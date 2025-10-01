@@ -1,0 +1,292 @@
+//! StdFace configuration data structures.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use super::error::{StdFaceError, Result};
+
+/// StdFace configuration structure.
+///
+/// This structure represents a parsed StdFace configuration file,
+/// containing all the parameters needed for mVMC calculations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StdFaceConfig {
+    /// Lattice parameters
+    pub lattice: LatticeConfig,
+
+    /// Model parameters
+    pub model: ModelConfig,
+
+    /// Calculation parameters
+    pub calculation: CalculationConfig,
+
+    /// Optimization parameters
+    pub optimization: OptimizationConfig,
+
+    /// Monte Carlo parameters
+    pub monte_carlo: MonteCarloConfig,
+
+    /// Additional parameters
+    pub additional: HashMap<String, String>,
+}
+
+/// Lattice configuration parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LatticeConfig {
+    /// Lattice type (e.g., "chain", "Tetragonal")
+    pub lattice_type: String,
+
+    /// Lattice dimensions
+    pub dimensions: Vec<usize>,
+
+    /// Sublattice dimensions
+    pub sub_dimensions: Vec<usize>,
+}
+
+/// Model configuration parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelConfig {
+    /// Model type (e.g., "Hubbard", "Spin", "FermionHubbard")
+    pub model_type: String,
+
+    /// Model-specific parameters
+    pub parameters: HashMap<String, f64>,
+}
+
+/// Calculation configuration parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CalculationConfig {
+    /// Number of electrons/particles
+    pub n_particles: Option<usize>,
+
+    /// Total spin Sz
+    pub total_sz: Option<i32>,
+
+    /// Random seed
+    pub random_seed: Option<u64>,
+}
+
+/// Optimization configuration parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OptimizationConfig {
+    /// Number of SR optimization steps
+    pub sr_steps: Option<usize>,
+
+    /// SR reduction cutoff
+    pub sr_reduction_cutoff: Option<f64>,
+
+    /// SR stabilization delta
+    pub sr_stabilization_delta: Option<f64>,
+
+    /// SR step delta
+    pub sr_step_delta: Option<f64>,
+}
+
+/// Monte Carlo configuration parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonteCarloConfig {
+    /// Number of VMC samples
+    pub vmc_samples: Option<usize>,
+
+    /// VMC calculation mode
+    pub vmc_calculation_mode: Option<usize>,
+}
+
+impl Default for StdFaceConfig {
+    fn default() -> Self {
+        Self {
+            lattice: LatticeConfig {
+                lattice_type: "chain".to_string(),
+                dimensions: vec![],
+                sub_dimensions: vec![],
+            },
+            model: ModelConfig {
+                model_type: "Hubbard".to_string(),
+                parameters: HashMap::new(),
+            },
+            calculation: CalculationConfig {
+                n_particles: Some(6),
+                total_sz: Some(0),
+                random_seed: Some(1),
+            },
+            optimization: OptimizationConfig {
+                sr_steps: Some(500),
+                sr_reduction_cutoff: Some(1e-8),
+                sr_stabilization_delta: Some(1e-2),
+                sr_step_delta: Some(3e-3),
+            },
+            monte_carlo: MonteCarloConfig {
+                vmc_samples: Some(100),
+                vmc_calculation_mode: Some(0),
+            },
+            additional: HashMap::new(),
+        }
+    }
+}
+
+impl StdFaceConfig {
+    /// Creates a new StdFace configuration with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Validates the configuration parameters.
+    pub fn validate(&self) -> Result<()> {
+        // Validate lattice dimensions
+        if self.lattice.dimensions.is_empty() {
+            return Err(StdFaceError::ValidationError {
+                message: "Lattice dimensions cannot be empty".to_string(),
+            });
+        }
+
+        for &dim in &self.lattice.dimensions {
+            if dim == 0 {
+                return Err(StdFaceError::ValidationError {
+                    message: "Lattice dimensions must be positive".to_string(),
+                });
+            }
+        }
+
+        // Validate sublattice dimensions
+        if self.lattice.sub_dimensions.len() != self.lattice.dimensions.len() {
+            return Err(StdFaceError::ValidationError {
+                message: "Sublattice dimensions must match lattice dimensions".to_string(),
+            });
+        }
+
+        for (i, &sub_dim) in self.lattice.sub_dimensions.iter().enumerate() {
+            if sub_dim == 0 || sub_dim > self.lattice.dimensions[i] {
+                return Err(StdFaceError::ValidationError {
+                    message: format!(
+                        "Sublattice dimension {} must be positive and <= lattice dimension {}",
+                        sub_dim, self.lattice.dimensions[i]
+                    ),
+                });
+            }
+        }
+
+        // Validate model parameters
+        match self.model.model_type.as_str() {
+            "Hubbard" | "FermionHubbard" => {
+                if !self.model.parameters.contains_key("t") {
+                    return Err(StdFaceError::MissingParameter {
+                        parameter: "t (hopping parameter)".to_string(),
+                    });
+                }
+                if !self.model.parameters.contains_key("U") {
+                    return Err(StdFaceError::MissingParameter {
+                        parameter: "U (interaction parameter)".to_string(),
+                    });
+                }
+            }
+            "Spin" => {
+                if !self.model.parameters.contains_key("J") {
+                    return Err(StdFaceError::MissingParameter {
+                        parameter: "J (exchange parameter)".to_string(),
+                    });
+                }
+            }
+            _ => {
+                return Err(StdFaceError::UnsupportedModel {
+                    model: self.model.model_type.clone(),
+                });
+            }
+        }
+
+        // Validate calculation parameters
+        if let Some(n_particles) = self.calculation.n_particles {
+            let total_sites: usize = self.lattice.dimensions.iter().product();
+            if n_particles > total_sites * 2 {
+                return Err(StdFaceError::ValidationError {
+                    message: format!(
+                        "Number of particles ({}) exceeds maximum capacity ({} sites * 2)",
+                        n_particles, total_sites
+                    ),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns the total number of lattice sites.
+    pub fn total_sites(&self) -> usize {
+        self.lattice.dimensions.iter().product()
+    }
+
+    /// Returns the lattice dimension (1D, 2D, etc.).
+    pub fn lattice_dimension(&self) -> usize {
+        self.lattice.dimensions.len()
+    }
+
+    /// Returns true if the lattice is periodic.
+    pub fn is_periodic(&self) -> bool {
+        // For now, assume all lattices are periodic
+        // This could be made configurable in the future
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = StdFaceConfig::new();
+        assert_eq!(config.lattice.lattice_type, "chain");
+        assert_eq!(config.lattice.dimensions, vec![] as Vec<usize>);
+        assert_eq!(config.model.model_type, "Hubbard");
+        assert_eq!(config.calculation.n_particles, Some(6));
+    }
+
+    #[test]
+    fn test_validate_hubbard_config() {
+        let mut config = StdFaceConfig::new();
+        config.lattice.dimensions = vec![6];
+        config.lattice.sub_dimensions = vec![2];
+        config.model.parameters.insert("t".to_string(), 1.0);
+        config.model.parameters.insert("U".to_string(), 4.0);
+
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_missing_parameters() {
+        let config = StdFaceConfig::new();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_dimensions() {
+        let mut config = StdFaceConfig::new();
+        config.lattice.dimensions = vec![0];
+        config.model.parameters.insert("t".to_string(), 1.0);
+        config.model.parameters.insert("U".to_string(), 4.0);
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_total_sites() {
+        let mut config = StdFaceConfig::new();
+        config.lattice.dimensions = vec![6];
+        assert_eq!(config.total_sites(), 6);
+
+        let mut config2d = StdFaceConfig::new();
+        config2d.lattice.dimensions = vec![4, 3];
+        config2d.lattice.sub_dimensions = vec![2, 2];
+        assert_eq!(config2d.total_sites(), 12);
+    }
+
+    #[test]
+    fn test_lattice_dimension() {
+        let mut config = StdFaceConfig::new();
+        config.lattice.dimensions = vec![6];
+        assert_eq!(config.lattice_dimension(), 1);
+
+        let mut config2d = StdFaceConfig::new();
+        config2d.lattice.dimensions = vec![4, 3];
+        config2d.lattice.sub_dimensions = vec![2, 2];
+        assert_eq!(config2d.lattice_dimension(), 2);
+    }
+}
