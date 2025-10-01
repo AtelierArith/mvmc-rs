@@ -1,0 +1,6 @@
+[submodule "mVMC"]
+	path = mVMC
+	url = https://github.com/issp-center-dev/mVMC.git
+[submodule "mVMC-tutorial"]
+	path = mVMC-tutorial
+	url = https://github.com/issp-center-dev/mVMC-tutorial.git
