@@ -1,0 +1,27 @@
+[package]
+name = "mvmc-bindings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+# FFI bindings
+libc = "0.2"
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# Complex numbers
+num-complex = { workspace = true }
+# Array operations
+ndarray = { workspace = true }
+# Approximate equality for testing
+approx = { workspace = true }
+
+[dev-dependencies]
+# Property-based testing
+proptest = { workspace = true }
+
+[build-dependencies]
+# For generating bindings
+bindgen = "0.69"

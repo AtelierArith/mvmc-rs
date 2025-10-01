@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 769bdd1d945ced62e0587d53d5be60472525379eaf49378098e3f0d35eda9938 # shrinks to mut matrix = [[Complex { re: 0.0, im: 0.0 }, Complex { re: 0.0, im: 6.466324017033389 }],  [Complex { re: 0.0, im: -3.9855610430117006 }, Complex { re: 0.0, im: 0.0 }]], shape=[2, 2], strides=[2, 1], layout=Cc (0x5), const ndim=2

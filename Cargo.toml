@@ -41,3 +41,4 @@ rayon = "1.10"
 approx = "0.5"
 proptest = "1.5"
 criterion = "0.5"
+
