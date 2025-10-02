@@ -15,7 +15,7 @@ use mvmc_core::{
 use mvmc_io::{ConfigParser as _, OutputFormat, OutputManager, StdFaceParser, TomlParser, JsonParser};
 use mvmc_physics::hamiltonian::{HubbardHamiltonian, Hamiltonian};
 use mvmc_physics::lattice::{ChainLattice, SquareLattice};
-use mvmc_physics::wavefunction::{CombinedWavefunction, SlaterDeterminant};
+use mvmc_physics::wavefunction::CombinedWavefunction;
 use std::path::PathBuf;
 use std::time::Instant;
 use std::io::Write;
@@ -120,7 +120,8 @@ pub fn execute(
 
     // Initialize VMC engine
     println!("🔧 Creating VMC engine...");
-    let wavefunction = CombinedWavefunction::new(vmc_params.nsite.get(), vmc_params.ne.get());
+    let wavefunction = CombinedWavefunction::new(vmc_params.nsite.get(), vmc_params.ne.get())
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
 
     // Create Hamiltonian based on model type
     let hamiltonian = create_hamiltonian(&vmc_params)?;
@@ -159,7 +160,7 @@ pub fn execute(
 
             // Define output callback for bin-by-bin data
             let mut sample_count = 0;
-            let output_callback = |bin_idx: usize, local_energy: Complex64, stats: &SamplingStatistics| {
+            let output_callback = |bin_idx: usize, _local_energy: Complex64, stats: &SamplingStatistics| {
                 sample_count += 1;
                 let timestamp = chrono::Local::now().format("%a %b %d %H:%M:%S %Y").to_string();
                 let acc_hop = stats.acceptance_rate;
@@ -454,7 +455,6 @@ mod tests {
     #[test]
     fn test_convert_stdface_to_vmc_params_hubbard() {
         use mvmc_io::stdface::StdFaceConfig;
-        use std::collections::HashMap;
 
         let mut config = StdFaceConfig::new();
         config.lattice.dimensions = vec![6];
@@ -478,7 +478,6 @@ mod tests {
     #[test]
     fn test_convert_stdface_to_vmc_params_spin() {
         use mvmc_io::stdface::StdFaceConfig;
-        use std::collections::HashMap;
 
         let mut config = StdFaceConfig::new();
         config.lattice.dimensions = vec![8];

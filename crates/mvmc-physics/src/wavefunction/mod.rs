@@ -82,15 +82,23 @@ impl CombinedWavefunction {
     /// * `ne` - Number of electrons
     ///
     /// # Returns
-    /// * `Self` - The combined wavefunction
-    pub fn new(nsite: usize, ne: usize) -> Self {
-        Self {
-            slater: None,
+    /// * `Result<Self>` - The combined wavefunction
+    ///
+    /// # Note
+    /// This creates a wavefunction with a plane wave Slater determinant by default.
+    /// Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
+    pub fn new(nsite: usize, ne: usize) -> Result<Self> {
+        // Initialize with plane wave basis (like C implementation)
+        // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSlaterElm()
+        let slater = SlaterDeterminant::new_plane_wave(nsite, ne)?;
+
+        Ok(Self {
+            slater: Some(slater),
             pfaffian: None,
             projectors: Vec::new(),
             nsite,
             ne,
-        }
+        })
     }
 
     /// Creates a combined wavefunction with Slater determinant.
@@ -432,11 +440,11 @@ mod tests {
     fn test_combined_wavefunction_creation() {
         let nsite = 4;
         let ne = 2;
-        let wavefunction = CombinedWavefunction::new(nsite, ne);
+        let wavefunction = CombinedWavefunction::new(nsite, ne).unwrap();
 
         assert_eq!(wavefunction.nsite(), nsite);
         assert_eq!(wavefunction.ne(), ne);
-        assert!(wavefunction.slater().is_none());
+        assert!(wavefunction.slater().is_some()); // Now initialized by default
         assert!(wavefunction.pfaffian().is_none());
     }
 

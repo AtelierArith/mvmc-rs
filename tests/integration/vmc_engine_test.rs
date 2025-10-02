@@ -7,8 +7,10 @@ use mvmc_core::{
     vmc::VmcEngine,
     config::VmcParameters,
     types::{SiteCount, ElectronCount, TwoSz, RandomSeed, CalcMode, LanczosMode},
-    wavefunction::CombinedWavefunction,
 };
+use mvmc_physics::wavefunction::CombinedWavefunction;
+use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
+use mvmc_physics::lattice::ChainLattice;
 
 /// Test basic VMC engine creation and initialization
 #[test]
@@ -23,8 +25,10 @@ fn test_vmc_engine_creation() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-    let engine = VmcEngine::new(params, wavefunction);
+    let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+    let lattice = ChainLattice::new(4, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
     assert!(engine.is_ok());
 
     let engine = engine.unwrap();
@@ -46,11 +50,13 @@ fn test_vmc_optimization_small_system() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(2), ElectronCount::new(1));
-    let mut engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(2, 1).unwrap();
+    let lattice = ChainLattice::new(2, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let mut engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Run optimization (this should complete without error)
-    let result = engine.run();
+    let result = engine.run(None::<fn(usize, num_complex::Complex64, &mvmc_core::monte_carlo::SamplingStatistics)>);
     assert!(result.is_ok());
 
     let result = result.unwrap();
@@ -73,11 +79,13 @@ fn test_vmc_expectation_small_system() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(2), ElectronCount::new(1));
-    let mut engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(2, 1).unwrap();
+    let lattice = ChainLattice::new(2, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let mut engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Run expectation calculation (this should complete without error)
-    let result = engine.run();
+    let result = engine.run(None::<fn(usize, num_complex::Complex64, &mvmc_core::monte_carlo::SamplingStatistics)>);
     assert!(result.is_ok());
 
     let result = result.unwrap();
@@ -98,11 +106,13 @@ fn test_energy_calculation() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-    let mut engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+    let lattice = ChainLattice::new(4, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let mut engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Run expectation calculation to get energy
-    let result = engine.run();
+    let result = engine.run(None::<fn(usize, num_complex::Complex64, &mvmc_core::monte_carlo::SamplingStatistics)>);
     assert!(result.is_ok());
 
     let result = result.unwrap();
@@ -123,8 +133,10 @@ fn test_wavefunction_access() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-    let engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+    let lattice = ChainLattice::new(4, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Test wavefunction access
     let wavefunction = engine.wavefunction();
@@ -145,8 +157,10 @@ fn test_current_configuration_access() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-    let engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+    let lattice = ChainLattice::new(4, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Test sampler access
     let _sampler = engine.sampler();
@@ -166,8 +180,10 @@ fn test_sampling_statistics() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-    let engine = VmcEngine::new(params, wavefunction).unwrap();
+    let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+    let lattice = ChainLattice::new(4, true).unwrap();
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+    let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
 
     // Test sampling statistics access
     let _stats = engine.sampler();
@@ -214,8 +230,10 @@ fn test_different_calculation_modes() {
         .build()
         .unwrap();
 
-    let wavefunction = CombinedWavefunction::new(SiteCount::new(2), ElectronCount::new(1));
-    let opt_engine = VmcEngine::new(opt_params, wavefunction.clone()).unwrap();
+    let wavefunction = CombinedWavefunction::new(2, 1).unwrap();
+    let lattice1 = ChainLattice::new(2, true).unwrap();
+    let hamiltonian1 = HeisenbergHamiltonian::new(lattice1, -1.0, 0.0).unwrap();
+    let opt_engine = VmcEngine::new(opt_params, wavefunction, Box::new(hamiltonian1)).unwrap();
     assert_eq!(opt_engine.params().calc_mode, CalcMode::Optimization);
 
     // Test expectation mode
@@ -224,7 +242,10 @@ fn test_different_calculation_modes() {
         .build()
         .unwrap();
 
-    let exp_engine = VmcEngine::new(exp_params, wavefunction).unwrap();
+    let wavefunction2 = CombinedWavefunction::new(2, 1).unwrap();
+    let lattice2 = ChainLattice::new(2, true).unwrap();
+    let hamiltonian2 = HeisenbergHamiltonian::new(lattice2, -1.0, 0.0).unwrap();
+    let exp_engine = VmcEngine::new(exp_params, wavefunction2, Box::new(hamiltonian2)).unwrap();
     assert_eq!(exp_engine.params().calc_mode, CalcMode::Expectation);
 }
 
@@ -244,8 +265,10 @@ fn test_different_system_sizes() {
             .build()
             .unwrap();
 
-        let wavefunction = CombinedWavefunction::new(SiteCount::new(nsite), ElectronCount::new(ne));
-        let engine = VmcEngine::new(params, wavefunction);
+        let wavefunction = CombinedWavefunction::new(nsite, ne).unwrap();
+        let lattice = ChainLattice::new(nsite, true).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+        let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok(), "Failed for nsite={}, ne={}", nsite, ne);
     }
 }
@@ -266,8 +289,10 @@ fn test_different_spin_configurations() {
             .build()
             .unwrap();
 
-        let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
-        let engine = VmcEngine::new(params, wavefunction);
+        let wavefunction = CombinedWavefunction::new(4, 2).unwrap();
+        let lattice = ChainLattice::new(4, true).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
+        let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok(), "Failed for spin={}", spin);
     }
 }

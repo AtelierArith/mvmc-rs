@@ -137,17 +137,22 @@ fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResu
     use mvmc_physics::hamiltonian::HeisenbergHamiltonian;
     use mvmc_physics::lattice::ChainLattice;
     use mvmc_physics::wavefunction::{CombinedWavefunction, SlaterDeterminant};
+    use mvmc_core::types::CalcMode;
+
+    // 最適化モードに設定
+    let mut opt_params = vmc_params.clone();
+    opt_params.calc_mode = CalcMode::Optimization;
 
     // ハミルトニアンを作成
-    let lattice = ChainLattice::new(vmc_params.nsite.get(), true)
+    let lattice = ChainLattice::new(opt_params.nsite.get(), true)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
 
     let hamiltonian = HeisenbergHamiltonian::new(lattice, -0.5, 0.0) // J = -0.5 for Heisenberg chain
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hamiltonian: {}", e)))?;
 
     // 波動関数を作成
-    let nsite = vmc_params.nsite.get();
-    let ne = vmc_params.ne.get();
+    let nsite = opt_params.nsite.get();
+    let ne = opt_params.ne.get();
     let slater = SlaterDeterminant::new_plane_wave(nsite, ne)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Slater determinant: {}", e)))?;
 
@@ -156,7 +161,7 @@ fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResu
 
     // VMCエンジンを作成
     let mut vmc_engine = VmcEngine::new(
-        vmc_params.clone(),
+        opt_params.clone(),
         wavefunction,
         Box::new(hamiltonian),
     ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create VMC engine: {}", e)))?;
@@ -166,38 +171,54 @@ fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResu
     let mut output_file = File::create(&output_file_path)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create output file: {}", e)))?;
 
-    // VMC計算を実行
-    let num_iterations = vmc_params.sr_params.iteration_steps;
+    // VMC最適化を実行
+    let num_iterations = opt_params.sr_params.iteration_steps;
 
-    println!("  Running actual VMC calculation with:");
+    println!("  Running VMC optimization with:");
     println!("    - Slater determinant wavefunction");
     println!("    - Heisenberg Hamiltonian");
     println!("    - Monte Carlo sampling");
-    println!("    - Energy calculation");
+    println!("    - Stochastic Reconfiguration optimization");
+    println!("    - Parameter updates between iterations");
     println!();
 
-    for iteration in 0..num_iterations {
-        // VMC計算の1ステップを実行
-        let result = vmc_engine.run_single_iteration()
-            .map_err(|e| CliError::Other(anyhow::anyhow!("VMC calculation failed at iteration {}: {}", iteration, e)))?;
+    // 最適化を実行して結果を取得
+    let optimization_result = vmc_engine.run_optimization()
+        .map_err(|e| CliError::Other(anyhow::anyhow!("VMC optimization failed: {}", e)))?;
 
-        // 結果をファイルに書き込み
+    // 最適化結果からエネルギー履歴を取得
+    if let Some(opt) = &optimization_result.optimization {
+        for (iteration, &energy) in opt.energy_history.iter().enumerate() {
+            // 結果をファイルに書き込み
+            writeln!(
+                output_file,
+                "{:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e}",
+                energy.re,
+                energy.im,
+                0.0, // variance (placeholder)
+                1000.0, // sample_count (placeholder)
+                0.0, // その他の統計情報1
+                0.0  // その他の統計情報2
+            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write output: {}", e)))?;
+
+            // 進捗を表示
+            if iteration % 10 == 0 || iteration == opt.energy_history.len() - 1 {
+                println!("  Iteration {}/{}: Energy = {:.6}",
+                    iteration + 1, opt.energy_history.len(), energy.re);
+            }
+        }
+    } else {
+        // フォールバック: 単一の結果を書き込み
         writeln!(
             output_file,
             "{:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e}",
-            result.energy.re,
-            result.energy.im,
-            result.variance,
-            result.sample_count as f64,
+            optimization_result.energy.re,
+            optimization_result.energy.im,
+            optimization_result.energy_error,
+            1000.0, // sample_count (placeholder)
             0.0, // その他の統計情報1
             0.0  // その他の統計情報2
         ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write output: {}", e)))?;
-
-        // 進捗を表示
-        if iteration % 10 == 0 || iteration == num_iterations - 1 {
-            println!("  Iteration {}/{}: Energy = {:.6}, Variance = {:.6}",
-                iteration + 1, num_iterations, result.energy.re, result.variance);
-        }
     }
 
     Ok(())

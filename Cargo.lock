@@ -534,6 +534,8 @@ dependencies = [
  "mvmc-cli",
  "mvmc-core",
  "mvmc-io",
+ "mvmc-physics",
+ "num-complex",
  "tempfile",
 ]
 

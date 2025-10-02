@@ -1829,3 +1829,272 @@ PLAN.mdのPhase 4（コアライブラリ基盤）のVMC計算エンジン統合
 - ビルド成功とヘルプコマンド動作確認
 
 これにより、**完全なVMC計算システム**が確立され、基本的なVMC計算が実行可能な状態になりました。次のステップとして、並列化基盤の実装や高度な機能の追加が可能です。
+
+---
+
+# Critical Issue Log - VMC計算が実際には動作していない (2025-10-02)
+
+## 問題の発覚
+
+**日時:** 2025-10-02
+
+**検証方法:**
+- C実装の参照結果（`examples/CImplementationReferenceHeisenbergChain/output/zvo_out_001.dat`）と比較
+- デバッグ出力を追加して実行時の内部状態を確認
+
+**症状:**
+```
+# Rust実装の出力（全て0）
+0.000000000000000e+00 0.000000000000000e+00 0.000000000000000e+00 ...
+0.000000000000000e+00 0.000000000000000e+00 0.000000000000000e+00 ...
+(500行すべて同じ)
+
+# C実装の参照出力（単調減少して収束）
+-1.328846153846154e+00 0.000000000000000e+00 2.359119415073651e-03 ...
+-1.330295190656816e+00 0.000000000000000e+00 1.993041654143447e-03 ...
+-1.331244314868805e+00 0.000000000000000e+00 1.801301050889120e-03 ...
+```
+
+## デバッグ出力から判明した問題
+
+```rust
+DEBUG: First config - spin_config: [Down]     // ❌ 1サイトしかない（4サイト必要）
+DEBUG: u8_config: [2]                         // ❌ 1要素のみ
+DEBUG: psi: 1+0i, norm: 1                     // ❌ 常に1（計算されていない）
+DEBUG: local_energy: 0+0i                     // ❌ 常に0（ハミルトニアンが呼ばれていない）
+DEBUG: total_energy: 0+0i, total_weight: 1000, average: 0+0i
+```
+
+## 根本原因の分析
+
+### 1. 電子配置の生成が根本的に間違っている
+
+**問題箇所:** `crates/mvmc-core/src/vmc/engine.rs:electron_config_to_spin_config()`
+
+```rust
+fn electron_config_to_spin_config(&self, config: &ElectronConfiguration) -> Vec<Spin> {
+    // ❌ 問題: 最初の1サイトしか見ていない
+    let spin_up = config.spin_up();
+    let spin_down = config.spin_down();
+
+    if spin_up > 0 {
+        vec![Spin::Up]  // ❌ 1要素のベクターを返している
+    } else if spin_down > 0 {
+        vec![Spin::Down]  // ❌ 1要素のベクターを返している
+    } else {
+        vec![Spin::Empty]  // ❌ 1要素のベクターを返している
+    }
+}
+```
+
+**正しい実装（C実装を参考に）:**
+- 全サイト（nsite個）のスピン状態を保持する必要がある
+- 各サイトは `Up`, `Down`, `Empty` のいずれかの状態
+- C実装では `eleIdx[Ne]` と `eleSpn[Ne]` で電子の位置とスピンを表現
+
+### 2. ElectronConfigurationの設計が不適切
+
+**問題箇所:** `crates/mvmc-core/src/monte_carlo/metropolis.rs:ElectronConfiguration`
+
+```rust
+pub struct ElectronConfiguration {
+    sites: Vec<usize>,  // ❌ サイトのインデックスのみ（全サイトの状態を保持していない）
+    spin_up: usize,     // ❌ up/downの総数だけで個別のサイト情報がない
+    spin_down: usize,
+}
+```
+
+**正しい設計（C実装を参考に）:**
+```c
+// C実装: global.h
+int *eleIdx;      // 電子のサイトインデックス [Ne]
+int *eleSpn;      // 電子のスピン（0:up, 1:down） [Ne]
+
+// または、全サイトのスピン状態を保持
+// Spin[Nsite]: 各サイトのスピン状態（Empty, Up, Down）
+```
+
+### 3. 波動関数が初期化されていない
+
+**問題箇所:** `crates/mvmc-physics/src/wavefunction/mod.rs:CombinedWavefunction`
+
+```rust
+impl CombinedWavefunction {
+    pub fn new(nsite: usize, ne: usize) -> Self {
+        Self {
+            slater: None,      // ❌ Noneのまま
+            pfaffian: None,    // ❌ Noneのまま
+            projectors: Vec::new(),  // ❌ 空のまま
+            nsite,
+            ne,
+        }
+    }
+
+    pub fn calculate(&self, config: &[u8]) -> Result<Complex64> {
+        // ❌ slaterがNoneなので常に1.0を返す
+        let mut amplitude = Complex64::new(1.0, 0.0);
+
+        if let Some(slater) = &self.slater {
+            amplitude *= slater.calculate(config)?;
+        }
+        // slaterがNoneなので上のブロックは実行されない
+
+        Ok(amplitude)  // ❌ 常に1.0
+    }
+}
+```
+
+**正しい初期化（C実装を参考に）:**
+- Slater行列式を平面波基底で初期化
+- C実装の `makeInitialSample()` や `makeInitialSlaterElm()` を参考に
+
+### 4. ハミルトニアンの局所エネルギー計算が呼ばれていない
+
+**問題箇所:** `crates/mvmc-core/src/vmc/engine.rs:calculate_vmc_local_energy()`
+
+```rust
+fn calculate_vmc_local_energy(&self, spin_config: &[Spin]) -> Result<f64> {
+    // 対角エネルギーを計算
+    let mut local_energy = self.hamiltonian.diagonal_element(spin_config);
+
+    // 非対角項の追加を試みる
+    let nsite = spin_config.len();
+
+    for i in 0..nsite {
+        for j in 0..nsite {
+            if i != j {
+                // ❌ 隣接判定やホッピングの実装が不完全
+                // この部分が正しく動作していない
+            }
+        }
+    }
+
+    Ok(local_energy)
+}
+```
+
+**正しい実装（C実装を参考に）:**
+- C実装の `CalculateHamiltonian()` を詳細に分析
+- 対角要素と非対角要素の両方を正確に計算
+- 波動関数振幅比 `ψ(j)/ψ(i)` を計算
+
+### 5. SR最適化が完全にコメントアウトされている
+
+**問題箇所:** `crates/mvmc-core/src/vmc/engine.rs:run_single_iteration()`
+
+```rust
+pub fn run_single_iteration(&mut self) -> Result<VmcIterationResult> {
+    // サンプリング
+    let sampling_result = self.sampler.sample(&self.wavefunction)?;
+
+    // エネルギー計算
+    let energy = self.calculate_energy(&sampling_result.configurations)?;
+    let variance = self.calculate_variance(&sampling_result.configurations, energy)?;
+
+    // ❌ 最適化がコメントアウトされている
+    // if let Some(optimizer) = &mut self.optimizer {
+    //     let opt_result = optimizer.optimize(...)?;
+    //     // パラメータ更新
+    // }
+
+    Ok(VmcIterationResult {
+        energy,
+        variance,
+        // ...
+    })
+}
+```
+
+**正しい実装:**
+- SR最適化を実際に実行
+- パラメータを更新して波動関数に反映
+- これによりエネルギーが反復ごとに変化する
+
+## 実装上の学び
+
+### 誤った仮定
+1. **「テストが通れば実装は正しい」** - 実際にはテストがモックデータで通っていただけ
+2. **「型が合えば動く」** - 型安全性は重要だが、アルゴリズムの正しさは別問題
+3. **「段階的実装で最後に統合すれば良い」** - 各コンポーネントが正しく連携していないと意味がない
+
+### 正しいアプローチ
+1. **C実装の詳細な分析を最初に行う** - アルゴリズムの完全な理解
+2. **小さい系でエンドツーエンドテスト** - 2サイト系から始めて動作確認
+3. **デバッグ出力を最初から入れる** - 内部状態の可視化
+4. **C実装との結果比較を頻繁に行う** - 各ステップで検証
+
+### C実装の必読箇所
+
+1. **電子配置とサンプリング:**
+   - `mVMC/src/mVMC/vmcmake.c:VMCMakeInitial()` - 初期配置の生成
+   - `mVMC/src/mVMC/vmccal.c:VMCMakeSample()` - モンテカルロサンプリング
+   - `mVMC/src/mVMC/global.h:eleIdx, eleSpn` - 電子配置の表現
+
+2. **波動関数:**
+   - `mVMC/src/mVMC/slater.c:UpdateSlaterElm()` - Slater行列の更新
+   - `mVMC/src/mVMC/slater.c:makeInitialSlaterElm()` - Slater行列の初期化
+   - `mVMC/src/mVMC/vmcmake.c:CalculateMAll()` - 波動関数振幅の計算
+
+3. **エネルギー計算:**
+   - `mVMC/src/mVMC/vmccal.c:CalculateHamiltonian()` - ハミルトニアンの計算
+   - `mVMC/src/mVMC/vmccal.c:VMCCalcEnergyDiff()` - エネルギー差の計算
+
+4. **最適化:**
+   - `mVMC/src/mVMC/vmcmain.c:optimization_loop()` - SR法の実装
+   - `mVMC/src/mVMC/stcopt_main.c` - SR法の詳細
+
+## 次のアクション
+
+### 緊急対応（Phase 8）
+
+1. **C実装の完全な分析** (1-2日)
+   - 上記の必読箇所を詳細に読む
+   - アルゴリズムのフローチャートを作成
+   - データ構造の対応表を作成
+
+2. **電子配置の正しい実装** (1日)
+   - `ElectronConfiguration` の再設計
+   - 全サイトの状態を保持する構造に変更
+   - C実装の `eleIdx`, `eleSpn` との対応
+
+3. **波動関数の初期化** (1日)
+   - Slater行列式の正しい初期化
+   - 平面波基底の実装
+   - 振幅計算の実装
+
+4. **局所エネルギー計算** (1-2日)
+   - ハミルトニアンの行列要素の正確な計算
+   - 対角・非対角要素の実装
+   - 波動関数振幅比の計算
+
+5. **SR最適化の実装** (1-2日)
+   - 最適化ループの実装
+   - パラメータ更新の実装
+   - 収束判定の実装
+
+6. **検証とデバッグ** (2-3日)
+   - 2サイト系でのテスト
+   - 4サイト系でのテスト
+   - C実装との詳細な比較
+
+**推定所要時間:** 7-12日
+
+## 教訓
+
+1. **「動いているように見える」≠「正しく動いている」**
+   - 出力ファイルが生成されても、中身が正しいとは限らない
+   - 参照実装との比較が不可欠
+
+2. **物理計算の実装は型システムだけでは保証できない**
+   - Rustの型安全性は重要だが、アルゴリズムの正しさは別次元の問題
+   - 物理的な妥当性の検証が必須
+
+3. **段階的実装の罠**
+   - 各モジュールが独立してテストされていても、統合すると動かない
+   - エンドツーエンドテストを早期に実施すべき
+
+4. **C実装の理解が最優先**
+   - Rustで綺麗に書き直そうとする前に、C実装を完全に理解する
+   - アルゴリズムの正確な移植が第一優先
+
+この問題により、**Phase 4（コアライブラリ基盤）とPhase 7（CLI基盤）は「形式的には完了」しているが「実質的には未完成」** であることが明らかになった。Phase 8として、VMC計算の完全な再実装が必要である。

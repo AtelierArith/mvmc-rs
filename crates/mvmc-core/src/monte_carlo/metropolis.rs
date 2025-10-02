@@ -31,13 +31,14 @@ pub struct SamplingResult {
 ///
 /// This structure represents the current electron configuration in the lattice.
 /// It corresponds to the electron arrays in the C implementation.
-/// Reference: mVMC/src/mVMC/vmccal.c (eleIdx, eleCfg, eleNum)
+/// Reference: mVMC/src/mVMC/vmcmake.c (eleIdx, eleSpn, eleCfg, eleNum)
 ///
-/// # Structure
+/// # Structure (C実装に対応)
 ///
-/// - `ele_idx`: Electron indices (which electrons are present)
-/// - `ele_cfg`: Electron configuration (up/down spin for each site)
-/// - `ele_num`: Electron numbers (n_up, n_down for each site)
+/// - `ele_idx[Ne*2]`: 各電子のサイトインデックス
+/// - `ele_spn[Ne*2]`: 各電子のスピン（0: up, 1: down）
+/// - `ele_cfg[Nsite*2]`: 各サイト・スピンの電子番号（-1: empty）
+/// - `ele_num[Nsite*2]`: 各サイト・スピンの電子数（0 or 1）
 ///
 /// # Examples
 ///
@@ -62,17 +63,23 @@ pub struct ElectronConfiguration {
     two_sz: i32,
 
     /// Electron indices (which electrons are present)
-    /// Reference: mVMC/src/mVMC/vmccal.c (eleIdx)
-    ele_idx: Vec<usize>,
+    /// Reference: mVMC/src/mVMC/vmcmake.c (eleIdx[Ne*2])
+    /// ele_idx[i] = 電子iのサイトインデックス
+    ele_idx: Vec<i32>,
 
-    /// Electron configuration (up/down spin for each site)
-    /// Reference: mVMC/src/mVMC/vmccal.c (eleCfg)
-    /// ele_cfg[i] = 0: empty, 1: up, 2: down, 3: both
-    ele_cfg: Vec<usize>,
+    /// Electron spins (0: up, 1: down)
+    /// Reference: mVMC/src/mVMC/vmcmake.c (eleSpn[Ne*2])
+    /// ele_spn[i] = 電子iのスピン（0: up, 1: down）
+    ele_spn: Vec<i32>,
+
+    /// Electron configuration (site-spin to electron mapping)
+    /// Reference: mVMC/src/mVMC/vmcmake.c (eleCfg[Nsite*2])
+    /// ele_cfg[site + spin*Nsite] = 電子番号（-1: empty）
+    ele_cfg: Vec<i32>,
 
     /// Electron numbers (n_up, n_down for each site)
-    /// Reference: mVMC/src/mVMC/vmccal.c (eleNum)
-    /// ele_num[i] = n_up[i], ele_num[i + nsite] = n_down[i]
+    /// Reference: mVMC/src/mVMC/vmcmake.c (eleNum[Nsite*2])
+    /// ele_num[site] = n_up[site], ele_num[site + Nsite] = n_down[site]
     ele_num: Vec<i32>,
 }
 
@@ -170,16 +177,19 @@ impl ElectronConfiguration {
         let ne_val = ne.get();
         let two_sz_val = two_sz.get();
 
-        // Initialize with empty configuration
-        let ele_idx = vec![0; ne_val];
-        let ele_cfg = vec![0; nsite_val];
-        let ele_num = vec![0; 2 * nsite_val]; // n_up, n_down for each site
+        // Initialize with empty configuration (C実装に対応)
+        // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
+        let ele_idx = vec![-1; ne_val * 2];  // eleIdx[Ne*2]
+        let ele_spn = vec![-1; ne_val * 2];  // eleSpn[Ne*2]
+        let ele_cfg = vec![-1; nsite_val * 2];  // eleCfg[Nsite*2]
+        let ele_num = vec![0; nsite_val * 2];   // eleNum[Nsite*2]
 
         Self {
             nsite: nsite_val,
             ne: ne_val,
             two_sz: two_sz_val,
             ele_idx,
+            ele_spn,
             ele_cfg,
             ele_num,
         }
@@ -201,7 +211,7 @@ impl ElectronConfiguration {
     }
 
     /// Returns the electron configuration array
-    pub fn ele_cfg(&self) -> &[usize] {
+    pub fn ele_cfg(&self) -> &[i32] {
         &self.ele_cfg
     }
 
@@ -211,8 +221,13 @@ impl ElectronConfiguration {
     }
 
     /// Returns the electron indices array
-    pub fn ele_idx(&self) -> &[usize] {
+    pub fn ele_idx(&self) -> &[i32] {
         &self.ele_idx
+    }
+
+    /// Returns the electron spins array
+    pub fn ele_spn(&self) -> &[i32] {
+        &self.ele_spn
     }
 
     /// Returns the number of up-spin electrons at a given site
@@ -234,6 +249,80 @@ impl ElectronConfiguration {
     /// Returns the total number of electrons at a given site
     pub fn electron_number(&self, site: usize) -> usize {
         self.electron_number_up(site) + self.electron_number_down(site)
+    }
+
+    /// Initializes electron configuration with random placement
+    ///
+    /// This method corresponds to C実装の`makeInitialSample()` in vmcmake.c
+    /// It places electrons randomly on the lattice according to the spin quantum number.
+    ///
+    /// # Arguments
+    /// * `rng_state` - Random number generator state
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success or error
+    pub fn initialize_random(&mut self, rng_state: &mut u64) -> Result<()> {
+        // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
+        let nsize = self.ne * 2;  // Total number of electron slots
+        let nsite2 = self.nsite * 2;  // Total number of site-spin slots
+
+        // Initialize all arrays to empty state
+        for i in 0..nsize {
+            self.ele_idx[i] = -1;
+            self.ele_spn[i] = -1;
+        }
+        for i in 0..nsite2 {
+            self.ele_cfg[i] = -1;
+        }
+
+        // Determine spin distribution based on two_sz
+        let tmp_two_sz = if self.two_sz == -1 { 0 } else { self.two_sz / 2 };
+        let n_up = self.ne + tmp_two_sz as usize;
+        let _n_down = self.ne - tmp_two_sz as usize;
+
+        // Assign spins to electrons
+        for i in 0..nsize {
+            if i < n_up {
+                self.ele_spn[i] = 0;  // Up spin
+            } else {
+                self.ele_spn[i] = 1;  // Down spin
+            }
+        }
+
+        // Place electrons randomly on lattice
+        for i in 0..nsize {
+            let spin = self.ele_spn[i] as usize;
+            let mut attempts = 0;
+            let max_attempts = self.nsite * self.nsite;
+
+            loop {
+                if attempts >= max_attempts {
+                    return Err(VmcError::invalid_config("Failed to place all electrons"));
+                }
+
+                let site = self.generate_random_site(rng_state);
+                let site_spin_idx = site + spin * self.nsite;
+
+                if self.ele_cfg[site_spin_idx] == -1 {
+                    // Place electron
+                    self.ele_cfg[site_spin_idx] = i as i32;
+                    self.ele_idx[i] = site as i32;
+                    self.ele_num[site_spin_idx] = 1;
+                    break;
+                }
+
+                attempts += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Generates a random site index
+    fn generate_random_site(&self, rng_state: &mut u64) -> usize {
+        // Simple linear congruential generator
+        *rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        (*rng_state as usize) % self.nsite
     }
 
     /// Sets an electron at a specific site
@@ -285,9 +374,9 @@ impl ElectronConfiguration {
     /// # Errors
     ///
     /// Returns an error if the configuration is invalid
-    pub fn set_configuration(&mut self, ele_cfg: &[usize], ele_num: &[i32]) -> Result<()> {
-        if ele_cfg.len() != self.nsite {
-            return Err(VmcError::dim_mismatch(self.nsite, ele_cfg.len()));
+    pub fn set_configuration(&mut self, ele_cfg: &[i32], ele_num: &[i32]) -> Result<()> {
+        if ele_cfg.len() != self.nsite * 2 {
+            return Err(VmcError::dim_mismatch(self.nsite * 2, ele_cfg.len()));
         }
         if ele_num.len() != 2 * self.nsite {
             return Err(VmcError::dim_mismatch(2 * self.nsite, ele_num.len()));
@@ -303,33 +392,29 @@ impl ElectronConfiguration {
     }
 
     /// Updates electron indices based on current configuration
+    ///
+    /// This method reconstructs ele_idx and ele_spn from ele_cfg and ele_num
     fn update_electron_indices(&mut self) -> Result<()> {
-        let mut idx = 0;
-
-        for site in 0..self.nsite {
-            let n_up = self.ele_num[site] as usize;
-            let n_down = self.ele_num[site + self.nsite] as usize;
-
-            for _ in 0..n_up {
-                if idx >= self.ne {
-                    return Err(VmcError::invalid_config("Too many electrons"));
-                }
-                self.ele_idx[idx] = site;
-                idx += 1;
-            }
-
-            for _ in 0..n_down {
-                if idx >= self.ne {
-                    return Err(VmcError::invalid_config("Too many electrons"));
-                }
-                self.ele_idx[idx] = site + self.nsite; // Down spin offset
-                idx += 1;
-            }
+        // Initialize all electron slots as empty
+        for i in 0..self.ne * 2 {
+            self.ele_idx[i] = -1;
+            self.ele_spn[i] = -1;
         }
 
-        // Fill remaining indices with zeros
-        for i in idx..self.ne {
-            self.ele_idx[i] = 0;
+        let mut electron_count = 0;
+
+        // Scan through all site-spin combinations
+        for site in 0..self.nsite {
+            for spin in 0..2 {
+                let site_spin_idx = site + spin * self.nsite;
+
+                if self.ele_num[site_spin_idx] > 0 && electron_count < self.ne * 2 {
+                    // This site-spin has an electron
+                    self.ele_idx[electron_count] = site as i32;
+                    self.ele_spn[electron_count] = spin as i32;
+                    electron_count += 1;
+                }
+            }
         }
 
         Ok(())
@@ -443,30 +528,11 @@ impl MetropolisSampler {
 
         let mut current_config = ElectronConfiguration::new(nsite, ne, two_sz);
 
-        // Initialize with a simple configuration if we have electrons
+        // Initialize with random electron placement (C実装に対応)
+        // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
         if ne_val > 0 {
-            let mut ele_cfg = vec![0; nsite_val];
-            let mut ele_num = vec![0; 2 * nsite_val];
-
-            // Place electrons in a simple pattern
-            let n_up = (ne_val + 1) / 2;
-            let n_down = ne_val / 2;
-
-            for i in 0..n_up.min(nsite_val) {
-                ele_cfg[i] = 1;
-                ele_num[i] = 1;
-            }
-
-            for i in 0..n_down.min(nsite_val) {
-                if ele_cfg[i] == 1 {
-                    ele_cfg[i] = 3; // Both up and down
-                } else {
-                    ele_cfg[i] = 2;
-                }
-                ele_num[i + nsite_val] = 1;
-            }
-
-            current_config.set_configuration(&ele_cfg, &ele_num).unwrap();
+            let mut rng_state = seed_val;
+            current_config.initialize_random(&mut rng_state).unwrap();
         }
 
         let slater_wfn = SlaterDeterminant::new(nsite, ne);
