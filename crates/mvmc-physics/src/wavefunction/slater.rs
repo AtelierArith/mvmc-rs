@@ -464,14 +464,14 @@ impl SlaterDeterminant {
 
         // Calculate determinant for up spins
         let up_det = if up_sites.len() > 0 {
-            self.calculate_determinant_for_sites(&up_sites)
+            self.calculate_determinant_for_sites(&up_sites, 0)
         } else {
             Complex64::new(1.0, 0.0)
         };
 
         // Calculate determinant for down spins
         let down_det = if down_sites.len() > 0 {
-            self.calculate_determinant_for_sites(&down_sites)
+            self.calculate_determinant_for_sites(&down_sites, up_sites.len())
         } else {
             Complex64::new(1.0, 0.0)
         };
@@ -486,7 +486,7 @@ impl SlaterDeterminant {
     ///
     /// # Returns
     /// * `Complex64` - The determinant value
-    fn calculate_determinant_for_sites(&self, sites: &[usize]) -> Complex64 {
+    fn calculate_determinant_for_sites(&self, sites: &[usize], orbital_offset: usize) -> Complex64 {
         if sites.len() == 0 {
             return Complex64::new(1.0, 0.0);
         }
@@ -496,12 +496,15 @@ impl SlaterDeterminant {
         }
 
         // Create submatrix for occupied sites
-        let mut submatrix = Array2::zeros((sites.len(), sites.len()));
+        // We need a square matrix for determinant calculation
+        let n_electrons = sites.len();
+        let mut submatrix = Array2::zeros((n_electrons, n_electrons));
         for (i, &site) in sites.iter().enumerate() {
-            for j in 0..sites.len() {
-                if j < self.ne {
-                    submatrix[[i, j]] = self.orbitals[[site, j]];
-                }
+            for j in 0..n_electrons {
+                // For each electron in this spin sector, select the appropriate orbital
+                // The orbital index should be the electron index within this spin sector plus the offset
+                let orbital_index = orbital_offset + j;
+                submatrix[[i, j]] = self.orbitals[[site, orbital_index]];
             }
         }
 

@@ -165,7 +165,7 @@ impl ObservableCalculator {
     ///     amplitude_ratio: Complex64::new(1.0, 0.0),
     /// };
     ///
-    /// calculator.add_sample(&config, &step);
+    /// calculator.add_sample(&config, &step, 1.5);
     /// ```
     pub fn add_sample(&mut self, config: &ElectronConfiguration, _step: &MetropolisStep, local_energy: f64) {
         // Use provided local energy instead of calculating

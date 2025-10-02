@@ -138,7 +138,7 @@ impl VmcEngine {
     /// use mvmc_physics::hamiltonian::{HubbardHamiltonian, Hamiltonian};
     /// use mvmc_physics::lattice::ChainLattice;
     ///
-    /// let sr_params = SRParameters::new(1000, 100, 100, 1e-6, 1e-6, 0.1, 100, 1e-6);
+    /// let sr_params = SRParameters::new(1000, 100, 100, 1e-6, 1e-6, 0.1, 100, 1e-6, true);
     /// let mc_params = MonteCarloParameters::new(100, 1, 1000, false, 1);
     /// let params = VmcParameters::new(
     ///     SiteCount::new(4),

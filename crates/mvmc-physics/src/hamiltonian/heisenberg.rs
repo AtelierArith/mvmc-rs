@@ -128,7 +128,7 @@ impl HeisenbergHamiltonian {
 
         for site in 0..self.lattice.n_sites() {
             let spin_z = config[site].value_f64();
-            energy -= self.magnetic_field * 0.5 * spin_z;
+            energy -= self.magnetic_field * spin_z;
         }
 
         energy
@@ -234,9 +234,9 @@ impl Hamiltonian for HeisenbergHamiltonian {
 
             // Matrix element for Heisenberg exchange flip term
             // H contains J * (S^+_i S^-_j + S^-_i S^+_j) for spin-1/2
-            // C実装では正の符号で定義されているため、負の符号を適用
-            // Thus, <↓↑|H|↑↓> = -J
-            Complex64::new(-self.exchange, 0.0)
+            // For spin-1/2, the matrix element is J/2 * (S^+_i S^-_j + S^-_i S^+_j)
+            // Thus, <↓↑|H|↑↓> = -J/2
+            Complex64::new(-self.exchange * 0.5, 0.0)
     }
 
     fn diagonal_element(&self, config: &[Spin]) -> f64 {
