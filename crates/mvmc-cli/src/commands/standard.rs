@@ -8,7 +8,7 @@ use colored::Colorize;
 use mvmc_io::{StdFaceParser, DefFileGenerator, DefFileConfig};
 use mvmc_core::config::{VmcParameters, SRParameters, MonteCarloParameters};
 use mvmc_core::types::{SiteCount, ElectronCount, TwoSz, CalcMode, LanczosMode, RandomSeed};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Standard modeの実行
 ///
@@ -79,6 +79,12 @@ pub fn execute(input_file: PathBuf, output_dir: PathBuf) -> CliResult<()> {
 
     println!("✓ All input files generated successfully");
     println!();
+
+    // VMC計算を実行
+    println!("{}", "🔬 Running VMC calculation...".yellow());
+    run_vmc_calculation(&vmc_params, &output_dir)?;
+    println!("✓ VMC calculation completed successfully");
+    println!();
     println!("{}", "═══════════════════════════════════════════".cyan());
     println!("{}", "✓ Standard mode completed successfully".green().bold());
     println!("{}", "═══════════════════════════════════════════".cyan());
@@ -121,4 +127,78 @@ fn convert_stdface_to_vmc_params(stdface_config: &mvmc_io::StdFaceConfig) -> Cli
     };
 
     Ok(params)
+}
+
+/// VMC計算を実行してzvo_out_001.datを生成
+fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResult<()> {
+    use std::fs::File;
+    use std::io::Write;
+    use mvmc_core::vmc::VmcEngine;
+    use mvmc_physics::hamiltonian::HeisenbergHamiltonian;
+    use mvmc_physics::lattice::ChainLattice;
+    use mvmc_physics::wavefunction::{CombinedWavefunction, SlaterDeterminant};
+
+    // ハミルトニアンを作成
+    let lattice = ChainLattice::new(vmc_params.nsite.get(), true)
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
+
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, -0.5, 0.0) // J = -0.5 for Heisenberg chain
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hamiltonian: {}", e)))?;
+
+    // 波動関数を作成
+    let nsite = vmc_params.nsite.get();
+    let ne = vmc_params.ne.get();
+    let slater = SlaterDeterminant::new_plane_wave(nsite, ne)
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Slater determinant: {}", e)))?;
+
+    let wavefunction = CombinedWavefunction::with_slater(nsite, ne, slater)
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
+
+    // VMCエンジンを作成
+    let mut vmc_engine = VmcEngine::new(
+        vmc_params.clone(),
+        wavefunction,
+        Box::new(hamiltonian),
+    ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create VMC engine: {}", e)))?;
+
+    // 出力ファイルを作成
+    let output_file_path = output_dir.join("zvo_out_001.dat");
+    let mut output_file = File::create(&output_file_path)
+        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create output file: {}", e)))?;
+
+    // VMC計算を実行
+    let num_iterations = vmc_params.sr_params.iteration_steps;
+
+    println!("  Running actual VMC calculation with:");
+    println!("    - Slater determinant wavefunction");
+    println!("    - Heisenberg Hamiltonian");
+    println!("    - Monte Carlo sampling");
+    println!("    - Energy calculation");
+    println!();
+
+    for iteration in 0..num_iterations {
+        // VMC計算の1ステップを実行
+        let result = vmc_engine.run_single_iteration()
+            .map_err(|e| CliError::Other(anyhow::anyhow!("VMC calculation failed at iteration {}: {}", iteration, e)))?;
+
+        // 結果をファイルに書き込み
+        writeln!(
+            output_file,
+            "{:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e}",
+            result.energy.re,
+            result.energy.im,
+            result.variance,
+            result.sample_count as f64,
+            0.0, // その他の統計情報1
+            0.0  // その他の統計情報2
+        ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write output: {}", e)))?;
+
+        // 進捗を表示
+        if iteration % 10 == 0 || iteration == num_iterations - 1 {
+            println!("  Iteration {}/{}: Energy = {:.6}, Variance = {:.6}",
+                iteration + 1, num_iterations, result.energy.re, result.variance);
+        }
+    }
+
+    Ok(())
 }

@@ -14,6 +14,18 @@ use crate::wavefunction::{
     make_projection_count,
 };
 use num_complex::Complex64;
+use rand::{Rng, thread_rng};
+
+/// Result of Monte Carlo sampling
+#[derive(Debug, Clone)]
+pub struct SamplingResult {
+    /// Sampled configurations
+    pub configurations: Vec<ElectronConfiguration>,
+    /// Acceptance rate
+    pub acceptance_rate: f64,
+    /// Number of steps
+    pub num_steps: usize,
+}
 
 /// Electron configuration for VMC calculations
 ///
@@ -217,6 +229,50 @@ impl ElectronConfiguration {
             return 0;
         }
         self.ele_num[site + self.nsite] as usize
+    }
+
+    /// Returns the total number of electrons at a given site
+    pub fn electron_number(&self, site: usize) -> usize {
+        self.electron_number_up(site) + self.electron_number_down(site)
+    }
+
+    /// Sets an electron at a specific site
+    ///
+    /// # Arguments
+    /// * `site` - Site index
+    /// * `electron_type` - Electron type (0: empty, 1: up, 2: down)
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success or error
+    pub fn set_electron(&mut self, site: usize, electron_type: usize) -> Result<()> {
+        if site >= self.nsite {
+            return Err(VmcError::invalid_config("Site index out of bounds"));
+        }
+
+        match electron_type {
+            0 => {
+                // Remove electron
+                self.ele_num[site] = 0;
+                self.ele_num[site + self.nsite] = 0;
+            }
+            1 => {
+                // Add up spin electron
+                self.ele_num[site] = 1;
+                self.ele_num[site + self.nsite] = 0;
+            }
+            2 => {
+                // Add down spin electron
+                self.ele_num[site] = 0;
+                self.ele_num[site + self.nsite] = 1;
+            }
+            _ => {
+                return Err(VmcError::invalid_config("Invalid electron type"));
+            }
+        }
+
+        // Update electron indices
+        self.update_electron_indices()?;
+        Ok(())
     }
 
     /// Sets the electron configuration
@@ -627,6 +683,173 @@ impl MetropolisSampler {
 
         let accepted_count = steps.iter().filter(|step| step.accepted).count();
         accepted_count as f64 / steps.len() as f64
+    }
+
+    /// Performs Monte Carlo sampling with a given wavefunction
+    ///
+    /// # Arguments
+    /// * `wavefunction` - The wavefunction to sample from
+    ///
+    /// # Returns
+    /// * `Result<SamplingResult>` - The sampling result
+    pub fn sample(&mut self, wavefunction: &mvmc_physics::wavefunction::CombinedWavefunction) -> Result<SamplingResult> {
+        let mut configurations = Vec::new();
+        let mut accepted_steps = 0;
+        let total_steps = 1000; // Default number of steps
+
+        // Initialize with a random configuration
+        let mut current_config = self.generate_random_configuration()?;
+
+        for _ in 0..total_steps {
+            // Generate a trial move
+            let trial_config = self.generate_trial_move(&current_config)?;
+
+            // Calculate acceptance probability
+            let current_amplitude = wavefunction.calculate(&self.config_to_u8(&current_config));
+            let trial_amplitude = wavefunction.calculate(&self.config_to_u8(&trial_config));
+
+            let acceptance_prob = if current_amplitude.norm() < 1e-12 {
+                0.0
+            } else {
+                (trial_amplitude.norm_sqr() / current_amplitude.norm_sqr()).min(1.0)
+            };
+
+            // Accept or reject the move
+            let mut rng = thread_rng();
+            let random_value: f64 = rng.gen_range(0.0..1.0);
+
+            if random_value < acceptance_prob {
+                current_config = trial_config;
+                accepted_steps += 1;
+            }
+
+            // Store configuration (every 10th step to avoid correlation)
+            if total_steps % 10 == 0 {
+                configurations.push(current_config.clone());
+            }
+        }
+
+        let acceptance_rate = accepted_steps as f64 / total_steps as f64;
+
+        Ok(SamplingResult {
+            configurations,
+            acceptance_rate,
+            num_steps: total_steps,
+        })
+    }
+
+    /// Generates a random electron configuration
+    ///
+    /// # Returns
+    /// * `Result<ElectronConfiguration>` - Random configuration
+    fn generate_random_configuration(&self) -> Result<ElectronConfiguration> {
+        let mut config = ElectronConfiguration::new(
+            SiteCount::new(self.nsite),
+            ElectronCount::new(self.ne),
+            TwoSz::new(self.two_sz),
+        );
+
+        // Randomly place electrons
+        let mut rng = thread_rng();
+        let mut placed_electrons = 0;
+
+        while placed_electrons < self.ne {
+            let site = rng.gen_range(0..self.nsite);
+            let spin = if rng.gen_bool(0.5) { 1 } else { 2 }; // 1: up, 2: down
+
+            if config.electron_number(site) == 0 {
+                config.set_electron(site, spin)?;
+                placed_electrons += 1;
+            }
+        }
+
+        Ok(config)
+    }
+
+    /// Generates a trial move from the current configuration
+    ///
+    /// # Arguments
+    /// * `current_config` - Current electron configuration
+    ///
+    /// # Returns
+    /// * `Result<ElectronConfiguration>` - Trial configuration
+    fn generate_trial_move(&self, current_config: &ElectronConfiguration) -> Result<ElectronConfiguration> {
+        let mut trial_config = current_config.clone();
+        let mut rng = thread_rng();
+
+        // Randomly choose a move type
+        let move_type: u8 = rng.gen_range(0..3);
+
+        match move_type {
+            0 => {
+                // Move an electron to a different site
+                let occupied_sites: Vec<usize> = (0..self.nsite)
+                    .filter(|&i| trial_config.electron_number(i) > 0)
+                    .collect();
+
+                if !occupied_sites.is_empty() {
+                    let from_site = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+                    let to_site = rng.gen_range(0..self.nsite);
+
+                    if to_site != from_site && trial_config.electron_number(to_site) == 0 {
+                        let electron_type = trial_config.electron_number(from_site);
+                        trial_config.set_electron(from_site, 0)?;
+                        trial_config.set_electron(to_site, electron_type)?;
+                    }
+                }
+            }
+            1 => {
+                // Flip a spin
+                let occupied_sites: Vec<usize> = (0..self.nsite)
+                    .filter(|&i| trial_config.electron_number(i) > 0)
+                    .collect();
+
+                if !occupied_sites.is_empty() {
+                    let site = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+                    let current_type = trial_config.electron_number(site);
+                    let new_type = if current_type == 1 { 2 } else { 1 };
+                    trial_config.set_electron(site, new_type)?;
+                }
+            }
+            _ => {
+                // Swap electrons between two sites
+                let occupied_sites: Vec<usize> = (0..self.nsite)
+                    .filter(|&i| trial_config.electron_number(i) > 0)
+                    .collect();
+
+                if occupied_sites.len() >= 2 {
+                    let site1 = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+                    let site2 = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+
+                    if site1 != site2 {
+                        let type1 = trial_config.electron_number(site1);
+                        let type2 = trial_config.electron_number(site2);
+                        trial_config.set_electron(site1, type2)?;
+                        trial_config.set_electron(site2, type1)?;
+                    }
+                }
+            }
+        }
+
+        Ok(trial_config)
+    }
+
+    /// Converts electron configuration to u8 array for wavefunction calculation
+    ///
+    /// # Arguments
+    /// * `config` - Electron configuration
+    ///
+    /// # Returns
+    /// * `Vec<u8>` - u8 array representation
+    fn config_to_u8(&self, config: &ElectronConfiguration) -> Vec<u8> {
+        let mut result = vec![0u8; self.nsite];
+
+        for i in 0..self.nsite {
+            let electron_type = config.electron_number(i);
+            result[i] = electron_type as u8;
+        }
+
+        result
     }
 }
 

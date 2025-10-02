@@ -742,6 +742,7 @@ dependencies = [
  "mvmc-physics",
  "num-complex",
  "proptest",
+ "rand 0.8.5",
  "serde",
  "thiserror",
 ]
@@ -785,11 +786,13 @@ version = "0.1.0"
 name = "mvmc-physics"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "approx",
  "mvmc-math",
  "ndarray",
  "num-complex",
  "proptest",
+ "rand 0.8.5",
  "serde",
  "thiserror",
 ]

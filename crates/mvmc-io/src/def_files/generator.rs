@@ -7,7 +7,7 @@ use super::{
     ModParaGenerator, LocSpnGenerator, TransGenerator, ExchangeGenerator,
     CoulombInterGenerator, HundGenerator, GreenOneGenerator, GreenTwoGenerator,
     GutzwillerIdxGenerator, JastrowIdxGenerator, OrbitalIdxGenerator,
-    QPTransIdxGenerator, NamelistGenerator, ZvoOutGenerator,
+    QPTransIdxGenerator, NamelistGenerator,
 };
 use crate::Result;
 use std::path::Path;
@@ -120,7 +120,6 @@ impl DefFileGenerator {
         self.generate_orbitalidx(output_dir)?;
         self.generate_qptransidx(output_dir)?;
         self.generate_namelist(output_dir)?;
-        self.generate_zvo_out(output_dir)?;
 
         Ok(())
     }
@@ -201,11 +200,5 @@ impl DefFileGenerator {
     pub fn generate_namelist<P: AsRef<Path>>(&self, output_dir: P) -> Result<()> {
         let generator = NamelistGenerator::new(&self.config);
         generator.generate(output_dir.as_ref().join("namelist.def"))
-    }
-
-    /// Generates zvo_out_001.dat file.
-    pub fn generate_zvo_out<P: AsRef<Path>>(&self, output_dir: P) -> Result<()> {
-        let generator = ZvoOutGenerator::new(&self.config);
-        generator.generate(output_dir.as_ref().join("zvo_out_001.dat"))
     }
 }

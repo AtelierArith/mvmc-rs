@@ -10,12 +10,12 @@ use mvmc_core::{
     vmc::{VmcEngine, VmcResult},
     config::VmcParameters,
     types::{SiteCount, ElectronCount, TwoSz, RandomSeed, CalcMode, LanczosMode},
-    wavefunction::CombinedWavefunction,
     monte_carlo::SamplingStatistics,
 };
 use mvmc_io::{ConfigParser as _, OutputFormat, OutputManager, StdFaceParser, TomlParser, JsonParser};
-use mvmc_physics::hamiltonian::{HubbardHamiltonian, HeisenbergHamiltonian, Hamiltonian};
-use mvmc_physics::lattice::{ChainLattice, SquareLattice, Lattice};
+use mvmc_physics::hamiltonian::{HubbardHamiltonian, Hamiltonian};
+use mvmc_physics::lattice::{ChainLattice, SquareLattice};
+use mvmc_physics::wavefunction::{CombinedWavefunction, SlaterDeterminant};
 use std::path::PathBuf;
 use std::time::Instant;
 use std::io::Write;
@@ -120,7 +120,7 @@ pub fn execute(
 
     // Initialize VMC engine
     println!("🔧 Creating VMC engine...");
-    let wavefunction = CombinedWavefunction::new(vmc_params.nsite, vmc_params.ne);
+    let wavefunction = CombinedWavefunction::new(vmc_params.nsite.get(), vmc_params.ne.get());
 
     // Create Hamiltonian based on model type
     let hamiltonian = create_hamiltonian(&vmc_params)?;

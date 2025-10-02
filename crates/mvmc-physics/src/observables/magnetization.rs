@@ -199,6 +199,190 @@ impl MagnetizationCalculator {
         // Rough estimate: susceptibility ∝ magnetization²
         Ok(magnetization.powi(2) / n_sites as f64)
     }
+
+    /// Calculates the magnetization for VMC calculations.
+    ///
+    /// This calculates the magnetization with proper wave function weighting.
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    /// * `wavefunction` - Wave function for the configuration
+    ///
+    /// # Returns
+    /// The magnetization
+    pub fn magnetization_vmc(&self, config: &[Spin], wavefunction: &dyn crate::wavefunction::Wavefunction) -> Result<f64> {
+        validate_configuration(config, self.lattice.as_ref())?;
+
+        // Calculate the wave function amplitude
+        let psi = wavefunction.calculate_spin(config)?;
+        if psi.norm() < 1e-12 {
+            return Ok(0.0);
+        }
+
+        // Calculate the magnetization
+        let magnetization = self.total_magnetization(config)?;
+        Ok(magnetization)
+    }
+
+    /// Calculates the magnetization variance for VMC calculations.
+    ///
+    /// This calculates the variance of the magnetization over multiple configurations.
+    ///
+    /// # Arguments
+    /// * `configurations` - List of configurations
+    /// * `wavefunction` - Wave function
+    ///
+    /// # Returns
+    /// The magnetization variance
+    pub fn calculate_magnetization_variance(
+        &self,
+        configurations: &[Vec<Spin>],
+        wavefunction: &dyn crate::wavefunction::Wavefunction,
+    ) -> Result<f64> {
+        if configurations.is_empty() {
+            return Ok(0.0);
+        }
+
+        let mut magnetizations = Vec::new();
+        let mut total_magnetization = 0.0;
+
+        for config in configurations {
+            let magnetization = self.magnetization_vmc(config, wavefunction)?;
+            magnetizations.push(magnetization);
+            total_magnetization += magnetization;
+        }
+
+        let mean_magnetization = total_magnetization / configurations.len() as f64;
+
+        let variance = magnetizations
+            .iter()
+            .map(|&m| (m - mean_magnetization).powi(2))
+            .sum::<f64>() / configurations.len() as f64;
+
+        Ok(variance)
+    }
+
+    /// Calculates the spin-spin correlation function for VMC calculations.
+    ///
+    /// This calculates the correlation function between spins at different sites.
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    /// * `site1` - First site index
+    /// * `site2` - Second site index
+    /// * `wavefunction` - Wave function for the configuration
+    ///
+    /// # Returns
+    /// The spin-spin correlation
+    pub fn spin_spin_correlation_vmc(
+        &self,
+        config: &[Spin],
+        site1: usize,
+        site2: usize,
+        wavefunction: &dyn crate::wavefunction::Wavefunction,
+    ) -> Result<f64> {
+        validate_configuration(config, self.lattice.as_ref())?;
+
+        if site1 >= config.len() || site2 >= config.len() {
+            return Ok(0.0);
+        }
+
+        // Calculate the wave function amplitude
+        let psi = wavefunction.calculate_spin(config)?;
+        if psi.norm() < 1e-12 {
+            return Ok(0.0);
+        }
+
+        // Calculate the spin-spin correlation
+        let spin1 = config[site1].value_f64();
+        let spin2 = config[site2].value_f64();
+        let correlation = spin1 * spin2;
+
+        Ok(correlation)
+    }
+
+    /// Calculates the structure factor for VMC calculations.
+    ///
+    /// This calculates the structure factor for a given momentum.
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    /// * `momentum` - Momentum vector
+    /// * `wavefunction` - Wave function for the configuration
+    ///
+    /// # Returns
+    /// The structure factor
+    pub fn structure_factor_vmc(
+        &self,
+        config: &[Spin],
+        momentum: &[f64],
+        wavefunction: &dyn crate::wavefunction::Wavefunction,
+    ) -> Result<f64> {
+        validate_configuration(config, self.lattice.as_ref())?;
+
+        if momentum.len() != self.lattice.dimension() {
+            return Ok(0.0);
+        }
+
+        // Calculate the wave function amplitude
+        let psi = wavefunction.calculate_spin(config)?;
+        if psi.norm() < 1e-12 {
+            return Ok(0.0);
+        }
+
+        let mut structure_factor = 0.0;
+
+        for i in 0..self.lattice.n_sites() {
+            for j in 0..self.lattice.n_sites() {
+                let spin_i = config[i].value_f64();
+                let spin_j = config[j].value_f64();
+
+                // Calculate the phase factor
+                let mut phase = 0.0;
+                for (dim, &k) in momentum.iter().enumerate() {
+                    let size = self.lattice.size()[dim];
+                    let pos_i = (i % size) as f64;
+                    let pos_j = (j % size) as f64;
+                    phase += k * (pos_i - pos_j);
+                }
+
+                structure_factor += spin_i * spin_j * (2.0 * std::f64::consts::PI * phase).cos();
+            }
+        }
+
+        Ok(structure_factor / self.lattice.n_sites() as f64)
+    }
+
+    /// Calculates the magnetic moment for VMC calculations.
+    ///
+    /// This calculates the magnetic moment of the system.
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    /// * `wavefunction` - Wave function for the configuration
+    ///
+    /// # Returns
+    /// The magnetic moment
+    pub fn magnetic_moment_vmc(
+        &self,
+        config: &[Spin],
+        wavefunction: &dyn crate::wavefunction::Wavefunction,
+    ) -> Result<f64> {
+        validate_configuration(config, self.lattice.as_ref())?;
+
+        // Calculate the wave function amplitude
+        let psi = wavefunction.calculate_spin(config)?;
+        if psi.norm() < 1e-12 {
+            return Ok(0.0);
+        }
+
+        // Calculate the magnetic moment
+        let magnetization = self.total_magnetization(config)?;
+        let n_sites = self.lattice.n_sites();
+
+        // Magnetic moment per site
+        Ok(magnetization / n_sites as f64)
+    }
 }
 
 impl Observable for MagnetizationCalculator {

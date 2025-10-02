@@ -55,6 +55,9 @@ pub enum ObservableError {
 
     #[error("Calculation failed: {message}")]
     CalculationFailed { message: String },
+
+    #[error("Anyhow error: {0}")]
+    Anyhow(#[from] anyhow::Error),
 }
 
 /// Result type for observable operations.

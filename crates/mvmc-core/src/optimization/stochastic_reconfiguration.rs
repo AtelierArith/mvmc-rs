@@ -580,9 +580,115 @@ impl SROptimizer {
             }
         }
 
-        // Solve using simple Gaussian elimination (for small systems)
-        // In practice, this would use more sophisticated methods like Cholesky decomposition
-        self.gaussian_elimination(&mut reduced_matrix, &mut reduced_force)
+        // Apply regularization to improve numerical stability
+        let regularization = self.calculate_regularization_for_reduced_matrix(&reduced_matrix);
+        for i in 0..n {
+            reduced_matrix[i][i] += regularization;
+        }
+
+        // Solve using Cholesky decomposition for better numerical stability
+        self.solve_cholesky_reduced(&reduced_matrix, &reduced_force)
+    }
+
+    /// Solves linear system using Cholesky decomposition (reduced system)
+    ///
+    /// # Arguments
+    ///
+    /// * `matrix` - Symmetric positive definite matrix
+    /// * `rhs` - Right-hand side vector
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Vec<f64>>` - Solution vector
+    fn solve_cholesky_reduced(&self, matrix: &[Vec<f64>], rhs: &[f64]) -> Result<Vec<f64>> {
+        let n = matrix.len();
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Perform Cholesky decomposition: A = L * L^T
+        let mut l = vec![vec![0.0; n]; n];
+
+        for i in 0..n {
+            for j in 0..=i {
+                let mut sum = matrix[i][j];
+                for k in 0..j {
+                    sum -= l[i][k] * l[j][k];
+                }
+
+                if i == j {
+                    if sum <= 0.0 {
+                        // Fall back to Gaussian elimination if not positive definite
+                        return self.gaussian_elimination(&mut matrix.to_vec(), &mut rhs.to_vec());
+                    }
+                    l[i][j] = sum.sqrt();
+                } else {
+                    l[i][j] = sum / l[j][j];
+                }
+            }
+        }
+
+        // Solve L * y = rhs (forward substitution)
+        let mut y = vec![0.0; n];
+        for i in 0..n {
+            let mut sum = rhs[i];
+            for j in 0..i {
+                sum -= l[i][j] * y[j];
+            }
+            y[i] = sum / l[i][i];
+        }
+
+        // Solve L^T * x = y (backward substitution)
+        let mut x = vec![0.0; n];
+        for i in (0..n).rev() {
+            let mut sum = y[i];
+            for j in (i + 1)..n {
+                sum -= l[j][i] * x[j];
+            }
+            x[i] = sum / l[i][i];
+        }
+
+        Ok(x)
+    }
+
+    /// Calculates regularization parameter for reduced matrix
+    ///
+    /// # Arguments
+    ///
+    /// * `matrix` - Reduced matrix
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Regularization parameter
+    fn calculate_regularization_for_reduced_matrix(&self, matrix: &[Vec<f64>]) -> f64 {
+        let n = matrix.len();
+        if n == 0 {
+            return 0.0;
+        }
+
+        // Calculate regularization based on matrix condition number
+        let mut max_eigenvalue: f64 = 0.0;
+        let mut min_eigenvalue = f64::INFINITY;
+
+        for i in 0..n {
+            let mut row_sum = 0.0;
+            for j in 0..n {
+                row_sum += matrix[i][j].abs();
+            }
+            max_eigenvalue = max_eigenvalue.max(row_sum);
+            min_eigenvalue = min_eigenvalue.min(matrix[i][i]);
+        }
+
+        min_eigenvalue = min_eigenvalue.max(0.0);
+
+        if min_eigenvalue > 1e-12 {
+            let condition_number = max_eigenvalue / min_eigenvalue;
+            // Regularization proportional to condition number
+            max_eigenvalue * 1e-6 * condition_number.sqrt()
+        } else {
+            // Fallback regularization
+            max_eigenvalue * 1e-6
+        }
     }
 
     /// Performs Gaussian elimination to solve the linear system
@@ -680,14 +786,233 @@ impl SROptimizer {
             return Err(VmcError::dim_mismatch(self.n_params, parameters.len()));
         }
 
-        let mut updated = parameters.to_vec();
+        // Solve the linear system S * δp = f using regularized inversion
+        let parameter_updates = result.parameter_updates.clone();
 
-        for i in 0..self.n_params {
-            let update = result.get_update(i)?;
-            updated[i] += update;
+        // Apply parameter updates with step size control
+        let mut updated = Vec::with_capacity(parameters.len());
+        for (i, &param) in parameters.iter().enumerate() {
+            let update = if i < parameter_updates.len() {
+                parameter_updates[i]
+            } else {
+                0.0
+            };
+
+            // Apply step size control and regularization
+            let step_size = self.calculate_step_size(param, update);
+            let new_param = param + step_size * update;
+
+            // Apply parameter constraints
+            let constrained_param = self.apply_parameter_constraints(new_param, i);
+            updated.push(constrained_param);
         }
 
         Ok(updated)
+    }
+
+    /// Solves the SR equation S * δp = f using regularized inversion
+    ///
+    /// # Arguments
+    ///
+    /// * `force_vector` - Force vector f
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Vec<f64>>` - Parameter updates δp
+    fn solve_sr_equation(&self, force_vector: &[f64]) -> Result<Vec<f64>> {
+        if force_vector.len() != self.n_params {
+            return Err(VmcError::invalid_config(
+                "Force vector length mismatch in SR equation"
+            ));
+        }
+
+        // Use regularized inversion to solve S * δp = f
+        // S_reg = S + λ * I, where λ is the regularization parameter
+        let regularization = self.calculate_regularization();
+
+        // Create regularized matrix
+        let mut regularized_matrix = self.sr_matrix.matrix.clone();
+        for i in 0..self.n_params {
+            regularized_matrix[i][i] += regularization;
+        }
+
+        // Solve using Cholesky decomposition for symmetric positive definite matrix
+        let parameter_updates = self.solve_cholesky(&regularized_matrix, force_vector)?;
+
+        Ok(parameter_updates)
+    }
+
+    /// Solves linear system using Cholesky decomposition
+    ///
+    /// # Arguments
+    ///
+    /// * `matrix` - Symmetric positive definite matrix
+    /// * `rhs` - Right-hand side vector
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Vec<f64>>` - Solution vector
+    fn solve_cholesky(&self, matrix: &[Vec<f64>], rhs: &[f64]) -> Result<Vec<f64>> {
+        let n = matrix.len();
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Perform Cholesky decomposition: A = L * L^T
+        let mut l = vec![vec![0.0; n]; n];
+
+        for i in 0..n {
+            for j in 0..=i {
+                let mut sum = matrix[i][j];
+                for k in 0..j {
+                    sum -= l[i][k] * l[j][k];
+                }
+
+                if i == j {
+                    if sum <= 0.0 {
+                        return Err(VmcError::invalid_config(
+                            "Matrix is not positive definite in Cholesky decomposition"
+                        ));
+                    }
+                    l[i][j] = sum.sqrt();
+                } else {
+                    l[i][j] = sum / l[j][j];
+                }
+            }
+        }
+
+        // Solve L * y = rhs (forward substitution)
+        let mut y = vec![0.0; n];
+        for i in 0..n {
+            let mut sum = rhs[i];
+            for j in 0..i {
+                sum -= l[i][j] * y[j];
+            }
+            y[i] = sum / l[i][i];
+        }
+
+        // Solve L^T * x = y (backward substitution)
+        let mut x = vec![0.0; n];
+        for i in (0..n).rev() {
+            let mut sum = y[i];
+            for j in (i + 1)..n {
+                sum -= l[j][i] * x[j];
+            }
+            x[i] = sum / l[i][i];
+        }
+
+        Ok(x)
+    }
+
+    /// Calculates regularization parameter for SR matrix
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Regularization parameter
+    fn calculate_regularization(&self) -> f64 {
+        // Calculate regularization based on matrix condition number
+        let max_eigenvalue = self.estimate_max_eigenvalue();
+        let min_eigenvalue = self.estimate_min_eigenvalue();
+
+        if min_eigenvalue > 1e-12 {
+            let condition_number = max_eigenvalue / min_eigenvalue;
+            // Regularization proportional to condition number
+            max_eigenvalue * 1e-6 * condition_number.sqrt()
+        } else {
+            // Fallback regularization
+            max_eigenvalue * 1e-6
+        }
+    }
+
+    /// Estimates the maximum eigenvalue of the SR matrix
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Estimated maximum eigenvalue
+    fn estimate_max_eigenvalue(&self) -> f64 {
+        // Use Gerschgorin's theorem for eigenvalue estimation
+        let mut max_eigenvalue: f64 = 0.0;
+
+        for i in 0..self.n_params {
+            let mut row_sum = 0.0;
+            for j in 0..self.n_params {
+                row_sum += self.sr_matrix.matrix[i][j].abs();
+            }
+            max_eigenvalue = max_eigenvalue.max(row_sum);
+        }
+
+        max_eigenvalue
+    }
+
+    /// Estimates the minimum eigenvalue of the SR matrix
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Estimated minimum eigenvalue
+    fn estimate_min_eigenvalue(&self) -> f64 {
+        // Use diagonal elements as lower bound for minimum eigenvalue
+        let mut min_eigenvalue = f64::INFINITY;
+
+        for i in 0..self.n_params {
+            min_eigenvalue = min_eigenvalue.min(self.sr_matrix.matrix[i][i]);
+        }
+
+        min_eigenvalue.max(0.0)
+    }
+
+    /// Calculates adaptive step size for parameter updates
+    ///
+    /// # Arguments
+    ///
+    /// * `current_param` - Current parameter value
+    /// * `update` - Proposed parameter update
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Step size
+    fn calculate_step_size(&self, current_param: f64, update: f64) -> f64 {
+        // Adaptive step size based on parameter magnitude and update size
+        let param_magnitude = current_param.abs();
+        let update_magnitude = update.abs();
+
+        if update_magnitude < 1e-12 {
+            return 0.0;
+        }
+
+        // Base step size
+        let base_step_size = 0.1;
+
+        // Adaptive scaling based on parameter and update magnitudes
+        let scale_factor = if param_magnitude > 1e-12 {
+            (param_magnitude / update_magnitude).min(1.0).max(0.01)
+        } else {
+            0.01
+        };
+
+        base_step_size * scale_factor
+    }
+
+    /// Applies parameter constraints
+    ///
+    /// # Arguments
+    ///
+    /// * `param` - Parameter value
+    /// * `param_index` - Parameter index
+    ///
+    /// # Returns
+    ///
+    /// * `f64` - Constrained parameter value
+    fn apply_parameter_constraints(&self, param: f64, param_index: usize) -> f64 {
+        // Apply basic constraints based on parameter type
+        if param_index <= self.nsite * self.ne {
+            // Slater determinant parameters (orbital coefficients)
+            // Constrain orbital coefficients to reasonable range
+            param.clamp(-10.0, 10.0)
+        } else {
+            // Pfaffian parameters (pairing amplitudes)
+            // Constrain pairing amplitudes
+            param.clamp(-5.0, 5.0)
+        }
     }
 }
 

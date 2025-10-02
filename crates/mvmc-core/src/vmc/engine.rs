@@ -14,10 +14,26 @@ use crate::monte_carlo::{
 use crate::optimization::SROptimizer;
 use crate::types::{CalcMode, ElectronCount, RandomSeed, SiteCount};
 use crate::wavefunction::CombinedWavefunction;
+use mvmc_physics::wavefunction::CombinedWavefunction as PhysicsCombinedWavefunction;
 use mvmc_physics::hamiltonian::Hamiltonian;
 use mvmc_physics::hamiltonian::Spin;
 use num_complex::Complex64;
 use std::fmt;
+
+/// Result of a single VMC iteration
+#[derive(Debug, Clone)]
+pub struct VmcIterationResult {
+    /// Energy value
+    pub energy: Complex64,
+    /// Energy variance
+    pub variance: f64,
+    /// Number of samples
+    pub sample_count: usize,
+    /// Acceptance rate
+    pub acceptance_rate: f64,
+    /// Physical observables
+    pub observables: PhysicalObservables,
+}
 
 /// VMC calculation engine
 ///
@@ -39,7 +55,7 @@ pub struct VmcEngine {
     /// VMC parameters
     params: VmcParameters,
     /// Combined wavefunction
-    wavefunction: CombinedWavefunction,
+    wavefunction: PhysicsCombinedWavefunction,
     /// Metropolis sampler
     sampler: MetropolisSampler,
     /// SR optimizer (for optimization mode)
@@ -135,7 +151,7 @@ impl VmcEngine {
     ///
     /// let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
     /// ```
-    pub fn new(params: VmcParameters, wavefunction: CombinedWavefunction, hamiltonian: Box<dyn Hamiltonian>) -> Result<Self> {
+    pub fn new(params: VmcParameters, wavefunction: PhysicsCombinedWavefunction, hamiltonian: Box<dyn Hamiltonian>) -> Result<Self> {
         // Validate parameters
         params.validate()?;
 
@@ -393,12 +409,12 @@ impl VmcEngine {
     }
 
     /// Returns the current wavefunction
-    pub fn wavefunction(&self) -> &CombinedWavefunction {
+    pub fn wavefunction(&self) -> &PhysicsCombinedWavefunction {
         &self.wavefunction
     }
 
     /// Returns a mutable reference to the wavefunction
-    pub fn wavefunction_mut(&mut self) -> &mut CombinedWavefunction {
+    pub fn wavefunction_mut(&mut self) -> &mut PhysicsCombinedWavefunction {
         &mut self.wavefunction
     }
 
@@ -471,6 +487,112 @@ impl VmcEngine {
         Ok(Complex64::new(local_energy, 0.0))
     }
 
+    /// Runs a single VMC iteration (for optimization mode)
+    ///
+    /// This method performs one iteration of the VMC calculation,
+    /// including sampling, energy calculation, and parameter updates.
+    ///
+    /// # Returns
+    /// * `Result<VmcIterationResult>` - The iteration result
+    pub fn run_single_iteration(&mut self) -> Result<VmcIterationResult> {
+        // 1. Monte Carlo sampling
+        let sampling_result = self.sampler.sample(&self.wavefunction)?;
+
+        // 2. Calculate energy and observables
+        let energy = self.calculate_energy(&sampling_result.configurations)?;
+        let observables = self.calculator.calculate_observables();
+
+        // 3. Calculate variance
+        let variance = self.calculate_variance(&sampling_result.configurations, energy)?;
+
+        // 4. Update parameters if in optimization mode
+        // Note: This is a placeholder - full optimization implementation would be needed
+        // if let Some(ref mut optimizer) = self.optimizer {
+        //     optimizer.update_parameters(&self.wavefunction, &sampling_result)?;
+        // }
+
+        Ok(VmcIterationResult {
+            energy,
+            variance,
+            sample_count: sampling_result.configurations.len(),
+            acceptance_rate: sampling_result.acceptance_rate,
+            observables,
+        })
+    }
+
+    /// Calculates the total energy for a set of configurations
+    ///
+    /// # Arguments
+    /// * `configurations` - List of electron configurations
+    ///
+    /// # Returns
+    /// * `Result<Complex64>` - The total energy
+    fn calculate_energy(&self, configurations: &[crate::monte_carlo::ElectronConfiguration]) -> Result<Complex64> {
+        let mut total_energy = Complex64::new(0.0, 0.0);
+        let mut total_weight = 0.0;
+
+        for config in configurations {
+            let spin_config = self.electron_config_to_spin_config(config);
+            let local_energy = self.calculate_local_energy(&spin_config)?;
+            let weight = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config)).norm();
+
+            total_energy += local_energy * weight;
+            total_weight += weight;
+        }
+
+        if total_weight > 1e-12 {
+            Ok(total_energy / total_weight)
+        } else {
+            Ok(Complex64::new(0.0, 0.0))
+        }
+    }
+
+    /// Calculates the variance of the energy
+    ///
+    /// # Arguments
+    /// * `configurations` - List of electron configurations
+    /// * `mean_energy` - Mean energy value
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The variance
+    fn calculate_variance(&self, configurations: &[crate::monte_carlo::ElectronConfiguration], mean_energy: Complex64) -> Result<f64> {
+        let mut total_variance = 0.0;
+        let mut total_weight = 0.0;
+
+        for config in configurations {
+            let spin_config = self.electron_config_to_spin_config(config);
+            let local_energy = self.calculate_local_energy(&spin_config)?;
+            let weight = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config)).norm();
+
+            let energy_diff = local_energy - mean_energy;
+            total_variance += energy_diff.norm_sqr() * weight;
+            total_weight += weight;
+        }
+
+        if total_weight > 1e-12 {
+            Ok(total_variance / total_weight)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    /// Converts spin configuration to u8 array for wavefunction calculation
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration
+    ///
+    /// # Returns
+    /// * `Vec<u8>` - u8 array representation
+    fn spin_config_to_u8(&self, spin_config: &[Spin]) -> Vec<u8> {
+        spin_config.iter().map(|spin| {
+            match spin {
+                Spin::Up => 1,
+                Spin::Down => 2,
+                Spin::Empty => 0,
+            }
+        }).collect()
+    }
+
     /// Calculates VMC local energy including off-diagonal terms
     ///
     /// # Arguments
@@ -511,6 +633,208 @@ impl VmcEngine {
         }
 
         Ok(local_energy)
+    }
+
+    /// Calculates the magnetization for a given configuration
+    ///
+    /// # Arguments
+    /// * `configurations` - List of electron configurations
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated magnetization
+    fn calculate_magnetization(&self, configurations: &[crate::monte_carlo::ElectronConfiguration]) -> Result<f64> {
+        if configurations.is_empty() {
+            return Ok(0.0);
+        }
+
+        let mut total_magnetization = 0.0;
+        let mut total_weight = 0.0;
+
+        for config in configurations {
+            // Convert electron configuration to spin configuration
+            let spin_config = self.electron_config_to_spin_config(config);
+
+            // Calculate the magnetization for this configuration
+            let magnetization = self.calculate_magnetization_single(&spin_config)?;
+
+            // Calculate the wave function amplitude
+            let psi = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config));
+            let weight = psi.norm_sqr();
+
+            total_magnetization += magnetization * weight;
+            total_weight += weight;
+        }
+
+        if total_weight > 1e-12 {
+            Ok(total_magnetization / total_weight)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    /// Calculates the magnetization for a single configuration
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated magnetization
+    fn calculate_magnetization_single(&self, spin_config: &[Spin]) -> Result<f64> {
+        let magnetization = spin_config.iter().map(|spin| spin.value_f64()).sum();
+        Ok(magnetization)
+    }
+
+    /// Calculates the spin-spin correlation for a given configuration
+    ///
+    /// # Arguments
+    /// * `configurations` - List of electron configurations
+    /// * `site1` - First site index
+    /// * `site2` - Second site index
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated correlation
+    fn calculate_spin_spin_correlation(
+        &self,
+        configurations: &[crate::monte_carlo::ElectronConfiguration],
+        site1: usize,
+        site2: usize,
+    ) -> Result<f64> {
+        if configurations.is_empty() {
+            return Ok(0.0);
+        }
+
+        let mut total_correlation = 0.0;
+        let mut total_weight = 0.0;
+
+        for config in configurations {
+            // Convert electron configuration to spin configuration
+            let spin_config = self.electron_config_to_spin_config(config);
+
+            // Calculate the correlation for this configuration
+            let correlation = self.calculate_spin_spin_correlation_single(&spin_config, site1, site2)?;
+
+            // Calculate the wave function amplitude
+            let psi = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config));
+            let weight = psi.norm_sqr();
+
+            total_correlation += correlation * weight;
+            total_weight += weight;
+        }
+
+        if total_weight > 1e-12 {
+            Ok(total_correlation / total_weight)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    /// Calculates the spin-spin correlation for a single configuration
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration
+    /// * `site1` - First site index
+    /// * `site2` - Second site index
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated correlation
+    fn calculate_spin_spin_correlation_single(
+        &self,
+        spin_config: &[Spin],
+        site1: usize,
+        site2: usize,
+    ) -> Result<f64> {
+        if site1 >= spin_config.len() || site2 >= spin_config.len() {
+            return Ok(0.0);
+        }
+
+        let spin1 = spin_config[site1].value_f64();
+        let spin2 = spin_config[site2].value_f64();
+        let correlation = spin1 * spin2;
+
+        Ok(correlation)
+    }
+
+    /// Calculates the structure factor for a given configuration
+    ///
+    /// # Arguments
+    /// * `configurations` - List of electron configurations
+    /// * `momentum` - Momentum vector
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated structure factor
+    fn calculate_structure_factor(
+        &self,
+        configurations: &[crate::monte_carlo::ElectronConfiguration],
+        momentum: &[f64],
+    ) -> Result<f64> {
+        if configurations.is_empty() {
+            return Ok(0.0);
+        }
+
+        let mut total_structure_factor = 0.0;
+        let mut total_weight = 0.0;
+
+        for config in configurations {
+            // Convert electron configuration to spin configuration
+            let spin_config = self.electron_config_to_spin_config(config);
+
+            // Calculate the structure factor for this configuration
+            let structure_factor = self.calculate_structure_factor_single(&spin_config, momentum)?;
+
+            // Calculate the wave function amplitude
+            let psi = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config));
+            let weight = psi.norm_sqr();
+
+            total_structure_factor += structure_factor * weight;
+            total_weight += weight;
+        }
+
+        if total_weight > 1e-12 {
+            Ok(total_structure_factor / total_weight)
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    /// Calculates the structure factor for a single configuration
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration
+    /// * `momentum` - Momentum vector
+    ///
+    /// # Returns
+    /// * `Result<f64>` - The calculated structure factor
+    fn calculate_structure_factor_single(
+        &self,
+        spin_config: &[Spin],
+        momentum: &[f64],
+    ) -> Result<f64> {
+        if momentum.len() != self.hamiltonian.lattice().dimension() {
+            return Ok(0.0);
+        }
+
+        let mut structure_factor = 0.0;
+        let n_sites = spin_config.len();
+
+        for i in 0..n_sites {
+            for j in 0..n_sites {
+                let spin_i = spin_config[i].value_f64();
+                let spin_j = spin_config[j].value_f64();
+
+                // Calculate the phase factor
+                let mut phase = 0.0;
+                for (dim, &k) in momentum.iter().enumerate() {
+                    let size = self.hamiltonian.lattice().size()[dim];
+                    let pos_i = (i % size) as f64;
+                    let pos_j = (j % size) as f64;
+                    phase += k * (pos_i - pos_j);
+                }
+
+                structure_factor += spin_i * spin_j * (2.0 * std::f64::consts::PI * phase).cos();
+            }
+        }
+
+        Ok(structure_factor / n_sites as f64)
     }
 }
 

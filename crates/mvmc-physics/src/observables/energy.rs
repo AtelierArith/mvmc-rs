@@ -121,6 +121,148 @@ impl EnergyCalculator {
         // This method is provided for consistency with Monte Carlo methods
         Ok(0.0)
     }
+
+    /// Calculates the local energy for VMC calculations.
+    ///
+    /// The local energy is defined as H|ψ⟩/|ψ⟩, where H is the Hamiltonian
+    /// and |ψ⟩ is the wave function. This is the key quantity in VMC.
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    /// * `wavefunction` - Wave function for the configuration
+    ///
+    /// # Returns
+    /// The local energy
+    pub fn local_energy(&self, config: &[Spin], wavefunction: &dyn crate::wavefunction::Wavefunction) -> Result<f64> {
+        validate_configuration(config, self.hamiltonian.lattice())?;
+
+        // Calculate the wave function amplitude
+        let psi = wavefunction.calculate_spin(config)?;
+        if psi.norm() < 1e-12 {
+            return Ok(0.0);
+        }
+
+        // Calculate the local energy: H|ψ⟩/|ψ⟩
+        let mut local_energy = 0.0;
+
+        // Diagonal terms (current configuration)
+        let diagonal_energy = self.hamiltonian.total_energy(config);
+        local_energy += diagonal_energy;
+
+        // Off-diagonal terms (hopping terms)
+        let n_sites = self.hamiltonian.lattice().n_sites();
+        for i in 0..n_sites {
+            for j in 0..n_sites {
+                if i != j {
+                    // Check if hopping is possible
+                    if self.can_hop(config, i, j) {
+                        let mut new_config = config.to_vec();
+                        self.perform_hop(&mut new_config, i, j);
+
+                        let new_psi = wavefunction.calculate_spin(&new_config)?;
+                        if new_psi.norm() > 1e-12 {
+                            let hopping_amplitude = self.get_hopping_amplitude(config, i, j);
+                            let ratio = new_psi / psi;
+                            local_energy += hopping_amplitude * ratio.re;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(local_energy)
+    }
+
+    /// Calculates the energy variance for VMC calculations.
+    ///
+    /// This calculates the variance of the local energy over multiple configurations.
+    ///
+    /// # Arguments
+    /// * `configurations` - List of configurations
+    /// * `wavefunction` - Wave function
+    ///
+    /// # Returns
+    /// The energy variance
+    pub fn calculate_energy_variance(
+        &self,
+        configurations: &[Vec<Spin>],
+        wavefunction: &dyn crate::wavefunction::Wavefunction,
+    ) -> Result<f64> {
+        if configurations.is_empty() {
+            return Ok(0.0);
+        }
+
+        let mut local_energies = Vec::new();
+        let mut total_energy = 0.0;
+
+        for config in configurations {
+            let local_energy = self.local_energy(config, wavefunction)?;
+            local_energies.push(local_energy);
+            total_energy += local_energy;
+        }
+
+        let mean_energy = total_energy / configurations.len() as f64;
+
+        let variance = local_energies
+            .iter()
+            .map(|&e| (e - mean_energy).powi(2))
+            .sum::<f64>() / configurations.len() as f64;
+
+        Ok(variance)
+    }
+
+    /// Checks if hopping is possible between two sites.
+    ///
+    /// # Arguments
+    /// * `config` - Current configuration
+    /// * `from` - Source site
+    /// * `to` - Destination site
+    ///
+    /// # Returns
+    /// True if hopping is possible
+    fn can_hop(&self, config: &[Spin], from: usize, to: usize) -> bool {
+        if from >= config.len() || to >= config.len() {
+            return false;
+        }
+
+        // Check if source site is occupied and destination is empty
+        config[from] != Spin::Empty && config[to] == Spin::Empty
+    }
+
+    /// Performs a hopping move between two sites.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration to modify
+    /// * `from` - Source site
+    /// * `to` - Destination site
+    fn perform_hop(&self, config: &mut [Spin], from: usize, to: usize) {
+        if from < config.len() && to < config.len() {
+            config[to] = config[from];
+            config[from] = Spin::Empty;
+        }
+    }
+
+    /// Gets the hopping amplitude between two sites.
+    ///
+    /// # Arguments
+    /// * `config` - Current configuration
+    /// * `from` - Source site
+    /// * `to` - Destination site
+    ///
+    /// # Returns
+    /// The hopping amplitude
+    fn get_hopping_amplitude(&self, config: &[Spin], from: usize, to: usize) -> f64 {
+        // This is a simplified implementation
+        // In practice, this should be extracted from the Hamiltonian
+        if from < config.len() && to < config.len() {
+            match (config[from], config[to]) {
+                (Spin::Up, Spin::Empty) | (Spin::Down, Spin::Empty) => 1.0,
+                _ => 0.0,
+            }
+        } else {
+            0.0
+        }
+    }
 }
 
 impl Observable for EnergyCalculator {

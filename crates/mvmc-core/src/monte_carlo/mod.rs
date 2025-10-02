@@ -9,6 +9,6 @@ pub mod metropolis;
 pub mod observables;
 pub mod sampler;
 
-pub use metropolis::{ElectronConfiguration, MetropolisSampler, MetropolisStep};
+pub use metropolis::{ElectronConfiguration, MetropolisSampler, MetropolisStep, SamplingResult};
 pub use observables::{ObservableCalculator, PhysicalObservables};
 pub use sampler::{Sampler, SamplingStatistics};

@@ -23,7 +23,7 @@ pub use def_files::{
     DefFileGenerator, DefFileConfig, ModParaGenerator, LocSpnGenerator, TransGenerator,
     ExchangeGenerator, CoulombInterGenerator, HundGenerator, GreenOneGenerator, GreenTwoGenerator,
     GutzwillerIdxGenerator, JastrowIdxGenerator, OrbitalIdxGenerator, QPTransIdxGenerator,
-    NamelistGenerator, ZvoOutGenerator,
+    NamelistGenerator,
 };
 
 /// Common error types for I/O operations.

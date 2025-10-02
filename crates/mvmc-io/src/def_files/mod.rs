@@ -39,7 +39,6 @@ pub mod jastrowidx;
 pub mod orbitalidx;
 pub mod qptransidx;
 pub mod namelist;
-pub mod zvo_out;
 
 // Re-export commonly used types
 pub use generator::{DefFileGenerator, DefFileConfig};
@@ -56,5 +55,4 @@ pub use jastrowidx::JastrowIdxGenerator;
 pub use orbitalidx::OrbitalIdxGenerator;
 pub use qptransidx::QPTransIdxGenerator;
 pub use namelist::NamelistGenerator;
-pub use zvo_out::ZvoOutGenerator;
 

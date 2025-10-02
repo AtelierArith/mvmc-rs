@@ -28,8 +28,17 @@
 pub mod lattice;
 pub mod hamiltonian;
 pub mod observables;
+pub mod wavefunction;
+
+/// Common result type for physics operations.
+pub type Result<T> = std::result::Result<T, anyhow::Error>;
 
 // Re-export commonly used types
 pub use lattice::{Lattice, ChainLattice, SquareLattice};
 pub use hamiltonian::{Hamiltonian, Spin, HubbardHamiltonian, HeisenbergHamiltonian};
 pub use observables::{Observable, EnergyCalculator, MagnetizationCalculator, CorrelationCalculator};
+pub use wavefunction::{
+    SlaterDeterminant, PfaffianWavefunction, CombinedWavefunction,
+    ParticleNumberProjector, TotalSpinProjector, MomentumProjector,
+    SpatialSymmetryProjector, CombinedProjector, Projector, Wavefunction,
+};

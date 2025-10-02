@@ -10,6 +10,7 @@ thiserror = { workspace = true }
 num-complex = { workspace = true }
 serde = { workspace = true }
 mvmc-physics = { path = "../mvmc-physics" }
+rand = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }
