@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 /// Output manager for organizing VMC calculation output files.
 ///
 /// Manages the creation and organization of output files with a consistent
-/// directory structure and naming convention.
+/// directory structure and naming convention compatible with C implementation.
 ///
 /// # Example
 ///
@@ -34,20 +34,22 @@ use std::path::{Path, PathBuf};
 /// use mvmc_io::output::OutputManager;
 /// use num_complex::Complex64;
 ///
-/// let manager = OutputManager::new("output", "my_calculation");
+/// let manager = OutputManager::new("output", "zvo", 1);
 /// manager.ensure_output_dir().unwrap();
 ///
 /// // Output files will be created in:
-/// // output/my_calculation_out.dat
-/// // output/my_calculation_var.dat
-/// // output/my_calculation_opt.dat
+/// // output/zvo_out_001.dat
+/// // output/zvo_var_001.dat
+/// // output/zvo_opt.dat
 /// ```
 #[derive(Debug, Clone)]
 pub struct OutputManager {
     /// Base output directory
     pub output_dir: PathBuf,
-    /// Prefix for output files
-    pub prefix: String,
+    /// File header (CDataFileHead in C implementation)
+    pub file_head: String,
+    /// Data index start (NDataIdxStart in C implementation)
+    pub data_idx_start: usize,
 }
 
 impl OutputManager {
@@ -56,11 +58,13 @@ impl OutputManager {
     /// # Arguments
     ///
     /// * `output_dir` - Base directory for output files
-    /// * `prefix` - Prefix for output file names
-    pub fn new<P: AsRef<Path>>(output_dir: P, prefix: &str) -> Self {
+    /// * `file_head` - File header (CDataFileHead in C implementation)
+    /// * `data_idx_start` - Data index start (NDataIdxStart in C implementation)
+    pub fn new<P: AsRef<Path>>(output_dir: P, file_head: &str, data_idx_start: usize) -> Self {
         Self {
             output_dir: output_dir.as_ref().to_path_buf(),
-            prefix: prefix.to_string(),
+            file_head: file_head.to_string(),
+            data_idx_start,
         }
     }
 
@@ -72,25 +76,32 @@ impl OutputManager {
         Ok(())
     }
 
-    /// Gets the path for the energy output file (`zvo_out.dat`).
+    /// Gets the path for the energy output file (`zvo_out_001.dat`).
     ///
-    /// Reference: `mVMC/src/mVMC/vmcmain.c` - zvo_out.dat
+    /// Reference: `mVMC/src/mVMC/initfile.c` - sprintf(fileName, "%s_out_%03d.dat", CDataFileHead, idx)
     pub fn energy_output_path(&self) -> PathBuf {
-        self.output_dir.join(format!("{}_out.dat", self.prefix))
+        self.output_dir.join(format!("{}_out_{:03}.dat", self.file_head, self.data_idx_start))
     }
 
-    /// Gets the path for the variational data file (`zvo_var.dat`).
+    /// Gets the path for the variational data file (`zvo_var_001.dat`).
     ///
-    /// Reference: `mVMC/src/mVMC/vmcmain.c` - zvo_var.dat
+    /// Reference: `mVMC/src/mVMC/initfile.c` - sprintf(fileName, "%s_var_%03d.dat", CDataFileHead, idx)
     pub fn variational_output_path(&self) -> PathBuf {
-        self.output_dir.join(format!("{}_var.dat", self.prefix))
+        self.output_dir.join(format!("{}_var_{:03}.dat", self.file_head, self.data_idx_start))
+    }
+
+    /// Gets the path for the time data file (`zvo_time_001.dat`).
+    ///
+    /// Reference: `mVMC/src/mVMC/initfile.c` - sprintf(fileName, "%s_time_%03d.dat", CDataFileHead, NDataIdxStart)
+    pub fn time_output_path(&self) -> PathBuf {
+        self.output_dir.join(format!("{}_time_{:03}.dat", self.file_head, self.data_idx_start))
     }
 
     /// Gets the path for the optimized parameters file (`zqp_opt.dat`).
     ///
     /// Reference: `mVMC/src/mVMC/vmcmain.c` - zqp_opt output
     pub fn optimized_params_path(&self) -> PathBuf {
-        self.output_dir.join(format!("{}_opt.dat", self.prefix))
+        self.output_dir.join(format!("{}_opt.dat", self.file_head))
     }
 
     /// Gets the path for an observable file.
@@ -100,7 +111,7 @@ impl OutputManager {
     /// * `observable_name` - Name of the observable (e.g., "correlation", "green")
     pub fn observable_path(&self, observable_name: &str) -> PathBuf {
         self.output_dir
-            .join(format!("{}_{}.dat", self.prefix, observable_name))
+            .join(format!("{}_{}.dat", self.file_head, observable_name))
     }
 
     /// Writes energy data to the standard output file.
@@ -141,13 +152,13 @@ impl OutputManager {
 
     /// Cleans up old output files.
     ///
-    /// Removes all files with the current prefix from the output directory.
+    /// Removes all files with the current file head from the output directory.
     pub fn clean(&self) -> Result<()> {
         if !self.output_dir.exists() {
             return Ok(());
         }
 
-        let pattern = format!("{}_", self.prefix);
+        let pattern = format!("{}_", self.file_head);
         for entry in std::fs::read_dir(&self.output_dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -165,7 +176,8 @@ impl OutputManager {
 /// Builder for OutputManager with convenient defaults.
 pub struct OutputManagerBuilder {
     output_dir: PathBuf,
-    prefix: String,
+    file_head: String,
+    data_idx_start: usize,
 }
 
 impl OutputManagerBuilder {
@@ -173,7 +185,8 @@ impl OutputManagerBuilder {
     pub fn new() -> Self {
         Self {
             output_dir: PathBuf::from("output"),
-            prefix: "zvo".to_string(),
+            file_head: "zvo".to_string(),
+            data_idx_start: 1,
         }
     }
 
@@ -183,15 +196,21 @@ impl OutputManagerBuilder {
         self
     }
 
-    /// Sets the file prefix.
-    pub fn prefix(mut self, prefix: &str) -> Self {
-        self.prefix = prefix.to_string();
+    /// Sets the file head (CDataFileHead).
+    pub fn file_head(mut self, file_head: &str) -> Self {
+        self.file_head = file_head.to_string();
+        self
+    }
+
+    /// Sets the data index start (NDataIdxStart).
+    pub fn data_idx_start(mut self, data_idx_start: usize) -> Self {
+        self.data_idx_start = data_idx_start;
         self
     }
 
     /// Builds the OutputManager.
     pub fn build(self) -> OutputManager {
-        OutputManager::new(self.output_dir, &self.prefix)
+        OutputManager::new(self.output_dir, &self.file_head, self.data_idx_start)
     }
 }
 
@@ -208,20 +227,25 @@ mod tests {
 
     #[test]
     fn test_output_manager_new() {
-        let manager = OutputManager::new("test_output", "test");
+        let manager = OutputManager::new("test_output", "test", 1);
 
         assert_eq!(manager.output_dir, PathBuf::from("test_output"));
-        assert_eq!(manager.prefix, "test");
+        assert_eq!(manager.file_head, "test");
+        assert_eq!(manager.data_idx_start, 1);
     }
 
     #[test]
     fn test_output_manager_paths() {
-        let manager = OutputManager::new("output", "zvo");
+        let manager = OutputManager::new("output", "zvo", 1);
 
-        assert_eq!(manager.energy_output_path(), PathBuf::from("output/zvo_out.dat"));
+        assert_eq!(manager.energy_output_path(), PathBuf::from("output/zvo_out_001.dat"));
         assert_eq!(
             manager.variational_output_path(),
-            PathBuf::from("output/zvo_var.dat")
+            PathBuf::from("output/zvo_var_001.dat")
+        );
+        assert_eq!(
+            manager.time_output_path(),
+            PathBuf::from("output/zvo_time_001.dat")
         );
         assert_eq!(
             manager.optimized_params_path(),
@@ -238,7 +262,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_output_manager");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
         manager.ensure_output_dir().unwrap();
 
         assert!(test_dir.exists());
@@ -252,7 +276,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_energy_write");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
 
         let energy = EnergyData::new(
             Complex64::new(-2.5, 0.0),
@@ -276,7 +300,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_var_write");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
 
         let energy = EnergyData::new(
             Complex64::new(-2.5, 0.0),
@@ -302,7 +326,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_var_append");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
 
         let energy1 = EnergyData::new(
             Complex64::new(-2.5, 0.0),
@@ -337,7 +361,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_clean");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
         manager.ensure_output_dir().unwrap();
 
         // Create some test files
@@ -362,11 +386,13 @@ mod tests {
     fn test_output_manager_builder() {
         let manager = OutputManagerBuilder::new()
             .output_dir("custom_output")
-            .prefix("custom")
+            .file_head("custom")
+            .data_idx_start(2)
             .build();
 
         assert_eq!(manager.output_dir, PathBuf::from("custom_output"));
-        assert_eq!(manager.prefix, "custom");
+        assert_eq!(manager.file_head, "custom");
+        assert_eq!(manager.data_idx_start, 2);
     }
 
     #[test]
@@ -374,7 +400,8 @@ mod tests {
         let manager = OutputManagerBuilder::default().build();
 
         assert_eq!(manager.output_dir, PathBuf::from("output"));
-        assert_eq!(manager.prefix, "zvo");
+        assert_eq!(manager.file_head, "zvo");
+        assert_eq!(manager.data_idx_start, 1);
     }
 
     #[test]
@@ -382,7 +409,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_opt_params");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
 
         let params = vec![Complex64::new(1.0, 0.0), Complex64::new(2.0, 0.0)];
         let opt_params = OptimizedParameters::new(params);
@@ -400,7 +427,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_dir = temp_dir.join("test_observable");
 
-        let manager = OutputManager::new(&test_dir, "test");
+        let manager = OutputManager::new(&test_dir, "test", 1);
 
         let values = vec![Complex64::new(1.0, 0.0)];
         let obs = ObservableData::new("correlation".to_string(), values);

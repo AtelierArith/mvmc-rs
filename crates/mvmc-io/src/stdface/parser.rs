@@ -74,6 +74,9 @@ impl StdFaceParser {
 
         config.additional = additional;
 
+        // Set default particle count based on model type
+        config.set_default_particle_count();
+
         // Validate the configuration
         if self.strict_mode {
             config.validate()?;

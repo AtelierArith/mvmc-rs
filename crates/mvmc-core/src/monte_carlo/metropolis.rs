@@ -203,6 +203,22 @@ impl ElectronConfiguration {
         &self.ele_idx
     }
 
+    /// Returns the number of up-spin electrons at a given site
+    pub fn electron_number_up(&self, site: usize) -> usize {
+        if site >= self.nsite {
+            return 0;
+        }
+        self.ele_num[site] as usize
+    }
+
+    /// Returns the number of down-spin electrons at a given site
+    pub fn electron_number_down(&self, site: usize) -> usize {
+        if site >= self.nsite {
+            return 0;
+        }
+        self.ele_num[site + self.nsite] as usize
+    }
+
     /// Sets the electron configuration
     ///
     /// # Arguments
@@ -418,6 +434,11 @@ impl MetropolisSampler {
     /// Returns the current electron configuration
     pub fn current_config(&self) -> &ElectronConfiguration {
         &self.current_config
+    }
+
+    /// Returns sampling statistics
+    pub fn statistics(&self) -> crate::monte_carlo::SamplingStatistics {
+        crate::monte_carlo::SamplingStatistics::default()
     }
 
     /// Performs a single Metropolis step

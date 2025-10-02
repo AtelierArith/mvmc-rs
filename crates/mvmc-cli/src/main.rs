@@ -10,7 +10,7 @@ mod commands;
 mod error;
 
 use clap::{Parser, Subcommand};
-use error::CliResult;
+use error::{CliError, CliResult};
 use std::path::PathBuf;
 
 /// mVMC - Many-variable Variational Monte Carlo method
@@ -28,7 +28,13 @@ use std::path::PathBuf;
                   - Hubbard model\n  \
                   - Heisenberg model\n  \
                   - Kondo lattice model\n  \
-                  - Multi-orbital Hubbard model"
+                  - Multi-orbital Hubbard model\n\n\
+                  Compatible with C implementation:\n  \
+                  - Standard mode (-s)\n  \
+                  - MultiDef mode (-m)\n  \
+                  - OptTrans mode (-o)\n  \
+                  - Binary mode (-b)\n  \
+                  - Expert mode (-e)"
 )]
 struct Cli {
     /// Subcommand to execute
@@ -42,6 +48,30 @@ struct Cli {
     /// Quiet mode (suppress output)
     #[arg(short, long, global = true)]
     quiet: bool,
+
+    /// Binary mode (compatible with C implementation)
+    #[arg(short = 'b', long, global = true)]
+    binary: bool,
+
+    /// MultiDef mode (compatible with C implementation)
+    #[arg(short = 'm', long, global = true)]
+    multidef: Option<usize>,
+
+    /// OptTrans mode (compatible with C implementation)
+    #[arg(long, global = true)]
+    opttrans: bool,
+
+    /// File flush interval (compatible with C implementation)
+    #[arg(short = 'F', long, global = true)]
+    flush_interval: Option<usize>,
+
+    /// Expert mode (compatible with C implementation)
+    #[arg(short = 'e', long, global = true)]
+    expert: bool,
+
+    /// Standard mode (compatible with C implementation)
+    #[arg(short = 's', long, global = true)]
+    standard: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -56,13 +86,20 @@ enum Commands {
         #[arg(short, long, default_value = "output")]
         output: PathBuf,
 
-        /// Binary output format
-        #[arg(short, long)]
-        binary: bool,
-
         /// Number of threads (default: all available cores)
         #[arg(short = 'j', long)]
         threads: Option<usize>,
+    },
+
+    /// Standard mode - Generate mVMC input files from StdFace.def
+    Standard {
+        /// StdFace configuration file
+        #[arg(value_name = "STDFACE_DEF")]
+        config: PathBuf,
+
+        /// Output directory for generated files
+        #[arg(short, long, default_value = ".")]
+        output: PathBuf,
     },
 
     /// Show information about the configuration
@@ -91,23 +128,46 @@ fn main() -> CliResult<()> {
 
     log::info!("mVMC version {}", env!("CARGO_PKG_VERSION"));
 
-    match cli.command {
-        Commands::Run {
-            config,
-            output,
-            binary,
-            threads,
-        } => {
-            commands::run::execute(config, output, binary, threads)?;
+    // Handle C implementation compatibility
+    if cli.standard {
+        // Standard mode: Generate input files from StdFace.def and run VMC
+        match cli.command {
+            Commands::Run { config, output, threads } => {
+                // First generate input files using Standard mode
+                commands::standard::execute(config.clone(), output.clone())?;
+
+                // Then run VMC calculation using the original StdFace.def file
+                // (not the generated namelist.def)
+                commands::run::execute(config, output, cli.binary, threads)?;
+            }
+            _ => {
+                return Err(CliError::Other(anyhow::anyhow!(
+                    "Standard mode (-s) requires a Run command"
+                )));
+            }
         }
-        Commands::Info { config } => {
-            commands::info::execute(config)?;
-        }
-        Commands::Validate { config } => {
-            commands::validate::execute(config)?;
-        }
-        Commands::Version => {
-            commands::version::execute()?;
+    } else {
+        // Normal mode: Execute command as specified
+        match cli.command {
+            Commands::Run {
+                config,
+                output,
+                threads,
+            } => {
+                commands::run::execute(config, output, cli.binary, threads)?;
+            }
+            Commands::Standard { config, output } => {
+                commands::standard::execute(config, output)?;
+            }
+            Commands::Info { config } => {
+                commands::info::execute(config)?;
+            }
+            Commands::Validate { config } => {
+                commands::validate::execute(config)?;
+            }
+            Commands::Version => {
+                commands::version::execute()?;
+            }
         }
     }
 

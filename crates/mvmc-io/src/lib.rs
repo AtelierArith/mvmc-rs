@@ -9,6 +9,7 @@ pub mod stdface;
 pub mod toml;
 pub mod json;
 pub mod output;
+pub mod def_files;
 
 // Re-export commonly used types
 pub use stdface::{StdFaceParser, StdFaceError, StdFaceConfig};
@@ -17,6 +18,12 @@ pub use json::{JsonParser, JsonError, JsonConfig};
 pub use output::{
     EnergyData, ObservableData, OptimizedParameters, OutputFormat, OutputManager,
     VariationalData,
+};
+pub use def_files::{
+    DefFileGenerator, DefFileConfig, ModParaGenerator, LocSpnGenerator, TransGenerator,
+    ExchangeGenerator, CoulombInterGenerator, HundGenerator, GreenOneGenerator, GreenTwoGenerator,
+    GutzwillerIdxGenerator, JastrowIdxGenerator, OrbitalIdxGenerator, QPTransIdxGenerator,
+    NamelistGenerator, ZvoOutGenerator,
 };
 
 /// Common error types for I/O operations.

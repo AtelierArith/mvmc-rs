@@ -167,9 +167,9 @@ impl ObservableCalculator {
     ///
     /// calculator.add_sample(&config, &step);
     /// ```
-    pub fn add_sample(&mut self, config: &ElectronConfiguration, _step: &MetropolisStep) {
-        // Calculate observables for this configuration
-        let energy = self.calculate_energy(config);
+    pub fn add_sample(&mut self, config: &ElectronConfiguration, _step: &MetropolisStep, local_energy: f64) {
+        // Use provided local energy instead of calculating
+        let energy = local_energy;
         let kinetic = self.calculate_kinetic_energy(config);
         let potential = self.calculate_potential_energy(config);
         let magnetization = self.calculate_magnetization(config);
@@ -191,6 +191,20 @@ impl ObservableCalculator {
         }
 
         self.num_samples += 1;
+    }
+
+    /// Resets the calculator to start fresh
+    pub fn reset(&mut self) {
+        self.energy_sum = 0.0;
+        self.energy_sq_sum = 0.0;
+        self.kinetic_sum = 0.0;
+        self.potential_sum = 0.0;
+        self.magnetization_sum = 0.0;
+        self.site_magnetization_sum.fill(0.0);
+        for i in 0..self.nsite {
+            self.spin_correlation_sum[i].fill(0.0);
+        }
+        self.num_samples = 0;
     }
 
     /// Calculates the final observables from accumulated samples
@@ -330,23 +344,6 @@ impl ObservableCalculator {
         self.num_samples
     }
 
-    /// Resets the accumulator
-    pub fn reset(&mut self) {
-        self.energy_sum = 0.0;
-        self.energy_sq_sum = 0.0;
-        self.kinetic_sum = 0.0;
-        self.potential_sum = 0.0;
-        self.magnetization_sum = 0.0;
-
-        for i in 0..self.nsite {
-            self.site_magnetization_sum[i] = 0.0;
-            for j in 0..self.nsite {
-                self.spin_correlation_sum[i][j] = 0.0;
-            }
-        }
-
-        self.num_samples = 0;
-    }
 }
 
 #[cfg(test)]

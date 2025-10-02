@@ -7,7 +7,6 @@ authors.workspace = true
 
 [dependencies]
 mvmc-math = { path = "../mvmc-math" }
-mvmc-core = { path = "../mvmc-core" }
 num-complex = { workspace = true }
 ndarray = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

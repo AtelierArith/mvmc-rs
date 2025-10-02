@@ -14,6 +14,8 @@ use crate::monte_carlo::{
 use crate::optimization::SROptimizer;
 use crate::types::{CalcMode, ElectronCount, RandomSeed, SiteCount};
 use crate::wavefunction::CombinedWavefunction;
+use mvmc_physics::hamiltonian::Hamiltonian;
+use mvmc_physics::hamiltonian::Spin;
 use num_complex::Complex64;
 use std::fmt;
 
@@ -27,6 +29,7 @@ use std::fmt;
 /// - **Sampler**: Metropolis Monte Carlo sampler
 /// - **Optimizer**: SR (Stochastic Reconfiguration) optimizer
 /// - **Calculator**: Observable calculator
+/// - **Hamiltonian**: Physical Hamiltonian for energy calculations
 ///
 /// # References
 ///
@@ -43,6 +46,8 @@ pub struct VmcEngine {
     optimizer: Option<SROptimizer>,
     /// Observable calculator
     calculator: ObservableCalculator,
+    /// Physical Hamiltonian
+    hamiltonian: Box<dyn Hamiltonian>,
     /// Current optimization iteration
     current_iteration: usize,
 }
@@ -95,6 +100,7 @@ impl VmcEngine {
     ///
     /// * `params` - VMC parameters
     /// * `wavefunction` - Combined wavefunction
+    /// * `hamiltonian` - Physical Hamiltonian
     ///
     /// # Examples
     ///
@@ -103,6 +109,8 @@ impl VmcEngine {
     /// use mvmc_core::config::{VmcParameters, SRParameters, MonteCarloParameters};
     /// use mvmc_core::wavefunction::CombinedWavefunction;
     /// use mvmc_core::types::{SiteCount, ElectronCount, TwoSz, CalcMode, LanczosMode, RandomSeed};
+    /// use mvmc_physics::hamiltonian::{HubbardHamiltonian, Hamiltonian};
+    /// use mvmc_physics::lattice::ChainLattice;
     ///
     /// let sr_params = SRParameters::new(1000, 100, 100, 1e-6, 1e-6, 0.1, 100, 1e-6);
     /// let mc_params = MonteCarloParameters::new(100, 1, 1000, false, 1);
@@ -122,9 +130,12 @@ impl VmcEngine {
     ///     ElectronCount::new(2),
     /// );
     ///
-    /// let engine = VmcEngine::new(params, wavefunction).unwrap();
+    /// let lattice = ChainLattice::new(4, true).unwrap();
+    /// let hamiltonian = HubbardHamiltonian::new(lattice, 1.0, 4.0, 0.0).unwrap();
+    ///
+    /// let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian)).unwrap();
     /// ```
-    pub fn new(params: VmcParameters, wavefunction: CombinedWavefunction) -> Result<Self> {
+    pub fn new(params: VmcParameters, wavefunction: CombinedWavefunction, hamiltonian: Box<dyn Hamiltonian>) -> Result<Self> {
         // Validate parameters
         params.validate()?;
 
@@ -155,6 +166,7 @@ impl VmcEngine {
             sampler,
             optimizer,
             calculator,
+            hamiltonian,
             current_iteration: 0,
         })
     }
@@ -172,10 +184,13 @@ impl VmcEngine {
     /// # References
     ///
     /// - C implementation: `mVMC/src/mVMC/vmcmain.c:VMCParaOpt`, `VMCParaOptMain`
-    pub fn run(&mut self) -> Result<VmcResult> {
+    pub fn run<F>(&mut self, output_callback: Option<F>) -> Result<VmcResult>
+    where
+        F: FnMut(usize, Complex64, &SamplingStatistics),
+    {
         match self.params.calc_mode {
             CalcMode::Optimization => self.run_optimization(),
-            CalcMode::Expectation => self.run_expectation(),
+            CalcMode::Expectation => self.run_expectation(output_callback),
         }
     }
 
@@ -201,9 +216,10 @@ impl VmcEngine {
             self.warmup(mc_params.warmup_steps)?;
 
             // Sampling phase
-            let (energy, _observables, _statistics) = self.sample_and_calculate(
+            let (energy, _observables, _statistics) = self.sample_and_calculate::<fn(usize, Complex64, &SamplingStatistics)>(
                 mc_params.num_samples,
                 mc_params.sampling_interval,
+                None,
             )?;
 
             energy_history.push(energy);
@@ -236,9 +252,10 @@ impl VmcEngine {
             }
         }
 
-        let (final_energy, final_observables, final_statistics) = self.sample_and_calculate(
+        let (final_energy, final_observables, final_statistics) = self.sample_and_calculate::<fn(usize, Complex64, &SamplingStatistics)>(
             mc_params.num_samples * 10, // Use more samples for final result
             mc_params.sampling_interval,
+            None,
         )?;
 
         let optimization_result = OptimizationResult {
@@ -265,7 +282,10 @@ impl VmcEngine {
     /// # References
     ///
     /// - C implementation: `mVMC/src/mVMC/vmcmain.c:VMCParaOpt` (NVMCCalMode == 1)
-    fn run_expectation(&mut self) -> Result<VmcResult> {
+    fn run_expectation<F>(&mut self, output_callback: Option<F>) -> Result<VmcResult>
+    where
+        F: FnMut(usize, Complex64, &SamplingStatistics),
+    {
         let mc_params = self.params.mc_params.clone();
 
         // Warmup phase
@@ -275,6 +295,7 @@ impl VmcEngine {
         let (energy, observables, statistics) = self.sample_and_calculate(
             mc_params.num_samples,
             mc_params.sampling_interval,
+            output_callback,
         )?;
 
         Ok(VmcResult {
@@ -306,49 +327,67 @@ impl VmcEngine {
     ///
     /// * `num_samples` - Number of samples to collect
     /// * `interval` - Sampling interval (steps between samples)
+    /// * `output_callback` - Optional callback for bin-by-bin output
     ///
     /// # Returns
     ///
     /// Tuple of (energy, observables, statistics)
-    fn sample_and_calculate(
+    fn sample_and_calculate<F>(
         &mut self,
         num_samples: usize,
         interval: usize,
-    ) -> Result<(Complex64, PhysicalObservables, SamplingStatistics)> {
+        mut output_callback: Option<F>,
+    ) -> Result<(Complex64, PhysicalObservables, SamplingStatistics)>
+    where
+        F: FnMut(usize, Complex64, &SamplingStatistics),
+    {
         // Reset calculator
-        // TODO: Implement calculator reset
+        self.calculator.reset();
 
         let mut energy_sum = Complex64::new(0.0, 0.0);
+        let mut energy_squared_sum = Complex64::new(0.0, 0.0);
         let mut samples_collected = 0;
 
-        for _sample_idx in 0..num_samples {
+        for sample_idx in 0..num_samples {
             // Perform interval steps
             for _ in 0..interval {
                 let _step = self.sampler.metropolis_step();
             }
 
             // Collect sample
-            let _config = self.sampler.current_config();
-            let _step = self.sampler.metropolis_step();
+            let step = self.sampler.metropolis_step()?;
+            let config = self.sampler.current_config();
 
-            // Calculate energy for this configuration
-            // (This is simplified - full implementation would use Hamiltonian)
-            let local_energy = 1.0; // Placeholder energy
-            energy_sum += Complex64::new(local_energy, 0.0);
+            // Convert electron configuration to spin configuration
+            let spin_config = self.electron_config_to_spin_config(&config);
+
+            // Calculate local energy using Hamiltonian
+            let local_energy = self.calculate_local_energy(&spin_config)?;
+            energy_sum += local_energy;
+            energy_squared_sum += local_energy * local_energy;
 
             // Add sample to calculator
-            // TODO: Implement proper sample addition
+            self.calculator.add_sample(&config, &step, local_energy.re);
             samples_collected += 1;
+
+            // Call output callback if provided
+            if let Some(ref mut callback) = output_callback {
+                let statistics = self.sampler.statistics();
+                callback(sample_idx, local_energy, &statistics);
+            }
         }
 
-        // Calculate average energy
+        // Calculate average energy and variance
         let avg_energy = energy_sum / Complex64::new(samples_collected as f64, 0.0);
+        let avg_energy_squared = energy_squared_sum / Complex64::new(samples_collected as f64, 0.0);
+        let energy_variance = avg_energy_squared - avg_energy * avg_energy;
+        let _energy_error = (energy_variance.re / samples_collected as f64).sqrt();
 
         // Calculate observables
-        let observables = PhysicalObservables::new(4);
+        let observables = self.calculator.calculate_observables();
 
         // Get sampling statistics
-        let statistics = SamplingStatistics::default();
+        let statistics = self.sampler.statistics();
 
         Ok((avg_energy, observables, statistics))
     }
@@ -381,6 +420,97 @@ impl VmcEngine {
     /// Returns the current iteration
     pub fn current_iteration(&self) -> usize {
         self.current_iteration
+    }
+
+    /// Converts electron configuration to spin configuration
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Electron configuration
+    ///
+    /// # Returns
+    ///
+    /// Spin configuration for Hamiltonian calculation
+    fn electron_config_to_spin_config(&self, config: &crate::monte_carlo::ElectronConfiguration) -> Vec<Spin> {
+        let mut spin_config = Vec::with_capacity(config.nsite());
+
+        for site in 0..config.nsite() {
+            let n_up = config.electron_number_up(site);
+            let n_down = config.electron_number_down(site);
+
+            match (n_up, n_down) {
+                (1, 0) => spin_config.push(Spin::Up),
+                (0, 1) => spin_config.push(Spin::Down),
+                (1, 1) => spin_config.push(Spin::Up), // Both spins present, use Up as representative
+                (0, 0) => spin_config.push(Spin::Empty),
+                _ => spin_config.push(Spin::Empty), // Invalid state, treat as empty
+            }
+        }
+
+        spin_config
+    }
+
+    /// Calculates local energy for a given spin configuration
+    ///
+    /// # Arguments
+    ///
+    /// * `spin_config` - Spin configuration
+    ///
+    /// # Returns
+    ///
+    /// Local energy as complex number
+    fn calculate_local_energy(&self, spin_config: &[Spin]) -> Result<Complex64> {
+        // Calculate diagonal element (expectation value)
+        let diagonal_energy = self.hamiltonian.diagonal_element(spin_config);
+
+        // For VMC, we need the local energy which includes off-diagonal terms
+        // This is a simplified implementation - full VMC would require
+        // calculating the ratio of wavefunction amplitudes
+        let local_energy = self.calculate_vmc_local_energy(spin_config)?;
+
+        Ok(Complex64::new(local_energy, 0.0))
+    }
+
+    /// Calculates VMC local energy including off-diagonal terms
+    ///
+    /// # Arguments
+    ///
+    /// * `spin_config` - Spin configuration
+    ///
+    /// # Returns
+    ///
+    /// VMC local energy
+    fn calculate_vmc_local_energy(&self, spin_config: &[Spin]) -> Result<f64> {
+        // Start with diagonal energy
+        let mut local_energy = self.hamiltonian.diagonal_element(spin_config);
+
+        // Add off-diagonal contributions
+        // This is a simplified implementation - full VMC would require
+        // calculating wavefunction amplitude ratios for all possible transitions
+        let nsite = spin_config.len();
+
+        for i in 0..nsite {
+            for j in 0..nsite {
+                if i != j {
+                    // Check if sites are neighbors
+                    if self.hamiltonian.lattice().neighbors(i).contains(&j) {
+                        // Calculate matrix element for this transition
+                        let mut new_config = spin_config.to_vec();
+                        new_config.swap(i, j);
+
+                        let matrix_element = self.hamiltonian.matrix_element(spin_config, &new_config);
+
+                        // Calculate wavefunction amplitude ratio
+                        // This is a placeholder - full implementation would use actual wavefunction
+                        let amplitude_ratio = 1.0; // Placeholder
+
+                        local_energy += (matrix_element * amplitude_ratio).re;
+                    }
+                }
+            }
+        }
+
+        Ok(local_energy)
     }
 }
 

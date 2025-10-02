@@ -104,7 +104,7 @@ impl Default for StdFaceConfig {
                 parameters: HashMap::new(),
             },
             calculation: CalculationConfig {
-                n_particles: Some(6),
+                n_particles: None, // Will be determined by model type
                 total_sz: Some(0),
                 random_seed: Some(1),
             },
@@ -195,7 +195,19 @@ impl StdFaceConfig {
         // Validate calculation parameters
         if let Some(n_particles) = self.calculation.n_particles {
             let total_sites: usize = self.lattice.dimensions.iter().product();
-            if n_particles > total_sites * 2 {
+
+            // For spin models, particles should be 0
+            if self.model.model_type == "Spin" && n_particles != 0 {
+                return Err(StdFaceError::ValidationError {
+                    message: format!(
+                        "Spin models should have 0 particles, but got {}",
+                        n_particles
+                    ),
+                });
+            }
+
+            // For other models, check capacity
+            if self.model.model_type != "Spin" && n_particles > total_sites * 2 {
                 return Err(StdFaceError::ValidationError {
                     message: format!(
                         "Number of particles ({}) exceeds maximum capacity ({} sites * 2)",
@@ -223,6 +235,17 @@ impl StdFaceConfig {
         // For now, assume all lattices are periodic
         // This could be made configurable in the future
         true
+    }
+
+    /// Sets default particle count based on model type.
+    pub fn set_default_particle_count(&mut self) {
+        if self.calculation.n_particles.is_none() {
+            self.calculation.n_particles = Some(match self.model.model_type.as_str() {
+                "Spin" => 0, // No electrons for spin models
+                "Hubbard" | "FermionHubbard" => self.total_sites(), // Half-filling
+                _ => self.total_sites(), // Default to half-filling
+            });
+        }
     }
 }
 
@@ -288,5 +311,45 @@ mod tests {
         config2d.lattice.dimensions = vec![4, 3];
         config2d.lattice.sub_dimensions = vec![2, 2];
         assert_eq!(config2d.lattice_dimension(), 2);
+    }
+
+    #[test]
+    fn test_set_default_particle_count() {
+        // Test Hubbard model
+        let mut config_hubbard = StdFaceConfig::new();
+        config_hubbard.lattice.dimensions = vec![6];
+        config_hubbard.model.model_type = "Hubbard".to_string();
+        config_hubbard.set_default_particle_count();
+        assert_eq!(config_hubbard.calculation.n_particles, Some(6));
+
+        // Test Spin model
+        let mut config_spin = StdFaceConfig::new();
+        config_spin.lattice.dimensions = vec![6];
+        config_spin.model.model_type = "Spin".to_string();
+        config_spin.set_default_particle_count();
+        assert_eq!(config_spin.calculation.n_particles, Some(0));
+
+        // Test that existing value is not overwritten
+        let mut config_existing = StdFaceConfig::new();
+        config_existing.lattice.dimensions = vec![6];
+        config_existing.model.model_type = "Hubbard".to_string();
+        config_existing.calculation.n_particles = Some(4);
+        config_existing.set_default_particle_count();
+        assert_eq!(config_existing.calculation.n_particles, Some(4));
+    }
+
+    #[test]
+    fn test_validate_spin_model_particles() {
+        let mut config = StdFaceConfig::new();
+        config.lattice.dimensions = vec![6];
+        config.model.model_type = "Spin".to_string();
+        config.model.parameters.insert("J".to_string(), 1.0);
+        config.calculation.n_particles = Some(0); // Correct for spin model
+
+        assert!(config.validate().is_ok());
+
+        // Test invalid particle count for spin model
+        config.calculation.n_particles = Some(2);
+        assert!(config.validate().is_err());
     }
 }

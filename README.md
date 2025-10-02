@@ -42,6 +42,7 @@ This Rust port aims to provide the same functionality with improved safety, main
 - Comprehensive validation and error handling
 - Output data management (text/binary formats)
 - Optimized parameter saving/loading
+- **Definition file generation** - C実装と同等の13種類の`.def`ファイル生成
 
 #### Physics Models (`mvmc-physics`)
 - Lattice structures (1D chain, 2D square)

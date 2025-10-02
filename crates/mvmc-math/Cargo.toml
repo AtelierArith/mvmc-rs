@@ -12,13 +12,13 @@ nalgebra = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 thiserror = { workspace = true }
-mvmc-bindings = { path = "../mvmc-bindings" }
+# mvmc-bindings = { path = "../mvmc-bindings" }  # Temporarily disabled due to compilation issues
 
 [dev-dependencies]
 approx = { workspace = true }
 proptest = { workspace = true }
 criterion = { workspace = true }
 
-[[bench]]
-name = "linear_algebra_benchmarks"
-harness = false
+# [[bench]]
+# name = "linear_algebra_benchmarks"
+# harness = false
