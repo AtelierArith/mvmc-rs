@@ -366,6 +366,80 @@ impl PfaffianWavefunction {
         result
     }
 
+    /// Calculates analytical derivatives O_k = ∂logψ/∂θ_k for Pfaffian parameters.
+    /// Parameters are taken as upper-triangular (i<j) pairing amplitudes A_{ij} (real part).
+    pub fn calculate_parameter_derivatives(&self, config: &[u8]) -> Vec<Complex64> {
+        let n = self.nsite;
+        let mut derivs = vec![Complex64::new(0.0, 0.0); n * (n - 1) / 2];
+
+        // Determine occupied indices
+        let mut occ = Vec::new();
+        for (i, &s) in config.iter().enumerate() {
+            if s == 1 || s == 2 || s == 3 { occ.push(i); }
+        }
+        if occ.len() != self.ne || self.ne == 0 { return derivs; }
+
+        // Build submatrix A (occupied)
+        let m = occ.len();
+        let mut a = Array2::zeros((m, m));
+        for (ri, &i_site) in occ.iter().enumerate() {
+            for (cj, &j_site) in occ.iter().enumerate() {
+                a[[ri, cj]] = self.pairing_amplitudes[[i_site, j_site]];
+            }
+        }
+
+        // Inverse of A
+        let inv = match self.inverse_complex(&a) { Some(x) => x, None => return derivs };
+
+        // For each lattice pair (p<q): if both in occ, derivative = 1/2 * (Ainv)_{iq,ip} - (Ainv)_{ip,iq}
+        // Map occ site -> index
+        let mut pos = vec![usize::MAX; n];
+        for (k, &site) in occ.iter().enumerate() { pos[site] = k; }
+        let mut idx = 0usize;
+        for p in 0..n {
+            for q in (p+1)..n {
+                if pos[p] != usize::MAX && pos[q] != usize::MAX {
+                    let ip = pos[p];
+                    let iq = pos[q];
+                    let val = (inv[[iq, ip]] - inv[[ip, iq]]) * Complex64::new(0.5, 0.0);
+                    derivs[idx] = val;
+                }
+                idx += 1;
+            }
+        }
+
+        derivs
+    }
+
+    /// Simple Gauss-Jordan inverse for complex matrices
+    fn inverse_complex(&self, mat: &Array2<Complex64>) -> Option<Array2<Complex64>> {
+        let n = mat.nrows();
+        if n == 0 { return Some(Array2::zeros((0,0))); }
+        let mut aug = Array2::zeros((n, 2*n));
+        for i in 0..n { for j in 0..n { aug[[i,j]] = mat[[i,j]]; } aug[[i, n+i]] = Complex64::new(1.0,0.0); }
+        for i in 0..n {
+            // pivot
+            let mut piv = i; let mut pivnorm = aug[[i,i]].norm();
+            for r in i+1..n { let v = aug[[r,i]].norm(); if v > pivnorm { piv=r; pivnorm=v; } }
+            if pivnorm < 1e-14 { return None; }
+            if piv != i { for c in 0..2*n { let tmp=aug[[i,c]]; aug[[i,c]]=aug[[piv,c]]; aug[[piv,c]]=tmp; } }
+            let diag = aug[[i,i]];
+            for c in 0..2*n { aug[[i,c]] /= diag; }
+            for r in 0..n {
+                if r!=i {
+                    let f=aug[[r,i]];
+                    let row_i = aug.row(i).to_owned();
+                    for c in 0..2*n {
+                        aug[[r,c]] -= f*row_i[c];
+                    }
+                }
+            }
+        }
+        let mut inv = Array2::zeros((n,n));
+        for i in 0..n { for j in 0..n { inv[[i,j]] = aug[[i, n+j]]; } }
+        Some(inv)
+    }
+
     /// Calculates the ratio of Pfaffians after a spin flip.
     ///
     /// # Arguments

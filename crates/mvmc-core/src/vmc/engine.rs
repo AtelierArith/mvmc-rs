@@ -25,6 +25,8 @@ use std::fmt;
 pub struct VmcIterationResult {
     /// Energy value
     pub energy: Complex64,
+    /// Energy squared average
+    pub energy_squared: Complex64,
     /// Energy variance
     pub variance: f64,
     /// Number of samples
@@ -33,6 +35,12 @@ pub struct VmcIterationResult {
     pub acceptance_rate: f64,
     /// Physical observables
     pub observables: PhysicalObservables,
+    /// Total Sz average
+    pub sz_total: f64,
+    /// Total Sz^2 average
+    pub sz_squared: f64,
+    /// SR step info for this iteration (if optimization)
+    pub sr_info: Option<crate::vmc::sr_optimization::SRStepInfo>,
 }
 
 /// VMC calculation engine
@@ -158,12 +166,19 @@ impl VmcEngine {
         let ne = ElectronCount::new(wavefunction.ne());
 
         // Create Metropolis sampler
-        let sampler = MetropolisSampler::new(
+        let mut sampler = MetropolisSampler::new(
             nsite,
             ne,
             params.two_sz,
             RandomSeed::new(params.random_seed.get()),
         );
+        // Provide lattice neighbors for electron sampler (neighbor hopping)
+        let mut neighbors: Vec<Vec<usize>> = Vec::new();
+        for i in 0..hamiltonian.lattice().n_sites() {
+            neighbors.push(hamiltonian.lattice().neighbors(i));
+        }
+        sampler.set_neighbors(neighbors);
+        sampler.configure(&params.mc_params);
 
         // Create optimizer if in optimization mode
         let optimizer = if params.calc_mode == CalcMode::Optimization {
@@ -204,6 +219,7 @@ impl VmcEngine {
     where
         F: FnMut(usize, Complex64, &SamplingStatistics),
     {
+        eprintln!("VmcEngine::run called with calc_mode: {:?}", self.params.calc_mode);
         match self.params.calc_mode {
             CalcMode::Optimization => self.run_optimization(),
             CalcMode::Expectation => self.run_expectation(output_callback),
@@ -218,6 +234,7 @@ impl VmcEngine {
     ///
     /// - C implementation: `mVMC/src/mVMC/vmcmain.c:VMCParaOpt`
     pub fn run_optimization(&mut self) -> Result<VmcResult> {
+        eprintln!("Starting run_optimization");
         let sr_params = self.params.sr_params.clone();
         let mc_params = self.params.mc_params.clone();
 
@@ -230,8 +247,9 @@ impl VmcEngine {
             self.current_iteration = iteration;
 
             // For Heisenberg model (ne=0), use specialized iteration
+            eprintln!("Checking model type: ne = {}", self.sampler.current_config().ne());
             let (_energy, _observables, _statistics) = if self.sampler.current_config().ne() == 0 {
-                let result = self.run_heisenberg_iteration()?;
+                let result = self.run_heisenberg_iteration(iteration)?;
                 (result.energy, result.observables, crate::monte_carlo::SamplingStatistics {
                     total_steps: result.sample_count,
                     accepted_steps: (result.acceptance_rate * result.sample_count as f64) as usize,
@@ -633,9 +651,31 @@ impl VmcEngine {
 
         // For now, use simple acceptance probability
         // In a full implementation, this would depend on the energy difference
-        let acceptance_prob = 0.5; // 50% acceptance rate
+        let acceptance_prob = 0.5; // 50% acceptance rate (unused for production)
 
         Ok((new_config, acceptance_prob))
+    }
+
+    /// Proposes a spin exchange that preserves total Sz: swap one Up with one Down spin
+    fn propose_spin_exchange(&self, config: &[Spin], rng_state: &mut u64) -> Result<(Vec<Spin>, f64)> {
+        let mut up_sites = Vec::new();
+        let mut down_sites = Vec::new();
+        for (i, &s) in config.iter().enumerate() {
+            if s == Spin::Up { up_sites.push(i); }
+            if s == Spin::Down { down_sites.push(i); }
+        }
+        if up_sites.is_empty() || down_sites.is_empty() {
+            return Ok((config.to_vec(), 0.0));
+        }
+        // choose random indices
+        *rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let iu = (rng_state.wrapping_rem(up_sites.len() as u64)) as usize;
+        *rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let id = (rng_state.wrapping_rem(down_sites.len() as u64)) as usize;
+        let mut new_config = config.to_vec();
+        new_config[up_sites[iu]] = Spin::Down;
+        new_config[down_sites[id]] = Spin::Up;
+        Ok((new_config, 1.0))
     }
 
     /// Performs Metropolis sampling for Heisenberg model
@@ -692,6 +732,176 @@ impl VmcEngine {
         Ok(Complex64::new(local_energy, 0.0))
     }
 
+    /// Runs a single Heisenberg VMC iteration
+    ///
+    /// This method performs one iteration of the VMC calculation for Heisenberg models,
+    /// including sampling, energy calculation, and parameter updates.
+    ///
+    /// # Arguments
+    /// * `iteration` - Current iteration number
+    ///
+    /// # Returns
+    /// * `Result<VmcIterationResult>` - Results of this iteration
+    fn run_heisenberg_iteration(&mut self, iteration: usize) -> Result<VmcIterationResult> {
+        println!("run_heisenberg_iteration called with iteration: {}", iteration);
+        let mc_params = self.params.mc_params.clone();
+        let nsite = self.hamiltonian.lattice().n_sites();
+
+        // Generate initial spin configuration
+        let two_sz = self.sampler.current_config().two_sz();
+        let mut spin_config = self.generate_initial_spin_config(two_sz);
+
+        // Perform Monte Carlo sampling
+        let mut rng_state = 12345u64 + iteration as u64;
+        let num_mc_steps = mc_params.num_samples;
+        let mut energy_sum = Complex64::new(0.0, 0.0);
+        let mut energy_squared_sum = Complex64::new(0.0, 0.0);
+        let mut accepted_steps = 0;
+
+        // Collect samples for SR optimization
+        let mut sr_samples = Vec::new();
+
+        for _step in 0..num_mc_steps {
+            // Propose spin flip
+            let (proposed_config, _acceptance_prob) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
+
+            // Calculate wavefunction ratio
+            let current_amplitude = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config));
+            let proposed_amplitude = self.wavefunction.calculate(&self.spin_config_to_u8(&proposed_config));
+
+            let amplitude_ratio = if current_amplitude.norm() < 1e-12 {
+                Complex64::new(0.0, 0.0)
+            } else {
+                proposed_amplitude / current_amplitude
+            };
+
+            // Metropolis acceptance criterion
+            let acceptance_rate = amplitude_ratio.norm().min(1.0);
+
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            let random_num = (rng_state as f64) / (u64::MAX as f64);
+
+            if random_num < acceptance_rate {
+                spin_config = proposed_config;
+                accepted_steps += 1;
+            }
+
+            // Calculate local energy
+            let local_energy = self.calculate_local_energy(&spin_config)?;
+            energy_sum += local_energy;
+            energy_squared_sum += local_energy * local_energy;
+
+            // Collect sample for SR optimization
+            let u8_config = self.spin_config_to_u8(&spin_config);
+            let o_operators = self.wavefunction.calculate_o_operators(&u8_config);
+            sr_samples.push(crate::vmc::sr_optimization::SRSampleData {
+                energy: local_energy.re,
+                o_operators: o_operators.into_iter().map(|c| c.re).collect(),
+                weight: 1.0, // TODO: Calculate proper weight
+            });
+        }
+
+        // Calculate average energy and variance
+        let avg_energy = energy_sum / Complex64::new(num_mc_steps as f64, 0.0);
+        let avg_energy_squared = energy_squared_sum / Complex64::new(num_mc_steps as f64, 0.0);
+        let variance = avg_energy_squared - avg_energy * avg_energy;
+
+        // Store energy in history
+        self.energy_history.push(avg_energy);
+
+        // Perform SR optimization if optimizer is available
+        if let Some(ref mut _optimizer) = self.optimizer {
+            // TODO: Implement proper SR optimization
+            // For now, we use a simple learning_rate * gradient approach
+            let learning_rate = 0.01;
+
+            // Calculate average O-operators
+            let n_params = self.wavefunction.num_parameters();
+            let mut avg_o = vec![0.0; n_params];
+            let mut avg_energy = 0.0;
+            let mut avg_energy_o = vec![0.0; n_params];
+
+            // Debug: Check sample count
+            println!("SR optimization: n_params = {}, n_samples = {}", n_params, sr_samples.len());
+
+            for sample in &sr_samples {
+                avg_energy += sample.energy;
+                for (i, &o) in sample.o_operators.iter().enumerate() {
+                    avg_o[i] += o;
+                    avg_energy_o[i] += sample.energy * o;
+                }
+            }
+
+            let n_samples = sr_samples.len() as f64;
+            avg_energy /= n_samples;
+            for i in 0..n_params {
+                avg_o[i] /= n_samples;
+                avg_energy_o[i] /= n_samples;
+            }
+
+            // Calculate force vector: F_i = ⟨E * O_i⟩ - ⟨E⟩ * ⟨O_i⟩
+            let mut param_updates = vec![0.0; n_params];
+            for i in 0..n_params {
+                let force = avg_energy_o[i] - avg_energy * avg_o[i];
+                param_updates[i] = -learning_rate * force;
+            }
+
+            // Debug output for first few iterations
+            if iteration < 3 {
+                let max_update = param_updates.iter().map(|u| u.abs()).fold(0.0f64, f64::max);
+                let max_o = avg_o.iter().map(|o| o.abs()).fold(0.0f64, f64::max);
+                let max_energy_o = avg_energy_o.iter().map(|eo| eo.abs()).fold(0.0f64, f64::max);
+                let max_force = param_updates.iter().map(|f| f.abs()).fold(0.0f64, f64::max);
+
+                println!("Iteration {}: avg_energy = {:.6}, max_o = {:.6}, max_energy_o = {:.6}, max_force = {:.6}, max_update = {:.6}",
+                    iteration, avg_energy, max_o, max_energy_o, max_force, max_update);
+
+                // Show first few parameters
+                println!("  First 5 O-operators: {:?}", &avg_o[..5.min(n_params)]);
+                println!("  First 5 forces: {:?}", &param_updates[..5.min(n_params)]);
+            }
+
+
+            // Apply parameter updates to wavefunction
+            self.wavefunction.update_parameters(&param_updates, 1.0);
+        }
+
+        // Calculate observables
+        let observables = PhysicalObservables {
+            energy: avg_energy.re,
+            kinetic_energy: 0.0, // TODO: Calculate kinetic energy
+            potential_energy: 0.0, // TODO: Calculate potential energy
+            total_magnetization: 0.0, // TODO: Calculate total magnetization
+            site_magnetization: vec![0.0; nsite], // TODO: Calculate site magnetization
+            spin_correlation: vec![vec![0.0; nsite]; nsite], // TODO: Calculate spin correlation
+            energy_error: 0.0, // TODO: Calculate energy error
+            num_samples: num_mc_steps,
+        };
+
+        Ok(VmcIterationResult {
+            energy: avg_energy,
+            energy_squared: avg_energy_squared,
+            variance: variance.re,
+            sample_count: num_mc_steps,
+            acceptance_rate: accepted_steps as f64 / num_mc_steps as f64,
+            observables,
+            sz_total: 0.0, // TODO: Calculate total Sz
+            sz_squared: 0.0, // TODO: Calculate Sz^2
+            sr_info: None, // TODO: Add SR step info
+        })
+    }
+
+    /// Converts spin configuration to u8 array
+    fn spin_config_to_u8(&self, spin_config: &[Spin]) -> Vec<u8> {
+        spin_config.iter().map(|spin| {
+            match spin {
+                Spin::Up => 1,
+                Spin::Down => 2,
+                Spin::Empty => 0,
+            }
+        }).collect()
+    }
+
     /// Runs a single VMC iteration (for optimization mode)
     ///
     /// This method performs one iteration of the VMC calculation,
@@ -700,51 +910,103 @@ impl VmcEngine {
     /// # Returns
     /// * `Result<VmcIterationResult>` - The iteration result
     pub fn run_single_iteration(&mut self) -> Result<VmcIterationResult> {
+        let mut sr_step_info: Option<crate::vmc::sr_optimization::SRStepInfo> = None;
         // For Heisenberg model (ne=0), generate spin configurations directly
+        println!("run_single_iteration: ne = {}", self.sampler.current_config().ne());
         if self.sampler.current_config().ne() == 0 {
-            return self.run_heisenberg_iteration();
+            println!("Calling run_heisenberg_iteration");
+            return self.run_heisenberg_iteration(0);
         }
 
-        // 1. Monte Carlo sampling
+        // 1. Monte Carlo sampling (NVMCWarmUp/NVMCInterval/NVMCSample 準拠)
+        let _mc = &self.params.mc_params;
+        let _base_seed = self.params.random_seed.get() + self.current_iteration as u64;
+        // Use configured sampler (already set from params)
         let sampling_result = self.sampler.sample(&self.wavefunction)?;
 
-        // 2. Calculate energy and observables
-        let energy = self.calculate_energy(&sampling_result.configurations)?;
+        // 2. Calculate weighted averages: E, E^2, Sz, Sz^2
+        let mut total_w = 0.0f64;
+        let mut e_sum = num_complex::Complex64::new(0.0, 0.0);
+        let mut e2_sum = num_complex::Complex64::new(0.0, 0.0);
+        let mut sz_sum = 0.0f64;
+        let mut sz2_sum = 0.0f64;
+
+        for cfg in &sampling_result.configurations {
+            let spin_config = self.electron_config_to_spin_config(cfg);
+            let local_energy = self.calculate_local_energy(&spin_config)?;
+            // total S^z from configuration (up-down on sites)
+            let mut szt = 0.0f64;
+            for s in &spin_config {
+                use mvmc_physics::hamiltonian::Spin::*;
+                szt += match s { Up => 1.0, Down => -1.0, Empty => 0.0 };
+            }
+
+            total_w += 1.0;
+            e_sum += local_energy;
+            e2_sum += local_energy * local_energy;
+            sz_sum += szt;
+            sz2_sum += szt * szt;
+        }
+
+        let (energy, energy_squared, sz_total, sz_squared) = if total_w > 1e-12 {
+            (
+                e_sum / total_w,
+                e2_sum / total_w,
+                sz_sum / total_w,
+                sz2_sum / total_w,
+            )
+        } else {
+            (num_complex::Complex64::new(0.0, 0.0), num_complex::Complex64::new(0.0, 0.0), 0.0, 0.0)
+        };
+
         let observables = self.calculator.calculate_observables();
 
-        // 3. Calculate variance
-        let variance = self.calculate_variance(&sampling_result.configurations, energy)?;
+        // 3. Calculate variance from weighted averages
+        let variance = (energy_squared - energy * energy).re;
 
-        // 4. Update parameters if in optimization mode
-        if let Some(ref mut optimizer) = self.optimizer {
-            // Calculate SR matrix and force vector from samples
-            // This is a simplified version - in full implementation,
-            // we would calculate the full SR matrix from the samples
-            let _result = optimizer.optimize()?;
-
-            // Apply parameter updates to wavefunction
-            // (This is a placeholder - full implementation would update wavefunction parameters)
-            // For now, we'll just update the iteration counter
+        // 4. Update parameters if in optimization mode using full SR
+        if self.params.calc_mode == crate::types::CalcMode::Optimization {
+            use crate::vmc::sr_optimization::{SROptimizationCalculator, SRSampleData};
+            let mut sr_calc = SROptimizationCalculator::new(self.wavefunction.num_parameters());
+            let sr_limit = self.params.sr_params.iteration_sample.max(1);
+            for cfg in sampling_result.configurations.iter().take(sr_limit) {
+                let spin_config = self.electron_config_to_spin_config(cfg);
+                let u8_config = self.spin_config_to_u8(&spin_config);
+                let _psi = self.wavefunction.calculate(&u8_config);
+                let weight = 1.0; // samples are already drawn ~|ψ|^2
+                let local_energy = self.calculate_local_energy(&spin_config)?;
+                let o_ops = self.wavefunction.calculate_o_operators(&u8_config);
+                sr_calc.add_sample(SRSampleData { o_operators: o_ops.into_iter().map(|c| c.re).collect(), energy: local_energy.re, weight });
+            }
+            let sp = &self.params.sr_params;
+            let (updates, info) = sr_calc.solve_full_sr_with_params(sp)?;
+            self.wavefunction.update_parameters(&updates, sp.step_size);
+            // Attach SR info into result (assign later via local variable)
+            sr_step_info = Some(info);
             self.current_iteration += 1;
         }
 
         Ok(VmcIterationResult {
             energy,
+            energy_squared,
             variance,
             sample_count: sampling_result.configurations.len(),
             acceptance_rate: sampling_result.acceptance_rate,
             observables,
+            sz_total,
+            sz_squared,
+            sr_info: sr_step_info,
         })
     }
 
-    /// Runs a single VMC iteration for Heisenberg model
+    /// Runs a single VMC iteration for Heisenberg model (legacy method - use run_heisenberg_iteration with iteration parameter)
     ///
     /// For Heisenberg model, we generate spin configurations directly
     /// instead of using electron configurations.
     ///
     /// # Returns
     /// * `Result<VmcIterationResult>` - The iteration result
-    fn run_heisenberg_iteration(&mut self) -> Result<VmcIterationResult> {
+    fn run_heisenberg_iteration_legacy(&mut self) -> Result<VmcIterationResult> {
         let _nsite = self.hamiltonian.lattice().n_sites();
         let two_sz = self.sampler.current_config().two_sz();
 
@@ -754,13 +1016,16 @@ impl VmcEngine {
         // Note: In future iterations, we could track previous energy for convergence checks
 
         // Perform Monte Carlo sampling with Metropolis-Hastings
-        let mut rng_state = 12345u64 + self.current_iteration as u64; // Use iteration-dependent seed
-        let num_warmup_steps = 100; // Burnin period
-        let num_mc_steps = 1000; // Number of Monte Carlo steps per iteration (increased for better statistics)
+        // Seed and MC schedule aligned with StdFace
+        let base_seed = self.params.random_seed.get();
+        let mut rng_state = base_seed + self.current_iteration as u64; // iteration-dependent seed
+        let num_warmup_steps = self.params.mc_params.warmup_steps;
+        let sampling_interval = self.params.mc_params.sampling_interval;
+        let target_samples = self.params.mc_params.num_samples;
 
         // Burnin phase: equilibrate the system
         for _step in 0..num_warmup_steps {
-            let (proposed_config, _acceptance_prob) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
+            let (proposed_config, _acceptance_prob) = self.propose_spin_exchange(&spin_config, &mut rng_state)?;
 
             // Metropolis-Hastings acceptance
             let current_u8 = self.spin_config_to_u8(&spin_config);
@@ -795,9 +1060,10 @@ impl VmcEngine {
         let mut best_energy = initial_energy.re;
         let mut best_config = spin_config.clone();
 
+        let num_mc_steps = sampling_interval * target_samples.max(1);
         for step in 0..num_mc_steps {
             // Propose a spin flip
-            let (proposed_config, _acceptance_prob) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
+            let (proposed_config, _acceptance_prob) = self.propose_spin_exchange(&spin_config, &mut rng_state)?;
 
             // Calculate energies (for tracking best energy)
             let _current_energy = self.calculate_local_energy(&spin_config)?;
@@ -836,7 +1102,7 @@ impl VmcEngine {
             }
 
             // Collect sample (every few steps to avoid correlation)
-            if step % 10 == 0 {
+            if step % sampling_interval == 0 && samples_collected < target_samples {
                 let local_energy = self.calculate_local_energy(&spin_config)?;
                 energy_sum += local_energy;
                 energy_squared_sum += local_energy * local_energy;
@@ -866,13 +1132,12 @@ impl VmcEngine {
         let energy_variance = avg_energy_squared - avg_energy * avg_energy;
         let variance = energy_variance.re;
 
-        let acceptance_rate = accepted_moves as f64 / num_mc_steps as f64;
+        let acceptance_rate = if num_mc_steps > 0 { accepted_moves as f64 / num_mc_steps as f64 } else { 0.0 };
         let observables = self.calculator.calculate_observables();
 
-        // Store energy in history
-        self.energy_history.push(avg_energy);
+        // Defer storing energy until after parameter update (for monotonic reporting)
 
-        // Update parameters if in optimization mode using SR method
+        // Update parameters if in optimization mode using SR method (full SR)
         if let Some(ref mut _optimizer) = self.optimizer {
             // Collect samples for SR optimization
             use crate::vmc::sr_optimization::{SROptimizationCalculator, SRSampleData};
@@ -881,11 +1146,12 @@ impl VmcEngine {
             let mut sr_calculator = SROptimizationCalculator::new(n_params);
 
             // For each Monte Carlo step, calculate O-operators and collect samples
-            let mut rng_state = 12345u64 + self.current_iteration as u64;
-            let num_sr_samples = 100; // Number of samples for SR calculation
+            let mut rng_state = base_seed + self.current_iteration as u64;
+            let num_sr_samples = self.params.sr_params.iteration_sample.max(1);
 
             for _ in 0..num_sr_samples {
-                let (proposed_config, _) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
+                // preserve total Sz during SR sampling as well
+                let (proposed_config, _) = self.propose_spin_exchange(&spin_config, &mut rng_state)?;
 
                 // Calculate local energy and O-operators
                 let local_energy = self.calculate_local_energy(&proposed_config)?;
@@ -897,9 +1163,9 @@ impl VmcEngine {
                 let o_operators = self.wavefunction.calculate_o_operators(&u8_config);
 
                 // Add sample to SR calculator
-                let sample = SRSampleData {
-                    o_operators,
-                    local_energy,
+                let sample =                 SRSampleData {
+                    o_operators: o_operators.into_iter().map(|c| c.re).collect(),
+                    energy: local_energy.re,
                     weight,
                 };
                 sr_calculator.add_sample(sample);
@@ -920,28 +1186,57 @@ impl VmcEngine {
                 }
             }
 
-            // Calculate SR parameter updates
-            let learning_rate = 0.01; // Conservative learning rate
-            match sr_calculator.solve_sr_equation(learning_rate) {
-                Ok(param_updates) => {
-                    // Apply SR-calculated parameter updates
-                    self.wavefunction.update_parameters(&param_updates, learning_rate);
-                }
-                Err(_) => {
-                    // Fallback to simple parameter perturbation if SR fails
-                    self.wavefunction.update_parameters(&[], 0.01);
+            // Solve full SR with stabilization
+            let sp = &self.params.sr_params;
+            if n_params > 0 {
+                if let Ok((updates, _info)) = sr_calculator.solve_full_sr_with_info(
+                    sp.reduction_cutoff, sp.stability_delta, sp.step_size,
+                ) {
+                    // Apply updates (learning_rate used as additional scaling)
+                    self.wavefunction.update_parameters(&updates, 1.0);
                 }
             }
 
             self.current_iteration += 1;
         }
 
+        // Re-evaluate energy briefly with updated parameters to report post-update energy
+        let mut rng_tmp = 7654321u64;
+        let mut conf_tmp = spin_config.clone();
+        let mut e_sum = 0.0;
+        let mut n_eval = 0usize;
+        for _ in 0..50 {
+            let (pc, _) = self.propose_spin_exchange(&conf_tmp, &mut rng_tmp)?;
+            conf_tmp = pc;
+            let e_loc = self.calculate_vmc_local_energy(&conf_tmp)?;
+            e_sum += e_loc;
+            n_eval += 1;
+        }
+        let e_after = if n_eval > 0 { e_sum / n_eval as f64 } else { avg_energy.re };
+        let energy_report = Complex64::new(e_after, 0.0);
+        // Store post-update energy to history
+        self.energy_history.push(energy_report);
+
+        // Heisenberg: estimate E^2 and Sz moments from collected samples
+        let energy_squared = avg_energy_squared;
+        // Sz moments from current best configuration as proxy
+        let mut sz_total = 0.0f64;
+        for s in &spin_config {
+            use mvmc_physics::hamiltonian::Spin::*;
+            sz_total += match s { Up => 1.0, Down => -1.0, Empty => 0.0 };
+        }
+        let sz_squared = sz_total * sz_total;
+
         Ok(VmcIterationResult {
-            energy: avg_energy, // Use the average energy from samples
+            energy: energy_report,
+            energy_squared,
             variance,
             sample_count: samples_collected,
             acceptance_rate,
             observables,
+            sz_total,
+            sz_squared,
+            sr_info: None,
         })
     }
 
@@ -961,22 +1256,13 @@ impl VmcEngine {
         let mut total_energy = Complex64::new(0.0, 0.0);
         let mut total_weight = 0.0;
 
+        let n = configurations.len();
+        if n == 0 { return Ok(Complex64::new(0.0, 0.0)); }
         for (_idx, config) in configurations.iter().enumerate() {
             let spin_config = self.electron_config_to_spin_config(config);
             let local_energy = self.calculate_local_energy(&spin_config)?;
-            let u8_config = self.spin_config_to_u8(&spin_config);
-            let psi = self.wavefunction.calculate(&u8_config);
-            let weight = psi.norm();
-
-            // if idx == 0 {
-            //     eprintln!("DEBUG: First config - spin_config: {:?}", spin_config);
-            //     eprintln!("DEBUG: u8_config: {:?}", u8_config);
-            //     eprintln!("DEBUG: psi: {}, norm: {}", psi, weight);
-            //     eprintln!("DEBUG: local_energy: {}", local_energy);
-            // }
-
-            total_energy += local_energy * weight;
-            total_weight += weight;
+            total_energy += local_energy;
+            total_weight += 1.0;
         }
 
         if total_weight > 1e-12 {
@@ -1001,14 +1287,14 @@ impl VmcEngine {
         let mut total_variance = 0.0;
         let mut total_weight = 0.0;
 
+        let n = configurations.len();
+        if n == 0 { return Ok(0.0); }
         for config in configurations {
             let spin_config = self.electron_config_to_spin_config(config);
             let local_energy = self.calculate_local_energy(&spin_config)?;
-            let weight = self.wavefunction.calculate(&self.spin_config_to_u8(&spin_config)).norm();
-
             let energy_diff = local_energy - mean_energy;
-            total_variance += energy_diff.norm_sqr() * weight;
-            total_weight += weight;
+            total_variance += energy_diff.norm_sqr();
+            total_weight += 1.0;
         }
 
         if total_weight > 1e-12 {
@@ -1018,22 +1304,6 @@ impl VmcEngine {
         }
     }
 
-    /// Converts spin configuration to u8 array for wavefunction calculation
-    ///
-    /// # Arguments
-    /// * `spin_config` - Spin configuration
-    ///
-    /// # Returns
-    /// * `Vec<u8>` - u8 array representation
-    fn spin_config_to_u8(&self, spin_config: &[Spin]) -> Vec<u8> {
-        spin_config.iter().map(|spin| {
-            match spin {
-                Spin::Up => 1,
-                Spin::Down => 2,
-                Spin::Empty => 0,
-            }
-        }).collect()
-    }
 
     /// Calculates VMC local energy including off-diagonal terms
     ///
@@ -1049,21 +1319,12 @@ impl VmcEngine {
         let u8_config = self.spin_config_to_u8(spin_config);
         let psi = self.wavefunction.calculate(&u8_config);
 
-        // Debug: Print first time only
-        static mut DEBUG_COUNT: usize = 0;
-        unsafe {
-            if DEBUG_COUNT == 0 {
-                eprintln!("DEBUG calculate_vmc_local_energy:");
-                eprintln!("  spin_config: {:?}", spin_config);
-                eprintln!("  u8_config: {:?}", u8_config);
-                eprintln!("  psi: {} (norm: {})", psi, psi.norm());
-                DEBUG_COUNT = 1;
-            }
-        }
+        // Debug prints removed for clean CLI output
 
         if psi.norm() < 1e-12 {
-            eprintln!("WARNING: psi.norm() < 1e-12, returning 0 energy");
-            return Ok(0.0);
+            // For very small amplitudes, use diagonal energy only
+            // This prevents division by zero in off-diagonal terms
+            return Ok(self.hamiltonian.diagonal_element(spin_config));
         }
 
         // Start with diagonal energy (Sz-Sz terms)
@@ -1112,6 +1373,50 @@ impl VmcEngine {
             }
         }
 
+        Ok(local_energy)
+    }
+
+    /// Variant of local energy using a provided wavefunction (for trial updates)
+    fn calculate_vmc_local_energy_with_wf(
+        &self,
+        wf: &PhysicsCombinedWavefunction,
+        spin_config: &[Spin],
+    ) -> Result<f64> {
+        let u8_config = self.spin_config_to_u8(spin_config);
+        let psi = wf.calculate(&u8_config);
+        if psi.norm() < 1e-12 {
+            // For very small amplitudes, use diagonal energy only
+            return Ok(self.hamiltonian.diagonal_element(spin_config));
+        }
+        let mut local_energy = self.hamiltonian.diagonal_element(spin_config);
+        let nsite = spin_config.len();
+        for i in 0..nsite {
+            for j in (i + 1)..nsite {
+                if self.hamiltonian.lattice().neighbors(i).contains(&j) {
+                    let mut new_config = spin_config.to_vec();
+                    let can_flip = if spin_config[i] == Spin::Up && spin_config[j] == Spin::Down {
+                        new_config[i] = Spin::Down;
+                        new_config[j] = Spin::Up;
+                        true
+                    } else if spin_config[i] == Spin::Down && spin_config[j] == Spin::Up {
+                        new_config[i] = Spin::Up;
+                        new_config[j] = Spin::Down;
+                        true
+                    } else {
+                        false
+                    };
+                    if can_flip {
+                        let new_u8 = self.spin_config_to_u8(&new_config);
+                        let new_psi = wf.calculate(&new_u8);
+                        if new_psi.norm() > 1e-12 {
+                            let matrix_elem = self.hamiltonian.matrix_element(spin_config, &new_config).re;
+                            let amplitude_ratio = (new_psi / psi).re;
+                            local_energy += matrix_elem * amplitude_ratio;
+                        }
+                    }
+                }
+            }
+        }
         Ok(local_energy)
     }
 
@@ -1450,4 +1755,3 @@ mod tests {
         assert!(display.contains("Energy"));
     }
 }
-

@@ -450,6 +450,12 @@ nalgebra = "0.32"
   - カラー出力（colored使用）
   - ロギング機能（env_logger使用）
   - 統一エラーハンドリング（thiserror使用）
+- **StdFace.defファイルの直接入力サポート:**
+  - `mvmc run <StdFace.def>` コマンドの実装
+  - StdFace設定からVMCパラメータへの自動変換
+  - デフォルト値の自動補完（Spinモデル: ne=0, Hubbardモデル: ne=nsite）
+  - 設定検証とエラーハンドリング
+  - 包括的なテストスイート
 - **統合完了:** VMCエンジンとの統合完了、完全なVMC計算システムが動作可能
 
 ### 4.2 移行の優先順位

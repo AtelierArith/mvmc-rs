@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 /// * `input_file` - StdFace.defファイルのパス
 /// * `output_dir` - 出力ディレクトリ
 pub fn execute(input_file: PathBuf, output_dir: PathBuf) -> CliResult<()> {
+    println!("Standard: execute function called");
     println!("{}", "═══════════════════════════════════════════".cyan());
     println!("{}", "  mVMC - Standard Mode".cyan().bold());
     println!("{}", "═══════════════════════════════════════════".cyan());
@@ -114,15 +115,17 @@ fn convert_stdface_to_vmc_params(stdface_config: &mvmc_io::StdFaceConfig) -> Cli
             reduction_cutoff: stdface_config.optimization.sr_reduction_cutoff.unwrap_or(1e-6),
             stability_delta: stdface_config.optimization.sr_stabilization_delta.unwrap_or(1e-6),
             step_size: stdface_config.optimization.sr_step_delta.unwrap_or(0.1),
-            cg_max_iterations: 1000,
-            cg_tolerance: 1e-10,
+            cg_max_iterations: stdface_config.optimization.sr_cg_max_iter.unwrap_or(1000),
+            cg_tolerance: stdface_config.optimization.sr_cg_tol.unwrap_or(1e-10),
+            use_cg: stdface_config.optimization.sr_cg.unwrap_or(0) != 0,
         },
         mc_params: MonteCarloParameters {
-            warmup_steps: 1000,
-            sampling_interval: 10,
-            num_samples: 1000,
-            exchange_update: false,
-            block_update_size: 1,
+            warmup_steps: stdface_config.monte_carlo.vmc_warmup_steps.unwrap_or(1000),
+            sampling_interval: stdface_config.monte_carlo.vmc_sampling_interval.unwrap_or(10),
+            num_samples: stdface_config.monte_carlo.vmc_samples.unwrap_or(1000),
+            exchange_update: stdface_config.monte_carlo.ex_update_path.unwrap_or(0) != 0,
+            block_update_size: stdface_config.monte_carlo.block_update_size.unwrap_or(1),
+            exchange_ratio: stdface_config.monte_carlo.ex_update_ratio.unwrap_or(0.3),
         },
     };
 
@@ -134,97 +137,228 @@ fn run_vmc_calculation(vmc_params: &VmcParameters, stdface_config: &mvmc_io::Std
     use std::fs::File;
     use std::io::Write;
     use mvmc_core::vmc::VmcEngine;
-    use mvmc_physics::hamiltonian::HeisenbergHamiltonian;
-    use mvmc_physics::lattice::ChainLattice;
-    use mvmc_physics::wavefunction::{CombinedWavefunction, SlaterDeterminant};
+    use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, HubbardHamiltonian, Hamiltonian};
+    use mvmc_physics::lattice::{ChainLattice, SquareLattice, Lattice};
+    use mvmc_physics::wavefunction::CombinedWavefunction;
     use mvmc_core::types::CalcMode;
 
     // 最適化モードに設定
     let mut opt_params = vmc_params.clone();
     opt_params.calc_mode = CalcMode::Optimization;
 
-    // StdFace設定からJの値を取得（デフォルト: 1.0）
-    let j_exchange = *stdface_config.model.parameters.get("J").unwrap_or(&1.0);
-
-    // ハミルトニアンを作成
-    let lattice = ChainLattice::new(opt_params.nsite.get(), true)
-        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
-
-    // Heisenbergモデル: H = J * sum <S_i · S_j>
-    // C実装と同じ符号規則を使用（J > 0で反強磁性）
-    let hamiltonian = HeisenbergHamiltonian::new(lattice, j_exchange, 0.0)
-        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hamiltonian: {}", e)))?;
-
-    // 波動関数を作成
+    // Lattice selection based on StdFace
     let nsite = opt_params.nsite.get();
-    let ne = opt_params.ne.get();
-    let slater = SlaterDeterminant::new_plane_wave(nsite, ne)
-        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Slater determinant: {}", e)))?;
+    let dims = &stdface_config.lattice.dimensions;
+    let periodic = parse_periodic_from_stdface(&stdface_config);
 
-    let wavefunction = CombinedWavefunction::with_slater(nsite, ne, slater)
-        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
+    // Build Hamiltonian and wavefunction based on model type
+    let model = stdface_config.model.model_type.to_lowercase();
+
+    // Heisenberg (Spin) model
+    let (mut wavefunction, hamiltonian_boxed): (CombinedWavefunction, Box<dyn Hamiltonian>) = if model == "spin" {
+        // Ensure ne = 0 for spin model
+        if opt_params.ne.get() != 0 {
+            eprintln!("warning: Spin model detected but ne != 0; overriding ne -> 0 for spin-only calculation");
+        }
+
+        let j_exchange = *stdface_config.model.parameters.get("J").unwrap_or(&1.0);
+        // Build lattice
+        let h = match dims.len() {
+            1 => {
+                let lat = ChainLattice::new(dims[0], periodic)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Chain lattice: {}", e)))?;
+                HeisenbergHamiltonian::new(lat, j_exchange, 0.0)
+            }
+            2 => {
+                let lat = SquareLattice::new(dims[0], dims[1], periodic)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Square lattice: {}", e)))?;
+                HeisenbergHamiltonian::new(lat, j_exchange, 0.0)
+            }
+            _ => {
+                let lat = ChainLattice::new(nsite, true)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
+                HeisenbergHamiltonian::new(lat, j_exchange, 0.0)
+            }
+        }
+            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Heisenberg Hamiltonian: {}", e)))?;
+
+        // For spin model, construct combined wavefunction with ne=0 (Slater part becomes constant 1)
+        let mut wf = CombinedWavefunction::new(nsite, 0)
+            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
+
+        // Add a simple spin-Jastrow projector to avoid constant wavefunction in spin model
+        // Pairs: nearest-neighbor bonds from lattice
+        let mut pairs: Vec<(usize, usize)> = Vec::new();
+        for i in 0..nsite {
+            for &j in h.lattice().neighbors(i).iter() {
+                if i < j { pairs.push((i, j)); }
+            }
+        }
+        // Small negative alpha favors antiferromagnetic correlations
+        let alpha = -0.05_f64;
+        wf.add_projector(Box::new(mvmc_physics::wavefunction::projection::SpinJastrowProjector::new(nsite, pairs, alpha)));
+
+        (wf, Box::new(h))
+    } else {
+        // Fermionic (Hubbard) model: use parameters t, U, mu when available
+        let t = *stdface_config.model.parameters.get("t").unwrap_or(&1.0);
+        let u = *stdface_config.model.parameters.get("U").unwrap_or(&0.0);
+        let mu = *stdface_config.model.parameters.get("mu").unwrap_or(&0.0);
+
+        let h = match dims.len() {
+            1 => {
+                let lat = ChainLattice::new(dims[0], periodic)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Chain lattice: {}", e)))?;
+                HubbardHamiltonian::new(lat, t, u, mu)
+            }
+            2 => {
+                let lat = SquareLattice::new(dims[0], dims[1], periodic)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Square lattice: {}", e)))?;
+                HubbardHamiltonian::new(lat, t, u, mu)
+            }
+            _ => {
+                let lat = ChainLattice::new(nsite, true)
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
+                HubbardHamiltonian::new(lat, t, u, mu)
+            }
+        }
+            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hubbard Hamiltonian: {}", e)))?;
+
+        // Use CombinedWavefunction::new to initialize a Slater-based wavefunction
+        let wf = CombinedWavefunction::new(nsite, opt_params.ne.get())
+            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
+
+        (wf, Box::new(h))
+    };
 
     // VMCエンジンを作成
     let mut vmc_engine = VmcEngine::new(
         opt_params.clone(),
         wavefunction,
-        Box::new(hamiltonian),
+        hamiltonian_boxed,
     ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create VMC engine: {}", e)))?;
 
-    // 出力ファイルを作成
-    let output_file_path = output_dir.join("zvo_out_001.dat");
-    let mut output_file = File::create(&output_file_path)
-        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create output file: {}", e)))?;
+    // 出力管理器（C準拠のファイル名）
+    let out_mgr = mvmc_io::output::OutputManager::new(&output_dir, "zvo", 1);
+    // Clean previous outputs to avoid mixing formats from earlier runs
+    out_mgr.clean().map_err(|e| CliError::Other(anyhow::anyhow!("Failed to clean output dir: {}", e)))?;
+    let srinfo_path = out_mgr.output_dir.join(format!("{}_SRinfo.dat", out_mgr.file_head));
 
     // VMC最適化を実行
     let num_iterations = opt_params.sr_params.iteration_steps;
 
     println!("  Running VMC optimization with:");
-    println!("    - Slater determinant wavefunction");
-    println!("    - Heisenberg Hamiltonian");
+    println!("    - Combined wavefunction (Slater/Pfaffian + projections)");
+    println!("    - {} Hamiltonian", if model == "spin" { "Heisenberg" } else { "Hubbard" });
     println!("    - Monte Carlo sampling");
     println!("    - Stochastic Reconfiguration optimization");
     println!("    - Parameter updates between iterations");
     println!();
 
-    // 最適化を実行して結果を取得
-    let optimization_result = vmc_engine.run_optimization()
-        .map_err(|e| CliError::Other(anyhow::anyhow!("VMC optimization failed: {}", e)))?;
+    // 逐次イテレーションを実行し、各ステップで出力
+    for iter in 0..num_iterations {
+        println!("Standard: About to call run_single_iteration for iteration {}", iter);
+        let result = vmc_engine
+            .run_single_iteration()
+            .map_err(|e| CliError::Other(anyhow::anyhow!("VMC iteration {} failed: {}", iter, e)))?;
+        println!("Standard: run_single_iteration completed for iteration {}", iter);
 
-    // 最適化結果からエネルギー履歴を取得
-    if let Some(opt) = &optimization_result.optimization {
-        for (iteration, &energy) in opt.energy_history.iter().enumerate() {
-            // 結果をファイルに書き込み
+        // zvo_out: Re(E), Im(E), Re(E^2), Re(Var), Re(Sz), Re(Sz^2)
+        let energy_data = mvmc_io::output::EnergyData::new(
+            num_complex::Complex64::new(result.energy.re, result.energy.im),
+            num_complex::Complex64::new(result.energy_squared.re, result.energy_squared.im),
+            num_complex::Complex64::new(result.sz_total, 0.0),
+            num_complex::Complex64::new(result.sz_squared, 0.0),
+        );
+        // append one line to zvo_out_001.dat
+        {
+            use std::io::Write as _;
+            let out_path = out_mgr.energy_output_path();
+            std::fs::create_dir_all(out_path.parent().unwrap())
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to ensure output dir: {}", e)))?;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&out_path)
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to open zvo_out: {}", e)))?;
             writeln!(
-                output_file,
-                "{:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e}",
-                energy.re,
-                energy.im,
-                0.0, // variance (placeholder)
-                1000.0, // sample_count (placeholder)
-                0.0, // その他の統計情報1
-                0.0  // その他の統計情報2
-            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write output: {}", e)))?;
-
-            // 進捗を表示
-            if iteration % 10 == 0 || iteration == opt.energy_history.len() - 1 {
-                println!("  Iteration {}/{}: Energy = {:.6}",
-                    iteration + 1, opt.energy_history.len(), energy.re);
-            }
+                f,
+                "{:.18e} {:.18e}  {:.18e} {:.18e} {:.18e} {:.18e}",
+                energy_data.energy.re,
+                energy_data.energy.im,
+                energy_data.energy_squared.re,
+                energy_data.variance.re,
+                energy_data.sz_total.re,
+                energy_data.sz_squared.re,
+            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to append zvo_out: {}", e)))?;
         }
-    } else {
-        // フォールバック: 単一の結果を書き込み
-        writeln!(
-            output_file,
-            "{:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e} {:20.15e}",
-            optimization_result.energy.re,
-            optimization_result.energy.im,
-            optimization_result.energy_error,
-            1000.0, // sample_count (placeholder)
-            0.0, // その他の統計情報1
-            0.0  // その他の統計情報2
-        ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write output: {}", e)))?;
+
+        // zvo_var: [E_re E_im 0.0 E2_re E2_im 0.0] then parameters [Re Im 0.0]*
+        let params_vec = vmc_engine.wavefunction().export_parameters();
+        let var_data = mvmc_io::output::VariationalData::new(energy_data, params_vec);
+        out_mgr.append_variational(&var_data)
+            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to append zvo_var: {}", e)))?;
+
+        // zvo_SRinfo.dat: header once, then one line per step
+        if !srinfo_path.exists() || std::fs::metadata(&srinfo_path).map(|m| m.len()).unwrap_or(0) == 0 {
+            use std::io::Write as _;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&srinfo_path)
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to open zvo_SRinfo.dat: {}", e)))?;
+            writeln!(f, "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax      imax")
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to write zvo_SRinfo header: {}", e)))?;
+        }
+        if let Some(info) = &result.sr_info {
+            use std::io::Write as _;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&srinfo_path)
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to open zvo_SRinfo.dat: {}", e)))?;
+            writeln!(
+                f,
+                "{:5} {:5} {:5} {:5}  {:.5e}  {:.5e} {:.5e} {:6}",
+                info.npara,
+                info.msize,
+                info.opt_cut,
+                info.diag_cut,
+                info.sdiag_max,
+                info.sdiag_min,
+                info.abs_rmax,
+                info.imax,
+            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to append zvo_SRinfo.dat: {}", e)))?;
+        }
+
+        if iter % (num_iterations.max(1) / 20 + 1) == 0 || iter + 1 == num_iterations {
+            println!("  Iteration {}/{}: Energy = {:.6}", iter + 1, num_iterations, result.energy.re);
+        }
     }
 
     Ok(())
+}
+
+/// Try to interpret periodic boundary from StdFace.
+/// Defaults to true (mVMC standard). Supports keys in additional:
+/// - periodic = 0/1
+/// - boundary = Open/Periodic (case-insensitive)
+fn parse_periodic_from_stdface(cfg: &mvmc_io::StdFaceConfig) -> bool {
+    // default periodic
+    let mut periodic = true;
+    // normalize keys
+    for (k, v) in &cfg.additional {
+        let key = k.to_lowercase();
+        let val = v.to_lowercase();
+        if key == "periodic" {
+            if let Ok(n) = val.parse::<i32>() { return n != 0; }
+            if val.contains("true") { return true; }
+            if val.contains("false") { return false; }
+        }
+        if key == "boundary" || key == "boundarycondition" {
+            if val.starts_with("open") { return false; }
+            if val.starts_with("periodic") { return true; }
+        }
+    }
+    periodic
 }

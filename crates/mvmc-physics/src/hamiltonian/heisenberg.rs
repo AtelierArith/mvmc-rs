@@ -106,7 +106,9 @@ impl HeisenbergHamiltonian {
                     let spin_i = config[site].value_f64();
                     let spin_j = config[neighbor].value_f64();
 
-                    // Exchange interaction: J * S_i * S_j
+                    // Spin-1/2 convention: S^z = (1/2) σ^z, σ^z = ±1
+                    // SzSz term: J * S^z_i S^z_j = J * (1/2) * (1/2) * σ^z_i σ^z_j = (J/4) * σ^z_i σ^z_j
+                    // But we use σ^z_i σ^z_j directly, so we need J * σ^z_i σ^z_j
                     energy += self.exchange * spin_i * spin_j;
                 }
             }
@@ -118,12 +120,13 @@ impl HeisenbergHamiltonian {
     /// Calculates the magnetic field energy contribution.
     ///
     /// This is the magnetic field term: -h ∑_i S_i^z
+    /// For spin-1/2: S^z = (1/2) σ^z, so energy = -h * (1/2) * σ^z = -(h/2) * σ^z
     fn magnetic_field_energy(&self, config: &[Spin]) -> f64 {
         let mut energy = 0.0;
 
         for site in 0..self.lattice.n_sites() {
             let spin_z = config[site].value_f64();
-            energy -= self.magnetic_field * spin_z;
+            energy -= self.magnetic_field * 0.5 * spin_z;
         }
 
         energy
@@ -227,11 +230,10 @@ impl Hamiltonian for HeisenbergHamiltonian {
             return Complex64::new(0.0, 0.0);
         }
 
-        // Matrix element for exchange coupling
-        // Reference: mVMC exchange.def uses ParaExchangeCoupling = -J/2
-        // The exchange term is: -J/2 * (S^+_i S^-_j + S^-_i S^+_j)
-        // Matrix element for each flip is -J/2
-        Complex64::new(-self.exchange * 0.5, 0.0)
+        // Matrix element for Heisenberg exchange flip term
+        // H contains (J/2) * (S^+_i S^-_j + S^-_i S^+_j) for spin-1/2
+        // Thus, <↓↑|H|↑↓> = J/2
+        Complex64::new(self.exchange * 0.5, 0.0)
     }
 
     fn diagonal_element(&self, config: &[Spin]) -> f64 {

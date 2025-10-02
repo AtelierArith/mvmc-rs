@@ -138,6 +138,9 @@ pub struct SRParameters {
 
     /// Tolerance for SR-CG method (DSROptCGTol)
     pub cg_tolerance: f64,
+
+    /// Use CG solver for SR (NSRCG != 0)
+    pub use_cg: bool,
 }
 
 impl SRParameters {
@@ -160,6 +163,7 @@ impl SRParameters {
         step_size: f64,
         cg_max_iterations: usize,
         cg_tolerance: f64,
+        use_cg: bool,
     ) -> Self {
         Self {
             iteration_steps,
@@ -170,6 +174,7 @@ impl SRParameters {
             step_size,
             cg_max_iterations,
             cg_tolerance,
+            use_cg,
         }
     }
 
@@ -207,6 +212,7 @@ impl Default for SRParameters {
             step_size: 3e-3,
             cg_max_iterations: 1000,
             cg_tolerance: 1e-10,
+            use_cg: false,
         }
     }
 }
@@ -230,6 +236,12 @@ pub struct MonteCarloParameters {
 
     /// Block size for Pfaffian update (NBlockUpdateSize)
     pub block_update_size: usize,
+
+    /// Ratio for exchange updates vs hopping inside a block (0.0..1.0)
+    /// If NExUpdatePath is enabled, this ratio controls how frequently
+    /// exchange updates are attempted relative to hopping within a block.
+    /// Default is 0.3 (30% exchange, 70% hop).
+    pub exchange_ratio: f64,
 }
 
 impl MonteCarloParameters {
@@ -256,6 +268,7 @@ impl MonteCarloParameters {
             num_samples,
             exchange_update,
             block_update_size,
+            exchange_ratio: 0.3,
         }
     }
 
@@ -291,6 +304,7 @@ impl Default for MonteCarloParameters {
             num_samples: 1000,
             exchange_update: false,
             block_update_size: 1,
+            exchange_ratio: 0.3,
         }
     }
 }

@@ -90,27 +90,45 @@ impl CombinedWavefunction {
     /// * `Result<Self>` - The combined wavefunction
     ///
     /// # Note
-    /// This creates a wavefunction with a plane wave Slater determinant by default.
+    /// For Heisenberg models (ne=0), this creates a wavefunction without Slater determinant.
+    /// For fermionic models (ne>0), this creates a wavefunction with a plane wave Slater determinant.
     /// Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
     pub fn new(nsite: usize, ne: usize) -> Result<Self> {
-        // Initialize with plane wave basis (like C implementation)
-        // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSlaterElm()
-        let slater = SlaterDeterminant::new_plane_wave(nsite, ne)?;
+        if ne == 0 {
+            // Heisenberg model (ne=0): No Slater determinant needed
+            let gutzwiller_params = vec![0.0; nsite];
+            let n_jastrow = nsite * (nsite - 1) / 2;  // Number of unique pairs i < j
+            let jastrow_params = vec![0.0; n_jastrow];
 
-        // Initialize Gutzwiller and Jastrow parameters to zero
-        let gutzwiller_params = vec![0.0; nsite];
-        let n_jastrow = nsite * (nsite - 1) / 2;  // Number of unique pairs i < j
-        let jastrow_params = vec![0.0; n_jastrow];
+            Ok(Self {
+                slater: None,  // No Slater determinant for spin models
+                pfaffian: None,
+                projectors: Vec::new(),
+                nsite,
+                ne,
+                gutzwiller_params,
+                jastrow_params,
+            })
+        } else {
+            // Fermionic model (ne>0): Initialize with plane wave basis
+            // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSlaterElm()
+            let slater = SlaterDeterminant::new_plane_wave(nsite, ne)?;
 
-        Ok(Self {
-            slater: Some(slater),
-            pfaffian: None,
-            projectors: Vec::new(),
-            nsite,
-            ne,
-            gutzwiller_params,
-            jastrow_params,
-        })
+            // Initialize Gutzwiller and Jastrow parameters to zero
+            let gutzwiller_params = vec![0.0; nsite];
+            let n_jastrow = nsite * (nsite - 1) / 2;  // Number of unique pairs i < j
+            let jastrow_params = vec![0.0; n_jastrow];
+
+            Ok(Self {
+                slater: Some(slater),
+                pfaffian: None,
+                projectors: Vec::new(),
+                nsite,
+                ne,
+                gutzwiller_params,
+                jastrow_params,
+            })
+        }
     }
 
     /// Creates a combined wavefunction with Slater determinant.
@@ -278,20 +296,27 @@ impl CombinedWavefunction {
                 slater.add_noise(0.01);
             }
         } else {
-            // Apply SR-calculated parameter updates to all components
-            let mut offset = 0;
-
-            // Update Slater determinant parameters
-            if let Some(slater) = &mut self.slater {
-                let n_slater_params = slater.nsite() * slater.ne() * 2;
-                if param_updates.len() >= n_slater_params {
-                    slater.apply_parameter_updates(&param_updates[offset..offset+n_slater_params]);
-                    offset += n_slater_params;
+            if self.ne == 0 {
+                // Heisenberg model (ne=0): Update Jastrow parameters only
+                let n_jastrow_params = self.nsite * (self.nsite - 1) / 2;
+                if param_updates.len() >= n_jastrow_params {
+                    for i in 0..n_jastrow_params {
+                        self.jastrow_params[i] -= learning_rate * param_updates[i];
+                    }
                 }
-            }
+            } else {
+                // Fermionic model (ne>0): Update all parameters
+                // Update Slater determinant parameters
+                if let Some(slater) = &mut self.slater {
+                    let n_slater_params = slater.nsite() * slater.ne() * 2;
+                    if param_updates.len() >= n_slater_params {
+                        slater.apply_parameter_updates(&param_updates[0..n_slater_params]);
+                    }
+                }
 
-            // Update Gutzwiller and Jastrow parameters
-            self.update_projection_parameters(param_updates, learning_rate);
+                // Update Gutzwiller and Jastrow parameters
+                self.update_projection_parameters(param_updates, learning_rate);
+            }
         }
     }
 
@@ -314,20 +339,86 @@ impl CombinedWavefunction {
 
     /// Returns the number of variational parameters.
     pub fn num_parameters(&self) -> usize {
-        let mut n_params = 0;
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Only Jastrow parameters
+            self.nsite * (self.nsite - 1) / 2
+        } else {
+            // Fermionic model (ne>0): Full combined wavefunction
+            let mut n_params = 0;
 
-        // Slater determinant parameters
-        if let Some(slater) = &self.slater {
-            n_params += slater.nsite() * slater.ne() * 2;  // real + imaginary
+            // Slater determinant parameters
+            if let Some(slater) = &self.slater {
+                n_params += slater.nsite() * slater.ne() * 2;  // real + imaginary
+            }
+
+            // Gutzwiller/Jastrow (electron) parameters (kept for compatibility)
+            n_params += self.nsite; // gutzwiller
+            n_params += self.nsite * (self.nsite - 1) / 2; // jastrow (electron)
+
+            // Spin-Jastrow projector parameters (one per projector)
+            for _p in &self.projectors {
+                // if projector exposes spin-jastrow, add one parameter
+                if _p.spin_jastrow_pairs().is_some() {
+                    n_params += 1;
+                }
+            }
+
+            n_params
+        }
+    }
+
+    /// Exports current variational parameters in C-compatible order.
+    ///
+    /// Order:
+    /// - Slater orbitals flattened as (i,j) over sites and electrons
+    /// - Gutzwiller parameters (per site)
+    /// - Jastrow parameters (i<j pairs)
+    pub fn export_parameters(&self) -> Vec<num_complex::Complex64> {
+        use num_complex::Complex64;
+        let mut params = Vec::new();
+
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Only Jastrow parameters
+            let mut idx = 0;
+            for _i in 0..self.nsite {
+                for _j in (_i + 1)..self.nsite {
+                    if idx < self.jastrow_params.len() {
+                        params.push(Complex64::new(self.jastrow_params[idx], 0.0));
+                        idx += 1;
+                    }
+                }
+            }
+        } else {
+            // Fermionic model (ne>0): Full combined wavefunction
+            // Slater determinant parameters
+            if let Some(slater) = &self.slater {
+                let orbs = slater.orbitals();
+                let (ns, ne) = (slater.nsite(), slater.ne());
+                for i in 0..ns {
+                    for j in 0..ne {
+                        params.push(orbs[[i, j]]);
+                    }
+                }
+            }
+
+            // Gutzwiller parameters
+            for &g in &self.gutzwiller_params {
+                params.push(Complex64::new(g, 0.0));
+            }
+
+            // Jastrow parameters (i<j)
+            let mut idx = 0usize;
+            for i in 0..self.nsite {
+                for _j in (i + 1)..self.nsite {
+                    if idx < self.jastrow_params.len() {
+                        params.push(Complex64::new(self.jastrow_params[idx], 0.0));
+                        idx += 1;
+                    }
+                }
+            }
         }
 
-        // Gutzwiller parameters (one per site)
-        n_params += self.nsite;
-
-        // Jastrow parameters (one per unique site pair i < j)
-        n_params += self.nsite * (self.nsite - 1) / 2;
-
-        n_params
+        params
     }
 
     /// Calculates the wavefunction value for a given spin configuration.
@@ -342,25 +433,32 @@ impl CombinedWavefunction {
             return Complex64::new(0.0, 0.0);
         }
 
-        // Calculate Slater determinant component
-        let slater_value = if let Some(slater) = &self.slater {
-            slater.calculate_determinant(spin_config)
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Use Jastrow factor only
+            // ψ = exp(Σ_{i<j} v_{ij} S_i^z S_j^z)
+            self.calculate_heisenberg_amplitude(spin_config)
         } else {
-            Complex64::new(1.0, 0.0)
-        };
+            // Fermionic model (ne>0): Use full combined wavefunction
+            // Calculate Slater determinant component
+            let slater_value = if let Some(slater) = &self.slater {
+                slater.calculate_determinant(spin_config)
+            } else {
+                Complex64::new(1.0, 0.0)
+            };
 
-        // Calculate Pfaffian component
-        let pfaffian_value = if let Some(pfaffian) = &self.pfaffian {
-            pfaffian.calculate_pfaffian(spin_config)
-        } else {
-            Complex64::new(1.0, 0.0)
-        };
+            // Calculate Pfaffian component
+            let pfaffian_value = if let Some(pfaffian) = &self.pfaffian {
+                pfaffian.calculate_pfaffian(spin_config)
+            } else {
+                Complex64::new(1.0, 0.0)
+            };
 
-        // Calculate projection weight
-        let projection_weight = self.calculate_projection_weight(spin_config);
+            // Calculate projection weight
+            let projection_weight = self.calculate_projection_weight(spin_config);
 
-        // Combine all components
-        slater_value * pfaffian_value * projection_weight
+            // Combine all components
+            slater_value * pfaffian_value * projection_weight
+        }
     }
 
     /// Calculates the ratio of wavefunction values after a spin flip.
@@ -374,34 +472,40 @@ impl CombinedWavefunction {
     /// # Returns
     /// * `Complex64` - The ratio of wavefunction values
     pub fn calculate_ratio(&self, spin_config: &[u8], flip_site: usize, flip_from: u8, flip_to: u8) -> Complex64 {
-        // Calculate Slater determinant ratio
-        let slater_ratio = if let Some(slater) = &self.slater {
-            slater.calculate_ratio(spin_config, flip_site, flip_from, flip_to)
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Use Jastrow factor only
+            self.calculate_heisenberg_ratio(spin_config, flip_site, flip_from, flip_to)
         } else {
-            Complex64::new(1.0, 0.0)
-        };
+            // Fermionic model (ne>0): Use full combined wavefunction
+            // Calculate Slater determinant ratio
+            let slater_ratio = if let Some(slater) = &self.slater {
+                slater.calculate_ratio(spin_config, flip_site, flip_from, flip_to)
+            } else {
+                Complex64::new(1.0, 0.0)
+            };
 
-        // Calculate Pfaffian ratio
-        let pfaffian_ratio = if let Some(pfaffian) = &self.pfaffian {
-            pfaffian.calculate_ratio(spin_config, flip_site, flip_from, flip_to)
-        } else {
-            Complex64::new(1.0, 0.0)
-        };
+            // Calculate Pfaffian ratio
+            let pfaffian_ratio = if let Some(pfaffian) = &self.pfaffian {
+                pfaffian.calculate_ratio(spin_config, flip_site, flip_from, flip_to)
+            } else {
+                Complex64::new(1.0, 0.0)
+            };
 
-        // Calculate projection weight ratio
-        let mut new_config = spin_config.to_vec();
-        new_config[flip_site] = flip_to;
-        let old_projection = self.calculate_projection_weight(spin_config);
-        let new_projection = self.calculate_projection_weight(&new_config);
+            // Calculate projection weight ratio
+            let mut new_config = spin_config.to_vec();
+            new_config[flip_site] = flip_to;
+            let old_projection = self.calculate_projection_weight(spin_config);
+            let new_projection = self.calculate_projection_weight(&new_config);
 
-        let projection_ratio = if old_projection.norm() < 1e-12 {
-            Complex64::new(0.0, 0.0)
-        } else {
-            new_projection / old_projection
-        };
+            let projection_ratio = if old_projection.norm() < 1e-12 {
+                Complex64::new(0.0, 0.0)
+            } else {
+                new_projection / old_projection
+            };
 
-        // Combine all ratios
-        slater_ratio * pfaffian_ratio * projection_ratio
+            // Combine all ratios
+            slater_ratio * pfaffian_ratio * projection_ratio
+        }
     }
 
     /// Calculates the projection weight for a spin configuration.
@@ -412,12 +516,40 @@ impl CombinedWavefunction {
     /// # Returns
     /// * `Complex64` - The projection weight
     fn calculate_projection_weight(&self, spin_config: &[u8]) -> Complex64 {
-        let mut weight = Complex64::new(1.0, 0.0);
+        use num_complex::Complex64 as C;
+        let mut weight = C::new(1.0, 0.0);
 
-        for projector in &self.projectors {
-            weight *= projector.project(spin_config);
+        // Built-in Gutzwiller/Jastrow factors
+        let mut expo = 0.0f64;
+        let mut n_site = vec![0.0f64; self.nsite];
+        for i in 0..self.nsite {
+            let s = spin_config[i];
+            n_site[i] = match s { 3 => 2.0, 1|2 => 1.0, _ => 0.0 };
         }
+        for i in 0..self.nsite { expo += self.gutzwiller_params[i] * n_site[i]; }
+        let mut idx = 0usize;
+        for i in 0..self.nsite {
+            for j in (i+1)..self.nsite {
+                expo += self.jastrow_params[idx] * (n_site[i]*n_site[j]);
+                idx += 1;
+            }
+        }
+        // Doublon-holon (simplified site-local placeholders)
+        // If needed, can be generalized to bond-based terms
+        // Here, we just modulate doubles/holons by site parameters
+        // to reflect DH-like correlation weights.
+        // (Zeros by default, so no effect unless set.)
+        // self.doublon_holon2_params / doublon_holon4_params applied additively in exponent
+        // TODO: Add doublon/holon parameters if needed
+        // if false { /* reserved for future bond-based DH */ }
+        // for i in 0..self.nsite {
+        //     if n_site[i] >= 1.5 { expo += self.doublon_holon2_params[i]; }
+        //     if n_site[i] <= 0.5 { expo += self.doublon_holon4_params[i]; }
+        // }
+        weight *= C::new(expo.exp(), 0.0);
 
+        // External projectors (e.g., spin-Jastrow)
+        for projector in &self.projectors { weight *= projector.project(spin_config); }
         weight
     }
 
@@ -452,6 +584,92 @@ impl CombinedWavefunction {
         }
     }
 
+    /// Calculates the Heisenberg model amplitude using Jastrow factor.
+    ///
+    /// For Heisenberg models (ne=0), the wavefunction is:
+    /// ψ = exp(Σ_{i<j} v_{ij} S_i^z S_j^z)
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration (1: up, 2: down)
+    ///
+    /// # Returns
+    /// * `Complex64` - The wavefunction amplitude
+    fn calculate_heisenberg_amplitude(&self, spin_config: &[u8]) -> Complex64 {
+        // Calculate Jastrow factor: exp(Σ_{i<j} v_{ij} S_i^z S_j^z)
+        let mut log_amplitude = 0.0;
+        let mut idx = 0;
+
+        for i in 0..self.nsite {
+            for _j in (i + 1)..self.nsite {
+                let s_i = self.spin_value(spin_config[i]);
+                let s_j = self.spin_value(spin_config[_j]);
+                if idx < self.jastrow_params.len() {
+                    let v_ij = self.jastrow_params[idx];
+                    log_amplitude += v_ij * s_i * s_j;
+                    idx += 1;
+                }
+            }
+        }
+
+        Complex64::from_polar(log_amplitude.exp(), 0.0)
+    }
+
+    /// Calculates the Heisenberg model ratio for a spin flip.
+    ///
+    /// For Heisenberg models (ne=0), the ratio is:
+    /// ψ_new / ψ_old = exp(Σ_{j≠i} v_{ij} (S_i^new - S_i^old) S_j)
+    ///
+    /// # Arguments
+    /// * `spin_config` - Current spin configuration
+    /// * `flip_site` - Site to flip
+    /// * `flip_from` - Current spin state
+    /// * `flip_to` - New spin state
+    ///
+    /// # Returns
+    /// * `Complex64` - The ratio of wavefunction values
+    fn calculate_heisenberg_ratio(&self, spin_config: &[u8], flip_site: usize, flip_from: u8, flip_to: u8) -> Complex64 {
+        let s_old = self.spin_value(flip_from);
+        let s_new = self.spin_value(flip_to);
+        let delta_s = s_new - s_old;
+
+        // Calculate the change in log amplitude
+        let mut delta_log_amplitude = 0.0;
+
+        // Iterate over all pairs (i, j) with i < j
+        let mut idx = 0;
+        for i in 0..self.nsite {
+            for j in (i + 1)..self.nsite {
+                if i == flip_site || j == flip_site {
+                    // This pair involves the flipped site
+                    let other_site = if i == flip_site { j } else { i };
+                    let s_other = self.spin_value(spin_config[other_site]);
+                    if idx < self.jastrow_params.len() {
+                        let v_ij = self.jastrow_params[idx];
+                        delta_log_amplitude += v_ij * delta_s * s_other;
+                    }
+                }
+                idx += 1;
+            }
+        }
+
+        Complex64::from_polar(delta_log_amplitude.exp(), 0.0)
+    }
+
+    /// Converts spin configuration to spin value for Heisenberg models.
+    ///
+    /// # Arguments
+    /// * `spin_state` - Spin state (1: up, 2: down)
+    ///
+    /// # Returns
+    /// * `f64` - Spin value (+1.0 for up, -1.0 for down)
+    fn spin_value(&self, spin_state: u8) -> f64 {
+        match spin_state {
+            1 => 1.0,   // spin up
+            2 => -1.0,  // spin down
+            _ => 0.0,   // empty or invalid (should not happen in Heisenberg models)
+        }
+    }
+
     /// Calculates projection counts (Gutzwiller + Jastrow) for a configuration.
     ///
     /// Reference: mVMC/src/mVMC/projection.c:MakeProjCnt()
@@ -480,41 +698,38 @@ impl CombinedWavefunction {
             }
         }
 
-        // Gutzwiller factor: For Heisenberg model (pure spin), count spin configuration
-        // For ne>0: double occupancy n0[ri] * n1[ri]
-        // For ne=0: use total occupation n0[ri] + n1[ri] to track spin presence
-        // Reference: mVMC/src/mVMC/projection.c:77-81
+        // For spin models (ne==0), use spin correlation Jastrow: S_i^z S_j^z
+        // Set on-site (Gutzwiller-like) counts to zero for spins
+        // For fermionic models (ne>0), use standard counts
         for ri in 0..nsite {
             if self.ne == 0 {
-                // Heisenberg model: count total spin occupation
-                proj_counts[ri] = n0[ri] + n1[ri];
+                proj_counts[ri] = 0; // no on-site projection for pure spin model
             } else {
-                // Fermionic model: count double occupancy
-                proj_counts[ri] = n0[ri] * n1[ri];
+                proj_counts[ri] = n0[ri] * n1[ri]; // double occupancy
             }
         }
 
-        // Jastrow factor: counts (n_i - 1) * (n_j - 1) for i < j
-        // For Heisenberg model, this represents spin-spin correlations
-        // Reference: mVMC/src/mVMC/projection.c:84-95
+        // Pair terms (Jastrow):
+        // - Spin model: S_i^z S_j^z with S^z=+1 (Up), -1 (Down)
+        // - Fermion model: (n_i - 1) * (n_j - 1)
         let offset = n_gutzwiller;
         let mut idx_count = 0;
         for ri in 0..nsite {
             let xi = if self.ne == 0 {
-                // Heisenberg model: use spin occupation directly
-                n0[ri] + n1[ri]
+                // Spin value +1 (Up) or -1 (Down)
+                if n0[ri] == 1 && n1[ri] == 0 { 1 } else if n0[ri] == 0 && n1[ri] == 1 { -1 } else { 0 }
             } else {
-                // Fermionic model: use (n - 1)
+                // Fermionic: (n - 1)
                 n0[ri] + n1[ri] - 1
             };
 
             for rj in (ri+1)..nsite {
                 let xj = if self.ne == 0 {
-                    n0[rj] + n1[rj]
+                    if n0[rj] == 1 && n1[rj] == 0 { 1 } else if n0[rj] == 0 && n1[rj] == 1 { -1 } else { 0 }
                 } else {
                     n0[rj] + n1[rj] - 1
                 };
-                proj_counts[offset + idx_count] = xi * xj;
+                proj_counts[offset + idx_count] = xi * xj; // spin correlation or density correlation
                 idx_count += 1;
             }
         }
@@ -535,35 +750,55 @@ impl CombinedWavefunction {
     pub fn calculate_all_parameter_derivatives(&self, config: &[u8]) -> Vec<Complex64> {
         let mut derivatives = Vec::new();
 
-        // 1. Slater determinant parameters (orbital parameters)
-        if let Some(ref slater) = self.slater {
-            let slater_derivs = slater.calculate_parameter_derivatives(config);
-            derivatives.extend(slater_derivs);
-        }
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Only Jastrow parameters
+            // For Jastrow parameters: O_k = ∂log(ψ)/∂v_k = S_i^z S_j^z
+            for i in 0..self.nsite {
+                for j in (i + 1)..self.nsite {
+                    let s_i = self.spin_value(config[i]);
+                    let s_j = self.spin_value(config[j]);
+                    let derivative = s_i * s_j;
+                    derivatives.push(Complex64::new(derivative, 0.0));
+                }
+            }
+        } else {
+            // Fermionic model (ne>0): Full combined wavefunction
+            // 1. Slater determinant parameters (orbital parameters)
+            if let Some(ref slater) = self.slater {
+                let slater_derivs = slater.calculate_parameter_derivatives(config);
+                derivatives.extend(slater_derivs);
+            }
 
-        // 2. Pfaffian parameters (not implemented yet)
-        // if let Some(ref pfaffian) = self.pfaffian {
-        //     let pfaffian_derivs = pfaffian.calculate_parameter_derivatives(config);
-        //     derivatives.extend(pfaffian_derivs);
-        // }
+            // 2. Pfaffian parameters (not implemented yet)
+            // if let Some(ref pfaffian) = self.pfaffian {
+            //     let pfaffian_derivs = pfaffian.calculate_parameter_derivatives(config);
+            //     derivatives.extend(pfaffian_derivs);
+            // }
 
-        // 3. Gutzwiller and Jastrow parameters
-        // For these, O_k = ∂log(ψ)/∂θ_k = projCnt[k]
-        // Reference: Gutzwiller factor = exp(Σ g_k * n_k) => ∂log/∂g_k = n_k
-        let proj_counts = self.calculate_proj_counts(config);
+            // 3. Gutzwiller and Jastrow parameters
+            // For these, O_k = ∂log(ψ)/∂θ_k = projCnt[k]
+            // Reference: Gutzwiller factor = exp(Σ g_k * n_k) => ∂log/∂g_k = n_k
+            let proj_counts = self.calculate_proj_counts(config);
 
-        use std::sync::atomic::{AtomicBool, Ordering};
-        static PRINTED_ONCE: AtomicBool = AtomicBool::new(false);
-        if !PRINTED_ONCE.swap(true, Ordering::Relaxed) {
-            eprintln!("DEBUG O-operators (projCnt):");
-            eprintln!("  First 5 Gutzwiller: {:?}", &proj_counts[..5.min(proj_counts.len())]);
-            if proj_counts.len() > self.nsite {
-                eprintln!("  First 5 Jastrow: {:?}", &proj_counts[self.nsite..self.nsite+5.min(proj_counts.len()-self.nsite)]);
+            for count in proj_counts {
+                derivatives.push(Complex64::new(count as f64, 0.0));
             }
         }
 
-        for count in proj_counts {
-            derivatives.push(Complex64::new(count as f64, 0.0));
+        // 4. Spin-Jastrow projector parameter(s) (only for fermionic models)
+        if self.ne > 0 {
+            // For ψ = exp(α Σ_{<i,j>} σ_i σ_j), ∂logψ/∂α = Σ σ_i σ_j
+            for p in &self.projectors {
+                if let Some(pairs) = p.spin_jastrow_pairs() {
+                    let mut s = 0.0;
+                    for &(i, j) in pairs {
+                        let si = match config.get(i).copied().unwrap_or(0) { 1 => 1.0, 2 => -1.0, _ => 0.0 };
+                        let sj = match config.get(j).copied().unwrap_or(0) { 1 => 1.0, 2 => -1.0, _ => 0.0 };
+                        s += si * sj;
+                    }
+                    derivatives.push(Complex64::new(s, 0.0));
+                }
+            }
         }
 
         derivatives
@@ -575,54 +810,64 @@ impl CombinedWavefunction {
     /// * `param_updates` - Parameter updates (same length as total parameters)
     /// * `learning_rate` - Learning rate for updates
     pub fn update_projection_parameters(&mut self, param_updates: &[f64], learning_rate: f64) {
-        // Calculate offset (skip Slater parameters)
-        let n_slater_params = if let Some(ref slater) = self.slater {
-            slater.nsite() * slater.ne() * 2  // 2 for real + imaginary
+        if self.ne == 0 {
+            // Heisenberg model (ne=0): Update Jastrow parameters only
+            let n_jastrow = self.nsite * (self.nsite - 1) / 2;
+            for k in 0..n_jastrow {
+                if k < param_updates.len() {
+                    self.jastrow_params[k] -= learning_rate * param_updates[k];
+                }
+            }
         } else {
-            0
-        };
+            // Fermionic model (ne>0): Update all parameters
+            // Calculate offset (skip Slater parameters)
+            let n_slater_params = if let Some(ref slater) = self.slater {
+                slater.nsite() * slater.ne() * 2  // 2 for real + imaginary
+            } else {
+                0
+            };
 
-        let n_gutzwiller = self.nsite;
-        let n_jastrow = self.nsite * (self.nsite - 1) / 2;
+            let n_gutzwiller = self.nsite;
+            let n_jastrow = self.nsite * (self.nsite - 1) / 2;
 
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static UPDATE_COUNT: AtomicUsize = AtomicUsize::new(0);
+            // Update Gutzwiller parameters
+            for k in 0..n_gutzwiller {
+                let param_idx = n_slater_params + k;
+                if param_idx < param_updates.len() {
+                    self.gutzwiller_params[k] -= learning_rate * param_updates[param_idx];
+                }
+            }
 
-        let count = UPDATE_COUNT.fetch_add(1, Ordering::Relaxed);
-        if count % 10 == 0 {
-            eprintln!("DEBUG update_projection_parameters (call #{}):", count + 1);
-            eprintln!("  n_slater_params: {}, param_updates.len(): {}", n_slater_params, param_updates.len());
-            eprintln!("  learning_rate: {}", learning_rate);
-            if n_gutzwiller > 0 {
-                let idx = n_slater_params;
-                if idx < param_updates.len() {
-                    eprintln!("  param_updates[{}] (Gutzwiller[0]): {}", idx, param_updates[idx]);
-                    eprintln!("  gutzwiller_params[0] before: {}", self.gutzwiller_params[0]);
+            // Update Jastrow parameters (electron)
+            for k in 0..n_jastrow {
+                let param_idx = n_slater_params + n_gutzwiller + k;
+                if param_idx < param_updates.len() {
+                    self.jastrow_params[k] -= learning_rate * param_updates[param_idx];
+                }
+            }
+
+            // Spin-Jastrow projector parameters (only for fermionic models)
+            let n_slater_params = if let Some(ref slater) = self.slater {
+                slater.nsite() * slater.ne() * 2  // 2 for real + imaginary
+            } else {
+                0
+            };
+            let n_gutzwiller = self.nsite;
+            let n_jastrow = self.nsite * (self.nsite - 1) / 2;
+            let mut offset = n_slater_params + n_gutzwiller + n_jastrow;
+
+            for p in &mut self.projectors {
+                if p.spin_jastrow_pairs().is_some() {
+                    if offset < param_updates.len() {
+                        let delta = -learning_rate * param_updates[offset];
+                        p.update_param(delta);
+                    }
+                    offset += 1;
                 }
             }
         }
 
-        // Update Gutzwiller parameters
-        for k in 0..n_gutzwiller {
-            let param_idx = n_slater_params + k;
-            if param_idx < param_updates.len() {
-                self.gutzwiller_params[k] -= learning_rate * param_updates[param_idx];
-            }
-        }
-
-        // Update Jastrow parameters
-        for k in 0..n_jastrow {
-            let param_idx = n_slater_params + n_gutzwiller + k;
-            if param_idx < param_updates.len() {
-                self.jastrow_params[k] -= learning_rate * param_updates[param_idx];
-            }
-        }
-
-        if count % 10 == 0 {
-            if n_gutzwiller > 0 {
-                eprintln!("  gutzwiller_params[0] after: {}", self.gutzwiller_params[0]);
-            }
-        }
+        // debug logs removed for clean CLI output
     }
 }
 

@@ -131,6 +131,21 @@ unsafe extern "C" {
         rwork: *mut c_double,
         info: *mut c_int,
     );
+
+    /// DPOSV - Solve real symmetric positive definite system using Cholesky
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn dposv_(
+        uplo: *const c_char,
+        n: *const c_int,
+        nrhs: *const c_int,
+        a: *mut c_double,
+        lda: *const c_int,
+        b: *mut c_double,
+        ldb: *const c_int,
+        info: *mut c_int,
+    );
 }
 
 #[cfg(test)]

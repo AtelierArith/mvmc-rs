@@ -8,14 +8,19 @@
 
 pub mod combined;
 pub mod doublon_holon;
+pub mod gutzwiller;
+pub mod heisenberg;
 pub mod jastrow;
 pub mod pfaffian;
 pub mod projection;
 pub mod rbm;
 pub mod slater;
+pub mod spin_jastrow;
 
 pub use combined::{AmplitudeResult, CombinedWavefunction};
 pub use doublon_holon::{DoublonHolonFactor, DoublonHolonParameters};
+pub use gutzwiller::{GutzwillerParameters, GutzwillerProjector};
+pub use heisenberg::HeisenbergWavefunction;
 pub use jastrow::{JastrowFactor, JastrowParameters};
 pub use pfaffian::{PfaffianMatrix, PfaffianWavefunction};
 pub use projection::{
@@ -24,3 +29,4 @@ pub use projection::{
 };
 pub use rbm::{RBMCounter, RBMParameters, RBMWavefunction};
 pub use slater::{SlaterDeterminant, SlaterMatrix};
+pub use spin_jastrow::{SpinJastrowParameters, SpinJastrowWavefunction};

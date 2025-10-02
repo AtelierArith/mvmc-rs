@@ -79,6 +79,13 @@ pub struct OptimizationConfig {
 
     /// SR step delta
     pub sr_step_delta: Option<f64>,
+
+    /// Use CG solver (NSRCG)
+    pub sr_cg: Option<usize>,
+    /// CG max iterations
+    pub sr_cg_max_iter: Option<usize>,
+    /// CG tolerance
+    pub sr_cg_tol: Option<f64>,
 }
 
 /// Monte Carlo configuration parameters.
@@ -89,6 +96,20 @@ pub struct MonteCarloConfig {
 
     /// VMC calculation mode
     pub vmc_calculation_mode: Option<usize>,
+
+    /// Number of warm-up steps (NVMCWarmUp)
+    pub vmc_warmup_steps: Option<usize>,
+
+    /// Sampling interval (NVMCInterval)
+    pub vmc_sampling_interval: Option<usize>,
+
+    /// Exchange update path (NExUpdatePath)
+    pub ex_update_path: Option<usize>,
+    /// Block update size (NBlockUpdateSize)
+    pub block_update_size: Option<usize>,
+
+    /// Exchange update ratio inside a block (optional)
+    pub ex_update_ratio: Option<f64>,
 }
 
 impl Default for StdFaceConfig {
@@ -113,10 +134,18 @@ impl Default for StdFaceConfig {
                 sr_reduction_cutoff: Some(1e-8),
                 sr_stabilization_delta: Some(1e-2),
                 sr_step_delta: Some(3e-3),
+                sr_cg: Some(0),
+                sr_cg_max_iter: Some(1000),
+                sr_cg_tol: Some(1e-10),
             },
             monte_carlo: MonteCarloConfig {
                 vmc_samples: Some(100),
                 vmc_calculation_mode: Some(0),
+                vmc_warmup_steps: Some(1000),
+                vmc_sampling_interval: Some(10),
+                ex_update_path: Some(0),
+                block_update_size: Some(1),
+                ex_update_ratio: Some(0.3),
             },
             additional: HashMap::new(),
         }

@@ -13,7 +13,7 @@ use mvmc_core::{
     monte_carlo::SamplingStatistics,
 };
 use mvmc_io::{ConfigParser as _, OutputFormat, OutputManager, StdFaceParser, TomlParser, JsonParser};
-use mvmc_physics::hamiltonian::{HubbardHamiltonian, Hamiltonian};
+use mvmc_physics::hamiltonian::{HubbardHamiltonian, HeisenbergHamiltonian, Hamiltonian};
 use mvmc_physics::lattice::{ChainLattice, SquareLattice};
 use mvmc_physics::wavefunction::CombinedWavefunction;
 use std::path::PathBuf;
@@ -35,6 +35,7 @@ pub fn execute(
     binary: bool,
     threads: Option<usize>,
 ) -> CliResult<()> {
+    eprintln!("CLI: execute function called");
     let start_time = Instant::now();
 
     // Check if config file exists
@@ -133,11 +134,14 @@ pub fn execute(
     println!();
 
     // Run VMC calculation based on mode
+    eprintln!("CLI: About to check calc_mode: {:?}", engine.params().calc_mode);
     match engine.params().calc_mode {
         CalcMode::Optimization => {
             println!("🚀 Starting VMC optimization...");
+            eprintln!("CLI: About to call engine.run");
             let result = engine.run::<fn(usize, Complex64, &SamplingStatistics)>(None)
                 .map_err(|e| CliError::Other(anyhow::anyhow!("VMC optimization failed: {}", e)))?;
+            eprintln!("CLI: engine.run completed");
 
             println!("✓ Optimization completed successfully");
             println!("   Final energy: {:.6}", result.energy.re);
@@ -213,33 +217,48 @@ pub fn execute(
 /// Boxed Hamiltonian trait object
 fn create_hamiltonian(params: &VmcParameters) -> CliResult<Box<dyn Hamiltonian>> {
     let nsite = params.nsite.get();
+    let ne = params.ne.get();
 
-    // For now, create a simple Hubbard model as default
-    // In a full implementation, this would be determined by the configuration
-    let hamiltonian = if nsite <= 16 {
-        // Use 1D chain for small systems
+    // Choose Hamiltonian based on electron count
+    let hamiltonian: Box<dyn Hamiltonian> = if ne == 0 {
+        // Heisenberg model (spin-only, no electrons)
         let lattice = ChainLattice::new(nsite, true)
             .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create chain lattice: {}", e)))?;
-        HubbardHamiltonian::new(
+        let hamiltonian = HeisenbergHamiltonian::new(
             lattice,
-            1.0,  // hopping parameter
-            4.0,  // interaction parameter
-            0.0   // chemical potential
-        ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hubbard Hamiltonian: {}", e)))?
+            1.0,  // exchange coupling J
+            0.0   // magnetic field h
+        ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Heisenberg Hamiltonian: {}", e)))?;
+        Box::new(hamiltonian)
     } else {
-        // Use 2D square lattice for larger systems
-        let l = (nsite as f64).sqrt() as usize;
-        let lattice = SquareLattice::new(l, l, true)
-            .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create square lattice: {}", e)))?;
-        HubbardHamiltonian::new(
-            lattice,
-            1.0,  // hopping parameter
-            4.0,  // interaction parameter
-            0.0   // chemical potential
-        ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hubbard Hamiltonian: {}", e)))?
+        // Hubbard model (with electrons)
+        if nsite <= 16 {
+            // Use 1D chain for small systems
+            let lattice = ChainLattice::new(nsite, true)
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create chain lattice: {}", e)))?;
+            let hamiltonian = HubbardHamiltonian::new(
+                lattice,
+                1.0,  // hopping parameter
+                4.0,  // interaction parameter
+                0.0   // chemical potential
+            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hubbard Hamiltonian: {}", e)))?;
+            Box::new(hamiltonian)
+        } else {
+            // Use 2D square lattice for larger systems
+            let l = (nsite as f64).sqrt() as usize;
+            let lattice = SquareLattice::new(l, l, true)
+                .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create square lattice: {}", e)))?;
+            let hamiltonian = HubbardHamiltonian::new(
+                lattice,
+                1.0,  // hopping parameter
+                4.0,  // interaction parameter
+                0.0   // chemical potential
+            ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hubbard Hamiltonian: {}", e)))?;
+            Box::new(hamiltonian)
+        }
     };
 
-    Ok(Box::new(hamiltonian))
+    Ok(hamiltonian)
 }
 
 /// Converts StdFace configuration to VMC parameters
@@ -277,6 +296,7 @@ fn convert_stdface_to_vmc_params(cfg: &mvmc_io::stdface::StdFaceConfig) -> CliRe
         cfg.optimization.sr_step_delta.unwrap_or(3e-3),
         1000, // cg_max_iterations
         1e-10, // cg_tolerance
+        false, // use_cg (use direct solver by default)
     );
 
     // Create Monte Carlo parameters from StdFace configuration

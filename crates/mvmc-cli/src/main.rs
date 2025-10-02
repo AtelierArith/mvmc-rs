@@ -130,15 +130,20 @@ fn main() -> CliResult<()> {
 
     // Handle C implementation compatibility
     if cli.standard {
+        println!("CLI: standard mode detected");
         // Standard mode: Generate input files from StdFace.def and run VMC
         match cli.command {
             Commands::Run { config, output, threads } => {
+                println!("CLI: About to call standard::execute");
                 // First generate input files using Standard mode
                 commands::standard::execute(config.clone(), output.clone())?;
+                println!("CLI: standard::execute completed");
 
                 // Then run VMC calculation using the original StdFace.def file
                 // (not the generated namelist.def)
+                println!("CLI: About to call run::execute");
                 commands::run::execute(config, output, cli.binary, threads)?;
+                println!("CLI: run::execute completed");
             }
             _ => {
                 return Err(CliError::Other(anyhow::anyhow!(

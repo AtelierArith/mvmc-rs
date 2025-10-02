@@ -14,7 +14,8 @@ use crate::wavefunction::{
     make_projection_count,
 };
 use num_complex::Complex64;
-use rand::{Rng, thread_rng};
+// Removed unused imports: Rng, thread_rng
+use mvmc_physics::wavefunction::CombinedWavefunction;
 
 /// Result of Monte Carlo sampling
 #[derive(Debug, Clone)]
@@ -150,6 +151,21 @@ pub struct MetropolisSampler {
 
     /// Random number generator state
     rng_state: u64,
+
+    /// Neighbor lists per site for lattice-aware hopping
+    neighbors: Vec<Vec<usize>>,
+
+    /// Whether to use exchange-update path (NExUpdatePath)
+    ex_update_path: bool,
+    /// Block update size (NBlockUpdateSize)
+    block_update_size: usize,
+
+    /// Configured warmup steps
+    warmup_steps: usize,
+    /// Configured sampling interval
+    sampling_interval: usize,
+    /// Configured number of samples
+    num_samples: usize,
 }
 
 impl ElectronConfiguration {
@@ -587,7 +603,27 @@ impl MetropolisSampler {
             proj_op,
             proj_cnt,
             rng_state: seed_val,
+            neighbors: vec![Vec::new(); nsite_val],
+            ex_update_path: false,
+            block_update_size: 1,
+            warmup_steps: 1000,
+            sampling_interval: 10,
+            num_samples: 1000,
         }
+    }
+
+    /// Provide lattice neighbor lists for hopping updates
+    pub fn set_neighbors(&mut self, neighbors: Vec<Vec<usize>>) {
+        self.neighbors = neighbors;
+    }
+
+    /// Configure update options from MonteCarlo parameters
+    pub fn configure(&mut self, mc: &crate::config::MonteCarloParameters) {
+        self.warmup_steps = mc.warmup_steps;
+        self.sampling_interval = mc.sampling_interval;
+        self.num_samples = mc.num_samples;
+        self.ex_update_path = mc.exchange_update;
+        self.block_update_size = mc.block_update_size.max(1);
     }
 
     /// Returns the current electron configuration
@@ -788,57 +824,98 @@ impl MetropolisSampler {
         accepted_count as f64 / steps.len() as f64
     }
 
-    /// Performs Monte Carlo sampling with a given wavefunction
+    /// Performs Monte Carlo sampling with a given wavefunction (parameterized)
     ///
-    /// # Arguments
-    /// * `wavefunction` - The wavefunction to sample from
-    ///
-    /// # Returns
-    /// * `Result<SamplingResult>` - The sampling result
-    pub fn sample(&mut self, wavefunction: &mvmc_physics::wavefunction::CombinedWavefunction) -> Result<SamplingResult> {
-        let mut configurations = Vec::new();
-        let mut accepted_steps = 0;
-        let total_steps = 1000; // Default number of steps
+    /// Follows StdFace parameters: NVMCWarmUp, NVMCInterval, NVMCSample.
+    pub fn sample_with_params(
+        &mut self,
+        wavefunction: &CombinedWavefunction,
+        warmup_steps: usize,
+        sampling_interval: usize,
+        num_samples: usize,
+        base_seed: u64,
+        _exchange_update: bool,
+        _block_update_size: usize,
+    ) -> Result<SamplingResult> {
+        let mut configurations = Vec::with_capacity(num_samples);
+        let mut accepted_steps = 0usize;
+
+        // Deterministic RNG state
+        let mut rng_state = base_seed;
 
         // Initialize with a random configuration
         let mut current_config = self.generate_random_configuration()?;
 
-        for _ in 0..total_steps {
-            // Generate a trial move
-            let trial_config = self.generate_trial_move(&current_config)?;
-
-            // Calculate acceptance probability
-            let current_amplitude = wavefunction.calculate(&self.config_to_u8(&current_config));
-            let trial_amplitude = wavefunction.calculate(&self.config_to_u8(&trial_config));
-
-            let acceptance_prob = if current_amplitude.norm() < 1e-12 {
-                0.0
-            } else {
-                (trial_amplitude.norm_sqr() / current_amplitude.norm_sqr()).min(1.0)
-            };
-
-            // Accept or reject the move
-            let mut rng = thread_rng();
-            let random_value: f64 = rng.gen_range(0.0..1.0);
-
-            if random_value < acceptance_prob {
-                current_config = trial_config;
-                accepted_steps += 1;
+        // Burn-in (warmup)
+        for _ in 0..warmup_steps {
+            // derive exchange attempts from ratio (approximate 30% if enabled)
+            let ex_count = if self.ex_update_path { ((0.3 * self.block_update_size as f64).round() as usize).min(self.block_update_size) } else { 0 };
+            let hop_count = self.block_update_size.saturating_sub(ex_count);
+            // exchange first
+            for _ in 0..ex_count {
+                let trial_config = self.propose_exchange(&current_config)?;
+                let current_amp = wavefunction.calculate(&self.config_to_u8(&current_config));
+                let trial_amp = wavefunction.calculate(&self.config_to_u8(&trial_config));
+                let acc = if current_amp.norm() < 1e-12 { 1.0 } else { (trial_amp.norm_sqr() / current_amp.norm_sqr()).min(1.0) };
+                rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                let r = (rng_state as f64) / (u64::MAX as f64);
+                if r < acc { current_config = trial_config; accepted_steps += 1; }
             }
+            // then hop attempts
+            for _ in 0..hop_count {
+                let trial_config = self.propose_hop_neighbor(&current_config)?;
+                let current_amp = wavefunction.calculate(&self.config_to_u8(&current_config));
+                let trial_amp = wavefunction.calculate(&self.config_to_u8(&trial_config));
+                let acc = if current_amp.norm() < 1e-12 { 1.0 } else { (trial_amp.norm_sqr() / current_amp.norm_sqr()).min(1.0) };
+                rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                let r = (rng_state as f64) / (u64::MAX as f64);
+                if r < acc { current_config = trial_config; accepted_steps += 1; }
+            }
+        }
 
-            // Store configuration (every 10th step to avoid correlation)
-            if total_steps % 10 == 0 {
+        // Production sampling
+        let total_steps = sampling_interval * num_samples.max(1);
+        for step_idx in 0..total_steps {
+            let ex_count = if self.ex_update_path { ((0.3 * self.block_update_size as f64).round() as usize).min(self.block_update_size) } else { 0 };
+            let hop_count = self.block_update_size.saturating_sub(ex_count);
+            for _ in 0..ex_count {
+                let trial_config = self.propose_exchange(&current_config)?;
+                let current_amp = wavefunction.calculate(&self.config_to_u8(&current_config));
+                let trial_amp = wavefunction.calculate(&self.config_to_u8(&trial_config));
+                let acc = if current_amp.norm() < 1e-12 { 1.0 } else { (trial_amp.norm_sqr() / current_amp.norm_sqr()).min(1.0) };
+                rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                let r = (rng_state as f64) / (u64::MAX as f64);
+                if r < acc { current_config = trial_config; accepted_steps += 1; }
+            }
+            for _ in 0..hop_count {
+                let trial_config = self.propose_hop_neighbor(&current_config)?;
+                let current_amp = wavefunction.calculate(&self.config_to_u8(&current_config));
+                let trial_amp = wavefunction.calculate(&self.config_to_u8(&trial_config));
+                let acc = if current_amp.norm() < 1e-12 { 1.0 } else { (trial_amp.norm_sqr() / current_amp.norm_sqr()).min(1.0) };
+                rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                let r = (rng_state as f64) / (u64::MAX as f64);
+                if r < acc { current_config = trial_config; accepted_steps += 1; }
+            }
+            if step_idx % sampling_interval == 0 && configurations.len() < num_samples {
                 configurations.push(current_config.clone());
             }
         }
 
-        let acceptance_rate = accepted_steps as f64 / total_steps as f64;
+        let acceptance_rate = if total_steps > 0 { accepted_steps as f64 / total_steps as f64 } else { 0.0 };
+        Ok(SamplingResult { configurations, acceptance_rate, num_steps: warmup_steps + total_steps })
+    }
 
-        Ok(SamplingResult {
-            configurations,
-            acceptance_rate,
-            num_steps: total_steps,
-        })
+    /// Backward-compatible default sampler (uses fixed defaults)
+    pub fn sample(&mut self, wavefunction: &CombinedWavefunction) -> Result<SamplingResult> {
+        self.sample_with_params(
+            wavefunction,
+            self.warmup_steps,
+            self.sampling_interval,
+            self.num_samples,
+            self.seed,
+            self.ex_update_path,
+            self.block_update_size,
+        )
     }
 
     /// Generates a random electron configuration
@@ -852,20 +929,24 @@ impl MetropolisSampler {
             TwoSz::new(self.two_sz),
         );
 
-        // Randomly place electrons
-        let mut rng = thread_rng();
-        let mut placed_electrons = 0;
-
-        while placed_electrons < self.ne {
-            let site = rng.gen_range(0..self.nsite);
-            let spin = if rng.gen_bool(0.5) { 1 } else { 2 }; // 1: up, 2: down
-
-            if config.electron_number(site) == 0 {
-                config.set_electron(site, spin)?;
-                placed_electrons += 1;
-            }
+        // Initialize deterministically with given seed preserving 2Sz
+        let ne = self.ne as i32;
+        let two_sz = self.two_sz as i32;
+        let n_up = ((ne + two_sz) / 2) as usize;
+        let n_down = (ne as usize) - n_up;
+        let mut rng_state = self.seed;
+        let mut up_count = 0usize;
+        while up_count < n_up {
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            let site = (rng_state as usize) % self.nsite;
+            if config.electron_number_up(site) == 0 { config.set_electron(site, 1)?; up_count += 1; }
         }
-
+        let mut dn_count = 0usize;
+        while dn_count < n_down {
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            let site = (rng_state as usize) % self.nsite;
+            if config.electron_number_down(site) == 0 { config.set_electron(site, 2)?; dn_count += 1; }
+        }
         Ok(config)
     }
 
@@ -878,10 +959,10 @@ impl MetropolisSampler {
     /// * `Result<ElectronConfiguration>` - Trial configuration
     fn generate_trial_move(&self, current_config: &ElectronConfiguration) -> Result<ElectronConfiguration> {
         let mut trial_config = current_config.clone();
-        let mut rng = thread_rng();
-
-        // Randomly choose a move type
-        let move_type: u8 = rng.gen_range(0..3);
+        // Deterministic RNG and move selection
+        let mut rng_state = self.rng_state;
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let move_type: u8 = (rng_state as u8) % 3;
 
         match move_type {
             0 => {
@@ -891,8 +972,10 @@ impl MetropolisSampler {
                     .collect();
 
                 if !occupied_sites.is_empty() {
-                    let from_site = occupied_sites[rng.gen_range(0..occupied_sites.len())];
-                    let to_site = rng.gen_range(0..self.nsite);
+                    rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                    let from_site = occupied_sites[(rng_state as usize) % occupied_sites.len()];
+                    rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                    let to_site = (rng_state as usize) % self.nsite;
 
                     if to_site != from_site && trial_config.electron_number(to_site) == 0 {
                         let electron_type = trial_config.electron_number(from_site);
@@ -908,7 +991,8 @@ impl MetropolisSampler {
                     .collect();
 
                 if !occupied_sites.is_empty() {
-                    let site = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+                    rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                    let site = occupied_sites[(rng_state as usize) % occupied_sites.len()];
                     let current_type = trial_config.electron_number(site);
                     let new_type = if current_type == 1 { 2 } else { 1 };
                     trial_config.set_electron(site, new_type)?;
@@ -921,8 +1005,10 @@ impl MetropolisSampler {
                     .collect();
 
                 if occupied_sites.len() >= 2 {
-                    let site1 = occupied_sites[rng.gen_range(0..occupied_sites.len())];
-                    let site2 = occupied_sites[rng.gen_range(0..occupied_sites.len())];
+                    rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                    let site1 = occupied_sites[(rng_state as usize) % occupied_sites.len()];
+                    rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                    let site2 = occupied_sites[(rng_state as usize) % occupied_sites.len()];
 
                     if site1 != site2 {
                         let type1 = trial_config.electron_number(site1);
@@ -935,6 +1021,105 @@ impl MetropolisSampler {
         }
 
         Ok(trial_config)
+    }
+
+    /// Propose one step based on configured update options and neighbors
+    fn propose_step(&self, current_config: &ElectronConfiguration) -> Result<ElectronConfiguration> {
+        // If exchange path enabled, attempt exchange with 50% probability
+        let mut rng_state = self.rng_state;
+        let do_exchange = self.ex_update_path && {
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            (rng_state & 1) == 0
+        };
+        if do_exchange {
+            return self.propose_exchange(current_config);
+        }
+
+        // Neighbor hop
+        let mut trial = current_config.clone();
+        let mut occ = Vec::new();
+        for i in 0..self.nsite { if trial.electron_number(i) > 0 { occ.push(i); } }
+        if occ.is_empty() { return Ok(trial); }
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let from_site = occ[(rng_state as usize) % occ.len()];
+        let neighs = if from_site < self.neighbors.len() { &self.neighbors[from_site] } else { &Vec::new() };
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let to_site = if !neighs.is_empty() { neighs[(rng_state as usize) % neighs.len()] } else { (rng_state as usize) % self.nsite };
+        if to_site != from_site && trial.electron_number(to_site) == 0 {
+            let electron_type = trial.electron_number(from_site);
+            trial.set_electron(from_site, 0)?;
+            trial.set_electron(to_site, electron_type)?;
+        }
+        Ok(trial)
+    }
+
+    /// Propose an exchange between one up-spin site and one down-spin site
+    fn propose_exchange(&self, current_config: &ElectronConfiguration) -> Result<ElectronConfiguration> {
+        let mut trial = current_config.clone();
+        let mut up_sites = Vec::new();
+        let mut down_sites = Vec::new();
+        for i in 0..self.nsite {
+            if trial.electron_number_up(i) > 0 { up_sites.push(i); }
+            if trial.electron_number_down(i) > 0 { down_sites.push(i); }
+        }
+        if up_sites.is_empty() || down_sites.is_empty() { return Ok(trial); }
+        // Deterministic RNG from sampler state
+        let mut rng_state = self.rng_state;
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let iu = (rng_state as usize) % up_sites.len();
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let id = (rng_state as usize) % down_sites.len();
+        let su = up_sites[iu];
+        let sd = down_sites[id];
+        trial.set_electron(su, 2)?;
+        trial.set_electron(sd, 1)?;
+        Ok(trial)
+    }
+
+    /// Propose a hop to a neighboring site
+    fn propose_hop_neighbor(&self, current_config: &ElectronConfiguration) -> Result<ElectronConfiguration> {
+        let mut trial = current_config.clone();
+        let mut occupied_sites = Vec::new();
+
+        // Find all occupied sites
+        for i in 0..self.nsite {
+            if trial.electron_number(i) > 0 {
+                occupied_sites.push(i);
+            }
+        }
+
+        if occupied_sites.is_empty() {
+            return Ok(trial);
+        }
+
+        // Deterministic RNG from sampler state
+        let mut rng_state = self.rng_state;
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let from_site = occupied_sites[(rng_state as usize) % occupied_sites.len()];
+
+        // Get neighbors of the selected site
+        let neighbors = if from_site < self.neighbors.len() {
+            &self.neighbors[from_site]
+        } else {
+            &Vec::new()
+        };
+
+        if neighbors.is_empty() {
+            return Ok(trial);
+        }
+
+        // Select a random neighbor
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        let to_site = neighbors[(rng_state as usize) % neighbors.len()];
+
+        // Move electron from from_site to to_site
+        let electron_state = trial.electron_number(from_site);
+        if electron_state > 0 {
+            trial.set_electron(from_site, 0)?;
+            trial.set_electron(to_site, electron_state)?;
+        }
+
+        Ok(trial)
     }
 
     /// Converts electron configuration to u8 array for wavefunction calculation

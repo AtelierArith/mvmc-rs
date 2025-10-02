@@ -7,6 +7,39 @@ use ndarray::Array1;
 use num_complex::Complex64;
 use std::fmt;
 
+/// Spin Jastrow projector: psi <- psi * exp(alpha * sum_{<i,j>} sigma_i sigma_j)
+/// where sigma = +1 (up), -1 (down), 0 (empty)
+#[derive(Debug, Clone)]
+pub struct SpinJastrowProjector {
+    nsite: usize,
+    /// neighbor pairs (i < j)
+    pairs: Vec<(usize, usize)>,
+    /// variational strength
+    pub alpha: f64,
+}
+
+impl SpinJastrowProjector {
+    pub fn new(nsite: usize, pairs: Vec<(usize, usize)>, alpha: f64) -> Self {
+        Self { nsite, pairs, alpha }
+    }
+
+    /// Compute sum of sigma_i*sigma_j over provided pairs
+    fn pair_sum(&self, spin_config: &[u8]) -> f64 {
+        let mut s = 0.0;
+        for &(i, j) in &self.pairs {
+            let si = match spin_config.get(i).copied().unwrap_or(0) { 1 => 1.0, 2 => -1.0, _ => 0.0 };
+            let sj = match spin_config.get(j).copied().unwrap_or(0) { 1 => 1.0, 2 => -1.0, _ => 0.0 };
+            s += si * sj;
+        }
+        s
+    }
+
+    pub fn project(&self, spin_config: &[u8]) -> Complex64 {
+        let s = self.pair_sum(spin_config);
+        Complex64::new((self.alpha * s).exp(), 0.0)
+    }
+}
+
 /// Projection operator for enforcing particle number conservation.
 ///
 /// This operator projects the wavefunction onto the subspace with
@@ -382,6 +415,14 @@ pub trait Projector {
         let projection_weight = self.project(&u8_config);
         amplitude * projection_weight
     }
+
+    /// Returns spin-jastrow neighbor pairs if this projector is a spin-jastrow.
+    /// Default: None
+    fn spin_jastrow_pairs(&self) -> Option<&[(usize, usize)]> { None }
+
+    /// Updates internal variational parameter by delta (e.g., alpha for spin-jastrow).
+    /// Default: no-op
+    fn update_param(&mut self, _delta: f64) {}
 }
 
 impl Projector for ParticleNumberProjector {
@@ -411,6 +452,20 @@ impl Projector for SpatialSymmetryProjector {
 impl Projector for CombinedProjector {
     fn project(&self, spin_config: &[u8]) -> Complex64 {
         self.project(spin_config)
+    }
+}
+
+impl Projector for SpinJastrowProjector {
+    fn project(&self, spin_config: &[u8]) -> Complex64 {
+        self.project(spin_config)
+    }
+
+    fn spin_jastrow_pairs(&self) -> Option<&[(usize, usize)]> {
+        Some(&self.pairs)
+    }
+
+    fn update_param(&mut self, delta: f64) {
+        self.alpha += delta;
     }
 }
 

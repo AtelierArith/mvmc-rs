@@ -742,6 +742,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "approx",
+ "mvmc-bindings",
  "mvmc-physics",
  "num-complex",
  "proptest",

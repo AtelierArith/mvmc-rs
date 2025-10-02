@@ -212,15 +212,47 @@ impl StdFaceParser {
                 let val = self.parse_float(value)?;
                 config.optimization.sr_step_delta = Some(val);
             }
+            "NSRCG" => {
+                let val = self.parse_positive_integer(value)?;
+                config.optimization.sr_cg = Some(val);
+            }
+            "NSROptCGMaxIter" => {
+                let val = self.parse_positive_integer(value)?;
+                config.optimization.sr_cg_max_iter = Some(val);
+            }
+            "DSROptCGTol" => {
+                let val = self.parse_float(value)?;
+                config.optimization.sr_cg_tol = Some(val);
+            }
 
             // Monte Carlo parameters
             "NVMCSample" => {
                 let val = self.parse_positive_integer(value)?;
                 config.monte_carlo.vmc_samples = Some(val);
             }
+            "NVMCWarmUp" => {
+                let val = self.parse_positive_integer(value)?;
+                config.monte_carlo.vmc_warmup_steps = Some(val);
+            }
+            "NVMCInterval" => {
+                let val = self.parse_positive_integer(value)?;
+                config.monte_carlo.vmc_sampling_interval = Some(val);
+            }
             "NVMCCalMode" => {
                 let val = self.parse_positive_integer(value)?;
                 config.monte_carlo.vmc_calculation_mode = Some(val);
+            }
+            "NExUpdatePath" => {
+                let val = self.parse_positive_integer(value)?;
+                config.monte_carlo.ex_update_path = Some(val);
+            }
+            "NBlockUpdateSize" => {
+                let val = self.parse_positive_integer(value)?;
+                config.monte_carlo.block_update_size = Some(val);
+            }
+            "NExUpdateRatio" => {
+                let val = self.parse_float(value)?;
+                config.monte_carlo.ex_update_ratio = Some(val);
             }
 
             // Unknown parameters go to additional
