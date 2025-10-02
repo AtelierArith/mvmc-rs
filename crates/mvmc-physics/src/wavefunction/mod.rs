@@ -480,21 +480,40 @@ impl CombinedWavefunction {
             }
         }
 
-        // Gutzwiller factor: counts double occupancy n0[ri] * n1[ri]
+        // Gutzwiller factor: For Heisenberg model (pure spin), count spin configuration
+        // For ne>0: double occupancy n0[ri] * n1[ri]
+        // For ne=0: use total occupation n0[ri] + n1[ri] to track spin presence
         // Reference: mVMC/src/mVMC/projection.c:77-81
         for ri in 0..nsite {
-            proj_counts[ri] = n0[ri] * n1[ri];
+            if self.ne == 0 {
+                // Heisenberg model: count total spin occupation
+                proj_counts[ri] = n0[ri] + n1[ri];
+            } else {
+                // Fermionic model: count double occupancy
+                proj_counts[ri] = n0[ri] * n1[ri];
+            }
         }
 
         // Jastrow factor: counts (n_i - 1) * (n_j - 1) for i < j
+        // For Heisenberg model, this represents spin-spin correlations
         // Reference: mVMC/src/mVMC/projection.c:84-95
         let offset = n_gutzwiller;
         let mut idx_count = 0;
         for ri in 0..nsite {
-            let xi = n0[ri] + n1[ri] - 1;
+            let xi = if self.ne == 0 {
+                // Heisenberg model: use spin occupation directly
+                n0[ri] + n1[ri]
+            } else {
+                // Fermionic model: use (n - 1)
+                n0[ri] + n1[ri] - 1
+            };
 
             for rj in (ri+1)..nsite {
-                let xj = n0[rj] + n1[rj] - 1;
+                let xj = if self.ne == 0 {
+                    n0[rj] + n1[rj]
+                } else {
+                    n0[rj] + n1[rj] - 1
+                };
                 proj_counts[offset + idx_count] = xi * xj;
                 idx_count += 1;
             }
@@ -519,7 +538,6 @@ impl CombinedWavefunction {
         // 1. Slater determinant parameters (orbital parameters)
         if let Some(ref slater) = self.slater {
             let slater_derivs = slater.calculate_parameter_derivatives(config);
-            eprintln!("DEBUG: Slater derivatives: {}", slater_derivs.len());
             derivatives.extend(slater_derivs);
         }
 
@@ -533,13 +551,21 @@ impl CombinedWavefunction {
         // For these, O_k = ∂log(ψ)/∂θ_k = projCnt[k]
         // Reference: Gutzwiller factor = exp(Σ g_k * n_k) => ∂log/∂g_k = n_k
         let proj_counts = self.calculate_proj_counts(config);
-        eprintln!("DEBUG: Proj counts: {}", proj_counts.len());
-        eprintln!("DEBUG: Expected - Gutzwiller: {}, Jastrow: {}", self.nsite, self.nsite * (self.nsite - 1) / 2);
+
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static PRINTED_ONCE: AtomicBool = AtomicBool::new(false);
+        if !PRINTED_ONCE.swap(true, Ordering::Relaxed) {
+            eprintln!("DEBUG O-operators (projCnt):");
+            eprintln!("  First 5 Gutzwiller: {:?}", &proj_counts[..5.min(proj_counts.len())]);
+            if proj_counts.len() > self.nsite {
+                eprintln!("  First 5 Jastrow: {:?}", &proj_counts[self.nsite..self.nsite+5.min(proj_counts.len()-self.nsite)]);
+            }
+        }
+
         for count in proj_counts {
             derivatives.push(Complex64::new(count as f64, 0.0));
         }
 
-        eprintln!("DEBUG: Total derivatives: {}", derivatives.len());
         derivatives
     }
 
@@ -559,6 +585,23 @@ impl CombinedWavefunction {
         let n_gutzwiller = self.nsite;
         let n_jastrow = self.nsite * (self.nsite - 1) / 2;
 
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static UPDATE_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        let count = UPDATE_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count % 10 == 0 {
+            eprintln!("DEBUG update_projection_parameters (call #{}):", count + 1);
+            eprintln!("  n_slater_params: {}, param_updates.len(): {}", n_slater_params, param_updates.len());
+            eprintln!("  learning_rate: {}", learning_rate);
+            if n_gutzwiller > 0 {
+                let idx = n_slater_params;
+                if idx < param_updates.len() {
+                    eprintln!("  param_updates[{}] (Gutzwiller[0]): {}", idx, param_updates[idx]);
+                    eprintln!("  gutzwiller_params[0] before: {}", self.gutzwiller_params[0]);
+                }
+            }
+        }
+
         // Update Gutzwiller parameters
         for k in 0..n_gutzwiller {
             let param_idx = n_slater_params + k;
@@ -572,6 +615,12 @@ impl CombinedWavefunction {
             let param_idx = n_slater_params + n_gutzwiller + k;
             if param_idx < param_updates.len() {
                 self.jastrow_params[k] -= learning_rate * param_updates[param_idx];
+            }
+        }
+
+        if count % 10 == 0 {
+            if n_gutzwiller > 0 {
+                eprintln!("  gutzwiller_params[0] after: {}", self.gutzwiller_params[0]);
             }
         }
     }
