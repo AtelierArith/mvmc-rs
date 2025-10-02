@@ -4,6 +4,12 @@ A Rust implementation of mVMC (many-variable Variational Monte Carlo method), a 
 
 [![CI](https://github.com/atelierarith/mvmc-rs/workflows/CI/badge.svg)](https://github.com/atelierarith/mvmc-rs/actions)
 
+## TL;DR
+
+```sh
+$ cargo run --release -p mvmc-cli -- standard examples/c_reference/StdFace.def --output examples/output
+```
+
 ## Overview
 
 mVMC performs highly-accurate variational Monte Carlo calculations for strongly correlated electron systems including:
