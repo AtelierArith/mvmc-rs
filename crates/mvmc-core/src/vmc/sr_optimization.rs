@@ -578,12 +578,8 @@ mod tests {
     fn test_add_sample() {
         let mut calc = SROptimizationCalculator::new(3);
         let sample = SRSampleData {
-            o_operators: vec![
-                Complex64::new(1.0, 0.0),
-                Complex64::new(2.0, 0.0),
-                Complex64::new(3.0, 0.0),
-            ],
-            local_energy: Complex64::new(-1.0, 0.0),
+            o_operators: vec![1.0, 2.0, 3.0],
+            energy: -1.0,
             weight: 1.0,
         };
         calc.add_sample(sample);

@@ -376,7 +376,7 @@ mod tests {
             amplitude_ratio: Complex64::new(1.0, 0.0),
         };
 
-        calculator.add_sample(&config, &step);
+        calculator.add_sample(&config, &step, 0.0);
         assert_eq!(calculator.num_samples(), 1);
     }
 
@@ -410,7 +410,7 @@ mod tests {
 
         // Add multiple samples
         for _ in 0..10 {
-            calculator.add_sample(&config, &step);
+            calculator.add_sample(&config, &step, 0.0);
         }
 
         let observables = calculator.calculate_observables();
@@ -435,7 +435,7 @@ mod tests {
             amplitude_ratio: Complex64::new(1.0, 0.0),
         };
 
-        calculator.add_sample(&config, &step);
+        calculator.add_sample(&config, &step, 0.0);
         assert_eq!(calculator.num_samples(), 1);
 
         calculator.reset();
@@ -484,7 +484,7 @@ mod property_tests {
 
                 // Add samples
                 for _ in 0..n_samples {
-                    calculator.add_sample(&config, &step);
+                    calculator.add_sample(&config, &step, 0.0);
                 }
 
                 let observables = calculator.calculate_observables();

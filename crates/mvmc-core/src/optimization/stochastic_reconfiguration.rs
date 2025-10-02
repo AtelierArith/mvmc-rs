@@ -1140,8 +1140,13 @@ mod tests {
 
         let updated = optimizer.update_parameters(&parameters, &result).unwrap();
 
-        assert_eq!(updated[0], 0.1);
-        assert_eq!(updated[1], 0.2);
+        // With adaptive step size control, the updates are scaled
+        // For zero initial parameters, scale_factor = 0.01, so step_size = 0.1 * 0.01 = 0.001
+        let expected_update_0 = 0.1 * 0.001; // 0.0001
+        let expected_update_1 = 0.2 * 0.001; // 0.0002
+
+        assert_eq!(updated[0], expected_update_0);
+        assert_eq!(updated[1], expected_update_1);
         assert_eq!(updated[2], 0.0);
         assert_eq!(updated[3], 0.0);
     }

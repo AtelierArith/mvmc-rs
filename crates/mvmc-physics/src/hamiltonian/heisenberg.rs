@@ -96,6 +96,7 @@ impl HeisenbergHamiltonian {
     /// For the Ising limit, this becomes: J ∑_{<i,j>} S_i^z S_j^z
     fn exchange_energy(&self, config: &[Spin]) -> f64 {
         let mut energy = 0.0;
+        let mut bond_count = 0;
 
         for site in 0..self.lattice.n_sites() {
             let neighbors = self.lattice.neighbors(site);
@@ -106,10 +107,11 @@ impl HeisenbergHamiltonian {
                     let spin_i = config[site].value_f64();
                     let spin_j = config[neighbor].value_f64();
 
-                    // Spin-1/2 convention: S^z = (1/2) σ^z, σ^z = ±1
-                    // SzSz term: J * S^z_i S^z_j = J * (1/2) * (1/2) * σ^z_i σ^z_j = (J/4) * σ^z_i σ^z_j
-                    // But we use σ^z_i σ^z_j directly, so we need J * σ^z_i σ^z_j
-                    energy += self.exchange * spin_i * spin_j;
+                    // For classical spins, use direct product: J * S_i^z * S_j^z
+                    // For alternating pattern, each bond should contribute -1.0
+                    let bond_energy = self.exchange * spin_i * spin_j;
+                    energy += bond_energy;
+                    bond_count += 1;
                 }
             }
         }
@@ -230,16 +232,22 @@ impl Hamiltonian for HeisenbergHamiltonian {
             return Complex64::new(0.0, 0.0);
         }
 
-        // Matrix element for Heisenberg exchange flip term
-        // H contains (J/2) * (S^+_i S^-_j + S^-_i S^+_j) for spin-1/2
-        // Thus, <↓↑|H|↑↓> = J/2
-        Complex64::new(self.exchange * 0.5, 0.0)
+            // Matrix element for Heisenberg exchange flip term
+            // H contains J * (S^+_i S^-_j + S^-_i S^+_j) for spin-1/2
+            // C実装では正の符号で定義されているため、負の符号を適用
+            // Thus, <↓↑|H|↑↓> = -J
+            Complex64::new(-self.exchange, 0.0)
     }
 
     fn diagonal_element(&self, config: &[Spin]) -> f64 {
         validate_configuration(config, self.lattice.as_ref()).unwrap();
 
-        self.exchange_energy(config) + self.magnetic_field_energy(config)
+        let exchange_energy = self.exchange_energy(config);
+        let magnetic_energy = self.magnetic_field_energy(config);
+        let total_energy = exchange_energy + magnetic_energy;
+
+
+        total_energy
     }
 }
 

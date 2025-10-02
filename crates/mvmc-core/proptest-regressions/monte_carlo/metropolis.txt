@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc af5fe7dacc075fd0a90077b152060b280bdc9b505e199e04c082c33112258592 # shrinks to nsite = 2, ne = 1, two_sz = 0, seed = 0
 cc 5f7c42ba42a915007d89db3a18f3387255c2bf022d25246225519910d57c844a # shrinks to nsite = 2, ne = 1, two_sz = 0, seed = 3457, n_steps = 1
+cc 6d51d81bb7488d8f0f2b564437abcb1d9ae6509c512e9bb363142e676358c574 # shrinks to nsite = 4, ne = 6, two_sz = -2, seed = 0

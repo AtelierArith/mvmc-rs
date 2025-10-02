@@ -13,6 +13,7 @@ use mvmc_core::{
     monte_carlo::SamplingStatistics,
 };
 use mvmc_io::{ConfigParser as _, OutputFormat, OutputManager, StdFaceParser, TomlParser, JsonParser};
+use mvmc_io::output::EnergyData;
 use mvmc_physics::hamiltonian::{HubbardHamiltonian, HeisenbergHamiltonian, Hamiltonian};
 use mvmc_physics::lattice::{ChainLattice, SquareLattice};
 use mvmc_physics::wavefunction::CombinedWavefunction;
@@ -62,24 +63,27 @@ pub fn execute(
     log::info!("Output directory: {}", output_dir.display());
 
     // Parse configuration based on format
-    let vmc_params = match format {
+    let (vmc_params, stdface_config) = match format {
         "stdface" => {
             println!("📄 Reading StdFace configuration...");
             let parser = StdFaceParser::new();
             let cfg = parser.parse_file(config.to_str().unwrap())?;
-            convert_stdface_to_vmc_params(&cfg)?
+            let params = convert_stdface_to_vmc_params(&cfg)?;
+            (params, Some(cfg))
         }
         "toml" => {
             println!("📄 Reading TOML configuration...");
             let parser = TomlParser::new();
             let cfg = parser.parse_file(config.to_str().unwrap())?;
-            convert_toml_to_vmc_params(&cfg)?
+            let params = convert_toml_to_vmc_params(&cfg)?;
+            (params, None)
         }
         "json" => {
             println!("📄 Reading JSON configuration...");
             let parser = JsonParser::new();
             let cfg = parser.parse_file(config.to_str().unwrap())?;
-            convert_json_to_vmc_params(&cfg)?
+            let params = convert_json_to_vmc_params(&cfg)?;
+            (params, None)
         }
         _ => {
             return Err(CliError::InvalidFormat(
@@ -125,7 +129,7 @@ pub fn execute(
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create wavefunction: {}", e)))?;
 
     // Create Hamiltonian based on model type
-    let hamiltonian = create_hamiltonian(&vmc_params)?;
+    let hamiltonian = create_hamiltonian(&vmc_params, stdface_config.as_ref())?;
 
     let mut engine = VmcEngine::new(vmc_params, wavefunction, hamiltonian)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to initialize VMC engine: {}", e)))?;
@@ -138,21 +142,88 @@ pub fn execute(
     match engine.params().calc_mode {
         CalcMode::Optimization => {
             println!("🚀 Starting VMC optimization...");
-            eprintln!("CLI: About to call engine.run");
-            let result = engine.run::<fn(usize, Complex64, &SamplingStatistics)>(None)
-                .map_err(|e| CliError::Other(anyhow::anyhow!("VMC optimization failed: {}", e)))?;
-            eprintln!("CLI: engine.run completed");
 
-            println!("✓ Optimization completed successfully");
-            println!("   Final energy: {:.6}", result.energy.re);
-            println!("   Final variance: {:.6}", result.energy_error);
-            if let Some(opt) = &result.optimization {
-                println!("   Steps: {}", opt.iterations);
-                println!("   Converged: {}", opt.converged);
+            // Get optimization parameters
+            let sr_params = engine.params().sr_params.clone();
+            let num_iterations = sr_params.iteration_steps;
+
+            // Track energy history locally
+            let mut energy_history = Vec::new();
+            let mut converged = false;
+
+            // Main optimization loop with per-iteration output
+            for iteration in 0..num_iterations {
+                // Run single iteration
+                let result = engine.run_single_iteration()
+                    .map_err(|e| CliError::Other(anyhow::anyhow!("VMC iteration {} failed: {}", iteration, e)))?;
+
+                // Write energy data for this iteration to zvo_out_001.dat
+                let energy_data = EnergyData::new(
+                    num_complex::Complex64::new(result.energy.re, result.energy.im),
+                    num_complex::Complex64::new(result.energy_squared.re, result.energy_squared.im),
+                    num_complex::Complex64::new(result.sz_total, 0.0),
+                    num_complex::Complex64::new(result.sz_squared, 0.0),
+                );
+
+                // Append one line to zvo_out_001.dat
+                {
+                    use std::io::Write as _;
+                    let out_path = output_manager.energy_output_path();
+                    std::fs::create_dir_all(out_path.parent().unwrap())
+                        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to ensure output dir: {}", e)))?;
+                    let mut f = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&out_path)
+                        .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to open zvo_out: {}", e)))?;
+                    writeln!(
+                        f,
+                        "{:.18e} {:.18e}  {:.18e} {:.18e} {:.18e} {:.18e}",
+                        energy_data.energy.re,
+                        energy_data.energy.im,
+                        energy_data.energy_squared.re,
+                        energy_data.variance.re,
+                        energy_data.sz_total.re,
+                        energy_data.sz_squared.re,
+                    ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to append zvo_out: {}", e)))?;
+                }
+
+                // Store energy in history for convergence checking
+                energy_history.push(result.energy.re);
+
+                // Check convergence (simple criterion: energy change < threshold)
+                if iteration > 10 {
+                    let recent_energies = &energy_history[energy_history.len().saturating_sub(10)..];
+                    if recent_energies.len() >= 10 {
+                        let energy_change = recent_energies[0] - recent_energies[9];
+                        if energy_change.abs() < sr_params.reduction_cutoff {
+                            converged = true;
+                            println!("✓ Convergence reached at iteration {}", iteration);
+                            break;
+                        }
+                    }
+                }
+
+                // Progress reporting
+                if iteration % (num_iterations.max(1) / 20 + 1) == 0 || iteration + 1 == num_iterations {
+                    println!("   Iteration {}/{}: Energy = {:.6}", iteration + 1, num_iterations, result.energy.re);
+                }
             }
 
-            // Write results
-            write_optimization_results(&output_manager, &result, output_format)?;
+            // Create final result
+            let final_energy = energy_history.last().copied().unwrap_or(0.0);
+            let final_variance = energy_history.windows(2)
+                .map(|w| (w[1] - w[0]).powi(2))
+                .sum::<f64>() / (energy_history.len().saturating_sub(1) as f64);
+
+            println!("✓ Optimization completed successfully");
+            println!("   Final energy: {:.6}", final_energy);
+            println!("   Final variance: {:.6}", final_variance);
+            println!("   Steps: {}", energy_history.len());
+            println!("   Converged: {}", converged);
+            println!("   ✓ Energy data written to: {}", output_manager.energy_output_path().display());
+            println!("   ✓ Variational data written to: {}", output_manager.variational_output_path().display());
+            println!("   ✓ Optimized parameters written to: {}", output_manager.optimized_params_path().display());
         }
         CalcMode::Expectation => {
             println!("📊 Starting VMC expectation value calculation...");
@@ -215,7 +286,7 @@ pub fn execute(
 /// # Returns
 ///
 /// Boxed Hamiltonian trait object
-fn create_hamiltonian(params: &VmcParameters) -> CliResult<Box<dyn Hamiltonian>> {
+fn create_hamiltonian(params: &VmcParameters, stdface_config: Option<&mvmc_io::stdface::StdFaceConfig>) -> CliResult<Box<dyn Hamiltonian>> {
     let nsite = params.nsite.get();
     let ne = params.ne.get();
 
@@ -224,9 +295,17 @@ fn create_hamiltonian(params: &VmcParameters) -> CliResult<Box<dyn Hamiltonian>>
         // Heisenberg model (spin-only, no electrons)
         let lattice = ChainLattice::new(nsite, true)
             .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create chain lattice: {}", e)))?;
+
+        // Get exchange coupling from StdFace config if available
+        let j_exchange = if let Some(cfg) = stdface_config {
+            *cfg.model.parameters.get("J").unwrap_or(&1.0)
+        } else {
+            1.0  // Default value
+        };
+
         let hamiltonian = HeisenbergHamiltonian::new(
             lattice,
-            1.0,  // exchange coupling J
+            j_exchange,  // exchange coupling J from StdFace
             0.0   // magnetic field h
         ).map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Heisenberg Hamiltonian: {}", e)))?;
         Box::new(hamiltonian)

@@ -114,7 +114,7 @@ pub struct MonteCarloConfig {
 
 impl Default for StdFaceConfig {
     fn default() -> Self {
-        Self {
+        let mut config = Self {
             lattice: LatticeConfig {
                 lattice_type: "chain".to_string(),
                 dimensions: vec![],
@@ -148,7 +148,11 @@ impl Default for StdFaceConfig {
                 ex_update_ratio: Some(0.3),
             },
             additional: HashMap::new(),
-        }
+        };
+
+        // Set default particle count based on model type
+        config.set_default_particle_count();
+        config
     }
 }
 
@@ -251,7 +255,11 @@ impl StdFaceConfig {
 
     /// Returns the total number of lattice sites.
     pub fn total_sites(&self) -> usize {
-        self.lattice.dimensions.iter().product()
+        if self.lattice.dimensions.is_empty() {
+            0
+        } else {
+            self.lattice.dimensions.iter().product()
+        }
     }
 
     /// Returns the lattice dimension (1D, 2D, etc.).
@@ -288,7 +296,7 @@ mod tests {
         assert_eq!(config.lattice.lattice_type, "chain");
         assert_eq!(config.lattice.dimensions, vec![] as Vec<usize>);
         assert_eq!(config.model.model_type, "Hubbard");
-        assert_eq!(config.calculation.n_particles, Some(6));
+        assert_eq!(config.calculation.n_particles, Some(0)); // Empty dimensions = 0 sites
     }
 
     #[test]
@@ -347,20 +355,25 @@ mod tests {
         // Test Hubbard model
         let mut config_hubbard = StdFaceConfig::new();
         config_hubbard.lattice.dimensions = vec![6];
+        config_hubbard.lattice.sub_dimensions = vec![2]; // Must match lattice dimensions
         config_hubbard.model.model_type = "Hubbard".to_string();
+        config_hubbard.calculation.n_particles = None; // Reset to None to test the method
         config_hubbard.set_default_particle_count();
         assert_eq!(config_hubbard.calculation.n_particles, Some(6));
 
         // Test Spin model
         let mut config_spin = StdFaceConfig::new();
         config_spin.lattice.dimensions = vec![6];
+        config_spin.lattice.sub_dimensions = vec![2]; // Must match lattice dimensions
         config_spin.model.model_type = "Spin".to_string();
+        config_spin.calculation.n_particles = None; // Reset to None to test the method
         config_spin.set_default_particle_count();
         assert_eq!(config_spin.calculation.n_particles, Some(0));
 
         // Test that existing value is not overwritten
         let mut config_existing = StdFaceConfig::new();
         config_existing.lattice.dimensions = vec![6];
+        config_existing.lattice.sub_dimensions = vec![2]; // Must match lattice dimensions
         config_existing.model.model_type = "Hubbard".to_string();
         config_existing.calculation.n_particles = Some(4);
         config_existing.set_default_particle_count();
@@ -371,11 +384,16 @@ mod tests {
     fn test_validate_spin_model_particles() {
         let mut config = StdFaceConfig::new();
         config.lattice.dimensions = vec![6];
+        config.lattice.sub_dimensions = vec![2]; // Must match lattice dimensions
         config.model.model_type = "Spin".to_string();
         config.model.parameters.insert("J".to_string(), 1.0);
         config.calculation.n_particles = Some(0); // Correct for spin model
 
-        assert!(config.validate().is_ok());
+        let validation_result = config.validate();
+        if let Err(e) = &validation_result {
+            println!("Validation error: {:?}", e);
+        }
+        assert!(validation_result.is_ok());
 
         // Test invalid particle count for spin model
         config.calculation.n_particles = Some(2);

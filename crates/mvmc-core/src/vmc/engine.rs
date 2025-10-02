@@ -811,59 +811,76 @@ impl VmcEngine {
 
         // Perform SR optimization if optimizer is available
         if let Some(ref mut _optimizer) = self.optimizer {
-            // TODO: Implement proper SR optimization
-            // For now, we use a simple learning_rate * gradient approach
-            let learning_rate = 0.01;
+            // Use proper SR optimization
+            use crate::vmc::sr_optimization::{SROptimizationCalculator, SRSampleData};
 
-            // Calculate average O-operators
             let n_params = self.wavefunction.num_parameters();
-            let mut avg_o = vec![0.0; n_params];
-            let mut avg_energy = 0.0;
-            let mut avg_energy_o = vec![0.0; n_params];
+            let mut sr_calculator = SROptimizationCalculator::new(n_params);
 
             // Debug: Check sample count
             println!("SR optimization: n_params = {}, n_samples = {}", n_params, sr_samples.len());
 
+            // Add samples to SR calculator
             for sample in &sr_samples {
-                avg_energy += sample.energy;
-                for (i, &o) in sample.o_operators.iter().enumerate() {
-                    avg_o[i] += o;
-                    avg_energy_o[i] += sample.energy * o;
+                sr_calculator.add_sample(sample.clone());
+            }
+
+            // Perform SR optimization
+            let sr_params = &self.params.sr_params;
+            match sr_calculator.solve_full_sr_with_params(sr_params) {
+                Ok((param_updates, sr_info)) => {
+                    // Debug output for first few iterations
+                    if iteration < 3 {
+                        let max_update = param_updates.iter().map(|u| u.abs()).fold(0.0f64, f64::max);
+                        let max_o = sr_samples.iter()
+                            .flat_map(|s| &s.o_operators)
+                            .map(|o| o.abs())
+                            .fold(0.0f64, f64::max);
+                        let max_energy_o = sr_samples.iter()
+                            .map(|s| s.energy * s.o_operators.iter().map(|o| o.abs()).fold(0.0f64, f64::max))
+                            .fold(0.0f64, f64::max);
+
+                        println!("Iteration {}: avg_energy = {:.6}, max_o = {:.6}, max_energy_o = {:.6}, max_force = {:.6}, max_update = {:.6}",
+                            iteration, avg_energy.re, max_o, max_energy_o, max_update, max_update);
+
+                        // Show first few parameters
+                        if !sr_samples.is_empty() {
+                            println!("  First 5 O-operators: {:?}", &sr_samples[0].o_operators[..5.min(n_params)]);
+                            println!("  First 5 forces: {:?}", &param_updates[..5.min(n_params)]);
+                        }
+                    }
+
+                    // Apply parameter updates to wavefunction
+                    self.wavefunction.update_parameters(&param_updates, sr_params.step_size);
+                }
+                Err(e) => {
+                    eprintln!("SR optimization failed: {}", e);
+                    // Fallback to simple gradient descent
+                    let learning_rate = 0.01;
+                    let mut param_updates = vec![0.0; n_params];
+
+                    // Calculate simple gradient
+                    let mut avg_o = vec![0.0; n_params];
+                    let mut avg_energy_o = vec![0.0; n_params];
+
+                    for sample in &sr_samples {
+                        for (i, &o) in sample.o_operators.iter().enumerate() {
+                            avg_o[i] += o;
+                            avg_energy_o[i] += sample.energy * o;
+                        }
+                    }
+
+                    let n_samples = sr_samples.len() as f64;
+                    for i in 0..n_params {
+                        avg_o[i] /= n_samples;
+                        avg_energy_o[i] /= n_samples;
+                        let force = avg_energy_o[i] - avg_energy.re * avg_o[i];
+                        param_updates[i] = -learning_rate * force;
+                    }
+
+                    self.wavefunction.update_parameters(&param_updates, 1.0);
                 }
             }
-
-            let n_samples = sr_samples.len() as f64;
-            avg_energy /= n_samples;
-            for i in 0..n_params {
-                avg_o[i] /= n_samples;
-                avg_energy_o[i] /= n_samples;
-            }
-
-            // Calculate force vector: F_i = ⟨E * O_i⟩ - ⟨E⟩ * ⟨O_i⟩
-            let mut param_updates = vec![0.0; n_params];
-            for i in 0..n_params {
-                let force = avg_energy_o[i] - avg_energy * avg_o[i];
-                param_updates[i] = -learning_rate * force;
-            }
-
-            // Debug output for first few iterations
-            if iteration < 3 {
-                let max_update = param_updates.iter().map(|u| u.abs()).fold(0.0f64, f64::max);
-                let max_o = avg_o.iter().map(|o| o.abs()).fold(0.0f64, f64::max);
-                let max_energy_o = avg_energy_o.iter().map(|eo| eo.abs()).fold(0.0f64, f64::max);
-                let max_force = param_updates.iter().map(|f| f.abs()).fold(0.0f64, f64::max);
-
-                println!("Iteration {}: avg_energy = {:.6}, max_o = {:.6}, max_energy_o = {:.6}, max_force = {:.6}, max_update = {:.6}",
-                    iteration, avg_energy, max_o, max_energy_o, max_force, max_update);
-
-                // Show first few parameters
-                println!("  First 5 O-operators: {:?}", &avg_o[..5.min(n_params)]);
-                println!("  First 5 forces: {:?}", &param_updates[..5.min(n_params)]);
-            }
-
-
-            // Apply parameter updates to wavefunction
-            self.wavefunction.update_parameters(&param_updates, 1.0);
         }
 
         // Calculate observables
@@ -1319,27 +1336,32 @@ impl VmcEngine {
         let u8_config = self.spin_config_to_u8(spin_config);
         let psi = self.wavefunction.calculate(&u8_config);
 
-        // Debug prints removed for clean CLI output
 
         if psi.norm() < 1e-12 {
             // For very small amplitudes, use diagonal energy only
             // This prevents division by zero in off-diagonal terms
-            return Ok(self.hamiltonian.diagonal_element(spin_config));
+            let diagonal_energy = self.hamiltonian.diagonal_element(spin_config);
+            return Ok(diagonal_energy);
         }
 
         // Start with diagonal energy (Sz-Sz terms)
         let mut local_energy = self.hamiltonian.diagonal_element(spin_config);
 
-        // Add off-diagonal contributions (S+ S- and S- S+ terms)
-        // For Heisenberg model: H = J * sum_<ij> (Sz_i * Sz_j + 0.5 * (S+_i * S-_j + S-_i * S+_j))
-        //
-        // Reference: mVMC/src/mVMC/calham.c:160-168 (ExchangeCoupling term)
-        // The matrix element calculation uses: <X'|H|X> = H_ij * ψ(X')/ψ(X)
+            // Add off-diagonal contributions (S+ S- and S- S+ terms)
+            // For Heisenberg model: H = J * sum_<ij> (Sz_i * Sz_j + S+_i * S-_j + S-_i * S+_j)
+            //
+            // Reference: mVMC/src/mVMC/calham.c:160-168 (ExchangeCoupling term)
+            // The matrix element calculation uses: <X'|H|X> = H_ij * ψ(X')/ψ(X)
         let nsite = spin_config.len();
+        let mut off_diagonal_contributions = 0.0;
+        let mut bond_count = 0;
 
+        // Only consider each bond once by iterating through all sites
         for i in 0..nsite {
-            for j in (i+1)..nsite {  // Only i < j to avoid double counting
-                if self.hamiltonian.lattice().neighbors(i).contains(&j) {
+            let neighbors = self.hamiltonian.lattice().neighbors(i);
+            for &j in &neighbors {
+                // Only consider i < j to avoid double counting
+                if i < j {
                     // Try both spin flip transitions for this bond
                     // S+_i S-_j: flip (i:Up, j:Down) → (i:Down, j:Up)
                     // S-_i S+_j: flip (i:Down, j:Up) → (i:Up, j:Down)
@@ -1362,16 +1384,20 @@ impl VmcEngine {
                         let new_psi = self.wavefunction.calculate(&new_u8_config);
 
                         if new_psi.norm() > 1e-12 {
-                            // Matrix element is already J/2 from HeisenbergHamiltonian
+                            // Matrix element is J from HeisenbergHamiltonian
                             // Local energy contribution: E += H_ij * ψ(X')/ψ(X)
                             let matrix_elem = self.hamiltonian.matrix_element(spin_config, &new_config).re;
                             let amplitude_ratio = (new_psi / psi).re;
-                            local_energy += matrix_elem * amplitude_ratio;
+                            let contribution = matrix_elem * amplitude_ratio;
+                                local_energy += contribution;
+                                off_diagonal_contributions += contribution;
+                                bond_count += 1;
                         }
                     }
                 }
             }
         }
+
 
         Ok(local_energy)
     }
@@ -1669,13 +1695,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let wavefunction = PhysicsCombinedWavefunction::new(4, 2, 0).unwrap();
+        let wavefunction = PhysicsCombinedWavefunction::new(4, 2).unwrap();
 
         use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
         use mvmc_physics::lattice::ChainLattice;
 
         let lattice = ChainLattice::new(4, true).unwrap();
-        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
 
         let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());
@@ -1697,13 +1723,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let wavefunction = PhysicsCombinedWavefunction::new(4, 2, 0).unwrap();
+        let wavefunction = PhysicsCombinedWavefunction::new(4, 2).unwrap();
 
         use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
         use mvmc_physics::lattice::ChainLattice;
 
         let lattice = ChainLattice::new(4, true).unwrap();
-        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
 
         let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());
@@ -1727,13 +1753,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let wavefunction = PhysicsCombinedWavefunction::new(2, 1, 1).unwrap();
+        let wavefunction = PhysicsCombinedWavefunction::new(2, 1).unwrap();
 
         use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
         use mvmc_physics::lattice::ChainLattice;
 
         let lattice = ChainLattice::new(2, true).unwrap();
-        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0, 0.0).unwrap();
 
         let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());

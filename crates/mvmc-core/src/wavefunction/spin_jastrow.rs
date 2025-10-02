@@ -93,7 +93,10 @@ impl SpinJastrowParameters {
             return Err(VmcError::out_of_bounds(j, self.n_sites));
         }
 
-        let idx = i * (i - 1) / 2 + j;
+        // Upper triangular indexing: for i < j, idx = i * n - i * (i + 1) / 2 + j - i - 1
+        // Safe calculation to avoid overflow
+        let n = self.n_sites;
+        let idx = i * n - i * (i + 1) / 2 + j - i - 1;
         Ok(self.parameters[idx])
     }
 
@@ -109,7 +112,10 @@ impl SpinJastrowParameters {
             return Err(VmcError::out_of_bounds(j, self.n_sites));
         }
 
-        let idx = i * (i - 1) / 2 + j;
+        // Upper triangular indexing: for i < j, idx = i * n - i * (i + 1) / 2 + j - i - 1
+        // Safe calculation to avoid overflow
+        let n = self.n_sites;
+        let idx = i * n - i * (i + 1) / 2 + j - i - 1;
         self.parameters[idx] = value;
         Ok(())
     }

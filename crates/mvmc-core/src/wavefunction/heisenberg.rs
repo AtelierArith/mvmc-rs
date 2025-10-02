@@ -62,6 +62,25 @@ impl HeisenbergWavefunction {
         wavefunction
     }
 
+    /// Creates a new Heisenberg wavefunction with zero parameters (for testing)
+    ///
+    /// # Arguments
+    ///
+    /// * `n_sites` - Number of lattice sites
+    ///
+    /// # Returns
+    ///
+    /// New wavefunction with zero parameters
+    pub fn new_zero_params(n_sites: SiteCount) -> Self {
+        let nsite = n_sites.get();
+        Self {
+            n_sites: nsite,
+            ne: 0, // Heisenberg models have no electrons
+            spin_jastrow: SpinJastrowWavefunction::new(n_sites),
+            gutzwiller: GutzwillerProjector::new(n_sites, 0),
+        }
+    }
+
     /// Creates a new Heisenberg wavefunction with initial Jastrow parameters
     ///
     /// # Arguments
@@ -321,7 +340,7 @@ mod tests {
     #[test]
     fn test_heisenberg_wavefunction_amplitude() {
         let nsite = SiteCount::new(2);
-        let wavefunction = HeisenbergWavefunction::new(nsite);
+        let wavefunction = HeisenbergWavefunction::new_zero_params(nsite);
 
         // Test with spin up, spin down configuration
         let spin_config = vec![1, 2]; // up, down
@@ -334,7 +353,7 @@ mod tests {
     #[test]
     fn test_heisenberg_wavefunction_ratio() {
         let nsite = SiteCount::new(2);
-        let wavefunction = HeisenbergWavefunction::new(nsite);
+        let wavefunction = HeisenbergWavefunction::new_zero_params(nsite);
 
         let spin_config = vec![1, 2]; // up, down
         let ratio = wavefunction.calculate_ratio(&spin_config, 0, 1, 2).unwrap();
