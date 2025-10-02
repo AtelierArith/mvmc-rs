@@ -4,6 +4,18 @@
 
 この文書は、C言語で実装されたmVMC（many-variable Variational Monte Carlo method）をRustに移植するための包括的な計画書です。既存のC実装の構造分析に基づき、Rustの利点を最大限活用した設計を提案します。
 
+## 🔴 重要な更新 (2025-10-02)
+
+**Phase 8で重大な問題が発覚しました：**
+
+現在の実装には**Heisenbergスピンモデル（ne=0）用の波動関数が存在しない**という根本的な問題があります。
+
+- ✅ **動作する**: フェルミオン系（ne>0）- Slater行列式
+- 🔴 **動作しない**: スピン系（ne=0）- 波動関数が未実装
+- 📋 **次のステップ**: Phase 9でSpinJastrowWavefunctionを実装
+
+詳細は `TODO.md` の「Phase 9: Heisenbergモデル用の波動関数実装」および `IMPLEMENTATION_LOG.md` の「Critical Discovery Log」を参照してください。
+
 ## 前提
 
 - C 実装 mVMC を忠実に実装することが望まれます．
@@ -1002,29 +1014,224 @@ criterion_main!(benches);
 
 **Phase 8: VMC計算の完全な再実装（緊急）**
 
-### 8.1 C実装の詳細な分析 🔴 **最優先**
+### 8.1 C実装の詳細な分析 🔴 **最優先** ✅ **解析完了（2025-01-02）**
 
 #### C実装のVMC計算フローの理解
-- [ ] `mVMC/src/mVMC/vmcmain.c` の完全な解析
-  - [ ] 初期化フェーズ（波動関数、電子配置）
-  - [ ] モンテカルロサンプリングループ
-  - [ ] 局所エネルギー計算
-  - [ ] SR法による最適化
 
-- [ ] `mVMC/src/mVMC/vmccal.c` の解析
-  - [ ] `VMCMainCal()` - メイン計算ループ
-  - [ ] `VMCMakeSample()` - サンプル生成
-  - [ ] `VMCCalcEnergyDiff()` - エネルギー差の計算
+**解析済みファイル:**
+1. **`mVMC/src/mVMC/vmcmain.c`** - メインプログラム
+2. **`mVMC/src/mVMC/vmccal.c`** - VMCメイン計算ループ
+3. **`mVMC/src/mVMC/vmcmake.c`** - 電子配置生成
+4. **`mVMC/src/mVMC/slater.c`** - Slater行列式とO-operator計算
+5. **`mVMC/src/mVMC/calham.c`** - Hamiltonian計算
+6. **`mVMC/src/mVMC/greenfunction.c`** - GreenFunc1/GreenFunc2
+7. **`mVMC/src/mVMC/include/global.h`** - グローバル変数定義
 
-- [ ] `mVMC/src/mVMC/vmcmake.c` の解析
-  - [ ] `VMCMakeInitial()` - 初期状態の生成
-  - [ ] 電子配置の構築方法
-  - [ ] スピン配置の表現方法
+#### VMC計算フロー（C実装）
 
-- [ ] `mVMC/src/mVMC/slater.c` の解析
-  - [ ] `UpdateSlaterElm()` - Slater行列の更新
-  - [ ] 行列式の計算方法
-  - [ ] 波動関数振幅の計算
+**1. 初期化フェーズ（`vmcmake.c:makeInitialSample()`）**
+
+C実装の電子配置生成:
+```c
+void makeInitialSample() {
+    int msi = 0;  // 電子インデックス
+
+    // Phase 1: 局在スピンの配置
+    for(si=0; si<2; si++) {  // ★ si=0:up, si=1:down
+        for(mi=0; mi<Nsite; mi++) {
+            if(LocSpn[mi] == 1) {
+                eleCfg[mi+si*Nsite] = msi;  // サイト → 電子マッピング
+                eleIdx[msi] = mi+si*Nsite;  // 電子 → サイトマッピング
+                eleSpn[msi] = si;           // スピン
+                msi++;
+            }
+        }
+    }
+
+    // Phase 2: 遍歴電子の配置（Hubbardモデル用）
+    for(ri=0; ri<Ne_itinerant; ri++) {
+        do {
+            isi = genrand_int32() % Nsite2;
+        } while(eleCfg[isi] != -1);  // 空きサイトを探す
+
+        eleCfg[isi] = msi;
+        eleIdx[msi] = isi;
+        eleSpn[msi] = isi / Nsite;
+        msi++;
+    }
+}
+```
+
+**データ構造（`global.h:58-61`）:**
+```c
+int *eleIdx;   // eleIdx[Nsize=2*Ne]: 電子 i のサイトインデックス
+int *eleCfg;   // eleCfg[Nsite2=2*Nsite]: サイト s の電子インデックス（-1 = 空）
+int *eleNum;   // eleNum[Nsite2]: 各サイトの占有数（0 or 1）
+int *eleSpn;   // eleSpn[Nsize]: 各電子のスピン（0=up, 1=down）
+```
+
+**2. VMCメインループ（`vmccal.c:VMCMainCal()`）**
+
+```c
+void VMCMainCal(int ip, int *eleIdx, int *eleCfg) {
+    // 1. Slater行列式とPfaffianの計算
+    CalculateMAll_fcmp(eleIdx, eleCfg, ..., &ip);
+
+    // 2. モンテカルロサンプリング
+    for(sample = 0; sample < NSample; sample++) {
+        // Metropolisステップ
+        for(step = 0; step < NExcitation; step++) {
+            VMCMakeSample(eleIdx, eleCfg, ...);
+        }
+
+        // 3. 局所エネルギー計算
+        eloc = CalculateHamiltonian(eleIdx, eleCfg, ip, ...);
+
+        // 4. O-operator計算（SR法用）
+        SlaterElmDiff_fcmp(sltE, eleIdx, eleCfg, ..., ip);
+
+        // 5. SR行列とforce vectorの構築
+        calculateOO(sltE, ...);  // <O_i O_j>
+        calculateHO(eloc, sltE, ...);  // <H O_i>
+    }
+
+    // 6. パラメータ更新（SR法）
+    if(NVMCCalMode == 0) {  // optimization mode
+        solveLinearEquation(SR_matrix, force_vector, delta);
+        updateParameters(delta);
+    }
+}
+```
+
+**3. Hamiltonian計算（`calham.c:CalculateHamiltonian()`）**
+
+```c
+double complex CalculateHamiltonian(int *eleIdx, int *eleCfg) {
+    double complex e = 0.0;
+
+    // 1. 対角項
+    e += calculateCoulombIntra(eleCfg);
+    e += calculateCoulombInter(eleCfg);
+    e += calculateHundCoupling(eleCfg);
+
+    // 2. 移動項（非対角項）
+    for(i=0; i<NTransfer; i++) {
+        ri = Transfer[i][0];
+        rj = Transfer[i][2];
+        s  = Transfer[i][1];
+        t  = ParaTransfer[i];
+
+        // ★重要: GreenFunc1で <c^†_j c_i> を計算
+        tmp = t * GreenFunc1(ri, rj, s, ip, eleIdx, eleCfg, ...);
+        e += tmp;
+    }
+
+    // 3. 交換項（非対角項）
+    for(i=0; i<NExchangeCoupling; i++) {
+        ri = ExchangeCoupling[i][0];
+        rj = ExchangeCoupling[i][1];
+        ex = ParaExchangeCoupling[i];
+
+        // ★重要: GreenFunc2で2体演算子を計算
+        tmp = ex * GreenFunc2(ri, rj, ri, rj, 0, 1, 1, 0, ...);
+        e += tmp;
+    }
+
+    // 他の項（PairHopping, InterAll等）も同様
+
+    return e;
+}
+```
+
+**4. GreenFunc1の実装（`greenfunction.c`）**
+
+```c
+double complex GreenFunc1(int ri, int rj, int s, double complex ip,
+                          int *eleIdx, int *eleCfg) {
+    // c^†_{rj,s} c_{ri,s} の期待値 = ψ(X')/ψ(X)
+
+    // 境界条件チェック
+    if(eleCfg[ri+s*Nsite] == -1) return 0.0;  // riが空
+    if(eleCfg[rj+s*Nsite] != -1) return 0.0;  // rjが占有
+
+    // 電子をri→rjに移動
+    mi = eleCfg[ri+s*Nsite];
+    eleIdx_new[mi] = rj + s*Nsite;
+    eleCfg_new[ri+s*Nsite] = -1;
+    eleCfg_new[rj+s*Nsite] = mi;
+
+    // 新しい配置での波動関数振幅を計算
+    ip_new = CalculateMAll_fcmp(eleIdx_new, eleCfg_new, ...);
+
+    // 振幅比を返す
+    return ip_new / ip;
+}
+```
+
+**5. O-operator計算（`slater.c:SlaterElmDiff_fcmp()`）**
+
+```c
+void SlaterElmDiff_fcmp(double complex *sltE, int *eleIdx,
+                        const int *eleCfg, double complex ip) {
+    // O_k = Tr[Inv[M] * ∂M/∂f_k] / ip
+
+    for(orbidx=0; orbidx<NOrbitals; orbidx++) {
+        for(msi=0; msi<ne; msi++) {
+            isite = eleIdx[msi];
+
+            // up-up block
+            for(msj=0; msj<ne; msj++) {
+                jsite = eleIdx[msj];
+                tmp = get_orbital(orbidx, isite, jsite);
+                buf[orbidx] += invM[msi][msj] * tmp * cs;  // cs: 回転因子
+            }
+
+            // up-down block
+            for(msj=ne; msj<nsize; msj++) {
+                jsite = eleIdx[msj];
+                tmp = get_orbital(orbidx, isite, jsite);
+                buf[orbidx] -= invM[msi][msj] * tmp * cc;
+            }
+        }
+        sltE[orbidx] = buf[orbidx] / ip;
+    }
+}
+```
+
+#### C↔Rust関数対応表（詳細版）
+
+| C関数 | 行番号 | Rust関数 | ファイル | 状態 | 問題点 |
+|-------|-------|---------|---------|------|--------|
+| `makeInitialSample()` | `vmcmake.c:389-425` | `generate_random_configuration()` | `metropolis.rs:70-100` | ❌ | si=0,1ループなし |
+| `VMCMainCal()` | `vmccal.c:82-229` | `run_vmc_calculation()` | `engine.rs:400-500` | ⚠️ | 構造のみ |
+| `CalculateHamiltonian()` | `calham.c:59-193` | `calculate_vmc_local_energy()` | `engine.rs:1045-1098` | ⚠️ | 対角項のみ |
+| `GreenFunc1()` | `greenfunction.c:50-120` | なし | - | ❌ | 未実装 |
+| `GreenFunc2()` | `greenfunction.c:130-200` | なし | - | ❌ | 未実装 |
+| `SlaterElmDiff_fcmp()` | `slater.c:100-244` | `calculate_o_operators()` | `wavefunction/mod.rs:258-276` | ❌ | 未実装 |
+| `CalculateMAll_fcmp()` | `matrix.c:50-150` | `SlaterDeterminant::calculate()` | `wavefunction/slater.rs:100-200` | ⚠️ | ne=0で動かない |
+| `UpdateSlaterElm()` | `slater.c:250-350` | なし | - | ❌ | 未実装 |
+
+#### 根本的な問題の特定
+
+**問題1: 電子配置生成の不完全実装**
+- **C実装**: `si=0,1`のループで全サイトを2回走査（up, down）
+- **Rust実装**: ループがないため1サイトしか初期化されない
+- **影響**: 全ての計算が意味をなさない
+
+**問題2: GreenFunc1/GreenFunc2の欠如**
+- **C実装**: 非対角ハミルトニアン項の計算に必須
+- **Rust実装**: 関数自体が存在しない
+- **影響**: Transfer項、Exchange項が計算されない
+
+**問題3: O-operator計算の未実装**
+- **C実装**: SR法最適化に必須の微分計算
+- **Rust実装**: メソッドは存在するが中身が空
+- **影響**: パラメータ最適化が動作しない
+
+**問題4: Heisenberg波動関数の欠如**
+- **C実装**: ne=0の場合も正しく動作
+- **Rust実装**: SlaterDeterminantのみ、ne=0では使えない
+- **影響**: スピン系の計算が不可能
 
 ### 8.2 正しい電子配置とスピン配置の実装 🔴
 

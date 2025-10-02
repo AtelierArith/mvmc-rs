@@ -256,7 +256,9 @@ impl VmcEngine {
             // Energy is already pushed to self.energy_history in run_heisenberg_iteration
 
             // Check convergence (simple criterion for now)
-            if iteration > 10 {
+            // Disabled for now to ensure we run the full number of iterations
+            // TODO: Implement proper convergence criteria
+            if false && iteration > 10 {
                 let recent_energies: Vec<_> = self.energy_history.iter().rev().take(5).collect();
                 let avg_energy: Complex64 = recent_energies.iter().map(|&&e| e).sum::<Complex64>()
                     / Complex64::new(recent_energies.len() as f64, 0.0);
@@ -546,18 +548,22 @@ impl VmcEngine {
         let nsite = self.hamiltonian.lattice().n_sites();
         let mut spin_config = vec![Spin::Empty; nsite];
 
-        // For Heisenberg model, we need to place spins according to two_sz
+        // For Heisenberg model, ALL sites must have spins (no Empty sites)
         // two_sz = 0 means equal number of up and down spins
-        let n_up = (nsite + two_sz as usize) / 2;
-        let n_down = (nsite - two_sz as usize) / 2;
+        let total_sz = two_sz as i32;
+        let n_up = ((nsite as i32 + total_sz) / 2) as usize;
+        let _n_down = nsite - n_up;
+
+        // Ensure we don't exceed the number of sites
+        let n_up = n_up.min(nsite);
 
         // Place up spins
-        for i in 0..n_up.min(nsite) {
+        for i in 0..n_up {
             spin_config[i] = Spin::Up;
         }
 
-        // Place down spins
-        for i in n_up..(n_up + n_down).min(nsite) {
+        // Place down spins for the remaining sites
+        for i in n_up..nsite {
             spin_config[i] = Spin::Down;
         }
 
@@ -565,7 +571,10 @@ impl VmcEngine {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64;
         self.shuffle_spin_config(&mut spin_config, seed);
 
-        // println!("DEBUG: Generated spin config: {:?}", spin_config);
+        // Verify no Empty spins remain
+        debug_assert!(spin_config.iter().all(|&s| s != Spin::Empty),
+            "Heisenberg model should have no Empty spins: {:?}", spin_config);
+
         spin_config
     }
 
@@ -863,40 +872,66 @@ impl VmcEngine {
         // Store energy in history
         self.energy_history.push(avg_energy);
 
-        // Update parameters if in optimization mode
-        if let Some(ref mut optimizer) = self.optimizer {
-            // Calculate SR matrix and force vector from samples
-            // This is a simplified version - in full implementation,
-            // we would calculate the full SR matrix from the samples
-            let _result = optimizer.optimize()?;
+        // Update parameters if in optimization mode using SR method
+        if let Some(ref mut _optimizer) = self.optimizer {
+            // Collect samples for SR optimization
+            use crate::vmc::sr_optimization::{SROptimizationCalculator, SRSampleData};
 
-            // Apply parameter updates to wavefunction
-            // In C implementation: UpdateSlaterElm() based on SR-calculated gradients
-            // Here: simplified adaptive gradient descent
+            let n_params = self.wavefunction.num_parameters();
+            let mut sr_calculator = SROptimizationCalculator::new(n_params);
 
-            // Calculate learning rate based on energy improvement
-            let prev_energy = if self.current_iteration > 0 && !self.energy_history.is_empty() {
-                self.energy_history[self.energy_history.len() - 2].re
-            } else {
-                avg_energy.re
-            };
+            // For each Monte Carlo step, calculate O-operators and collect samples
+            let mut rng_state = 12345u64 + self.current_iteration as u64;
+            let num_sr_samples = 100; // Number of samples for SR calculation
 
-            let energy_diff = avg_energy.re - prev_energy;
-            let learning_rate = if energy_diff < 0.0 {
-                // Energy decreased (good) - take a larger step in this direction
-                2.0
-            } else if energy_diff > 0.01 {
-                // Energy increased significantly - reduce learning rate
-                0.05
-            } else {
-                // Small change - maintain current rate
-                0.5
-            };
+            for _ in 0..num_sr_samples {
+                let (proposed_config, _) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
 
-            // Update wavefunction parameters
-            // In full C implementation, this would use SR-calculated parameter updates
-            // For now, we use a simplified approach with controlled noise
-            self.wavefunction.update_parameters(&[], learning_rate);
+                // Calculate local energy and O-operators
+                let local_energy = self.calculate_local_energy(&proposed_config)?;
+                let u8_config = self.spin_config_to_u8(&proposed_config);
+                let psi = self.wavefunction.calculate(&u8_config);
+                let weight = psi.norm_sqr();
+
+                // Calculate O-operators (derivatives of log wavefunction)
+                let o_operators = self.wavefunction.calculate_o_operators(&u8_config);
+
+                // Add sample to SR calculator
+                let sample = SRSampleData {
+                    o_operators,
+                    local_energy,
+                    weight,
+                };
+                sr_calculator.add_sample(sample);
+
+                // Metropolis acceptance for next step
+                let current_u8 = self.spin_config_to_u8(&spin_config);
+                let current_psi = self.wavefunction.calculate(&current_u8);
+                let acceptance_rate = if current_psi.norm_sqr() > 1e-12 {
+                    (weight / current_psi.norm_sqr()).min(1.0)
+                } else {
+                    1.0
+                };
+
+                rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                let random_num = (rng_state as f64) / (u64::MAX as f64);
+                if random_num < acceptance_rate {
+                    spin_config = proposed_config;
+                }
+            }
+
+            // Calculate SR parameter updates
+            let learning_rate = 0.01; // Conservative learning rate
+            match sr_calculator.solve_sr_equation(learning_rate) {
+                Ok(param_updates) => {
+                    // Apply SR-calculated parameter updates
+                    self.wavefunction.update_parameters(&param_updates, learning_rate);
+                }
+                Err(_) => {
+                    // Fallback to simple parameter perturbation if SR fails
+                    self.wavefunction.update_parameters(&[], 0.01);
+                }
+            }
 
             self.current_iteration += 1;
         }
@@ -1010,40 +1045,67 @@ impl VmcEngine {
     ///
     /// VMC local energy
     fn calculate_vmc_local_energy(&self, spin_config: &[Spin]) -> Result<f64> {
-        // For Heisenberg model (ne=0), use simple wavefunction = 1
-        // This corresponds to classical spin model where we don't need quantum wavefunction
-        let psi = Complex64::new(1.0, 0.0);
+        // Calculate the wavefunction amplitude for current configuration
+        let u8_config = self.spin_config_to_u8(spin_config);
+        let psi = self.wavefunction.calculate(&u8_config);
 
-        // Start with diagonal energy
+        // Debug: Print first time only
+        static mut DEBUG_COUNT: usize = 0;
+        unsafe {
+            if DEBUG_COUNT == 0 {
+                eprintln!("DEBUG calculate_vmc_local_energy:");
+                eprintln!("  spin_config: {:?}", spin_config);
+                eprintln!("  u8_config: {:?}", u8_config);
+                eprintln!("  psi: {} (norm: {})", psi, psi.norm());
+                DEBUG_COUNT = 1;
+            }
+        }
+
+        if psi.norm() < 1e-12 {
+            eprintln!("WARNING: psi.norm() < 1e-12, returning 0 energy");
+            return Ok(0.0);
+        }
+
+        // Start with diagonal energy (Sz-Sz terms)
         let mut local_energy = self.hamiltonian.diagonal_element(spin_config);
 
-        // Add off-diagonal contributions
-        // For Heisenberg model, we need to include spin flip terms
+        // Add off-diagonal contributions (S+ S- and S- S+ terms)
+        // For Heisenberg model: H = J * sum_<ij> (Sz_i * Sz_j + 0.5 * (S+_i * S-_j + S-_i * S+_j))
+        //
+        // Reference: mVMC/src/mVMC/calham.c:160-168 (ExchangeCoupling term)
+        // The matrix element calculation uses: <X'|H|X> = H_ij * ψ(X')/ψ(X)
         let nsite = spin_config.len();
 
         for i in 0..nsite {
-            for j in 0..nsite {
-                if i != j {
-                    // Check if sites are neighbors
-                    if self.hamiltonian.lattice().neighbors(i).contains(&j) {
-                        // For Heisenberg model, consider spin flip transitions
-                        let mut new_config = spin_config.to_vec();
+            for j in (i+1)..nsite {  // Only i < j to avoid double counting
+                if self.hamiltonian.lattice().neighbors(i).contains(&j) {
+                    // Try both spin flip transitions for this bond
+                    // S+_i S-_j: flip (i:Up, j:Down) → (i:Down, j:Up)
+                    // S-_i S+_j: flip (i:Down, j:Up) → (i:Up, j:Down)
 
-                        // Try swapping spins (for XY terms in Heisenberg model)
-                        if spin_config[i] != spin_config[j] &&
-                           spin_config[i] != Spin::Empty &&
-                           spin_config[j] != Spin::Empty {
-                            new_config[i] = spin_config[j];
-                            new_config[j] = spin_config[i];
+                    let mut new_config = spin_config.to_vec();
+                    let can_flip = if spin_config[i] == Spin::Up && spin_config[j] == Spin::Down {
+                        new_config[i] = Spin::Down;
+                        new_config[j] = Spin::Up;
+                        true
+                    } else if spin_config[i] == Spin::Down && spin_config[j] == Spin::Up {
+                        new_config[i] = Spin::Up;
+                        new_config[j] = Spin::Down;
+                        true
+                    } else {
+                        false
+                    };
 
-                            let new_u8_config = self.spin_config_to_u8(&new_config);
-                            let new_psi = self.wavefunction.calculate(&new_u8_config);
+                    if can_flip {
+                        let new_u8_config = self.spin_config_to_u8(&new_config);
+                        let new_psi = self.wavefunction.calculate(&new_u8_config);
 
-                            if new_psi.norm() > 1e-12 {
-                                let matrix_element = self.hamiltonian.matrix_element(spin_config, &new_config);
-                                let amplitude_ratio = (new_psi / psi).re;
-                                local_energy += (matrix_element * amplitude_ratio).re;
-                            }
+                        if new_psi.norm() > 1e-12 {
+                            // Matrix element is already J/2 from HeisenbergHamiltonian
+                            // Local energy contribution: E += H_ij * ψ(X')/ψ(X)
+                            let matrix_elem = self.hamiltonian.matrix_element(spin_config, &new_config).re;
+                            let amplitude_ratio = (new_psi / psi).re;
+                            local_energy += matrix_elem * amplitude_ratio;
                         }
                     }
                 }
@@ -1302,9 +1364,15 @@ mod tests {
             .build()
             .unwrap();
 
-        let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
+        let wavefunction = PhysicsCombinedWavefunction::new(4, 2, 0).unwrap();
 
-        let engine = VmcEngine::new(params, wavefunction);
+        use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
+        use mvmc_physics::lattice::ChainLattice;
+
+        let lattice = ChainLattice::new(4, true).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+
+        let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());
 
         let engine = engine.unwrap();
@@ -1324,9 +1392,15 @@ mod tests {
             .build()
             .unwrap();
 
-        let wavefunction = CombinedWavefunction::new(SiteCount::new(4), ElectronCount::new(2));
+        let wavefunction = PhysicsCombinedWavefunction::new(4, 2, 0).unwrap();
 
-        let engine = VmcEngine::new(params, wavefunction);
+        use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
+        use mvmc_physics::lattice::ChainLattice;
+
+        let lattice = ChainLattice::new(4, true).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+
+        let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());
 
         let engine = engine.unwrap();
@@ -1348,10 +1422,15 @@ mod tests {
             .build()
             .unwrap();
 
-        let slater = SlaterDeterminant::new(nsite, ne);
-        let wavefunction = CombinedWavefunction::new(nsite, ne).with_slater(slater);
+        let wavefunction = PhysicsCombinedWavefunction::new(2, 1, 1).unwrap();
 
-        let engine = VmcEngine::new(params, wavefunction);
+        use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian};
+        use mvmc_physics::lattice::ChainLattice;
+
+        let lattice = ChainLattice::new(2, true).unwrap();
+        let hamiltonian = HeisenbergHamiltonian::new(lattice, -1.0).unwrap();
+
+        let engine = VmcEngine::new(params, wavefunction, Box::new(hamiltonian));
         assert!(engine.is_ok());
     }
 

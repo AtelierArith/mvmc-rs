@@ -177,35 +177,225 @@ impl SlaterDeterminant {
     ///
     /// # Reference
     /// C implementation: mVMC/src/mVMC/slater.c - SlaterElmDiff_fcmp (lines 99-244)
+    /// Calculates O-operators using analytical formula
+    ///
+    /// Implements the exact formula from C implementation:
+    /// O_k = Tr[Inv[M] * D_k] / psi
+    ///
+    /// where D_k is the derivative matrix ∂M/∂f_k
+    ///
+    /// Reference: mVMC/src/mVMC/slater.c:100-244 (SlaterElmDiff_fcmp)
     pub fn calculate_parameter_derivatives(&self, spin_config: &[u8]) -> Vec<Complex64> {
+        // For Heisenberg model (ne=0), we don't have orbital parameters
+        // Slater determinant is not relevant, return empty vector
+        if self.ne == 0 {
+            return Vec::new();
+        }
+
         let psi = self.calculate_determinant(spin_config);
-        let n_params = self.nsite * self.ne;
+
+        // For fermionic models, use nsite * ne * 2 parameters (real + imaginary)
+        let n_params = self.nsite * self.ne * 2;
         let mut derivatives = vec![Complex64::new(0.0, 0.0); n_params];
 
         if psi.norm() < 1e-12 {
             return derivatives;
         }
 
-        // Use finite differences to approximate ∂ψ/∂f_{ij}
-        let delta = 1e-5;
-        let mut idx = 0;
+        // Build the Slater matrix M for current configuration
+        let slater_matrix = self.build_slater_matrix(spin_config);
 
-        for i in 0..self.nsite {
-            for j in 0..self.ne {
-                // Create perturbed matrix
-                let mut perturbed = self.clone();
-                perturbed.orbitals[[i, j]] += Complex64::new(delta, 0.0);
-                perturbed.cached_det = None;
+        // Calculate inverse of Slater matrix
+        // Reference: mVMC/src/mVMC/slater.c:130 (uses invM)
+        let inv_m = match self.calculate_inverse_matrix(&slater_matrix) {
+            Some(inv) => inv,
+            None => return derivatives, // Singular matrix, return zeros
+        };
 
-                let psi_perturbed = perturbed.calculate_determinant(spin_config);
+        // Calculate O_k = Tr[Inv[M] * D_k] / psi for each orbital parameter
+        // Reference: mVMC/src/mVMC/slater.c:187-218
+        let nsize = self.ne * 2;  // Total electron slots (up + down)
+        let mut orb_idx = 0;
 
-                // O_{ij} = (1/ψ) ∂ψ/∂f_{ij} ≈ (ψ(f+δ) - ψ(f)) / (δ * ψ)
-                derivatives[idx] = (psi_perturbed - psi) / (delta * psi);
-                idx += 1;
+        for k in 0..self.nsite {
+            for l in 0..self.ne {
+                let mut o_k = Complex64::new(0.0, 0.0);
+
+                // Build derivative matrix D_k
+                // D_k has 1.0 at positions where orbital k contributes
+                // Reference: mVMC/src/mVMC/slater.c:205-215
+                for i in 0..nsize {
+                    for j in 0..nsize {
+                        // D_k[i,j] = ∂M[i,j]/∂f_k
+                        // For Slater matrix, this is 1 if orbital k is at position (i,j), else 0
+                        if self.orbital_contributes_to_element(k, l, i, j, spin_config) {
+                            // O_k += Inv[M][i,j] * D_k[j,i] = Inv[M][i,j] * 1.0
+                            o_k += inv_m[[i, j]];
+                        }
+                    }
+                }
+
+                // Normalize by wavefunction amplitude
+                derivatives[orb_idx] = o_k / psi;
+                orb_idx += 1;
             }
         }
 
         derivatives
+    }
+
+    /// Builds the Slater matrix M for a given spin configuration
+    ///
+    /// M[i,j] = φ_j(r_i) where φ_j is the j-th orbital and r_i is the i-th electron position
+    fn build_slater_matrix(&self, spin_config: &[u8]) -> ndarray::Array2<Complex64> {
+        let nsize = self.ne * 2;
+        let mut matrix = ndarray::Array2::zeros((nsize, nsize));
+
+        let mut electron_idx = 0;
+
+        // First, place up-spin electrons
+        for site in 0..self.nsite {
+            if spin_config[site] == 1 || spin_config[site] == 3 {  // up or both
+                for orb in 0..self.ne {
+                    matrix[[electron_idx, orb]] = self.orbitals[[site, orb]];
+                }
+                electron_idx += 1;
+            }
+        }
+
+        // Then, place down-spin electrons
+        for site in 0..self.nsite {
+            if spin_config[site] == 2 || spin_config[site] == 3 {  // down or both
+                for orb in 0..self.ne {
+                    matrix[[electron_idx, orb + self.ne]] = self.orbitals[[site, orb]];
+                }
+                electron_idx += 1;
+            }
+        }
+
+        matrix
+    }
+
+    /// Checks if orbital (k,l) contributes to Slater matrix element (i,j)
+    fn orbital_contributes_to_element(
+        &self,
+        k: usize,
+        l: usize,
+        i: usize,
+        j: usize,
+        spin_config: &[u8],
+    ) -> bool {
+        // Get the site where electron i is located
+        let mut electron_idx = 0;
+        let mut electron_site = 0;
+        let mut is_up_spin = true;
+
+        // Find electron i's position (up spins first)
+        for site in 0..self.nsite {
+            if spin_config[site] == 1 || spin_config[site] == 3 {
+                if electron_idx == i {
+                    electron_site = site;
+                    is_up_spin = true;
+                    break;
+                }
+                electron_idx += 1;
+            }
+        }
+
+        // If not found in up spins, search in down spins
+        if electron_idx != i {
+            for site in 0..self.nsite {
+                if spin_config[site] == 2 || spin_config[site] == 3 {
+                    if electron_idx == i {
+                        electron_site = site;
+                        is_up_spin = false;
+                        break;
+                    }
+                    electron_idx += 1;
+                }
+            }
+        }
+
+        // Check if orbital (k,l) matches this element
+        if is_up_spin {
+            electron_site == k && j == l
+        } else {
+            electron_site == k && j == (l + self.ne)
+        }
+    }
+
+    /// Calculates the inverse of a matrix using Gauss-Jordan elimination
+    ///
+    /// This is a simple implementation for complex matrices.
+    /// For production use, consider using optimized libraries like LAPACK.
+    fn calculate_inverse_matrix(&self, matrix: &ndarray::Array2<Complex64>) -> Option<ndarray::Array2<Complex64>> {
+        let n = matrix.nrows();
+        if n == 0 {
+            return None;
+        }
+
+        // Create augmented matrix [A | I]
+        let mut aug = ndarray::Array2::zeros((n, 2 * n));
+        for i in 0..n {
+            for j in 0..n {
+                aug[[i, j]] = matrix[[i, j]];
+            }
+            aug[[i, i + n]] = Complex64::new(1.0, 0.0); // Identity on the right
+        }
+
+        // Gauss-Jordan elimination
+        for i in 0..n {
+            // Find pivot
+            let mut max_row = i;
+            let mut max_val = aug[[i, i]].norm();
+            for k in (i + 1)..n {
+                let val = aug[[k, i]].norm();
+                if val > max_val {
+                    max_val = val;
+                    max_row = k;
+                }
+            }
+
+            if max_val < 1e-12 {
+                return None; // Singular matrix
+            }
+
+            // Swap rows if needed
+            if max_row != i {
+                for j in 0..(2 * n) {
+                    let temp = aug[[i, j]];
+                    aug[[i, j]] = aug[[max_row, j]];
+                    aug[[max_row, j]] = temp;
+                }
+            }
+
+            // Scale pivot row
+            let pivot = aug[[i, i]];
+            for j in 0..(2 * n) {
+                aug[[i, j]] /= pivot;
+            }
+
+            // Eliminate column
+            for k in 0..n {
+                if k != i {
+                    let factor = aug[[k, i]];
+                    for j in 0..(2 * n) {
+                        let pivot_val = aug[[i, j]];
+                        aug[[k, j]] -= factor * pivot_val;
+                    }
+                }
+            }
+        }
+
+        // Extract inverse from right half
+        let mut result = ndarray::Array2::zeros((n, n));
+        for i in 0..n {
+            for j in 0..n {
+                result[[i, j]] = aug[[i, j + n]];
+            }
+        }
+
+        Some(result)
     }
 
     /// Updates orbital parameters using computed gradients from SR method.
@@ -216,6 +406,11 @@ impl SlaterDeterminant {
     /// # Reference
     /// C implementation: mVMC/src/mVMC/stcopt.c - lines 174-186 (parameter update)
     pub fn apply_parameter_updates(&mut self, param_updates: &[f64]) {
+        // For Heisenberg model (ne=0), no orbital parameters to update
+        if self.ne == 0 {
+            return;
+        }
+
         assert_eq!(param_updates.len(), self.nsite * self.ne);
 
         let mut idx = 0;
@@ -243,6 +438,12 @@ impl SlaterDeterminant {
     pub fn calculate_determinant(&self, spin_config: &[u8]) -> Complex64 {
         if spin_config.len() != self.nsite {
             return Complex64::new(0.0, 0.0);
+        }
+
+        // For Heisenberg model (ne=0), return constant wavefunction
+        // The Slater determinant is not used for pure spin systems
+        if self.ne == 0 {
+            return Complex64::new(1.0, 0.0);
         }
 
         // Extract occupied sites for up and down spins

@@ -188,9 +188,50 @@ impl Hamiltonian for HeisenbergHamiltonian {
             return Complex64::new(self.diagonal_element(config_i), 0.0);
         }
 
-        // For the Ising model, only diagonal elements are non-zero
-        // (no quantum fluctuations)
-        Complex64::new(0.0, 0.0)
+        // For Heisenberg model, calculate off-diagonal matrix elements
+        // from spin flip transitions: S^+_i S^-_j and S^-_i S^+_j
+        //
+        // Reference: mVMC/src/mVMC/calham.c:160-168 (ExchangeCoupling)
+        // The exchange coupling term is: J * (S^+_i S^-_j + S^-_i S^+_j)
+        // which corresponds to J * 2 * (flip amplitude)
+
+        // Find which spins are different between config_i and config_j
+        let mut flip_sites = Vec::new();
+        for site in 0..config_i.len() {
+            if config_i[site] != config_j[site] {
+                flip_sites.push(site);
+            }
+        }
+
+        // Only handle two-spin flip (exchange) transitions
+        if flip_sites.len() != 2 {
+            return Complex64::new(0.0, 0.0);
+        }
+
+        let site_i = flip_sites[0];
+        let site_j = flip_sites[1];
+
+        // Check if this is a valid exchange: one site flips Up→Down, other Down→Up
+        let valid_exchange = (config_i[site_i] == Spin::Up && config_i[site_j] == Spin::Down
+                             && config_j[site_i] == Spin::Down && config_j[site_j] == Spin::Up)
+                          || (config_i[site_i] == Spin::Down && config_i[site_j] == Spin::Up
+                             && config_j[site_i] == Spin::Up && config_j[site_j] == Spin::Down);
+
+        if !valid_exchange {
+            return Complex64::new(0.0, 0.0);
+        }
+
+        // Check if sites are neighbors
+        let neighbors_i = self.lattice.neighbors(site_i);
+        if !neighbors_i.contains(&site_j) {
+            return Complex64::new(0.0, 0.0);
+        }
+
+        // Matrix element for exchange coupling
+        // Reference: mVMC exchange.def uses ParaExchangeCoupling = -J/2
+        // The exchange term is: -J/2 * (S^+_i S^-_j + S^-_i S^+_j)
+        // Matrix element for each flip is -J/2
+        Complex64::new(-self.exchange * 0.5, 0.0)
     }
 
     fn diagonal_element(&self, config: &[Spin]) -> f64 {
@@ -299,14 +340,20 @@ mod tests {
         let lattice = ChainLattice::new(4, true).unwrap();
         let hamiltonian = HeisenbergHamiltonian::new(lattice, 1.0, 0.0).unwrap();
 
+        // Test non-neighbor spin flip (should be 0)
         let config_i = vec![Spin::Up, Spin::Down, Spin::Up, Spin::Down];
         let config_j = vec![Spin::Down, Spin::Down, Spin::Up, Spin::Down];
-
         let matrix_element = hamiltonian.matrix_element(&config_i, &config_j);
-
-        // Should be 0 (no off-diagonal elements in Ising model)
         assert_abs_diff_eq!(matrix_element.re, 0.0, epsilon = 1e-10);
         assert_abs_diff_eq!(matrix_element.im, 0.0, epsilon = 1e-10);
+
+        // Test neighbor spin flip (should be -J/2 = -0.5)
+        let config_k = vec![Spin::Up, Spin::Down, Spin::Up, Spin::Down];
+        let config_l = vec![Spin::Down, Spin::Up, Spin::Up, Spin::Down];  // Sites 0,1 flipped
+        let matrix_element2 = hamiltonian.matrix_element(&config_k, &config_l);
+        // For exchange J=1.0, matrix element is -J/2 = -0.5
+        assert_abs_diff_eq!(matrix_element2.re, -0.5, epsilon = 1e-10);
+        assert_abs_diff_eq!(matrix_element2.im, 0.0, epsilon = 1e-10);
     }
 
     #[test]

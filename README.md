@@ -23,23 +23,57 @@ This Rust port aims to provide the same functionality with improved safety, main
 
 ## Project Status
 
-🚀 **Phase 4 Core VMC Engine Implementation Complete - Production Ready**
+⚠️ **Phase 8 In Progress - Critical Issue Identified**
 
+**Completed Phases:**
 - ✅ **Phase 1**: TDD infrastructure and workspace setup
 - ✅ **Phase 2**: Numerical computing library (`mvmc-math`) - 45 tests
 - ✅ **Phase 3**: Input/output processing (`mvmc-io`) - 50 tests
-- ✅ **Phase 4**: Core VMC engine (`mvmc-core`) - **Complete with 445+ tests**
+- ✅ **Phase 4**: Core VMC engine (`mvmc-core`) - Framework complete (445+ tests)
 - ✅ **Phase 5**: Physics models (`mvmc-physics`) - 99 tests
 - ✅ **Phase 7**: Command-line interface (`mvmc-cli`) - Full implementation
-- 🔄 **Phase 6**: Advanced parallelization (future)
+- ✅ **Phase 8**: SR optimization mathematical foundation
+
+**Current Status:**
+- 🔴 **Critical Issue**: Heisenberg spin model (ne=0) wavefunction not implemented
+- ✅ **Working**: Fermionic models (ne>0) with Slater determinants
+- ✅ **Working**: SR optimization framework, Hamiltonian calculations, Monte Carlo sampling
+- 🚧 **In Progress**: Phase 9 - Spin wavefunction implementation (SpinJastrowWavefunction)
 
 **Total Test Suite**: 445+ tests across 92 source files, 4 example programs
+
+## Known Issues and Limitations
+
+### 🔴 Critical: Heisenberg Spin Model (ne=0)
+
+**Issue**: The current implementation lacks a wavefunction for Heisenberg spin models (ne=0).
+
+**Impact**:
+- Heisenberg model calculations return zero energy
+- Variational optimization does not work for spin systems
+- Only fermionic models (ne>0) are fully functional
+
+**Root Cause**:
+- `SlaterDeterminant` is designed for fermionic systems (ne>0)
+- Spin models require different wavefunction types (Jastrow, Gutzwiller)
+- Current implementation returns constant wavefunction (ψ=1) for ne=0
+
+**Solution in Progress** (Phase 9):
+- Implementing `SpinJastrowWavefunction` for Heisenberg models
+- Target: ψ = exp(Σ_<ij> v_ij S_i·S_j)
+- ETA: 2-3 weeks
+
+**Workaround**:
+- Use fermionic Hubbard model instead
+- Wait for Phase 9 completion for spin model support
+
+For detailed technical analysis, see `IMPLEMENTATION_LOG.md` section "Critical Discovery Log - Heisenbergモデル用波動関数の欠如".
 
 ## Current Codebase Structure
 
 ### Core Implementation Status
 
-The project now includes a fully functional VMC engine with comprehensive implementations:
+The project includes a comprehensive VMC engine framework with the following implementations:
 
 #### `mvmc-core` - Core VMC Engine (31 Rust files)
 - **Wavefunction Module**: 7 submodules (slater, pfaffian, rbm, jastrow, projection, doublon_holon, combined)

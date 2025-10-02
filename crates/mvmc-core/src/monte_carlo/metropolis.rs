@@ -251,17 +251,22 @@ impl ElectronConfiguration {
         self.electron_number_up(site) + self.electron_number_down(site)
     }
 
-    /// Initializes electron configuration with random placement
+    /// Initializes electron configuration with localized spins
     ///
-    /// This method corresponds to C実装の`makeInitialSample()` in vmcmake.c
-    /// It places electrons randomly on the lattice according to the spin quantum number.
+    /// This method corresponds to C実装の`makeInitialSample()` in vmcmake.c:389-425
+    /// It implements the two-phase initialization:
+    /// - Phase 1: Place localized spins (si=0,1 loop for up/down)
+    /// - Phase 2: Place itinerant electrons randomly
     ///
     /// # Arguments
+    /// * `loc_spn` - Local spin array (1: localized spin, 0: no localized spin)
     /// * `rng_state` - Random number generator state
     ///
     /// # Returns
     /// * `Result<()>` - Success or error
-    pub fn initialize_random(&mut self, rng_state: &mut u64) -> Result<()> {
+    ///
+    /// Reference: mVMC/src/mVMC/vmcmake.c:389-425
+    pub fn initialize_with_localized_spins(&mut self, loc_spn: &[i32], rng_state: &mut u64) -> Result<()> {
         // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSample()
         let nsize = self.ne * 2;  // Total number of electron slots
         let nsite2 = self.nsite * 2;  // Total number of site-spin slots
@@ -273,41 +278,56 @@ impl ElectronConfiguration {
         }
         for i in 0..nsite2 {
             self.ele_cfg[i] = -1;
+            self.ele_num[i] = 0;
         }
 
-        // Determine spin distribution based on two_sz
-        let tmp_two_sz = if self.two_sz == -1 { 0 } else { self.two_sz / 2 };
-        let n_up = self.ne + tmp_two_sz as usize;
-        let _n_down = self.ne - tmp_two_sz as usize;
+        let mut msi = 0;  // Electron index counter
 
-        // Assign spins to electrons
-        for i in 0..nsize {
-            if i < n_up {
-                self.ele_spn[i] = 0;  // Up spin
-            } else {
-                self.ele_spn[i] = 1;  // Down spin
+        // Phase 1: 局在スピンの配置 (mVMC/src/mVMC/vmcmake.c:389-399)
+        // ★重要: si=0,1のループで全サイトを2回走査（up, down）
+        for si in 0..2 {  // si=0: up spin, si=1: down spin
+            for mi in 0..self.nsite {
+                if loc_spn[mi] == 1 {
+                    let site_spin_idx = mi + si * self.nsite;
+                    self.ele_cfg[site_spin_idx] = msi;
+                    self.ele_idx[msi as usize] = site_spin_idx as i32;
+                    self.ele_spn[msi as usize] = si as i32;
+                    self.ele_num[site_spin_idx] = 1;
+                    msi += 1;
+
+                    if msi as usize >= nsize {
+                        break;
+                    }
+                }
+            }
+            if msi as usize >= nsize {
+                break;
             }
         }
 
-        // Place electrons randomly on lattice
-        for i in 0..nsize {
-            let spin = self.ele_spn[i] as usize;
+        // Phase 2: 遍歴電子の配置 (mVMC/src/mVMC/vmcmake.c:401-411)
+        // 残りの電子をランダムに配置
+        while (msi as usize) < nsize {
+            let mut isi;
             let mut attempts = 0;
-            let max_attempts = self.nsite * self.nsite;
+            let max_attempts = nsite2 * 10;
 
             loop {
                 if attempts >= max_attempts {
-                    return Err(VmcError::invalid_config("Failed to place all electrons"));
+                    return Err(VmcError::invalid_config("Failed to place itinerant electrons"));
                 }
 
-                let site = self.generate_random_site(rng_state);
-                let site_spin_idx = site + spin * self.nsite;
+                // Generate random site-spin index
+                *rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+                isi = (*rng_state as usize) % nsite2;
 
-                if self.ele_cfg[site_spin_idx] == -1 {
-                    // Place electron
-                    self.ele_cfg[site_spin_idx] = i as i32;
-                    self.ele_idx[i] = site as i32;
-                    self.ele_num[site_spin_idx] = 1;
+                if self.ele_cfg[isi] == -1 {
+                    // Empty site found
+                    self.ele_cfg[isi] = msi;
+                    self.ele_idx[msi as usize] = isi as i32;
+                    self.ele_spn[msi as usize] = (isi / self.nsite) as i32;
+                    self.ele_num[isi] = 1;
+                    msi += 1;
                     break;
                 }
 
@@ -316,6 +336,23 @@ impl ElectronConfiguration {
         }
 
         Ok(())
+    }
+
+    /// Initializes electron configuration with random placement (for systems without localized spins)
+    ///
+    /// This method corresponds to C実装の`makeInitialSample()` in vmcmake.c
+    /// It places electrons randomly on the lattice according to the spin quantum number.
+    ///
+    /// # Arguments
+    /// * `rng_state` - Random number generator state
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success or error
+    pub fn initialize_random(&mut self, rng_state: &mut u64) -> Result<()> {
+        // For Heisenberg model: all sites have localized spins
+        // For Hubbard model: no localized spins
+        let loc_spn = vec![1; self.nsite];  // Default: all sites have localized spins
+        self.initialize_with_localized_spins(&loc_spn, rng_state)
     }
 
     /// Generates a random site index

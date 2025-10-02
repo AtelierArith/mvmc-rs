@@ -2332,3 +2332,319 @@ PLAN.mdのPhase 8「VMC計算の完全な再実装」の一環として、真の
 - 型安全性の確保
 
 これにより、**数学的に正しいSR最適化の基盤**が確立され、完全なC実装への道筋が開かれました。現在の実装は簡略版ですが、理論的には正しく、将来的な完全実装の基盤となります。
+
+---
+
+# Critical Discovery Log - Heisenbergモデル用波動関数の欠如 (2025-10-02)
+
+## 問題の発見
+
+**日時:** 2025-10-02
+
+**発見の経緯:**
+- StdFace.def（L=16, Lsub=4, model="Spin", J=1.0）でVMC計算を実行
+- 出力ファイル`zvo_out_001.dat`が全て0
+- C実装の参照出力`zqp_opt.dat`は単調減少して収束
+- デバッグ出力を追加して原因を調査
+
+**根本原因:**
+```
+model = "Spin"  →  Heisenbergモデル  →  ne = 0（電子なし、スピンのみ）
+```
+
+現在のRust実装には**Heisenbergスピンモデル用の波動関数が存在しない**。
+
+## 技術的詳細
+
+### 1. Heisenbergモデルの特性
+
+**物理的背景:**
+- Heisenbergモデル: H = J Σ_<ij> S_i · S_j
+- 電子がいないスピン系（ne = 0）
+- 各サイトはUp/Downの2状態のみ
+
+**C実装での波動関数:**
+```c
+// mVMC/src/mVMC/projection.c
+// Heisenbergモデル用の波動関数構造:
+// ψ = P_G × P_J × φ_0
+//
+// P_G: Gutzwiller射影（二重占有抑制）
+// P_J: Jastrow因子（密度・スピン相関）
+// φ_0: 基底状態
+```
+
+### 2. 現在のRust実装の問題
+
+**問題1: SlaterDeterminantはne>0専用**
+```rust
+// crates/mvmc-physics/src/wavefunction/slater.rs
+pub struct SlaterDeterminant {
+    orbitals: Array2<Complex64>,  // [nsite × ne] 行列
+    nsite: usize,
+    ne: usize,  // ← ne=0の場合、0×nsite行列になり意味をなさない
+}
+
+impl SlaterDeterminant {
+    pub fn calculate_determinant(&self, spin_config: &[u8]) -> Complex64 {
+        if self.ne == 0 {
+            return Complex64::new(1.0, 0.0);  // ← 定数を返すだけ
+        }
+        // ...
+    }
+}
+```
+
+**問題2: CombinedWavefunctionの対症療法**
+```rust
+// crates/mvmc-physics/src/wavefunction/mod.rs
+pub fn num_parameters(&self) -> usize {
+    if let Some(slater) = &self.slater {
+        let ne = slater.ne();
+        if ne == 0 {
+            // ← 暫定対応: パラメータ数をnsiteと定義
+            // しかし実際のパラメータは存在しない
+            nsite
+        } else {
+            nsite * ne  // フェルミオン系の正しいパラメータ数
+        }
+    }
+}
+```
+
+**問題3: O演算子が計算できない**
+```rust
+pub fn calculate_o_operators(&self, spin_config: &[u8]) -> Vec<Complex64> {
+    if let Some(slater) = &self.slater {
+        slater.calculate_parameter_derivatives(spin_config)
+    } else {
+        Vec::new()  // ← 空のベクターを返す
+    }
+}
+
+// SlaterDeterminant::calculate_parameter_derivatives()
+pub fn calculate_parameter_derivatives(&self, spin_config: &[u8]) -> Vec<Complex64> {
+    if self.ne == 0 {
+        return derivatives;  // ← 全て0のベクター
+    }
+    // ...
+}
+```
+
+### 3. 実行時の症状
+
+**デバッグ出力:**
+```
+DEBUG: spin_config (first 4) = [Up, Down, Up, Down]
+DEBUG: diagonal_energy = 0        ← Hamiltonian自体は動作している
+DEBUG: nsite = 16, neighbors[0] = [1, 15]
+```
+
+**出力ファイル（zvo_out_001.dat）:**
+```
+0.000000000000000e0  0.000000000000000e0  0.000000000000000e0  1.000000000000000e3  ...
+0.000000000000000e0  0.000000000000000e0  0.000000000000000e0  1.000000000000000e3  ...
+（全て同じ）
+```
+
+**問題:**
+- Hamiltonianの計算自体は正しい（diagonal_energyは計算されている）
+- しかし波動関数が定数（ψ=1）のため、局所エネルギーが0
+- SR最適化も動作しない（パラメータがない）
+
+## 解決策の検討
+
+### オプションA: 簡略版Jastrow波動関数（推奨）
+
+**実装内容:**
+```rust
+// 新ファイル: crates/mvmc-physics/src/wavefunction/spin_jastrow.rs
+pub struct SpinJastrowWavefunction {
+    /// 変分パラメータ v_ij: 隣接サイト間相互作用
+    parameters: Vec<f64>,  // サイズ: n_bonds
+
+    /// 格子構造（隣接関係を保持）
+    lattice: Arc<dyn Lattice>,
+}
+
+impl SpinJastrowWavefunction {
+    /// 波動関数振幅の計算
+    /// ψ = exp(Σ_<ij> v_ij S_i·S_j)
+    pub fn calculate(&self, spin_config: &[Spin]) -> Complex64 {
+        let mut log_psi = 0.0;
+
+        for (bond_idx, &v_ij) in self.parameters.iter().enumerate() {
+            let (i, j) = self.lattice.bond(bond_idx);
+
+            // S_i · S_j = Sz_i * Sz_j
+            // Sz = +0.5 for Up, -0.5 for Down
+            let sz_i = spin_config[i].sz();
+            let sz_j = spin_config[j].sz();
+
+            log_psi += v_ij * sz_i * sz_j;
+        }
+
+        Complex64::new(log_psi.exp(), 0.0)
+    }
+
+    /// O演算子の計算（解析的）
+    /// O_k = (1/ψ) ∂ψ/∂v_k = S_i·S_j
+    pub fn calculate_o_operators(&self, spin_config: &[Spin]) -> Vec<Complex64> {
+        let mut o_ops = Vec::with_capacity(self.parameters.len());
+
+        for bond_idx in 0..self.parameters.len() {
+            let (i, j) = self.lattice.bond(bond_idx);
+            let sz_i = spin_config[i].sz();
+            let sz_j = spin_config[j].sz();
+
+            // O_k = S_i·S_j（解析的に計算可能）
+            o_ops.push(Complex64::new(sz_i * sz_j, 0.0));
+        }
+
+        o_ops
+    }
+
+    /// パラメータ更新
+    pub fn update_parameters(&mut self, updates: &[f64], learning_rate: f64) {
+        for (v_ij, &delta) in self.parameters.iter_mut().zip(updates) {
+            *v_ij += learning_rate * delta;
+        }
+    }
+}
+```
+
+**利点:**
+1. **実装が比較的簡単** - 1-2週間で実装可能
+2. **解析的微分** - O演算子が厳密に計算できる（数値微分不要）
+3. **SR最適化が動作** - 実際にエネルギーが改善される
+4. **物理的に妥当** - スピン相関を表現する標準的な形
+
+**欠点:**
+1. **C実装の完全な再現ではない** - Gutzwiller射影などは含まない
+2. **精度** - C実装より低い可能性（許容誤差10%程度）
+
+### オプションB: C実装の完全移植（長期計画）
+
+**実装内容:**
+1. **Gutzwiller射影** (`gutzwiller.rs`)
+   - C実装: `mVMC/src/mVMC/projection.c:makeGutzwiller()`
+   - 二重占有を抑制する因子
+
+2. **完全Jastrow因子** (`jastrow.rs`)
+   - C実装: `mVMC/src/mVMC/projection.c:makeJastrow()`
+   - 密度-密度相関、スピン-スピン相関
+
+3. **対称性射影** (`projection.rs`の拡張)
+   - 運動量射影、スピン射影
+
+**利点:**
+- C実装と同等の精度
+- 完全な互換性
+
+**欠点:**
+- 実装に数週間〜数ヶ月
+- 複雑でバグが入りやすい
+
+## 実装スケジュール（推奨）
+
+### フェーズ1: 簡略版実装（優先度: 最高）
+**期間:** 2-3週間
+**担当:** 開発者
+
+**Week 1:**
+- Day 1-2: `SpinJastrowWavefunction`の基本構造実装
+- Day 3-4: `calculate()`と`calculate_o_operators()`の実装
+- Day 5: `update_parameters()`とテスト
+
+**Week 2:**
+- Day 1-2: `CombinedWavefunction`への統合
+- Day 3-4: `VmcEngine`でのHeisenbergモデル対応
+- Day 5: 小規模系（L=4）でのテスト
+
+**Week 3:**
+- Day 1-2: L=16系でのテストと調整
+- Day 3-4: C実装との結果比較
+- Day 5: ドキュメント作成とPR
+
+**成果物:**
+- 動作するHeisenberg VMC計算
+- エネルギーが単調減少して収束
+- C実装との誤差10%以内（目標）
+
+### フェーズ2: 結果検証（1週間）
+- C実装との詳細な比較
+- 許容誤差の評価
+- 改善点の特定
+
+### フェーズ3: 完全実装への拡張（将来）
+- Gutzwiller射影の実装
+- 完全Jastrow因子の実装
+- 対称性射影の実装
+
+## 学んだこと
+
+### 設計上の教訓
+
+1. **物理モデルの多様性を考慮**
+   - フェルミオン系とスピン系は根本的に異なる
+   - 共通のインターフェースだけでは不十分
+   - モデルごとに専用の波動関数が必要
+
+2. **テストの不足**
+   - 既存のテストはne>0の場合のみカバー
+   - ne=0の場合のテストが完全に欠如
+   - エンドツーエンドテストの重要性
+
+3. **C実装の理解の重要性**
+   - 型システムだけでは物理計算の正しさは保証できない
+   - C実装の詳細な分析が不可欠
+   - 実装前にアルゴリズムを完全に理解する必要
+
+### 技術的な学び
+
+1. **波動関数の設計**
+   - 波動関数は物理モデルに強く依存
+   - 汎用的な設計は難しい
+   - トレイトベースの設計が有効
+
+2. **SR最適化の前提条件**
+   - 変分パラメータが存在すること
+   - O演算子が計算可能なこと
+   - パラメータ更新が波動関数に反映されること
+   - これらが満たされて初めて動作
+
+3. **デバッグ戦略**
+   - 出力ファイルだけでは不十分
+   - 内部状態のデバッグ出力が必須
+   - C実装との比較を各段階で実施
+
+## 次のアクション
+
+**即座に実行:**
+1. `SpinJastrowWavefunction`の実装開始
+2. Heisenberg専用のテストスイート作成
+3. C実装の`projection.c`を詳細に読む
+
+**短期目標（2-3週間）:**
+- Heisenbergモデルで実際に動作するVMC計算
+- エネルギーが単調減少
+- C実装との結果比較
+
+**中期目標（1-2ヶ月）:**
+- C実装と同等の精度
+- 他のスピンモデルへの対応
+
+## 結論
+
+**現在の状況:**
+- 🔴 Heisenbergモデル用の波動関数が存在しないことが判明
+- 🔴 これが「エネルギーが常に0」の根本原因
+- ✅ SR最適化の数学的基盤は正しく実装されている
+- ✅ Hamiltonianも正しく動作している
+
+**必要なアクション:**
+- **最優先:** `SpinJastrowWavefunction`の実装
+- **期間:** 2-3週間
+- **目標:** Heisenbergモデルで実際に動作するVMC計算
+
+この発見により、プロジェクトの次の明確なステップが定義されました。Heisenberg用の波動関数を実装することで、初めて実用的なVMC計算が可能になります。

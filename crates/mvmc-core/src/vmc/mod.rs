@@ -9,6 +9,7 @@ pub mod improved_heisenberg;
 pub mod adaptive_heisenberg;
 pub mod integration_test;
 pub mod sr_optimization;
+pub mod green_function;
 
 pub use engine::{VmcEngine, VmcResult, OptimizationResult, ExpectationResult};
 pub use simple_heisenberg::SimpleHeisenbergVMC;

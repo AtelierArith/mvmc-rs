@@ -539,44 +539,125 @@
 - ❌ Rustの型安全性は実装されているが、物理計算の正しさは保証されていない
 - 🔴 **最優先課題**: Phase 8（VMC計算の完全な再実装）
 
-## 最新の実装状況 (2025-01-XX)
+## 最新の実装状況 (2025-01-XX更新)
 
-### ⚠️ **Phase 8進行中: 真のSR最適化の基盤実装完了**
+### 🔴 **重大な問題: Heisenbergモデル（ne=0）用の波動関数が未実装**
 
-**実装完了項目:**
+**根本原因の特定:**
+
+現在のRust実装では、**Heisenbergスピンモデル（ne=0）用の波動関数が実装されていない**ことが判明しました。
+
+**問題の詳細:**
+
+1. **現在の実装はフェルミオン系（ne>0）専用**
+   - `SlaterDeterminant`: フェルミオンの軌道を表現（ne × nsite行列）
+   - Heisenbergモデル（ne=0）では使用不可
+
+2. **Heisenbergモデルに必要な波動関数**
+   - C実装では以下の組み合わせを使用：
+     - Gutzwiller射影: 二重占有を抑制
+     - Jastrow因子: スピン相関を表現
+     - 対称性射影: 運動量・スピン対称性
+   - これらが全て未実装
+
+3. **現在の対症療法的な実装**
+   - `ne=0`の場合、波動関数を定数（ψ=1）として扱う
+   - パラメータ数を`nsite`とする暫定対応
+   - これでは実際の変分最適化は不可能
+
+**実装完了項目（しかし問題あり）:**
 - ✅ **SR最適化の数学的基盤**: SR行列、力ベクトル、SR方程式の正確な実装
 - ✅ **SlaterElmDiff相当の実装**: 数値微分によるO演算子計算
 - ✅ **パラメータ更新機能**: SR法によるパラメータ更新の適用
-- ✅ **C実装との対応明記**: 各関数・変数の対応をコメントで明記
+- ⚠️ **Heisenbergモデル対応**: ne=0の場合の暫定処理（波動関数は定数）
 
-**残存する問題:**
-- ❌ **VMC計算エンジンが動作していない** - 根本的な問題は未解決
-- ❌ **エネルギーが常に0** - ハミルトニアン計算が全く行われていない
-- ❌ **電子配置の生成が不完全** - 1サイトしか生成されない
-- ❌ **波動関数が実際に計算されていない** - 常に1を返す
-- ❌ **完全な統合は未完了** - VMCエンジンとの統合、解析的微分、LAPACK統合は未実装
+**残存する根本的問題:**
+- 🔴 **Heisenbergモデル用の波動関数が存在しない** - これが最大の問題
+- ❌ **エネルギーが常に0** - 波動関数が定数のため最適化できない
+- ❌ **変分最適化が機能しない** - パラメータがないため改善しない
+- ❌ **C実装との互換性なし** - 全く異なるアプローチ
 
-**根本原因の分析:**
+## Phase 9: Heisenbergモデル用の波動関数実装（新規追加）
 
-1. **電子配置からスピン配置への変換が間違っている**
-   - `electron_config_to_spin_config()` が1サイトしか返していない
-   - C実装では全サイトのスピン状態を生成する必要がある
+### 9.1 Heisenbergモデルの特性理解
 
-2. **モンテカルロサンプリングが機能していない**
-   - `MetropolisSampler::sample()` が正しい電子配置を生成していない
-   - 電子配置が全サイトをカバーしていない
+**必要な知識:**
+1. スピンモデルの波動関数表現
+2. C実装での波動関数の構造（`vmcmake.c`, `projection.c`）
+3. Gutzwiller射影とJastrow因子の理論
 
-3. **ハミルトニアンの行列要素計算が呼ばれていない**
-   - `calculate_local_energy()` が0を返し続けている
-   - `HeisenbergHamiltonian::diagonal_element()` が呼ばれているか不明
+### 9.2 実装計画（短期: 2-3週間）
 
-4. **波動関数の計算が意味をなしていない**
-   - `CombinedWavefunction::calculate()` が常に1.0を返している
-   - Slater行列式やPfaffianが実際に計算されていない
+#### オプション A: 簡略版スピン波動関数（推奨）
+**概要:** 最小限の機能で動作する波動関数を実装
 
-5. **SR最適化が全く動作していない**
-   - `run_single_iteration()` で最適化がコメントアウトされている
-   - パラメータが更新されないのでエネルギーが変化しない
+**実装項目:**
+1. **`SpinWavefunction`構造体** (新規)
+   - 単純なJastrow因子: ψ = exp(Σ_<ij> v_ij S_i·S_j)
+   - 変分パラメータ: v_ij (隣接サイト間相互作用)
+   - パラメータ数: O(L) (Lは格子サイズ)
+
+2. **波動関数振幅計算**
+   - `calculate()`: スピン配置からψを計算
+   - 対数振幅: log(ψ) = Σ_<ij> v_ij S_i·S_j
+
+3. **O演算子計算**
+   - ∂log(ψ)/∂v_ij = S_i·S_j
+   - 解析的に計算可能（高速）
+
+4. **CombinedWavefunctionへの統合**
+   - `ne==0`の場合に`SpinWavefunction`を使用
+   - `calculate()`, `calculate_o_operators()`, `update_parameters()`の実装
+
+**利点:**
+- 実装が比較的簡単（1-2週間）
+- 解析的微分が可能（高速・正確）
+- SR最適化が実際に動作する
+
+**欠点:**
+- C実装の完全な再現ではない
+- 精度は劣る可能性
+
+#### オプション B: C実装の完全移植（長期）
+**概要:** C実装のGutzwiller + Jastrow + 射影を完全に移植
+
+**実装項目:**
+1. **Gutzwiller射影** (`mvmc-physics/src/wavefunction/gutzwiller.rs`)
+   - 二重占有抑制因子
+   - C実装: `projection.c`の`makeGutzwiller()`
+
+2. **Jastrow因子** (`mvmc-physics/src/wavefunction/jastrow.rs`)
+   - 密度-密度相関
+   - スピン-スピン相関
+   - C実装: `projection.c`の`makeJastrow()`
+
+3. **対称性射影**
+   - 運動量射影
+   - スピン射影
+
+**利点:**
+- C実装との完全な互換性
+- 高精度な計算が可能
+
+**欠点:**
+- 実装に数週間〜数ヶ月かかる
+- 複雑で バグが入りやすい
+
+### 9.3 推奨アプローチ
+
+**段階1: オプションAの実装**（優先度: 最高）
+- 期間: 2-3週間
+- 目標: Heisenbergモデルで実際にエネルギー最適化が動作
+- 成果物: 動作するVMC計算システム
+
+**段階2: C実装との比較**
+- 期間: 1週間
+- 目標: 結果の妥当性を検証
+- 許容誤差: エネルギーが10%以内で一致
+
+**段階3: オプションBへの拡張**（将来）
+- 期間: 数週間〜数ヶ月
+- 目標: C実装と同等の精度
 
 **実装したファイル（しかし正しく動作していない）:**
 1. `crates/mvmc-core/src/vmc/engine.rs` - VMC計算エンジン
@@ -599,6 +680,272 @@
 - VMC計算が実際には全く動作していない
 - ゼロからの実装が必要
 - C実装のmVMCを詳細に読んで正しいアルゴリズムを理解する必要がある
+
+## C実装の詳細解析結果 (2025-01-02)
+
+### 解析対象ファイル
+
+1. **`mVMC/src/mVMC/vmcmake.c`** - 電子配置生成
+2. **`mVMC/src/mVMC/slater.c`** - Slater行列式とO-operator計算
+3. **`mVMC/src/mVMC/vmccal.c`** - VMCメインループ
+4. **`mVMC/src/mVMC/calham.c`** - Hamiltonian計算
+5. **`mVMC/src/mVMC/include/global.h`** - グローバル変数定義
+
+### C実装の重要なデータ構造
+
+**電子配置を表す配列（`global.h:58-61`）:**
+```c
+int *eleIdx;   // eleIdx[Nsize=2*Ne]: 電子のサイトインデックス配列
+int *eleCfg;   // eleCfg[Nsite2=2*Nsite]: サイトから電子へのマッピング
+int *eleNum;   // eleNum[Nsite2]: 各サイトの占有数（0 or 1）
+int *eleSpn;   // eleSpn[Nsize]: 各電子のスピン（0=up, 1=down）
+```
+
+**システムサイズ変数（`global.h:51-56`）:**
+```c
+int Ne;        // 電子数（Heisenbergモデルでは0）
+int Nsize;     // 2*Ne（電子配列のサイズ）
+int Nsite;     // サイト数
+int Nsite2;    // 2*Nsite（サイト配列のサイズ）
+int LocSpn[Nsite];  // 局在スピン（Heisenberg: すべて1）
+```
+
+### 1. 電子配置生成アルゴリズム（`vmcmake.c:359-425`）
+
+**C実装の `makeInitialSample()` 関数:**
+
+```c
+void makeInitialSample() {
+    // Phase 1: 局在スピンの配置（si=0,1でスピンup,down）
+    for(si=0; si<2; si++) {  // ★これが重要！
+        for(mi=0; mi<Nsite; mi++) {
+            if(LocSpn[mi] == 1) {
+                eleCfg[mi+si*Nsite] = msi;  // サイトmiに電子msiを配置
+                eleIdx[msi] = mi+si*Nsite;  // 電子msiはサイトmiにいる
+                eleSpn[msi] = si;
+                msi++;
+            }
+        }
+    }
+
+    // Phase 2: 遍歴電子の配置
+    for(ri=0; ri<Ne_itinerant; ri++) {
+        // ランダムな空きサイトに配置
+        do {
+            isi = genrand_int32() % Nsite2;
+        } while(eleCfg[isi] != -1);  // 空きサイトを探す
+
+        eleCfg[isi] = msi;
+        eleIdx[msi] = isi;
+        eleSpn[msi] = isi / Nsite;
+        msi++;
+    }
+}
+```
+
+**Rust実装の問題（`metropolis.rs:70-100`）:**
+```rust
+pub fn generate_random_configuration(nsite: usize, ne: usize) -> Self {
+    // ❌ 問題: si=0,1のループがない！1サイトしか生成しない
+    let mut ele_idx = vec![0; 2 * ne];
+    let mut ele_cfg = vec![-1; 2 * nsite];
+
+    // この実装ではele_idx[0]だけ設定され、残りは0のまま
+}
+```
+
+**根本原因:**
+- C実装は `si=0,1` のループで up/down 両方のスピンセクターを走査
+- Rust実装はこのループがないため、1サイトしか初期化されない
+
+### 2. O-operator計算アルゴリズム（`slater.c:100-244`）
+
+**C実装の `SlaterElmDiff_fcmp()` 関数:**
+
+```c
+void SlaterElmDiff_fcmp(double complex *sltE, int *eleIdx, const int *eleCfg) {
+    // 数式: O_k = Tr[Inv[M] * D_k(X)] / ip
+
+    for(orbidx=0; orbidx<NOrbitals; orbidx++) {
+        // Orbital k に対する微分行列 D_k の構築
+        for(msi=0; msi<ne; msi++) {
+            isite = eleIdx[msi];  // 電子msiのサイト
+
+            // D_k行列の (msi,:) 行を計算
+            for(msj=0; msj<ne; msj++) {         // up-up block
+                jsite = eleIdx[msj];
+                tmp = get_orbital_element(orbidx, isite, jsite);
+                buf[orbidx] += invM_i[msj] * tmp * cs;  // cs: 回転因子
+            }
+            for(msj=ne; msj<nsize; msj++) {     // up-down block
+                jsite = eleIdx[msj];
+                tmp = get_orbital_element(orbidx, isite, jsite);
+                buf[orbidx] -= invM_i[msj] * tmp * cc;  // cc: 回転因子
+            }
+        }
+        sltE[orbidx] = buf[orbidx] / ip;  // ip: Slater determinant value
+    }
+}
+```
+
+**重要な数学的関係:**
+- `invM`: Slater行列の逆行列 `M^{-1}`
+- `D_k`: Orbital k に対する微分行列（∂M/∂f_k）
+- 回転因子: `cs = cos(θ)*sin(φ)`, `cc = cos(θ)*cos(φ)`, `ss = sin(θ)*sin(φ)`
+
+**Rust実装の問題:**
+- ❌ `CombinedWavefunction::calculate_o_operators()` が未実装（`wavefunction/mod.rs:258-276`）
+- ❌ O-operatorの計算ロジックが存在しない
+- ❌ Slater行列の逆行列計算が行われていない
+
+### 3. エネルギー計算アルゴリズム（`calham.c:59-193`）
+
+**C実装の `CalculateHamiltonian()` 関数:**
+
+```c
+double complex CalculateHamiltonian(int *eleIdx, int *eleCfg) {
+    double complex e = 0.0;
+
+    // 1. 対角項（ParaCoulombIntra等）
+    e += calculateDiagonalTerms(eleIdx, eleCfg);
+
+    // 2. 移動項（Transfer）
+    for(i=0; i<NTransfer; i++) {
+        ri = Transfer[i][0];  // サイトi
+        rj = Transfer[i][2];  // サイトj
+        s  = Transfer[i][1];  // スピン
+        t  = ParaTransfer[i]; // 移動積分
+
+        // ★重要: GreenFunc1で振幅比を計算
+        tmp = t * GreenFunc1(ri, rj, s, ip, eleIdx, eleCfg, ...);
+        e += tmp;
+    }
+
+    // 3. 交換項（ExchangeCoupling）
+    for(i=0; i<NExchangeCoupling; i++) {
+        ri = ExchangeCoupling[i][0];
+        rj = ExchangeCoupling[i][1];
+        ex = ParaExchangeCoupling[i];
+
+        // ★重要: GreenFunc2で2体演算子を計算
+        tmp = ex * GreenFunc2(ri, rj, ri, rj, 0, 1, 1, 0, ...);
+        e += tmp;
+    }
+
+    return e;
+}
+```
+
+**GreenFunc1の物理的意味（`greenfunction.c`）:**
+```c
+double complex GreenFunc1(int ri, int rj, int s, double complex ip,
+                          int *eleIdx, int *eleCfg, ...) {
+    // c^†_{rj,s} c_{ri,s} の期待値を計算
+    // 電子配置を変化させて振幅比 ψ(X')/ψ(X) を求める
+
+    if(eleCfg[ri+s*Nsite] == -1) return 0.0;  // riが空ならゼロ
+    if(eleCfg[rj+s*Nsite] != -1) return 0.0;  // rjが占有ならゼロ
+
+    // 電子をri→rjに移動
+    newConfig = moveElectron(ri, rj, s, eleIdx, eleCfg);
+
+    // 新しい配置での波動関数振幅を計算
+    ip_new = calculateSlaterDeterminant(newConfig);
+
+    return ip_new / ip;  // 振幅比を返す
+}
+```
+
+**Rust実装の問題（`engine.rs:1045-1098`）:**
+```rust
+fn calculate_vmc_local_energy(&self, config: &ElectronConfiguration) -> f64 {
+    // ❌ 問題: 対角項のみ、GreenFunc1/GreenFunc2がない
+    let mut energy = 0.0;
+
+    // CoulombIntraのみ実装
+    for term in &self.hamiltonian.coulomb_intra {
+        energy += term.value;
+    }
+
+    // ❌ Transfer, ExchangeCoupling項が未実装
+    // ❌ 振幅比の計算がない
+
+    energy
+}
+```
+
+### C↔Rust対応表
+
+| C実装 | Rust実装 | 状態 | 問題点 |
+|-------|---------|------|--------|
+| `vmcmake.c:makeInitialSample()` | `metropolis.rs:generate_random_configuration()` | ❌ | si=0,1ループなし |
+| `vmccal.c:VMCMainCal()` | `engine.rs:run_vmc_calculation()` | ⚠️ | 構造のみ |
+| `slater.c:SlaterElmDiff_fcmp()` | `wavefunction/mod.rs:calculate_o_operators()` | ❌ | 未実装 |
+| `calham.c:CalculateHamiltonian()` | `engine.rs:calculate_vmc_local_energy()` | ⚠️ | 対角項のみ |
+| `greenfunction.c:GreenFunc1()` | なし | ❌ | 存在しない |
+| `greenfunction.c:GreenFunc2()` | なし | ❌ | 存在しない |
+| `matrix.c:CalculateMAll_fcmp()` | `wavefunction/slater.rs:calculate()` | ⚠️ | ne=0で動かない |
+| `pfupdate.c:CalculatePfaffian()` | `wavefunction/pfaffian.rs:calculate()` | ✅ | OK |
+
+### 優先度付き修正リスト
+
+**Priority 1: 電子配置生成の修正（Critical）**
+- ファイル: `crates/mvmc-core/src/monte_carlo/metropolis.rs:70-100`
+- 修正内容: `generate_random_configuration()` に si=0,1 のループを追加
+- C参照: `mVMC/src/mVMC/vmcmake.c:389-399`
+- 工数: 1時間
+
+**Priority 2: GreenFunc1/GreenFunc2の実装（Critical）**
+- 新規ファイル: `crates/mvmc-core/src/vmc/green_function.rs`
+- 実装内容:
+  - `green_func1(ri, rj, s, psi, config)` - 1体グリーン関数
+  - `green_func2(ri, rj, rk, rl, si, sj, sk, sl, psi, config)` - 2体グリーン関数
+- C参照: `mVMC/src/mVMC/greenfunction.c`
+- 工数: 8時間
+
+**Priority 3: エネルギー計算の完成（High）**
+- ファイル: `crates/mvmc-core/src/vmc/engine.rs:1045-1098`
+- 修正内容: `calculate_vmc_local_energy()` に7つの項を実装
+  - Transfer項（GreenFunc1使用）
+  - ExchangeCoupling項（GreenFunc2使用）
+  - 残りの5項
+- C参照: `mVMC/src/mVMC/calham.c:59-193`
+- 工数: 6時間
+
+**Priority 4: O-operator計算の実装（High）**
+- ファイル: `crates/mvmc-physics/src/wavefunction/mod.rs:258-276`
+- 実装内容: `calculate_o_operators()` の実装
+  - Slater行列の逆行列計算
+  - 微分行列 D_k の構築
+  - Tr[Inv[M] * D_k] の計算
+- C参照: `mVMC/src/mVMC/slater.c:100-244`
+- 工数: 8時間
+
+**Priority 5: Heisenberg波動関数（Medium）**
+- ファイル: `crates/mvmc-physics/src/wavefunction/heisenberg.rs`（新規）
+- 実装内容: ne=0 の場合の波動関数
+  - Jastrow因子の実装
+  - Gutzwiller射影の実装
+- C参照: `mVMC/src/mVMC/` （複数ファイル）
+- 工数: 12時間
+
+### 検証方法
+
+**小規模系でのテスト:**
+1. 2サイト Heisenberg モデル（`test-data/data/HeisenbergChain/`）
+2. デバッグ出力で各ステップを確認:
+   - 電子配置の全要素が初期化されているか
+   - 波動関数振幅が非ゼロか
+   - GreenFunc1/GreenFunc2の戻り値が妥当か
+   - 局所エネルギーが物理的に妥当な範囲か（-10 ~ 10程度）
+3. C実装との比較（3σルール）
+
+**推奨デバッグ順序:**
+1. `generate_random_configuration()` → `eleIdx`, `eleCfg` を全てprintして確認
+2. `GreenFunc1()` → 振幅比が1.0以外の値を返すか確認
+3. `calculate_vmc_local_energy()` → 各項の寄与を個別に出力
+4. `calculate_o_operators()` → O値が非ゼロか確認
+5. Full VMC run → エネルギーの収束を確認
 
 ## 実装詳細
 

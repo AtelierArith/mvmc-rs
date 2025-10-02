@@ -72,6 +72,11 @@ pub struct CombinedWavefunction {
     nsite: usize,
     /// Number of electrons
     ne: usize,
+    /// Gutzwiller projection parameters (one per site, for double occupancy)
+    gutzwiller_params: Vec<f64>,
+    /// Jastrow correlation parameters (one per site pair)
+    /// Indexed as jastrow_params[i * nsite + j] for i < j
+    jastrow_params: Vec<f64>,
 }
 
 impl CombinedWavefunction {
@@ -92,12 +97,19 @@ impl CombinedWavefunction {
         // Reference: mVMC/src/mVMC/vmcmake.c - makeInitialSlaterElm()
         let slater = SlaterDeterminant::new_plane_wave(nsite, ne)?;
 
+        // Initialize Gutzwiller and Jastrow parameters to zero
+        let gutzwiller_params = vec![0.0; nsite];
+        let n_jastrow = nsite * (nsite - 1) / 2;  // Number of unique pairs i < j
+        let jastrow_params = vec![0.0; n_jastrow];
+
         Ok(Self {
             slater: Some(slater),
             pfaffian: None,
             projectors: Vec::new(),
             nsite,
             ne,
+            gutzwiller_params,
+            jastrow_params,
         })
     }
 
@@ -118,12 +130,18 @@ impl CombinedWavefunction {
             ));
         }
 
+        let gutzwiller_params = vec![0.0; nsite];
+        let n_jastrow = nsite * (nsite - 1) / 2;
+        let jastrow_params = vec![0.0; n_jastrow];
+
         Ok(Self {
             slater: Some(slater),
             pfaffian: None,
             projectors: Vec::new(),
             nsite,
             ne,
+            gutzwiller_params,
+            jastrow_params,
         })
     }
 
@@ -144,12 +162,18 @@ impl CombinedWavefunction {
             ));
         }
 
+        let gutzwiller_params = vec![0.0; nsite];
+        let n_jastrow = nsite * (nsite - 1) / 2;
+        let jastrow_params = vec![0.0; n_jastrow];
+
         Ok(Self {
             slater: None,
             pfaffian: Some(pfaffian),
             projectors: Vec::new(),
             nsite,
             ne,
+            gutzwiller_params,
+            jastrow_params,
         })
     }
 
@@ -183,12 +207,18 @@ impl CombinedWavefunction {
             ));
         }
 
+        let gutzwiller_params = vec![0.0; nsite];
+        let n_jastrow = nsite * (nsite - 1) / 2;
+        let jastrow_params = vec![0.0; n_jastrow];
+
         Ok(Self {
             slater: Some(slater),
             pfaffian: Some(pfaffian),
             projectors: Vec::new(),
             nsite,
             ne,
+            gutzwiller_params,
+            jastrow_params,
         })
     }
 
@@ -241,17 +271,27 @@ impl CombinedWavefunction {
     ///
     /// # Reference
     /// C implementation: mVMC/src/mVMC/stcopt.c - lines 174-186
-    pub fn update_parameters(&mut self, param_updates: &[f64], _learning_rate: f64) {
+    pub fn update_parameters(&mut self, param_updates: &[f64], learning_rate: f64) {
         if param_updates.is_empty() {
             // Fallback to random perturbation if no SR updates provided
             if let Some(slater) = &mut self.slater {
                 slater.add_noise(0.01);
             }
         } else {
-            // Apply SR-calculated parameter updates
+            // Apply SR-calculated parameter updates to all components
+            let mut offset = 0;
+
+            // Update Slater determinant parameters
             if let Some(slater) = &mut self.slater {
-                slater.apply_parameter_updates(param_updates);
+                let n_slater_params = slater.nsite() * slater.ne() * 2;
+                if param_updates.len() >= n_slater_params {
+                    slater.apply_parameter_updates(&param_updates[offset..offset+n_slater_params]);
+                    offset += n_slater_params;
+                }
             }
+
+            // Update Gutzwiller and Jastrow parameters
+            self.update_projection_parameters(param_updates, learning_rate);
         }
     }
 
@@ -268,20 +308,26 @@ impl CombinedWavefunction {
     /// # Reference
     /// C implementation: mVMC/src/mVMC/slater.c - SlaterElmDiff_fcmp
     pub fn calculate_o_operators(&self, spin_config: &[u8]) -> Vec<Complex64> {
-        if let Some(slater) = &self.slater {
-            slater.calculate_parameter_derivatives(spin_config)
-        } else {
-            Vec::new()
-        }
+        // Use the new method that includes all parameters
+        self.calculate_all_parameter_derivatives(spin_config)
     }
 
     /// Returns the number of variational parameters.
     pub fn num_parameters(&self) -> usize {
+        let mut n_params = 0;
+
+        // Slater determinant parameters
         if let Some(slater) = &self.slater {
-            slater.nsite() * slater.ne()
-        } else {
-            0
+            n_params += slater.nsite() * slater.ne() * 2;  // real + imaginary
         }
+
+        // Gutzwiller parameters (one per site)
+        n_params += self.nsite;
+
+        // Jastrow parameters (one per unique site pair i < j)
+        n_params += self.nsite * (self.nsite - 1) / 2;
+
+        n_params
     }
 
     /// Calculates the wavefunction value for a given spin configuration.
@@ -405,6 +451,130 @@ impl CombinedWavefunction {
             pfaffian.update_pairing_amplitudes(new_amplitudes);
         }
     }
+
+    /// Calculates projection counts (Gutzwiller + Jastrow) for a configuration.
+    ///
+    /// Reference: mVMC/src/mVMC/projection.c:MakeProjCnt()
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration (0: empty, 1: up, 2: down, 3: both)
+    ///
+    /// # Returns
+    /// * `Vec<i32>` - Projection counts [Gutzwiller counts, Jastrow counts]
+    fn calculate_proj_counts(&self, config: &[u8]) -> Vec<i32> {
+        let nsite = self.nsite;
+        let n_gutzwiller = nsite;
+        let n_jastrow = nsite * (nsite - 1) / 2;
+        let mut proj_counts = vec![0i32; n_gutzwiller + n_jastrow];
+
+        // Calculate occupation numbers: n0 (up), n1 (down)
+        let mut n0 = vec![0i32; nsite];  // up spin
+        let mut n1 = vec![0i32; nsite];  // down spin
+
+        for site in 0..nsite {
+            match config[site] {
+                1 => n0[site] = 1,  // up only
+                2 => n1[site] = 1,  // down only
+                3 => { n0[site] = 1; n1[site] = 1; }  // both (doubly occupied)
+                _ => {}  // empty
+            }
+        }
+
+        // Gutzwiller factor: counts double occupancy n0[ri] * n1[ri]
+        // Reference: mVMC/src/mVMC/projection.c:77-81
+        for ri in 0..nsite {
+            proj_counts[ri] = n0[ri] * n1[ri];
+        }
+
+        // Jastrow factor: counts (n_i - 1) * (n_j - 1) for i < j
+        // Reference: mVMC/src/mVMC/projection.c:84-95
+        let offset = n_gutzwiller;
+        let mut idx_count = 0;
+        for ri in 0..nsite {
+            let xi = n0[ri] + n1[ri] - 1;
+
+            for rj in (ri+1)..nsite {
+                let xj = n0[rj] + n1[rj] - 1;
+                proj_counts[offset + idx_count] = xi * xj;
+                idx_count += 1;
+            }
+        }
+
+        proj_counts
+    }
+
+    /// Calculates parameter derivatives (O-operators) for optimization.
+    ///
+    /// For Gutzwiller/Jastrow: O_k = ∂log(ψ)/∂θ_k = projCnt[k]
+    /// For Slater/Pfaffian: O_k = Tr[Inv[M] * ∂M/∂θ_k] / ψ
+    ///
+    /// # Arguments
+    /// * `config` - Spin configuration
+    ///
+    /// # Returns
+    /// * `Vec<Complex64>` - Parameter derivatives for all parameters
+    pub fn calculate_all_parameter_derivatives(&self, config: &[u8]) -> Vec<Complex64> {
+        let mut derivatives = Vec::new();
+
+        // 1. Slater determinant parameters (orbital parameters)
+        if let Some(ref slater) = self.slater {
+            let slater_derivs = slater.calculate_parameter_derivatives(config);
+            eprintln!("DEBUG: Slater derivatives: {}", slater_derivs.len());
+            derivatives.extend(slater_derivs);
+        }
+
+        // 2. Pfaffian parameters (not implemented yet)
+        // if let Some(ref pfaffian) = self.pfaffian {
+        //     let pfaffian_derivs = pfaffian.calculate_parameter_derivatives(config);
+        //     derivatives.extend(pfaffian_derivs);
+        // }
+
+        // 3. Gutzwiller and Jastrow parameters
+        // For these, O_k = ∂log(ψ)/∂θ_k = projCnt[k]
+        // Reference: Gutzwiller factor = exp(Σ g_k * n_k) => ∂log/∂g_k = n_k
+        let proj_counts = self.calculate_proj_counts(config);
+        eprintln!("DEBUG: Proj counts: {}", proj_counts.len());
+        eprintln!("DEBUG: Expected - Gutzwiller: {}, Jastrow: {}", self.nsite, self.nsite * (self.nsite - 1) / 2);
+        for count in proj_counts {
+            derivatives.push(Complex64::new(count as f64, 0.0));
+        }
+
+        eprintln!("DEBUG: Total derivatives: {}", derivatives.len());
+        derivatives
+    }
+
+    /// Updates Gutzwiller and Jastrow parameters.
+    ///
+    /// # Arguments
+    /// * `param_updates` - Parameter updates (same length as total parameters)
+    /// * `learning_rate` - Learning rate for updates
+    pub fn update_projection_parameters(&mut self, param_updates: &[f64], learning_rate: f64) {
+        // Calculate offset (skip Slater parameters)
+        let n_slater_params = if let Some(ref slater) = self.slater {
+            slater.nsite() * slater.ne() * 2  // 2 for real + imaginary
+        } else {
+            0
+        };
+
+        let n_gutzwiller = self.nsite;
+        let n_jastrow = self.nsite * (self.nsite - 1) / 2;
+
+        // Update Gutzwiller parameters
+        for k in 0..n_gutzwiller {
+            let param_idx = n_slater_params + k;
+            if param_idx < param_updates.len() {
+                self.gutzwiller_params[k] -= learning_rate * param_updates[param_idx];
+            }
+        }
+
+        // Update Jastrow parameters
+        for k in 0..n_jastrow {
+            let param_idx = n_slater_params + n_gutzwiller + k;
+            if param_idx < param_updates.len() {
+                self.jastrow_params[k] -= learning_rate * param_updates[param_idx];
+            }
+        }
+    }
 }
 
 impl Clone for CombinedWavefunction {
@@ -415,6 +585,8 @@ impl Clone for CombinedWavefunction {
             projectors: Vec::new(), // Cannot clone trait objects
             nsite: self.nsite,
             ne: self.ne,
+            gutzwiller_params: self.gutzwiller_params.clone(),
+            jastrow_params: self.jastrow_params.clone(),
         }
     }
 }
@@ -471,6 +643,28 @@ impl Wavefunction for CombinedWavefunction {
 
             amplitude = projector.apply(amplitude, &spin_config);
         }
+
+        // Apply Gutzwiller and Jastrow factors
+        // ψ = ψ_0 * exp(Σ g_k * projCnt_k)
+        // Reference: mVMC/src/mVMC/projection.c:LogProjVal()
+        let proj_counts = self.calculate_proj_counts(config);
+        let n_gutzwiller = self.nsite;
+        let n_jastrow = self.nsite * (self.nsite - 1) / 2;
+
+        let mut log_proj_val = 0.0;
+
+        // Gutzwiller contribution
+        for k in 0..n_gutzwiller {
+            log_proj_val += self.gutzwiller_params[k] * proj_counts[k] as f64;
+        }
+
+        // Jastrow contribution
+        for k in 0..n_jastrow {
+            log_proj_val += self.jastrow_params[k] * proj_counts[n_gutzwiller + k] as f64;
+        }
+
+        // Apply exponential factor
+        amplitude *= Complex64::from_polar(log_proj_val.exp(), 0.0);
 
         Ok(amplitude)
     }

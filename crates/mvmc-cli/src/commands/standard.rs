@@ -82,7 +82,7 @@ pub fn execute(input_file: PathBuf, output_dir: PathBuf) -> CliResult<()> {
 
     // VMC計算を実行
     println!("{}", "🔬 Running VMC calculation...".yellow());
-    run_vmc_calculation(&vmc_params, &output_dir)?;
+    run_vmc_calculation(&vmc_params, &stdface_config, &output_dir)?;
     println!("✓ VMC calculation completed successfully");
     println!();
     println!("{}", "═══════════════════════════════════════════".cyan());
@@ -130,7 +130,7 @@ fn convert_stdface_to_vmc_params(stdface_config: &mvmc_io::StdFaceConfig) -> Cli
 }
 
 /// VMC計算を実行してzvo_out_001.datを生成
-fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResult<()> {
+fn run_vmc_calculation(vmc_params: &VmcParameters, stdface_config: &mvmc_io::StdFaceConfig, output_dir: &Path) -> CliResult<()> {
     use std::fs::File;
     use std::io::Write;
     use mvmc_core::vmc::VmcEngine;
@@ -143,11 +143,16 @@ fn run_vmc_calculation(vmc_params: &VmcParameters, output_dir: &Path) -> CliResu
     let mut opt_params = vmc_params.clone();
     opt_params.calc_mode = CalcMode::Optimization;
 
+    // StdFace設定からJの値を取得（デフォルト: 1.0）
+    let j_exchange = *stdface_config.model.parameters.get("J").unwrap_or(&1.0);
+
     // ハミルトニアンを作成
     let lattice = ChainLattice::new(opt_params.nsite.get(), true)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create lattice: {}", e)))?;
 
-    let hamiltonian = HeisenbergHamiltonian::new(lattice, -0.5, 0.0) // J = -0.5 for Heisenberg chain
+    // Heisenbergモデル: H = J * sum <S_i · S_j>
+    // C実装と同じ符号規則を使用（J > 0で反強磁性）
+    let hamiltonian = HeisenbergHamiltonian::new(lattice, j_exchange, 0.0)
         .map_err(|e| CliError::Other(anyhow::anyhow!("Failed to create Hamiltonian: {}", e)))?;
 
     // 波動関数を作成
