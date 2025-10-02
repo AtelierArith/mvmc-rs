@@ -136,10 +136,10 @@ impl AdaptiveHeisenbergVMC {
 
         if rate_diff > 0.1 {
             // Acceptance rate too high, increase temperature
-            self.temperature *= (1.0 + self.temp_adjustment_factor);
+            self.temperature *= 1.0 + self.temp_adjustment_factor;
         } else if rate_diff < -0.1 {
             // Acceptance rate too low, decrease temperature
-            self.temperature *= (1.0 - self.temp_adjustment_factor);
+            self.temperature *= 1.0 - self.temp_adjustment_factor;
         }
 
         // Keep temperature within reasonable bounds
@@ -167,7 +167,7 @@ impl AdaptiveHeisenbergVMC {
             self.next_random() % 100 < 70
         };
 
-        let (energy_diff, accepted) = if move_type {
+        let (_energy_diff, accepted) = if move_type {
             // Spin flip
             if let Some((site, new_spin)) = self.propose_spin_flip(config) {
                 let current_energy = self.calculate_energy(config);
@@ -233,7 +233,7 @@ impl AdaptiveHeisenbergVMC {
         let mut energy_sum = 0.0;
         let mut energy_squared_sum = 0.0;
         let mut accepted_moves = 0;
-        let mut step_count = 0;
+        let mut _step_count = 0;
 
         // Adaptive phase (first 20% of steps)
         let adaptive_steps = total_steps / 5;
@@ -282,7 +282,7 @@ impl AdaptiveHeisenbergVMC {
                 self.energy_history.pop_front();
             }
 
-            step_count += 1;
+            _step_count += 1;
 
             if step % (measurement_steps / 10) == 0 {
                 let current_acceptance = accepted_moves as f64 / (step + adaptive_steps + 1) as f64;

@@ -213,6 +213,7 @@ pub struct SpatialSymmetryProjector {
     /// Symmetry operations
     symmetry_operations: Vec<Array1<usize>>,
     /// Tolerance for symmetry
+    #[allow(dead_code)]
     tolerance: f64,
 }
 

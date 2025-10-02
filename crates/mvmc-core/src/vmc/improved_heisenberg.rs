@@ -129,7 +129,7 @@ impl ImprovedHeisenbergVMC {
         // Choose move type: 70% spin flip, 30% spin swap
         let move_type = self.next_random() % 100;
 
-        let (energy_diff, accepted) = if move_type < 70 {
+        let (_energy_diff, accepted) = if move_type < 70 {
             // Spin flip
             if let Some((site, new_spin)) = self.propose_spin_flip(config) {
                 let current_energy = self.calculate_energy(config);

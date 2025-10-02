@@ -276,8 +276,8 @@ pub fn eigenvalue_decomposition(
     // Query optimal workspace size
     unsafe {
         crate::ffi::lapack::zgeev_(
-            if compute_left { b"V\0".as_ptr() as *const i8 } else { b"N\0".as_ptr() as *const i8 },
-            if compute_right { b"V\0".as_ptr() as *const i8 } else { b"N\0".as_ptr() as *const i8 },
+            if compute_left { b"V\0".as_ptr()  } else { b"N\0".as_ptr()  },
+            if compute_right { b"V\0".as_ptr()  } else { b"N\0".as_ptr()  },
             &(n as i32),
             a.as_mut_ptr(),
             &(n as i32),
@@ -298,8 +298,8 @@ pub fn eigenvalue_decomposition(
 
     unsafe {
         crate::ffi::lapack::zgeev_(
-            if compute_left { b"V\0".as_ptr() as *const i8 } else { b"N\0".as_ptr() as *const i8 },
-            if compute_right { b"V\0".as_ptr() as *const i8 } else { b"N\0".as_ptr() as *const i8 },
+            if compute_left { b"V\0".as_ptr()  } else { b"N\0".as_ptr()  },
+            if compute_right { b"V\0".as_ptr()  } else { b"N\0".as_ptr()  },
             &(n as i32),
             a.as_mut_ptr(),
             &(n as i32),
@@ -343,8 +343,8 @@ pub fn singular_value_decomposition(
     // Query optimal workspace size
     unsafe {
         crate::ffi::lapack::zgesvd_(
-            b"A\0".as_ptr() as *const i8,
-            b"A\0".as_ptr() as *const i8,
+            b"A\0".as_ptr() ,
+            b"A\0".as_ptr() ,
             &(m as i32),
             &(n as i32),
             a.as_mut_ptr(),
@@ -366,8 +366,8 @@ pub fn singular_value_decomposition(
 
     unsafe {
         crate::ffi::lapack::zgesvd_(
-            b"A\0".as_ptr() as *const i8,
-            b"A\0".as_ptr() as *const i8,
+            b"A\0".as_ptr() ,
+            b"A\0".as_ptr() ,
             &(m as i32),
             &(n as i32),
             a.as_mut_ptr(),

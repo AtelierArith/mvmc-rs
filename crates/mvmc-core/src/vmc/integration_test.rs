@@ -7,11 +7,7 @@ use crate::vmc::{
     SimpleHeisenbergVMC,
     ImprovedHeisenbergVMC,
     AdaptiveHeisenbergVMC,
-    VmcStatistics,
-    MultipleVmcStatistics,
-    AdaptiveVmcStatistics
 };
-use mvmc_physics::hamiltonian::Spin;
 use std::collections::HashMap;
 
 /// Integration test suite for VMC calculations

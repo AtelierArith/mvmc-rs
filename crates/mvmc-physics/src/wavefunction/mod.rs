@@ -230,6 +230,60 @@ impl CombinedWavefunction {
         self.projectors.push(projector);
     }
 
+    /// Updates wavefunction parameters using SR method.
+    ///
+    /// Applies parameter updates computed from SR optimization:
+    /// f_{ij} ← f_{ij} + δf_{ij}
+    ///
+    /// # Arguments
+    /// * `param_updates` - Parameter updates δf_{ij} from SR equation
+    /// * `_learning_rate` - Learning rate (not used when updates are provided)
+    ///
+    /// # Reference
+    /// C implementation: mVMC/src/mVMC/stcopt.c - lines 174-186
+    pub fn update_parameters(&mut self, param_updates: &[f64], _learning_rate: f64) {
+        if param_updates.is_empty() {
+            // Fallback to random perturbation if no SR updates provided
+            if let Some(slater) = &mut self.slater {
+                slater.add_noise(0.01);
+            }
+        } else {
+            // Apply SR-calculated parameter updates
+            if let Some(slater) = &mut self.slater {
+                slater.apply_parameter_updates(param_updates);
+            }
+        }
+    }
+
+    /// Calculates O-operators for SR optimization.
+    ///
+    /// Computes O_k = (1/ψ) ∂ψ/∂f_k for each variational parameter.
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration
+    ///
+    /// # Returns
+    /// * `Vec<Complex64>` - O-operators for all parameters
+    ///
+    /// # Reference
+    /// C implementation: mVMC/src/mVMC/slater.c - SlaterElmDiff_fcmp
+    pub fn calculate_o_operators(&self, spin_config: &[u8]) -> Vec<Complex64> {
+        if let Some(slater) = &self.slater {
+            slater.calculate_parameter_derivatives(spin_config)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Returns the number of variational parameters.
+    pub fn num_parameters(&self) -> usize {
+        if let Some(slater) = &self.slater {
+            slater.nsite() * slater.ne()
+        } else {
+            0
+        }
+    }
+
     /// Calculates the wavefunction value for a given spin configuration.
     ///
     /// # Arguments

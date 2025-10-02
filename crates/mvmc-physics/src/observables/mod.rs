@@ -11,7 +11,7 @@ pub use energy::EnergyCalculator;
 pub use magnetization::MagnetizationCalculator;
 pub use correlation::CorrelationCalculator;
 
-use crate::hamiltonian::{HubbardHamiltonian, Spin};
+use crate::hamiltonian::Spin;
 use crate::lattice::Lattice;
 
 /// Trait for physical observables.

@@ -134,6 +134,105 @@ impl SlaterDeterminant {
         &mut self.orbitals
     }
 
+    /// Adds small random noise to orbital coefficients for parameter optimization.
+    ///
+    /// This is a simplified parameter update mechanism. In the full C implementation,
+    /// parameters would be updated via SR method (Stochastic Reconfiguration).
+    ///
+    /// # Arguments
+    /// * `amplitude` - Amplitude of noise to add
+    ///
+    /// # Reference
+    /// C implementation: mVMC/src/mVMC/stcopt.c - parameter update
+    pub fn add_noise(&mut self, amplitude: f64) {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+
+        for i in 0..self.nsite {
+            for j in 0..self.ne {
+                let real_noise = rng.gen_range(-amplitude..amplitude);
+                let imag_noise = rng.gen_range(-amplitude..amplitude);
+                self.orbitals[[i, j]] += Complex64::new(real_noise, imag_noise);
+            }
+        }
+
+        // Clear cache after parameter update
+        self.cached_det = None;
+        self.cached_inverse = None;
+    }
+
+    /// Calculates derivatives of wavefunction with respect to orbital parameters.
+    ///
+    /// This computes O-operators: O_{ij} = (1/ψ) ∂ψ/∂f_{ij}
+    /// using numerical differentiation (finite differences).
+    ///
+    /// In the full C implementation (SlaterElmDiff_fcmp), this uses analytical
+    /// derivatives computed via Tr[M^{-1} ∂M/∂f_{ij}].
+    ///
+    /// # Arguments
+    /// * `spin_config` - Spin configuration to evaluate at
+    ///
+    /// # Returns
+    /// * `Vec<Complex64>` - Derivatives for each orbital parameter (flattened)
+    ///
+    /// # Reference
+    /// C implementation: mVMC/src/mVMC/slater.c - SlaterElmDiff_fcmp (lines 99-244)
+    pub fn calculate_parameter_derivatives(&self, spin_config: &[u8]) -> Vec<Complex64> {
+        let psi = self.calculate_determinant(spin_config);
+        let n_params = self.nsite * self.ne;
+        let mut derivatives = vec![Complex64::new(0.0, 0.0); n_params];
+
+        if psi.norm() < 1e-12 {
+            return derivatives;
+        }
+
+        // Use finite differences to approximate ∂ψ/∂f_{ij}
+        let delta = 1e-5;
+        let mut idx = 0;
+
+        for i in 0..self.nsite {
+            for j in 0..self.ne {
+                // Create perturbed matrix
+                let mut perturbed = self.clone();
+                perturbed.orbitals[[i, j]] += Complex64::new(delta, 0.0);
+                perturbed.cached_det = None;
+
+                let psi_perturbed = perturbed.calculate_determinant(spin_config);
+
+                // O_{ij} = (1/ψ) ∂ψ/∂f_{ij} ≈ (ψ(f+δ) - ψ(f)) / (δ * ψ)
+                derivatives[idx] = (psi_perturbed - psi) / (delta * psi);
+                idx += 1;
+            }
+        }
+
+        derivatives
+    }
+
+    /// Updates orbital parameters using computed gradients from SR method.
+    ///
+    /// # Arguments
+    /// * `param_updates` - Parameter updates δf_{ij} (flattened)
+    ///
+    /// # Reference
+    /// C implementation: mVMC/src/mVMC/stcopt.c - lines 174-186 (parameter update)
+    pub fn apply_parameter_updates(&mut self, param_updates: &[f64]) {
+        assert_eq!(param_updates.len(), self.nsite * self.ne);
+
+        let mut idx = 0;
+        for i in 0..self.nsite {
+            for j in 0..self.ne {
+                // Update only real part for simplicity
+                // Full C implementation handles both real and imaginary parts
+                self.orbitals[[i, j]] += Complex64::new(param_updates[idx], 0.0);
+                idx += 1;
+            }
+        }
+
+        // Clear cache after parameter update
+        self.cached_det = None;
+        self.cached_inverse = None;
+    }
+
     /// Calculates the Slater determinant for a given spin configuration.
     ///
     /// # Arguments

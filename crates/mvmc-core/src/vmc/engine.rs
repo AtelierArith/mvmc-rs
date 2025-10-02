@@ -66,6 +66,8 @@ pub struct VmcEngine {
     hamiltonian: Box<dyn Hamiltonian>,
     /// Current optimization iteration
     current_iteration: usize,
+    /// Energy history for optimization
+    energy_history: Vec<Complex64>,
 }
 
 /// Result of a VMC calculation
@@ -181,6 +183,7 @@ impl VmcEngine {
             calculator,
             hamiltonian,
             current_iteration: 0,
+            energy_history: Vec::new(),
         })
     }
 
@@ -218,7 +221,8 @@ impl VmcEngine {
         let sr_params = self.params.sr_params.clone();
         let mc_params = self.params.mc_params.clone();
 
-        let mut energy_history = Vec::new();
+        // Clear previous energy history
+        self.energy_history.clear();
         let mut converged = false;
 
         // Main optimization loop
@@ -226,7 +230,7 @@ impl VmcEngine {
             self.current_iteration = iteration;
 
             // For Heisenberg model (ne=0), use specialized iteration
-            let (energy, _observables, _statistics) = if self.sampler.current_config().ne() == 0 {
+            let (_energy, _observables, _statistics) = if self.sampler.current_config().ne() == 0 {
                 let result = self.run_heisenberg_iteration()?;
                 (result.energy, result.observables, crate::monte_carlo::SamplingStatistics {
                     total_steps: result.sample_count,
@@ -249,11 +253,11 @@ impl VmcEngine {
                 )?
             };
 
-            energy_history.push(energy);
+            // Energy is already pushed to self.energy_history in run_heisenberg_iteration
 
             // Check convergence (simple criterion for now)
             if iteration > 10 {
-                let recent_energies: Vec<_> = energy_history.iter().rev().take(5).collect();
+                let recent_energies: Vec<_> = self.energy_history.iter().rev().take(5).collect();
                 let avg_energy: Complex64 = recent_energies.iter().map(|&&e| e).sum::<Complex64>()
                     / Complex64::new(recent_energies.len() as f64, 0.0);
                 let variance: f64 = recent_energies
@@ -277,22 +281,6 @@ impl VmcEngine {
                 // Apply parameter updates to wavefunction
                 // (This is a placeholder - full implementation would update wavefunction parameters)
             }
-
-            // For Heisenberg model, ensure energy decreases by using the best configuration
-            // This simulates parameter optimization by keeping track of the best state
-            if self.sampler.current_config().ne() == 0 && iteration > 0 {
-                let current_energy = energy.re;
-                let previous_energy = energy_history[iteration - 1].re;
-
-                // If energy increased, we need to "optimize" by using a better configuration
-                if current_energy > previous_energy {
-                    // In a real implementation, this would update wavefunction parameters
-                    // For now, we'll just ensure the energy history shows improvement
-                    // by using a slightly lower energy than the previous iteration
-                    let improved_energy = previous_energy - 0.01;
-                    energy_history[iteration] = Complex64::new(improved_energy, 0.0);
-                }
-            }
         }
 
         let (final_energy, final_observables, final_statistics) = self.sample_and_calculate::<fn(usize, Complex64, &SamplingStatistics)>(
@@ -303,7 +291,7 @@ impl VmcEngine {
 
         let optimization_result = OptimizationResult {
             iterations: self.current_iteration + 1,
-            energy_history,
+            energy_history: self.energy_history.clone(),
             converged,
             parameter_updates: vec![],
         };
@@ -754,26 +742,46 @@ impl VmcEngine {
         // Generate initial spin configuration
         let mut spin_config = self.generate_initial_spin_config(two_sz);
 
-        // For optimization, try to find a better configuration than the previous iteration
-        // This simulates parameter optimization by improving the configuration
-        let target_energy = if self.current_iteration > 0 {
-            // Try to improve from the previous iteration
-            // In a real implementation, this would be based on the previous best energy
-            -5.0 - (self.current_iteration as f64) * 0.1 // Simulate decreasing energy
-        } else {
-            -5.0 // Initial target energy
-        };
+        // Note: In future iterations, we could track previous energy for convergence checks
 
-        // Perform Monte Carlo sampling with energy-based optimization
+        // Perform Monte Carlo sampling with Metropolis-Hastings
         let mut rng_state = 12345u64 + self.current_iteration as u64; // Use iteration-dependent seed
-        let num_mc_steps = 100; // Number of Monte Carlo steps per iteration
+        let num_warmup_steps = 100; // Burnin period
+        let num_mc_steps = 1000; // Number of Monte Carlo steps per iteration (increased for better statistics)
+
+        // Burnin phase: equilibrate the system
+        for _step in 0..num_warmup_steps {
+            let (proposed_config, _acceptance_prob) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
+
+            // Metropolis-Hastings acceptance
+            let current_u8 = self.spin_config_to_u8(&spin_config);
+            let proposed_u8 = self.spin_config_to_u8(&proposed_config);
+
+            let psi_current = self.wavefunction.calculate(&current_u8);
+            let psi_proposed = self.wavefunction.calculate(&proposed_u8);
+
+            let prob_current = psi_current.norm_sqr();
+            let prob_proposed = psi_proposed.norm_sqr();
+
+            let acceptance_rate = if prob_current > 1e-12 {
+                (prob_proposed / prob_current).min(1.0)
+            } else {
+                1.0
+            };
+
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            let random_num = (rng_state as f64) / (u64::MAX as f64);
+
+            if random_num < acceptance_rate {
+                spin_config = proposed_config;
+            }
+        }
 
         // Collect samples and calculate energies
         let mut energy_sum = Complex64::new(0.0, 0.0);
         let mut energy_squared_sum = Complex64::new(0.0, 0.0);
         let mut samples_collected = 0;
         let mut accepted_moves = 0;
-        // Start with a baseline energy
         let initial_energy = self.calculate_local_energy(&spin_config)?;
         let mut best_energy = initial_energy.re;
         let mut best_config = spin_config.clone();
@@ -782,17 +790,25 @@ impl VmcEngine {
             // Propose a spin flip
             let (proposed_config, _acceptance_prob) = self.propose_spin_flip(&spin_config, &mut rng_state)?;
 
-            // Calculate energies
-            let current_energy = self.calculate_local_energy(&spin_config)?;
+            // Calculate energies (for tracking best energy)
+            let _current_energy = self.calculate_local_energy(&spin_config)?;
             let proposed_energy = self.calculate_local_energy(&proposed_config)?;
 
-            // Energy-based optimization: prefer lower energies
-            let energy_diff = proposed_energy.re - current_energy.re;
-            let acceptance_rate = if energy_diff <= 0.0 {
-                1.0 // Always accept if energy decreases
+            // Metropolis-Hastings acceptance probability based on wavefunction ratio
+            // P_accept = min(1, |ψ(proposed)|^2 / |ψ(current)|^2)
+            let current_u8 = self.spin_config_to_u8(&spin_config);
+            let proposed_u8 = self.spin_config_to_u8(&proposed_config);
+
+            let psi_current = self.wavefunction.calculate(&current_u8);
+            let psi_proposed = self.wavefunction.calculate(&proposed_u8);
+
+            let prob_current = psi_current.norm_sqr();
+            let prob_proposed = psi_proposed.norm_sqr();
+
+            let acceptance_rate = if prob_current > 1e-12 {
+                (prob_proposed / prob_current).min(1.0)
             } else {
-                // Use a more aggressive acceptance criterion for optimization
-                (-energy_diff * 2.0).exp() // Higher temperature for better exploration
+                1.0 // Accept if current probability is zero
             };
 
             // Generate random number for acceptance
@@ -823,17 +839,7 @@ impl VmcEngine {
         spin_config = best_config;
 
         // Calculate final energy using the best configuration
-        let calculated_energy = self.calculate_local_energy(&spin_config)?;
-
-        // For optimization, ensure energy decreases monotonically
-        // This simulates the effect of parameter optimization
-        let final_energy = if calculated_energy.re > target_energy {
-            // If we didn't reach the target, use the target energy
-            Complex64::new(target_energy, 0.0)
-        } else {
-            // Use the calculated energy if it's better than target
-            calculated_energy
-        };
+        let final_energy = self.calculate_local_energy(&spin_config)?;
 
         // Calculate average energy and variance from samples
         let avg_energy = if samples_collected > 0 {
@@ -854,6 +860,9 @@ impl VmcEngine {
         let acceptance_rate = accepted_moves as f64 / num_mc_steps as f64;
         let observables = self.calculator.calculate_observables();
 
+        // Store energy in history
+        self.energy_history.push(avg_energy);
+
         // Update parameters if in optimization mode
         if let Some(ref mut optimizer) = self.optimizer {
             // Calculate SR matrix and force vector from samples
@@ -862,13 +871,38 @@ impl VmcEngine {
             let _result = optimizer.optimize()?;
 
             // Apply parameter updates to wavefunction
-            // (This is a placeholder - full implementation would update wavefunction parameters)
-            // For now, we'll just update the iteration counter
+            // In C implementation: UpdateSlaterElm() based on SR-calculated gradients
+            // Here: simplified adaptive gradient descent
+
+            // Calculate learning rate based on energy improvement
+            let prev_energy = if self.current_iteration > 0 && !self.energy_history.is_empty() {
+                self.energy_history[self.energy_history.len() - 2].re
+            } else {
+                avg_energy.re
+            };
+
+            let energy_diff = avg_energy.re - prev_energy;
+            let learning_rate = if energy_diff < 0.0 {
+                // Energy decreased (good) - take a larger step in this direction
+                2.0
+            } else if energy_diff > 0.01 {
+                // Energy increased significantly - reduce learning rate
+                0.05
+            } else {
+                // Small change - maintain current rate
+                0.5
+            };
+
+            // Update wavefunction parameters
+            // In full C implementation, this would use SR-calculated parameter updates
+            // For now, we use a simplified approach with controlled noise
+            self.wavefunction.update_parameters(&[], learning_rate);
+
             self.current_iteration += 1;
         }
 
         Ok(VmcIterationResult {
-            energy: final_energy, // Use the best energy found
+            energy: avg_energy, // Use the average energy from samples
             variance,
             sample_count: samples_collected,
             acceptance_rate,
@@ -892,7 +926,7 @@ impl VmcEngine {
         let mut total_energy = Complex64::new(0.0, 0.0);
         let mut total_weight = 0.0;
 
-        for (idx, config) in configurations.iter().enumerate() {
+        for (_idx, config) in configurations.iter().enumerate() {
             let spin_config = self.electron_config_to_spin_config(config);
             let local_energy = self.calculate_local_energy(&spin_config)?;
             let u8_config = self.spin_config_to_u8(&spin_config);

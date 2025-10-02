@@ -138,6 +138,7 @@ impl HeisenbergHamiltonian {
     ///
     /// # Returns
     /// The matrix element for this specific spin flip
+    #[allow(dead_code)]
     fn flip_matrix_element(
         &self,
         config_i: &[Spin],
