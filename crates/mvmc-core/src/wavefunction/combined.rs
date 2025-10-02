@@ -7,12 +7,12 @@
 //! - RBM (Restricted Boltzmann Machine corrections)
 //!
 //! The combined wavefunction represents:
-//! Ψ(x) = Ψ_Slater(x) × Ψ_Pfaffian(x) × Ψ_Projection(x) × Ψ_RBM(x)
+//! Ψ(x) = Ψ_Slater(x) × Ψ_Pfaffian(x) × Ψ_Projection(x) × Ψ_RBM(x) × Ψ_Jastrow(x) × Ψ_DoublonHolon(x)
 
 use crate::error::{Result, VmcError};
 use crate::types::{ElectronCount, SiteCount};
 use crate::wavefunction::{
-    PfaffianWavefunction, ProjectionOperator, RBMWavefunction, SlaterDeterminant,
+    DoublonHolonFactor, JastrowFactor, PfaffianWavefunction, ProjectionOperator, RBMWavefunction, SlaterDeterminant,
 };
 use num_complex::Complex64;
 
@@ -27,6 +27,8 @@ use num_complex::Complex64;
 /// - **Pfaffian**: Represents pairing correlations (optional)
 /// - **Projection operators**: Apply correlation factors (optional)
 /// - **RBM**: Neural network corrections (optional)
+/// - **Jastrow factor**: Electron-electron correlations (optional)
+/// - **Doublon-Holon factor**: Doublon-holon correlations (optional)
 ///
 /// # References
 ///
@@ -45,6 +47,10 @@ pub struct CombinedWavefunction {
     projection: Option<ProjectionOperator>,
     /// RBM wavefunction (optional, for neural network corrections)
     rbm: Option<RBMWavefunction>,
+    /// Jastrow factor (optional, for electron-electron correlations)
+    jastrow: Option<JastrowFactor>,
+    /// Doublon-Holon factor (optional, for doublon-holon correlations)
+    doublon_holon: Option<DoublonHolonFactor>,
 }
 
 /// Result of wavefunction amplitude calculation
@@ -60,6 +66,10 @@ pub struct AmplitudeResult {
     pub projection_amplitude: Option<Complex64>,
     /// RBM component (if present)
     pub rbm_amplitude: Option<Complex64>,
+    /// Jastrow component (if present)
+    pub jastrow_amplitude: Option<Complex64>,
+    /// Doublon-Holon component (if present)
+    pub doublon_holon_amplitude: Option<Complex64>,
 }
 
 impl CombinedWavefunction {
@@ -88,6 +98,8 @@ impl CombinedWavefunction {
             pfaffian: None,
             projection: None,
             rbm: None,
+            jastrow: None,
+            doublon_holon: None,
         }
     }
 
@@ -112,6 +124,18 @@ impl CombinedWavefunction {
     /// Sets the RBM component
     pub fn with_rbm(mut self, rbm: RBMWavefunction) -> Self {
         self.rbm = Some(rbm);
+        self
+    }
+
+    /// Sets the Jastrow factor component
+    pub fn with_jastrow(mut self, jastrow: JastrowFactor) -> Self {
+        self.jastrow = Some(jastrow);
+        self
+    }
+
+    /// Sets the Doublon-Holon factor component
+    pub fn with_doublon_holon(mut self, doublon_holon: DoublonHolonFactor) -> Self {
+        self.doublon_holon = Some(doublon_holon);
         self
     }
 
@@ -145,10 +169,20 @@ impl CombinedWavefunction {
         self.rbm.is_some()
     }
 
+    /// Returns whether Jastrow component is present
+    pub fn has_jastrow(&self) -> bool {
+        self.jastrow.is_some()
+    }
+
+    /// Returns whether Doublon-Holon component is present
+    pub fn has_doublon_holon(&self) -> bool {
+        self.doublon_holon.is_some()
+    }
+
     /// Calculates the total wavefunction amplitude for a given electron configuration
     ///
     /// The total amplitude is the product of all components:
-    /// Ψ_total = Ψ_Slater × Ψ_Pfaffian × Ψ_Projection × Ψ_RBM
+    /// Ψ_total = Ψ_Slater × Ψ_Pfaffian × Ψ_Projection × Ψ_RBM × Ψ_Jastrow × Ψ_DoublonHolon
     ///
     /// # Arguments
     ///
@@ -172,6 +206,8 @@ impl CombinedWavefunction {
             pfaffian_amplitude: None,
             projection_amplitude: None,
             rbm_amplitude: None,
+            jastrow_amplitude: None,
+            doublon_holon_amplitude: None,
         };
 
         // Calculate Slater component
@@ -189,7 +225,7 @@ impl CombinedWavefunction {
         }
 
         // Calculate Projection component
-        if let Some(ref projection) = self.projection {
+        if let Some(ref _projection) = self.projection {
             // For now, use a placeholder
             // In a full implementation, this would calculate the projection factor
             let projection_amp = Complex64::new(1.0, 0.0);
@@ -202,6 +238,20 @@ impl CombinedWavefunction {
             let rbm_amp = rbm.calculate_weight(electron_config)?;
             result.rbm_amplitude = Some(rbm_amp);
             result.amplitude *= rbm_amp;
+        }
+
+        // Calculate Jastrow component
+        if let Some(ref jastrow) = self.jastrow {
+            let jastrow_amp = jastrow.calculate_factor(electron_config)?;
+            result.jastrow_amplitude = Some(jastrow_amp);
+            result.amplitude *= jastrow_amp;
+        }
+
+        // Calculate Doublon-Holon component
+        if let Some(ref doublon_holon) = self.doublon_holon {
+            let dh_amp = doublon_holon.calculate_factor(electron_config)?;
+            result.doublon_holon_amplitude = Some(dh_amp);
+            result.amplitude *= dh_amp;
         }
 
         Ok(result)
@@ -252,6 +302,26 @@ impl CombinedWavefunction {
             match rbm.calculate_log_weight(electron_config) {
                 Ok(rbm_log_weight) => {
                     log_amplitude += rbm_log_weight;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Calculate Jastrow component
+        if let Some(ref jastrow) = self.jastrow {
+            match jastrow.calculate_log_factor(electron_config) {
+                Ok(jastrow_log_factor) => {
+                    log_amplitude += Complex64::new(jastrow_log_factor, 0.0);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Calculate Doublon-Holon component
+        if let Some(ref doublon_holon) = self.doublon_holon {
+            match doublon_holon.calculate_log_factor(electron_config) {
+                Ok(dh_log_factor) => {
+                    log_amplitude += Complex64::new(dh_log_factor, 0.0);
                 }
                 Err(e) => return Err(e),
             }
@@ -329,6 +399,26 @@ impl CombinedWavefunction {
     pub fn rbm_mut(&mut self) -> Option<&mut RBMWavefunction> {
         self.rbm.as_mut()
     }
+
+    /// Returns a reference to the Jastrow factor
+    pub fn jastrow(&self) -> Option<&JastrowFactor> {
+        self.jastrow.as_ref()
+    }
+
+    /// Returns a mutable reference to the Jastrow factor
+    pub fn jastrow_mut(&mut self) -> Option<&mut JastrowFactor> {
+        self.jastrow.as_mut()
+    }
+
+    /// Returns a reference to the Doublon-Holon factor
+    pub fn doublon_holon(&self) -> Option<&DoublonHolonFactor> {
+        self.doublon_holon.as_ref()
+    }
+
+    /// Returns a mutable reference to the Doublon-Holon factor
+    pub fn doublon_holon_mut(&mut self) -> Option<&mut DoublonHolonFactor> {
+        self.doublon_holon.as_mut()
+    }
 }
 
 impl std::fmt::Display for CombinedWavefunction {
@@ -346,6 +436,12 @@ impl std::fmt::Display for CombinedWavefunction {
         }
         if self.has_rbm() {
             write!(f, ", RBM")?;
+        }
+        if self.has_jastrow() {
+            write!(f, ", Jastrow")?;
+        }
+        if self.has_doublon_holon() {
+            write!(f, ", Doublon-Holon")?;
         }
         write!(f, ")")
     }
@@ -367,6 +463,8 @@ mod tests {
         assert!(!wf.has_pfaffian());
         assert!(!wf.has_projection());
         assert!(!wf.has_rbm());
+        assert!(!wf.has_jastrow());
+        assert!(!wf.has_doublon_holon());
     }
 
     #[test]
@@ -442,6 +540,74 @@ mod tests {
         assert!(display.contains("CombinedWavefunction"));
         assert!(display.contains("nsite=4"));
         assert!(display.contains("ne=2"));
+    }
+
+    #[test]
+    fn test_combined_wavefunction_with_jastrow() {
+        let nsite = SiteCount::new(2);
+        let ne = ElectronCount::new(1);
+
+        let jastrow = JastrowFactor::gutzwiller(2, 0.5).unwrap();
+        let wf = CombinedWavefunction::new(nsite, ne).with_jastrow(jastrow);
+
+        assert!(wf.has_jastrow());
+
+        let config = vec![1, 0];
+        let result = wf.calculate_amplitude(&config).unwrap();
+
+        assert!(result.amplitude.norm() > 0.0);
+        assert!(result.jastrow_amplitude.is_some());
+    }
+
+    #[test]
+    fn test_combined_wavefunction_with_doublon_holon() {
+        let nsite = SiteCount::new(2);
+        let ne = ElectronCount::new(1);
+
+        let dh_factor = DoublonHolonFactor::simple(2, 0.1, Some(1)).unwrap();
+        let wf = CombinedWavefunction::new(nsite, ne).with_doublon_holon(dh_factor);
+
+        assert!(wf.has_doublon_holon());
+
+        let config = vec![3, 0]; // Doublon and holon
+        let result = wf.calculate_amplitude(&config).unwrap();
+
+        assert!(result.amplitude.norm() > 0.0);
+        assert!(result.doublon_holon_amplitude.is_some());
+    }
+
+    #[test]
+    fn test_combined_wavefunction_with_all_components() {
+        let nsite = SiteCount::new(2);
+        let ne = ElectronCount::new(1);
+
+        // Create a simple Slater determinant with non-singular matrix
+        let mut slater = SlaterDeterminant::new(nsite, ne);
+        // Set up a non-singular Slater matrix
+        slater.matrix_mut().set(0, 0, Complex64::new(1.0, 0.0));
+        slater.matrix_mut().set(0, 1, Complex64::new(0.1, 0.0));
+        slater.matrix_mut().set(1, 0, Complex64::new(0.1, 0.0));
+        slater.matrix_mut().set(1, 1, Complex64::new(1.0, 0.0));
+        let jastrow = JastrowFactor::gutzwiller(2, 0.5).unwrap();
+        let dh_factor = DoublonHolonFactor::simple(2, 0.1, Some(1)).unwrap();
+
+        let wf = CombinedWavefunction::new(nsite, ne)
+            .with_slater(slater)
+            .with_jastrow(jastrow)
+            .with_doublon_holon(dh_factor);
+
+        assert!(wf.has_slater());
+        assert!(wf.has_jastrow());
+        assert!(wf.has_doublon_holon());
+
+        let config = vec![1, 0];
+        let result = wf.calculate_amplitude(&config).unwrap();
+
+        // The amplitude should be non-zero due to all components
+        assert!(result.amplitude.norm() > 0.0);
+        assert!(result.slater_amplitude.norm() > 0.0);
+        assert!(result.jastrow_amplitude.is_some());
+        assert!(result.doublon_holon_amplitude.is_some());
     }
 }
 

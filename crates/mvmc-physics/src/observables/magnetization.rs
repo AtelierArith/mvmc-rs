@@ -15,7 +15,7 @@ use crate::lattice::Lattice;
 /// # Examples
 ///
 /// ```
-/// use mvmc_physics::observables::MagnetizationCalculator;
+/// use mvmc_physics::observables::{MagnetizationCalculator, Observable};
 /// use mvmc_physics::lattice::ChainLattice;
 /// use mvmc_physics::hamiltonian::Spin;
 ///

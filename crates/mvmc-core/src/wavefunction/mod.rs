@@ -7,12 +7,16 @@
 //! - RBM (Restricted Boltzmann Machine) corrections
 
 pub mod combined;
+pub mod doublon_holon;
+pub mod jastrow;
 pub mod pfaffian;
 pub mod projection;
 pub mod rbm;
 pub mod slater;
 
 pub use combined::{AmplitudeResult, CombinedWavefunction};
+pub use doublon_holon::{DoublonHolonFactor, DoublonHolonParameters};
+pub use jastrow::{JastrowFactor, JastrowParameters};
 pub use pfaffian::{PfaffianMatrix, PfaffianWavefunction};
 pub use projection::{
     ProjectionCount, ProjectionOperator, log_projection_ratio, log_projection_value,

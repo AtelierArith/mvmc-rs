@@ -9,7 +9,7 @@
 //! ```
 //! use mvmc_physics::lattice::ChainLattice;
 //! use mvmc_physics::hamiltonian::{HubbardHamiltonian, Spin};
-//! use mvmc_physics::observables::EnergyCalculator;
+//! use mvmc_physics::observables::{EnergyCalculator, Observable};
 //!
 //! // Create a 1D chain lattice
 //! let lattice = ChainLattice::new(6, true).unwrap();

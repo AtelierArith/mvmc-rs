@@ -13,12 +13,12 @@ use super::{Lattice, LatticeError, Result};
 /// # Examples
 ///
 /// ```
-/// use mvmc_physics::lattice::SquareLattice;
+/// use mvmc_physics::lattice::{SquareLattice, Lattice};
 ///
 /// // Create a 3x4 square lattice with periodic boundary conditions
 /// let lattice = SquareLattice::new(3, 4, true).unwrap();
 /// assert_eq!(lattice.n_sites(), 12);
-/// assert_eq!(lattice.neighbors(0), vec![8, 1, 3, 9]); // up, right, down, left
+/// assert_eq!(lattice.neighbors(0), vec![9, 1, 3, 2]); // up, right, down, left
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SquareLattice {
@@ -45,7 +45,7 @@ impl SquareLattice {
     /// # Examples
     ///
     /// ```
-    /// use mvmc_physics::lattice::SquareLattice;
+    /// use mvmc_physics::lattice::{SquareLattice, Lattice};
     ///
     /// let lattice = SquareLattice::new(3, 4, true).unwrap();
     /// assert_eq!(lattice.n_sites(), 12);

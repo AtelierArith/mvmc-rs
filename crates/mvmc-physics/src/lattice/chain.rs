@@ -13,7 +13,7 @@ use super::{Lattice, LatticeError, Result};
 /// # Examples
 ///
 /// ```
-/// use mvmc_physics::lattice::ChainLattice;
+/// use mvmc_physics::lattice::{ChainLattice, Lattice};
 ///
 /// // Create a 6-site chain with periodic boundary conditions
 /// let lattice = ChainLattice::new(6, true).unwrap();
@@ -42,7 +42,7 @@ impl ChainLattice {
     /// # Examples
     ///
     /// ```
-    /// use mvmc_physics::lattice::ChainLattice;
+    /// use mvmc_physics::lattice::{ChainLattice, Lattice};
     ///
     /// let lattice = ChainLattice::new(6, true).unwrap();
     /// assert_eq!(lattice.n_sites(), 6);

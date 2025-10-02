@@ -48,7 +48,8 @@ pub use optimization::{
 };
 pub use vmc::{VmcEngine, VmcResult, OptimizationResult, ExpectationResult};
 pub use wavefunction::{
-    AmplitudeResult, CombinedWavefunction, PfaffianMatrix, PfaffianWavefunction,
+    AmplitudeResult, CombinedWavefunction, DoublonHolonFactor, DoublonHolonParameters,
+    JastrowFactor, JastrowParameters, PfaffianMatrix, PfaffianWavefunction,
     ProjectionCount, ProjectionOperator, RBMCounter, RBMParameters, RBMWavefunction,
     SlaterDeterminant, SlaterMatrix, log_projection_ratio, log_projection_value,
     make_projection_count, projection_ratio,

@@ -14,7 +14,7 @@ use crate::hamiltonian::{Hamiltonian, Spin};
 /// # Examples
 ///
 /// ```
-/// use mvmc_physics::observables::EnergyCalculator;
+/// use mvmc_physics::observables::{EnergyCalculator, Observable};
 /// use mvmc_physics::hamiltonian::HubbardHamiltonian;
 /// use mvmc_physics::lattice::ChainLattice;
 /// use mvmc_physics::hamiltonian::Spin;

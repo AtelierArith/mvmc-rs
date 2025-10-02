@@ -28,9 +28,8 @@ use num_complex::Complex64;
 /// # Examples
 ///
 /// ```
-/// use mvmc_physics::hamiltonian::HeisenbergHamiltonian;
+/// use mvmc_physics::hamiltonian::{HeisenbergHamiltonian, Hamiltonian, Spin};
 /// use mvmc_physics::lattice::ChainLattice;
-/// use mvmc_physics::hamiltonian::Spin;
 ///
 /// let lattice = ChainLattice::new(6, true).unwrap();
 /// let hamiltonian = HeisenbergHamiltonian::new(lattice, 1.0, 0.0).unwrap();

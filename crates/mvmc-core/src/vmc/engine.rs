@@ -100,10 +100,12 @@ impl VmcEngine {
     ///
     /// ```
     /// use mvmc_core::vmc::VmcEngine;
-    /// use mvmc_core::config::VmcParameters;
+    /// use mvmc_core::config::{VmcParameters, SRParameters, MonteCarloParameters};
     /// use mvmc_core::wavefunction::CombinedWavefunction;
     /// use mvmc_core::types::{SiteCount, ElectronCount, TwoSz, CalcMode, LanczosMode, RandomSeed};
     ///
+    /// let sr_params = SRParameters::new(1000, 100, 100, 1e-6, 1e-6, 0.1, 100, 1e-6);
+    /// let mc_params = MonteCarloParameters::new(100, 1, 1000, false, 1);
     /// let params = VmcParameters::new(
     ///     SiteCount::new(4),
     ///     ElectronCount::new(2),
@@ -111,6 +113,8 @@ impl VmcEngine {
     ///     CalcMode::Optimization,
     ///     LanczosMode::None,
     ///     RandomSeed::new(12345),
+    ///     sr_params,
+    ///     mc_params,
     /// );
     ///
     /// let wavefunction = CombinedWavefunction::new(
