@@ -26,6 +26,12 @@ impl StdFaceParser {
         Self { strict_mode: true }
     }
 
+    /// Parses a StdFace configuration from a file.
+    pub fn parse_file(&self, path: &str) -> Result<StdFaceConfig> {
+        let content = std::fs::read_to_string(path)?;
+        self.parse_str(&content)
+    }
+
     /// Parses a StdFace configuration from a string.
     pub fn parse_str(&self, input: &str) -> Result<StdFaceConfig> {
         let mut config = StdFaceConfig::new();

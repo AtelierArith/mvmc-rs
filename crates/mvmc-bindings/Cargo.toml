@@ -8,6 +8,8 @@ authors.workspace = true
 [dependencies]
 # FFI bindings
 libc = "0.2"
+# LAPACK bindings
+lapack = "0.19"
 # Error handling
 anyhow = { workspace = true }
 thiserror = { workspace = true }

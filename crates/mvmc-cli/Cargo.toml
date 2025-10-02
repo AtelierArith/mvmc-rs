@@ -5,4 +5,24 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[[bin]]
+name = "mvmc"
+path = "src/main.rs"
+
 [dependencies]
+mvmc-core = { path = "../mvmc-core" }
+mvmc-io = { path = "../mvmc-io" }
+mvmc-physics = { path = "../mvmc-physics" }
+mvmc-math = { path = "../mvmc-math" }
+
+clap = { version = "4.5", features = ["derive", "cargo"] }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+num-complex = { workspace = true }
+rayon = { workspace = true }
+env_logger = "0.11"
+log = "0.4"
+colored = "2.1"

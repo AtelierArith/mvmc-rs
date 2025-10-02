@@ -46,119 +46,91 @@ pub fn check_lapack_info(info: i32) -> Result<(), LapackError> {
 // LAPACK function signatures
 // Note: These are extern "C" declarations for LAPACK functions
 
-/// ZGESV - Solve system of linear equations using LU decomposition
-///
-/// # Safety
-/// This function is unsafe because it operates on raw pointers
-pub unsafe extern "C" fn zgesv_(
-    _n: *const c_int,
-    _nrhs: *const c_int,
-    _a: *mut Complex64,
-    _lda: *const c_int,
-    _ipiv: *mut c_int,
-    _b: *mut Complex64,
-    _ldb: *const c_int,
-    info: *mut c_int,
-) {
-    // This would be the actual LAPACK call in a real implementation
-    // For now, we'll implement a placeholder that compiles
-    unsafe {
-        *info = 0;
-    }
-}
+unsafe extern "C" {
+    /// ZGESV - Solve system of linear equations using LU decomposition
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn zgesv_(
+        n: *const c_int,
+        nrhs: *const c_int,
+        a: *mut Complex64,
+        lda: *const c_int,
+        ipiv: *mut c_int,
+        b: *mut Complex64,
+        ldb: *const c_int,
+        info: *mut c_int,
+    );
 
-/// ZGETRF - LU decomposition
-///
-/// # Safety
-/// This function is unsafe because it operates on raw pointers
-pub unsafe extern "C" fn zgetrf_(
-    _m: *const c_int,
-    _n: *const c_int,
-    _a: *mut Complex64,
-    _lda: *const c_int,
-    _ipiv: *mut c_int,
-    info: *mut c_int,
-) {
-    // This would be the actual LAPACK call in a real implementation
-    // For now, we'll implement a placeholder that compiles
-    unsafe {
-        *info = 0;
-    }
-}
+    /// ZGETRF - LU decomposition
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn zgetrf_(
+        m: *const c_int,
+        n: *const c_int,
+        a: *mut Complex64,
+        lda: *const c_int,
+        ipiv: *mut c_int,
+        info: *mut c_int,
+    );
 
-/// ZGETRI - Matrix inversion using LU decomposition
-///
-/// # Safety
-/// This function is unsafe because it operates on raw pointers
-pub unsafe extern "C" fn zgetri_(
-    _n: *const c_int,
-    _a: *mut Complex64,
-    _lda: *const c_int,
-    _ipiv: *const c_int,
-    _work: *mut Complex64,
-    _lwork: *const c_int,
-    info: *mut c_int,
-) {
-    // This would be the actual LAPACK call in a real implementation
-    // For now, we'll implement a placeholder that compiles
-    unsafe {
-        *info = 0;
-    }
-}
+    /// ZGETRI - Matrix inversion using LU decomposition
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn zgetri_(
+        n: *const c_int,
+        a: *mut Complex64,
+        lda: *const c_int,
+        ipiv: *const c_int,
+        work: *mut Complex64,
+        lwork: *const c_int,
+        info: *mut c_int,
+    );
 
-/// ZGEEV - Eigenvalue decomposition
-///
-/// # Safety
-/// This function is unsafe because it operates on raw pointers
-pub unsafe extern "C" fn zgeev_(
-    _jobvl: *const c_char,
-    _jobvr: *const c_char,
-    _n: *const c_int,
-    _a: *mut Complex64,
-    _lda: *const c_int,
-    _w: *mut Complex64,
-    _vl: *mut Complex64,
-    _ldvl: *const c_int,
-    _vr: *mut Complex64,
-    _ldvr: *const c_int,
-    _work: *mut Complex64,
-    _lwork: *const c_int,
-    _rwork: *mut c_double,
-    info: *mut c_int,
-) {
-    // This would be the actual LAPACK call in a real implementation
-    // For now, we'll implement a placeholder that compiles
-    unsafe {
-        *info = 0;
-    }
-}
+    /// ZGEEV - Eigenvalue decomposition
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn zgeev_(
+        jobvl: *const c_char,
+        jobvr: *const c_char,
+        n: *const c_int,
+        a: *mut Complex64,
+        lda: *const c_int,
+        w: *mut Complex64,
+        vl: *mut Complex64,
+        ldvl: *const c_int,
+        vr: *mut Complex64,
+        ldvr: *const c_int,
+        work: *mut Complex64,
+        lwork: *const c_int,
+        rwork: *mut c_double,
+        info: *mut c_int,
+    );
 
-/// ZGESVD - Singular value decomposition
-///
-/// # Safety
-/// This function is unsafe because it operates on raw pointers
-pub unsafe extern "C" fn zgesvd_(
-    _jobu: *const c_char,
-    _jobvt: *const c_char,
-    _m: *const c_int,
-    _n: *const c_int,
-    _a: *mut Complex64,
-    _lda: *const c_int,
-    _s: *mut c_double,
-    _u: *mut Complex64,
-    _ldu: *const c_int,
-    _vt: *mut Complex64,
-    _ldvt: *const c_int,
-    _work: *mut Complex64,
-    _lwork: *const c_int,
-    _rwork: *mut c_double,
-    info: *mut c_int,
-) {
-    // This would be the actual LAPACK call in a real implementation
-    // For now, we'll implement a placeholder that compiles
-    unsafe {
-        *info = 0;
-    }
+    /// ZGESVD - Singular value decomposition
+    ///
+    /// # Safety
+    /// This function is unsafe because it operates on raw pointers
+    pub fn zgesvd_(
+        jobu: *const c_char,
+        jobvt: *const c_char,
+        m: *const c_int,
+        n: *const c_int,
+        a: *mut Complex64,
+        lda: *const c_int,
+        s: *mut c_double,
+        u: *mut Complex64,
+        ldu: *const c_int,
+        vt: *mut Complex64,
+        ldvt: *const c_int,
+        work: *mut Complex64,
+        lwork: *const c_int,
+        rwork: *mut c_double,
+        info: *mut c_int,
+    );
 }
 
 #[cfg(test)]

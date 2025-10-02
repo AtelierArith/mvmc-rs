@@ -25,13 +25,33 @@
 
 pub mod config;
 pub mod error;
+pub mod monte_carlo;
+pub mod optimization;
 pub mod types;
+pub mod vmc;
 pub mod wavefunction;
 
 // Re-export commonly used items
+pub use config::{MonteCarloParameters, SRParameters, VmcParameters, ParameterValidator};
 pub use error::{Result, VmcError};
 pub use types::{
     CalcMode, ElectronCount, LanczosMode, RandomSeed, SiteCount, SiteIndex, TwoSz,
+};
+pub use monte_carlo::{
+    ElectronConfiguration, MetropolisSampler, MetropolisStep, ObservableCalculator,
+    PhysicalObservables, SamplingStatistics, Sampler,
+};
+pub use monte_carlo::sampler::SamplingAnalysis;
+pub use optimization::{
+    ConjugateGradientSolver, CGSolver, LanczosEigenvalue, LanczosSolver,
+    SROptimizationResult, SROptimizer, SRMatrix,
+};
+pub use vmc::{VmcEngine, VmcResult, OptimizationResult, ExpectationResult};
+pub use wavefunction::{
+    AmplitudeResult, CombinedWavefunction, PfaffianMatrix, PfaffianWavefunction,
+    ProjectionCount, ProjectionOperator, RBMCounter, RBMParameters, RBMWavefunction,
+    SlaterDeterminant, SlaterMatrix, log_projection_ratio, log_projection_value,
+    make_projection_count, projection_ratio,
 };
 
 #[cfg(test)]

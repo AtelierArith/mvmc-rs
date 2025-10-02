@@ -1,0 +1,18 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2024"
+
+[[test]]
+name = "vmc_engine_test"
+path = "vmc_engine_test.rs"
+
+# [[test]]
+# name = "cli_integration_test"
+# path = "cli_integration_test.rs"
+
+[dependencies]
+mvmc-core = { path = "../../crates/mvmc-core" }
+mvmc-cli = { path = "../../crates/mvmc-cli" }
+mvmc-io = { path = "../../crates/mvmc-io" }
+tempfile = { workspace = true }

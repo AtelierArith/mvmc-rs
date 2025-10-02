@@ -17,15 +17,16 @@ This Rust port aims to provide the same functionality with improved safety, main
 
 ## Project Status
 
-🚀 **Phase 2-5 Complete - Core Foundation Ready**
+🚀 **Phase 2-3, 5, and 7 Complete - Core Foundation Ready**
 
 - ✅ **Phase 1**: TDD infrastructure and workspace setup
 - ✅ **Phase 2**: Numerical computing library (`mvmc-math`) - 45 tests
-- ✅ **Phase 3**: Input/output processing (`mvmc-io`) - 20 tests
+- ✅ **Phase 3**: Input/output processing (`mvmc-io`) - 50 tests
 - ✅ **Phase 5**: Physics models (`mvmc-physics`) - 99 tests
+- ✅ **Phase 7**: Command-line interface (`mvmc-cli`) - Basic implementation
 - 🔄 **Phase 4**: Core VMC engine (next)
 
-**Total Test Suite**: 164+ tests passing across all implemented modules
+**Total Test Suite**: 194+ tests passing across all implemented modules
 
 ### Implemented Features
 
@@ -39,11 +40,19 @@ This Rust port aims to provide the same functionality with improved safety, main
 - StdFace format parser (mVMC standard)
 - TOML and JSON configuration support
 - Comprehensive validation and error handling
+- Output data management (text/binary formats)
+- Optimized parameter saving/loading
 
 #### Physics Models (`mvmc-physics`)
 - Lattice structures (1D chain, 2D square)
 - Hamiltonians (Hubbard, Heisenberg models)
 - Physical observables (energy, magnetization, correlations)
+
+#### Command-Line Interface (`mvmc-cli`)
+- Four operational commands: `run`, `info`, `validate`, `version`
+- Multiple input format support (StdFace, TOML, JSON)
+- Text and binary output options
+- Thread pool configuration for parallel computing
 
 ## Quick Start
 
@@ -51,6 +60,12 @@ This Rust port aims to provide the same functionality with improved safety, main
 # Clone with submodules
 git clone --recursive https://github.com/atelierarith/mvmc-rs.git
 cd mvmc-rs
+
+# Build the CLI
+cargo build --release
+
+# Run VMC calculation
+./target/release/mvmc run examples/hubbard_chain.def output/
 
 # Run all tests
 cargo test --workspace
@@ -60,6 +75,172 @@ cargo test --workspace --release
 
 # Build documentation
 cargo doc --open
+```
+
+## CLI Usage
+
+### Build and Install
+
+```bash
+# Build in release mode (recommended for performance)
+cargo build --release -p mvmc-cli
+
+# Install to cargo bin directory
+cargo install --path crates/mvmc-cli
+
+# Or run directly
+cargo run --release -p mvmc-cli -- [COMMAND]
+```
+
+### Commands
+
+#### Run VMC Calculation
+
+```bash
+# Run with StdFace format input
+mvmc run examples/hubbard_chain.def output/
+
+# Run with TOML format
+mvmc run config.toml output/
+
+# Run with JSON format
+mvmc run config.json output/
+
+# Use binary output format (faster I/O)
+mvmc run config.def output/ --binary
+
+# Specify number of threads
+mvmc run config.def output/ --threads 8
+
+# Enable verbose logging
+mvmc run config.def output/ -v
+
+# Quiet mode (errors only)
+mvmc run config.def output/ -q
+```
+
+**Output files:**
+- `{output_dir}/output_out.dat` - Energy data per iteration
+- `{output_dir}/output_var.dat` - Variational data
+- `{output_dir}/output_opt.dat` - Optimized parameters
+
+#### Show Configuration Info
+
+```bash
+# Display configuration details
+mvmc info examples/hubbard_chain.def
+
+# Works with all formats
+mvmc info config.toml
+mvmc info config.json
+```
+
+**Output:**
+```
+Configuration Information
+Model: Hubbard
+Lattice: Chain
+Lattice Size: L=10
+Physical parameters:
+  - t (hopping): 1.0
+  - U (interaction): 4.0
+  - mu (chemical potential): 0.0
+```
+
+#### Validate Configuration
+
+```bash
+# Check configuration file for errors
+mvmc validate examples/hubbard_chain.def
+
+# Validates all supported formats
+mvmc validate config.toml
+mvmc validate config.json
+```
+
+**Output:**
+```
+✓ Configuration is valid
+Model: Hubbard
+Lattice: Chain
+```
+
+#### Show Version
+
+```bash
+# Display version information
+mvmc version
+```
+
+**Output:**
+```
+mvmc 0.1.0
+Commit: <git-hash>
+```
+
+### Input File Formats
+
+#### StdFace Format (`.def`)
+
+```
+L = 10
+model = "Hubbard"
+lattice = "chain"
+t = 1.0
+U = 4.0
+mu = 0.0
+Ncond = 10
+```
+
+#### TOML Format (`.toml`)
+
+```toml
+[model]
+type = "Hubbard"
+
+[lattice]
+type = "chain"
+L = 10
+
+[parameters]
+t = 1.0
+U = 4.0
+mu = 0.0
+Ncond = 10
+```
+
+#### JSON Format (`.json`)
+
+```json
+{
+  "model": {
+    "type": "Hubbard"
+  },
+  "lattice": {
+    "type": "chain",
+    "L": 10
+  },
+  "parameters": {
+    "t": 1.0,
+    "U": 4.0,
+    "mu": 0.0,
+    "Ncond": 10
+  }
+}
+```
+
+### Global Options
+
+```bash
+# Verbose mode - show detailed logs
+mvmc [COMMAND] -v
+
+# Quiet mode - show only errors
+mvmc [COMMAND] -q
+
+# Show help
+mvmc --help
+mvmc [COMMAND] --help
 ```
 
 ### Testing Examples
@@ -160,9 +341,9 @@ mvmc-rs/
 │   ├── mvmc-math/       # ✅ Numerical computing (45 tests)
 │   ├── mvmc-core/       # 🔄 Core VMC engine (next phase)
 │   ├── mvmc-physics/    # ✅ Physics models (99 tests)
-│   ├── mvmc-io/         # ✅ Input/output (20 tests)
+│   ├── mvmc-io/         # ✅ Input/output (50 tests)
 │   ├── mvmc-parallel/   # 🔄 Parallelization (future)
-│   ├── mvmc-cli/        # 🔄 Command-line interface (future)
+│   ├── mvmc-cli/        # ✅ Command-line interface (basic)
 │   └── mvmc-bindings/   # ✅ FFI bindings (8 tests)
 ├── tests/               # Integration tests
 ├── benches/             # Benchmarks
@@ -332,6 +513,8 @@ Based on [mVMC](https://github.com/issp-center-dev/mVMC) which is based on mVMC-
 - [x] StdFace format parser
 - [x] TOML and JSON support
 - [x] Configuration validation
+- [x] Output data management (text/binary formats)
+- [x] Optimized parameter saving/loading
 
 ### Phase 4: Core VMC Engine 🔄
 - [ ] Wave function representations (Slater matrices, Pfaffians)
@@ -349,11 +532,14 @@ Based on [mVMC](https://github.com/issp-center-dev/mVMC) which is based on mVMC-
 - [ ] MPI support for distributed computing
 - [ ] Performance optimization
 
-### Phase 7: CLI and Integration
-- [ ] Command-line interface
+### Phase 7: CLI and Integration ✅ (Basic)
+- [x] Command-line interface (run, info, validate, version commands)
+- [x] Multiple input format support (StdFace, TOML, JSON)
+- [x] Output file management (text/binary)
+- [x] Thread pool configuration
 - [ ] Full regression testing
 - [ ] Production readiness
 
 ---
 
-**Status**: Phases 1, 2, 3, and 5 complete. Ready for Phase 4 (Core VMC Engine) implementation.
+**Status**: Phases 1, 2, 3, 5, and 7 (basic) complete. Ready for Phase 4 (Core VMC Engine) implementation.
