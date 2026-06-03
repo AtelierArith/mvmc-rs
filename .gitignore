@@ -1,4 +1,19 @@
-examples/output
 /target
-test-data
+/output
+**/*.rs.bk
+*.log
+# editor / IDE
+.idea/
+.vscode/
+# OS
+.DS_Store
+# benchmark output
+/criterion
+# golden fixture caches (regenerated from extern/Julia-mVMC/tools/extract_rust_port_fixtures.jl)
+tests/fixtures/**/*.dat.cache
+
+doc
+output
+.DS_Store
 *.out
+.env

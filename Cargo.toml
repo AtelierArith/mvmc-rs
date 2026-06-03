@@ -1,0 +1,61 @@
+# Workspace manifest for the Julia-mVMC → Rust port.
+# Lifecycle / scope assumptions are documented in `docs/PORTING_PLAN.md`.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/sfmt19937",
+    "crates/pfapack",
+    "crates/mvmc-expert-parsers",
+    "crates/mvmc-core",
+    "crates/mvmc-cli",
+    "xtask",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.82"
+authors = ["ManyVariableVariationalMonteCarlo.jl contributors"]
+repository = "https://github.com/atelierarith/ManyVariableVariationalMonteCarlo.jl"
+homepage = "https://github.com/atelierarith/ManyVariableVariationalMonteCarlo.jl"
+
+[workspace.dependencies]
+# --- internal crates (path-resolved) ---
+sfmt19937 = { path = "crates/sfmt19937", version = "0.0.0" }
+pfapack = { path = "crates/pfapack", version = "0.0.0" }
+mvmc-expert-parsers = { path = "crates/mvmc-expert-parsers", version = "0.0.0" }
+mvmc-core = { path = "crates/mvmc-core", version = "0.0.0" }
+
+# --- numerics / data ---
+num-complex = "0.4"
+ndarray = "0.16"
+rand_core = "0.6"
+
+# --- BLAS / LAPACK plumbing.
+#
+# Library crates depend on the API wrapper crates (`blas`, `lapack`) only;
+# the concrete backend implementation (`openblas-src`, `mkl-src`,
+# `accelerate-src`, ...) is selected at the binary leaf in Phase 2 once
+# we actually link against BLAS / LAPACK symbols. In Phase 0 the skeleton
+# doesn't call into BLAS yet, so no backend crate is wired up.
+lapack = "0.19"
+blas = "0.22"
+
+# --- ergonomics ---
+thiserror = "1"
+tracing = "0.1"
+
+# --- dev / test ---
+approx = "0.5"
+proptest = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = 1
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

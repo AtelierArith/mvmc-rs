@@ -1,0 +1,32 @@
+[package]
+name = "mvmc-core"
+version = "0.0.0"
+description = "VMC parameter optimization engine (port of MVMCOptimizers.jl)"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sfmt19937 = { workspace = true }
+pfapack = { workspace = true }
+mvmc-expert-parsers = { workspace = true }
+num-complex = { workspace = true }
+ndarray = { workspace = true }
+blas = { workspace = true }
+lapack = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[features]
+# Re-export pfapack's BLAS backend so leaf binaries can opt in.
+default = []
+pfapack-blas = ["pfapack/blas-backend"]
+
+# NOTE: Phase 4 will add an `openblas-src` dev-dependency here so that
+# `cargo test -p mvmc-core` resolves BLAS / LAPACK symbols.

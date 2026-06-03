@@ -1,0 +1,236 @@
+//! LTL decomposition of skew-symmetric matrices (upper-triangular form).
+//!
+//! Port targets: `extern/Julia-mVMC/PfaPack.jl/src/ltl_decomposition.jl`
+//! (`julia_dsktf2!` for Real / `julia_zsktf2!` for Complex), which in
+//! turn are line-by-line ports of Wimmer PfaPack 2014-09's Fortran
+//! `dsktf2.f` / `zsktf2.f` (`UPLO='U'`, `MODE='N'`).
+//!
+//! License: BSD-3-Clause.
+//!
+//! On exit the upper-triangular portion of `a` holds the LTL form. The
+//! pivot vector `pivots` (length `n`, **1-based** to mirror the Fortran
+//! `IPIV` convention) tells the post-decomposition routines
+//! (`utu2pfa` / `utu2inv`) which row/column swaps were applied.
+//!
+//! Returns `Ok(())` on success or `Err(zero_pivot_row)` mirroring the
+//! Fortran `INFO > 0` semantics.
+
+use num_complex::Complex64;
+
+use crate::backend::{self, BlasScalar};
+use crate::mat::SqMat;
+use crate::PivotIndex1Based;
+
+/// LTL decomposition for real skew-symmetric matrices (`dsktf2`).
+///
+/// Mirrors `julia_dsktf2!(A, iPiv)` from `ltl_decomposition.jl`.
+pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
+    sktf2_generic::<f64, _>(a, pivots, |x| x.abs())
+}
+
+/// LTL decomposition for complex skew-symmetric matrices (`zsktf2`).
+pub fn zsktf2(a: &mut SqMat<'_, Complex64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
+    // IZAMAX uses |Re| + |Im|, the BLAS 1-norm. We mirror it exactly.
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs())
+}
+
+fn sktf2_generic<T, Mag>(
+    a: &mut SqMat<'_, T>,
+    pivots: &mut [PivotIndex1Based],
+    mag: Mag,
+) -> Result<(), usize>
+where
+    T: BlasScalar,
+    Mag: Fn(T) -> f64,
+{
+    let n = a.n();
+    assert_eq!(pivots.len(), n, "pivots length must equal matrix side");
+
+    let mut info: Option<usize> = None;
+
+    // Julia: for i in 1:n; iPiv[i] = i
+    for i in 0..n {
+        pivots[i] = PivotIndex1Based((i as u32) + 1);
+    }
+
+    if n < 2 {
+        return Ok(());
+    }
+
+    // Iterate K from N down to 2 (Fortran: DO K=N, 2, -1). The Julia
+    // version uses 1-based `k`; in 0-based Rust the loop runs over
+    // `k0 = n-1 ..= 1` so `kk0 = k0 - 1` is the row/col to swap with kp.
+    let mut k0 = n; // sentinel; we decrement at the top of the loop
+    while k0 > 1 {
+        k0 -= 1;
+        let kk0 = k0 - 1; // Julia's kk = k - 1, 0-based
+
+        // Pivot search: argmax_{j in 0..kk0+1} |A[j, k0]| via the
+        // appropriate 1-norm. Julia uses IDAMAX / IZAMAX which return
+        // the FIRST index achieving the max; we mirror that with a
+        // strict `>` comparison.
+        let mut kp = 0usize;
+        let mut colmax = mag(a.get(0, k0));
+        for j in 1..=kk0 {
+            let v = mag(a.get(j, k0));
+            if v > colmax {
+                colmax = v;
+                kp = j;
+            }
+        }
+
+        if colmax == 0.0 {
+            // Column is zero -- record INFO if first time, set pivot to
+            // kk0 (no swap), continue the outer loop.
+            if info.is_none() {
+                // Fortran INFO is 1-based row index; Julia stores k-1
+                // which is the 1-based kk. Translate to 1-based here.
+                info = Some(kk0 + 1);
+            }
+            pivots[kk0] = PivotIndex1Based((kk0 as u32) + 1);
+            continue;
+        }
+
+        // Swap rows/columns kk0 and kp if needed.
+        if kp != kk0 {
+            // Julia: for j in 1:(kp-1); A[j, kk], A[j, kp] = A[j, kp], A[j, kk]
+            for j in 0..kp {
+                let t = a.get(j, kk0);
+                a.set(j, kk0, a.get(j, kp));
+                a.set(j, kp, t);
+            }
+            // Julia: for j in (kp+1):(kk-1); A[j, kk], A[kp, j] = A[kp, j], A[j, kk]
+            for j in (kp + 1)..kk0 {
+                let t = a.get(j, kk0);
+                a.set(j, kk0, a.get(kp, j));
+                a.set(kp, j, t);
+            }
+            // Julia: for j in k:n; A[kk, j], A[kp, j] = A[kp, j], A[kk, j]
+            for j in k0..n {
+                let t = a.get(kk0, j);
+                a.set(kk0, j, a.get(kp, j));
+                a.set(kp, j, t);
+            }
+            // Julia: for j in kp:(kk-1); A[j, kk] = -A[j, kk]
+            for j in kp..kk0 {
+                let v = -a.get(j, kk0);
+                a.set(j, kk0, v);
+            }
+            // Julia: for j in (kp+1):(kk-1); A[kp, j] = -A[kp, j]
+            for j in (kp + 1)..kk0 {
+                let v = -a.get(kp, j);
+                a.set(kp, j, v);
+            }
+        }
+
+        pivots[kk0] = PivotIndex1Based((kp as u32) + 1);
+
+        // Skew-symmetric rank-2 update of A[0..kk0, 0..kk0].
+        // Julia: if k >= 3 ... (kk = k-1 >= 2, i.e. kk0 >= 1 in 0-based).
+        if kk0 >= 1 {
+            let pivot = a.get(kk0, k0);
+            // Note: pivot is `A[kk, k]` in Julia (a single off-diagonal entry).
+            let alpha = T::pfaf_one() / pivot;
+
+            // Skew-symmetric rank-2 update of the **upper-triangular** part
+            // of A[0..kk0, 0..kk0], byte-for-byte equivalent to Julia
+            // `julia_dsktf2!` (ltl_decomposition.jl:124-150). Julia
+            // deliberately uses a hand-rolled upper-triangle-only DSKR2
+            // here ("Optimized skew-symmetric rank-2 update") instead of
+            // `BLAS.ger!`, because the LTL output contract requires the
+            // strict lower triangle to be preserved as the original
+            // matrix entries — the golden fixtures under
+            // `tests/fixtures/dump_pfapack_reference/` compare the full
+            // n×n buffer.
+            //
+            // We mirror that here: a single `dger` would touch the lower
+            // triangle, which `utu2pfa` doesn't care about but the golden
+            // diff does, so the scalar form is the bit-parity-correct
+            // backend even when `--features blas-backend` is on.
+            for j in 0..kk0 {
+                let temp1 = alpha * a.get(j, kk0);
+                let temp2 = alpha * a.get(j, k0);
+                for i in 0..j {
+                    let cur = a.get(i, j);
+                    let upd = a.get(i, k0) * temp1 - a.get(i, kk0) * temp2;
+                    a.set(i, j, cur + upd);
+                }
+                a.set(j, j, T::pfaf_zero());
+            }
+
+            // Julia: BLAS.scal!(k-2, alpha, A[1:k-2, k], 1) — backend
+            // route: dscal / zscal when BLAS is on, plain loop otherwise.
+            let n_sub = kk0;
+            let lda = a.lda();
+            let col_start = k0 * lda;
+            backend::scal_strided::<T>(
+                &mut a.as_mut_slice()[col_start..col_start + n_sub],
+                n_sub,
+                alpha,
+            );
+        }
+    }
+
+    match info {
+        None => Ok(()),
+        Some(i) => Err(i),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pfaffian::pfaffian_ltl_real;
+    use crate::utu2::utu2pfa_real;
+    use approx::assert_relative_eq;
+
+    // After dsktf2, utu2pfa should reproduce the same Pfaffian as the
+    // direct Parlett-Reid pass on a fresh copy. This is the
+    // "end-to-end" property test the upstream package documents.
+    #[test]
+    fn dsktf2_then_utu2pfa_matches_parlett_reid_real() {
+        let n = 6;
+        let raw = [
+            [0.0, 1.5, -0.7, 2.1, 0.4, -0.2],
+            [-1.5, 0.0, 0.3, -0.4, 1.2, 0.9],
+            [0.7, -0.3, 0.0, 1.1, -0.5, 0.1],
+            [-2.1, 0.4, -1.1, 0.0, 0.8, -0.6],
+            [-0.4, -1.2, 0.5, -0.8, 0.0, 0.7],
+            [0.2, -0.9, -0.1, 0.6, -0.7, 0.0],
+        ];
+        let mut a_copy_for_pr = vec![0.0; n * n];
+        let mut a_copy_for_ltl = vec![0.0; n * n];
+        for j in 0..n {
+            for i in 0..n {
+                a_copy_for_pr[j * n + i] = raw[i][j];
+                a_copy_for_ltl[j * n + i] = raw[i][j];
+            }
+        }
+        let pf_pr = {
+            let mut m = SqMat::new(&mut a_copy_for_pr, n);
+            pfaffian_ltl_real(&mut m)
+        };
+        let pf_utu2 = {
+            let mut m = SqMat::new(&mut a_copy_for_ltl, n);
+            let mut piv = vec![PivotIndex1Based(0); n];
+            dsktf2(&mut m, &mut piv).expect("dsktf2 should succeed on non-singular skew matrix");
+            utu2pfa_real(&m, &piv)
+        };
+        assert_relative_eq!(pf_pr, pf_utu2, max_relative = 1e-12);
+    }
+
+    #[test]
+    fn zero_matrix_returns_info() {
+        // A 4x4 all-zero matrix: every pivot column is zero, so `info`
+        // should fire on the very first iteration (k = n = 4, kk = 3,
+        // 1-based info = 3).
+        let n = 4;
+        let mut buf = vec![0.0; n * n];
+        let mut m = SqMat::new(&mut buf, n);
+        let mut piv = vec![PivotIndex1Based(0); n];
+        let err = dsktf2(&mut m, &mut piv).unwrap_err();
+        // Fortran INFO is the 1-based first zero-pivot row, which is
+        // n-1 here (k = n, kk = n-1, info = kk = 3).
+        assert_eq!(err, n - 1);
+    }
+}
