@@ -746,7 +746,7 @@ dependencies = [
  "mvmc-physics",
  "num-complex",
  "proptest",
- "rand 0.8.5",
+ "rand 0.9.2",
  "serde",
  "thiserror",
 ]
@@ -777,7 +777,7 @@ dependencies = [
  "ndarray",
  "num-complex",
  "proptest",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rand_distr",
  "thiserror",
 ]
@@ -796,7 +796,7 @@ dependencies = [
  "ndarray",
  "num-complex",
  "proptest",
- "rand 0.8.5",
+ "rand 0.9.2",
  "serde",
  "thiserror",
 ]
