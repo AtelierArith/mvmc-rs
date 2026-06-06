@@ -19,6 +19,7 @@ pub fn julia_mvmc_root() -> Option<PathBuf> {
         manifest.join("../../../Julia-mVMC"),
         manifest.join("../../../ManyVariableVariationalMonteCarlo.jl/extern/Julia-mVMC"),
         manifest.join("../../../../ManyVariableVariationalMonteCarlo.jl/extern/Julia-mVMC"),
+        manifest.join("../../extern/Julia-mVMC"),
         manifest.join("../../Julia-mVMC"),
         manifest.join("../Julia-mVMC"),
     ];

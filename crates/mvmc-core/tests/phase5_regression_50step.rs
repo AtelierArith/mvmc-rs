@@ -55,7 +55,7 @@ fn all_models() -> &'static [Model] {
 }
 
 fn run_and_compare(julia: &Path, model: &Model) -> Result<(), String> {
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let namelist = julia
         .join("examples")
         .join("inputs")
