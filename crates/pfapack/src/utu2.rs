@@ -117,12 +117,17 @@ where
     if n == 0 {
         return;
     }
+    let b_data = b.as_slice();
+    let c_data = c.as_mut_slice();
+
     // Julia 1-based: vT[1..n-1], B[1..n, 1..n], C[1..n, 1..n].
     //   inv_minus_vT_1 = inv(-vT[1])
     //   C[2, j] = B[1, j] * inv_minus_vT_1  for j in 1..n
     let inv_minus_vt_1 = T::pfaf_one() / (-vt[0]);
-    for j in 0..n {
-        c.set(1, j, b.get(0, j) * inv_minus_vt_1);
+    let mut base = 0usize;
+    for _ in 0..n {
+        c_data[base + 1] = b_data[base] * inv_minus_vt_1;
+        base += n;
     }
     // Julia: i_cpp = 2; while i_cpp < n;
     //   inv_minus_vT_i_cpp_1 = inv(-vT[i_cpp+1])
@@ -134,11 +139,16 @@ where
     while i_julia < n {
         let inv_minus_vt_ipp1 = T::pfaf_one() / (-vt[i_julia]); // vT[i_cpp+1] (1-based) -> vt[i_cpp+1 - 1] = vt[i_julia]
         let vt_i_julia = vt[i_julia - 1]; // vT[i_cpp] (1-based) -> vt[i_cpp - 1]
-        for j in 0..n {
-            let cij = c.get(i_julia - 1, j); // C[i_cpp, j] (1-based) -> c[i_julia-1, j]
-            let bipij = b.get(i_julia, j); // B[i_cpp + 1, j] (1-based) -> b[i_julia, j]
+        let read_row = i_julia - 1; // C[i_cpp, j] (1-based) -> c[i_julia-1, j]
+        let b_row = i_julia; // B[i_cpp + 1, j] (1-based) -> b[i_julia, j]
+        let write_row = i_julia + 1; // C[i_cpp + 2, j] (1-based) -> c[i_julia + 1, j]
+        let mut base = 0usize;
+        for _ in 0..n {
+            let cij = c_data[base + read_row];
+            let bipij = b_data[base + b_row];
             let new_val = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
-            c.set(i_julia + 1, j, new_val); // C[i_cpp + 2, j] (1-based) -> c[i_julia + 1, j]
+            c_data[base + write_row] = new_val;
+            base += n;
         }
         i_julia += 2;
     }
@@ -157,11 +167,16 @@ where
     if n == 0 {
         return;
     }
+    let b_data = b.as_slice();
+    let c_data = c.as_mut_slice();
+
     // Julia: vT_n_1 = inv(vT[n - 1])
     //        C[n - 1, j] = B[n, j] * vT_n_1   for j in 1..n
     let inv_vt_nm1 = T::pfaf_one() / vt[n - 2]; // vT[n-1] (1-based) -> vt[n-2]
-    for j in 0..n {
-        c.set(n - 2, j, b.get(n - 1, j) * inv_vt_nm1); // C[n-1, j] (1-based) -> c[n-2, j]; B[n, j] -> b[n-1, j]
+    let mut base = 0usize;
+    for _ in 0..n {
+        c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
+        base += n;
     }
     // Julia: i_cpp = n - 3; while i_cpp >= 1;
     //   inv_vT_i_cpp   = inv(vT[i_cpp])
@@ -177,11 +192,16 @@ where
         let i = i_julia as usize;
         let inv_vt_i = T::pfaf_one() / vt[i - 1]; // vT[i_cpp] (1-based) -> vt[i_cpp - 1]
         let vt_ip1 = vt[i]; // vT[i_cpp + 1] (1-based) -> vt[i_cpp]
-        for j in 0..n {
-            let bip = b.get(i, j); // B[i_cpp + 1, j] (1-based) -> b[i_cpp, j]
-            let cip2 = c.get(i + 1, j); // C[i_cpp + 2, j] (1-based) -> c[i_cpp + 1, j]
+        let b_row = i; // B[i_cpp + 1, j] (1-based) -> b[i_cpp, j]
+        let read_row = i + 1; // C[i_cpp + 2, j] (1-based) -> c[i_cpp + 1, j]
+        let write_row = i - 1; // C[i_cpp, j] (1-based) -> c[i_cpp - 1, j]
+        let mut base = 0usize;
+        for _ in 0..n {
+            let bip = b_data[base + b_row];
+            let cip2 = c_data[base + read_row];
             let new_val = (bip + cip2 * vt_ip1) * inv_vt_i;
-            c.set(i - 1, j, new_val); // C[i_cpp, j] (1-based) -> c[i_cpp - 1, j]
+            c_data[base + write_row] = new_val;
+            base += n;
         }
         i_julia -= 2;
     }
@@ -244,11 +264,10 @@ fn utu2inv_generic<T>(
     assert_eq!(vt.len(), n - 1);
 
     // Step 1: M <- I
-    for j in 0..n {
-        for i in 0..n {
-            m.set(i, j, T::pfaf_zero());
-        }
-        m.set(j, j, T::pfaf_one());
+    let m_data = m.as_mut_slice();
+    m_data.fill(T::pfaf_zero());
+    for i in 0..n {
+        m_data[i * n + i] = T::pfaf_one();
     }
 
     // Step 2: trtri on the unit upper-triangular submatrix A[0..n-1, 1..n].
@@ -273,16 +292,21 @@ fn utu2inv_generic<T>(
     // Julia: for j_rel in 1:n-2; for i_rel in 1:j_rel; M[i_rel, j_rel+1] = A[i_rel, j_rel+2]
     // 0-based: for jr in 0..n-2; for ir in 0..=jr; m[ir, jr+1] = a[ir, jr+2]
     if n > 2 {
+        let a_data = a.as_slice();
+        let m_data = m.as_mut_slice();
         for jr in 0..(n - 2) {
+            let src_col = (jr + 2) * n;
+            let dst_col = (jr + 1) * n;
             for ir in 0..=jr {
-                m.set(ir, jr + 1, a.get(ir, jr + 2));
+                m_data[dst_col + ir] = a_data[src_col + ir];
             }
         }
     }
 
     // Step 4: vT[i] = -A[i, i+1]  (0-based: vt[i] = -a[i, i+1] for i in 0..n-1)
+    let a_data = a.as_slice();
     for i in 0..(n - 1) {
-        vt[i] = -a.get(i, i + 1);
+        vt[i] = -a_data[(i + 1) * n + i];
     }
 
     // Step 5: skew-tridiagonal solve (input M, output A).
@@ -294,13 +318,14 @@ fn utu2inv_generic<T>(
 
     // Step 6: column permutation by iPiv (forward direction).
     // Julia: for j in 1:n; target = iPiv[j]; if target != j; swap cols.
+    let a_data = a.as_mut_slice();
     for j in 0..n {
         let target = (pivots[j].0 as usize) - 1;
         if target != j {
+            let col_j = j * n;
+            let col_target = target * n;
             for i in 0..n {
-                let t = a.get(i, j);
-                a.set(i, j, a.get(i, target));
-                a.set(i, target, t);
+                a_data.swap(col_j + i, col_target + i);
             }
         }
     }
@@ -312,13 +337,13 @@ fn utu2inv_generic<T>(
     }
 
     // Step 8: row permutation by iPiv (forward direction, sequential)
+    let a_data = a.as_mut_slice();
     for i in 0..n {
         let target = (pivots[i].0 as usize) - 1;
         if target != i {
             for j in 0..n {
-                let t = a.get(i, j);
-                a.set(i, j, a.get(target, j));
-                a.set(target, j, t);
+                let col = j * n;
+                a_data.swap(col + i, col + target);
             }
         }
     }
