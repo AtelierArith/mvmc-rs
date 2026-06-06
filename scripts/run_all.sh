@@ -32,6 +32,18 @@ run_rust_scalar() {
     cargo run --release --manifest-path "$manifest" --offline | tee "$out"
 }
 
+run_rust_simd() {
+  local threads="$1"
+  local out="$out_dir/rust_simd_openblas${threads}.csv"
+  local target_dir="$out_dir/target_simd_openblas${threads}"
+
+  echo "== Rust SIMD / OPENBLAS_NUM_THREADS=$threads =="
+  OPENBLAS_NUM_THREADS="$threads" \
+  CARGO_TARGET_DIR="$target_dir" \
+    cargo run --release --manifest-path "$manifest" \
+      --features pfapack/simd-backend --offline | tee "$out"
+}
+
 run_rust_blas() {
   local threads="$1"
   local out="$out_dir/rust_blas_openblas${threads}.csv"
@@ -82,6 +94,7 @@ generate_report() {
     for threads in 1 4; do
       echo "OPENBLAS_NUM_THREADS=$threads julia --project=$julia_project $julia_bench"
       echo "OPENBLAS_NUM_THREADS=$threads cargo run --release --manifest-path $manifest --offline"
+      echo "OPENBLAS_NUM_THREADS=$threads cargo run --release --manifest-path $manifest --features pfapack/simd-backend --offline"
       echo "OPENBLAS_NUM_THREADS=$threads cargo run --release --manifest-path $manifest --features pfapack/blas-backend --offline"
     done
     echo '```'
@@ -132,8 +145,8 @@ generate_report() {
           config = configs[c]
           print "## " config_titles[config]
           print ""
-          print "| kind | n | op | Julia ms | Julia LV ms | Rust scalar ms | Rust BLAS ms |"
-          print "|---|---:|---|---:|---:|---:|---:|"
+          print "| kind | n | op | Julia ms | Julia LV ms | Rust scalar ms | Rust SIMD ms | Rust BLAS ms |"
+          print "|---|---:|---|---:|---:|---:|---:|---:|"
           for (ki = 1; ki <= 2; ki++) {
             kind = kinds[ki]
             for (ni = 1; ni <= 4; ni++) {
@@ -144,17 +157,20 @@ generate_report() {
                 julia = value[base SUBSEP "julia"]
                 julia_lv = value[base SUBSEP "julia_lv"]
                 rust_scalar = value[base SUBSEP "rust_scalar"]
+                rust_simd = value[base SUBSEP "rust_simd"]
                 rust_blas = value[base SUBSEP "rust_blas"]
                 min = ""
                 min = consider(julia, min)
                 min = consider(julia_lv, min)
                 min = consider(rust_scalar, min)
+                min = consider(rust_simd, min)
                 min = consider(rust_blas, min)
-                printf("| %s | %s | %s | %s | %s | %s | %s |\n",
+                printf("| %s | %s | %s | %s | %s | %s | %s | %s |\n",
                   kind, n, op,
                   marked(julia, min),
                   marked(julia_lv, min),
                   marked(rust_scalar, min),
+                  marked(rust_simd, min),
                   marked(rust_blas, min))
               }
             }
@@ -174,6 +190,9 @@ for threads in 1 4; do
 
   run_rust_scalar "$threads"
   append_with_config "openblas_threads_${threads}" "rust_scalar" "$out_dir/rust_scalar_openblas${threads}.csv"
+
+  run_rust_simd "$threads"
+  append_with_config "openblas_threads_${threads}" "rust_simd" "$out_dir/rust_simd_openblas${threads}.csv"
 
   run_rust_blas "$threads"
   append_with_config "openblas_threads_${threads}" "rust_blas" "$out_dir/rust_blas_openblas${threads}.csv"

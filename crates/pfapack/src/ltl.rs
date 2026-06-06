@@ -205,6 +205,9 @@ impl UpperRank2Kernel for Complex64 {
 mod simd_rank2 {
     use num_complex::Complex64;
     use pulp::{Arch, Simd, WithSimd};
+    use std::sync::OnceLock;
+
+    static ARCH: OnceLock<Arch> = OnceLock::new();
 
     pub(super) fn update_upper_rank2_c64(
         write_cols: &mut [Complex64],
@@ -214,7 +217,7 @@ mod simd_rank2 {
         kk0: usize,
         alpha: Complex64,
     ) {
-        Arch::new().dispatch(UpdateUpperRank2C64 {
+        (*ARCH.get_or_init(Arch::new)).dispatch(UpdateUpperRank2C64 {
             write_cols,
             col_kk0_data,
             col_k0_data,
@@ -247,7 +250,37 @@ mod simd_rank2 {
                 alpha,
             } = self;
 
-            for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+            let mut cols = write_cols.chunks_exact_mut(lda);
+            let mut j = 0usize;
+            while j + 1 < kk0 {
+                let col_j0 = cols.next().expect("column j must exist");
+                let col_j1 = cols.next().expect("column j+1 must exist");
+
+                let temp1_j0 = alpha * col_kk0_data[j];
+                let temp2_j0 = alpha * col_k0_data[j];
+                let temp1_j1 = alpha * col_kk0_data[j + 1];
+                let temp2_j1 = alpha * col_k0_data[j + 1];
+
+                update_col2(
+                    simd,
+                    &mut col_j0[..j],
+                    &mut col_j1[..j],
+                    &col_k0_data[..j],
+                    &col_kk0_data[..j],
+                    temp1_j0,
+                    temp2_j0,
+                    temp1_j1,
+                    temp2_j1,
+                );
+
+                col_j0[j] = Complex64::new(0.0, 0.0);
+                col_j1[j] += col_k0_data[j] * temp1_j1 - col_kk0_data[j] * temp2_j1;
+                col_j1[j + 1] = Complex64::new(0.0, 0.0);
+                j += 2;
+            }
+
+            if j < kk0 {
+                let col_j = cols.next().expect("last column must exist");
                 let temp1 = alpha * col_kk0_data[j];
                 let temp2 = alpha * col_k0_data[j];
                 update_col(
@@ -275,20 +308,70 @@ mod simd_rank2 {
         let temp1_scalar = temp1;
         let temp2_scalar = temp2;
         let temp1 = simd.splat_c64s(temp1_scalar);
-        let temp2 = simd.splat_c64s(temp2_scalar);
+        let neg_temp2 = simd.splat_c64s(-temp2_scalar);
 
         let (dst_head, dst_tail) = S::as_mut_simd_c64s(dst);
         let (x_head, x_tail) = S::as_simd_c64s(x);
         let (y_head, y_tail) = S::as_simd_c64s(y);
 
         for ((dst, x), y) in dst_head.iter_mut().zip(x_head).zip(y_head) {
-            let add = simd.mul_c64s(*x, temp1);
-            let sub = simd.mul_c64s(*y, temp2);
-            *dst = simd.add_c64s(*dst, simd.sub_c64s(add, sub));
+            let acc = simd.mul_add_c64s(*x, temp1, *dst);
+            *dst = simd.mul_add_c64s(*y, neg_temp2, acc);
         }
 
         for ((dst, x), y) in dst_tail.iter_mut().zip(x_tail).zip(y_tail) {
             *dst += *x * temp1_scalar - *y * temp2_scalar;
+        }
+    }
+
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn update_col2<S: Simd>(
+        simd: S,
+        dst0: &mut [Complex64],
+        dst1: &mut [Complex64],
+        x: &[Complex64],
+        y: &[Complex64],
+        temp1_0: Complex64,
+        temp2_0: Complex64,
+        temp1_1: Complex64,
+        temp2_1: Complex64,
+    ) {
+        let temp1_0_scalar = temp1_0;
+        let temp2_0_scalar = temp2_0;
+        let temp1_1_scalar = temp1_1;
+        let temp2_1_scalar = temp2_1;
+        let temp1_0 = simd.splat_c64s(temp1_0_scalar);
+        let neg_temp2_0 = simd.splat_c64s(-temp2_0_scalar);
+        let temp1_1 = simd.splat_c64s(temp1_1_scalar);
+        let neg_temp2_1 = simd.splat_c64s(-temp2_1_scalar);
+
+        let (dst0_head, dst0_tail) = S::as_mut_simd_c64s(dst0);
+        let (dst1_head, dst1_tail) = S::as_mut_simd_c64s(dst1);
+        let (x_head, x_tail) = S::as_simd_c64s(x);
+        let (y_head, y_tail) = S::as_simd_c64s(y);
+
+        for (((dst0, dst1), x), y) in dst0_head
+            .iter_mut()
+            .zip(dst1_head.iter_mut())
+            .zip(x_head)
+            .zip(y_head)
+        {
+            let acc0 = simd.mul_add_c64s(*x, temp1_0, *dst0);
+            *dst0 = simd.mul_add_c64s(*y, neg_temp2_0, acc0);
+
+            let acc1 = simd.mul_add_c64s(*x, temp1_1, *dst1);
+            *dst1 = simd.mul_add_c64s(*y, neg_temp2_1, acc1);
+        }
+
+        for (((dst0, dst1), x), y) in dst0_tail
+            .iter_mut()
+            .zip(dst1_tail.iter_mut())
+            .zip(x_tail)
+            .zip(y_tail)
+        {
+            *dst0 += *x * temp1_0_scalar - *y * temp2_0_scalar;
+            *dst1 += *x * temp1_1_scalar - *y * temp2_1_scalar;
         }
     }
 }
@@ -302,7 +385,7 @@ fn update_upper_rank2_c64_simd(
     k0: usize,
     alpha: Complex64,
 ) {
-    if kk0 < 64 {
+    if kk0 < 8 {
         update_upper_rank2_c64_scalar(data, lda, kk0, k0, alpha);
         return;
     }
