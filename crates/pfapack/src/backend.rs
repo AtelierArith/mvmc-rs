@@ -366,3 +366,131 @@ mod blas_impl {
         }
     }
 }
+
+#[cfg(all(test, feature = "blas-backend"))]
+mod tests {
+    use super::*;
+
+    #[inline]
+    fn idx(lda: usize, row: usize, col: usize) -> usize {
+        col * lda + row
+    }
+
+    #[inline]
+    fn z(re: f64, im: f64) -> Complex64 {
+        Complex64::new(re, im)
+    }
+
+    fn assert_complex_slices_close(got: &[Complex64], want: &[Complex64]) {
+        assert_eq!(got.len(), want.len());
+        for (i, (got, want)) in got.iter().zip(want.iter()).enumerate() {
+            let diff = (*got - *want).norm();
+            let scale = got.norm().max(want.norm()).max(1.0);
+            assert!(
+                diff <= 1e-12 * scale,
+                "complex slice mismatch at idx {i}: got={got:?} want={want:?} diff={diff:.3e}"
+            );
+        }
+    }
+
+    fn reference_trtri_uu(a: &mut [Complex64], lda: usize, row0: usize, col0: usize, n: usize) {
+        if n < 2 {
+            return;
+        }
+
+        let mut tmp = vec![Complex64::new(0.0, 0.0); n - 1];
+        for j in 1..n {
+            for i in 0..j {
+                tmp[i] = a[idx(lda, row0 + i, col0 + j)];
+            }
+            for i in 0..j {
+                let mut acc = tmp[i];
+                for k in (i + 1)..j {
+                    acc += a[idx(lda, row0 + i, col0 + k)] * tmp[k];
+                }
+                a[idx(lda, row0 + i, col0 + j)] = -acc;
+            }
+        }
+    }
+
+    fn reference_trmm_lutu(m: &[Complex64], a: &mut [Complex64], n: usize) {
+        for i_rev in 0..n {
+            let i = n - 1 - i_rev;
+            for j in 0..n {
+                let mut acc = a[idx(n, i, j)];
+                for k in 0..i {
+                    acc += m[idx(n, k, i)] * a[idx(n, k, j)];
+                }
+                a[idx(n, i, j)] = acc;
+            }
+        }
+    }
+
+    #[test]
+    fn complex_trtri_uu_offset_submatrix_matches_scalar_reference() {
+        let lda = 7;
+        let row0 = 1;
+        let col0 = 2;
+        let n = 4;
+        let mut got: Vec<_> = (0..lda * lda)
+            .map(|k| z(0.125 + 0.031 * k as f64, -0.25 + 0.017 * k as f64))
+            .collect();
+
+        for j in 0..n {
+            for i in 0..n {
+                let value = if i < j {
+                    z(
+                        0.2 + 0.13 * i as f64 + 0.19 * j as f64,
+                        -0.3 + 0.07 * i as f64 - 0.11 * j as f64,
+                    )
+                } else {
+                    z(
+                        7.0 + 0.3 * i as f64 + 0.2 * j as f64,
+                        -5.0 + 0.4 * i as f64 - 0.1 * j as f64,
+                    )
+                };
+                got[idx(lda, row0 + i, col0 + j)] = value;
+            }
+        }
+
+        let mut want = got.clone();
+        reference_trtri_uu(&mut want, lda, row0, col0, n);
+
+        trtri_uu_inplace::<Complex64>(&mut got, lda, row0, col0, n);
+
+        assert_complex_slices_close(&got, &want);
+    }
+
+    #[test]
+    fn complex_trmm_lutu_uses_plain_transpose_not_conjugate_transpose() {
+        let n = 5;
+        let mut m = vec![Complex64::new(0.0, 0.0); n * n];
+        for j in 0..n {
+            for i in 0..n {
+                m[idx(n, i, j)] = z(
+                    3.0 + 0.2 * i as f64 + 0.1 * j as f64,
+                    -2.0 + 0.05 * i as f64 - 0.07 * j as f64,
+                );
+            }
+        }
+        for j in 0..n {
+            for i in 0..j {
+                m[idx(n, i, j)] = z(
+                    0.35 + 0.09 * i as f64 + 0.14 * j as f64,
+                    -0.42 + 0.08 * i as f64 - 0.06 * j as f64,
+                );
+            }
+            m[idx(n, j, j)] = z(19.0 + j as f64, -23.0 - j as f64);
+        }
+
+        let mut got: Vec<_> = (0..n * n)
+            .map(|k| z(-0.7 + 0.03 * k as f64, 0.45 - 0.04 * k as f64))
+            .collect();
+        let mut want = got.clone();
+        reference_trmm_lutu(&m, &mut want, n);
+
+        trmm_lutu::<Complex64>(&m, &mut got, n);
+
+        assert_complex_slices_close(&got, &want);
+    }
+}
