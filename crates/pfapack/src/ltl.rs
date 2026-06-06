@@ -49,8 +49,8 @@ where
     let mut info: Option<usize> = None;
 
     // Julia: for i in 1:n; iPiv[i] = i
-    for i in 0..n {
-        pivots[i] = PivotIndex1Based((i as u32) + 1);
+    for (i, pivot) in pivots.iter_mut().enumerate().take(n) {
+        *pivot = PivotIndex1Based((i as u32) + 1);
     }
 
     if n < 2 {

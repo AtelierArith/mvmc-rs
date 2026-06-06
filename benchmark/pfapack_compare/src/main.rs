@@ -67,91 +67,115 @@ fn iters_for(n: usize) -> usize {
     }
 }
 
-fn main() {
-    println!("impl,kind,n,op,median_ms");
+fn print_result(kind: &str, n: usize, op: &str, t: f64) {
+    println!("rust,{kind},{n},{op},{t:.6}");
+}
+
+fn run_benchmark() {
     for &n in &[32usize, 64, 128, 256] {
         let iters = iters_for(n);
 
         let orig = skew_real(n, 42);
+        let mut a = vec![0.0; n * n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
+            a.copy_from_slice(&orig);
             let mut sm = SqMat::new(&mut a, n);
             std::hint::black_box(pfaffian_ltl_real(&mut sm));
         });
-        println!("rust,real,{n},pfaffian_ltl,{t:.6}");
+        print_result("real", n, "pfaffian_ltl", t);
 
+        let mut a = vec![0.0; n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             let mut sm = SqMat::new(&mut a, n);
-            std::hint::black_box(dsktf2(&mut sm, &mut piv).unwrap());
+            dsktf2(&mut sm, &mut piv).unwrap();
+            std::hint::black_box(piv[0]);
         });
-        println!("rust,real,{n},ltl,{t:.6}");
+        print_result("real", n, "ltl", t);
 
+        let mut a = vec![0.0; n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             let mut sm = SqMat::new(&mut a, n);
             dsktf2(&mut sm, &mut piv).unwrap();
             std::hint::black_box(utu2pfa_real(&sm, &piv));
         });
-        println!("rust,real,{n},ltl_utu2pfa,{t:.6}");
+        print_result("real", n, "ltl_utu2pfa", t);
 
+        let mut a = vec![0.0; n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
+        let mut vt = vec![0.0; n - 1];
+        let mut m_buf = vec![0.0; n * n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             {
                 let mut sm = SqMat::new(&mut a, n);
                 dsktf2(&mut sm, &mut piv).unwrap();
             }
-            let mut vt = vec![0.0; n - 1];
-            let mut m_buf = vec![0.0; n * n];
             let mut sm = SqMat::new(&mut a, n);
             let mut mm = SqMat::new(&mut m_buf, n);
             utu2inv_real(&mut sm, &piv, &mut vt, &mut mm);
             std::hint::black_box(sm.get(0, 0));
         });
-        println!("rust,real,{n},ltl_utu2inv,{t:.6}");
+        print_result("real", n, "ltl_utu2inv", t);
 
         let orig = skew_complex(n, 42);
+        let mut a = vec![Complex64::new(0.0, 0.0); n * n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
+            a.copy_from_slice(&orig);
             let mut sm = SqMat::new(&mut a, n);
             std::hint::black_box(pfaffian_ltl_complex(&mut sm));
         });
-        println!("rust,complex,{n},pfaffian_ltl,{t:.6}");
+        print_result("complex", n, "pfaffian_ltl", t);
 
+        let mut a = vec![Complex64::new(0.0, 0.0); n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             let mut sm = SqMat::new(&mut a, n);
-            std::hint::black_box(zsktf2(&mut sm, &mut piv).unwrap());
+            zsktf2(&mut sm, &mut piv).unwrap();
+            std::hint::black_box(piv[0]);
         });
-        println!("rust,complex,{n},ltl,{t:.6}");
+        print_result("complex", n, "ltl", t);
 
+        let mut a = vec![Complex64::new(0.0, 0.0); n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             let mut sm = SqMat::new(&mut a, n);
             zsktf2(&mut sm, &mut piv).unwrap();
             std::hint::black_box(utu2pfa_complex(&sm, &piv));
         });
-        println!("rust,complex,{n},ltl_utu2pfa,{t:.6}");
+        print_result("complex", n, "ltl_utu2pfa", t);
 
+        let mut a = vec![Complex64::new(0.0, 0.0); n * n];
+        let mut piv = vec![PivotIndex1Based(0); n];
+        let mut vt = vec![Complex64::new(0.0, 0.0); n - 1];
+        let mut m_buf = vec![Complex64::new(0.0, 0.0); n * n];
         let t = bench(iters, || {
-            let mut a = orig.clone();
-            let mut piv = vec![PivotIndex1Based(0); n];
+            a.copy_from_slice(&orig);
+            piv.fill(PivotIndex1Based(0));
             {
                 let mut sm = SqMat::new(&mut a, n);
                 zsktf2(&mut sm, &mut piv).unwrap();
             }
-            let mut vt = vec![Complex64::new(0.0, 0.0); n - 1];
-            let mut m_buf = vec![Complex64::new(0.0, 0.0); n * n];
             let mut sm = SqMat::new(&mut a, n);
             let mut mm = SqMat::new(&mut m_buf, n);
             utu2inv_complex(&mut sm, &piv, &mut vt, &mut mm);
             std::hint::black_box(sm.get(0, 0));
         });
-        println!("rust,complex,{n},ltl_utu2inv,{t:.6}");
+        print_result("complex", n, "ltl_utu2inv", t);
     }
+}
+
+fn main() {
+    println!("impl,kind,n,op,median_ms");
+    run_benchmark();
 }

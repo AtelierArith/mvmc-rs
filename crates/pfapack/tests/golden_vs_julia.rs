@@ -147,9 +147,8 @@ fn rel_close_complex(a: Complex64, b: Complex64, rel: f64, abs: f64) -> bool {
 }
 
 /// Strip the LTL-fixture payload into `(matrix_entries, pivots_1based)`.
-fn split_ltl_payload(payload: &[String], n: usize, complex: bool) -> (Vec<String>, Vec<u32>) {
-    let payload_lines_per_entry = if complex { n * n } else { n * n };
-    let _ = complex;
+fn split_ltl_payload(payload: &[String], n: usize) -> (Vec<String>, Vec<u32>) {
+    let payload_lines_per_entry = n * n;
     let mat_lines: Vec<String> = payload
         .iter()
         .take(payload_lines_per_entry)
@@ -188,7 +187,7 @@ fn check_real_case(n: usize, seed: u64) {
     assert_eq!(inv_fx.kind_value, "inverse");
 
     let orig = parse_real_vector(&orig_fx.payload);
-    let (ltl_mat_lines, ltl_pivots_julia) = split_ltl_payload(&ltl_fx.payload, n, false);
+    let (ltl_mat_lines, ltl_pivots_julia) = split_ltl_payload(&ltl_fx.payload, n);
     let ltl_expected = parse_real_vector(&ltl_mat_lines);
     let pf_expected = parse_real_vector(&pf_fx.payload);
     let inv_expected = parse_real_vector(&inv_fx.payload);
@@ -277,7 +276,7 @@ fn check_complex_case(n: usize, seed: u64) {
     assert_eq!(inv_fx.kind_value, "inverse");
 
     let orig = parse_complex_vector(&orig_fx.payload);
-    let (ltl_mat_lines, ltl_pivots_julia) = split_ltl_payload(&ltl_fx.payload, n, true);
+    let (ltl_mat_lines, ltl_pivots_julia) = split_ltl_payload(&ltl_fx.payload, n);
     let ltl_expected = parse_complex_vector(&ltl_mat_lines);
     let pf_expected = parse_complex_vector(&pf_fx.payload);
     let inv_expected = parse_complex_vector(&inv_fx.payload);

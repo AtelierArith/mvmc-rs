@@ -125,7 +125,18 @@ where
     //   C[2, j] = B[1, j] * inv_minus_vT_1  for j in 1..n
     let inv_minus_vt_1 = T::pfaf_one() / (-vt[0]);
     let mut base = 0usize;
-    for _ in 0..n {
+    let unrolled = n / 4 * 4;
+    for _ in (0..unrolled).step_by(4) {
+        c_data[base + 1] = b_data[base] * inv_minus_vt_1;
+        base += n;
+        c_data[base + 1] = b_data[base] * inv_minus_vt_1;
+        base += n;
+        c_data[base + 1] = b_data[base] * inv_minus_vt_1;
+        base += n;
+        c_data[base + 1] = b_data[base] * inv_minus_vt_1;
+        base += n;
+    }
+    for _ in unrolled..n {
         c_data[base + 1] = b_data[base] * inv_minus_vt_1;
         base += n;
     }
@@ -143,11 +154,32 @@ where
         let b_row = i_julia; // B[i_cpp + 1, j] (1-based) -> b[i_julia, j]
         let write_row = i_julia + 1; // C[i_cpp + 2, j] (1-based) -> c[i_julia + 1, j]
         let mut base = 0usize;
-        for _ in 0..n {
+        let unrolled = n / 4 * 4;
+        for _ in (0..unrolled).step_by(4) {
             let cij = c_data[base + read_row];
             let bipij = b_data[base + b_row];
-            let new_val = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
-            c_data[base + write_row] = new_val;
+            c_data[base + write_row] = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
+            base += n;
+
+            let cij = c_data[base + read_row];
+            let bipij = b_data[base + b_row];
+            c_data[base + write_row] = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
+            base += n;
+
+            let cij = c_data[base + read_row];
+            let bipij = b_data[base + b_row];
+            c_data[base + write_row] = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
+            base += n;
+
+            let cij = c_data[base + read_row];
+            let bipij = b_data[base + b_row];
+            c_data[base + write_row] = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
+            base += n;
+        }
+        for _ in unrolled..n {
+            let cij = c_data[base + read_row];
+            let bipij = b_data[base + b_row];
+            c_data[base + write_row] = (bipij - cij * vt_i_julia) * inv_minus_vt_ipp1;
             base += n;
         }
         i_julia += 2;
@@ -174,7 +206,18 @@ where
     //        C[n - 1, j] = B[n, j] * vT_n_1   for j in 1..n
     let inv_vt_nm1 = T::pfaf_one() / vt[n - 2]; // vT[n-1] (1-based) -> vt[n-2]
     let mut base = 0usize;
-    for _ in 0..n {
+    let unrolled = n / 4 * 4;
+    for _ in (0..unrolled).step_by(4) {
+        c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
+        base += n;
+        c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
+        base += n;
+        c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
+        base += n;
+        c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
+        base += n;
+    }
+    for _ in unrolled..n {
         c_data[base + n - 2] = b_data[base + n - 1] * inv_vt_nm1;
         base += n;
     }
@@ -196,11 +239,32 @@ where
         let read_row = i + 1; // C[i_cpp + 2, j] (1-based) -> c[i_cpp + 1, j]
         let write_row = i - 1; // C[i_cpp, j] (1-based) -> c[i_cpp - 1, j]
         let mut base = 0usize;
-        for _ in 0..n {
+        let unrolled = n / 4 * 4;
+        for _ in (0..unrolled).step_by(4) {
             let bip = b_data[base + b_row];
             let cip2 = c_data[base + read_row];
-            let new_val = (bip + cip2 * vt_ip1) * inv_vt_i;
-            c_data[base + write_row] = new_val;
+            c_data[base + write_row] = (bip + cip2 * vt_ip1) * inv_vt_i;
+            base += n;
+
+            let bip = b_data[base + b_row];
+            let cip2 = c_data[base + read_row];
+            c_data[base + write_row] = (bip + cip2 * vt_ip1) * inv_vt_i;
+            base += n;
+
+            let bip = b_data[base + b_row];
+            let cip2 = c_data[base + read_row];
+            c_data[base + write_row] = (bip + cip2 * vt_ip1) * inv_vt_i;
+            base += n;
+
+            let bip = b_data[base + b_row];
+            let cip2 = c_data[base + read_row];
+            c_data[base + write_row] = (bip + cip2 * vt_ip1) * inv_vt_i;
+            base += n;
+        }
+        for _ in unrolled..n {
+            let bip = b_data[base + b_row];
+            let cip2 = c_data[base + read_row];
+            c_data[base + write_row] = (bip + cip2 * vt_ip1) * inv_vt_i;
             base += n;
         }
         i_julia -= 2;
@@ -263,11 +327,25 @@ fn utu2inv_generic<T>(
     assert_eq!(m.n(), n);
     assert_eq!(vt.len(), n - 1);
 
-    // Step 1: M <- I
+    // Step 1: M <- I.
+    //
+    // Step 3 overwrites every strict-upper entry that is used later, so
+    // only the diagonal and lower triangle need to be reset here. This
+    // avoids writing roughly half of the workspace on every inverse.
     let m_data = m.as_mut_slice();
-    m_data.fill(T::pfaf_zero());
-    for i in 0..n {
-        m_data[i * n + i] = T::pfaf_one();
+    if n <= 2 {
+        m_data.fill(T::pfaf_zero());
+        for i in 0..n {
+            m_data[i * n + i] = T::pfaf_one();
+        }
+    } else {
+        for j in 0..n {
+            let col = j * n;
+            m_data[col + j] = T::pfaf_one();
+            for i in (j + 1)..n {
+                m_data[col + i] = T::pfaf_zero();
+            }
+        }
     }
 
     // Step 2: trtri on the unit upper-triangular submatrix A[0..n-1, 1..n].
@@ -297,9 +375,7 @@ fn utu2inv_generic<T>(
         for jr in 0..(n - 2) {
             let src_col = (jr + 2) * n;
             let dst_col = (jr + 1) * n;
-            for ir in 0..=jr {
-                m_data[dst_col + ir] = a_data[src_col + ir];
-            }
+            m_data[dst_col..=(dst_col + jr)].copy_from_slice(&a_data[src_col..=(src_col + jr)]);
         }
     }
 
@@ -319,8 +395,8 @@ fn utu2inv_generic<T>(
     // Step 6: column permutation by iPiv (forward direction).
     // Julia: for j in 1:n; target = iPiv[j]; if target != j; swap cols.
     let a_data = a.as_mut_slice();
-    for j in 0..n {
-        let target = (pivots[j].0 as usize) - 1;
+    for (j, pivot) in pivots.iter().enumerate().take(n) {
+        let target = (pivot.0 as usize) - 1;
         if target != j {
             let col_j = j * n;
             let col_target = target * n;
@@ -338,8 +414,8 @@ fn utu2inv_generic<T>(
 
     // Step 8: row permutation by iPiv (forward direction, sequential)
     let a_data = a.as_mut_slice();
-    for i in 0..n {
-        let target = (pivots[i].0 as usize) - 1;
+    for (i, pivot) in pivots.iter().enumerate().take(n) {
+        let target = (pivot.0 as usize) - 1;
         if target != i {
             for j in 0..n {
                 let col = j * n;

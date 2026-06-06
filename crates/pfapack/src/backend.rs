@@ -79,6 +79,7 @@ impl BlasScalar for Complex64 {}
 ///
 /// Used by callers that have to gather `x` / `y` from non-unit strides
 /// (e.g. `pfaffian_ltl_generic`, where `tau` is a row of A).
+#[allow(clippy::too_many_arguments)]
 pub fn skr2_neg_vec<T: BlasScalar>(
     a: &mut [T],
     lda: usize,
@@ -140,6 +141,7 @@ pub fn trmm_lutu<T: BlasScalar>(m: &[T], a: &mut [T], n: usize) {
 
 #[doc(hidden)]
 pub trait BlasKernels: Sized + Copy {
+    #[allow(clippy::too_many_arguments)]
     fn skr2_neg_vec(
         a: &mut [Self],
         lda: usize,
@@ -155,6 +157,50 @@ pub trait BlasKernels: Sized + Copy {
     fn trmm_lutu(m: &[Self], a: &mut [Self], n: usize);
 }
 
+#[inline]
+fn idx(lda: usize, row: usize, col: usize) -> usize {
+    col * lda + row
+}
+
+#[inline]
+fn scalar_trtri_uu_impl<T>(a: &mut [T], lda: usize, row0: usize, col0: usize, n: usize)
+where
+    T: Copy + core::ops::Neg<Output = T> + core::ops::Mul<Output = T> + core::ops::AddAssign,
+{
+    if n < 2 {
+        return;
+    }
+    for j in 1..n {
+        for i in 0..j {
+            let mut acc = a[idx(lda, row0 + i, col0 + j)];
+            for k in (i + 1)..j {
+                let x_ik = a[idx(lda, row0 + i, col0 + k)];
+                let x_kj = a[idx(lda, row0 + k, col0 + j)];
+                acc += x_ik * x_kj;
+            }
+            let pos = idx(lda, row0 + i, col0 + j);
+            a[pos] = -acc;
+        }
+    }
+}
+
+#[inline]
+fn scalar_trmm_lutu_impl<T>(m: &[T], a: &mut [T], n: usize)
+where
+    T: Copy + core::ops::Mul<Output = T> + core::ops::AddAssign,
+{
+    for i_rev in 0..n {
+        let i = n - 1 - i_rev;
+        for j in 0..n {
+            let mut acc = a[idx(n, i, j)];
+            for k in 0..i {
+                acc += m[idx(n, k, i)] * a[idx(n, k, j)];
+            }
+            a[idx(n, i, j)] = acc;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Pure-Rust default implementations (also serve as the reference oracle).
 // ---------------------------------------------------------------------------
@@ -162,11 +208,6 @@ pub trait BlasKernels: Sized + Copy {
 #[cfg(not(feature = "blas-backend"))]
 mod scalar_impl {
     use super::*;
-
-    #[inline]
-    fn idx(lda: usize, row: usize, col: usize) -> usize {
-        col * lda + row
-    }
 
     // Concrete scalar implementations for the two supported types.
     // (We can't use a blanket impl because `BlasScalar` is now a
@@ -192,40 +233,21 @@ mod scalar_impl {
                             let y_i = y[i];
                             let upd = alpha * (x_i * y_j - y_i * x_j);
                             let k = idx(lda, a_row0 + i, a_col0 + j);
-                            a[k] = a[k] + upd;
+                            a[k] += upd;
                         }
                     }
                 }
 
                 fn scal_strided(x: &mut [$t], n: usize, alpha: $t) {
                     for v in &mut x[..n] {
-                        *v = *v * alpha;
+                        *v *= alpha;
                     }
                 }
 
                 fn trtri_uu(a: &mut [$t], lda: usize, row0: usize, col0: usize, n: usize) {
                     // Column-by-column STRTI2 (DIAG='U') in place. Mirrors the
-                    // upstream `LAPACK.trtri!('U','U', view)` behaviour. See the
-                    // comment in utu2.rs for why we save the column before overwrite.
-                    if n < 2 {
-                        return;
-                    }
-                    let mut tmp: Vec<$t> =
-                        vec![<$t as crate::pfaffian::PfafOne>::pfaf_zero(); n - 1];
-                    for j in 1..n {
-                        for i in 0..j {
-                            tmp[i] = a[idx(lda, row0 + i, col0 + j)];
-                        }
-                        for i in 0..j {
-                            let mut acc = tmp[i];
-                            for k in (i + 1)..j {
-                                let x_ik = a[idx(lda, row0 + i, col0 + k)];
-                                acc += x_ik * tmp[k];
-                            }
-                            let pos = idx(lda, row0 + i, col0 + j);
-                            a[pos] = -acc;
-                        }
-                    }
+                    // upstream `LAPACK.trtri!('U','U', view)` behaviour.
+                    scalar_trtri_uu_impl(a, lda, row0, col0, n);
                 }
 
                 fn trmm_lutu(m: &[$t], a: &mut [$t], n: usize) {
@@ -233,16 +255,7 @@ mod scalar_impl {
                     // Process rows i from n-1 down to 0 so updated values don't
                     // contaminate the dependencies for smaller i (which read A[k, j]
                     // for k < i, untouched at that point).
-                    for i_rev in 0..n {
-                        let i = n - 1 - i_rev;
-                        for j in 0..n {
-                            let mut acc = a[idx(n, i, j)];
-                            for k in 0..i {
-                                acc += m[idx(n, k, i)] * a[idx(n, k, j)];
-                            }
-                            a[idx(n, i, j)] = acc;
-                        }
-                    }
+                    scalar_trmm_lutu_impl(m, a, n);
                 }
             }
         };
@@ -297,6 +310,10 @@ mod blas_impl {
         }
 
         fn trtri_uu(a: &mut [f64], lda: usize, row0: usize, col0: usize, n: usize) {
+            if n <= 64 {
+                scalar_trtri_uu_impl(a, lda, row0, col0, n);
+                return;
+            }
             let n_i = as_i32(n, "n");
             let lda_i = as_i32(lda, "lda");
             let mut info: i32 = 0;
@@ -310,6 +327,10 @@ mod blas_impl {
         }
 
         fn trmm_lutu(m: &[f64], a: &mut [f64], n: usize) {
+            if n <= 64 {
+                scalar_trmm_lutu_impl(m, a, n);
+                return;
+            }
             let n_i = as_i32(n, "n");
             unsafe {
                 blas::dtrmm(b'L', b'U', b'T', b'U', n_i, n_i, 1.0, m, n_i, a, n_i);
@@ -344,6 +365,10 @@ mod blas_impl {
         }
 
         fn trtri_uu(a: &mut [Complex64], lda: usize, row0: usize, col0: usize, n: usize) {
+            if n <= 32 {
+                scalar_trtri_uu_impl(a, lda, row0, col0, n);
+                return;
+            }
             let n_i = as_i32(n, "n");
             let lda_i = as_i32(lda, "lda");
             let mut info: i32 = 0;
@@ -356,6 +381,10 @@ mod blas_impl {
         }
 
         fn trmm_lutu(m: &[Complex64], a: &mut [Complex64], n: usize) {
+            if n <= 32 {
+                scalar_trmm_lutu_impl(m, a, n);
+                return;
+            }
             let n_i = as_i32(n, "n");
             // For complex 'T' = transpose (no conjugate). Julia's call
             // `BLAS.trmm!('L','U','T','U', 1.0, M, A)` likewise uses 'T'.

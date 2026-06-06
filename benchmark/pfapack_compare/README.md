@@ -1,8 +1,12 @@
 # PfaPack comparison benchmark
 
 Compares `extern/PfaPack.jl` with `crates/pfapack` on deterministic
-dense skew-symmetric matrices. Each timed iteration clones/copies the
-input first because the routines are in-place.
+dense skew-symmetric matrices.
+
+Work buffers are allocated before timing. Each timed iteration restores
+the input matrix with `copyto!` / `copy_from_slice` and then runs the
+routine. This removes allocator noise while keeping the in-place
+routines on identical fresh input.
 
 Run Julia:
 
@@ -32,4 +36,10 @@ and falls back to Accelerate otherwise.
 ```sh
 cargo run --release --manifest-path benchmark/pfapack_compare/Cargo.toml \
   --features pfapack/blas-backend --offline
+```
+
+Run all benchmark variants and generate a Markdown report:
+
+```sh
+scripts/run_all.sh
 ```

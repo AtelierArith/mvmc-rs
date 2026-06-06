@@ -48,99 +48,127 @@ end
 
 iters_for(n) = n <= 64 ? 200 : n <= 128 ? 80 : n <= 256 ? 25 : 8
 
-println("impl,kind,n,op,median_ms")
-for n in (32, 64, 128, 256)
-    iters = iters_for(n)
-
-    orig = skew_real(n, UInt64(42))
-    t = bench(iters) do
-        A = copy(orig)
-        Base.inferencebarrier(pfaffian_ltl!(A))
-    end
-    println("julia,real,$n,pfaffian_ltl,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(orig)
-        piv = zeros(Int, n)
-        Base.inferencebarrier(julia_dsktf2!(A, piv))
-    end
-    println("julia,real,$n,ltl,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(orig)
-        piv = zeros(Int, n)
-        julia_dsktf2!(A, piv)
-        Base.inferencebarrier(utu2pfa(n, A, n, piv))
-    end
-    println("julia,real,$n,ltl_utu2pfa,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(orig)
-        piv = zeros(Int, n)
-        julia_dsktf2!(A, piv)
-        vt = zeros(Float64, n - 1)
-        m = zeros(Float64, n, n)
-        utu2inv!(n, A, n, piv, vt, m, n)
-        Base.inferencebarrier(A[1, 1])
-    end
-    println("julia,real,$n,ltl_utu2inv,$(round(t; digits=6))")
-
-    origc = skew_complex(n, UInt64(42))
-    t = bench(iters) do
-        A = copy(origc)
-        Base.inferencebarrier(pfaffian_ltl!(A))
-    end
-    println("julia,complex,$n,pfaffian_ltl,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        Base.inferencebarrier(julia_zsktf2!(A, piv))
-    end
-    println("julia,complex,$n,ltl,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        Base.inferencebarrier(julia_zsktf2_turbo!(A, piv))
-    end
-    println("julia_lv,complex,$n,ltl,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        julia_zsktf2!(A, piv)
-        Base.inferencebarrier(utu2pfa(n, A, n, piv))
-    end
-    println("julia,complex,$n,ltl_utu2pfa,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        julia_zsktf2_turbo!(A, piv)
-        Base.inferencebarrier(utu2pfa(n, A, n, piv))
-    end
-    println("julia_lv,complex,$n,ltl_utu2pfa,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        julia_zsktf2!(A, piv)
-        vt = zeros(ComplexF64, n - 1)
-        m = zeros(ComplexF64, n, n)
-        utu2inv!(n, A, n, piv, vt, m, n)
-        Base.inferencebarrier(A[1, 1])
-    end
-    println("julia,complex,$n,ltl_utu2inv,$(round(t; digits=6))")
-
-    t = bench(iters) do
-        A = copy(origc)
-        piv = zeros(Int, n)
-        julia_zsktf2_turbo!(A, piv)
-        vt = zeros(ComplexF64, n - 1)
-        m = zeros(ComplexF64, n, n)
-        utu2inv!(n, A, n, piv, vt, m, n)
-        Base.inferencebarrier(A[1, 1])
-    end
-    println("julia_lv,complex,$n,ltl_utu2inv,$(round(t; digits=6))")
+function print_result(impl::String, kind::String, n::Int, op::String, t)
+    println("$impl,$kind,$n,$op,$(round(t; digits=6))")
 end
+
+function run_benchmark()
+    for n in (32, 64, 128, 256)
+        iters = iters_for(n)
+
+        orig = skew_real(n, UInt64(42))
+        A = similar(orig)
+        t = bench(iters) do
+            copyto!(A, orig)
+            Base.inferencebarrier(pfaffian_ltl!(A))
+        end
+        print_result("julia", "real", n, "pfaffian_ltl", t)
+
+        A = similar(orig)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, orig)
+            fill!(piv, 0)
+            Base.inferencebarrier(julia_dsktf2!(A, piv))
+        end
+        print_result("julia", "real", n, "ltl", t)
+
+        A = similar(orig)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, orig)
+            fill!(piv, 0)
+            julia_dsktf2!(A, piv)
+            Base.inferencebarrier(utu2pfa(n, A, n, piv))
+        end
+        print_result("julia", "real", n, "ltl_utu2pfa", t)
+
+        A = similar(orig)
+        piv = Vector{Int}(undef, n)
+        vt = Vector{Float64}(undef, n - 1)
+        m = Matrix{Float64}(undef, n, n)
+        t = bench(iters) do
+            copyto!(A, orig)
+            fill!(piv, 0)
+            julia_dsktf2!(A, piv)
+            utu2inv!(n, A, n, piv, vt, m, n)
+            Base.inferencebarrier(A[1, 1])
+        end
+        print_result("julia", "real", n, "ltl_utu2inv", t)
+
+        origc = skew_complex(n, UInt64(42))
+        A = similar(origc)
+        t = bench(iters) do
+            copyto!(A, origc)
+            Base.inferencebarrier(pfaffian_ltl!(A))
+        end
+        print_result("julia", "complex", n, "pfaffian_ltl", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            Base.inferencebarrier(julia_zsktf2!(A, piv))
+        end
+        print_result("julia", "complex", n, "ltl", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            Base.inferencebarrier(julia_zsktf2_turbo!(A, piv))
+        end
+        print_result("julia_lv", "complex", n, "ltl", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            julia_zsktf2!(A, piv)
+            Base.inferencebarrier(utu2pfa(n, A, n, piv))
+        end
+        print_result("julia", "complex", n, "ltl_utu2pfa", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            julia_zsktf2_turbo!(A, piv)
+            Base.inferencebarrier(utu2pfa(n, A, n, piv))
+        end
+        print_result("julia_lv", "complex", n, "ltl_utu2pfa", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        vt = Vector{ComplexF64}(undef, n - 1)
+        m = Matrix{ComplexF64}(undef, n, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            julia_zsktf2!(A, piv)
+            utu2inv!(n, A, n, piv, vt, m, n)
+            Base.inferencebarrier(A[1, 1])
+        end
+        print_result("julia", "complex", n, "ltl_utu2inv", t)
+
+        A = similar(origc)
+        piv = Vector{Int}(undef, n)
+        vt = Vector{ComplexF64}(undef, n - 1)
+        m = Matrix{ComplexF64}(undef, n, n)
+        t = bench(iters) do
+            copyto!(A, origc)
+            fill!(piv, 0)
+            julia_zsktf2_turbo!(A, piv)
+            utu2inv!(n, A, n, piv, vt, m, n)
+            Base.inferencebarrier(A[1, 1])
+        end
+        print_result("julia_lv", "complex", n, "ltl_utu2inv", t)
+    end
+end
+
+println("impl,kind,n,op,median_ms")
+run_benchmark()

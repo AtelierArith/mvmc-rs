@@ -117,17 +117,18 @@ mod tests {
     #[test]
     fn round_trip_2x2() {
         let mut buf = vec![0.0_f64; 4];
-        let mut m = SqMat::new(&mut buf, 2);
-        // Column-major: buf = [A[0,0], A[1,0], A[0,1], A[1,1]]
-        m.set(0, 0, 11.0);
-        m.set(1, 0, 21.0);
-        m.set(0, 1, 12.0);
-        m.set(1, 1, 22.0);
-        assert_eq!(m.get(0, 0), 11.0);
-        assert_eq!(m.get(1, 0), 21.0);
-        assert_eq!(m.get(0, 1), 12.0);
-        assert_eq!(m.get(1, 1), 22.0);
-        drop(m);
+        {
+            let mut m = SqMat::new(&mut buf, 2);
+            // Column-major: buf = [A[0,0], A[1,0], A[0,1], A[1,1]]
+            m.set(0, 0, 11.0);
+            m.set(1, 0, 21.0);
+            m.set(0, 1, 12.0);
+            m.set(1, 1, 22.0);
+            assert_eq!(m.get(0, 0), 11.0);
+            assert_eq!(m.get(1, 0), 21.0);
+            assert_eq!(m.get(0, 1), 12.0);
+            assert_eq!(m.get(1, 1), 22.0);
+        }
         assert_eq!(buf, vec![11.0, 21.0, 12.0, 22.0]);
     }
 }

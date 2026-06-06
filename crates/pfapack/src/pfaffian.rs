@@ -245,15 +245,13 @@ mod tests {
             }
         }
         // Snapshot for det computation.
-        let mut work = buf.clone();
+        let work = buf.clone();
         let det = det_4x4_dense(&work, n);
         let mut m = SqMat::new(&mut buf, n);
         let pf = pfaffian_ltl_real(&mut m);
         // Allow loose tolerance because det is computed with a slightly
         // different summation order than Pf^2.
         assert_relative_eq!(pf * pf, det, max_relative = 1e-12);
-        // Silence unused-mut warning on `work`.
-        work[0] = work[0];
     }
 
     /// Tiny Leibniz-expansion det for 4x4 dense column-major. Used only

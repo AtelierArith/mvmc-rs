@@ -96,7 +96,7 @@ generate_report() {
     echo "- Date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
     echo "- Output directory: \`$out_dir\`"
     echo "- Metric: median wall-clock time in milliseconds"
-    echo "- Iteration behavior: each timed iteration copies/clones the input matrix first"
+    echo "- Iteration behavior: work buffers are allocated outside the timed loop; each timed iteration restores the input matrix with \`copyto!\` / \`copy_from_slice\`"
     echo "- Julia LV uses \`julia_zsktf2_turbo!\` and is only available for complex LTL-derived operations"
     echo "- Fastest value in each row is marked with \`★\`"
     echo
