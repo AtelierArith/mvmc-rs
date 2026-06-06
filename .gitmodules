@@ -1,0 +1,3 @@
+[submodule "extern/PfaPack.jl"]
+	path = extern/PfaPack.jl
+	url = https://github.com/tmisawa/PfaPack.jl.git
