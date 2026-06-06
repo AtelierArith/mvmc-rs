@@ -381,6 +381,12 @@ fn complex_n16_seed20240301() {
     check_complex_case(16, 20240301);
 }
 
+#[cfg(feature = "blas-backend")]
+#[test]
+fn complex_n32_seed42_blas_utu2inv_regression() {
+    check_complex_case(32, 42);
+}
+
 #[test]
 #[ignore = "large benchmark-size Julia parity fixture"]
 fn real_n32_seed42_large() {
