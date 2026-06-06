@@ -1,3 +1,6 @@
 [submodule "extern/PfaPack.jl"]
 	path = extern/PfaPack.jl
 	url = https://github.com/tmisawa/PfaPack.jl.git
+[submodule "extern/Julia-mVMC"]
+	path = extern/Julia-mVMC
+	url = https://github.com/tmisawa/Julia-mVMC.git
