@@ -102,12 +102,8 @@ fn main() {
     let nsteps_override = nsteps_arg.or(nsteps_env);
 
     // Default output dir: namelist's parent directory.
-    let out_dir: PathBuf = out_dir_arg.unwrap_or_else(|| {
-        namelist
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join("output")
-    });
+    let out_dir: PathBuf =
+        out_dir_arg.unwrap_or_else(|| namelist.parent().unwrap_or(Path::new(".")).join("output"));
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
         eprintln!("error: cannot create output dir {}: {e}", out_dir.display());
         process::exit(1);
@@ -136,7 +132,10 @@ fn main() {
                 p.nsite, p.nelec, nsteps,
             );
             println!("mode     : NVMCCalMode={}", p.vmc_calc_mode);
-            println!("sample   : NVMCSample={} NVMCWarmUp={}", p.nvmc_sample, p.nvmc_warmup);
+            println!(
+                "sample   : NVMCSample={} NVMCWarmUp={}",
+                p.nvmc_sample, p.nvmc_warmup
+            );
             println!();
             nsteps
         }
@@ -154,19 +153,18 @@ fn main() {
 
     // ── run ───────────────────────────────────────────────────────────────────
     let t0 = Instant::now();
-    let result = mvmc_core::run_para_opt_from_namelist(
-        &namelist,
-        nsteps,
-        seed_arg,
-        Some(&out_dir),
-    );
+    let result = mvmc_core::run_para_opt_from_namelist(&namelist, nsteps, seed_arg, Some(&out_dir));
     let elapsed = t0.elapsed();
 
     // ── result ────────────────────────────────────────────────────────────────
     match result {
         Ok(summary) => {
             println!();
-            println!("=== Completed {} SR steps in {:.2}s ===", summary.nsteps, elapsed.as_secs_f64());
+            println!(
+                "=== Completed {} SR steps in {:.2}s ===",
+                summary.nsteps,
+                elapsed.as_secs_f64()
+            );
             if let Some(ref d) = summary.output_dir {
                 println!("Output files written to: {}", d.display());
                 // List key files that were created.

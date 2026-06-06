@@ -100,4 +100,3 @@ pub fn make_output_dir(model: &str) -> PathBuf {
     // Canonicalize to resolve `..` components so printed paths are clean.
     dir.canonicalize().unwrap_or(dir)
 }
-

@@ -202,7 +202,11 @@ pub fn run_para_opt_from_namelist<P: AsRef<Path>>(
         let content = std::fs::read_to_string(dir.join("zvo_out.dat")).ok()?;
         let last = content.lines().filter(|l| !l.trim().is_empty()).last()?;
         let e: f64 = last.split_whitespace().next()?.parse().ok()?;
-        if n_site > 0 { Some(e / n_site as f64) } else { None }
+        if n_site > 0 {
+            Some(e / n_site as f64)
+        } else {
+            None
+        }
     });
 
     Ok(RunSummary {
