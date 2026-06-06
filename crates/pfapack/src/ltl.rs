@@ -40,7 +40,7 @@ fn sktf2_generic<T, Mag>(
     mag: Mag,
 ) -> Result<(), usize>
 where
-    T: BlasScalar,
+    T: BlasScalar + UpperRank2Kernel,
     Mag: Fn(T) -> f64,
 {
     let n = a.n();
@@ -166,28 +166,228 @@ where
 }
 
 #[inline]
-fn update_upper_rank2<T: BlasScalar>(data: &mut [T], lda: usize, kk0: usize, k0: usize, alpha: T) {
+fn update_upper_rank2<T: UpperRank2Kernel>(
+    data: &mut [T],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+    alpha: T,
+) {
+    T::update_upper_rank2(data, lda, kk0, k0, alpha);
+}
+
+trait UpperRank2Kernel: BlasScalar {
+    fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self);
+}
+
+impl UpperRank2Kernel for f64 {
+    #[inline]
+    fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
+        update_upper_rank2_f64(data, lda, kk0, k0, alpha);
+    }
+}
+
+impl UpperRank2Kernel for Complex64 {
+    #[inline]
+    fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
+        #[cfg(feature = "simd-backend")]
+        {
+            update_upper_rank2_c64_simd(data, lda, kk0, k0, alpha);
+        }
+        #[cfg(not(feature = "simd-backend"))]
+        {
+            update_upper_rank2_c64_scalar(data, lda, kk0, k0, alpha);
+        }
+    }
+}
+
+#[cfg(feature = "simd-backend")]
+mod simd_rank2 {
+    use num_complex::Complex64;
+    use pulp::{Arch, Simd, WithSimd};
+
+    pub(super) fn update_upper_rank2_c64(
+        write_cols: &mut [Complex64],
+        col_kk0_data: &[Complex64],
+        col_k0_data: &[Complex64],
+        lda: usize,
+        kk0: usize,
+        alpha: Complex64,
+    ) {
+        Arch::new().dispatch(UpdateUpperRank2C64 {
+            write_cols,
+            col_kk0_data,
+            col_k0_data,
+            lda,
+            kk0,
+            alpha,
+        });
+    }
+
+    struct UpdateUpperRank2C64<'a> {
+        write_cols: &'a mut [Complex64],
+        col_kk0_data: &'a [Complex64],
+        col_k0_data: &'a [Complex64],
+        lda: usize,
+        kk0: usize,
+        alpha: Complex64,
+    }
+
+    impl WithSimd for UpdateUpperRank2C64<'_> {
+        type Output = ();
+
+        #[inline(always)]
+        fn with_simd<S: Simd>(self, simd: S) -> Self::Output {
+            let Self {
+                write_cols,
+                col_kk0_data,
+                col_k0_data,
+                lda,
+                kk0,
+                alpha,
+            } = self;
+
+            for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+                let temp1 = alpha * col_kk0_data[j];
+                let temp2 = alpha * col_k0_data[j];
+                update_col(
+                    simd,
+                    &mut col_j[..j],
+                    &col_k0_data[..j],
+                    &col_kk0_data[..j],
+                    temp1,
+                    temp2,
+                );
+                col_j[j] = Complex64::new(0.0, 0.0);
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn update_col<S: Simd>(
+        simd: S,
+        dst: &mut [Complex64],
+        x: &[Complex64],
+        y: &[Complex64],
+        temp1: Complex64,
+        temp2: Complex64,
+    ) {
+        let temp1_scalar = temp1;
+        let temp2_scalar = temp2;
+        let temp1 = simd.splat_c64s(temp1_scalar);
+        let temp2 = simd.splat_c64s(temp2_scalar);
+
+        let (dst_head, dst_tail) = S::as_mut_simd_c64s(dst);
+        let (x_head, x_tail) = S::as_simd_c64s(x);
+        let (y_head, y_tail) = S::as_simd_c64s(y);
+
+        for ((dst, x), y) in dst_head.iter_mut().zip(x_head).zip(y_head) {
+            let add = simd.mul_c64s(*x, temp1);
+            let sub = simd.mul_c64s(*y, temp2);
+            *dst = simd.add_c64s(*dst, simd.sub_c64s(add, sub));
+        }
+
+        for ((dst, x), y) in dst_tail.iter_mut().zip(x_tail).zip(y_tail) {
+            *dst += *x * temp1_scalar - *y * temp2_scalar;
+        }
+    }
+}
+
+#[cfg(feature = "simd-backend")]
+#[inline]
+fn update_upper_rank2_c64_simd(
+    data: &mut [Complex64],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+    alpha: Complex64,
+) {
+    if kk0 < 64 {
+        update_upper_rank2_c64_scalar(data, lda, kk0, k0, alpha);
+        return;
+    }
+
+    let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
+    simd_rank2::update_upper_rank2_c64(write_cols, col_kk0_data, col_k0_data, lda, kk0, alpha);
+}
+
+fn split_update_upper_rank2_cols<T>(
+    data: &mut [T],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+) -> (&mut [T], &mut [T], &mut [T]) {
     let col_kk0 = kk0 * lda;
     let col_k0 = k0 * lda;
-
-    debug_assert!(kk0 < k0);
-    debug_assert!(k0 < lda);
-    debug_assert!(col_k0 + lda <= data.len());
 
     let (write_cols, tail) = data.split_at_mut(col_kk0);
     let (col_kk0_data, tail) = tail.split_at_mut(lda);
     let skip_to_k0 = col_k0 - col_kk0 - lda;
     let (_, tail) = tail.split_at_mut(skip_to_k0);
     let (col_k0_data, _) = tail.split_at_mut(lda);
+    (write_cols, col_kk0_data, col_k0_data)
+}
+
+#[inline]
+fn check_update_upper_rank2_args<T>(data: &[T], lda: usize, kk0: usize, k0: usize) {
+    let col_k0 = k0 * lda;
+
+    debug_assert!(kk0 < k0);
+    debug_assert!(k0 < lda);
+    debug_assert!(col_k0 + lda <= data.len());
+}
+
+#[inline]
+fn update_upper_rank2_f64(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
+    check_update_upper_rank2_args(data, lda, kk0, k0);
+    let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
 
     for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
         let temp1 = alpha * col_kk0_data[j];
         let temp2 = alpha * col_k0_data[j];
+
         for i in 0..j {
-            let upd = col_k0_data[i] * temp1 - col_kk0_data[i] * temp2;
-            col_j[i] += upd;
+            col_j[i] += col_k0_data[i] * temp1 - col_kk0_data[i] * temp2;
         }
-        col_j[j] = T::pfaf_zero();
+        col_j[j] = 0.0;
+    }
+}
+
+#[inline]
+fn update_upper_rank2_c64_scalar(
+    data: &mut [Complex64],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+    alpha: Complex64,
+) {
+    check_update_upper_rank2_args(data, lda, kk0, k0);
+    let ar = alpha.re;
+    let ai = alpha.im;
+
+    let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
+
+    for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+        let kk_j = col_kk0_data[j];
+        let k_j = col_k0_data[j];
+        let temp1_re = ar * kk_j.re - ai * kk_j.im;
+        let temp1_im = ar * kk_j.im + ai * kk_j.re;
+        let temp2_re = ar * k_j.re - ai * k_j.im;
+        let temp2_im = ar * k_j.im + ai * k_j.re;
+
+        for i in 0..j {
+            let x = col_k0_data[i];
+            let y = col_kk0_data[i];
+
+            let x_temp1_re = x.re * temp1_re - x.im * temp1_im;
+            let x_temp1_im = x.re * temp1_im + x.im * temp1_re;
+            let y_temp2_re = y.re * temp2_re - y.im * temp2_im;
+            let y_temp2_im = y.re * temp2_im + y.im * temp2_re;
+
+            col_j[i].re += x_temp1_re - y_temp2_re;
+            col_j[i].im += x_temp1_im - y_temp2_im;
+        }
+        col_j[j] = Complex64::new(0.0, 0.0);
     }
 }
 

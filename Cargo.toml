@@ -30,6 +30,7 @@ mvmc-core = { path = "crates/mvmc-core", version = "0.0.0" }
 num-complex = "0.4"
 ndarray = "0.16"
 rand_core = "0.6"
+pulp = { version = "0.22.2", default-features = false, features = ["std"] }
 
 # --- BLAS / LAPACK plumbing.
 #

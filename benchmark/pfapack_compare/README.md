@@ -16,6 +16,15 @@ Run Rust scalar backend:
 cargo run --release --manifest-path benchmark/pfapack_compare/Cargo.toml --offline
 ```
 
+Run Rust SIMD backend. This keeps the scalar code as the reference path
+and uses `pulp` runtime dispatch for the complex LTL upper-triangular
+rank-2 update when the update is large enough to amortize dispatch cost.
+
+```sh
+cargo run --release --manifest-path benchmark/pfapack_compare/Cargo.toml \
+  --features pfapack/simd-backend --offline
+```
+
 Run Rust BLAS/LAPACK backend. On macOS this links Homebrew OpenBLAS
 when `/opt/homebrew/opt/openblas` or `/usr/local/opt/openblas` exists,
 and falls back to Accelerate otherwise.
