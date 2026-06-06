@@ -57,6 +57,8 @@ where
     }
 
     let mut pf = T::pfaf_one();
+    let mut tau_buf = Vec::<T>::with_capacity(n);
+    let mut y_buf = Vec::<T>::with_capacity(n);
 
     // Julia: for k in 0:2:(n-2)
     let mut k = 0usize;
@@ -123,21 +125,14 @@ where
             // y[r]   == A[start + r, i_piv_row_start]
             //        → column-major offset i_piv_row_start * lda + (start + r),
             //          i.e. stride = 1.
-            //
-            // The BLAS backend expects stride-1 vectors, so we copy tau
-            // into a temporary contiguous column inside the same buffer.
-            // Easier: hand both vectors to a backend wrapper that takes
-            // a closure to fetch tau / y from arbitrary strides. To keep
-            // the backend trait simple, we materialise tau into a temp
-            // and place it inside an unused entry range — but since the
-            // backend implementation copies into local Vec<T> anyway,
-            // we materialise inline here.
             let len = n - start;
             let lda = a.lda();
-            let mut tau_buf: Vec<T> = (0..len).map(|r| a.get(i_piv_col, start + r)).collect();
-            let mut y_buf: Vec<T> = (0..len)
-                .map(|r| a.get(start + r, i_piv_row_start))
-                .collect();
+            tau_buf.clear();
+            y_buf.clear();
+            for r in 0..len {
+                tau_buf.push(a.get(i_piv_col, start + r));
+                y_buf.push(a.get(start + r, i_piv_row_start));
+            }
             backend::skr2_neg_vec::<T>(
                 a.as_mut_slice(),
                 lda,

@@ -289,6 +289,24 @@ where
     backward_julia_style(vt, b, c);
 }
 
+#[inline]
+fn should_use_panel_trmmt(n: usize) -> bool {
+    const PANEL: usize = 64;
+    cfg!(not(feature = "blas-backend")) && PANEL > 1 && PANEL < n
+}
+
+fn fill_lower_from_upper_skew<T>(a: &mut [T], n: usize)
+where
+    T: Copy + core::ops::Neg<Output = T> + PfafOne,
+{
+    for j in 0..n {
+        a[j * n + j] = T::pfaf_zero();
+        for i in (j + 1)..n {
+            a[j * n + i] = -a[i * n + j];
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // utu2inv (eight-step pipeline)
 // ---------------------------------------------------------------------------
@@ -392,6 +410,15 @@ fn utu2inv_generic<T>(
     // the helper only writes into the output (`a`).
     solve_sktd::<T>(vt, m, a);
 
+    let panel_trmmt = should_use_panel_trmmt(n);
+    if panel_trmmt {
+        // Mirrors deps/invert.tcc::utu2inv: for large matrices, compute only
+        // the upper-triangular part of M^T * A by 64-column panels, then
+        // restore skew-symmetry before applying the pivot permutations.
+        backend::trmmt_upper_lutu::<T>(m.as_slice(), a.as_mut_slice(), n);
+        fill_lower_from_upper_skew::<T>(a.as_mut_slice(), n);
+    }
+
     // Step 6: column permutation by iPiv (forward direction).
     // Julia: for j in 1:n; target = iPiv[j]; if target != j; swap cols.
     let a_data = a.as_mut_slice();
@@ -407,7 +434,7 @@ fn utu2inv_generic<T>(
     }
 
     // Step 7: A <- M^T * A   (trmm, M unit upper-triangular)
-    {
+    if !panel_trmmt {
         let n_local = a.n();
         backend::trmm_lutu::<T>(m.as_slice(), a.as_mut_slice(), n_local);
     }

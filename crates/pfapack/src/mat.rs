@@ -13,21 +13,54 @@
 
 use core::ops::{Index, IndexMut};
 
-/// Mutable view over a square column-major matrix of side `n`.
+/// Mutable view over a square matrix of side `n`.
 ///
-/// The backing storage is `&mut [T]` with `data.len() == n * n`. We
-/// keep `lda == n` (no leading-dimension padding) to mirror the Julia
-/// callers in `MVMCOptimizers.jl`, which always pass `lda == n`.
+/// The default constructor wraps a contiguous column-major `n * n`
+/// buffer. Internally the view keeps element strides so kernels can
+/// eventually operate on submatrices without materializing temporary
+/// contiguous buffers.
 pub struct SqMat<'a, T> {
     pub(crate) data: &'a mut [T],
     pub(crate) n: usize,
+    pub(crate) row_stride: usize,
+    pub(crate) col_stride: usize,
 }
 
 impl<'a, T: Copy> SqMat<'a, T> {
     /// Wrap an `n*n` slice. Panics if the length mismatches.
     pub fn new(data: &'a mut [T], n: usize) -> Self {
         assert_eq!(data.len(), n * n, "SqMat::new expects n*n entries");
-        Self { data, n }
+        Self {
+            data,
+            n,
+            row_stride: 1,
+            col_stride: n,
+        }
+    }
+
+    /// Wrap a column-major matrix with an explicit leading dimension.
+    ///
+    /// This is mainly used by internal kernels that want a view over a
+    /// submatrix or padded column-major storage. The row stride remains
+    /// one element, while the column stride is `lda`.
+    #[allow(dead_code)]
+    pub(crate) fn from_column_major_slice_with_lda(
+        data: &'a mut [T],
+        n: usize,
+        lda: usize,
+    ) -> Self {
+        assert!(lda >= n, "SqMat lda must be at least n");
+        let required = n.checked_sub(1).map_or(0, |last| last * lda + n);
+        assert!(
+            data.len() >= required,
+            "SqMat::from_column_major_slice_with_lda expects enough backing storage"
+        );
+        Self {
+            data,
+            n,
+            row_stride: 1,
+            col_stride: lda,
+        }
     }
 
     /// Side length.
@@ -39,8 +72,7 @@ impl<'a, T: Copy> SqMat<'a, T> {
     /// Linear index into the column-major buffer (0-based `i, j`).
     #[inline]
     fn idx(&self, i: usize, j: usize) -> usize {
-        // column-major: column j starts at j * n, row i within it is +i.
-        j * self.n + i
+        i * self.row_stride + j * self.col_stride
     }
 
     /// Read `A[i, j]` (0-based).
@@ -85,10 +117,11 @@ impl<'a, T: Copy> SqMat<'a, T> {
         self.data
     }
 
-    /// Leading dimension. For `SqMat` we always store `lda == n`.
+    /// Leading dimension for column-major views.
     #[inline]
     pub(crate) fn lda(&self) -> usize {
-        self.n
+        debug_assert_eq!(self.row_stride, 1);
+        self.col_stride
     }
 }
 
@@ -97,7 +130,7 @@ impl<T: Copy> Index<(usize, usize)> for SqMat<'_, T> {
     type Output = T;
     #[inline]
     fn index(&self, (i, j): (usize, usize)) -> &T {
-        let k = j * self.n + i;
+        let k = self.idx(i, j);
         &self.data[k]
     }
 }
@@ -105,7 +138,7 @@ impl<T: Copy> Index<(usize, usize)> for SqMat<'_, T> {
 impl<T: Copy> IndexMut<(usize, usize)> for SqMat<'_, T> {
     #[inline]
     fn index_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
-        let k = j * self.n + i;
+        let k = self.idx(i, j);
         &mut self.data[k]
     }
 }

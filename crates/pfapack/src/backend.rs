@@ -80,6 +80,7 @@ impl BlasScalar for Complex64 {}
 /// Used by callers that have to gather `x` / `y` from non-unit strides
 /// (e.g. `pfaffian_ltl_generic`, where `tau` is a row of A).
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 pub fn skr2_neg_vec<T: BlasScalar>(
     a: &mut [T],
     lda: usize,
@@ -135,6 +136,18 @@ pub fn trmm_lutu<T: BlasScalar>(m: &[T], a: &mut [T], n: usize) {
     T::trmm_lutu(m, a, n);
 }
 
+/// Panel version of [`trmm_lutu`] that computes only the upper triangle
+/// of `A ← Mᵀ · A` by 64-column panels.
+///
+/// Mirrors `deps/trmmt.tcc` for `uploab == BLIS_UPPER`; callers must
+/// restore the lower triangle from skew-symmetry afterwards.
+pub fn trmmt_upper_lutu<T: BlasScalar>(m: &[T], a: &mut [T], n: usize) {
+    if n == 0 {
+        return;
+    }
+    T::trmmt_upper_lutu(m, a, n);
+}
+
 // ---------------------------------------------------------------------------
 // Per-scalar trait that the kernel implementations dispatch to.
 // ---------------------------------------------------------------------------
@@ -142,6 +155,7 @@ pub fn trmm_lutu<T: BlasScalar>(m: &[T], a: &mut [T], n: usize) {
 #[doc(hidden)]
 pub trait BlasKernels: Sized + Copy {
     #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)]
     fn skr2_neg_vec(
         a: &mut [Self],
         lda: usize,
@@ -155,6 +169,7 @@ pub trait BlasKernels: Sized + Copy {
     fn scal_strided(x: &mut [Self], n: usize, alpha: Self);
     fn trtri_uu(a: &mut [Self], lda: usize, row0: usize, col0: usize, n: usize);
     fn trmm_lutu(m: &[Self], a: &mut [Self], n: usize);
+    fn trmmt_upper_lutu(m: &[Self], a: &mut [Self], n: usize);
 }
 
 #[inline]
@@ -197,6 +212,34 @@ where
                 acc += m[idx(n, k, i)] * a[idx(n, k, j)];
             }
             a[idx(n, i, j)] = acc;
+        }
+    }
+}
+
+#[cfg(not(feature = "blas-backend"))]
+#[inline]
+fn scalar_trmmt_upper_lutu_impl<T>(m: &[T], a: &mut [T], n: usize)
+where
+    T: Copy + core::ops::Mul<Output = T> + core::ops::AddAssign,
+{
+    const PANEL: usize = 64;
+
+    for panel_col in (0..n).step_by(PANEL) {
+        let nloc = PANEL.min(n - panel_col);
+        let rows = panel_col + nloc;
+
+        for i_rev in 0..rows {
+            let i = rows - 1 - i_rev;
+            let m_col_i = &m[(i * n)..(i * n + i)];
+            for j in panel_col..(panel_col + nloc) {
+                let a_col = &mut a[(j * n)..(j * n + i + 1)];
+                let (a_head, a_slot) = a_col.split_at_mut(i);
+                let mut acc = a_slot[0];
+                for (m_ki, a_kj) in m_col_i.iter().zip(a_head.iter()) {
+                    acc += *m_ki * *a_kj;
+                }
+                a_slot[0] = acc;
+            }
         }
     }
 }
@@ -256,6 +299,10 @@ mod scalar_impl {
                     // contaminate the dependencies for smaller i (which read A[k, j]
                     // for k < i, untouched at that point).
                     scalar_trmm_lutu_impl(m, a, n);
+                }
+
+                fn trmmt_upper_lutu(m: &[$t], a: &mut [$t], n: usize) {
+                    scalar_trmmt_upper_lutu_impl(m, a, n);
                 }
             }
         };
@@ -336,6 +383,27 @@ mod blas_impl {
                 blas::dtrmm(b'L', b'U', b'T', b'U', n_i, n_i, 1.0, m, n_i, a, n_i);
             }
         }
+
+        fn trmmt_upper_lutu(m: &[f64], a: &mut [f64], n: usize) {
+            const PANEL: usize = 64;
+            if n <= PANEL {
+                scalar_trmm_lutu_impl(m, a, n);
+                return;
+            }
+            let lda_i = as_i32(n, "lda");
+            for panel_col in (0..n).step_by(PANEL) {
+                let nloc = PANEL.min(n - panel_col);
+                let rows = panel_col + nloc;
+                let rows_i = as_i32(rows, "rows");
+                let nloc_i = as_i32(nloc, "nloc");
+                let b = &mut a[panel_col * n..];
+                unsafe {
+                    blas::dtrmm(
+                        b'L', b'U', b'T', b'U', rows_i, nloc_i, 1.0, m, lda_i, b, lda_i,
+                    );
+                }
+            }
+        }
     }
 
     impl BlasKernels for Complex64 {
@@ -391,6 +459,28 @@ mod blas_impl {
             let one = Complex64::new(1.0, 0.0);
             unsafe {
                 blas::ztrmm(b'L', b'U', b'T', b'U', n_i, n_i, one, m, n_i, a, n_i);
+            }
+        }
+
+        fn trmmt_upper_lutu(m: &[Complex64], a: &mut [Complex64], n: usize) {
+            const PANEL: usize = 64;
+            if n <= PANEL {
+                scalar_trmm_lutu_impl(m, a, n);
+                return;
+            }
+            let lda_i = as_i32(n, "lda");
+            let one = Complex64::new(1.0, 0.0);
+            for panel_col in (0..n).step_by(PANEL) {
+                let nloc = PANEL.min(n - panel_col);
+                let rows = panel_col + nloc;
+                let rows_i = as_i32(rows, "rows");
+                let nloc_i = as_i32(nloc, "nloc");
+                let b = &mut a[panel_col * n..];
+                unsafe {
+                    blas::ztrmm(
+                        b'L', b'U', b'T', b'U', rows_i, nloc_i, one, m, lda_i, b, lda_i,
+                    );
+                }
             }
         }
     }

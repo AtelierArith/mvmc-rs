@@ -385,7 +385,12 @@ fn update_upper_rank2_c64_simd(
     k0: usize,
     alpha: Complex64,
 ) {
-    if kk0 < 8 {
+    // The current AoS Complex64 pulp kernel loses badly at the matrix sizes
+    // exercised by mVMC and the comparison benchmark. Julia's fast path uses
+    // a StructArray SoA layout before vectorizing; until Rust has the same
+    // layout-specialized kernel, keep the scalar hand-expanded complex loop
+    // for these sizes so enabling `simd-backend` is not a performance trap.
+    if kk0 < 512 {
         update_upper_rank2_c64_scalar(data, lda, kk0, k0, alpha);
         return;
     }
