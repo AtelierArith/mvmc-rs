@@ -455,7 +455,62 @@ fn update_upper_rank2_c64_scalar(
 
     let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
 
-    for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+    let mut cols = write_cols.chunks_exact_mut(lda);
+    let mut j = 0usize;
+    while j + 1 < kk0 {
+        let col_j0 = cols.next().expect("column j must exist");
+        let col_j1 = cols.next().expect("column j+1 must exist");
+
+        let kk_j0 = col_kk0_data[j];
+        let k_j0 = col_k0_data[j];
+        let temp1_0_re = ar * kk_j0.re - ai * kk_j0.im;
+        let temp1_0_im = ar * kk_j0.im + ai * kk_j0.re;
+        let temp2_0_re = ar * k_j0.re - ai * k_j0.im;
+        let temp2_0_im = ar * k_j0.im + ai * k_j0.re;
+
+        let kk_j1 = col_kk0_data[j + 1];
+        let k_j1 = col_k0_data[j + 1];
+        let temp1_1_re = ar * kk_j1.re - ai * kk_j1.im;
+        let temp1_1_im = ar * kk_j1.im + ai * kk_j1.re;
+        let temp2_1_re = ar * k_j1.re - ai * k_j1.im;
+        let temp2_1_im = ar * k_j1.im + ai * k_j1.re;
+
+        for i in 0..j {
+            let x = col_k0_data[i];
+            let y = col_kk0_data[i];
+
+            let x_temp1_re = x.re * temp1_0_re - x.im * temp1_0_im;
+            let x_temp1_im = x.re * temp1_0_im + x.im * temp1_0_re;
+            let y_temp2_re = y.re * temp2_0_re - y.im * temp2_0_im;
+            let y_temp2_im = y.re * temp2_0_im + y.im * temp2_0_re;
+            col_j0[i].re += x_temp1_re - y_temp2_re;
+            col_j0[i].im += x_temp1_im - y_temp2_im;
+
+            let x_temp1_re = x.re * temp1_1_re - x.im * temp1_1_im;
+            let x_temp1_im = x.re * temp1_1_im + x.im * temp1_1_re;
+            let y_temp2_re = y.re * temp2_1_re - y.im * temp2_1_im;
+            let y_temp2_im = y.re * temp2_1_im + y.im * temp2_1_re;
+            col_j1[i].re += x_temp1_re - y_temp2_re;
+            col_j1[i].im += x_temp1_im - y_temp2_im;
+        }
+
+        col_j0[j] = Complex64::new(0.0, 0.0);
+
+        let x = col_k0_data[j];
+        let y = col_kk0_data[j];
+        let x_temp1_re = x.re * temp1_1_re - x.im * temp1_1_im;
+        let x_temp1_im = x.re * temp1_1_im + x.im * temp1_1_re;
+        let y_temp2_re = y.re * temp2_1_re - y.im * temp2_1_im;
+        let y_temp2_im = y.re * temp2_1_im + y.im * temp2_1_re;
+        col_j1[j].re += x_temp1_re - y_temp2_re;
+        col_j1[j].im += x_temp1_im - y_temp2_im;
+
+        col_j1[j + 1] = Complex64::new(0.0, 0.0);
+        j += 2;
+    }
+
+    if j < kk0 {
+        let col_j = cols.next().expect("last column must exist");
         let kk_j = col_kk0_data[j];
         let k_j = col_k0_data[j];
         let temp1_re = ar * kk_j.re - ai * kk_j.im;

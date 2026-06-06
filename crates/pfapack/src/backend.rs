@@ -218,14 +218,29 @@ where
 
 #[cfg(not(feature = "blas-backend"))]
 #[inline]
+fn scalar_trmmt_panel_cols<T>(n: usize) -> usize {
+    const MIN_PANEL: usize = 8;
+    const MAX_PANEL: usize = 64;
+    const TARGET_BYTES: usize = 128 * 1024;
+
+    let elem_size = core::mem::size_of::<T>().max(1);
+    let mut panel = MAX_PANEL;
+    while panel > MIN_PANEL && n.saturating_mul(panel).saturating_mul(elem_size) > TARGET_BYTES {
+        panel /= 2;
+    }
+    panel
+}
+
+#[cfg(not(feature = "blas-backend"))]
+#[inline]
 fn scalar_trmmt_upper_lutu_impl<T>(m: &[T], a: &mut [T], n: usize)
 where
     T: Copy + core::ops::Mul<Output = T> + core::ops::AddAssign,
 {
-    const PANEL: usize = 64;
+    let panel = scalar_trmmt_panel_cols::<T>(n);
 
-    for panel_col in (0..n).step_by(PANEL) {
-        let nloc = PANEL.min(n - panel_col);
+    for panel_col in (0..n).step_by(panel) {
+        let nloc = panel.min(n - panel_col);
         let rows = panel_col + nloc;
 
         for i_rev in 0..rows {
