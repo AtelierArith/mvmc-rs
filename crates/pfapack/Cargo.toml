@@ -13,6 +13,7 @@ publish = false
 
 [dependencies]
 num-complex = { workspace = true }
+pulp = { workspace = true, optional = true }
 blas = { workspace = true, optional = true }
 lapack = { workspace = true, optional = true }
 
@@ -37,7 +38,13 @@ approx = { workspace = true }
 #   by default via LinearAlgebra. Expects unresolved BLAS / LAPACK
 #   symbols to be satisfied by the leaf binary (e.g. mvmc-cli linking
 #   openblas-src or accelerate-src).
+#
+# simd-backend:
+#   Dispatch the complex upper-triangular rank-2 update in `zsktf2` to a
+#   pulp runtime-SIMD kernel. The scalar implementation remains the
+#   reference path and is used for real matrices.
 # ---------------------------------------------------------------------------
 [features]
 default = []
 blas-backend = ["dep:blas", "dep:lapack"]
+simd-backend = ["dep:pulp"]
