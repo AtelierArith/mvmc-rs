@@ -9,6 +9,8 @@
 .DS_Store
 # benchmark output
 /criterion
+/benchmark/pfapack_compare/target
+/benchmark/pfapack_compare/results
 # golden fixture caches (regenerated from extern/Julia-mVMC/tools/extract_rust_port_fixtures.jl)
 tests/fixtures/**/*.dat.cache
 

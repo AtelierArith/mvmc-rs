@@ -172,8 +172,18 @@ golden diff passes in both backends. The dense Pfaffian rank-2 update,
 the unit-upper trtri, and the trmm Mᵀ · A pass are the actual hot path
 for `vmc_sampling` and are dispatched to BLAS.
 
-Build & run examples with BLAS on (OpenBLAS is already linked by
-`mvmc-core/build.rs`, so no extra backend crate is needed):
+Build & run examples with BLAS on. On macOS, install Homebrew OpenBLAS
+first because the BLAS backend expects the Fortran BLAS/LAPACK symbols
+from OpenBLAS rather than Accelerate:
+
+```bash
+brew install openblas
+```
+
+`openblas` is keg-only on macOS; the Rust build scripts add the Homebrew
+library path automatically when `--features blas-backend` is enabled. On
+Linux, install the system OpenBLAS/LAPACK package, for example
+`libopenblas-dev` on Debian/Ubuntu.
 
 ```bash
 cargo run --release -p mvmc-cli --features blas-backend --example heisenberg_chain_real

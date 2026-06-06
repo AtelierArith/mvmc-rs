@@ -1,0 +1,11 @@
+[workspace]
+
+[package]
+name = "pfapack_compare"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+num-complex = "0.4"
+pfapack = { path = "../../crates/pfapack" }
