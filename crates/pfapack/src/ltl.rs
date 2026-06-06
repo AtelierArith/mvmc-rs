@@ -147,33 +147,47 @@ where
             // triangle, which `utu2pfa` doesn't care about but the golden
             // diff does, so the scalar form is the bit-parity-correct
             // backend even when `--features blas-backend` is on.
-            for j in 0..kk0 {
-                let temp1 = alpha * a.get(j, kk0);
-                let temp2 = alpha * a.get(j, k0);
-                for i in 0..j {
-                    let cur = a.get(i, j);
-                    let upd = a.get(i, k0) * temp1 - a.get(i, kk0) * temp2;
-                    a.set(i, j, cur + upd);
-                }
-                a.set(j, j, T::pfaf_zero());
-            }
+            let lda = a.lda();
+            update_upper_rank2(a.as_mut_slice(), lda, kk0, k0, alpha);
 
             // Julia: BLAS.scal!(k-2, alpha, A[1:k-2, k], 1) — backend
             // route: dscal / zscal when BLAS is on, plain loop otherwise.
             let n_sub = kk0;
-            let lda = a.lda();
-            let col_start = k0 * lda;
-            backend::scal_strided::<T>(
-                &mut a.as_mut_slice()[col_start..col_start + n_sub],
-                n_sub,
-                alpha,
-            );
+            let data = a.as_mut_slice();
+            let col_k0 = k0 * lda;
+            backend::scal_strided::<T>(&mut data[col_k0..col_k0 + n_sub], n_sub, alpha);
         }
     }
 
     match info {
         None => Ok(()),
         Some(i) => Err(i),
+    }
+}
+
+#[inline]
+fn update_upper_rank2<T: BlasScalar>(data: &mut [T], lda: usize, kk0: usize, k0: usize, alpha: T) {
+    let col_kk0 = kk0 * lda;
+    let col_k0 = k0 * lda;
+
+    debug_assert!(kk0 < k0);
+    debug_assert!(k0 < lda);
+    debug_assert!(col_k0 + lda <= data.len());
+
+    let (write_cols, tail) = data.split_at_mut(col_kk0);
+    let (col_kk0_data, tail) = tail.split_at_mut(lda);
+    let skip_to_k0 = col_k0 - col_kk0 - lda;
+    let (_, tail) = tail.split_at_mut(skip_to_k0);
+    let (col_k0_data, _) = tail.split_at_mut(lda);
+
+    for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+        let temp1 = alpha * col_kk0_data[j];
+        let temp2 = alpha * col_k0_data[j];
+        for i in 0..j {
+            let upd = col_k0_data[i] * temp1 - col_kk0_data[i] * temp2;
+            col_j[i] += upd;
+        }
+        col_j[j] = T::pfaf_zero();
     }
 }
 
