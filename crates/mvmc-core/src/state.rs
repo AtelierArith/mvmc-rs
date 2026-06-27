@@ -20,7 +20,7 @@
 //! | [`PhysicalQuantities`] | `PhysicalQuantities` |
 //! | [`VmcOptimizationState`] | `VMCOptimizationState` |
 //!
-//! The two newtypes wrap raw `Vec<T>` storage so that
+//! The two newtypes wrap compact tenferro host tensors so that
 //! `SlaterElmFlat<T>` (row-major) and `InvMColMajor<T>` (column-major)
 //! never get accidentally exchanged. See `calculate_m_all.jl` and
 //! `vmc_sampling.jl:3236` for the upstream comments that fix the
@@ -30,6 +30,7 @@ use std::sync::Mutex;
 
 use num_complex::Complex64;
 use pfapack::PivotIndex1Based;
+use tenferro_tensor::{Buffer, TypedTensor};
 
 // ---------------------------------------------------------------------------
 // Storage-order newtypes
@@ -38,9 +39,9 @@ use pfapack::PivotIndex1Based;
 /// Slater-element table, **row-major** in `(ri + si * Nsite, rj + sj * Nsite)`
 /// inside one QP plane. Upstream sizes it as `Vector{T}` of length
 /// `n_qp_full * (2*n_site)^2`; we keep the same layout.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SlaterElmFlat<T> {
-    data: Vec<T>,
+    data: TypedTensor<T>,
     n_qp_full: usize,
     n_site2: usize, // 2 * n_site
 }
@@ -50,9 +51,24 @@ impl<T: Copy + Default> SlaterElmFlat<T> {
     pub fn zeros(n_qp_full: usize, n_site: usize) -> Self {
         let n_site2 = 2 * n_site;
         Self {
-            data: vec![T::default(); n_qp_full * n_site2 * n_site2],
+            data: TypedTensor::from_vec_col_major(
+                vec![n_site2 * n_site2, n_qp_full],
+                vec![T::default(); n_qp_full * n_site2 * n_site2],
+            )
+            .expect("SlaterElmFlat shape and data length must match"),
             n_qp_full,
             n_site2,
+        }
+    }
+}
+
+impl<T> SlaterElmFlat<T> {
+    fn host_storage(&self) -> &[T] {
+        match self.data.buffer() {
+            Buffer::Host(data) => data,
+            Buffer::Backend(_) => {
+                panic!("SlaterElmFlat requires host-backed tenferro storage")
+            }
         }
     }
 }
@@ -70,12 +86,12 @@ impl<T: Copy> SlaterElmFlat<T> {
 
     /// Total entries (`n_qp_full * n_site2 * n_site2`).
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.as_slice().len()
     }
 
     /// True iff the table holds zero entries (only when `n_qp_full == 0`).
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.as_slice().is_empty()
     }
 
     /// Row-major linear index, **0-based**. `row = ri + si * n_site`,
@@ -91,47 +107,59 @@ impl<T: Copy> SlaterElmFlat<T> {
     /// Read `slater_elm[qp][row, col]`.
     #[inline]
     pub fn get(&self, qp: usize, row: usize, col: usize) -> T {
-        self.data[self.idx(qp, row, col)]
+        self.as_slice()[self.idx(qp, row, col)]
     }
 
     /// Write `slater_elm[qp][row, col] = value`.
     #[inline]
     pub fn set(&mut self, qp: usize, row: usize, col: usize, value: T) {
         let k = self.idx(qp, row, col);
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
     }
 
-    /// Borrow the whole backing vector.
+    /// Borrow the whole backing storage.
     pub fn as_slice(&self) -> &[T] {
-        &self.data
+        self.host_storage()
     }
 
-    /// Mutably borrow the whole backing vector.
+    /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.data
+        self.data
+            .host_data_mut()
+            .expect("SlaterElmFlat::as_mut_slice requires host-backed storage")
     }
 
     /// Borrow a single QP plane (length `n_site2 * n_site2`, row-major).
     pub fn qp_slice(&self, qp: usize) -> &[T] {
         let stride = self.n_site2 * self.n_site2;
         let start = qp * stride;
-        &self.data[start..start + stride]
+        let end = start + stride;
+        &self.as_slice()[start..end]
     }
 
     /// Mutably borrow a single QP plane.
     pub fn qp_slice_mut(&mut self, qp: usize) -> &mut [T] {
         let stride = self.n_site2 * self.n_site2;
         let start = qp * stride;
-        &mut self.data[start..start + stride]
+        let end = start + stride;
+        &mut self.as_mut_slice()[start..end]
+    }
+}
+
+impl<T: PartialEq> PartialEq for SlaterElmFlat<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.n_qp_full == other.n_qp_full
+            && self.n_site2 == other.n_site2
+            && self.host_storage() == other.host_storage()
     }
 }
 
 /// Inverse-matrix table, **column-major** in `(mi + si * Ne, mj + sj * Ne)`
 /// inside one QP plane, with the upstream `+1` pad slot per QP that
 /// `vmc_sampling.jl:3236` reserves for the Pfaffian buffer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct InvMColMajor<T> {
-    data: Vec<T>,
+    data: TypedTensor<T>,
     n_qp_full: usize,
     n_size: usize, // 2 * n_elec
 }
@@ -143,9 +171,24 @@ impl<T: Copy + Default> InvMColMajor<T> {
         Self {
             // n_qp_full * (n_size * n_size + 1) -- the trailing slot is
             // the Pfaffian buffer pad upstream relies on.
-            data: vec![T::default(); n_qp_full * (n_size * n_size + 1)],
+            data: TypedTensor::from_vec_col_major(
+                vec![n_size * n_size + 1, n_qp_full],
+                vec![T::default(); n_qp_full * (n_size * n_size + 1)],
+            )
+            .expect("InvMColMajor shape and data length must match"),
             n_qp_full,
             n_size,
+        }
+    }
+}
+
+impl<T> InvMColMajor<T> {
+    fn host_storage(&self) -> &[T] {
+        match self.data.buffer() {
+            Buffer::Host(data) => data,
+            Buffer::Backend(_) => {
+                panic!("InvMColMajor requires host-backed tenferro storage")
+            }
         }
     }
 }
@@ -163,12 +206,12 @@ impl<T: Copy> InvMColMajor<T> {
 
     /// Total entries, including the per-QP pad slot.
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.as_slice().len()
     }
 
     /// True iff the table holds zero entries.
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.as_slice().is_empty()
     }
 
     /// Column-major linear index, **0-based**. Within one QP plane the
@@ -185,24 +228,26 @@ impl<T: Copy> InvMColMajor<T> {
     /// Read `inv_m[qp][row, col]`.
     #[inline]
     pub fn get(&self, qp: usize, row: usize, col: usize) -> T {
-        self.data[self.idx(qp, row, col)]
+        self.as_slice()[self.idx(qp, row, col)]
     }
 
     /// Write `inv_m[qp][row, col] = value`.
     #[inline]
     pub fn set(&mut self, qp: usize, row: usize, col: usize, value: T) {
         let k = self.idx(qp, row, col);
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
     }
 
-    /// Borrow the whole backing vector (including the per-QP pad slots).
+    /// Borrow the whole backing storage (including the per-QP pad slots).
     pub fn as_slice(&self) -> &[T] {
-        &self.data
+        self.host_storage()
     }
 
-    /// Mutably borrow the whole backing vector.
+    /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.data
+        self.data
+            .host_data_mut()
+            .expect("InvMColMajor::as_mut_slice requires host-backed storage")
     }
 
     /// Borrow one QP plane as a contiguous column-major slice of length
@@ -210,27 +255,29 @@ impl<T: Copy> InvMColMajor<T> {
     pub fn qp_matrix_slice(&self, qp: usize) -> &[T] {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
-        &self.data[start..start + self.n_size * self.n_size]
+        let end = start + self.n_size * self.n_size;
+        &self.as_slice()[start..end]
     }
 
     /// Mutably borrow one QP plane (matrix portion only).
     pub fn qp_matrix_slice_mut(&mut self, qp: usize) -> &mut [T] {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
-        &mut self.data[start..start + self.n_size * self.n_size]
+        let end = start + self.n_size * self.n_size;
+        &mut self.as_mut_slice()[start..end]
     }
 
     /// Read the Pfaffian-pad slot for one QP.
     pub fn pad_slot(&self, qp: usize) -> T {
         let stride = self.n_size * self.n_size + 1;
-        self.data[qp * stride + self.n_size * self.n_size]
+        self.as_slice()[qp * stride + self.n_size * self.n_size]
     }
 
     /// Write the Pfaffian-pad slot for one QP.
     pub fn set_pad_slot(&mut self, qp: usize, value: T) {
         let stride = self.n_size * self.n_size + 1;
         let k = qp * stride + self.n_size * self.n_size;
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
     }
 
     /// Borrow one QP plane as a column-major matrix view.
@@ -243,6 +290,14 @@ impl<T: Copy> InvMColMajor<T> {
     pub fn qp_matrix_mut(&mut self, qp: usize) -> InvMPlaneMut<'_, T> {
         let n = self.n_size;
         InvMPlaneMut::new(self.qp_matrix_slice_mut(qp), n)
+    }
+}
+
+impl<T: PartialEq> PartialEq for InvMColMajor<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.n_qp_full == other.n_qp_full
+            && self.n_size == other.n_size
+            && self.host_storage() == other.host_storage()
     }
 }
 
