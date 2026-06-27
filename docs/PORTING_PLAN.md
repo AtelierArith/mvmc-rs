@@ -88,7 +88,25 @@ the user's binding decision.
 | MPI gap (Phase 7 may stay unimplemented). | `Reducer` trait exists from Phase 4.1, so today's no-op stays correct; document `NSplitSize > 1` as silently single-process (matches Julia behaviour). |
 | Fixture licensing — `test/integration/reference/*` is GPL-3 C-mVMC. | Keep GPL-3 fixtures inside `mvmc-core` integration tests only, never inside `pfapack` (BSD/MPL) or `sfmt19937` (BSD) tests. |
 
-## 5. Quick reference: where to look in upstream
+## 5. Tenferro migration status/rules
+
+- `Vec` / slice remains the compatibility boundary first. Convert to explicit col-major `TypedTensor` only at bounded seams, never as a blanket replacement for hot paths.
+- `SlaterElmFlat` keeps the legacy row-major logical layout per QP plane. The public offset stays `(qp * n_site2 + row) * n_site2 + col`, even though its tenferro shape is `[n_site2 * n_site2, n_qp_full]`.
+- `InvMColMajor` keeps the legacy logical layout `qp * (n_size * n_size + 1) + row + col * n_size`, including the per-QP pad slot, even though its tenferro shape is `[n_size * n_size + 1, n_qp_full]`.
+- Production hot paths must not introduce per-sample `Vec -> TypedTensor` conversion or fresh backend creation. The Slater derivative QP reduction stays as explicit `Vec` loops until those buffers become tensor-backed.
+- Current tenferro-einsum code is limited to `finalize_oo_store`, the narrow SR store helper contract, and a dormant/tested QP-weighted reduction helper. The QP helper stays out of production hot paths until its input buffers become tensor-backed. Tests cover col-major copy-back and einsum references.
+- Any future conversion must keep the Julia/C parity tests and `phase5_regression_50step` as gates.
+
+### Raw-index audit summary
+
+The `rg -n "\\[[^\\]]+\\*[^\\]]+\\]|\\+ .*\\* n_|\\* n_size \\+|\\* n_site2 \\+|sample \\*|qp \\*" crates/mvmc-core/src` audit still finds raw index math in three categories:
+
+- Intentional typed layout APIs/tests: `state.rs` accessors and assertions for `SlaterElmFlat`, `InvMColMajor`, and sample-backed state buffers; these document the public logical layouts and packed storage.
+- Deliberate hot-path scalar loops: `sampling/updates.rs`, `slater_update.rs`, `observables.rs`, `sampling/driver.rs`, and related `Vec`-backed loops; these stay scalar until the corresponding buffers move to tensors.
+- Future candidates: non-hot-path layout helpers that already mirror a contiguous plane or sample store and could be tensor-backed later if the regression gates stay green.
+- Migration bugs: no remaining audit hit is classified as a migration bug in this pass.
+
+## 6. Quick reference: where to look in upstream
 
 - Optimizer entrypoint and phase order: `MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:65-100`.
 - RNG-draw order critical comments: `MVMCExpertModeParsers.jl/src/utils/parameter_init.jl` (line ~158).
