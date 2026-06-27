@@ -306,6 +306,7 @@ pub fn get_update_type(
 /// * `ele_cfg[ri + s*n_site] = mi` or `-1`.
 /// * `loc_spn[ri] = 1` marks local-spin sites disallowed for itinerant
 ///   hopping.
+#[allow(clippy::too_many_arguments)]
 pub fn make_candidate_hopping_fsz(
     ele_idx: &[i64],
     ele_cfg: &[i64],

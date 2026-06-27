@@ -29,6 +29,8 @@
 //! See `matrix.c:285-387` for the C reference the upstream Julia port
 //! traces back to.
 
+#![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+
 use num_complex::Complex64;
 use pfapack::{
     dsktf2, utu2inv_complex, utu2inv_real, utu2pfa_complex, utu2pfa_real, zsktf2, SqMat,
@@ -640,7 +642,7 @@ mod tests {
         let n_site2 = 2 * n_site;
 
         // Deterministic LCG so the test is reproducible without `rand`.
-        let mut s: u64 = 0xdeadbeef_dead_beef;
+        let mut s: u64 = 0xdead_beef_dead_beef;
         let mut next_f64 = || -> f64 {
             s = s
                 .wrapping_mul(6364136223846793005)

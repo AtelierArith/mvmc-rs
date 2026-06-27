@@ -200,7 +200,7 @@ pub fn run_para_opt_from_namelist<P: AsRef<Path>>(
     // Julia's `run_para_opt_from_namelist` return value.
     let final_energy_per_site = output_dir.and_then(|dir| {
         let content = std::fs::read_to_string(dir.join("zvo_out.dat")).ok()?;
-        let last = content.lines().filter(|l| !l.trim().is_empty()).last()?;
+        let last = content.lines().rfind(|l| !l.trim().is_empty())?;
         let e: f64 = last.split_whitespace().next()?.parse().ok()?;
         if n_site > 0 {
             Some(e / n_site as f64)

@@ -556,9 +556,9 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
     if n_site == 0 || ele_num.len() < 2 * n_site {
         return Complex64::new(0.0, 0.0);
     }
-    let n_charge = cfg.nneuron_charge.max(0);
-    let n_spin = cfg.nneuron_spin.max(0);
-    let n_general = cfg.nneuron_general.max(0);
+    let n_charge = cfg.nneuron_charge;
+    let n_spin = cfg.nneuron_spin;
+    let n_general = cfg.nneuron_general;
 
     let mut hidden_charge = vec![Complex64::new(0.0, 0.0); n_charge];
     let mut hidden_spin = vec![Complex64::new(0.0, 0.0); n_spin];

@@ -62,7 +62,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     let mut slater_values = vec![Complex64::new(0.0, 0.0); n_s];
 
     if !all_complex {
-        for i in 0..n_s {
+        for (i, slot) in slater_values.iter_mut().enumerate() {
             let opt_flag_idx = 2 * i + 2 * n_proj + 2 * (if flag_rbm { 1 } else { 0 }) * n_rbm;
             let should_optimize = data
                 .optimization_flags
@@ -71,14 +71,14 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
                 .unwrap_or(true);
             if should_optimize {
                 let r = rng.genrand_real2();
-                slater_values[i] = Complex64::new(2.0 * (r - 0.5), 0.0);
+                *slot = Complex64::new(2.0 * (r - 0.5), 0.0);
             } else {
-                slater_values[i] = Complex64::new(0.0, 0.0);
+                *slot = Complex64::new(0.0, 0.0);
             }
         }
     } else {
         let inv_sqrt_2 = 1.0 / std::f64::consts::SQRT_2;
-        for i in 0..n_s {
+        for (i, slot) in slater_values.iter_mut().enumerate() {
             let opt_flag_idx = 2 * i + 2 * n_proj + 2 * (if flag_rbm { 1 } else { 0 }) * n_rbm;
             let should_optimize = data
                 .optimization_flags
@@ -90,9 +90,9 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
                 let r2 = rng.genrand_real2();
                 let real = 2.0 * (r1 - 0.5);
                 let imag = 2.0 * (r2 - 0.5);
-                slater_values[i] = Complex64::new(real * inv_sqrt_2, imag * inv_sqrt_2);
+                *slot = Complex64::new(real * inv_sqrt_2, imag * inv_sqrt_2);
             } else {
-                slater_values[i] = Complex64::new(0.0, 0.0);
+                *slot = Complex64::new(0.0, 0.0);
             }
         }
     }

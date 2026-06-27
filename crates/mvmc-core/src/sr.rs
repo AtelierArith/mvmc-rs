@@ -8,6 +8,8 @@
 //! between factorisation and back-substitution; collapsing into `dposv`
 //! would silently change the regularisation behaviour.
 
+#![allow(clippy::needless_range_loop)]
+
 use mvmc_expert_parsers::utils::parameter_init::n_slater;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;

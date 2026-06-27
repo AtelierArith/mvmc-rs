@@ -23,10 +23,5 @@ pub fn julia_mvmc_root() -> Option<PathBuf> {
         manifest.join("../../Julia-mVMC"),
         manifest.join("../Julia-mVMC"),
     ];
-    for c in candidates {
-        if c.is_dir() {
-            return Some(c);
-        }
-    }
-    None
+    candidates.into_iter().find(|c| c.is_dir())
 }

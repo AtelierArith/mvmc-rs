@@ -24,7 +24,7 @@ pub fn gauss_legendre(x1: f64, x2: f64, n: usize) -> (Vec<f64>, Vec<f64>) {
     }
     let mut x = vec![0.0; n];
     let mut w = vec![0.0; n];
-    let m = (n + 1) / 2;
+    let m = n.div_ceil(2);
     let xm = 0.5 * (x2 + x1);
     let xl = 0.5 * (x2 - x1);
     let n_f = n as f64;
@@ -159,9 +159,8 @@ pub fn update_qp_weight(weights: &mut QuantumProjectionWeights, opt_trans: &[Com
         if weights.qp_full_weight.len() != nqp_full {
             weights.qp_full_weight = vec![Complex64::new(0.0, 0.0); nqp_full];
         }
-        for i in 0..nqp_opt {
+        for (i, tmp) in opt_trans.iter().copied().enumerate() {
             let offset = i * nqp_fix;
-            let tmp = opt_trans[i];
             for j in 0..nqp_fix {
                 weights.qp_full_weight[offset + j] = tmp * weights.qp_fix_weight[j];
             }
@@ -171,10 +170,7 @@ pub fn update_qp_weight(weights: &mut QuantumProjectionWeights, opt_trans: &[Com
 
 /// `data.qp_weights = init_qp_weight!(data)` mirror.
 pub fn init_qp_weight(data: &mut ExpertModeData) {
-    let mut weights = data
-        .qp_weights
-        .take()
-        .unwrap_or_else(QuantumProjectionWeights::new);
+    let mut weights = data.qp_weights.take().unwrap_or_default();
     init_qp_weight_inplace(
         &mut weights,
         data.modpara.nsp_gauss_leg,

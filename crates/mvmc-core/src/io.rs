@@ -95,8 +95,8 @@ pub fn output_data(
         format_c_double(variance),
         // sztot / sztot2 are written without the leading space in the
         // upstream format string ("%.18e" rather than "% .18e").
-        format!("{:.18e}", sztot),
-        format!("{:.18e}", sztot2),
+        format_args!("{:.18e}", sztot),
+        format_args!("{:.18e}", sztot2),
     )?;
 
     let var_path = output_path(&format!("{head}_var.dat"), output_dir)?;

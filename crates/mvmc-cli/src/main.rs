@@ -179,7 +179,7 @@ fn main() {
             if let Some(ref d) = summary.output_dir {
                 let zvo = d.join("zvo_out.dat");
                 if let Ok(content) = std::fs::read_to_string(&zvo) {
-                    if let Some(last) = content.lines().filter(|l| !l.trim().is_empty()).last() {
+                    if let Some(last) = content.lines().rfind(|l| !l.trim().is_empty()) {
                         let tokens: Vec<&str> = last.split_whitespace().collect();
                         if let Some(e_str) = tokens.first() {
                             if let Ok(e) = e_str.parse::<f64>() {

@@ -11,6 +11,12 @@
 //! Transfer / PairHopping / InterAll terms are still pending and will
 //! land alongside the QP-trans-aware `slater_elm_diff` port.
 
+#![allow(
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::items_after_test_module
+)]
+
 use num_complex::Complex64;
 
 use mvmc_expert_parsers::{ExpertModeData, Spin};
@@ -452,7 +458,7 @@ pub fn green_func_exchange_real(
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     let scratch_slater = state.slater_matrix.slater_elm.clone();
     let mut scratch_inv = state.slater_matrix.inv_m.clone();
-    if let Err(_) = calc_m_all_complex(
+    if calc_m_all_complex(
         &my_ele_idx,
         &scratch_slater,
         &mut scratch_inv,
@@ -462,7 +468,9 @@ pub fn green_func_exchange_real(
         n_site_l,
         n_elec_l,
         pool,
-    ) {
+    )
+    .is_err()
+    {
         return Complex64::new(0.0, 0.0);
     }
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);

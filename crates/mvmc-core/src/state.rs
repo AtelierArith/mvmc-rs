@@ -1082,16 +1082,19 @@ mod tests {
     fn slater_elm_flat_row_major_indexing() {
         let n_qp_full = 2;
         let n_site = 3;
+        let n_site2 = 2 * n_site;
         let mut a = SlaterElmFlat::<f64>::zeros(n_qp_full, n_site);
         a.set(0, 1, 4, 11.0);
         a.set(1, 5, 2, 22.0);
         // Row-major linearisation matches `(qp * n_site2 + row) * n_site2 + col`.
-        assert_eq!(a.as_slice()[(0 * 6 + 1) * 6 + 4], 11.0);
-        assert_eq!(a.as_slice()[(1 * 6 + 5) * 6 + 2], 22.0);
+        let first = n_site2 + 4;
+        let second = (n_site2 + 5) * n_site2 + 2;
+        assert_eq!(a.as_slice()[first], 11.0);
+        assert_eq!(a.as_slice()[second], 22.0);
         assert_eq!(a.get(0, 1, 4), 11.0);
         assert_eq!(a.get(1, 5, 2), 22.0);
-        assert_eq!(a.qp_slice(0).len(), 6 * 6);
-        assert_eq!(a.qp_slice(1).len(), 6 * 6);
+        assert_eq!(a.qp_slice(0).len(), n_site2 * n_site2);
+        assert_eq!(a.qp_slice(1).len(), n_site2 * n_site2);
     }
 
     #[test]
@@ -1105,8 +1108,10 @@ mod tests {
         a.set_pad_slot(1, 99.0);
         // Column-major linearisation matches `qp * (n_size^2 + 1) + row + col * n_size`.
         let stride = n_size * n_size + 1;
-        assert_eq!(a.as_slice()[0 * stride + 1 + 4 * n_size], 11.0);
-        assert_eq!(a.as_slice()[1 * stride + 5 + 2 * n_size], 22.0);
+        let first = 1 + 4 * n_size;
+        let second = stride + 5 + 2 * n_size;
+        assert_eq!(a.as_slice()[first], 11.0);
+        assert_eq!(a.as_slice()[second], 22.0);
         assert_eq!(a.pad_slot(1), 99.0);
         assert_eq!(a.qp_matrix_slice(0).len(), n_size * n_size);
         assert_eq!(a.qp_matrix_slice(1).len(), n_size * n_size);
@@ -1115,13 +1120,14 @@ mod tests {
     #[test]
     fn slater_elm_vec_layout_preserves_qp_row_major_planes() {
         let mut a = SlaterElmFlat::<f64>::zeros(2, 3);
+        let n_site2 = 6;
         a.set(0, 1, 4, 11.0);
         a.set(1, 5, 2, 22.0);
 
-        assert_eq!(a.as_slice()[(0 * 6 + 1) * 6 + 4], 11.0);
-        assert_eq!(a.as_slice()[(1 * 6 + 5) * 6 + 2], 22.0);
-        assert_eq!(a.qp_slice(0)[1 * 6 + 4], 11.0);
-        assert_eq!(a.qp_slice(1)[5 * 6 + 2], 22.0);
+        assert_eq!(a.as_slice()[n_site2 + 4], 11.0);
+        assert_eq!(a.as_slice()[(n_site2 + 5) * n_site2 + 2], 22.0);
+        assert_eq!(a.qp_slice(0)[n_site2 + 4], 11.0);
+        assert_eq!(a.qp_slice(1)[5 * n_site2 + 2], 22.0);
         assert_eq!(a.get(0, 1, 4), 11.0);
         assert_eq!(a.get(1, 5, 2), 22.0);
     }
@@ -1158,11 +1164,12 @@ mod tests {
         assert_eq!(cfg.ele_num_slice(2).len(), 4);
         assert_eq!(cfg.ele_proj_cnt_slice(0).len(), 4);
         assert_eq!(cfg.ele_spn_slice(2).len(), 4);
-        assert_eq!(cfg.ele_idx[1 * 4], 11);
-        assert_eq!(cfg.ele_cfg[1 * 4 + 3], 22);
+        let stride = 4;
+        assert_eq!(cfg.ele_idx[stride], 11);
+        assert_eq!(cfg.ele_cfg[stride + 3], 22);
         assert_eq!(cfg.ele_num[2 * 4 + 1], 33);
         assert_eq!(cfg.ele_proj_cnt[2], 44);
-        assert_eq!(cfg.ele_spn[2 * 4 + 1], 55);
+        assert_eq!(cfg.ele_spn[2 * stride + 1], 55);
     }
 
     #[test]

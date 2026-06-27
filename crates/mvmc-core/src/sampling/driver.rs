@@ -10,6 +10,8 @@
 //! paths exercised by the upstream `examples/inputs/*` cases. FSZ /
 //! BackFlow drivers are deferred to Phase 7.
 
+#![allow(clippy::too_many_arguments)]
+
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
