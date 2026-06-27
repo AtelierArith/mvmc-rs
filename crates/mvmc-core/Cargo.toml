@@ -14,6 +14,8 @@ sfmt19937 = { workspace = true }
 pfapack = { workspace = true }
 mvmc-expert-parsers = { workspace = true }
 tenferro-tensor = { workspace = true }
+tenferro-cpu = { workspace = true }
+tenferro-einsum = { workspace = true }
 num-complex = { workspace = true }
 ndarray = { workspace = true }
 blas = { workspace = true }

@@ -32,6 +32,8 @@ ndarray = "0.16"
 rand_core = "0.6"
 pulp = { version = "0.22.2", default-features = false, features = ["std"] }
 tenferro-tensor = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "761ba620ff39235fef3b3641f84a084d179f2438", default-features = false }
+tenferro-cpu = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "761ba620ff39235fef3b3641f84a084d179f2438", default-features = false, features = ["cpu-faer"] }
+tenferro-einsum = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "761ba620ff39235fef3b3641f84a084d179f2438", default-features = false, features = ["cpu-faer"] }
 
 # --- BLAS / LAPACK plumbing.
 #
