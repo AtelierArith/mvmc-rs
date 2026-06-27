@@ -233,20 +233,20 @@ impl<T: Copy> InvMColMajor<T> {
         self.data[k] = value;
     }
 
-    /// Borrow one QP plane as a contiguous column-major matrix view.
+    /// Borrow one QP plane as a column-major matrix view.
     pub fn qp_matrix(&self, qp: usize) -> InvMPlane<'_, T> {
         let n = self.n_size;
         InvMPlane::new(self.qp_matrix_slice(qp), n)
     }
 
-    /// Mutably borrow one QP plane as a contiguous column-major matrix view.
+    /// Mutably borrow one QP plane as a column-major matrix view.
     pub fn qp_matrix_mut(&mut self, qp: usize) -> InvMPlaneMut<'_, T> {
         let n = self.n_size;
         InvMPlaneMut::new(self.qp_matrix_slice_mut(qp), n)
     }
 }
 
-/// One `inv_m[qp]` plane borrowed as an immutable column-major slice.
+/// One `inv_m[qp]` plane borrowed as a contiguous column-major slice.
 #[derive(Debug, Clone, Copy)]
 pub struct InvMPlane<'a, T> {
     data: &'a [T],
@@ -254,23 +254,26 @@ pub struct InvMPlane<'a, T> {
 }
 
 impl<'a, T> InvMPlane<'a, T> {
+    /// Wrap a borrowed QP plane with its side length.
     pub fn new(data: &'a [T], n: usize) -> Self {
         Self { data, n }
     }
 }
 
 impl<T: Copy> InvMPlane<'_, T> {
+    /// Read one matrix entry from the borrowed plane.
     #[inline]
     pub fn get(&self, row: usize, col: usize) -> T {
         self.data[row + col * self.n]
     }
 
+    /// Return the underlying column-major slice.
     pub fn as_slice(&self) -> &[T] {
         self.data
     }
 }
 
-/// One `inv_m[qp]` plane borrowed as a mutable column-major slice.
+/// Mutable `inv_m[qp]` plane borrowed as a contiguous column-major slice.
 #[derive(Debug)]
 pub struct InvMPlaneMut<'a, T> {
     data: &'a mut [T],
@@ -278,26 +281,31 @@ pub struct InvMPlaneMut<'a, T> {
 }
 
 impl<'a, T> InvMPlaneMut<'a, T> {
+    /// Wrap a mutably borrowed QP plane with its side length.
     pub fn new(data: &'a mut [T], n: usize) -> Self {
         Self { data, n }
     }
 }
 
 impl<T: Copy> InvMPlaneMut<'_, T> {
+    /// Read one matrix entry from the borrowed plane.
     #[inline]
     pub fn get(&self, row: usize, col: usize) -> T {
         self.data[row + col * self.n]
     }
 
+    /// Write one matrix entry in the borrowed plane.
     #[inline]
     pub fn set(&mut self, row: usize, col: usize, value: T) {
         self.data[row + col * self.n] = value;
     }
 
+    /// Return the underlying column-major slice.
     pub fn as_slice(&self) -> &[T] {
         self.data
     }
 
+    /// Return the underlying mutable column-major slice.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         self.data
     }
@@ -396,6 +404,7 @@ impl SROptData {
         }
     }
 
+    /// Borrow one stored complex SR sample as a contiguous slice.
     #[inline]
     pub fn sr_opt_o_store_slice(&self, sample: usize) -> &[Complex64] {
         let stride = 2 * self.sr_opt_size;
@@ -403,6 +412,7 @@ impl SROptData {
         &self.sr_opt_o_store[start..start + stride]
     }
 
+    /// Borrow one stored complex SR sample mutably as a contiguous slice.
     #[inline]
     pub fn sr_opt_o_store_slice_mut(&mut self, sample: usize) -> &mut [Complex64] {
         let stride = 2 * self.sr_opt_size;
@@ -410,6 +420,7 @@ impl SROptData {
         &mut self.sr_opt_o_store[start..start + stride]
     }
 
+    /// Borrow one stored real SR sample as a contiguous slice.
     #[inline]
     pub fn sr_opt_o_store_real_slice(&self, sample: usize) -> &[f64] {
         let stride = self.sr_opt_size;
@@ -417,6 +428,7 @@ impl SROptData {
         &self.sr_opt_o_store_real[start..start + stride]
     }
 
+    /// Borrow one stored real SR sample mutably as a contiguous slice.
     #[inline]
     pub fn sr_opt_o_store_real_slice_mut(&mut self, sample: usize) -> &mut [f64] {
         let stride = self.sr_opt_size;
@@ -540,6 +552,7 @@ impl ElectronConfiguration {
         }
     }
 
+    /// Borrow one sample's electron-index block.
     #[inline]
     pub fn ele_idx_slice(&self, sample: usize) -> &[i64] {
         debug_assert!(sample < self.n_sample);
@@ -547,6 +560,7 @@ impl ElectronConfiguration {
         &self.ele_idx[start..start + self.n_size]
     }
 
+    /// Borrow one sample's electron-index block mutably.
     #[inline]
     pub fn ele_idx_slice_mut(&mut self, sample: usize) -> &mut [i64] {
         debug_assert!(sample < self.n_sample);
@@ -554,6 +568,7 @@ impl ElectronConfiguration {
         &mut self.ele_idx[start..start + self.n_size]
     }
 
+    /// Borrow one sample's configuration block.
     #[inline]
     pub fn ele_cfg_slice(&self, sample: usize) -> &[i64] {
         debug_assert!(sample < self.n_sample);
@@ -561,6 +576,7 @@ impl ElectronConfiguration {
         &self.ele_cfg[start..start + self.n_site2]
     }
 
+    /// Borrow one sample's configuration block mutably.
     #[inline]
     pub fn ele_cfg_slice_mut(&mut self, sample: usize) -> &mut [i64] {
         debug_assert!(sample < self.n_sample);
@@ -568,6 +584,7 @@ impl ElectronConfiguration {
         &mut self.ele_cfg[start..start + self.n_site2]
     }
 
+    /// Borrow one sample's electron-count block.
     #[inline]
     pub fn ele_num_slice(&self, sample: usize) -> &[i64] {
         debug_assert!(sample < self.n_sample);
@@ -575,6 +592,7 @@ impl ElectronConfiguration {
         &self.ele_num[start..start + self.n_site2]
     }
 
+    /// Borrow one sample's electron-count block mutably.
     #[inline]
     pub fn ele_num_slice_mut(&mut self, sample: usize) -> &mut [i64] {
         debug_assert!(sample < self.n_sample);
@@ -582,6 +600,7 @@ impl ElectronConfiguration {
         &mut self.ele_num[start..start + self.n_site2]
     }
 
+    /// Borrow one sample's projection-count block.
     #[inline]
     pub fn ele_proj_cnt_slice(&self, sample: usize) -> &[i64] {
         debug_assert!(sample < self.n_sample);
@@ -589,6 +608,7 @@ impl ElectronConfiguration {
         &self.ele_proj_cnt[start..start + self.n_proj]
     }
 
+    /// Borrow one sample's projection-count block mutably.
     #[inline]
     pub fn ele_proj_cnt_slice_mut(&mut self, sample: usize) -> &mut [i64] {
         debug_assert!(sample < self.n_sample);
@@ -596,6 +616,7 @@ impl ElectronConfiguration {
         &mut self.ele_proj_cnt[start..start + self.n_proj]
     }
 
+    /// Borrow one sample's spin block when FSZ is enabled.
     #[inline]
     pub fn ele_spn_slice(&self, sample: usize) -> &[i64] {
         if self.ele_spn.is_empty() {
@@ -607,6 +628,7 @@ impl ElectronConfiguration {
         }
     }
 
+    /// Borrow one sample's spin block mutably when FSZ is enabled.
     #[inline]
     pub fn ele_spn_slice_mut(&mut self, sample: usize) -> &mut [i64] {
         if self.ele_spn.is_empty() {

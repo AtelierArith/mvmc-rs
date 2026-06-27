@@ -196,8 +196,9 @@ pub fn calculate_oo_store(
     let we = e * w;
     let sqrtw = w.sqrt();
     let size_2 = 2 * sr_opt_size;
+    let store = &mut sr_opt_o_store[sample * size_2..(sample + 1) * size_2];
     for i in 0..size_2 {
-        sr_opt_o_store[i + sample * size_2] = sr_opt_o[i] * sqrtw;
+        store[i] = sr_opt_o[i] * sqrtw;
         sr_opt_ho[i] += sr_opt_o[i] * we;
     }
 }
@@ -215,8 +216,9 @@ pub fn finalize_oo_store(
         for j in 0..size_2 {
             let mut acc = Complex64::new(0.0, 0.0);
             for s in 0..sample_size {
-                let a = sr_opt_o_store[i + s * size_2];
-                let b = sr_opt_o_store[j + s * size_2];
+                let sample = &sr_opt_o_store[s * size_2..(s + 1) * size_2];
+                let a = sample[i];
+                let b = sample[j];
                 acc += a * b.conj();
             }
             sr_opt_oo[i * size_2 + j] = acc;
@@ -540,7 +542,10 @@ pub fn slater_elm_diff(
         let cc = pf * weights.spgl_cos_cos[spidx];
         let ss = pf * weights.spgl_sin_sin[spidx];
         let tbase = mpidx * n_size * n_size;
-        let inv_base = qpidx * (n_size * n_size + 1);
+        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
+        // Upstream `SlaterElmDiff` reads the inverse plane through the
+        // transposed flat convention `msi*n_size + msj`; keep that contract
+        // explicit while borrowing only the matrix portion of the QP plane.
 
         for msi in 0..n_elec {
             for msj in 0..n_elec {
@@ -550,7 +555,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cs,
+                    inv_plane[msj + msi * n_size] * cs,
                 );
             }
             for msj in n_elec..n_size {
@@ -560,7 +565,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    -state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cc,
+                    -inv_plane[msj + msi * n_size] * cc,
                 );
             }
         }
@@ -572,7 +577,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * ss,
+                    inv_plane[msj + msi * n_size] * ss,
                 );
             }
             for msj in n_elec..n_size {
@@ -582,7 +587,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    -state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cs,
+                    -inv_plane[msj + msi * n_size] * cs,
                 );
             }
         }
@@ -1204,17 +1209,17 @@ pub fn slater_elm_diff_fsz(
     for qpidx in 0..n_qp_full {
         let mpidx = qpidx.min(n_mp_trans.saturating_sub(1));
         let pf = state.slater_matrix.pf_m[qpidx];
-        let inv_base = qpidx * (n_size * n_size + 1);
+        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
+        // See `slater_elm_diff`: this upstream path uses the same transposed
+        // flat inverse convention.
         let tbase = mpidx * n_size * n_size;
         for msi in 0..n_size {
             for msj in 0..n_size {
                 let orbidx = trans_orb_idx[tbase + msi * n_size + msj];
                 if orbidx >= 0 && (orbidx as usize) < n_slater {
                     let sign = trans_orb_sgn[tbase + msi * n_size + msj];
-                    let value = -state.slater_matrix.inv_m.as_slice()
-                        [inv_base + msi * n_size + msj]
-                        * pf
-                        * Complex64::new(sign as f64, 0.0);
+                    let value =
+                        -inv_plane[msj + msi * n_size] * pf * Complex64::new(sign as f64, 0.0);
                     buffer[qpidx * n_slater + orbidx as usize] += value;
                 }
             }

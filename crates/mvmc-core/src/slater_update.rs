@@ -19,7 +19,6 @@ use crate::state::VmcOptimizationState;
 pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
-    let n_site2 = 2 * n_site;
     let weights = match data.qp_weights.as_ref() {
         Some(w) => w,
         None => return,
@@ -60,7 +59,6 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
         let ss = weights.spgl_sin_sin[spidx];
         let trans = data.qp_trans_entries.get(mpidx);
 
-        let qp_offset = qp * n_site2 * n_site2;
         for ri in 0..n_site {
             let ori = ri;
             let tri = trans
@@ -102,15 +100,22 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
                 let rsi1 = ri + n_site;
                 let rsj0 = rj;
                 let rsj1 = rj + n_site;
-
-                let row0 = qp_offset + rsi0 * n_site2;
-                let row1 = qp_offset + rsi1 * n_site2;
-
-                let flat = state.slater_matrix.slater_elm.as_mut_slice();
-                flat[row0 + rsj0] = -(slt_ij - slt_ji) * cs;
-                flat[row0 + rsj1] = slt_ij * cc + slt_ji * ss;
-                flat[row1 + rsj0] = -slt_ij * ss - slt_ji * cc;
-                flat[row1 + rsj1] = (slt_ij - slt_ji) * cs;
+                state
+                    .slater_matrix
+                    .slater_elm
+                    .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
+                state
+                    .slater_matrix
+                    .slater_elm
+                    .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
+                state
+                    .slater_matrix
+                    .slater_elm
+                    .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
+                state
+                    .slater_matrix
+                    .slater_elm
+                    .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
             }
         }
     }
@@ -118,14 +123,17 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     // Real shadow buffer: refresh the per-QP real plane from the
     // freshly-updated complex master so the real-mode sampler sees a
     // consistent view.
-    let n_real = state
-        .slater_matrix
-        .slater_elm
-        .len()
-        .min(state.slater_matrix.slater_elm_real.len());
-    for i in 0..n_real {
-        state.slater_matrix.slater_elm_real.as_mut_slice()[i] =
-            state.slater_matrix.slater_elm.as_slice()[i].re;
+    for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
+        for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
+            for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
+                state.slater_matrix.slater_elm_real.set(
+                    qp,
+                    row,
+                    col,
+                    state.slater_matrix.slater_elm.get(qp, row, col).re,
+                );
+            }
+        }
     }
 }
 
@@ -136,7 +144,6 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
 /// applied to the site index and the spin offset is kept explicit.
 pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     let n_site = data.modpara.nsite.max(0) as usize;
-    let n_site2 = 2 * n_site;
     if n_site == 0 {
         return;
     }
@@ -151,7 +158,6 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
         let rem = qp % n_qp_fix;
         let mpidx = rem / n_sp_gauss_leg;
         let trans = data.qp_trans_entries.get(mpidx);
-        let qp_offset = qp * n_site2 * n_site2;
         for ri in 0..n_site {
             let ori = ri;
             let tri = trans
@@ -199,8 +205,10 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
                         } else {
                             Complex64::new(0.0, 0.0)
                         };
-                        state.slater_matrix.slater_elm.as_mut_slice()
-                            [qp_offset + rsi * n_site2 + rsj] = slt_ij - slt_ji;
+                        state
+                            .slater_matrix
+                            .slater_elm
+                            .set(qp, rsi, rsj, slt_ij - slt_ji);
                     }
                 }
             }

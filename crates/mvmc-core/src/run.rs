@@ -287,7 +287,6 @@ fn accumulate_observables(
     use_fsz: bool,
 ) {
     let n_site = data.modpara.nsite.max(0) as usize;
-    let n_site2 = 2 * n_site;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
     let n_qp_full = state.slater_matrix.pf_m.len();
@@ -298,22 +297,19 @@ fn accumulate_observables(
     let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
 
     for sample in 0..n_vmc_sample {
-        let ele_idx_start = sample * n_size;
-        let ele_idx = state.electron_config.ele_idx[ele_idx_start..ele_idx_start + n_size].to_vec();
+        let ele_idx = state.electron_config.ele_idx_slice(sample).to_vec();
         if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
             continue;
         }
-        let cfg_start = sample * n_site2;
-        let ele_cfg = state.electron_config.ele_cfg[cfg_start..cfg_start + n_site2].to_vec();
-        let ele_num = state.electron_config.ele_num[cfg_start..cfg_start + n_site2].to_vec();
+        let ele_cfg = state.electron_config.ele_cfg_slice(sample).to_vec();
+        let ele_num = state.electron_config.ele_num_slice(sample).to_vec();
         let ele_spn = if use_fsz {
-            state.electron_config.ele_spn[ele_idx_start..ele_idx_start + n_size].to_vec()
+            state.electron_config.ele_spn_slice(sample).to_vec()
         } else {
             Vec::new()
         };
-        let proj_start = sample * n_proj;
         let ele_proj_cnt = if n_proj > 0 {
-            state.electron_config.ele_proj_cnt[proj_start..proj_start + n_proj].to_vec()
+            state.electron_config.ele_proj_cnt_slice(sample).to_vec()
         } else {
             Vec::new()
         };
@@ -364,13 +360,11 @@ fn accumulate_observables(
             continue;
         }
         if !all_complex {
-            let n_size_sq = n_size * n_size;
             for qp in 0..n_qp_full {
-                let real_base = qp * (n_size_sq + 1);
+                let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
                 for col in 0..n_size {
                     for row in 0..n_size {
-                        let value = state.slater_matrix.inv_m_real.as_slice()
-                            [real_base + row + col * n_size];
+                        let value = real_plane[row + col * n_size];
                         state
                             .slater_matrix
                             .inv_m
