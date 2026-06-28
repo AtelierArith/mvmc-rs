@@ -508,11 +508,9 @@ impl ExpertModeData {
             // Anti-parallel block is symmetric with a sign flip; mirror
             // upstream's symmetric fill so the kernel always sees both
             // halves populated.
-            if self.i_flg_orbital_general == 0 {
-                if idx[rj][ri] < 0 {
-                    idx[rj][ri] = term.idx;
-                    sgn[rj][ri] = -sign;
-                }
+            if self.i_flg_orbital_general == 0 && idx[rj][ri] < 0 {
+                idx[rj][ri] = term.idx;
+                sgn[rj][ri] = -sign;
             }
         }
         self.orbital_idx_matrix = Some(idx);

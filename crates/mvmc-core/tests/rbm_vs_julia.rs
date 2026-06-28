@@ -6,6 +6,8 @@
 //! and `log_rbm_ratio`. Rust constructs the same synthetic [`RbmConfig`]
 //! and compares all outputs.
 
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};

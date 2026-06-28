@@ -11,6 +11,12 @@
 //! Transfer / PairHopping / InterAll terms are still pending and will
 //! land alongside the QP-trans-aware `slater_elm_diff` port.
 
+#![allow(
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::items_after_test_module
+)]
+
 use num_complex::Complex64;
 
 use mvmc_expert_parsers::{ExpertModeData, Spin};
@@ -196,8 +202,9 @@ pub fn calculate_oo_store(
     let we = e * w;
     let sqrtw = w.sqrt();
     let size_2 = 2 * sr_opt_size;
+    let store = &mut sr_opt_o_store[sample * size_2..(sample + 1) * size_2];
     for i in 0..size_2 {
-        sr_opt_o_store[i + sample * size_2] = sr_opt_o[i] * sqrtw;
+        store[i] = sr_opt_o[i] * sqrtw;
         sr_opt_ho[i] += sr_opt_o[i] * we;
     }
 }
@@ -211,17 +218,64 @@ pub fn finalize_oo_store(
     sample_size: usize,
 ) {
     let size_2 = 2 * sr_opt_size;
-    for i in 0..size_2 {
-        for j in 0..size_2 {
-            let mut acc = Complex64::new(0.0, 0.0);
-            for s in 0..sample_size {
-                let a = sr_opt_o_store[i + s * size_2];
-                let b = sr_opt_o_store[j + s * size_2];
-                acc += a * b.conj();
+    if size_2 == 0 {
+        return;
+    }
+    if sample_size == 0 {
+        for i in 0..size_2 {
+            for j in 0..size_2 {
+                sr_opt_oo[i * size_2 + j] = Complex64::new(0.0, 0.0);
             }
-            sr_opt_oo[i * size_2 + j] = acc;
+        }
+        return;
+    }
+
+    let mut backend = tenferro_cpu::CpuBackend::new();
+    let store_tensor = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+        vec![size_2, sample_size],
+        sr_opt_o_store.to_vec(),
+    )
+    .expect("SR store shape and data length must match");
+    let gram =
+        sr_store_gram_einsum(&mut backend, &store_tensor).expect("SR store Gram einsum must run");
+    let gram = gram
+        .host_data()
+        .expect("SR store Gram tensor must be host-backed");
+    for j in 0..size_2 {
+        for i in 0..size_2 {
+            sr_opt_oo[i * size_2 + j] = gram[i + j * size_2];
         }
     }
+}
+
+fn sr_store_gram_einsum(
+    backend: &mut tenferro_cpu::CpuBackend,
+    store: &tenferro_tensor::TypedTensor<Complex64>,
+) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
+    use tenferro_einsum::TypedTensorEinsumExt;
+
+    let shape = store.shape();
+    assert_eq!(shape.len(), 2, "SR store must be [component, sample]");
+    let raw = store.host_data()?;
+    let conj = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+        shape.to_vec(),
+        raw.iter().map(|z| z.conj()).collect(),
+    )?;
+    [store, &conj].einsum("is,js->ij", backend)
+}
+
+// The current Slater derivative buffers are still Vec-backed and live in a
+// per-sample hot path. Keep the tensor einsum contract tested here, but do not
+// pay a Vec -> tensor conversion for every sample until the store is tensor-backed.
+#[allow(dead_code)]
+fn qp_weighted_orbital_sum_einsum(
+    backend: &mut tenferro_cpu::CpuBackend,
+    weights: &tenferro_tensor::TypedTensor<Complex64>,
+    buffer: &tenferro_tensor::TypedTensor<Complex64>,
+) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
+    use tenferro_einsum::TypedTensorEinsumExt;
+
+    [buffer, weights].einsum("oq,q->o", backend)
 }
 
 /// Diagonal-only Hamiltonian terms (no off-diagonal Green-function calls).
@@ -404,7 +458,7 @@ pub fn green_func_exchange_real(
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     let scratch_slater = state.slater_matrix.slater_elm.clone();
     let mut scratch_inv = state.slater_matrix.inv_m.clone();
-    if let Err(_) = calc_m_all_complex(
+    if calc_m_all_complex(
         &my_ele_idx,
         &scratch_slater,
         &mut scratch_inv,
@@ -414,7 +468,9 @@ pub fn green_func_exchange_real(
         n_site_l,
         n_elec_l,
         pool,
-    ) {
+    )
+    .is_err()
+    {
         return Complex64::new(0.0, 0.0);
     }
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
@@ -540,7 +596,10 @@ pub fn slater_elm_diff(
         let cc = pf * weights.spgl_cos_cos[spidx];
         let ss = pf * weights.spgl_sin_sin[spidx];
         let tbase = mpidx * n_size * n_size;
-        let inv_base = qpidx * (n_size * n_size + 1);
+        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
+        // Upstream `SlaterElmDiff` reads the inverse plane through the
+        // transposed flat convention `msi*n_size + msj`; keep that contract
+        // explicit while borrowing only the matrix portion of the QP plane.
 
         for msi in 0..n_elec {
             for msj in 0..n_elec {
@@ -550,7 +609,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cs,
+                    inv_plane[msj + msi * n_size] * cs,
                 );
             }
             for msj in n_elec..n_size {
@@ -560,7 +619,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    -state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cc,
+                    -inv_plane[msj + msi * n_size] * cc,
                 );
             }
         }
@@ -572,7 +631,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * ss,
+                    inv_plane[msj + msi * n_size] * ss,
                 );
             }
             for msj in n_elec..n_size {
@@ -582,7 +641,7 @@ pub fn slater_elm_diff(
                     n_slater,
                     trans_orb_idx[tbase + msi * n_size + msj],
                     trans_orb_sgn[tbase + msi * n_size + msj],
-                    -state.slater_matrix.inv_m.as_slice()[inv_base + msi * n_size + msj] * cs,
+                    -inv_plane[msj + msi * n_size] * cs,
                 );
             }
         }
@@ -1110,6 +1169,98 @@ mod tests {
         assert_eq!(buf[4], Complex64::new(-2.0, 0.0));
         assert_eq!(buf[6], Complex64::new(5.0, 0.0));
     }
+
+    #[test]
+    fn finalize_oo_store_preserves_legacy_flat_order() {
+        let mut sr_opt_oo = vec![Complex64::new(0.0, 0.0); 4];
+        let sr_opt_o_store = vec![Complex64::new(1.0, 2.0), Complex64::new(-3.0, 4.0)];
+
+        finalize_oo_store(&mut sr_opt_oo, &sr_opt_o_store, 1, 1);
+
+        assert_eq!(sr_opt_oo[0], Complex64::new(5.0, 0.0));
+        assert_eq!(sr_opt_oo[1], Complex64::new(5.0, -10.0));
+        assert_eq!(sr_opt_oo[2], Complex64::new(5.0, 10.0));
+        assert_eq!(sr_opt_oo[3], Complex64::new(25.0, 0.0));
+    }
+
+    #[test]
+    fn sr_store_gram_einsum_matches_manual_complex_reference() {
+        let mut backend = tenferro_cpu::CpuBackend::new();
+        let store = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+            vec![2, 3],
+            vec![
+                Complex64::new(1.0, 1.0),
+                Complex64::new(2.0, -1.0),
+                Complex64::new(-3.0, 0.5),
+                Complex64::new(4.0, 2.0),
+                Complex64::new(-1.5, 3.0),
+                Complex64::new(0.25, -0.75),
+            ],
+        )
+        .expect("typed tensor");
+
+        let gram = sr_store_gram_einsum(&mut backend, &store).expect("einsum result");
+        let gram_data = gram.host_data().expect("host data");
+
+        let mut expected = vec![Complex64::new(0.0, 0.0); 4];
+        let store_data = store.host_data().expect("host data");
+        for i in 0..2 {
+            for j in 0..2 {
+                let mut acc = Complex64::new(0.0, 0.0);
+                for s in 0..3 {
+                    let a = store_data[i + s * 2];
+                    let b = store_data[j + s * 2];
+                    acc += a * b.conj();
+                }
+                expected[i + j * 2] = acc;
+            }
+        }
+
+        assert_eq!(gram_data, expected.as_slice());
+    }
+
+    #[test]
+    fn qp_weighted_orbital_sum_einsum_matches_manual_complex_reference() {
+        let mut backend = tenferro_cpu::CpuBackend::new();
+        let buffer = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+            vec![2, 3],
+            vec![
+                Complex64::new(1.0, 0.0),
+                Complex64::new(2.0, 1.0),
+                Complex64::new(-1.0, 0.5),
+                Complex64::new(0.0, -2.0),
+                Complex64::new(3.0, 1.5),
+                Complex64::new(-4.0, 0.25),
+            ],
+        )
+        .expect("typed tensor");
+        let weights = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+            vec![3],
+            vec![
+                Complex64::new(0.5, 0.0),
+                Complex64::new(-1.0, 1.0),
+                Complex64::new(2.0, -0.5),
+            ],
+        )
+        .expect("typed tensor");
+
+        let weighted =
+            qp_weighted_orbital_sum_einsum(&mut backend, &weights, &buffer).expect("einsum result");
+        let weighted_data = weighted.host_data().expect("host data");
+
+        let buffer_data = buffer.host_data().expect("host data");
+        let weights_data = weights.host_data().expect("host data");
+        let mut expected = vec![Complex64::new(0.0, 0.0); 2];
+        for o in 0..2 {
+            let mut acc = Complex64::new(0.0, 0.0);
+            for q in 0..3 {
+                acc += buffer_data[o + q * 2] * weights_data[q];
+            }
+            expected[o] = acc;
+        }
+
+        assert_eq!(weighted_data, expected.as_slice());
+    }
 }
 
 /// FSZ Slater-parameter derivative block (`SlaterElmDiff_fsz!`).
@@ -1204,17 +1355,17 @@ pub fn slater_elm_diff_fsz(
     for qpidx in 0..n_qp_full {
         let mpidx = qpidx.min(n_mp_trans.saturating_sub(1));
         let pf = state.slater_matrix.pf_m[qpidx];
-        let inv_base = qpidx * (n_size * n_size + 1);
+        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
+        // See `slater_elm_diff`: this upstream path uses the same transposed
+        // flat inverse convention.
         let tbase = mpidx * n_size * n_size;
         for msi in 0..n_size {
             for msj in 0..n_size {
                 let orbidx = trans_orb_idx[tbase + msi * n_size + msj];
                 if orbidx >= 0 && (orbidx as usize) < n_slater {
                     let sign = trans_orb_sgn[tbase + msi * n_size + msj];
-                    let value = -state.slater_matrix.inv_m.as_slice()
-                        [inv_base + msi * n_size + msj]
-                        * pf
-                        * Complex64::new(sign as f64, 0.0);
+                    let value =
+                        -inv_plane[msj + msi * n_size] * pf * Complex64::new(sign as f64, 0.0);
                     buffer[qpidx * n_slater + orbidx as usize] += value;
                 }
             }

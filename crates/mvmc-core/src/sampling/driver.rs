@@ -10,6 +10,8 @@
 //! paths exercised by the upstream `examples/inputs/*` cases. FSZ /
 //! BackFlow drivers are deferred to Phase 7.
 
+#![allow(clippy::too_many_arguments)]
+
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
@@ -75,14 +77,17 @@ pub fn vmc_make_sample_real(
     };
 
     // Sync the real-mode Slater table from the complex master.
-    let n_copy = state
-        .slater_matrix
-        .slater_elm
-        .len()
-        .min(state.slater_matrix.slater_elm_real.len());
-    for i in 0..n_copy {
-        state.slater_matrix.slater_elm_real.as_mut_slice()[i] =
-            state.slater_matrix.slater_elm.as_slice()[i].re;
+    for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
+        for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
+            for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
+                state.slater_matrix.slater_elm_real.set(
+                    qp,
+                    row,
+                    col,
+                    state.slater_matrix.slater_elm.get(qp, row, col).re,
+                );
+            }
+        }
     }
 
     // Working buffers.
@@ -398,28 +403,22 @@ pub fn vmc_make_sample_real(
         if out_step + n_vmc_sample >= n_out_step {
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
-                let off_idx = sample * n_size;
-                let off_cfg = sample * n_site2;
-                let off_num = sample * n_site2;
-                let off_proj = sample * n_proj;
-                for i in 0..n_size {
-                    if off_idx + i < state.electron_config.ele_idx.len() {
-                        state.electron_config.ele_idx[off_idx + i] = tmp_ele_idx[i];
-                    }
-                }
-                for i in 0..n_site2 {
-                    if off_cfg + i < state.electron_config.ele_cfg.len() {
-                        state.electron_config.ele_cfg[off_cfg + i] = tmp_ele_cfg[i];
-                    }
-                    if off_num + i < state.electron_config.ele_num.len() {
-                        state.electron_config.ele_num[off_num + i] = tmp_ele_num[i];
-                    }
-                }
-                for i in 0..n_proj {
-                    if off_proj + i < state.electron_config.ele_proj_cnt.len() {
-                        state.electron_config.ele_proj_cnt[off_proj + i] = tmp_ele_proj_cnt[i];
-                    }
-                }
+                state
+                    .electron_config
+                    .ele_idx_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_idx);
+                state
+                    .electron_config
+                    .ele_cfg_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_cfg);
+                state
+                    .electron_config
+                    .ele_num_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_num);
+                state
+                    .electron_config
+                    .ele_proj_cnt_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
         }
@@ -781,28 +780,22 @@ pub fn vmc_make_sample(
         if out_step + n_vmc_sample >= n_out_step {
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
-                let off_idx = sample * n_size;
-                let off_cfg = sample * n_site2;
-                let off_num = sample * n_site2;
-                let off_proj = sample * n_proj;
-                for i in 0..n_size {
-                    if off_idx + i < state.electron_config.ele_idx.len() {
-                        state.electron_config.ele_idx[off_idx + i] = tmp_ele_idx[i];
-                    }
-                }
-                for i in 0..n_site2 {
-                    if off_cfg + i < state.electron_config.ele_cfg.len() {
-                        state.electron_config.ele_cfg[off_cfg + i] = tmp_ele_cfg[i];
-                    }
-                    if off_num + i < state.electron_config.ele_num.len() {
-                        state.electron_config.ele_num[off_num + i] = tmp_ele_num[i];
-                    }
-                }
-                for i in 0..n_proj {
-                    if off_proj + i < state.electron_config.ele_proj_cnt.len() {
-                        state.electron_config.ele_proj_cnt[off_proj + i] = tmp_ele_proj_cnt[i];
-                    }
-                }
+                state
+                    .electron_config
+                    .ele_idx_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_idx);
+                state
+                    .electron_config
+                    .ele_cfg_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_cfg);
+                state
+                    .electron_config
+                    .ele_num_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_num);
+                state
+                    .electron_config
+                    .ele_proj_cnt_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
         }
@@ -1288,20 +1281,26 @@ pub fn vmc_make_sample_fsz(
         if out_step + n_vmc_sample >= n_out_step {
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
-                let off_idx = sample * n_size;
-                let off_cfg = sample * n_site2;
-                let off_proj = sample * n_proj;
-                for i in 0..n_size {
-                    state.electron_config.ele_idx[off_idx + i] = tmp_ele_idx[i];
-                    state.electron_config.ele_spn[off_idx + i] = tmp_ele_spn[i];
-                }
-                for i in 0..n_site2 {
-                    state.electron_config.ele_cfg[off_cfg + i] = tmp_ele_cfg[i];
-                    state.electron_config.ele_num[off_cfg + i] = tmp_ele_num[i];
-                }
-                for i in 0..n_proj {
-                    state.electron_config.ele_proj_cnt[off_proj + i] = tmp_ele_proj_cnt[i];
-                }
+                state
+                    .electron_config
+                    .ele_idx_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_idx);
+                state
+                    .electron_config
+                    .ele_spn_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_spn);
+                state
+                    .electron_config
+                    .ele_cfg_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_cfg);
+                state
+                    .electron_config
+                    .ele_num_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_num);
+                state
+                    .electron_config
+                    .ele_proj_cnt_slice_mut(sample)
+                    .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
         }

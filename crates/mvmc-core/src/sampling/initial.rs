@@ -6,6 +6,13 @@
 //! `(gen_rand_mod(n_elec), spin_coin)`; for itinerant electrons we
 //! draw `gen_rand_mod(n_site)` until a free non-local site is found.
 
+#![allow(
+    clippy::result_unit_err,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::items_after_test_module
+)]
+
 use mvmc_expert_parsers::ExpertModeData;
 use sfmt19937::Sfmt19937Rng;
 
@@ -26,63 +33,56 @@ pub fn make_initial_sample(
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_site2 = 2 * n_site;
 
-    // Up to 100 retries, matching the Julia guard. The Pfaffian-validity
-    // retry is left to the caller because it needs the full state.
-    const MAX_LOOPS: usize = 100;
-    for _ in 0..MAX_LOOPS {
-        for slot in ele_idx.iter_mut() {
-            *slot = -1;
-        }
-        for slot in ele_cfg.iter_mut() {
-            *slot = -1;
-        }
+    for slot in ele_idx.iter_mut() {
+        *slot = -1;
+    }
+    for slot in ele_cfg.iter_mut() {
+        *slot = -1;
+    }
 
-        // Local spin sites.
-        for ri in 0..n_site {
-            if loc_spn.get(ri).copied().unwrap_or(0) != 1 {
+    // Local spin sites.
+    for ri in 0..n_site {
+        if loc_spn.get(ri).copied().unwrap_or(0) != 1 {
+            continue;
+        }
+        loop {
+            let mi = rng.gen_rand_mod(n_elec as u32) as usize;
+            let r = rng.genrand_real2();
+            let si = if r < 0.5 { 0 } else { 1 };
+            if ele_idx[mi + si * n_elec] == -1 {
+                ele_cfg[ri + si * n_site] = mi as i64;
+                ele_idx[mi + si * n_elec] = ri as i64;
+                break;
+            }
+        }
+    }
+
+    // Itinerant electrons.
+    for si in 0..2 {
+        for mi in 0..n_elec {
+            if ele_idx[mi + si * n_elec] != -1 {
                 continue;
             }
             loop {
-                let mi = rng.gen_rand_mod(n_elec as u32) as usize;
-                let r = rng.genrand_real2();
-                let si = if r < 0.5 { 0 } else { 1 };
-                if ele_idx[mi + si * n_elec] == -1 {
+                let ri = rng.gen_rand_mod(n_site as u32) as usize;
+                if ele_cfg[ri + si * n_site] == -1 && loc_spn.get(ri).copied().unwrap_or(0) != 1 {
                     ele_cfg[ri + si * n_site] = mi as i64;
                     ele_idx[mi + si * n_elec] = ri as i64;
                     break;
                 }
             }
         }
-
-        // Itinerant electrons.
-        for si in 0..2 {
-            for mi in 0..n_elec {
-                if ele_idx[mi + si * n_elec] != -1 {
-                    continue;
-                }
-                loop {
-                    let ri = rng.gen_rand_mod(n_site as u32) as usize;
-                    if ele_cfg[ri + si * n_site] == -1 && loc_spn.get(ri).copied().unwrap_or(0) != 1
-                    {
-                        ele_cfg[ri + si * n_site] = mi as i64;
-                        ele_idx[mi + si * n_elec] = ri as i64;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Electron-number array.
-        for rsi in 0..n_site2 {
-            ele_num[rsi] = if ele_cfg[rsi] < 0 { 0 } else { 1 };
-        }
-        // Projection counts.
-        make_proj_cnt(ele_proj_cnt, ele_num, data);
-        // Caller can validate via Pfaffian; we always return Ok on the
-        // first successful layout, mirroring upstream when `flag == 0`.
-        return Ok(());
     }
-    Err(())
+
+    // Electron-number array.
+    for rsi in 0..n_site2 {
+        ele_num[rsi] = if ele_cfg[rsi] < 0 { 0 } else { 1 };
+    }
+    // Projection counts.
+    make_proj_cnt(ele_proj_cnt, ele_num, data);
+    // Caller can validate via Pfaffian; we always return Ok on the
+    // first successful layout, mirroring upstream when `flag == 0`.
+    Ok(())
 }
 
 /// Convenience wrapper that initialises `loc_spn` from `data.locspin_terms`

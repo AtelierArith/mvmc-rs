@@ -147,7 +147,7 @@ fn load_fixture(path: &Path) -> Fixture {
 
 fn check(case: &str) {
     let fx = load_fixture(&fixture_path(case));
-    let data = parse_expert_mode_files(&namelist_path(case)).expect("parse namelist");
+    let data = parse_expert_mode_files(namelist_path(case)).expect("parse namelist");
     assert_eq!(data.modpara.nsite as usize, fx.n_site);
 
     // (1) init_loc_spn parity.

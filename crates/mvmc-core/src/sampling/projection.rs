@@ -11,6 +11,8 @@
 //! back on cheap incremental updates instead of recomputing
 //! `MakeProjCnt` after every move.
 
+#![allow(clippy::too_many_arguments)]
+
 use mvmc_expert_parsers::ExpertModeData;
 
 /// Initialise `loc_spn[ri] = 1` for sites flagged as local-spin in

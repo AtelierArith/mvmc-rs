@@ -13,6 +13,8 @@
 //! though the allocation reserves one pad slot per QP. Later update
 //! helpers read that same no-pad row-major flat layout.
 
+#![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+
 use num_complex::Complex64;
 
 use crate::state::SlaterElmFlat;

@@ -20,7 +20,7 @@
 //! | [`PhysicalQuantities`] | `PhysicalQuantities` |
 //! | [`VmcOptimizationState`] | `VMCOptimizationState` |
 //!
-//! The two newtypes wrap raw `Vec<T>` storage so that
+//! The two newtypes wrap compact tenferro host tensors so that
 //! `SlaterElmFlat<T>` (row-major) and `InvMColMajor<T>` (column-major)
 //! never get accidentally exchanged. See `calculate_m_all.jl` and
 //! `vmc_sampling.jl:3236` for the upstream comments that fix the
@@ -30,6 +30,7 @@ use std::sync::Mutex;
 
 use num_complex::Complex64;
 use pfapack::PivotIndex1Based;
+use tenferro_tensor::{Buffer, TypedTensor};
 
 // ---------------------------------------------------------------------------
 // Storage-order newtypes
@@ -38,9 +39,9 @@ use pfapack::PivotIndex1Based;
 /// Slater-element table, **row-major** in `(ri + si * Nsite, rj + sj * Nsite)`
 /// inside one QP plane. Upstream sizes it as `Vector{T}` of length
 /// `n_qp_full * (2*n_site)^2`; we keep the same layout.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SlaterElmFlat<T> {
-    data: Vec<T>,
+    data: TypedTensor<T>,
     n_qp_full: usize,
     n_site2: usize, // 2 * n_site
 }
@@ -50,9 +51,24 @@ impl<T: Copy + Default> SlaterElmFlat<T> {
     pub fn zeros(n_qp_full: usize, n_site: usize) -> Self {
         let n_site2 = 2 * n_site;
         Self {
-            data: vec![T::default(); n_qp_full * n_site2 * n_site2],
+            data: TypedTensor::from_vec_col_major(
+                vec![n_site2 * n_site2, n_qp_full],
+                vec![T::default(); n_qp_full * n_site2 * n_site2],
+            )
+            .expect("SlaterElmFlat shape and data length must match"),
             n_qp_full,
             n_site2,
+        }
+    }
+}
+
+impl<T> SlaterElmFlat<T> {
+    fn host_storage(&self) -> &[T] {
+        match self.data.buffer() {
+            Buffer::Host(data) => data,
+            Buffer::Backend(_) => {
+                panic!("SlaterElmFlat requires host-backed tenferro storage")
+            }
         }
     }
 }
@@ -70,12 +86,12 @@ impl<T: Copy> SlaterElmFlat<T> {
 
     /// Total entries (`n_qp_full * n_site2 * n_site2`).
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.as_slice().len()
     }
 
     /// True iff the table holds zero entries (only when `n_qp_full == 0`).
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.as_slice().is_empty()
     }
 
     /// Row-major linear index, **0-based**. `row = ri + si * n_site`,
@@ -91,47 +107,59 @@ impl<T: Copy> SlaterElmFlat<T> {
     /// Read `slater_elm[qp][row, col]`.
     #[inline]
     pub fn get(&self, qp: usize, row: usize, col: usize) -> T {
-        self.data[self.idx(qp, row, col)]
+        self.as_slice()[self.idx(qp, row, col)]
     }
 
     /// Write `slater_elm[qp][row, col] = value`.
     #[inline]
     pub fn set(&mut self, qp: usize, row: usize, col: usize, value: T) {
         let k = self.idx(qp, row, col);
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
     }
 
-    /// Borrow the whole backing vector.
+    /// Borrow the whole backing storage.
     pub fn as_slice(&self) -> &[T] {
-        &self.data
+        self.host_storage()
     }
 
-    /// Mutably borrow the whole backing vector.
+    /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.data
+        self.data
+            .host_data_mut()
+            .expect("SlaterElmFlat::as_mut_slice requires host-backed storage")
     }
 
     /// Borrow a single QP plane (length `n_site2 * n_site2`, row-major).
     pub fn qp_slice(&self, qp: usize) -> &[T] {
         let stride = self.n_site2 * self.n_site2;
         let start = qp * stride;
-        &self.data[start..start + stride]
+        let end = start + stride;
+        &self.as_slice()[start..end]
     }
 
     /// Mutably borrow a single QP plane.
     pub fn qp_slice_mut(&mut self, qp: usize) -> &mut [T] {
         let stride = self.n_site2 * self.n_site2;
         let start = qp * stride;
-        &mut self.data[start..start + stride]
+        let end = start + stride;
+        &mut self.as_mut_slice()[start..end]
+    }
+}
+
+impl<T: PartialEq> PartialEq for SlaterElmFlat<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.n_qp_full == other.n_qp_full
+            && self.n_site2 == other.n_site2
+            && self.host_storage() == other.host_storage()
     }
 }
 
 /// Inverse-matrix table, **column-major** in `(mi + si * Ne, mj + sj * Ne)`
 /// inside one QP plane, with the upstream `+1` pad slot per QP that
 /// `vmc_sampling.jl:3236` reserves for the Pfaffian buffer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct InvMColMajor<T> {
-    data: Vec<T>,
+    data: TypedTensor<T>,
     n_qp_full: usize,
     n_size: usize, // 2 * n_elec
 }
@@ -143,9 +171,24 @@ impl<T: Copy + Default> InvMColMajor<T> {
         Self {
             // n_qp_full * (n_size * n_size + 1) -- the trailing slot is
             // the Pfaffian buffer pad upstream relies on.
-            data: vec![T::default(); n_qp_full * (n_size * n_size + 1)],
+            data: TypedTensor::from_vec_col_major(
+                vec![n_size * n_size + 1, n_qp_full],
+                vec![T::default(); n_qp_full * (n_size * n_size + 1)],
+            )
+            .expect("InvMColMajor shape and data length must match"),
             n_qp_full,
             n_size,
+        }
+    }
+}
+
+impl<T> InvMColMajor<T> {
+    fn host_storage(&self) -> &[T] {
+        match self.data.buffer() {
+            Buffer::Host(data) => data,
+            Buffer::Backend(_) => {
+                panic!("InvMColMajor requires host-backed tenferro storage")
+            }
         }
     }
 }
@@ -163,12 +206,12 @@ impl<T: Copy> InvMColMajor<T> {
 
     /// Total entries, including the per-QP pad slot.
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.as_slice().len()
     }
 
     /// True iff the table holds zero entries.
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.as_slice().is_empty()
     }
 
     /// Column-major linear index, **0-based**. Within one QP plane the
@@ -185,24 +228,26 @@ impl<T: Copy> InvMColMajor<T> {
     /// Read `inv_m[qp][row, col]`.
     #[inline]
     pub fn get(&self, qp: usize, row: usize, col: usize) -> T {
-        self.data[self.idx(qp, row, col)]
+        self.as_slice()[self.idx(qp, row, col)]
     }
 
     /// Write `inv_m[qp][row, col] = value`.
     #[inline]
     pub fn set(&mut self, qp: usize, row: usize, col: usize, value: T) {
         let k = self.idx(qp, row, col);
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
     }
 
-    /// Borrow the whole backing vector (including the per-QP pad slots).
+    /// Borrow the whole backing storage (including the per-QP pad slots).
     pub fn as_slice(&self) -> &[T] {
-        &self.data
+        self.host_storage()
     }
 
-    /// Mutably borrow the whole backing vector.
+    /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.data
+        self.data
+            .host_data_mut()
+            .expect("InvMColMajor::as_mut_slice requires host-backed storage")
     }
 
     /// Borrow one QP plane as a contiguous column-major slice of length
@@ -210,27 +255,114 @@ impl<T: Copy> InvMColMajor<T> {
     pub fn qp_matrix_slice(&self, qp: usize) -> &[T] {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
-        &self.data[start..start + self.n_size * self.n_size]
+        let end = start + self.n_size * self.n_size;
+        &self.as_slice()[start..end]
     }
 
     /// Mutably borrow one QP plane (matrix portion only).
     pub fn qp_matrix_slice_mut(&mut self, qp: usize) -> &mut [T] {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
-        &mut self.data[start..start + self.n_size * self.n_size]
+        let end = start + self.n_size * self.n_size;
+        &mut self.as_mut_slice()[start..end]
     }
 
     /// Read the Pfaffian-pad slot for one QP.
     pub fn pad_slot(&self, qp: usize) -> T {
         let stride = self.n_size * self.n_size + 1;
-        self.data[qp * stride + self.n_size * self.n_size]
+        self.as_slice()[qp * stride + self.n_size * self.n_size]
     }
 
     /// Write the Pfaffian-pad slot for one QP.
     pub fn set_pad_slot(&mut self, qp: usize, value: T) {
         let stride = self.n_size * self.n_size + 1;
         let k = qp * stride + self.n_size * self.n_size;
-        self.data[k] = value;
+        self.as_mut_slice()[k] = value;
+    }
+
+    /// Borrow one QP plane as a column-major matrix view.
+    pub fn qp_matrix(&self, qp: usize) -> InvMPlane<'_, T> {
+        let n = self.n_size;
+        InvMPlane::new(self.qp_matrix_slice(qp), n)
+    }
+
+    /// Mutably borrow one QP plane as a column-major matrix view.
+    pub fn qp_matrix_mut(&mut self, qp: usize) -> InvMPlaneMut<'_, T> {
+        let n = self.n_size;
+        InvMPlaneMut::new(self.qp_matrix_slice_mut(qp), n)
+    }
+}
+
+impl<T: PartialEq> PartialEq for InvMColMajor<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.n_qp_full == other.n_qp_full
+            && self.n_size == other.n_size
+            && self.host_storage() == other.host_storage()
+    }
+}
+
+/// One `inv_m[qp]` plane borrowed as a contiguous column-major slice.
+#[derive(Debug, Clone, Copy)]
+pub struct InvMPlane<'a, T> {
+    data: &'a [T],
+    n: usize,
+}
+
+impl<'a, T> InvMPlane<'a, T> {
+    /// Wrap a borrowed QP plane with its side length.
+    pub fn new(data: &'a [T], n: usize) -> Self {
+        Self { data, n }
+    }
+}
+
+impl<T: Copy> InvMPlane<'_, T> {
+    /// Read one matrix entry from the borrowed plane.
+    #[inline]
+    pub fn get(&self, row: usize, col: usize) -> T {
+        self.data[row + col * self.n]
+    }
+
+    /// Return the underlying column-major slice.
+    pub fn as_slice(&self) -> &[T] {
+        self.data
+    }
+}
+
+/// Mutable `inv_m[qp]` plane borrowed as a contiguous column-major slice.
+#[derive(Debug)]
+pub struct InvMPlaneMut<'a, T> {
+    data: &'a mut [T],
+    n: usize,
+}
+
+impl<'a, T> InvMPlaneMut<'a, T> {
+    /// Wrap a mutably borrowed QP plane with its side length.
+    pub fn new(data: &'a mut [T], n: usize) -> Self {
+        Self { data, n }
+    }
+}
+
+impl<T: Copy> InvMPlaneMut<'_, T> {
+    /// Read one matrix entry from the borrowed plane.
+    #[inline]
+    pub fn get(&self, row: usize, col: usize) -> T {
+        self.data[row + col * self.n]
+    }
+
+    /// Write one matrix entry in the borrowed plane.
+    #[inline]
+    pub fn set(&mut self, row: usize, col: usize, value: T) {
+        self.data[row + col * self.n] = value;
+    }
+
+    /// Return the underlying column-major slice.
+    pub fn as_slice(&self) -> &[T] {
+        self.data
+    }
+
+    /// Return the underlying mutable column-major slice.
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        self.data
     }
 }
 
@@ -326,6 +458,38 @@ impl SROptData {
             sr_opt_o_store_real: o_store_real,
         }
     }
+
+    /// Borrow one stored complex SR sample as a contiguous slice.
+    #[inline]
+    pub fn sr_opt_o_store_slice(&self, sample: usize) -> &[Complex64] {
+        let stride = 2 * self.sr_opt_size;
+        let start = sample * stride;
+        &self.sr_opt_o_store[start..start + stride]
+    }
+
+    /// Borrow one stored complex SR sample mutably as a contiguous slice.
+    #[inline]
+    pub fn sr_opt_o_store_slice_mut(&mut self, sample: usize) -> &mut [Complex64] {
+        let stride = 2 * self.sr_opt_size;
+        let start = sample * stride;
+        &mut self.sr_opt_o_store[start..start + stride]
+    }
+
+    /// Borrow one stored real SR sample as a contiguous slice.
+    #[inline]
+    pub fn sr_opt_o_store_real_slice(&self, sample: usize) -> &[f64] {
+        let stride = self.sr_opt_size;
+        let start = sample * stride;
+        &self.sr_opt_o_store_real[start..start + stride]
+    }
+
+    /// Borrow one stored real SR sample mutably as a contiguous slice.
+    #[inline]
+    pub fn sr_opt_o_store_real_slice_mut(&mut self, sample: usize) -> &mut [f64] {
+        let stride = self.sr_opt_size;
+        let start = sample * stride;
+        &mut self.sr_opt_o_store_real[start..start + stride]
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +515,11 @@ pub struct OptDataPoint {
 /// empty when `use_fsz == false`, mirroring the Julia `Int[]` sentinel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ElectronConfiguration {
+    n_sample: usize,
+    n_size: usize,
+    n_site2: usize,
+    n_proj: usize,
+
     /// `[sample][mi + si * n_elec]`.
     pub ele_idx: Vec<i64>,
     /// `[sample][ri + si * n_site]`.
@@ -415,6 +584,10 @@ impl ElectronConfiguration {
             )
         };
         Self {
+            n_sample,
+            n_size,
+            n_site2,
+            n_proj,
             ele_idx: vec![0; n_sample * n_size],
             ele_cfg: vec![0; n_sample * n_site2],
             ele_num: vec![0; n_sample * n_site2],
@@ -431,6 +604,94 @@ impl ElectronConfiguration {
             burn_ele_proj_cnt: vec![0; n_proj],
             burn_ele_spn,
             counter: [0; 10],
+        }
+    }
+
+    /// Borrow one sample's electron-index block.
+    #[inline]
+    pub fn ele_idx_slice(&self, sample: usize) -> &[i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_size;
+        &self.ele_idx[start..start + self.n_size]
+    }
+
+    /// Borrow one sample's electron-index block mutably.
+    #[inline]
+    pub fn ele_idx_slice_mut(&mut self, sample: usize) -> &mut [i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_size;
+        &mut self.ele_idx[start..start + self.n_size]
+    }
+
+    /// Borrow one sample's configuration block.
+    #[inline]
+    pub fn ele_cfg_slice(&self, sample: usize) -> &[i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_site2;
+        &self.ele_cfg[start..start + self.n_site2]
+    }
+
+    /// Borrow one sample's configuration block mutably.
+    #[inline]
+    pub fn ele_cfg_slice_mut(&mut self, sample: usize) -> &mut [i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_site2;
+        &mut self.ele_cfg[start..start + self.n_site2]
+    }
+
+    /// Borrow one sample's electron-count block.
+    #[inline]
+    pub fn ele_num_slice(&self, sample: usize) -> &[i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_site2;
+        &self.ele_num[start..start + self.n_site2]
+    }
+
+    /// Borrow one sample's electron-count block mutably.
+    #[inline]
+    pub fn ele_num_slice_mut(&mut self, sample: usize) -> &mut [i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_site2;
+        &mut self.ele_num[start..start + self.n_site2]
+    }
+
+    /// Borrow one sample's projection-count block.
+    #[inline]
+    pub fn ele_proj_cnt_slice(&self, sample: usize) -> &[i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_proj;
+        &self.ele_proj_cnt[start..start + self.n_proj]
+    }
+
+    /// Borrow one sample's projection-count block mutably.
+    #[inline]
+    pub fn ele_proj_cnt_slice_mut(&mut self, sample: usize) -> &mut [i64] {
+        debug_assert!(sample < self.n_sample);
+        let start = sample * self.n_proj;
+        &mut self.ele_proj_cnt[start..start + self.n_proj]
+    }
+
+    /// Borrow one sample's spin block when FSZ is enabled.
+    #[inline]
+    pub fn ele_spn_slice(&self, sample: usize) -> &[i64] {
+        if self.ele_spn.is_empty() {
+            &self.ele_spn
+        } else {
+            debug_assert!(sample < self.n_sample);
+            let start = sample * self.n_size;
+            &self.ele_spn[start..start + self.n_size]
+        }
+    }
+
+    /// Borrow one sample's spin block mutably when FSZ is enabled.
+    #[inline]
+    pub fn ele_spn_slice_mut(&mut self, sample: usize) -> &mut [i64] {
+        if self.ele_spn.is_empty() {
+            &mut self.ele_spn
+        } else {
+            debug_assert!(sample < self.n_sample);
+            let start = sample * self.n_size;
+            &mut self.ele_spn[start..start + self.n_size]
         }
     }
 }
@@ -821,16 +1082,19 @@ mod tests {
     fn slater_elm_flat_row_major_indexing() {
         let n_qp_full = 2;
         let n_site = 3;
+        let n_site2 = 2 * n_site;
         let mut a = SlaterElmFlat::<f64>::zeros(n_qp_full, n_site);
         a.set(0, 1, 4, 11.0);
         a.set(1, 5, 2, 22.0);
         // Row-major linearisation matches `(qp * n_site2 + row) * n_site2 + col`.
-        assert_eq!(a.as_slice()[(0 * 6 + 1) * 6 + 4], 11.0);
-        assert_eq!(a.as_slice()[(1 * 6 + 5) * 6 + 2], 22.0);
+        let first = n_site2 + 4;
+        let second = (n_site2 + 5) * n_site2 + 2;
+        assert_eq!(a.as_slice()[first], 11.0);
+        assert_eq!(a.as_slice()[second], 22.0);
         assert_eq!(a.get(0, 1, 4), 11.0);
         assert_eq!(a.get(1, 5, 2), 22.0);
-        assert_eq!(a.qp_slice(0).len(), 6 * 6);
-        assert_eq!(a.qp_slice(1).len(), 6 * 6);
+        assert_eq!(a.qp_slice(0).len(), n_site2 * n_site2);
+        assert_eq!(a.qp_slice(1).len(), n_site2 * n_site2);
     }
 
     #[test]
@@ -844,11 +1108,84 @@ mod tests {
         a.set_pad_slot(1, 99.0);
         // Column-major linearisation matches `qp * (n_size^2 + 1) + row + col * n_size`.
         let stride = n_size * n_size + 1;
-        assert_eq!(a.as_slice()[0 * stride + 1 + 4 * n_size], 11.0);
-        assert_eq!(a.as_slice()[1 * stride + 5 + 2 * n_size], 22.0);
+        let first = 1 + 4 * n_size;
+        let second = stride + 5 + 2 * n_size;
+        assert_eq!(a.as_slice()[first], 11.0);
+        assert_eq!(a.as_slice()[second], 22.0);
         assert_eq!(a.pad_slot(1), 99.0);
         assert_eq!(a.qp_matrix_slice(0).len(), n_size * n_size);
         assert_eq!(a.qp_matrix_slice(1).len(), n_size * n_size);
+    }
+
+    #[test]
+    fn slater_elm_vec_layout_preserves_qp_row_major_planes() {
+        let mut a = SlaterElmFlat::<f64>::zeros(2, 3);
+        let n_site2 = 6;
+        a.set(0, 1, 4, 11.0);
+        a.set(1, 5, 2, 22.0);
+
+        assert_eq!(a.as_slice()[n_site2 + 4], 11.0);
+        assert_eq!(a.as_slice()[(n_site2 + 5) * n_site2 + 2], 22.0);
+        assert_eq!(a.qp_slice(0)[n_site2 + 4], 11.0);
+        assert_eq!(a.qp_slice(1)[5 * n_site2 + 2], 22.0);
+        assert_eq!(a.get(0, 1, 4), 11.0);
+        assert_eq!(a.get(1, 5, 2), 22.0);
+    }
+
+    #[test]
+    fn inv_m_vec_layout_preserves_qp_matrix_layout_and_pad_slot() {
+        let mut a = InvMColMajor::<f64>::zeros(2, 3);
+        a.set(0, 1, 4, 11.0);
+        a.set(1, 5, 2, 22.0);
+        a.set_pad_slot(0, 7.0);
+        a.set_pad_slot(1, 8.0);
+
+        let n_size = 6;
+        assert_eq!(a.qp_matrix_slice(0)[1 + 4 * n_size], 11.0);
+        assert_eq!(a.qp_matrix_slice(1)[5 + 2 * n_size], 22.0);
+        assert_eq!(a.pad_slot(0), 7.0);
+        assert_eq!(a.pad_slot(1), 8.0);
+        assert_eq!(a.qp_matrix_slice(0).len(), n_size * n_size);
+        assert_eq!(a.qp_matrix_slice(1).len(), n_size * n_size);
+    }
+
+    #[test]
+    fn electron_config_sample_accessors_preserve_legacy_flat_order() {
+        let mut cfg = ElectronConfiguration::zeros(3, 2, 2, 4, true);
+
+        cfg.ele_idx_slice_mut(1)[0] = 11;
+        cfg.ele_cfg_slice_mut(1)[3] = 22;
+        cfg.ele_num_slice_mut(2)[1] = 33;
+        cfg.ele_proj_cnt_slice_mut(0)[2] = 44;
+        cfg.ele_spn_slice_mut(2)[1] = 55;
+
+        assert_eq!(cfg.ele_idx_slice(1).len(), 4);
+        assert_eq!(cfg.ele_cfg_slice(1).len(), 4);
+        assert_eq!(cfg.ele_num_slice(2).len(), 4);
+        assert_eq!(cfg.ele_proj_cnt_slice(0).len(), 4);
+        assert_eq!(cfg.ele_spn_slice(2).len(), 4);
+        let stride = 4;
+        assert_eq!(cfg.ele_idx[stride], 11);
+        assert_eq!(cfg.ele_cfg[stride + 3], 22);
+        assert_eq!(cfg.ele_num[2 * 4 + 1], 33);
+        assert_eq!(cfg.ele_proj_cnt[2], 44);
+        assert_eq!(cfg.ele_spn[2 * stride + 1], 55);
+    }
+
+    #[test]
+    fn sr_store_sample_accessors_preserve_component_major_order() {
+        let mut sro = SROptData::zeros(4, 3, false);
+        let sample = 2;
+        sro.sr_opt_o_store_slice_mut(sample)[1] = Complex64::new(1.5, -2.5);
+        sro.sr_opt_o_store_real_slice_mut(sample)[3] = 7.25;
+
+        assert_eq!(sro.sr_opt_o_store_slice(sample).len(), 2 * 4);
+        assert_eq!(sro.sr_opt_o_store_real_slice(sample).len(), 4);
+        assert_eq!(
+            sro.sr_opt_o_store[2 * (2 * 4) + 1],
+            Complex64::new(1.5, -2.5)
+        );
+        assert_eq!(sro.sr_opt_o_store_real[2 * 4 + 3], 7.25);
     }
 
     #[test]

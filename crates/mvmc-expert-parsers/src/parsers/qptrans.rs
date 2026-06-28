@@ -94,13 +94,7 @@ pub fn parse_qptrans_content(content: &str, nsite: i64) -> QPTransSection {
         } else {
             1
         };
-        if mpidx < 0
-            || j < 0
-            || itmp < 0
-            || (mpidx as i64) >= n_qp_trans
-            || (j as i64) >= nsite
-            || (itmp as i64) >= nsite
-        {
+        if mpidx < 0 || j < 0 || itmp < 0 || mpidx >= n_qp_trans || j >= nsite || itmp >= nsite {
             continue;
         }
         let entry = &mut section.entries[mpidx as usize];
