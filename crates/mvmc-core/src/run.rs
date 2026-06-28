@@ -295,6 +295,7 @@ fn accumulate_observables(
     let sr_opt_size = state.sr_opt.sr_opt_size;
     let n_orb_total = sr_opt_size.saturating_sub(1 + n_proj);
     let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
+    let mut slater_derivative_scratch = crate::observables::SlaterDerivativeScratch::new();
 
     for sample in 0..n_vmc_sample {
         let ele_idx = state.electron_config.ele_idx_slice(sample).to_vec();
@@ -421,24 +422,28 @@ fn accumulate_observables(
         crate::observables::set_projection_diff(&mut state.sr_opt.sr_opt_o, &ele_proj_cnt, n_proj);
         let slater_offset = 2 * (1 + n_proj);
         if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
-            let mut slater_o = vec![Complex64::new(0.0, 0.0); 2 * n_orb_total];
+            let n_copy = (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
+            let slater_o = &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
             if use_fsz {
-                crate::observables::slater_elm_diff_fsz(
-                    &mut slater_o,
+                crate::observables::slater_elm_diff_fsz_with_scratch(
+                    slater_o,
                     ip,
                     &ele_idx,
                     &ele_spn,
                     data,
-                    state,
+                    &state.slater_matrix,
+                    &mut slater_derivative_scratch,
                 );
             } else {
-                crate::observables::slater_elm_diff(&mut slater_o, ip, &ele_idx, data, state);
+                crate::observables::slater_elm_diff_with_scratch(
+                    slater_o,
+                    ip,
+                    &ele_idx,
+                    data,
+                    &state.slater_matrix,
+                    &mut slater_derivative_scratch,
+                );
             }
-            let n_copy = slater_o
-                .len()
-                .min(state.sr_opt.sr_opt_o.len() - slater_offset);
-            state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy]
-                .copy_from_slice(&slater_o[..n_copy]);
         }
 
         if all_complex {
