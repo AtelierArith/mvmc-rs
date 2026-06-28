@@ -22,6 +22,7 @@ pub mod qp;
 pub mod reducer;
 pub mod run;
 pub mod sampling;
+mod slater_derivative;
 pub mod slater_update;
 pub mod sr;
 pub mod state;
