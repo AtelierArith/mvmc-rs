@@ -7,7 +7,7 @@ module-by-module mapping, and (d) the risk register.
 ## 1. Pre-flight clarifications
 
 | # | Question | Status | Resolution |
-|---|---|---|---|
+|---|---|---|
 | 1 | Where does the Rust workspace live? | **Assumed** | `extern/Julia-mVMC-rs/` (this directory). Co-locates fixtures with the Julia source for CI; revisit if the team wants a sibling repo. |
 | 2 | Fidelity target: bit-exact C-parity vs. idiomatic rewrite? | **Assumed** | **Bit-exact** — matches Julia-mVMC v0.1's headline guarantee. Floating-point summation order, BLAS call sequence, RNG draw order, and `init_*` phase order all preserved verbatim. |
 | 3 | Scope ceiling — v0.1 only or also v0.2+? | **Assumed** | v0.1 only for now (`VMCParaOpt` + partial `VMCPhysCal` + Lanczos step-0). BackFlow / MPI / full Lanczos are listed under Phase 7 (stretch). |
@@ -93,8 +93,8 @@ the user's binding decision.
 - `Vec` / slice remains the compatibility boundary first. Convert to explicit col-major `TypedTensor` only at bounded seams, never as a blanket replacement for hot paths.
 - `SlaterElmFlat` keeps the legacy row-major logical layout per QP plane. The public offset stays `(qp * n_site2 + row) * n_site2 + col`, even though its tenferro shape is `[n_site2 * n_site2, n_qp_full]`.
 - `InvMColMajor` keeps the legacy logical layout `qp * (n_size * n_size + 1) + row + col * n_size`, including the per-QP pad slot, even though its tenferro shape is `[n_size * n_size + 1, n_qp_full]`.
-- Production hot paths must not introduce per-sample `Vec -> TypedTensor` conversion or fresh backend creation. The Slater derivative QP reduction stays as explicit `Vec` loops until those buffers become tensor-backed.
-- Current tenferro-einsum code is limited to `finalize_oo_store`, the narrow SR store helper contract, and a dormant/tested QP-weighted reduction helper. The QP helper stays out of production hot paths until its input buffers become tensor-backed. Tests cover col-major copy-back and einsum references.
+- Production hot paths must not introduce per-sample `Vec -> TypedTensor` conversion or fresh backend creation. The Slater derivative QP buffer is tensor-backed through `SlaterDerivativeScratch`, which is reused across samples in the production run loop.
+- Current tenferro-einsum code covers `finalize_oo_store`, the narrow SR store helper contract, and the production Slater derivative QP-weighted reduction. Tests cover col-major copy-back, scratch layout, and einsum references.
 - Any future conversion must keep the Julia/C parity tests and `phase5_regression_50step` as gates.
 
 ### Raw-index audit summary
