@@ -23,7 +23,7 @@ use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
-use sfmt19937::Sfmt19937Rng;
+sfmt19937::Sfmt19937Rng;
 
 use crate::average::{weight_average_sr_opt, weight_average_sr_opt_real, weight_average_we};
 use crate::counter::reduce_counter;
@@ -295,7 +295,7 @@ fn accumulate_observables(
     let sr_opt_size = state.sr_opt.sr_opt_size;
     let n_orb_total = sr_opt_size.saturating_sub(1 + n_proj);
     let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
-    let mut slater_derivative_scratch = crate::observables::SlaterDerivativeScratch::new();
+    let mut slater_derivative_scratch = crate::slater_derivative::SlaterDerivativeScratch::new();
 
     for sample in 0..n_vmc_sample {
         let ele_idx = state.electron_config.ele_idx_slice(sample).to_vec();
@@ -425,7 +425,7 @@ fn accumulate_observables(
             let n_copy = (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
             let slater_o = &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
             if use_fsz {
-                crate::observables::slater_elm_diff_fsz_with_scratch(
+                crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
                     slater_o,
                     ip,
                     &ele_idx,
@@ -435,7 +435,7 @@ fn accumulate_observables(
                     &mut slater_derivative_scratch,
                 );
             } else {
-                crate::observables::slater_elm_diff_with_scratch(
+                crate::slater_derivative::slater_elm_diff_with_scratch(
                     slater_o,
                     ip,
                     &ele_idx,
