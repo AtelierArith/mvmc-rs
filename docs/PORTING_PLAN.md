@@ -93,8 +93,8 @@ the user's binding decision.
 - `Vec` / slice remains the compatibility boundary first. Convert to explicit col-major `TypedTensor` only at bounded seams, never as a blanket replacement for hot paths.
 - `SlaterElmFlat` keeps the legacy row-major logical layout per QP plane. The public offset stays `(qp * n_site2 + row) * n_site2 + col`, even though its tenferro shape is `[n_site2 * n_site2, n_qp_full]`.
 - `InvMColMajor` keeps the legacy logical layout `qp * (n_size * n_size + 1) + row + col * n_size`, including the per-QP pad slot, even though its tenferro shape is `[n_size * n_size + 1, n_qp_full]`.
-- Production hot paths must not introduce per-sample `Vec -> TypedTensor` conversion or fresh backend creation. The Slater derivative QP buffer is tensor-backed through `SlaterDerivativeScratch`, which is reused across samples in the production run loop.
-- Current tenferro-einsum code covers `finalize_oo_store`, the narrow SR store helper contract, and the production Slater derivative QP-weighted reduction. Tests cover col-major copy-back, scratch layout, and einsum references.
+- Production hot paths must not introduce per-sample `Vec -> TypedTensor` conversion or fresh backend creation. The Slater derivative QP reduction uses one scratch tensor for the existing col-major accumulation buffer, a borrowed view over the per-sample QP weights, a reusable `ConcreteEinsumPlan`, and a preallocated weighted output tensor.
+- Current tenferro-einsum code covers `finalize_oo_store`, the narrow SR store helper contract, and the Slater derivative QP reduction. Tests cover col-major copy-back, borrowed-weight `einsum_into`, and legacy real/imag output layout.
 - Any future conversion must keep the Julia/C parity tests and `phase5_regression_50step` as gates.
 
 ### Raw-index audit summary

@@ -2,22 +2,47 @@
 
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
+use tenferro_einsum::ConcreteEinsumPlan;
+use tenferro_tensor::{TensorRead, TensorScalar, TypedTensor, TypedTensorView};
 
 use crate::state::SlaterMatrixData;
 
-fn qp_weighted_orbital_sum_einsum(
-    backend: &mut tenferro_cpu::CpuBackend,
-    weights: &tenferro_tensor::TypedTensor<Complex64>,
-    buffer: &tenferro_tensor::TypedTensor<Complex64>,
-) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
-    use tenferro_einsum::TypedTensorEinsumExt;
+type ComplexTensor = TypedTensor<Complex64>;
 
-    [buffer, weights].einsum("oq,q->o", backend)
+fn qp_weighted_orbital_inputs<'a>(
+    buffer: &'a ComplexTensor,
+    weights: &'a [Complex64],
+) -> tenferro_tensor::Result<[TensorRead<'a>; 2]> {
+    let weights_view = TypedTensorView::from_slice([weights.len()], [1], 0, weights)?;
+    Ok([
+        Complex64::tensor_read(buffer),
+        TensorRead::from_view(Complex64::tensor_view(weights_view)),
+    ])
+}
+
+fn qp_weighted_orbital_sum_plan(
+    buffer: &ComplexTensor,
+    weights: &[Complex64],
+) -> tenferro_tensor::Result<ConcreteEinsumPlan> {
+    let inputs = qp_weighted_orbital_inputs(buffer, weights)?;
+    ConcreteEinsumPlan::prepare_read(inputs, "oq,q->o")
+}
+
+fn qp_weighted_orbital_sum_einsum_into(
+    backend: &mut tenferro_cpu::CpuBackend,
+    plan: &ConcreteEinsumPlan,
+    buffer: &ComplexTensor,
+    weights: &[Complex64],
+    out: &mut ComplexTensor,
+) -> tenferro_tensor::Result<()> {
+    let inputs = qp_weighted_orbital_inputs(buffer, weights)?;
+    plan.execute_read_into(inputs, backend, Complex64::tensor_write(out))
 }
 
 pub(crate) struct SlaterDerivativeScratch {
-    qp_orbital: Option<tenferro_tensor::TypedTensor<Complex64>>,
-    qp_weights: Option<tenferro_tensor::TypedTensor<Complex64>>,
+    qp_orbital: Option<ComplexTensor>,
+    weighted_orbital: Option<ComplexTensor>,
+    qp_weighted_plan: Option<ConcreteEinsumPlan>,
     backend: tenferro_cpu::CpuBackend,
     n_slater: usize,
     n_qp_full: usize,
@@ -27,7 +52,8 @@ impl SlaterDerivativeScratch {
     pub(crate) fn new() -> Self {
         Self {
             qp_orbital: None,
-            qp_weights: None,
+            weighted_orbital: None,
+            qp_weighted_plan: None,
             backend: tenferro_cpu::CpuBackend::new(),
             n_slater: 0,
             n_qp_full: 0,
@@ -46,7 +72,14 @@ impl SlaterDerivativeScratch {
             )
             .expect("SlaterDerivativeScratch shape and data length must match"),
         );
-        self.qp_weights = None;
+        self.weighted_orbital = Some(
+            tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+                vec![n_slater],
+                vec![Complex64::new(0.0, 0.0); n_slater],
+            )
+            .expect("SlaterDerivativeScratch weighted shape and data length must match"),
+        );
+        self.qp_weighted_plan = None;
         self.n_slater = n_slater;
         self.n_qp_full = n_qp_full;
     }
@@ -83,28 +116,22 @@ impl SlaterDerivativeScratch {
             .expect("SlaterDerivativeScratch requires host-backed storage")
     }
 
-    fn ensure_weights(&mut self, weights: &[Complex64]) {
+    fn ensure_qp_weighted_plan(&mut self, weights: &[Complex64]) {
         assert_eq!(
             weights.len(),
             self.n_qp_full,
             "QP weight length must match Slater derivative scratch shape"
         );
-        match self.qp_weights.as_mut() {
-            Some(qp_weights) if qp_weights.shape() == [self.n_qp_full] => {
-                qp_weights
-                    .host_data_mut()
-                    .expect("SlaterDerivativeScratch weights require host-backed storage")
-                    .copy_from_slice(weights);
-            }
-            _ => {
-                self.qp_weights = Some(
-                    tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
-                        vec![self.n_qp_full],
-                        weights.to_vec(),
-                    )
-                    .expect("SlaterDerivativeScratch weight shape and data length must match"),
-                );
-            }
+        if self.qp_weighted_plan.is_none() {
+            self.qp_weighted_plan = Some(
+                qp_weighted_orbital_sum_plan(
+                    self.qp_orbital
+                        .as_ref()
+                        .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
+                    weights,
+                )
+                .expect("Slater derivative QP weighted einsum plan must be prepared"),
+            );
         }
     }
 
@@ -121,18 +148,25 @@ impl SlaterDerivativeScratch {
             sr_opt_o.len() >= 2 * self.n_slater,
             "Slater derivative output must have real/imag slots for every orbital"
         );
-        self.ensure_weights(weights);
-        let weighted = qp_weighted_orbital_sum_einsum(
+        self.ensure_qp_weighted_plan(weights);
+        qp_weighted_orbital_sum_einsum_into(
             &mut self.backend,
-            self.qp_weights
+            self.qp_weighted_plan
                 .as_ref()
-                .expect("SlaterDerivativeScratch weights must be initialized"),
+                .expect("SlaterDerivativeScratch plan must be initialized"),
             self.qp_orbital
                 .as_ref()
                 .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
+            weights,
+            self.weighted_orbital
+                .as_mut()
+                .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
         )
         .expect("Slater derivative QP weighted einsum must run");
-        let weighted_data = weighted
+        let weighted_data = self
+            .weighted_orbital
+            .as_ref()
+            .expect("SlaterDerivativeScratch::ensure_shape must be called first")
             .host_data()
             .expect("Slater derivative weighted result must be host-readable");
         let inv_ip = Complex64::new(1.0, 0.0) / ip;
@@ -437,6 +471,48 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn qp_weighted_orbital_sum_einsum_into_writes_preallocated_output_from_borrowed_weights() {
+        let mut backend = tenferro_cpu::CpuBackend::new();
+        let buffer = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+            vec![2, 3],
+            vec![
+                Complex64::new(1.0, 0.0),
+                Complex64::new(2.0, 1.0),
+                Complex64::new(-1.0, 0.5),
+                Complex64::new(0.0, -2.0),
+                Complex64::new(3.0, 1.5),
+                Complex64::new(-4.0, 0.25),
+            ],
+        )
+        .expect("buffer tensor");
+        let weights = vec![
+            Complex64::new(0.5, 0.0),
+            Complex64::new(-1.0, 1.0),
+            Complex64::new(2.0, -0.5),
+        ];
+        let mut output = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
+            vec![2],
+            vec![Complex64::new(99.0, 99.0); 2],
+        )
+        .expect("output tensor");
+        let plan =
+            qp_weighted_orbital_sum_plan(&buffer, &weights).expect("QP weighted orbital plan");
+
+        qp_weighted_orbital_sum_einsum_into(&mut backend, &plan, &buffer, &weights, &mut output)
+            .expect("einsum into preallocated output");
+
+        let output = output.host_data().expect("host output");
+        let buffer_data = buffer.host_data().expect("host buffer");
+        let mut expected = vec![Complex64::new(0.0, 0.0); 2];
+        for orbidx in 0..2 {
+            for qpidx in 0..3 {
+                expected[orbidx] += weights[qpidx] * buffer_data[qpidx * 2 + orbidx];
+            }
+        }
+        assert_eq!(output, expected.as_slice());
+    }
 
     #[test]
     fn scratch_einsum_matches_legacy_reduction_layout() {
