@@ -23,7 +23,7 @@ use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
-sfmt19937::Sfmt19937Rng;
+use sfmt19937::Sfmt19937Rng;
 
 use crate::average::{weight_average_sr_opt, weight_average_sr_opt_real, weight_average_we};
 use crate::counter::reduce_counter;
