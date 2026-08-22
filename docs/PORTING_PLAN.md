@@ -4,6 +4,12 @@ This document is the single source of truth for the port. It captures
 (a) the answered / assumed clarifications, (b) the phased plan, (c) the
 module-by-module mapping, and (d) the risk register.
 
+Historical C-mVMC → Julia-mVMC plans, verification records, and the selected
+C-mVMC v1.3 manual snapshot are archived in
+[`docs/reference/c-to-julia/`](reference/c-to-julia/README.md). Those files are
+reference snapshots rather than current Rust decisions. Use them to prepare a
+separate C-mVMC v1.3 expansion plan before changing the scope recorded here.
+
 ## 1. Pre-flight clarifications
 
 | # | Question | Status | Resolution |
