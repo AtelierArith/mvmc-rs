@@ -21,5 +21,11 @@ heisenberg_chain_fsz
 hubbard_chain_real
 ```
 
-They are produced from Julia-mVMC's `tools/dump_zvo_50step_reference.jl`
-and compared by `rust/crates/mvmc-core/tests/phase5_regression_50step.rs`.
+They are produced from the bundled Julia-mVMC checkout (v0.5.0, Julia 1.11) by
+`scripts/dump_zvo_50step_reference.jl`:
+
+```bash
+julia +1.11 --project=extern/Julia-mVMC scripts/dump_zvo_50step_reference.jl
+```
+
+and compared by `crates/mvmc-core/tests/phase5_regression_50step.rs`.
