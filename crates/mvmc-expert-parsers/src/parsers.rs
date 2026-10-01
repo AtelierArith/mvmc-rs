@@ -3,8 +3,7 @@
 //! Phase 3 covers the parsers needed to round-trip the four upstream
 //! `examples/inputs/*` namelists (Heisenberg chain real / complex /
 //! FSZ, Hubbard chain real), and the InterAll/PairHop/DH2/DH4 input contracts. The remaining
-//! parsers (9-channel `rbm`) are pending
-//! and will land alongside Phase 4 when `mvmc-core` needs them.
+//! RBM index sections are implemented; their production integration is pending.
 
 pub mod coulomb;
 pub mod exchange;
@@ -20,7 +19,7 @@ pub mod pairhop;
 pub mod qptrans;
 pub mod trans;
 
-/// 9-channel RBM parsers (port of `rbm_parser.jl`). Empty for now.
-pub mod rbm {}
 /// Strict DH2/DH4 neighbor-table parsers.
 pub mod doublon_holon;
+/// Nine-channel index/optimization-flag RBM parsers.
+pub mod rbm;

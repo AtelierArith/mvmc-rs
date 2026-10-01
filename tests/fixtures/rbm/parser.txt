@@ -1,0 +1,1049 @@
+# Julia 1.13.1; LBTConfig([ILP64] libopenblas64_.0.3.30.dylib); threads=1; Julia-mVMC 8bb1b9e; parser source c2ea432
+ChargeRBM_PhysLayer 2_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_bad_integer.def 0 97 1 8
+Line 6: Error parsing ChargeRBM_PhysLayer term: ErrorException("invalid site/idx")
+1:2 2:0
+-1
+ChargeRBM_PhysLayer 2_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_empty.def 1 0 0 0
+
+
+0
+ChargeRBM_PhysLayer 2_empty_header.def 1 97 1 0
+
+
+0
+ChargeRBM_PhysLayer 2_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_invalid_coordinate.def 0 97 1 8
+Line 6: Error parsing ChargeRBM_PhysLayer term: ErrorException("invalid site/idx")
+1:2 2:0
+-1
+ChargeRBM_PhysLayer 2_invalid_index.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_PhysLayer term: ErrorException("invalid site/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_PhysLayer 2_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:3
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 9223372036854775807 0 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_multiple_errors.def 0 97 1 10
+Line 6: Error parsing ChargeRBM_PhysLayer term: ErrorException("invalid site/idx"); Line 7: Error parsing ChargeRBM_PhysLayer term: ErrorException("invalid site/idx")
+
+-1
+ChargeRBM_PhysLayer 2_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_no_flags.def 1 97 1 7
+
+
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_out_of_range.def 1 97 1 10
+
+
+5
+99 0 1 0000000000000000 0000000000000000
+98 2 1 0000000000000000 0000000000000000
+0 1 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+2 0 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_repeated_coordinate.def 1 97 1 6
+
+0:2 1:1
+1
+0 0 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_short_header.def 1 97 1 0
+
+
+0
+ChargeRBM_PhysLayer 2_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 1 0000000000000000 0000000000000000
+1 0 1 0000000000000000 0000000000000000
+2 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysLayer 2_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_bad_integer.def 0 97 1 8
+Line 6: Error parsing SpinRBM_PhysLayer term: ErrorException("invalid site/idx")
+1:2 2:0
+-1
+SpinRBM_PhysLayer 2_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_empty.def 1 0 0 0
+
+
+0
+SpinRBM_PhysLayer 2_empty_header.def 1 97 1 0
+
+
+0
+SpinRBM_PhysLayer 2_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_invalid_coordinate.def 0 97 1 8
+Line 6: Error parsing SpinRBM_PhysLayer term: ErrorException("invalid site/idx")
+1:2 2:0
+-1
+SpinRBM_PhysLayer 2_invalid_index.def 0 97 1 7
+Line 6: Error parsing SpinRBM_PhysLayer term: ErrorException("invalid site/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_PhysLayer 2_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:3
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 9223372036854775807 0 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_multiple_errors.def 0 97 1 10
+Line 6: Error parsing SpinRBM_PhysLayer term: ErrorException("invalid site/idx"); Line 7: Error parsing SpinRBM_PhysLayer term: ErrorException("invalid site/idx")
+
+-1
+SpinRBM_PhysLayer 2_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_no_flags.def 1 97 1 7
+
+
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_out_of_range.def 1 97 1 10
+
+
+5
+99 0 1 0000000000000000 0000000000000000
+98 2 1 0000000000000000 0000000000000000
+0 1 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+2 0 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_repeated_coordinate.def 1 97 1 6
+
+0:2 1:1
+1
+0 0 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_short_header.def 1 97 1 0
+
+
+0
+SpinRBM_PhysLayer 2_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 1 0000000000000000 0000000000000000
+1 0 1 0000000000000000 0000000000000000
+2 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysLayer 2_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_bad_integer.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysLayer term: ErrorException("invalid site/spin/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysLayer 3_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_empty.def 1 0 0 0
+
+
+0
+GeneralRBM_PhysLayer 3_empty_header.def 1 97 1 0
+
+
+0
+GeneralRBM_PhysLayer 3_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_invalid_coordinate.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysLayer term: ErrorException("invalid site/spin/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysLayer 3_invalid_index.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysLayer term: ErrorException("invalid site/spin/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysLayer 3_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:8
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 0 9223372036854775807 0 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_multiple_errors.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysLayer term: ErrorException("invalid site/spin/idx"); Line 7: Error parsing GeneralRBM_PhysLayer term: ErrorException("invalid site/spin/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysLayer 3_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_no_flags.def 1 97 1 7
+
+
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_out_of_range.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+99 99 0 1 0000000000000000 0000000000000000
+98 98 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_short_header.def 1 97 1 0
+
+
+0
+GeneralRBM_PhysLayer 3_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 0 1 0000000000000000 0000000000000000
+1 1 0 1 0000000000000000 0000000000000000
+2 2 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysLayer 3_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_bad_integer.def 0 97 1 8
+Line 6: Error parsing ChargeRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+ChargeRBM_HiddenLayer 2_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_empty.def 1 0 0 0
+
+
+0
+ChargeRBM_HiddenLayer 2_empty_header.def 1 97 1 0
+
+
+0
+ChargeRBM_HiddenLayer 2_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_invalid_coordinate.def 0 97 1 8
+Line 6: Error parsing ChargeRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+ChargeRBM_HiddenLayer 2_invalid_index.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_HiddenLayer 2_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:3
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 9223372036854775807 0 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_multiple_errors.def 0 97 1 10
+Line 6: Error parsing ChargeRBM_HiddenLayer term: ErrorException("invalid hidden/idx"); Line 7: Error parsing ChargeRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+
+-1
+ChargeRBM_HiddenLayer 2_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_no_flags.def 1 97 1 7
+
+
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_out_of_range.def 1 97 1 10
+
+
+5
+99 0 1 0000000000000000 0000000000000000
+98 2 1 0000000000000000 0000000000000000
+0 1 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+2 0 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_repeated_coordinate.def 1 97 1 6
+
+0:2 1:1
+1
+0 0 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_short_header.def 1 97 1 0
+
+
+0
+ChargeRBM_HiddenLayer 2_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 1 0000000000000000 0000000000000000
+1 0 1 0000000000000000 0000000000000000
+2 2 1 0000000000000000 0000000000000000
+ChargeRBM_HiddenLayer 2_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_bad_integer.def 0 97 1 8
+Line 6: Error parsing SpinRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+SpinRBM_HiddenLayer 2_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_empty.def 1 0 0 0
+
+
+0
+SpinRBM_HiddenLayer 2_empty_header.def 1 97 1 0
+
+
+0
+SpinRBM_HiddenLayer 2_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_invalid_coordinate.def 0 97 1 8
+Line 6: Error parsing SpinRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+SpinRBM_HiddenLayer 2_invalid_index.def 0 97 1 7
+Line 6: Error parsing SpinRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_HiddenLayer 2_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:3
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 9223372036854775807 0 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_multiple_errors.def 0 97 1 10
+Line 6: Error parsing SpinRBM_HiddenLayer term: ErrorException("invalid hidden/idx"); Line 7: Error parsing SpinRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+
+-1
+SpinRBM_HiddenLayer 2_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_no_flags.def 1 97 1 7
+
+
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_out_of_range.def 1 97 1 10
+
+
+5
+99 0 1 0000000000000000 0000000000000000
+98 2 1 0000000000000000 0000000000000000
+0 1 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+2 0 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_repeated_coordinate.def 1 97 1 6
+
+0:2 1:1
+1
+0 0 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_short_header.def 1 97 1 0
+
+
+0
+SpinRBM_HiddenLayer 2_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 1 0000000000000000 0000000000000000
+1 0 1 0000000000000000 0000000000000000
+2 2 1 0000000000000000 0000000000000000
+SpinRBM_HiddenLayer 2_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_bad_integer.def 0 97 1 8
+Line 6: Error parsing GeneralRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+GeneralRBM_HiddenLayer 2_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_empty.def 1 0 0 0
+
+
+0
+GeneralRBM_HiddenLayer 2_empty_header.def 1 97 1 0
+
+
+0
+GeneralRBM_HiddenLayer 2_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_invalid_coordinate.def 0 97 1 8
+Line 6: Error parsing GeneralRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+1:2 2:0
+-1
+GeneralRBM_HiddenLayer 2_invalid_index.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_HiddenLayer 2_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:3
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 9223372036854775807 0 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_multiple_errors.def 0 97 1 10
+Line 6: Error parsing GeneralRBM_HiddenLayer term: ErrorException("invalid hidden/idx"); Line 7: Error parsing GeneralRBM_HiddenLayer term: ErrorException("invalid hidden/idx")
+
+-1
+GeneralRBM_HiddenLayer 2_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_no_flags.def 1 97 1 7
+
+
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_out_of_range.def 1 97 1 10
+
+
+5
+99 0 1 0000000000000000 0000000000000000
+98 2 1 0000000000000000 0000000000000000
+0 1 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+2 0 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0000000000000000 0000000000000000
+1 2 0 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_repeated_coordinate.def 1 97 1 6
+
+0:2 1:1
+1
+0 0 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_short_header.def 1 97 1 0
+
+
+0
+GeneralRBM_HiddenLayer 2_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 1 0000000000000000 0000000000000000
+1 0 1 0000000000000000 0000000000000000
+2 2 1 0000000000000000 0000000000000000
+GeneralRBM_HiddenLayer 2_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 1 0000000000000000 0000000000000000
+1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_bad_integer.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_PhysHidden 3_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_empty.def 1 0 0 0
+
+
+0
+ChargeRBM_PhysHidden 3_empty_header.def 1 97 1 0
+
+
+0
+ChargeRBM_PhysHidden 3_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_invalid_coordinate.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_PhysHidden 3_invalid_index.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_PhysHidden 3_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:8
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 0 9223372036854775807 0 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_multiple_errors.def 0 97 1 7
+Line 6: Error parsing ChargeRBM_PhysHidden term: ErrorException("invalid site/hidden/idx"); Line 7: Error parsing ChargeRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+ChargeRBM_PhysHidden 3_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_no_flags.def 1 97 1 7
+
+
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_out_of_range.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+99 99 0 1 0000000000000000 0000000000000000
+98 98 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_short_header.def 1 97 1 0
+
+
+0
+ChargeRBM_PhysHidden 3_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 0 1 0000000000000000 0000000000000000
+1 1 0 1 0000000000000000 0000000000000000
+2 2 2 1 0000000000000000 0000000000000000
+ChargeRBM_PhysHidden 3_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_bad_integer.def 0 97 1 7
+Line 6: Error parsing SpinRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_PhysHidden 3_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_empty.def 1 0 0 0
+
+
+0
+SpinRBM_PhysHidden 3_empty_header.def 1 97 1 0
+
+
+0
+SpinRBM_PhysHidden 3_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_invalid_coordinate.def 0 97 1 7
+Line 6: Error parsing SpinRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_PhysHidden 3_invalid_index.def 0 97 1 7
+Line 6: Error parsing SpinRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_PhysHidden 3_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:8
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 0 9223372036854775807 0 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_multiple_errors.def 0 97 1 7
+Line 6: Error parsing SpinRBM_PhysHidden term: ErrorException("invalid site/hidden/idx"); Line 7: Error parsing SpinRBM_PhysHidden term: ErrorException("invalid site/hidden/idx")
+0:1 1:2 2:0
+-1
+SpinRBM_PhysHidden 3_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_no_flags.def 1 97 1 7
+
+
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_out_of_range.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+99 99 0 1 0000000000000000 0000000000000000
+98 98 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0000000000000000 0000000000000000
+1 1 2 0 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_short_header.def 1 97 1 0
+
+
+0
+SpinRBM_PhysHidden 3_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 0 1 0000000000000000 0000000000000000
+1 1 0 1 0000000000000000 0000000000000000
+2 2 2 1 0000000000000000 0000000000000000
+SpinRBM_PhysHidden 3_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 1 0000000000000000 0000000000000000
+1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_bad_complex.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0 0000000000000000 0000000000000000
+1 1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_bad_integer.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysHidden term: ErrorException("invalid site/spin/hidden/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysHidden 4_comments.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_empty.def 1 0 0 0
+
+
+0
+GeneralRBM_PhysHidden 4_empty_header.def 1 97 1 0
+
+
+0
+GeneralRBM_PhysHidden 4_flag_duplicates.def 1 97 1 7
+
+0:3 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_ignored_width.def 1 97 1 9
+
+0:1 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_inferred.def 1 3 0 2
+
+0:1 1:2 2:0
+2
+0 0 0 0 0 0000000000000000 0000000000000000
+1 1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_invalid_coordinate.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysHidden term: ErrorException("invalid site/spin/hidden/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysHidden 4_invalid_index.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysHidden term: ErrorException("invalid site/spin/hidden/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysHidden 4_invalid_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_map_after_flags.def 1 97 1 7
+
+0:1 1:2 2:0 8:8
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_maximum_index.def 1 -9223372036854775808 0 1
+
+
+1
+0 0 0 9223372036854775807 0 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_multiple_errors.def 0 97 1 7
+Line 6: Error parsing GeneralRBM_PhysHidden term: ErrorException("invalid site/spin/hidden/idx"); Line 7: Error parsing GeneralRBM_PhysHidden term: ErrorException("invalid site/spin/hidden/idx")
+0:1 1:2 2:0
+-1
+GeneralRBM_PhysHidden 4_negative_width.def 1 3 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_no_flags.def 1 97 1 7
+
+
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_out_of_range.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+99 99 99 0 1 0000000000000000 0000000000000000
+98 98 98 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_real.def 1 97 0 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 0 0000000000000000 0000000000000000
+1 1 1 2 0 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_short_header.def 1 97 1 0
+
+
+0
+GeneralRBM_PhysHidden 4_tied.def 1 9 1 8
+
+0:1 1:0 2:1
+3
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 0 1 0000000000000000 0000000000000000
+2 2 2 2 1 0000000000000000 0000000000000000
+GeneralRBM_PhysHidden 4_valid.def 1 97 1 7
+
+0:1 1:2 2:0
+2
+0 0 0 0 1 0000000000000000 0000000000000000
+1 1 1 2 1 0000000000000000 0000000000000000

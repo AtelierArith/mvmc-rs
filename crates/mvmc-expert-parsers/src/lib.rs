@@ -5,9 +5,8 @@
 //! Phase 3 status: the parsers, types and orchestration needed to
 //! round-trip the four upstream `examples/inputs/*` namelists are
 //! implemented, including strict DH2/DH4 definitions and their parameter layout.
-//! The remaining upstream modules (RBM,
-//! backflow) stay as skeleton stubs and
-//! will land alongside Phase 4 once `mvmc-core` actually consumes them.
+//! Nine RBM index sections and initialization follow the canonical layout.
+//! RBM production sampling/SR and backflow remain pending.
 //!
 //! License: GPL-3.0-or-later (inherits from upstream).
 
@@ -19,11 +18,14 @@ pub mod types;
 pub mod utils;
 
 pub use types::{
-    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex,
+    ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, CoulombInterTerm,
+    CoulombIntraTerm, DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex,
     DoublonHolon4SiteDefinition, DoublonHolon4SiteIndex, ExchangeTerm, ExpertModeData,
-    GreenOneTerm, GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
+    GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm, GreenOneTerm,
+    GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
     ModParaParameters, OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry,
-    QuantumProjectionWeights, Spin, TransferTerm, ValidationResult,
+    QuantumProjectionWeights, RbmParameter, Spin, SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm,
+    SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
 };
 
 pub use utils::validation::{
@@ -36,7 +38,7 @@ pub use utils::validation::{
 pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
     is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_orbital_opt_flags,
-    set_projection_opt_flags,
+    set_projection_opt_flags, set_rbm_opt_flags,
 };
 
 use std::collections::BTreeMap;
@@ -45,7 +47,7 @@ use std::path::Path;
 
 use crate::parsers::{
     coulomb, doublon_holon, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara,
-    orbital, pairhop, qptrans, trans,
+    orbital, pairhop, qptrans, rbm, trans,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -105,6 +107,7 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     let mut data = ExpertModeData::new();
     data.namelist = file_list.clone();
     let mut orbital_flags = BTreeMap::new();
+    let mut rbm_flags = BTreeMap::new();
 
     for (file_type, file_name) in &file_list {
         let full_path = base_dir.join(file_name);
@@ -133,7 +136,13 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
             ));
             continue;
         }
-        if let Err(e) = parse_file_by_type(&mut data, file_type, &full_path, &mut orbital_flags) {
+        if let Err(e) = parse_file_by_type(
+            &mut data,
+            file_type,
+            &full_path,
+            &mut orbital_flags,
+            &mut rbm_flags,
+        ) {
             if matches!(
                 file_type.as_str(),
                 "DH2" | "DoublonHolon2Site" | "DH4" | "DoublonHolon4Site"
@@ -160,6 +169,16 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
 
     // DH and Slater flags need the final projection layout.
     set_dh_opt_flags(&mut data);
+    let sizes = data.rbm_section_sizes();
+    let mut offset = data.projection_layout().n_proj;
+    for (name, size) in rbm::SECTION_NAMES.iter().zip(sizes) {
+        if size > 0 {
+            if let Some((flags, complex)) = rbm_flags.get(*name) {
+                utils::opt_flag::set_rbm_opt_flags(&mut data, flags, offset, *complex);
+            }
+        }
+        offset += size;
+    }
     set_orbital_opt_flags(&mut data, &orbital_flags);
 
     // Mirror the post-parse pass from upstream:
@@ -190,11 +209,14 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     Ok(data)
 }
 
+type RbmFlags = BTreeMap<String, (BTreeMap<i64, i64>, bool)>;
+
 fn parse_file_by_type(
     data: &mut ExpertModeData,
     file_type: &str,
     path: &Path,
     orbital_flags: &mut BTreeMap<i64, i64>,
+    rbm_flags: &mut RbmFlags,
 ) -> io::Result<()> {
     match file_type {
         "ModPara" => {
@@ -354,6 +376,96 @@ fn parse_file_by_type(
             data.i_flg_orbital_general = 1;
             orbital_flags.extend(section.opt_flags);
         }
+        "ChargeRBM_PhysLayer" => {
+            let section = rbm::parse_charge_rbm_phys_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.charge_rbm_phys_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "SpinRBM_PhysLayer" => {
+            let section = rbm::parse_spin_rbm_phys_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.spin_rbm_phys_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "GeneralRBM_PhysLayer" => {
+            let section = rbm::parse_general_rbm_phys_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.general_rbm_phys_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "ChargeRBM_HiddenLayer" => {
+            let section = rbm::parse_charge_rbm_hidden_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.charge_rbm_hidden_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "SpinRBM_HiddenLayer" => {
+            let section = rbm::parse_spin_rbm_hidden_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.spin_rbm_hidden_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "GeneralRBM_HiddenLayer" => {
+            let section = rbm::parse_general_rbm_hidden_layer_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.general_rbm_hidden_layer_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "ChargeRBM_PhysHidden" => {
+            let section = rbm::parse_charge_rbm_phys_hidden_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.charge_rbm_phys_hidden_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "SpinRBM_PhysHidden" => {
+            let section = rbm::parse_spin_rbm_phys_hidden_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.spin_rbm_phys_hidden_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
+        "GeneralRBM_PhysHidden" => {
+            let section = rbm::parse_general_rbm_phys_hidden_content(&read_def_file(path)?);
+            if let Some(terms) = section.terms {
+                data.general_rbm_phys_hidden_terms = terms;
+            }
+            rbm_flags.insert(
+                file_type.to_owned(),
+                (section.opt_flags, section.is_complex_flag),
+            );
+        }
         "OneBodyG" => {
             data.green_one_terms = green::parse_green_one_def(path)?;
         }
@@ -367,7 +479,7 @@ fn parse_file_by_type(
             data.para_qp_trans = data.qp_trans_entries.iter().map(|e| e.weight).collect();
         }
         _ => {
-            // Unknown / not-yet-supported keyword (e.g. RBM blocks).
+            // Unknown / not-yet-supported keyword.
             // Silently skip to match the upstream `@warn`-only policy.
             tracing::debug!("unknown namelist keyword: {}", file_type);
         }

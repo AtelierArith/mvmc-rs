@@ -52,7 +52,7 @@ pub fn set_orbital_opt_flags(data: &mut ExpertModeData, flags: &BTreeMap<i64, i6
     if flags.is_empty() {
         return;
     }
-    let n_proj = data.projection_layout().n_proj;
+    let n_proj = data.projection_layout().n_proj + data.count_rbm_parameters();
     let complex = all_complex_flag(data);
     ensure_optimization_flags_size(data, 2 * (n_proj + n_slater(data)));
     for (&idx, &flag) in flags {
@@ -96,7 +96,7 @@ pub fn set_dh_opt_flags(data: &mut ExpertModeData) {
 
 /// Component index for the real part of a zero-based Slater parameter.
 pub fn get_slater_opt_flag_index(data: &ExpertModeData, slater_idx: usize) -> usize {
-    2 * (data.projection_layout().n_proj + slater_idx)
+    2 * (data.projection_layout().n_proj + data.count_rbm_parameters() + slater_idx)
 }
 
 /// Whether the Slater real component is active; missing entries return false.
@@ -121,4 +121,31 @@ pub fn is_jastrow_optimized(data: &ExpertModeData, idx: usize) -> bool {
         .get(2 * (data.projection_layout().n_gutzwiller + idx))
         .copied()
         .unwrap_or(false)
+}
+
+/// Apply RBM flags at a global parameter offset. Listed indices may cross
+/// section boundaries as in Julia; only the final component array bounds apply.
+pub fn set_rbm_opt_flags(
+    data: &mut ExpertModeData,
+    flags: &BTreeMap<i64, i64>,
+    offset: usize,
+    is_complex: bool,
+) {
+    if flags.is_empty() {
+        return;
+    }
+    let n_para = data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data);
+    ensure_optimization_flags_size(data, 2 * n_para);
+    for (&idx, &flag) in flags {
+        let Ok(idx) = usize::try_from(idx) else {
+            continue;
+        };
+        let Some(component) = offset.checked_add(idx).and_then(|p| p.checked_mul(2)) else {
+            continue;
+        };
+        if component < data.optimization_flags.len() {
+            data.optimization_flags[component] = flag != 0;
+            data.optimization_flags[component + 1] = is_complex && flag != 0;
+        }
+    }
 }

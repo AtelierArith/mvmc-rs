@@ -8,9 +8,7 @@
 //! caller MUST seed the SFMT RNG before calling [`init_parameter`].
 //!
 //! Real/complex Slater initialization includes Gutzwiller/Jastrow/DH2/DH4 declarations.
-//! RBM init lives behind `flag_rbm` and currently no-ops because the
-//! Phase-3 parsers do not surface RBM terms; once RBM parsers land,
-//! drop the parking logic here.
+//! RBM coefficients consume draws in canonical section/index order before Slater.
 
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
@@ -58,11 +56,48 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
 
     let all_complex = all_complex_flag(data);
     let n_proj = data.projection_layout().n_proj;
-    // Phase-4 scope: RBM blocks are still parser-side stubs; treat
-    // `n_rbm = 0` so the Slater opt-flag index lines up with the
-    // upstream layout for non-RBM models.
-    let n_rbm = 0usize;
-    let flag_rbm = false;
+    let sizes = data.rbm_section_sizes();
+    let n_rbm = sizes.iter().sum::<usize>();
+    let mut rbm_values = vec![Complex64::new(0.0, 0.0); n_rbm];
+    let neurons = data
+        .modpara
+        .nneuron
+        .wrapping_add(data.modpara.nneuron_charge)
+        .wrapping_add(data.modpara.nneuron_spin)
+        .wrapping_add(data.modpara.nneuron_general);
+    let divisor = if neurons > 0 { neurons as f64 } else { 1.0 };
+    for (i, slot) in rbm_values.iter_mut().enumerate() {
+        // Unlike Slater, absent RBM flags are inactive and consume no draws.
+        if data
+            .optimization_flags
+            .get(2 * (n_proj + i))
+            .copied()
+            .unwrap_or(false)
+        {
+            if all_complex {
+                let radius = 1e-2 * rng.genrand_real2();
+                let phase = (2.0 * std::f64::consts::PI) * rng.genrand_real2();
+                let sin = super::julia_trig::sin(phase);
+                let cos = super::julia_trig::cos(phase);
+                *slot = Complex64::new(radius * cos, radius * sin);
+            } else {
+                *slot = Complex64::new(0.01 * (rng.genrand_real2() - 0.5) / divisor, 0.0);
+            }
+        }
+    }
+    let mut offsets = [0; 9];
+    for i in 1..9 {
+        offsets[i] = offsets[i - 1] + sizes[i - 1];
+    }
+    data.visit_rbm_terms_mut(|section, term| {
+        let idx = term.idx();
+        let value = if idx >= 0 && (idx as usize) < sizes[section] {
+            rbm_values[offsets[section] + idx as usize]
+        } else {
+            Complex64::new(0.0, 0.0)
+        };
+        term.set_value(value);
+    });
     // Julia initializes only mapped slots, even when the header reserves
     // unused trailing parameters for loading and SR. Drawing for those
     // unused slots would shift the entire subsequent sampling trajectory.
@@ -80,7 +115,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
 
     if !all_complex {
         for (i, slot) in slater_values.iter_mut().enumerate() {
-            let opt_flag_idx = 2 * i + 2 * n_proj + 2 * (if flag_rbm { 1 } else { 0 }) * n_rbm;
+            let opt_flag_idx = 2 * i + 2 * n_proj + 2 * n_rbm;
             let should_optimize = data
                 .optimization_flags
                 .get(opt_flag_idx)
@@ -95,7 +130,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
         }
     } else {
         for (i, slot) in slater_values.iter_mut().enumerate() {
-            let opt_flag_idx = 2 * i + 2 * n_proj + 2 * (if flag_rbm { 1 } else { 0 }) * n_rbm;
+            let opt_flag_idx = 2 * i + 2 * n_proj + 2 * n_rbm;
             let should_optimize = data
                 .optimization_flags
                 .get(opt_flag_idx)

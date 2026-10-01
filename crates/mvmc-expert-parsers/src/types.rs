@@ -3,11 +3,8 @@
 //! Port target: `MVMCExpertModeParsers.jl/src/types/expert_types.jl`.
 //!
 //! Phase 3 status: the round-trip subset is implemented (`ModPara`, the
-//! simple term structs, DH2/DH4 definitions, plus `ExpertModeData`). The RBM /
-//! backflow tree from the upstream Julia file is still pending
-//! and will land alongside Phase 4. Anything not used by the four
-//! upstream `examples/inputs/*/namelist.def` test cases is omitted on
-//! purpose.
+//! simple term structs, DH2/DH4 definitions, nine RBM mappings and
+//! `ExpertModeData`). The upstream backflow tree remains pending.
 
 use num_complex::Complex64;
 
@@ -519,6 +516,242 @@ pub struct DoublonHolon4SiteDefinition {
     pub is_complex: bool,
 }
 
+/// Common indexed parameter access for the nine RBM term shapes.
+pub trait RbmParameter {
+    /// Section-local parameter index.
+    fn idx(&self) -> i64;
+    /// Current variational value.
+    fn value(&self) -> Complex64;
+    /// Assign a shared indexed variational value.
+    fn set_value(&mut self, value: Complex64);
+}
+
+/// Charge RBM PhysLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChargeRBMPhysLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for ChargeRBMPhysLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// Spin RBM PhysLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpinRBMPhysLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for SpinRBMPhysLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// General RBM PhysLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeneralRBMPhysLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Raw `spin` mapping coordinate.
+    pub spin: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for GeneralRBMPhysLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// Charge RBM HiddenLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChargeRBMHiddenLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for ChargeRBMHiddenLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// Spin RBM HiddenLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpinRBMHiddenLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for SpinRBMHiddenLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// General RBM HiddenLayer mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeneralRBMHiddenLayerTerm {
+    /// Raw `site` mapping coordinate.
+    pub site: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for GeneralRBMHiddenLayerTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// Charge RBM PhysHidden mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChargeRBMPhysHiddenTerm {
+    /// Raw `site1` mapping coordinate.
+    pub site1: i64,
+    /// Raw `site2` mapping coordinate.
+    pub site2: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for ChargeRBMPhysHiddenTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// Spin RBM PhysHidden mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpinRBMPhysHiddenTerm {
+    /// Raw `site1` mapping coordinate.
+    pub site1: i64,
+    /// Raw `site2` mapping coordinate.
+    pub site2: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for SpinRBMPhysHiddenTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
+/// General RBM PhysHidden mapping, with raw zero-based coordinates as in Julia.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeneralRBMPhysHiddenTerm {
+    /// Raw `site1` mapping coordinate.
+    pub site1: i64,
+    /// Raw `spin` mapping coordinate.
+    pub spin: i64,
+    /// Raw `site2` mapping coordinate.
+    pub site2: i64,
+    /// Section-local parameter index.
+    pub idx: i64,
+    /// Variational value shared by entries with the same index.
+    pub value: Complex64,
+    /// Header ComplexType declaration.
+    pub is_complex: bool,
+}
+impl RbmParameter for GeneralRBMPhysHiddenTerm {
+    fn idx(&self) -> i64 {
+        self.idx
+    }
+    fn value(&self) -> Complex64 {
+        self.value
+    }
+    fn set_value(&mut self, value: Complex64) {
+        self.value = value;
+    }
+}
+
 /// Owned container for all parsed Expert-mode `.def` data.
 #[derive(Debug, Clone, Default)]
 pub struct ExpertModeData {
@@ -581,6 +814,25 @@ pub struct ExpertModeData {
     /// DH4 ComplexType declaration, including empty definitions.
     pub doublon_holon_4site_complex: bool,
 
+    /// Charge RBM PhysLayer indexed mappings.
+    pub charge_rbm_phys_layer_terms: Vec<ChargeRBMPhysLayerTerm>,
+    /// Spin RBM PhysLayer indexed mappings.
+    pub spin_rbm_phys_layer_terms: Vec<SpinRBMPhysLayerTerm>,
+    /// General RBM PhysLayer indexed mappings.
+    pub general_rbm_phys_layer_terms: Vec<GeneralRBMPhysLayerTerm>,
+    /// Charge RBM HiddenLayer indexed mappings.
+    pub charge_rbm_hidden_layer_terms: Vec<ChargeRBMHiddenLayerTerm>,
+    /// Spin RBM HiddenLayer indexed mappings.
+    pub spin_rbm_hidden_layer_terms: Vec<SpinRBMHiddenLayerTerm>,
+    /// General RBM HiddenLayer indexed mappings.
+    pub general_rbm_hidden_layer_terms: Vec<GeneralRBMHiddenLayerTerm>,
+    /// Charge RBM PhysHidden indexed mappings.
+    pub charge_rbm_phys_hidden_terms: Vec<ChargeRBMPhysHiddenTerm>,
+    /// Spin RBM PhysHidden indexed mappings.
+    pub spin_rbm_phys_hidden_terms: Vec<SpinRBMPhysHiddenTerm>,
+    /// General RBM PhysHidden indexed mappings.
+    pub general_rbm_phys_hidden_terms: Vec<GeneralRBMPhysHiddenTerm>,
+
     /// Orbital (site1, site2, idx, sign) entries.
     pub orbital_terms: Vec<OrbitalTerm>,
     /// Set to 1 once an `Orbital` or `OrbitalAntiParallel` file is parsed.
@@ -637,6 +889,78 @@ impl ExpertModeData {
     /// Construct an empty `ExpertModeData`.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Mapped widths in canonical physical, hidden, physical-hidden family order.
+    /// Header declarations do not reserve unused RBM parameters.
+    pub fn rbm_section_sizes(&self) -> [usize; 9] {
+        fn width<T: RbmParameter>(terms: &[T]) -> usize {
+            terms
+                .iter()
+                .map(RbmParameter::idx)
+                .max()
+                .map_or(0, |idx| idx.wrapping_add(1).max(0) as usize)
+        }
+        [
+            width(&self.charge_rbm_phys_layer_terms),
+            width(&self.spin_rbm_phys_layer_terms),
+            width(&self.general_rbm_phys_layer_terms),
+            width(&self.charge_rbm_hidden_layer_terms),
+            width(&self.spin_rbm_hidden_layer_terms),
+            width(&self.general_rbm_hidden_layer_terms),
+            width(&self.charge_rbm_phys_hidden_terms),
+            width(&self.spin_rbm_phys_hidden_terms),
+            width(&self.general_rbm_phys_hidden_terms),
+        ]
+    }
+
+    /// Whether any RBM mapping exists, independent of declared or inferred widths.
+    pub fn has_rbm_terms(&self) -> bool {
+        !self.charge_rbm_phys_layer_terms.is_empty()
+            || !self.spin_rbm_phys_layer_terms.is_empty()
+            || !self.general_rbm_phys_layer_terms.is_empty()
+            || !self.charge_rbm_hidden_layer_terms.is_empty()
+            || !self.spin_rbm_hidden_layer_terms.is_empty()
+            || !self.general_rbm_hidden_layer_terms.is_empty()
+            || !self.charge_rbm_phys_hidden_terms.is_empty()
+            || !self.spin_rbm_phys_hidden_terms.is_empty()
+            || !self.general_rbm_phys_hidden_terms.is_empty()
+    }
+
+    /// Total number of indexed RBM coefficients, including gaps in mappings.
+    pub fn count_rbm_parameters(&self) -> usize {
+        self.rbm_section_sizes().iter().sum()
+    }
+
+    /// Visit each mapping in canonical section and input-row order.
+    pub fn visit_rbm_terms_mut(&mut self, mut visit: impl FnMut(usize, &mut dyn RbmParameter)) {
+        for term in &mut self.charge_rbm_phys_layer_terms {
+            visit(0, term);
+        }
+        for term in &mut self.spin_rbm_phys_layer_terms {
+            visit(1, term);
+        }
+        for term in &mut self.general_rbm_phys_layer_terms {
+            visit(2, term);
+        }
+        for term in &mut self.charge_rbm_hidden_layer_terms {
+            visit(3, term);
+        }
+        for term in &mut self.spin_rbm_hidden_layer_terms {
+            visit(4, term);
+        }
+        for term in &mut self.general_rbm_hidden_layer_terms {
+            visit(5, term);
+        }
+        for term in &mut self.charge_rbm_phys_hidden_terms {
+            visit(6, term);
+        }
+        for term in &mut self.spin_rbm_phys_hidden_terms {
+            visit(7, term);
+        }
+        for term in &mut self.general_rbm_phys_hidden_terms {
+            visit(8, term);
+        }
     }
 
     /// Julia's projection layout: reserve declared widths even with sparse terms.
