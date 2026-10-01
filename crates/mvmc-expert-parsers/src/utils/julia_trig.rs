@@ -1,4 +1,4 @@
-//! Julia 1.13.1 Float64 sine/cosine for projection angles in [-pi, pi].
+//! Julia 1.13.1 Float64 sine/cosine for projection angles in [-2*pi, 2*pi].
 //!
 //! Port of Base special/trig.jl and the small-angle Cody-Waite paths in
 //! special/rem_pio2.jl. Explicit mul_add calls mirror Julia's @horner and
@@ -54,8 +54,23 @@ fn cos_kernel(hi: f64, lo: Option<f64>) -> f64 {
 
 fn reduce(x: f64) -> (i32, f64, f64) {
     let high = ((x.to_bits() & 0x7fff_ffff_ffff_ffff) >> 32) as u32;
-    if high & 0xfffff != 0x921fb {
-        let n = if high <= 0x4002d97c { 1 } else { 2 };
+    let precise = if high <= 0x400f6a7a {
+        high & 0xfffff == 0x921fb
+    } else if high <= 0x4015fdbc {
+        high == 0x4012d97c
+    } else {
+        high == 0x401921fb
+    };
+    if !precise {
+        let n = if high <= 0x4002d97c {
+            1
+        } else if high <= 0x400f6a7a {
+            2
+        } else if high <= 0x4015fdbc {
+            3
+        } else {
+            4
+        };
         let n = if x > 0.0 { n } else { -n };
         let nf = n as f64;
         let z = (-nf).mul_add(PIO2_1, x);
@@ -88,7 +103,7 @@ fn reduce(x: f64) -> (i32, f64, f64) {
 }
 
 pub(super) fn sin(x: f64) -> f64 {
-    assert!(x.is_finite() && x.abs() <= std::f64::consts::PI);
+    assert!(x.is_finite() && x.abs() <= 2.0 * std::f64::consts::PI);
     if x.abs() < std::f64::consts::FRAC_PI_4 {
         if x.abs() < f64::EPSILON.sqrt() {
             return x;
@@ -105,7 +120,7 @@ pub(super) fn sin(x: f64) -> f64 {
 }
 
 pub(super) fn cos(x: f64) -> f64 {
-    assert!(x.is_finite() && x.abs() <= std::f64::consts::PI);
+    assert!(x.is_finite() && x.abs() <= 2.0 * std::f64::consts::PI);
     if x.abs() < std::f64::consts::FRAC_PI_4 {
         if x.abs() < (f64::EPSILON / 2.0).sqrt() {
             return 1.0;
@@ -118,5 +133,22 @@ pub(super) fn cos(x: f64) -> f64 {
         1 => -sin_kernel(hi, Some(lo)),
         2 => -cos_kernel(hi, Some(lo)),
         _ => sin_kernel(hi, Some(lo)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn rbm_phase_sine_cosine_bits_match_julia_near_quadrant_boundaries_and_seeded_draws() {
+        let fixture = include_str!("../../../../tests/fixtures/rbm/phase.txt");
+        for line in fixture.lines().filter(|l| !l.starts_with('#')) {
+            let bits: Vec<_> = line
+                .split_whitespace()
+                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .collect();
+            let phase = f64::from_bits(bits[0]);
+            assert_eq!(super::sin(phase).to_bits(), bits[1], "sin({phase:?})");
+            assert_eq!(super::cos(phase).to_bits(), bits[2], "cos({phase:?})");
+        }
     }
 }

@@ -57,6 +57,9 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
+    if data.has_rbm_terms() {
+        return Err("RBM is not implemented yet (issue #26)".into());
+    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
@@ -187,6 +190,53 @@ fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::mpi_requested;
+
+    #[test]
+    fn parsed_and_programmatic_rbm_terms_remain_gated_until_production_parity() {
+        use mvmc_expert_parsers::{
+            parse_expert_mode_files, types::GeneralRBMHiddenLayerTerm, ExpertModeData,
+        };
+        use num_complex::Complex64;
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/rbm");
+        for name in [
+            "ChargeRBM_PhysLayer",
+            "SpinRBM_PhysLayer",
+            "GeneralRBM_PhysLayer",
+            "ChargeRBM_HiddenLayer",
+            "SpinRBM_HiddenLayer",
+            "GeneralRBM_HiddenLayer",
+            "ChargeRBM_PhysHidden",
+            "SpinRBM_PhysHidden",
+            "GeneralRBM_PhysHidden",
+        ] {
+            let mut data =
+                parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
+            assert!(super::validate_para_opt(&data)
+                .unwrap_err()
+                .contains("issue #26"));
+            data.namelist.clear();
+            assert!(
+                super::validate_para_opt(&data)
+                    .unwrap_err()
+                    .contains("issue #26"),
+                "{name}"
+            );
+        }
+        // A nonempty mapping whose maximum index wraps to a zero width is still RBM.
+        let mut data = ExpertModeData::new();
+        data.general_rbm_hidden_layer_terms
+            .push(GeneralRBMHiddenLayerTerm {
+                site: 0,
+                idx: i64::MAX,
+                value: Complex64::new(0.0, 0.0),
+                is_complex: false,
+            });
+        assert_eq!(data.count_rbm_parameters(), 0);
+        assert!(super::validate_para_opt(&data)
+            .unwrap_err()
+            .contains("issue #26"));
+    }
 
     #[test]
     fn mpi_detection_matches_julia_launch_policy() {
