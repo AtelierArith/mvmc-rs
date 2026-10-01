@@ -38,14 +38,19 @@ fn main() {
 
     let out_dir = support::make_output_dir("heisenberg_chain_cmp");
 
-    let summary = mvmc_core::run_para_opt_from_namelist(&namelist, nsteps, None, Some(&out_dir))
-        .unwrap_or_else(|e| {
-            eprintln!("error: run failed: {e}");
-            std::process::exit(1);
-        });
+    let summary = mvmc_core::run_para_opt_from_namelist(
+        &namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(nsteps as i64),
+            seed: None,
+            output_dir: Some(out_dir.clone()),
+            ..mvmc_core::RunConfig::new(nsteps as i64, "cmp")
+        },
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("error: run failed: {e}");
+        std::process::exit(1);
+    });
 
-    match summary.final_energy_per_site {
-        Some(e) => println!("Final energy / site = {e}"),
-        None => eprintln!("warning: could not read final energy from zvo_out.dat"),
-    }
+    println!("Final energy / site = {}", summary.final_energy_per_site);
 }

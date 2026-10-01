@@ -37,13 +37,3 @@ path = "examples/hubbard_chain.rs"
 mvmc-core = { workspace = true }
 mvmc-expert-parsers = { workspace = true }
 tracing = { workspace = true }
-
-[features]
-# Forward `blas-backend` to pfapack so the BLAS-2 / LAPACK kernels are
-# enabled in the final binary. OpenBLAS is already linked by
-# `mvmc-core/build.rs`, so no extra backend crate is required.
-default = []
-blas-backend = ["mvmc-core/pfapack-blas"]
-# NOTE: Phase 5 will add `openblas-src` here. The binary leaf is where
-# the concrete BLAS/LAPACK backend symbols get linked into the final
-# executable, so library consumers can swap implementations cleanly.

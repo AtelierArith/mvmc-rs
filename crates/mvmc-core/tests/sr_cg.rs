@@ -1,0 +1,262 @@
+//! Sampled SR operator contracts from Julia test_unit_stochastic_opt.jl.
+use mvmc_core::sr_cg::{sequential_dot, SampledSrOperator};
+
+#[test]
+fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
+    use mvmc_core::{ExpertModeData, VmcOptimizationState};
+    use mvmc_expert_parsers::OrbitalTerm;
+    use num_complex::Complex64 as C;
+    let mut data = ExpertModeData::new();
+    data.modpara.nsite = 1;
+    data.modpara.nelec = 1;
+    data.modpara.nvmc_sample = 2;
+    data.modpara.n_orbital_idx = 1;
+    data.modpara.nsrcg = 1;
+    data.modpara.dsr_opt_red_cut = 0.0;
+    data.modpara.dsr_opt_sta_del = 0.0;
+    data.modpara.dsr_opt_step_dt = 0.5;
+    data.orbital_terms.push(OrbitalTerm {
+        site1: 0,
+        site2: 0,
+        idx: 0,
+        value: C::new(10.0, 0.0),
+        is_complex: false,
+        sign: 1,
+    });
+    let mut state = VmcOptimizationState::zeros(1, 1, 0, 1, 1, 2, false, false);
+    state.energy.wc = C::new(4.0, 0.0);
+    state.sr_opt.sr_opt_oo_real[3] = 2.0;
+    state.sr_opt.sr_opt_ho_real[1] = 1.0;
+    state.sr_opt.sr_opt_o_store_real[1] = 2.0;
+    state.sr_opt.sr_opt_o_store_real[3] = 2.0;
+    assert_eq!(
+        mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
+        0
+    );
+    assert_eq!(data.orbital_terms[0].value, C::new(9.5, 0.0));
+    let dir = std::env::temp_dir().join(format!("mvmc-cg-srinfo-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    data.modpara.c_data_file_head = "custom".into();
+    let row = "    1     1     0     0  2.00000e+00  2.00000e+00 -5.00000e-01     0, 1\n";
+    for _ in 0..2 {
+        assert_eq!(
+            mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
+            0
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir.join("custom_SRinfo.dat")).unwrap(),
+        format!("#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n{row}{row}")
+    );
+    data.optimization_flags = vec![false, false];
+    let before = data.orbital_terms.clone();
+    assert_eq!(
+        mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
+        0
+    );
+    assert_eq!(data.orbital_terms, before);
+    data.optimization_flags = vec![true, false];
+    state.sr_opt.sr_opt_ho_real[1] = f64::NAN;
+    assert_eq!(
+        mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
+        1
+    );
+    assert_eq!(data.orbital_terms, before);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn cg_controls_default_to_julia_tolerance_and_active_dimension_limit() {
+    use mvmc_expert_parsers::parsers::modpara::parse_modpara_content;
+    for input in ["", "DSROptCGTol bad\nNSROptCGMaxIter bad"] {
+        let p = parse_modpara_content(input);
+        assert_eq!(p.dsr_opt_cg_tol, 1e-10);
+        assert_eq!(p.nsr_opt_cg_max_iter, 0);
+    }
+}
+
+#[test]
+fn cg_complex_component_flags_and_variance_cut_preserve_fixed_components() {
+    use mvmc_core::{ExpertModeData, VmcOptimizationState};
+    use mvmc_expert_parsers::OrbitalTerm;
+    use num_complex::Complex64 as C;
+    for (flags, cut, expected) in [
+        (vec![true, true], 0.0, C::new(9.5, 4.75)),
+        (vec![true, false], 0.0, C::new(9.5, 5.0)),
+        (vec![true, true], 0.5, C::new(10.0, 4.75)),
+    ] {
+        let mut data = ExpertModeData::new();
+        data.modpara.nvmc_sample = 2;
+        data.modpara.n_orbital_idx = 1;
+        data.modpara.dsr_opt_step_dt = 0.5;
+        data.modpara.dsr_opt_sta_del = 0.0;
+        data.modpara.dsr_opt_red_cut = cut;
+        data.optimization_flags = flags;
+        data.orbital_terms.push(OrbitalTerm {
+            site1: 0,
+            site2: 0,
+            idx: 0,
+            value: C::new(10.0, 5.0),
+            is_complex: true,
+            sign: 1,
+        });
+        let mut state = VmcOptimizationState::zeros(1, 1, 0, 1, 1, 2, true, false);
+        state.energy.wc = C::new(4.0, 0.0);
+        state.sr_opt.sr_opt_oo[6] = C::new(2.0, 0.0);
+        state.sr_opt.sr_opt_oo[7] = C::new(8.0, 0.0);
+        state.sr_opt.sr_opt_ho[2] = C::new(1.0, 0.0);
+        state.sr_opt.sr_opt_ho[3] = C::new(2.0, 0.0);
+        for s in 0..2 {
+            state.sr_opt.sr_opt_o_store[4 * s + 2] = C::new(2.0, 0.0);
+            state.sr_opt.sr_opt_o_store[4 * s + 3] = C::new(0.0, 4.0);
+        }
+        assert_eq!(
+            mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
+            0
+        );
+        assert!((data.orbital_terms[0].value - expected).norm() < 1e-14);
+    }
+}
+
+#[test]
+fn dot_preserves_source_sequential_accumulation() {
+    let mut p = vec![1e16];
+    p.extend([1.0; 100]);
+    p.push(-1e16);
+    assert_eq!(sequential_dot(&p, &vec![1.0; p.len()]), 0.0);
+}
+
+#[test]
+fn real_operator_applies_sampled_product_before_global_correction() {
+    let mut op = SampledSrOperator::new(2, 2, false);
+    op.real_samples.copy_from_slice(&[1.0, 3.0, 2.0, 4.0]);
+    op.mean.copy_from_slice(&[0.25, -0.5]);
+    op.diagonal.copy_from_slice(&[2.0, 3.0]);
+    let x = [0.5, -1.0];
+    let mut z = [0.0; 2];
+    op.apply(&mut z, &x, 0.25, 0.1);
+    assert_eq!(x, [0.5, -1.0]);
+    for (actual, expected) in z.into_iter().zip([-2.18125, -4.8625]) {
+        assert!((actual - expected).abs() < 1e-14);
+    }
+}
+
+#[test]
+fn complex_operator_adds_imaginary_sample_gram() {
+    let mut op = SampledSrOperator::new(2, 2, true);
+    op.real_samples.copy_from_slice(&[1.0, 3.0, 2.0, 4.0]);
+    op.imag_samples.copy_from_slice(&[2.0, -1.0, 0.0, 3.0]);
+    op.mean.copy_from_slice(&[0.25, -0.5]);
+    op.diagonal.copy_from_slice(&[2.0, 3.0]);
+    let mut z = [0.0; 2];
+    op.apply(&mut z, &[0.5, -1.0], 0.25, 0.1);
+    // Re(O O^H) = [[9,9],[9,35]], before mean/diagonal correction.
+    for (actual, expected) in z.into_iter().zip([-1.18125, -7.6125]) {
+        assert!((actual - expected).abs() < 1e-14);
+    }
+}
+
+#[test]
+fn standard_cg_solves_sampled_spd_matrix() {
+    let mut op = SampledSrOperator::new(2, 2, false);
+    // Sample Gram [[4,2],[2,2]], no means or regularization.
+    op.real_samples.copy_from_slice(&[2.0, 1.0, 0.0, 1.0]);
+    let result = op.solve(&[6.0, 4.0], 1.0, 0.0, 1e-14, 10);
+    assert_eq!(result.iterations, 2);
+    assert!((result.solution[0] - 1.0).abs() < 1e-14);
+    assert!((result.solution[1] - 1.0).abs() < 1e-14);
+}
+
+#[test]
+fn cg_preserves_julia_zero_gradient_and_breakdown_iteration_counts() {
+    let mut op = SampledSrOperator::new(2, 2, false);
+    let zero = op.solve(&[0.0, 0.0], 1.0, 0.0, 1e-6, 10);
+    assert_eq!(zero.iterations, 0);
+    assert_eq!(zero.solution, [0.0, 0.0]);
+    let breakdown = op.solve(&[1.0, 0.0], 1.0, 0.0, 1e-6, 10);
+    assert_eq!(breakdown.iterations, 1);
+    assert_eq!(breakdown.solution, [0.0, 0.0]);
+    let no_iterations = op.solve(&[1.0, 0.0], 1.0, 0.0, 1e-6, 0);
+    assert_eq!(no_iterations.iterations, 0);
+    assert_eq!(no_iterations.solution, [0.0, 0.0]);
+}
+
+// The Julia oracle restarts the upstream solver at every limit from 1 to 41.
+// Compare each iterate's complete state, including both residual refreshes,
+// without a tolerance that could hide backend arithmetic or CG-order drift.
+#[test]
+fn cg_fixed_input_matches_julia_through_residual_refresh() {
+    for (name, fixture) in [
+        (
+            "real",
+            include_str!("../../../tests/fixtures/sr_cg/real.txt"),
+        ),
+        (
+            "complex",
+            include_str!("../../../tests/fixtures/sr_cg/complex.txt"),
+        ),
+        (
+            "sampled complex",
+            include_str!("../../../tests/fixtures/sr_cg/sampled_complex.txt"),
+        ),
+    ] {
+        let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
+        let shape: Vec<usize> = lines
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        let (n, samples, complex) = (shape[0], shape[1], shape[2] != 0);
+        let parse = |line: &str| -> Vec<f64> {
+            line.split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect()
+        };
+        let mut op = SampledSrOperator::new(n, samples, complex);
+        op.mean = parse(lines.next().unwrap());
+        op.diagonal = parse(lines.next().unwrap());
+        op.real_samples = parse(lines.next().unwrap());
+        op.imag_samples = parse(lines.next().unwrap());
+        let g = parse(lines.next().unwrap());
+        let expected = parse(lines.next().unwrap());
+        assert_eq!(expected.len(), n);
+        let mut z = vec![0.0; n];
+        op.apply(&mut z, &g, 1.0 / samples as f64, 1e-5);
+        for (i, (&a, &b)) in z.iter().zip(&expected).enumerate() {
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "{name} operator component {i}: {a} != {b}"
+            );
+        }
+        let mut checked_limits = 0;
+        while let Some(line) = lines.next() {
+            let mut words = line.splitn(3, ' ');
+            let limit: usize = words.next().unwrap().parse().unwrap();
+            checked_limits += 1;
+            assert_eq!(limit, checked_limits);
+            let iter: usize = words.next().unwrap().parse().unwrap();
+            let expected = parse(words.next().unwrap());
+            let expected_residual = parse(lines.next().unwrap());
+            let expected_direction = parse(lines.next().unwrap());
+            let result = op.solve(&g, 1.0 / samples as f64, 1e-5, 0.0, limit);
+            assert_eq!(result.iterations, iter);
+            for (stage, actual, expected) in [
+                ("solution", &result.solution, &expected),
+                ("residual", &result.residual, &expected_residual),
+                ("direction", &result.direction, &expected_direction),
+            ] {
+                assert_eq!(actual.len(), expected.len());
+                for (i, (&a, &b)) in actual.iter().zip(expected).enumerate() {
+                    assert_eq!(
+                        a.to_bits(),
+                        b.to_bits(),
+                        "{name} limit {limit} {stage} component {i}: {a} != {b}"
+                    );
+                }
+            }
+        }
+        assert_eq!(checked_limits, 41);
+    }
+}

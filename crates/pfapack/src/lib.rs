@@ -45,14 +45,15 @@ mod mat;
 
 pub(crate) mod backend;
 
+pub mod julia_complex;
 pub mod ltl;
 pub mod pfaffian;
 pub mod utu2;
 
-pub use ltl::{dsktf2, zsktf2};
+pub use ltl::{dsktf2, zsktf2, zsktf2_turbo};
 pub use mat::SqMat;
 pub use pfaffian::{pfaffian_ltl_complex, pfaffian_ltl_real};
-pub use utu2::{utu2inv_complex, utu2inv_real, utu2pfa_complex, utu2pfa_real};
+pub use utu2::{utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real};
 
 /// One-based pivot index newtype.
 ///

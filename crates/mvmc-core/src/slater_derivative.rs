@@ -2,48 +2,16 @@
 
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
-use tenferro_einsum::ConcreteEinsumPlan;
-use tenferro_tensor::{TensorRead, TensorScalar, TypedTensor, TypedTensorView};
+use tenferro_tensor::TypedTensor;
 
+use crate::c_timer::CTimer;
 use crate::state::SlaterMatrixData;
 
 type ComplexTensor = TypedTensor<Complex64>;
 
-fn qp_weighted_orbital_inputs<'a>(
-    buffer: &'a ComplexTensor,
-    weights: &'a [Complex64],
-) -> tenferro_tensor::Result<[TensorRead<'a>; 2]> {
-    let weights_view = TypedTensorView::from_slice([weights.len()], [1], 0, weights)?;
-    Ok([
-        Complex64::tensor_read(buffer),
-        TensorRead::from_view(Complex64::tensor_view(weights_view)),
-    ])
-}
-
-fn qp_weighted_orbital_sum_plan(
-    buffer: &ComplexTensor,
-    weights: &[Complex64],
-) -> tenferro_tensor::Result<ConcreteEinsumPlan> {
-    let inputs = qp_weighted_orbital_inputs(buffer, weights)?;
-    ConcreteEinsumPlan::prepare_read(inputs, "oq,q->o")
-}
-
-fn qp_weighted_orbital_sum_einsum_into(
-    backend: &mut tenferro_cpu::CpuBackend,
-    plan: &ConcreteEinsumPlan,
-    buffer: &ComplexTensor,
-    weights: &[Complex64],
-    out: &mut ComplexTensor,
-) -> tenferro_tensor::Result<()> {
-    let inputs = qp_weighted_orbital_inputs(buffer, weights)?;
-    plan.execute_read_into(inputs, backend, Complex64::tensor_write(out))
-}
-
 pub(crate) struct SlaterDerivativeScratch {
     qp_orbital: Option<ComplexTensor>,
     weighted_orbital: Option<ComplexTensor>,
-    qp_weighted_plan: Option<ConcreteEinsumPlan>,
-    backend: tenferro_cpu::CpuBackend,
     n_slater: usize,
     n_qp_full: usize,
 }
@@ -53,8 +21,6 @@ impl SlaterDerivativeScratch {
         Self {
             qp_orbital: None,
             weighted_orbital: None,
-            qp_weighted_plan: None,
-            backend: tenferro_cpu::CpuBackend::new(),
             n_slater: 0,
             n_qp_full: 0,
         }
@@ -79,7 +45,6 @@ impl SlaterDerivativeScratch {
             )
             .expect("SlaterDerivativeScratch weighted shape and data length must match"),
         );
-        self.qp_weighted_plan = None;
         self.n_slater = n_slater;
         self.n_qp_full = n_qp_full;
     }
@@ -116,26 +81,7 @@ impl SlaterDerivativeScratch {
             .expect("SlaterDerivativeScratch requires host-backed storage")
     }
 
-    fn ensure_qp_weighted_plan(&mut self, weights: &[Complex64]) {
-        assert_eq!(
-            weights.len(),
-            self.n_qp_full,
-            "QP weight length must match Slater derivative scratch shape"
-        );
-        if self.qp_weighted_plan.is_none() {
-            self.qp_weighted_plan = Some(
-                qp_weighted_orbital_sum_plan(
-                    self.qp_orbital
-                        .as_ref()
-                        .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
-                    weights,
-                )
-                .expect("Slater derivative QP weighted einsum plan must be prepared"),
-            );
-        }
-    }
-
-    pub(crate) fn reduce_qp_weighted_einsum_into(
+    pub(crate) fn reduce_qp_weighted_julia_into(
         &mut self,
         weights: &[Complex64],
         ip: Complex64,
@@ -148,28 +94,31 @@ impl SlaterDerivativeScratch {
             sr_opt_o.len() >= 2 * self.n_slater,
             "Slater derivative output must have real/imag slots for every orbital"
         );
-        self.ensure_qp_weighted_plan(weights);
-        qp_weighted_orbital_sum_einsum_into(
-            &mut self.backend,
-            self.qp_weighted_plan
-                .as_ref()
-                .expect("SlaterDerivativeScratch plan must be initialized"),
-            self.qp_orbital
-                .as_ref()
-                .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
-            weights,
-            self.weighted_orbital
-                .as_mut()
-                .expect("SlaterDerivativeScratch::ensure_shape must be called first"),
-        )
-        .expect("Slater derivative QP weighted einsum must run");
+        assert_eq!(weights.len(), self.n_qp_full);
+        let buffer = self.qp_orbital.as_ref().unwrap().host_data().unwrap();
+        let weighted = self
+            .weighted_orbital
+            .as_mut()
+            .unwrap()
+            .host_data_mut()
+            .unwrap();
+        // Julia _store_slater_sr_opt_o_fast! folds QP terms in order. A GEMM
+        // contraction can reassociate/fuse this sum; a single ulp then changes
+        // the truncated CG solution. Keep tensor storage and fold explicitly.
+        for (orbidx, value) in weighted.iter_mut().enumerate() {
+            let mut acc = Complex64::new(0.0, 0.0);
+            for (qpidx, &weight) in weights.iter().enumerate() {
+                acc += weight * buffer[qpidx * self.n_slater + orbidx];
+            }
+            *value = acc;
+        }
         let weighted_data = self
             .weighted_orbital
             .as_ref()
             .expect("SlaterDerivativeScratch::ensure_shape must be called first")
             .host_data()
             .expect("Slater derivative weighted result must be host-readable");
-        let inv_ip = Complex64::new(1.0, 0.0) / ip;
+        let inv_ip = crate::julia_complex::reciprocal(ip);
         for orbidx in 0..self.n_slater {
             let acc = weighted_data[orbidx] * inv_ip;
             sr_opt_o[2 * orbidx] = acc;
@@ -184,13 +133,14 @@ impl Default for SlaterDerivativeScratch {
     }
 }
 
-pub(crate) fn slater_elm_diff_with_scratch(
+pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     sr_opt_o: &mut [Complex64],
     ip: Complex64,
     ele_idx: &[i64],
     data: &ExpertModeData,
     slater_matrix: &SlaterMatrixData,
     scratch: &mut SlaterDerivativeScratch,
+    timer: &mut CTimer<TIMED>,
 ) {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
@@ -216,21 +166,9 @@ pub(crate) fn slater_elm_diff_with_scratch(
         return;
     }
 
-    let mut orbital_idx = vec![vec![-1_i64; n_site]; n_site];
-    let mut orbital_sgn = vec![vec![1_i64; n_site]; n_site];
-    for term in &data.orbital_terms {
-        if term.site1 < 0 || term.site2 < 0 {
-            continue;
-        }
-        let ri = term.site1 as usize;
-        let rj = term.site2 as usize;
-        if ri >= n_site || rj >= n_site {
-            continue;
-        }
-        let sign = if term.sign == 0 { 1 } else { term.sign };
-        orbital_idx[ri][rj] = term.idx;
-        orbital_sgn[ri][rj] = sign;
-    }
+    let diag = timer.diagnostics.slater;
+    timer.start_diag(932, diag);
+    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
 
     let mut trans_orb_idx = vec![-1_i64; n_mp_trans * n_size * n_size];
     let mut trans_orb_sgn = vec![1_i64; n_mp_trans * n_size * n_size];
@@ -247,8 +185,7 @@ pub(crate) fn slater_elm_diff_with_scratch(
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri >= n_site {
                 continue;
@@ -264,8 +201,7 @@ pub(crate) fn slater_elm_diff_with_scratch(
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj >= n_site {
                     continue;
@@ -277,8 +213,12 @@ pub(crate) fn slater_elm_diff_with_scratch(
         }
     }
 
+    timer.stop_diag(932, diag);
+    timer.start_diag(931, diag);
     scratch.ensure_shape(n_slater, n_qp_full);
     scratch.zero_qp_orbital();
+    timer.stop_diag(931, diag);
+    timer.start_diag(933, diag);
     for qpidx in 0..n_qp_full {
         let mpidx = (qpidx / n_sp_gauss_leg).min(n_mp_trans.saturating_sub(1));
         let spidx = qpidx % n_sp_gauss_leg;
@@ -341,7 +281,10 @@ pub(crate) fn slater_elm_diff_with_scratch(
         }
     }
 
-    scratch.reduce_qp_weighted_einsum_into(&weights.qp_full_weight[..n_qp_full], ip, sr_opt_o);
+    timer.stop_diag(933, diag);
+    timer.start_diag(934, diag);
+    scratch.reduce_qp_weighted_julia_into(&weights.qp_full_weight[..n_qp_full], ip, sr_opt_o);
+    timer.stop_diag(934, diag);
 }
 
 fn accumulate_slater_diff(
@@ -413,8 +356,7 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri_site >= n_site {
                 continue;
@@ -432,8 +374,7 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj_site >= n_site {
                     continue;
@@ -465,7 +406,21 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
             }
         }
     }
-    scratch.reduce_qp_weighted_einsum_into(&weights.qp_full_weight[..n_qp_full], ip, sr_opt_o);
+    // FSZ accumulates both component columns before multiplying by inv(ip).
+    // Rotating the normalized column later changes signed zeros.
+    let inv_ip = crate::julia_complex::reciprocal(ip);
+    for orb in 0..n_slater {
+        let mut real = Complex64::new(0.0, 0.0);
+        let mut imag = Complex64::new(0.0, 0.0);
+        for qp in 0..n_qp_full {
+            let tmp = weights.qp_full_weight[qp]
+                * scratch.qp_orbital.as_ref().unwrap().host_data().unwrap()[qp * n_slater + orb];
+            real += tmp;
+            imag += Complex64::new(-tmp.im, tmp.re);
+        }
+        sr_opt_o[2 * orb] = real * inv_ip;
+        sr_opt_o[2 * orb + 1] = imag * inv_ip;
+    }
 }
 
 #[cfg(test)]
@@ -473,49 +428,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn qp_weighted_orbital_sum_einsum_into_writes_preallocated_output_from_borrowed_weights() {
-        let mut backend = tenferro_cpu::CpuBackend::new();
-        let buffer = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
-            vec![2, 3],
-            vec![
-                Complex64::new(1.0, 0.0),
-                Complex64::new(2.0, 1.0),
-                Complex64::new(-1.0, 0.5),
-                Complex64::new(0.0, -2.0),
-                Complex64::new(3.0, 1.5),
-                Complex64::new(-4.0, 0.25),
-            ],
-        )
-        .expect("buffer tensor");
-        let weights = vec![
-            Complex64::new(0.5, 0.0),
-            Complex64::new(-1.0, 1.0),
-            Complex64::new(2.0, -0.5),
-        ];
-        let mut output = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
-            vec![2],
-            vec![Complex64::new(99.0, 99.0); 2],
-        )
-        .expect("output tensor");
-        let plan =
-            qp_weighted_orbital_sum_plan(&buffer, &weights).expect("QP weighted orbital plan");
-
-        qp_weighted_orbital_sum_einsum_into(&mut backend, &plan, &buffer, &weights, &mut output)
-            .expect("einsum into preallocated output");
-
-        let output = output.host_data().expect("host output");
-        let buffer_data = buffer.host_data().expect("host buffer");
-        let mut expected = vec![Complex64::new(0.0, 0.0); 2];
-        for orbidx in 0..2 {
-            for qpidx in 0..3 {
-                expected[orbidx] += weights[qpidx] * buffer_data[qpidx * 2 + orbidx];
-            }
+    fn weighted_slater_derivative_matches_julia_numerical_bits() {
+        let mut lines = include_str!("../../../tests/fixtures/pfaffian_cg/slater_derivative.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'));
+        let shape: Vec<usize> = lines
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        let parse = |l: &str| -> Vec<Complex64> {
+            let doubles: Vec<_> = l
+                .split_whitespace()
+                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
+                .collect();
+            doubles
+                .chunks_exact(2)
+                .map(|z| Complex64::new(z[0], z[1]))
+                .collect()
+        };
+        let buffer = parse(lines.next().unwrap());
+        let weights = parse(lines.next().unwrap());
+        let ip = parse(lines.next().unwrap())[0];
+        let expected = parse(lines.next().unwrap());
+        let mut scratch = SlaterDerivativeScratch::new();
+        scratch.ensure_shape(shape[0], shape[1]);
+        scratch
+            .qp_orbital
+            .as_mut()
+            .unwrap()
+            .host_data_mut()
+            .unwrap()
+            .copy_from_slice(&buffer);
+        let mut actual = vec![Complex64::new(0.0, 0.0); expected.len()];
+        scratch.reduce_qp_weighted_julia_into(&weights, ip, &mut actual);
+        for (i, (&a, &b)) in actual.iter().zip(&expected).enumerate() {
+            assert_eq!(
+                (a.re.to_bits(), a.im.to_bits()),
+                (b.re.to_bits(), b.im.to_bits()),
+                "Slater component {i}: {a} != {b}"
+            );
         }
-        assert_eq!(output, expected.as_slice());
     }
 
     #[test]
-    fn scratch_einsum_matches_legacy_reduction_layout() {
+    fn scratch_weighted_reduction_preserves_tensor_layout() {
         let mut scratch = SlaterDerivativeScratch::new();
         scratch.ensure_shape(2, 3);
         scratch.zero_qp_orbital();
@@ -547,7 +505,7 @@ mod tests {
         let ip = Complex64::new(2.0, 0.0);
         let mut sr_opt_o = vec![Complex64::new(0.0, 0.0); 4];
 
-        scratch.reduce_qp_weighted_einsum_into(&weights, ip, &mut sr_opt_o);
+        scratch.reduce_qp_weighted_julia_into(&weights, ip, &mut sr_opt_o);
 
         let mut expected = vec![Complex64::new(0.0, 0.0); 4];
         for o in 0..2 {

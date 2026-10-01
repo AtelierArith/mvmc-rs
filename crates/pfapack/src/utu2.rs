@@ -60,7 +60,7 @@ pub fn utu2pfa_complex(a: &SqMat<'_, Complex64>, pivots: &[PivotIndex1Based]) ->
 
 fn utu2pfa_generic<T>(a: &SqMat<'_, T>, pivots: &[PivotIndex1Based]) -> T
 where
-    T: Copy + core::ops::MulAssign + core::ops::Neg<Output = T> + PfafOne,
+    T: Copy + core::ops::MulAssign + core::ops::Neg<Output = T> + PfafOne + BlasScalar,
 {
     let n = a.n();
     if n == 0 {
@@ -111,7 +111,8 @@ where
         + core::ops::Sub<Output = T>
         + core::ops::Add<Output = T>
         + core::ops::Div<Output = T>
-        + PfafOne,
+        + PfafOne
+        + BlasScalar,
 {
     let n = b.n();
     if n == 0 {
@@ -123,7 +124,7 @@ where
     // Julia 1-based: vT[1..n-1], B[1..n, 1..n], C[1..n, 1..n].
     //   inv_minus_vT_1 = inv(-vT[1])
     //   C[2, j] = B[1, j] * inv_minus_vT_1  for j in 1..n
-    let inv_minus_vt_1 = T::pfaf_one() / (-vt[0]);
+    let inv_minus_vt_1 = (-vt[0]).julia_inv();
     let mut base = 0usize;
     let unrolled = n / 4 * 4;
     for _ in (0..unrolled).step_by(4) {
@@ -148,7 +149,7 @@ where
     //   i_cpp += 2
     let mut i_julia = 2usize;
     while i_julia < n {
-        let inv_minus_vt_ipp1 = T::pfaf_one() / (-vt[i_julia]); // vT[i_cpp+1] (1-based) -> vt[i_cpp+1 - 1] = vt[i_julia]
+        let inv_minus_vt_ipp1 = (-vt[i_julia]).julia_inv(); // vT[i_cpp+1] (1-based) -> vt[i_cpp+1 - 1] = vt[i_julia]
         let vt_i_julia = vt[i_julia - 1]; // vT[i_cpp] (1-based) -> vt[i_cpp - 1]
         let read_row = i_julia - 1; // C[i_cpp, j] (1-based) -> c[i_julia-1, j]
         let b_row = i_julia; // B[i_cpp + 1, j] (1-based) -> b[i_julia, j]
@@ -193,7 +194,8 @@ where
         + core::ops::Mul<Output = T>
         + core::ops::Add<Output = T>
         + core::ops::Div<Output = T>
-        + PfafOne,
+        + PfafOne
+        + BlasScalar,
 {
     let n = b.n();
     if n == 0 {
@@ -204,7 +206,7 @@ where
 
     // Julia: vT_n_1 = inv(vT[n - 1])
     //        C[n - 1, j] = B[n, j] * vT_n_1   for j in 1..n
-    let inv_vt_nm1 = T::pfaf_one() / vt[n - 2]; // vT[n-1] (1-based) -> vt[n-2]
+    let inv_vt_nm1 = vt[n - 2].julia_inv(); // vT[n-1] (1-based) -> vt[n-2]
     let mut base = 0usize;
     let unrolled = n / 4 * 4;
     for _ in (0..unrolled).step_by(4) {
@@ -233,7 +235,7 @@ where
     let mut i_julia: isize = (n as isize) - 3;
     while i_julia >= 1 {
         let i = i_julia as usize;
-        let inv_vt_i = T::pfaf_one() / vt[i - 1]; // vT[i_cpp] (1-based) -> vt[i_cpp - 1]
+        let inv_vt_i = vt[i - 1].julia_inv(); // vT[i_cpp] (1-based) -> vt[i_cpp - 1]
         let vt_ip1 = vt[i]; // vT[i_cpp + 1] (1-based) -> vt[i_cpp]
         let b_row = i; // B[i_cpp + 1, j] (1-based) -> b[i_cpp, j]
         let read_row = i + 1; // C[i_cpp + 2, j] (1-based) -> c[i_cpp + 1, j]
@@ -283,7 +285,8 @@ where
         + core::ops::Sub<Output = T>
         + core::ops::Add<Output = T>
         + core::ops::Div<Output = T>
-        + PfafOne,
+        + PfafOne
+        + BlasScalar,
 {
     forward_julia_style(vt, b, c);
     backward_julia_style(vt, b, c);
@@ -297,7 +300,7 @@ fn should_use_panel_trmmt(n: usize) -> bool {
 
 fn fill_lower_from_upper_skew<T>(a: &mut [T], n: usize)
 where
-    T: Copy + core::ops::Neg<Output = T> + PfafOne,
+    T: Copy + core::ops::Neg<Output = T> + PfafOne + BlasScalar,
 {
     for j in 0..n {
         a[j * n + j] = T::pfaf_zero();
@@ -319,7 +322,7 @@ pub fn utu2inv_real(
     vt: &mut [f64],
     m_work: &mut SqMat<'_, f64>,
 ) {
-    utu2inv_generic::<f64>(a, pivots, vt, m_work);
+    utu2inv_generic::<f64>(a, pivots, vt, m_work, false);
 }
 
 /// Compute the inverse of a complex skew-symmetric matrix from its
@@ -330,7 +333,40 @@ pub fn utu2inv_complex(
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, false);
+}
+
+/// Inverse arithmetic used by Julia's FSZ runtime: direct tridiagonal
+/// divisions and its native BLAS provider, without a PfaPack wrapper call.
+pub fn utu2inv_complex_fsz(
+    a: &mut SqMat<'_, Complex64>,
+    pivots: &[PivotIndex1Based],
+    vt: &mut [Complex64],
+    m_work: &mut SqMat<'_, Complex64>,
+) {
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, true);
+}
+
+fn solve_sktd_direct<T: BlasScalar>(vt: &[T], b: &SqMat<'_, T>, c: &mut SqMat<'_, T>) {
+    let n = b.n();
+    for j in 0..n {
+        c.set(1, j, b.get(0, j) / -vt[0]);
+        for i in (2..n).step_by(2) {
+            c.set(
+                i + 1,
+                j,
+                (b.get(i, j) - c.get(i - 1, j) * vt[i - 1]) / -vt[i],
+            );
+        }
+        c.set(n - 2, j, b.get(n - 1, j) / vt[n - 2]);
+        for i in (1..n - 2).rev().step_by(2) {
+            c.set(
+                i - 1,
+                j,
+                (b.get(i, j) + c.get(i + 1, j) * vt[i]) / vt[i - 1],
+            );
+        }
+    }
 }
 
 fn utu2inv_generic<T>(
@@ -338,6 +374,7 @@ fn utu2inv_generic<T>(
     pivots: &[PivotIndex1Based],
     vt: &mut [T],
     m: &mut SqMat<'_, T>,
+    fsz: bool,
 ) where
     T: BlasScalar,
 {
@@ -380,7 +417,11 @@ fn utu2inv_generic<T>(
         // triangular (diagonal is forced to 1); we replicate that with
         // our own implementation.
         let lda = a.lda();
-        backend::trtri_uu_inplace::<T>(a.as_mut_slice(), lda, 0, 1, n - 1);
+        if fsz {
+            T::fsz_trtri(a.as_mut_slice(), lda, n - 1);
+        } else {
+            backend::trtri_uu_inplace::<T>(a.as_mut_slice(), lda, 0, 1, n - 1);
+        }
     }
 
     // Step 3: lacpy -- copy upper-triangular block A[0..n-2, 2..n]
@@ -408,7 +449,11 @@ fn utu2inv_generic<T>(
     //
     // We pass `m` by shared reference and `a` by mutable reference;
     // the helper only writes into the output (`a`).
-    solve_sktd::<T>(vt, m, a);
+    if fsz {
+        solve_sktd_direct(vt, m, a);
+    } else {
+        solve_sktd::<T>(vt, m, a);
+    }
 
     let panel_trmmt = should_use_panel_trmmt(n);
     if panel_trmmt {
@@ -436,7 +481,11 @@ fn utu2inv_generic<T>(
     // Step 7: A <- M^T * A   (trmm, M unit upper-triangular)
     if !panel_trmmt {
         let n_local = a.n();
-        backend::trmm_lutu::<T>(m.as_slice(), a.as_mut_slice(), n_local);
+        if fsz {
+            T::fsz_trmm(m.as_slice(), a.as_mut_slice(), n_local);
+        } else {
+            backend::trmm_lutu::<T>(m.as_slice(), a.as_mut_slice(), n_local);
+        }
     }
 
     // Step 8: row permutation by iPiv (forward direction, sequential)

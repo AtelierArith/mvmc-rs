@@ -3,6 +3,7 @@
 //! Port of `MVMCExpertModeParsers.jl/src/parsers/orbital_parser.jl`,
 //! restricted to the round-trip subset.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
@@ -21,6 +22,8 @@ pub struct OrbitalSection {
     pub n_orbital_idx: i64,
     /// `ComplexType` flag.
     pub is_complex: bool,
+    /// Per-parameter flags from the trailing OptFlag section.
+    pub opt_flags: BTreeMap<i64, i64>,
 }
 
 /// Parse a `orbitalidx*.def` file from disk.
@@ -37,7 +40,8 @@ pub fn parse_orbital_content(content: &str) -> OrbitalSection {
     let start_line = if has_header { 5 } else { 0 };
     let mut terms = Vec::new();
     let mut processing_idx = true;
-    for line in &lines[start_line..] {
+    let mut opt_flags = BTreeMap::new();
+    for line in lines.get(start_line..).unwrap_or_default() {
         let tokens = split_def_line(line);
         if tokens.is_empty() {
             continue;
@@ -46,7 +50,13 @@ pub fn parse_orbital_content(content: &str) -> OrbitalSection {
             if processing_idx && !terms.is_empty() {
                 processing_idx = false;
             }
-            // OptFlag lines: ignored for round-trip.
+            if !processing_idx {
+                let idx = safe_parse_int(tokens[0], -1);
+                let flag = safe_parse_int(tokens[1], 0);
+                if idx >= 0 {
+                    opt_flags.insert(idx, flag);
+                }
+            }
             continue;
         }
         if !processing_idx || tokens.len() < 3 {
@@ -75,9 +85,15 @@ pub fn parse_orbital_content(content: &str) -> OrbitalSection {
         });
     }
 
+    let n_orbital_idx = if has_header {
+        n_orbital_idx
+    } else {
+        terms.iter().map(|term| term.idx + 1).max().unwrap_or(0)
+    };
     OrbitalSection {
         terms,
         n_orbital_idx,
         is_complex,
+        opt_flags,
     }
 }

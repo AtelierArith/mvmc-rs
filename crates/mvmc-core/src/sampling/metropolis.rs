@@ -46,7 +46,7 @@ pub fn metropolis_weight(
     log_ip_old: Complex64,
 ) -> f64 {
     let exponent = 2.0 * (log_proj_delta + log_rbm_delta.re + (log_ip_new - log_ip_old).re);
-    let weight = exponent.exp();
+    let weight = mvmc_expert_parsers::utils::julia_exp::exp(exponent);
     if weight.is_finite() {
         weight
     } else {

@@ -34,8 +34,16 @@ fn heisenberg_chain_cmp_zvo_out_first10_matches_reference() {
         std::env::temp_dir().join(format!("mvmc-core-phase4-gate-cmp-{}", std::process::id(),));
     let _ = fs::remove_dir_all(&out_dir);
     fs::create_dir_all(&out_dir).expect("create temp dir");
-    mvmc_core::run_para_opt_from_namelist(&namelist, 10, Some(1), Some(&out_dir))
-        .expect("10-step cmp run completes");
+    mvmc_core::run_para_opt_from_namelist(
+        &namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(10),
+            seed: Some(1),
+            output_dir: Some(out_dir.clone()),
+            ..mvmc_core::RunConfig::new(10, "cmp")
+        },
+    )
+    .expect("10-step cmp run completes");
 
     let got = fs::read_to_string(out_dir.join("zvo_out.dat")).expect("zvo_out.dat written");
     let expected = fs::read_to_string(reference).expect("reference readable");

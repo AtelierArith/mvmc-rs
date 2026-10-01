@@ -1,0 +1,182 @@
+//! Runtime compatibility checks, separate from Expert-mode format parsing.
+//!
+//! Permanent restrictions follow Julia's `unsupported_inputs.jl`. Temporary
+//! restrictions name the porting issue and must be removed when its full
+//! production path passes deterministic Julia parity checks.
+
+use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
+use mvmc_expert_parsers::{ExpertModeData, ModParaParameters};
+
+/// Validate globally unsupported ModPara settings without mutating data.
+pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
+    if p.nsplit_size < 1 {
+        return Err(format!("NSplitSize must be >= 1; got {}", p.nsplit_size));
+    }
+    if !(0..=2).contains(&p.lanczos_mode) {
+        return Err(format!(
+            "NLanczosMode must be 0, 1, or 2; got {}",
+            p.lanczos_mode
+        ));
+    }
+    if p.nsrcg >= 2 {
+        return Err("NSRCG >= 2 is not supported by Julia-mVMC; use NSRCG = 0 or 1".into());
+    }
+    if p.use_diag_scale != 0 {
+        return Err("useDiagScale != 0 is not supported by Julia-mVMC".into());
+    }
+    if p.rescale_smat != 0 {
+        return Err("RescaleSmat != 0 is not supported by Julia-mVMC".into());
+    }
+    Ok(())
+}
+
+/// Validate parameter-optimization entry points before initialization or IO.
+pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
+    if mpi_requested(|key| std::env::var(key).ok()) {
+        return Err("MPI execution is not implemented yet (issue #35)".into());
+    }
+    let p = &data.modpara;
+    validate_supported_modpara(p)?;
+    if p.lanczos_mode > 0 {
+        return Err(
+            "NLanczosMode > 0 is not supported for parameter optimization; use PhysCal".into(),
+        );
+    }
+    if p.nsplit_size > 1 && p.nsrcg != 0 {
+        return Err("NSplitSize > 1 with SR-CG is not supported by Julia-mVMC".into());
+    }
+    if p.vmc_calc_mode != 0 {
+        return Err(format!(
+            "NVMCCalMode={} cannot run parameter optimization; PhysCal is not implemented yet (issue #29)",
+            p.vmc_calc_mode
+        ));
+    }
+    if p.nsplit_size > 1 {
+        return Err("NSplitSize > 1 is not implemented yet (issue #36)".into());
+    }
+    if data.n_qp_opt_trans > 1 {
+        return Err("OptTrans is not implemented yet (issue #27)".into());
+    }
+    for (kind, _) in &data.namelist {
+        let issue = match kind.as_str() {
+            "SpinJastrow" => {
+                return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
+            }
+            "PairHop" => Some(22),
+            "InterAll" => Some(23),
+            "DH2" | "DoublonHolon2Site" => Some(24),
+            "DH4" | "DoublonHolon4Site" => Some(25),
+            "OptTrans" => Some(27),
+            "TwoBodyGEx" => Some(30),
+            k if k.starts_with("ChargeRBM_")
+                || k.starts_with("SpinRBM_")
+                || k.starts_with("GeneralRBM_") =>
+            {
+                Some(26)
+            }
+            "InGutzwiller"
+            | "InJastrow"
+            | "InOrbital"
+            | "InOrbitalAntiParallel"
+            | "InOrbitalParallel"
+            | "InOrbitalGeneral" => None,
+            k if k.starts_with("In") => Some(20),
+            "ModPara"
+            | "LocSpin"
+            | "Trans"
+            | "CoulombIntra"
+            | "CoulombInter"
+            | "Hund"
+            | "Exchange"
+            | "Gutzwiller"
+            | "Jastrow"
+            | "Orbital"
+            | "OrbitalAntiParallel"
+            | "OrbitalParallel"
+            | "OrbitalGeneral"
+            | "OneBodyG"
+            | "TwoBodyG"
+            | "TransSym"
+            | "QPTrans" => None,
+            k => return Err(format!("unsupported namelist section {k}")),
+        };
+        if let Some(issue) = issue {
+            return Err(format!("{kind} is not implemented yet (issue #{issue})"));
+        }
+    }
+    if !data.input_errors.is_empty() {
+        return Err(format!(
+            "incomplete Expert input: {}",
+            data.input_errors.join("; ")
+        ));
+    }
+    if data.i_flg_orbital_general != 0
+        && !crate::run::get_all_complex_flag(data)
+        && !all_complex_flag(data)
+    {
+        return Err("real FSZ is not implemented yet (issue #43)".into());
+    }
+    // Avoid silently clamping malformed dimensions in the current runner.
+    for (name, value) in [
+        ("Nsite", p.nsite),
+        ("NElec", p.nelec),
+        ("NVMCWarmUp", p.nvmc_warmup),
+        ("NSROptItrStep", p.nsr_opt_itr_step),
+    ] {
+        if value < 0 {
+            return Err(format!("{name} must be nonnegative; got {value}"));
+        }
+    }
+    for (name, value) in [
+        ("NVMCSample", p.nvmc_sample),
+        ("NVMCInterval", p.nvmc_interval),
+    ] {
+        if value <= 0 {
+            return Err(format!("{name} must be positive; got {value}"));
+        }
+    }
+    Ok(())
+}
+
+fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
+    if get("JULIA_MVMC_MPI").is_some_and(|v| v == "1")
+        || get("OMPI_COMM_WORLD_SIZE").is_some()
+        || get("PMIX_RANK").is_some()
+    {
+        return true;
+    }
+    let pmi_size = get("PMI_SIZE").and_then(|v| v.parse::<i64>().ok());
+    // Match Julia's first parseable SLURM task-count key, not PMI_RANK alone.
+    let slurm_tasks = ["SLURM_NTASKS", "SLURM_NPROCS"]
+        .iter()
+        .find_map(|key| get(key).and_then(|v| v.parse::<i64>().ok()));
+    pmi_size.is_some_and(|n| n > 1 || slurm_tasks.is_some_and(|n| n > 1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mpi_requested;
+
+    #[test]
+    fn mpi_detection_matches_julia_launch_policy() {
+        for (env, expected) in [
+            (vec![], false),
+            (vec![("PMI_RANK", "0"), ("PMI_SIZE", "1")], false),
+            (vec![("SLURM_NTASKS", "4")], false),
+            (vec![("PMI_SIZE", "1"), ("SLURM_NTASKS", "4")], true),
+            (vec![("PMI_SIZE", "2")], true),
+            (vec![("OMPI_COMM_WORLD_SIZE", "1")], true),
+            (vec![("PMIX_RANK", "0")], true),
+            (vec![("JULIA_MVMC_MPI", "1")], true),
+        ] {
+            assert_eq!(
+                mpi_requested(|key| env
+                    .iter()
+                    .find(|(k, _)| *k == key)
+                    .map(|(_, v)| (*v).into())),
+                expected,
+                "{env:?}"
+            );
+        }
+    }
+}

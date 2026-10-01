@@ -21,10 +21,15 @@ use num_complex::Complex64;
 
 use mvmc_expert_parsers::{ExpertModeData, Spin};
 
-use crate::pfaffian::calc_m_all_complex;
+use crate::c_timer::CTimer;
 use crate::sampling::projection::update_proj_cnt;
-use crate::sampling::updates::calculate_new_pf_m_two2_real_flat;
+use crate::sampling::updates::{
+    calculate_new_pf_m2_complex_flat, calculate_new_pf_m2_fsz_complex_flat,
+    calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_complex_flat,
+    calculate_new_pf_m_two2_real_flat, calculate_new_pf_m_two_fsz_complex_flat,
+};
 use crate::state::VmcOptimizationState;
+use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 
 /// Reset the accumulators that `vmc_main_cal!` clears at the top of each
 /// SR step (`clear_phys_quantity!` in upstream).
@@ -189,6 +194,108 @@ pub fn calculate_oo(
     }
 }
 
+/// Active sample window and SR-CG finalization mode.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StoreFinalization {
+    /// Zero-based first stored sample, used by grouped/MPI sample ranges.
+    pub sample_start: usize,
+    /// Materialize only the mean and diagonal blocks needed by SR-CG.
+    pub diagonal_only: bool,
+}
+
+/// Store sqrt(weight)*O and accumulate weight*energy*O in real mode.
+pub fn calculate_oo_store_real(
+    sr_opt_ho: &mut [f64],
+    sr_opt_o_store: &mut [f64],
+    sr_opt_o: &[f64],
+    w: f64,
+    e: f64,
+    sample: usize,
+    sr_opt_size: usize,
+) {
+    let we = w * e;
+    let sqrtw = w.sqrt();
+    let store = &mut sr_opt_o_store[sample * sr_opt_size..(sample + 1) * sr_opt_size];
+    for i in 0..sr_opt_size {
+        store[i] = sqrtw * sr_opt_o[i];
+        sr_opt_ho[i] += we * sr_opt_o[i];
+    }
+}
+
+/// Finalize real O*O^T with Julia's BLAS GEMM path, preserving extra buffer slots.
+/// SR-CG writes just the first two blocks, in sample order as in Julia.
+pub fn finalize_oo_store_real(
+    sr_opt_oo: &mut [f64],
+    sr_opt_o_store: &[f64],
+    sr_opt_size: usize,
+    sample_size: usize,
+    options: StoreFinalization,
+) {
+    let n = sr_opt_size;
+    if options.diagonal_only {
+        for i in 0..n {
+            let mut mean = 0.0;
+            let mut diagonal = 0.0;
+            for sample in options.sample_start..options.sample_start + sample_size {
+                let o = sr_opt_o_store[i + sample * n];
+                mean += o;
+                diagonal += o * o;
+            }
+            sr_opt_oo[i] = mean;
+            sr_opt_oo[i + n] = diagonal;
+        }
+        return;
+    }
+    if n == 0 {
+        return;
+    }
+    if sample_size == 0 {
+        sr_opt_oo[..n * n].fill(0.0);
+        return;
+    }
+    let active =
+        &sr_opt_o_store[options.sample_start * n..(options.sample_start + sample_size) * n];
+    let dim = i32::try_from(n).expect("SR Gram dimension must fit BLAS LP64");
+    let samples = i32::try_from(sample_size).expect("sample count must fit BLAS LP64");
+    // Julia mul!(C, O, transpose(O)) recognizes the shared operand and
+    // selects SYRK. Below its max(n,samples)>=4 cutoff, generic_syrk!
+    // accumulates with muladd instead. Both paths copy the upper triangle.
+    if n.max(sample_size) < 4 {
+        sr_opt_oo[..n * n].fill(0.0);
+        for sample in 0..sample_size {
+            for j in 0..n {
+                let oj = active[j + sample * n];
+                for i in 0..=j {
+                    let index = i + j * n;
+                    sr_opt_oo[index] = active[i + sample * n].mul_add(oj, sr_opt_oo[index]);
+                }
+            }
+        }
+    } else {
+        // SAFETY: O is [n,samples], leading n; the writable output has n*n
+        // entries. SYRK reads O and overwrites the output's upper triangle.
+        unsafe {
+            blas::dsyrk(
+                b'U',
+                b'N',
+                dim,
+                samples,
+                1.0,
+                active,
+                dim,
+                0.0,
+                &mut sr_opt_oo[..n * n],
+                dim,
+            );
+        }
+    }
+    for j in 0..n {
+        for i in j + 1..n {
+            sr_opt_oo[i + j * n] = sr_opt_oo[j + i * n];
+        }
+    }
+}
+
 /// Complex `calculate_oo_store!` mirror (stores `sqrt(w) * O`).
 pub fn calculate_oo_store(
     sr_opt_ho: &mut [Complex64],
@@ -199,13 +306,13 @@ pub fn calculate_oo_store(
     sample: usize,
     sr_opt_size: usize,
 ) {
-    let we = e * w;
+    let we = w * e;
     let sqrtw = w.sqrt();
     let size_2 = 2 * sr_opt_size;
     let store = &mut sr_opt_o_store[sample * size_2..(sample + 1) * size_2];
     for i in 0..size_2 {
-        store[i] = sr_opt_o[i] * sqrtw;
-        sr_opt_ho[i] += sr_opt_o[i] * we;
+        store[i] = sqrtw * sr_opt_o[i];
+        sr_opt_ho[i] += we * sr_opt_o[i];
     }
 }
 
@@ -216,8 +323,23 @@ pub fn finalize_oo_store(
     sr_opt_o_store: &[Complex64],
     sr_opt_size: usize,
     sample_size: usize,
+    options: StoreFinalization,
 ) {
     let size_2 = 2 * sr_opt_size;
+    if options.diagonal_only {
+        for i in 0..size_2 {
+            let mut mean = Complex64::new(0.0, 0.0);
+            let mut diagonal = 0.0;
+            for sample in options.sample_start..options.sample_start + sample_size {
+                let o = sr_opt_o_store[i + sample * size_2];
+                mean += o;
+                diagonal += o.norm_sqr();
+            }
+            sr_opt_oo[i] = mean;
+            sr_opt_oo[i + size_2] = Complex64::new(diagonal, 0.0);
+        }
+        return;
+    }
     if size_2 == 0 {
         return;
     }
@@ -230,14 +352,14 @@ pub fn finalize_oo_store(
         return;
     }
 
-    let mut backend = tenferro_cpu::CpuBackend::new();
     let store_tensor = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
         vec![size_2, sample_size],
-        sr_opt_o_store.to_vec(),
+        sr_opt_o_store
+            [options.sample_start * size_2..(options.sample_start + sample_size) * size_2]
+            .to_vec(),
     )
     .expect("SR store shape and data length must match");
-    let gram =
-        sr_store_gram_einsum(&mut backend, &store_tensor).expect("SR store Gram einsum must run");
+    let gram = sr_store_gram_julia(&store_tensor).expect("SR store Gram must run");
     let gram = gram
         .host_data()
         .expect("SR store Gram tensor must be host-backed");
@@ -248,20 +370,27 @@ pub fn finalize_oo_store(
     }
 }
 
-fn sr_store_gram_einsum(
-    backend: &mut tenferro_cpu::CpuBackend,
+// Preserve the authoritative complex finalizer's sequential sample sum.
+// A general einsum backend can change rounding and signed zeros, which changes
+// the direct SR input even when the sampling/RNG trajectory is identical.
+fn sr_store_gram_julia(
     store: &tenferro_tensor::TypedTensor<Complex64>,
 ) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
-    use tenferro_einsum::TypedTensorEinsumExt;
-
     let shape = store.shape();
     assert_eq!(shape.len(), 2, "SR store must be [component, sample]");
+    let (n, samples) = (shape[0], shape[1]);
     let raw = store.host_data()?;
-    let conj = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
-        shape.to_vec(),
-        raw.iter().map(|z| z.conj()).collect(),
-    )?;
-    [store, &conj].einsum("is,js->ij", backend)
+    let mut gram = vec![Complex64::new(0.0, 0.0); n * n];
+    for i in 0..n {
+        for j in 0..n {
+            let mut sum = Complex64::new(0.0, 0.0);
+            for sample in 0..samples {
+                sum += raw[i + sample * n] * raw[j + sample * n].conj();
+            }
+            gram[i + j * n] = sum;
+        }
+    }
+    tenferro_tensor::TypedTensor::from_vec_col_major(vec![n, n], gram)
 }
 
 // The current Slater derivative buffers are still Vec-backed and live in a
@@ -329,11 +458,12 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
 /// because the exchange contribution requires it; for other 2-body
 /// operators (PairHop, InterAll) the call sites can land in a follow-up.
 #[allow(clippy::too_many_arguments)]
-pub fn green_func_exchange_real(
+pub fn green_func_exchange(
     ri: usize,
     rj: usize,
     spin: u8,
     spin_other: u8,
+    ip: Complex64,
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     ele_idx: &[i64],
@@ -363,40 +493,36 @@ pub fn green_func_exchange_real(
     let mut proj_mid = vec![0_i64; n_proj];
     let mut proj_final = vec![0_i64; n_proj];
 
-    // 1st hop: electron at rj with spin `spin` -> ri.
     let mj = ele_cfg[rj + spin as usize * n_site];
-    if mj < 0 {
+    let mi = ele_cfg[ri + spin_other as usize * n_site];
+    if mj < 0 || mi < 0 {
         return Complex64::new(0.0, 0.0);
     }
-    let mj = mj as usize;
+    let (mj, mi) = (mj as usize, mi as usize);
     let msj = mj + spin as usize * n_elec;
-    my_ele_idx[msj] = ri as i64;
-    my_ele_num[ri + spin as usize * n_site] = 1;
-    my_ele_num[rj + spin as usize * n_site] = 0;
+    let msi = mi + spin_other as usize * n_elec;
+
+    // Julia green_func2 applies the t hop (ri -> rj) before the s hop
+    // (rj -> ri), and passes that same order to the two-electron update.
+    my_ele_idx[msi] = rj as i64;
+    my_ele_num[ri + spin_other as usize * n_site] = 0;
+    my_ele_num[rj + spin_other as usize * n_site] = 1;
     update_proj_cnt(
-        rj as i64,
         ri as i64,
-        spin,
+        rj as i64,
+        spin_other,
         &mut proj_mid,
         ele_proj_cnt,
         &my_ele_num,
         data,
     );
-
-    // 2nd hop: electron at ri with spin_other -> rj.
-    let mi = ele_cfg[ri + spin_other as usize * n_site];
-    if mi < 0 {
-        return Complex64::new(0.0, 0.0);
-    }
-    let mi = mi as usize;
-    let msi = mi + spin_other as usize * n_elec;
-    my_ele_idx[msi] = rj as i64;
-    my_ele_num[rj + spin_other as usize * n_site] = 1;
-    my_ele_num[ri + spin_other as usize * n_site] = 0;
+    my_ele_idx[msj] = ri as i64;
+    my_ele_num[rj + spin as usize * n_site] = 0;
+    my_ele_num[ri + spin as usize * n_site] = 1;
     update_proj_cnt(
-        ri as i64,
         rj as i64,
-        spin_other,
+        ri as i64,
+        spin,
         &mut proj_final,
         &proj_mid,
         &my_ele_num,
@@ -405,7 +531,7 @@ pub fn green_func_exchange_real(
 
     let log_proj_delta =
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
-    let proj_ratio = log_proj_delta.exp();
+    let proj_ratio = julia_exp(log_proj_delta);
 
     let _ = my_ele_num;
 
@@ -416,8 +542,8 @@ pub fn green_func_exchange_real(
     // `inv_m_real` and `slater_elm_real` to compute the new Pfaffian in
     // O(N²) instead of the O(N³) full recomputation below.
     //
-    // `mj` (spin) hops ri→rj was the 1st hop and `mi` (spin_other)
-    // hops ri→rj was the 2nd hop. After both hops, `my_ele_idx` holds
+    // `mi` (spin_other) hops ri→rj first, then `mj` (spin) hops rj→ri.
+    // After both hops, `my_ele_idx` holds
     // the updated electron positions, from which `rsa` and `rsb` are
     // derived inside `calculate_new_pf_m_two2_real_flat`.
     if !state.slater_matrix.pf_m_real.is_empty() {
@@ -425,10 +551,10 @@ pub fn green_func_exchange_real(
         let inv_stride = n_size * n_size + 1;
         let mut pf_m_new_real = vec![0.0_f64; n_qp_full];
         calculate_new_pf_m_two2_real_flat(
-            mj,
-            spin,
             mi,
             spin_other,
+            mj,
+            spin,
             &mut pf_m_new_real,
             &my_ele_idx,
             &state.slater_matrix.slater_elm_real,
@@ -443,39 +569,30 @@ pub fn green_func_exchange_real(
         let new_ip_real = calculate_ip_real(&pf_m_new_real, 0, n_qp_full, data);
         // In real mode all quantities are real, so conj is a no-op.
         // Return as Complex64 to match the function signature.
-        return Complex64::new(proj_ratio * new_ip_real, 0.0);
+        return crate::julia_complex::divide(Complex64::new(proj_ratio * new_ip_real, 0.0), ip)
+            .conj();
     }
 
-    // Fallback: full O(N³) complex recomputation for all-complex mode.
-    //
-    // `green_func2` upstream returns `conj(z / ip)` where `z` is
-    // the projection ratio times the new inner product. We emit the
-    // `conj(z)` factor here so the caller multiplies by `conj(inv_ip)`.
-    let n_site_l = n_site;
-    let n_elec_l = n_elec;
-    let ws = &mut state.workspace;
-    let pool = &ws.pfapack;
+    let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
-    let scratch_slater = state.slater_matrix.slater_elm.clone();
-    let mut scratch_inv = state.slater_matrix.inv_m.clone();
-    if calc_m_all_complex(
-        &my_ele_idx,
-        &scratch_slater,
-        &mut scratch_inv,
+    calculate_new_pf_m_two2_complex_flat(
+        mi,
+        spin_other,
+        mj,
+        spin,
         &mut new_pf,
+        &my_ele_idx,
+        &state.slater_matrix.slater_elm,
+        state.slater_matrix.inv_m.as_slice(),
+        n_size * n_size + 1,
+        &state.slater_matrix.pf_m,
         0,
         n_qp_full,
-        n_site_l,
-        n_elec_l,
-        pool,
-    )
-    .is_err()
-    {
-        return Complex64::new(0.0, 0.0);
-    }
+        n_site,
+        n_elec,
+    );
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    let _ = scratch_inv;
-    (Complex64::new(proj_ratio, 0.0) * new_ip).conj()
+    crate::julia_complex::divide(Complex64::new(proj_ratio, 0.0) * new_ip, ip).conj()
 }
 
 /// Non-FSZ Slater-parameter derivative block (`SlaterElmDiff_fcmp!`).
@@ -518,21 +635,7 @@ pub fn slater_elm_diff(
         return;
     }
 
-    let mut orbital_idx = vec![vec![-1_i64; n_site]; n_site];
-    let mut orbital_sgn = vec![vec![1_i64; n_site]; n_site];
-    for term in &data.orbital_terms {
-        if term.site1 < 0 || term.site2 < 0 {
-            continue;
-        }
-        let ri = term.site1 as usize;
-        let rj = term.site2 as usize;
-        if ri >= n_site || rj >= n_site {
-            continue;
-        }
-        let sign = if term.sign == 0 { 1 } else { term.sign };
-        orbital_idx[ri][rj] = term.idx;
-        orbital_sgn[ri][rj] = sign;
-    }
+    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
 
     let mut trans_orb_idx = vec![-1_i64; n_mp_trans * n_size * n_size];
     let mut trans_orb_sgn = vec![1_i64; n_mp_trans * n_size * n_size];
@@ -550,8 +653,7 @@ pub fn slater_elm_diff(
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri >= n_site {
                 continue;
@@ -568,8 +670,7 @@ pub fn slater_elm_diff(
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj >= n_site {
                     continue;
@@ -735,41 +836,43 @@ pub fn green_func1_fsz(
             &my_ele_num,
             data,
         );
-        crate::sampling::projection::log_proj_ratio(&proj_new, ele_proj_cnt, data).exp()
+        julia_exp(crate::sampling::projection::log_proj_ratio(
+            &proj_new,
+            ele_proj_cnt,
+            data,
+        ))
     };
 
-    let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
-    let mut scratch_inv = state.slater_matrix.inv_m.clone();
+    let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
-    if crate::pfaffian::calc_m_all_fsz_complex(
+    calculate_new_pf_m2_fsz_complex_flat(
+        mj,
+        spin_create,
+        &mut new_pf,
         &my_ele_idx,
         &my_ele_spn,
         &state.slater_matrix.slater_elm,
-        &mut scratch_inv,
-        &mut new_pf,
+        state.slater_matrix.inv_m.as_slice(),
+        n_size * n_size + 1,
+        &state.slater_matrix.pf_m,
         0,
         n_qp_full,
         n_site,
         n_elec,
-        &pool,
-    )
-    .is_err()
-    {
-        return Complex64::new(0.0, 0.0);
-    }
-    ((Complex64::new(proj_ratio, 0.0) * calculate_ip_complex(&new_pf, 0, n_qp_full, data)) / ip)
-        .conj()
+    );
+    let numerator =
+        Complex64::new(proj_ratio, 0.0) * calculate_ip_complex(&new_pf, 0, n_qp_full, data);
+    crate::julia_complex::divide(numerator, ip).conj()
 }
 
-/// FSZ exchange Green-function numerator for `green_func2_fsz`'s
-/// Heisenberg exchange tile. Returns `conj(proj_ratio * ip_new)` so the
-/// caller can multiply by `conj(1/ip_old)`.
+/// FSZ Exchange Green ratio, using Julia's hop and normalization order.
 #[allow(clippy::too_many_arguments)]
 pub fn green_func_exchange_fsz(
     ri: usize,
     rj: usize,
     spin: u8,
     spin_other: u8,
+    ip: Complex64,
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     ele_idx: &[i64],
@@ -799,65 +902,64 @@ pub fn green_func_exchange_fsz(
     let mut proj_final = vec![0_i64; n_proj];
 
     let mj = ele_cfg[rj + spin as usize * n_site];
-    if mj < 0 {
+    let mi = ele_cfg[ri + spin_other as usize * n_site];
+    if mj < 0 || mi < 0 {
         return Complex64::new(0.0, 0.0);
     }
-    let mj = mj as usize;
-    my_ele_idx[mj] = ri as i64;
-    my_ele_spn[mj] = spin as i64;
-    my_ele_num[ri + spin as usize * n_site] = 1;
-    my_ele_num[rj + spin as usize * n_site] = 0;
+    let (mj, mi) = (mj as usize, mi as usize);
+    my_ele_idx[mi] = rj as i64;
+    my_ele_spn[mi] = spin_other as i64;
+    my_ele_num[ri + spin_other as usize * n_site] = 0;
+    my_ele_num[rj + spin_other as usize * n_site] = 1;
     update_proj_cnt(
-        rj as i64,
         ri as i64,
-        spin,
+        rj as i64,
+        spin_other,
         &mut proj_mid,
         ele_proj_cnt,
         &my_ele_num,
         data,
     );
-
-    let mi = ele_cfg[ri + spin_other as usize * n_site];
-    if mi < 0 {
-        return Complex64::new(0.0, 0.0);
-    }
-    let mi = mi as usize;
-    my_ele_idx[mi] = rj as i64;
-    my_ele_spn[mi] = spin_other as i64;
-    my_ele_num[rj + spin_other as usize * n_site] = 1;
-    my_ele_num[ri + spin_other as usize * n_site] = 0;
+    my_ele_idx[mj] = ri as i64;
+    my_ele_spn[mj] = spin as i64;
+    my_ele_num[rj + spin as usize * n_site] = 0;
+    my_ele_num[ri + spin as usize * n_site] = 1;
     update_proj_cnt(
-        ri as i64,
         rj as i64,
-        spin_other,
+        ri as i64,
+        spin,
         &mut proj_final,
         &proj_mid,
         &my_ele_num,
         data,
     );
 
-    let proj_ratio =
-        crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data).exp();
-    let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
-    let mut scratch_inv = state.slater_matrix.inv_m.clone();
+    let proj_ratio = julia_exp(crate::sampling::projection::log_proj_ratio(
+        &proj_final,
+        ele_proj_cnt,
+        data,
+    ));
+    let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
-    if crate::pfaffian::calc_m_all_fsz_complex(
+    calculate_new_pf_m_two_fsz_complex_flat(
+        mi,
+        spin_other,
+        mj,
+        spin,
+        &mut new_pf,
         &my_ele_idx,
         &my_ele_spn,
         &state.slater_matrix.slater_elm,
-        &mut scratch_inv,
-        &mut new_pf,
+        state.slater_matrix.inv_m.as_slice(),
+        n_size * n_size + 1,
+        &state.slater_matrix.pf_m,
         0,
         n_qp_full,
         n_site,
         n_elec,
-        &pool,
-    )
-    .is_err()
-    {
-        return Complex64::new(0.0, 0.0);
-    }
-    (Complex64::new(proj_ratio, 0.0) * calculate_ip_complex(&new_pf, 0, n_qp_full, data)).conj()
+    );
+    let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
+    crate::julia_complex::divide(Complex64::new(proj_ratio, 0.0) * new_ip, ip).conj()
 }
 
 /// FSZ local Hamiltonian for the Heisenberg/Hubbard fixture path.
@@ -871,7 +973,35 @@ pub fn calculate_local_energy_fsz(
     ele_proj_cnt: &[i64],
     ele_spn: &[i64],
 ) -> Complex64 {
+    calculate_local_energy_fsz_timed(
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+/// Evaluate this kernel with call-site-specific section and diagnostic timers.
+pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+    timer: &mut CTimer<TIMED>,
+) -> Complex64 {
+    timer.start(70);
     let mut e = calculate_hamiltonian_diagonal(ele_num, data);
+    timer.stop(70);
+    timer.start(71);
     for term in &data.transfer_terms {
         if term.site1 >= 0 && term.site2 >= 0 {
             let ri = term.site1 as usize;
@@ -895,9 +1025,10 @@ pub fn calculate_local_energy_fsz(
             }
         }
     }
+    timer.stop(71);
+    timer.start(72);
     if !data.exchange_terms.is_empty() && ip.norm() > 0.0 {
         let n_site = data.modpara.nsite as usize;
-        let inv_ip = (Complex64::new(1.0, 0.0) / ip).conj();
         for term in &data.exchange_terms {
             let ri = term.site1;
             let rj = term.site2;
@@ -909,6 +1040,7 @@ pub fn calculate_local_energy_fsz(
                 rj as usize,
                 0,
                 1,
+                ip,
                 data,
                 state,
                 ele_idx,
@@ -922,6 +1054,7 @@ pub fn calculate_local_energy_fsz(
                 rj as usize,
                 1,
                 0,
+                ip,
                 data,
                 state,
                 ele_idx,
@@ -930,9 +1063,10 @@ pub fn calculate_local_energy_fsz(
                 ele_proj_cnt,
                 ele_spn,
             );
-            e += Complex64::new(term.value, 0.0) * (g01 + g10) * inv_ip;
+            e += term.value * (g01 + g10);
         }
     }
+    timer.stop(72);
     e
 }
 
@@ -961,11 +1095,102 @@ pub fn green_func1(
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
+    green_func1_timed(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+// The cached real Transfer path evaluates the moved configuration directly.
+// Its Jastrow subtraction must precede multiplication by the site charge.
+fn calh1_direct_projection_ratio(
+    source: usize,
+    dest: usize,
+    ele_num: &[i64],
+    data: &ExpertModeData,
+) -> Option<f64> {
+    let n = data.modpara.nsite as usize;
+    let ng = data.n_gutzwiller_idx.max(0) as usize;
+    let nj = data.n_jastrow_idx.max(0) as usize;
+    if (ng == 0 && !data.gutzwiller_terms.is_empty())
+        || (nj == 0 && !data.jastrow_terms.is_empty())
+        || ng > data.gutzwiller_terms.len()
+        || nj > data.jastrow_terms.len()
+        || (ng > 0 && data.gutzwiller_idx.len() < n)
+        || (nj > 0
+            && (data.jastrow_idx.len() < n
+                || data.jastrow_idx.iter().take(n).any(|row| row.len() < n)))
+    {
+        return None;
+    }
+    let gutz = |site: usize| {
+        if ng == 0 {
+            return 0.0;
+        }
+        let index = data.gutzwiller_idx[site];
+        if index < 0 || index as usize >= ng {
+            0.0
+        } else {
+            data.gutzwiller_terms[index as usize].value.re
+        }
+    };
+    let jastrow = |a: usize, b: usize| {
+        if nj == 0 || a == b {
+            return 0.0;
+        }
+        let index = data.jastrow_idx[a.min(b)][a.max(b)];
+        if index < 0 || index as usize >= nj {
+            0.0
+        } else {
+            data.jastrow_terms[index as usize].value.re
+        }
+    };
+    let charge = |site: usize| ele_num[site] + ele_num[n + site] - 1;
+    let mut z = 0.0;
+    z -= gutz(source) * (ele_num[source] + ele_num[n + source]) as f64;
+    z += gutz(dest) * (ele_num[dest] * ele_num[n + dest]) as f64;
+    z += jastrow(source, dest) * (charge(source) - charge(dest) + 1) as f64;
+    for site in 0..n {
+        if site != source && site != dest {
+            z += (jastrow(dest, site) - jastrow(source, site)) * charge(site) as f64;
+        }
+    }
+    Some(julia_exp(z))
+}
+
+/// Evaluate this kernel with call-site-specific section and diagnostic timers.
+pub fn green_func1_timed<const TIMED: bool>(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    timer: &mut CTimer<TIMED>,
+) -> Complex64 {
+    let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
+    timer.start_diag(927, diag);
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     let n_qp_full = state.slater_matrix.pf_m.len();
 
     if ip.norm() == 0.0 {
+        timer.stop_diag(927, diag);
         return Complex64::new(0.0, 0.0);
     }
 
@@ -974,22 +1199,26 @@ pub fn green_func1(
 
     // Diagonal: <n_{ri,spin}>
     if spin_create == spin_annihilate && ri == rj {
+        timer.stop_diag(927, diag);
         return Complex64::new(ele_num[src] as f64, 0.0);
     }
 
     // Spin-flip hops are not representable in the non-FSZ block layout.
     if spin_create != spin_annihilate {
+        timer.stop_diag(927, diag);
         return Complex64::new(0.0, 0.0);
     }
 
     // Destination must be empty; source must be occupied.
     if ele_num[dst] == 1 || ele_num[src] == 0 {
+        timer.stop_diag(927, diag);
         return Complex64::new(0.0, 0.0);
     }
 
     // Find which electron (index within spin block) sits at rj.
     let mj_raw = ele_cfg[src];
     if mj_raw < 0 {
+        timer.stop_diag(927, diag);
         return Complex64::new(0.0, 0.0);
     }
     let mj = mj_raw as usize;
@@ -1002,6 +1231,8 @@ pub fn green_func1(
     my_ele_num[dst] = 1;
     my_ele_num[src] = 0;
 
+    timer.stop_diag(927, diag);
+    timer.start_diag(921, diag);
     // Update projection counts for the hop rj → ri (same spin).
     let n_proj = ele_proj_cnt.len();
     let mut proj_new = vec![0_i64; n_proj];
@@ -1015,40 +1246,75 @@ pub fn green_func1(
         data,
     );
 
-    let proj_ratio = if n_proj > 0 {
-        crate::sampling::projection::log_proj_ratio(&proj_new, ele_proj_cnt, data).exp()
+    timer.stop_diag(921, diag);
+    timer.start_diag(922, diag);
+    let direct_ratio = if !crate::run::get_all_complex_flag(data) {
+        calh1_direct_projection_ratio(rj, ri, &my_ele_num, data)
+    } else {
+        None
+    };
+    let proj_ratio = if let Some(ratio) = direct_ratio {
+        ratio
+    } else if n_proj > 0 {
+        julia_exp(crate::sampling::projection::log_proj_ratio(
+            &proj_new,
+            ele_proj_cnt,
+            data,
+        ))
     } else {
         1.0
     };
 
-    // Recompute Pfaffian for proposed configuration.
-    let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
-    let mut scratch_inv = state.slater_matrix.inv_m.clone();
+    timer.stop_diag(922, diag);
+    // The main-calculation state keeps one pad slot per QP; Julia's
+    // wrapper compacts the same inverse planes before its Green helper.
+    let inv_stride = (2 * n_elec).pow(2) + 1;
+    if !state.slater_matrix.pf_m_real.is_empty() {
+        let mut new_pf = vec![0.0; n_qp_full];
+        timer.start_diag(923, diag);
+        calculate_new_pf_m2_real_flat(
+            mj,
+            spin_annihilate,
+            &mut new_pf,
+            &my_ele_idx,
+            &state.slater_matrix.slater_elm_real,
+            state.slater_matrix.inv_m_real.as_slice(),
+            inv_stride,
+            &state.slater_matrix.pf_m_real,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+        );
+        timer.stop_diag(923, diag);
+        timer.start_diag(924, diag);
+        let new_ip = calculate_ip_real(&new_pf, 0, n_qp_full, data);
+        timer.stop_diag(924, diag);
+        return Complex64::new(proj_ratio * new_ip / ip.re, 0.0);
+    }
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
-    if calc_m_all_complex(
+    calculate_new_pf_m2_complex_flat(
+        mj,
+        spin_annihilate,
+        &mut new_pf,
         &my_ele_idx,
         &state.slater_matrix.slater_elm,
-        &mut scratch_inv,
-        &mut new_pf,
+        state.slater_matrix.inv_m.as_slice(),
+        inv_stride,
+        &state.slater_matrix.pf_m,
         0,
         n_qp_full,
         n_site,
         n_elec,
-        &pool,
-    )
-    .is_err()
-    {
-        return Complex64::new(0.0, 0.0);
-    }
-
+    );
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    ((Complex64::new(proj_ratio, 0.0) * new_ip) / ip).conj()
+    crate::julia_complex::divide(new_ip * proj_ratio, ip).conj()
 }
 
 /// Compute the local energy for a given sample. Non-FSZ path:
 /// diagonal contributions (CoulombIntra / CoulombInter / Hund),
 /// 1-body Transfer (kinetic hopping via `green_func1`),
-/// and 2-body Exchange (via `green_func_exchange_real`).
+/// and 2-body Exchange (via `green_func_exchange`).
 pub fn calculate_local_energy(
     ip: Complex64,
     data: &ExpertModeData,
@@ -1058,13 +1324,42 @@ pub fn calculate_local_energy(
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
+    calculate_local_energy_timed(
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+/// Evaluate this kernel with call-site-specific section and diagnostic timers.
+pub fn calculate_local_energy_timed<const TIMED: bool>(
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    timer: &mut CTimer<TIMED>,
+) -> Complex64 {
+    timer.start(70);
     let mut e = calculate_hamiltonian_diagonal(ele_num, data);
+    timer.stop(70);
+    timer.start(71);
     let n_site = data.modpara.nsite as usize;
 
     // Transfer (kinetic hopping) terms: H = Σ T_ij c†_{i,s1} c_{j,s2}.
     // The convention in upstream Julia is `e_local += -T * G1` where G1 is
     // the 1-body Green function ratio. Same-spin hops only for non-FSZ.
     if !data.transfer_terms.is_empty() && ip.norm() > 0.0 {
+        let real_transfer = !crate::run::get_all_complex_flag(data)
+            && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
+        let mut transfer_energy = 0.0;
         for term in &data.transfer_terms {
             if term.site1 < 0 || term.site2 < 0 {
                 continue;
@@ -1076,7 +1371,9 @@ pub fn calculate_local_energy(
             }
             let spin_create = spin_code(term.spin1);
             let spin_annihilate = spin_code(term.spin2);
-            let g1 = green_func1(
+            let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
+            timer.start_diag(920, diag);
+            let g1 = green_func1_timed(
                 ri,
                 rj,
                 spin_create,
@@ -1088,25 +1385,38 @@ pub fn calculate_local_energy(
                 ele_cfg,
                 ele_num,
                 ele_proj_cnt,
+                timer,
             );
-            e += -term.value * g1;
+            timer.stop_diag(920, diag);
+            if real_transfer {
+                transfer_energy -= term.value.re * g1.re;
+            } else {
+                e += -term.value * g1;
+            }
+        }
+        // Julia's real Transfer path sums this section before adding it to
+        // the diagonal energy. Combining the two sums changes SR gradients.
+        if real_transfer {
+            e += Complex64::new(transfer_energy, 0.0);
         }
     }
 
     // Exchange terms (2-body).
+    timer.stop(71);
+    timer.start(72);
     if !data.exchange_terms.is_empty() && ip.norm() > 0.0 {
-        let inv_ip = Complex64::new(1.0, 0.0) / ip;
         for term in &data.exchange_terms {
             let ri = term.site1;
             let rj = term.site2;
             if ri < 0 || rj < 0 || ri == rj || (ri as usize) >= n_site || (rj as usize) >= n_site {
                 continue;
             }
-            let g01 = green_func_exchange_real(
+            let g01 = green_func_exchange(
                 ri as usize,
                 rj as usize,
                 0,
                 1,
+                ip,
                 data,
                 state,
                 ele_idx,
@@ -1114,11 +1424,12 @@ pub fn calculate_local_energy(
                 ele_num,
                 ele_proj_cnt,
             );
-            let g10 = green_func_exchange_real(
+            let g10 = green_func_exchange(
                 ri as usize,
                 rj as usize,
                 1,
                 0,
+                ip,
                 data,
                 state,
                 ele_idx,
@@ -1126,10 +1437,11 @@ pub fn calculate_local_energy(
                 ele_num,
                 ele_proj_cnt,
             );
-            e += Complex64::new(term.value, 0.0) * (g01 + g10) * inv_ip.conj();
+            e += term.value * (g01 + g10);
         }
     }
 
+    timer.stop(72);
     e
 }
 
@@ -1175,7 +1487,13 @@ mod tests {
         let mut sr_opt_oo = vec![Complex64::new(0.0, 0.0); 4];
         let sr_opt_o_store = vec![Complex64::new(1.0, 2.0), Complex64::new(-3.0, 4.0)];
 
-        finalize_oo_store(&mut sr_opt_oo, &sr_opt_o_store, 1, 1);
+        finalize_oo_store(
+            &mut sr_opt_oo,
+            &sr_opt_o_store,
+            1,
+            1,
+            StoreFinalization::default(),
+        );
 
         assert_eq!(sr_opt_oo[0], Complex64::new(5.0, 0.0));
         assert_eq!(sr_opt_oo[1], Complex64::new(5.0, -10.0));
@@ -1184,8 +1502,7 @@ mod tests {
     }
 
     #[test]
-    fn sr_store_gram_einsum_matches_manual_complex_reference() {
-        let mut backend = tenferro_cpu::CpuBackend::new();
+    fn sr_store_gram_julia_matches_manual_complex_reference() {
         let store = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
             vec![2, 3],
             vec![
@@ -1199,7 +1516,7 @@ mod tests {
         )
         .expect("typed tensor");
 
-        let gram = sr_store_gram_einsum(&mut backend, &store).expect("einsum result");
+        let gram = sr_store_gram_julia(&store).expect("source-ordered Gram");
         let gram_data = gram.host_data().expect("host data");
 
         let mut expected = vec![Complex64::new(0.0, 0.0); 4];
@@ -1217,6 +1534,101 @@ mod tests {
         }
 
         assert_eq!(gram_data, expected.as_slice());
+    }
+
+    #[test]
+    fn stored_direct_sr_gram_matches_sampled_julia_bits() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/sr_direct");
+        for case in ["real", "cmp", "fsz", "hubbard"] {
+            let fixture =
+                std::fs::read_to_string(root.join(format!("{case}_store_runner/gram.txt")))
+                    .unwrap();
+            let mut lines = fixture.lines();
+            let dims: Vec<usize> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|s| s.parse().unwrap())
+                .collect();
+            let parse = |line: &str| -> Vec<f64> {
+                line.split_whitespace()
+                    .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
+                    .collect()
+            };
+            let store = parse(lines.next().unwrap());
+            let expected = parse(lines.next().unwrap());
+            let actual = if matches!(case, "cmp" | "fsz") {
+                let store: Vec<Complex64> = store
+                    .chunks_exact(2)
+                    .map(|z| Complex64::new(z[0], z[1]))
+                    .collect();
+                let mut oo = vec![Complex64::new(0.0, 0.0); expected.len() / 2];
+                finalize_oo_store(
+                    &mut oo,
+                    &store,
+                    dims[0],
+                    dims[1],
+                    StoreFinalization::default(),
+                );
+                oo.into_iter()
+                    .flat_map(|z| [z.re, z.im])
+                    .collect::<Vec<_>>()
+            } else {
+                let mut oo = vec![0.0; expected.len()];
+                finalize_oo_store_real(
+                    &mut oo,
+                    &store,
+                    dims[0],
+                    dims[1],
+                    StoreFinalization::default(),
+                );
+                oo
+            };
+            for (i, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "{case} Gram entry {i}: {a:?} versus {b:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn real_gram_matches_julia_generic_and_syrk_dispatch_boundary() {
+        let fixture = include_str!("../../../tests/fixtures/sr_direct/small_gram.txt");
+        let mut lines = fixture.lines().filter(|s| !s.starts_with('#'));
+        while let Some(dimensions) = lines.next() {
+            let dims: Vec<usize> = dimensions
+                .split_whitespace()
+                .map(|s| s.parse().unwrap())
+                .collect();
+            let parse = |s: &str| {
+                s.split_whitespace()
+                    .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                    .collect::<Vec<_>>()
+            };
+            let store = parse(lines.next().unwrap());
+            let expected = parse(lines.next().unwrap());
+            let mut oo = vec![777.0; expected.len()];
+            finalize_oo_store_real(
+                &mut oo,
+                &store,
+                dims[0],
+                dims[1],
+                StoreFinalization::default(),
+            );
+            for (i, (a, b)) in oo.iter().zip(&expected).enumerate() {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "n={}, samples={}, entry {i}",
+                    dims[0],
+                    dims[1]
+                );
+            }
+        }
     }
 
     #[test]
@@ -1318,8 +1730,7 @@ pub fn slater_elm_diff_fsz(
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri_site >= n_site {
                 continue;
@@ -1337,8 +1748,7 @@ pub fn slater_elm_diff_fsz(
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj_site >= n_site {
                     continue;

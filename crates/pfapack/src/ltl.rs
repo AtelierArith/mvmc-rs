@@ -25,19 +25,28 @@ use crate::PivotIndex1Based;
 ///
 /// Mirrors `julia_dsktf2!(A, iPiv)` from `ltl_decomposition.jl`.
 pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
-    sktf2_generic::<f64, _>(a, pivots, |x| x.abs())
+    sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false)
 }
 
 /// LTL decomposition for complex skew-symmetric matrices (`zsktf2`).
 pub fn zsktf2(a: &mut SqMat<'_, Complex64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
     // IZAMAX uses |Re| + |Im|, the BLAS 1-norm. We mirror it exactly.
-    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs())
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), false)
+}
+
+/// Complex LTL decomposition matching Julia's StructArray/@turbo production path.
+pub fn zsktf2_turbo(
+    a: &mut SqMat<'_, Complex64>,
+    pivots: &mut [PivotIndex1Based],
+) -> Result<(), usize> {
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), true)
 }
 
 fn sktf2_generic<T, Mag>(
     a: &mut SqMat<'_, T>,
     pivots: &mut [PivotIndex1Based],
     mag: Mag,
+    turbo: bool,
 ) -> Result<(), usize>
 where
     T: BlasScalar + UpperRank2Kernel,
@@ -130,7 +139,7 @@ where
         if kk0 >= 1 {
             let pivot = a.get(kk0, k0);
             // Note: pivot is `A[kk, k]` in Julia (a single off-diagonal entry).
-            let alpha = T::pfaf_one() / pivot;
+            let alpha = T::ltl_alpha(pivot, turbo);
 
             // Skew-symmetric rank-2 update of the **upper-triangular** part
             // of A[0..kk0, 0..kk0], byte-for-byte equivalent to Julia
@@ -148,14 +157,14 @@ where
             // diff does, so the scalar form is the bit-parity-correct
             // backend even when `--features blas-backend` is on.
             let lda = a.lda();
-            update_upper_rank2(a.as_mut_slice(), lda, kk0, k0, alpha);
+            T::update_rank2_mode(a.as_mut_slice(), lda, kk0, k0, alpha, turbo);
 
             // Julia: BLAS.scal!(k-2, alpha, A[1:k-2, k], 1) — backend
             // route: dscal / zscal when BLAS is on, plain loop otherwise.
             let n_sub = kk0;
             let data = a.as_mut_slice();
             let col_k0 = k0 * lda;
-            backend::scal_strided::<T>(&mut data[col_k0..col_k0 + n_sub], n_sub, alpha);
+            T::scale_column_mode(&mut data[col_k0..col_k0 + n_sub], n_sub, alpha, turbo);
         }
     }
 
@@ -177,6 +186,22 @@ fn update_upper_rank2<T: UpperRank2Kernel>(
 }
 
 trait UpperRank2Kernel: BlasScalar {
+    fn ltl_alpha(pivot: Self, _turbo: bool) -> Self {
+        Self::pfaf_one().julia_div(pivot)
+    }
+    fn update_rank2_mode(
+        data: &mut [Self],
+        lda: usize,
+        kk0: usize,
+        k0: usize,
+        alpha: Self,
+        _turbo: bool,
+    ) {
+        update_upper_rank2(data, lda, kk0, k0, alpha);
+    }
+    fn scale_column_mode(data: &mut [Self], n: usize, alpha: Self, _turbo: bool) {
+        backend::scal_strided::<Self>(data, n, alpha);
+    }
     fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self);
 }
 
@@ -188,6 +213,61 @@ impl UpperRank2Kernel for f64 {
 }
 
 impl UpperRank2Kernel for Complex64 {
+    fn ltl_alpha(pivot: Self, turbo: bool) -> Self {
+        if turbo {
+            let denom = pivot.re * pivot.re + pivot.im * pivot.im;
+            Self::new(pivot.re / denom, -pivot.im / denom)
+        } else {
+            Self::new(1.0, 0.0).julia_div(pivot)
+        }
+    }
+    fn update_rank2_mode(
+        data: &mut [Self],
+        lda: usize,
+        kk0: usize,
+        k0: usize,
+        alpha: Self,
+        turbo: bool,
+    ) {
+        if !turbo {
+            Self::update_upper_rank2(data, lda, kk0, k0, alpha);
+            return;
+        }
+        for j in 0..kk0 {
+            let t1 = alpha * data[j + kk0 * lda];
+            let t2 = alpha * data[j + k0 * lda];
+            for i in 0..j {
+                let x = data[i + k0 * lda];
+                let y = data[i + kk0 * lda];
+                let old = data[i + j * lda];
+                // LoopVectorization fuses from the right-hand products through
+                // the old entry; product-wise complex FMAs use a different tree.
+                let re = y.im.mul_add(t2.im, old.re);
+                let re = y.re.mul_add(t2.re, -re);
+                let re = x.im.mul_add(t1.im, re);
+                let re = x.re.mul_add(t1.re, -re);
+                let im = y.im.mul_add(t2.re, -old.im);
+                let im = y.re.mul_add(t2.im, im);
+                let im = (-x.im).mul_add(t1.re, im);
+                let im = x.re.mul_add(t1.im, -im);
+                data[i + j * lda] = Self::new(re, im);
+            }
+            data[j + j * lda] = Self::new(0.0, 0.0);
+        }
+    }
+    fn scale_column_mode(data: &mut [Self], n: usize, alpha: Self, turbo: bool) {
+        if !turbo {
+            backend::scal_strided::<Self>(data, n, alpha);
+            return;
+        }
+        for value in &mut data[..n] {
+            let v = *value;
+            *value = Self::new(
+                alpha.re.mul_add(v.re, -alpha.im * v.im),
+                alpha.re.mul_add(v.im, alpha.im * v.re),
+            );
+        }
+    }
     #[inline]
     fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
         #[cfg(feature = "simd-backend")]

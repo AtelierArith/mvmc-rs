@@ -52,13 +52,25 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     }
 
     let all_complex = all_complex_flag(data);
-    let n_proj = data.gutzwiller_terms.len() + data.jastrow_terms.len();
+    let n_proj = data.projection_layout().n_proj;
     // Phase-4 scope: RBM blocks are still parser-side stubs; treat
     // `n_rbm = 0` so the Slater opt-flag index lines up with the
     // upstream layout for non-RBM models.
     let n_rbm = 0usize;
     let flag_rbm = false;
-    let n_s = n_slater(data);
+    // Julia initializes only mapped slots, even when the header reserves
+    // unused trailing parameters for loading and SR. Drawing for those
+    // unused slots would shift the entire subsequent sampling trajectory.
+    let n_s = if data.orbital_terms.is_empty() {
+        n_slater(data)
+    } else {
+        data.orbital_terms
+            .iter()
+            .map(|t| t.idx + 1)
+            .max()
+            .unwrap_or(0)
+            .max(0) as usize
+    };
     let mut slater_values = vec![Complex64::new(0.0, 0.0); n_s];
 
     if !all_complex {
@@ -77,7 +89,6 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
             }
         }
     } else {
-        let inv_sqrt_2 = 1.0 / std::f64::consts::SQRT_2;
         for (i, slot) in slater_values.iter_mut().enumerate() {
             let opt_flag_idx = 2 * i + 2 * n_proj + 2 * (if flag_rbm { 1 } else { 0 }) * n_rbm;
             let should_optimize = data
@@ -90,7 +101,10 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
                 let r2 = rng.genrand_real2();
                 let real = 2.0 * (r1 - 0.5);
                 let imag = 2.0 * (r2 - 0.5);
-                *slot = Complex64::new(real * inv_sqrt_2, imag * inv_sqrt_2);
+                *slot = Complex64::new(
+                    real / std::f64::consts::SQRT_2,
+                    imag / std::f64::consts::SQRT_2,
+                );
             } else {
                 *slot = Complex64::new(0.0, 0.0);
             }
@@ -109,10 +123,13 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
 pub fn sync_modified_parameter(data: &mut ExpertModeData) {
     // Optional Gutzwiller / Jastrow shift mirroring the Julia
     // `flag_shift_gj` block. Active only when every parameter is
-    // optimised (true by default before opt-flag tracking lands).
+    // optimized. Empty flags mean all active, as in Julia's local sync.
     let n_gutz = data.gutzwiller_terms.len();
     let n_jast = data.jastrow_terms.len();
-    if n_gutz > 0 && n_jast > 0 {
+    let all_active = data.optimization_flags.is_empty()
+        || ((0..n_gutz).all(|i| super::opt_flag::is_gutzwiller_optimized(data, i))
+            && (0..n_jast).all(|i| super::opt_flag::is_jastrow_optimized(data, i)));
+    if n_gutz > 0 && n_jast > 0 && all_active {
         let total = n_gutz + n_jast;
         let mut shift = 0.0;
         for term in &data.gutzwiller_terms {
@@ -134,7 +151,7 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData) {
 
     let mut xmax = 0.0;
     for term in &data.orbital_terms {
-        let abs_val = term.value.norm();
+        let abs_val = super::julia_hypot::hypot(term.value.re, term.value.im);
         if abs_val > xmax {
             xmax = abs_val;
         }
@@ -142,7 +159,7 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData) {
     if xmax > 0.0 {
         let ratio = D_AMP_MAX / xmax;
         for term in data.orbital_terms.iter_mut() {
-            term.value *= Complex64::new(ratio, 0.0);
+            term.value *= ratio;
         }
     }
 }

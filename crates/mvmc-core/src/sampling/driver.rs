@@ -12,6 +12,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::c_timer::CTimer;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
@@ -57,6 +58,16 @@ pub fn vmc_make_sample_real(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
 ) -> SampleStats {
+    vmc_make_sample_real_timed(data, state, rng, &mut CTimer::<false>::new())
+}
+
+/// Run the sampler with call-site-specific C timer sections.
+pub fn vmc_make_sample_real_timed<const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
@@ -68,7 +79,7 @@ pub fn vmc_make_sample_real(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.gutzwiller_terms.len() + data.jastrow_terms.len();
+    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -96,6 +107,7 @@ pub fn vmc_make_sample_real(
     let mut tmp_ele_num = state.electron_config.tmp_ele_num.clone();
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
 
+    timer.start(30);
     let burn_flag = state.electron_config.counter[9] != 0;
     if burn_flag {
         tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
@@ -154,11 +166,13 @@ pub fn vmc_make_sample_real(
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
 
+    timer.stop(30);
     for out_step in 0..n_out_step {
         for _in_step in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Hopping => {
+                    timer.start(31);
                     let candidate = make_candidate_hopping(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -167,9 +181,12 @@ pub fn vmc_make_sample_real(
                         &loc_spn,
                         rng,
                     );
+                    timer.stop(31);
                     if candidate.reject {
                         continue;
                     }
+                    timer.start(32);
+                    timer.start(60);
                     update_ele_config(
                         candidate.mi,
                         candidate.ri,
@@ -190,6 +207,8 @@ pub fn vmc_make_sample_real(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(60);
+                    timer.start(61);
                     calculate_new_pf_m2_real_flat(
                         candidate.mi,
                         candidate.spin,
@@ -204,7 +223,10 @@ pub fn vmc_make_sample_real(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(61);
+                    timer.start(62);
                     let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -214,6 +236,7 @@ pub fn vmc_make_sample_real(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(63);
                         update_m_all_real_flat(
                             candidate.mi,
                             candidate.spin,
@@ -227,6 +250,7 @@ pub fn vmc_make_sample_real(
                             n_site,
                             n_elec,
                         );
+                        timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         state.slater_matrix.pf_m_real.copy_from_slice(&pf_m_new);
                         log_ip_old = log_ip_new;
@@ -245,8 +269,10 @@ pub fn vmc_make_sample_real(
                             n_elec,
                         );
                     }
+                    timer.stop(32);
                 }
                 UpdateType::Exchange => {
+                    timer.start(31);
                     let candidate = make_candidate_exchange(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -255,11 +281,14 @@ pub fn vmc_make_sample_real(
                         &tmp_ele_num,
                         rng,
                     );
+                    timer.stop(31);
                     if candidate.reject {
                         continue;
                     }
+                    timer.start(33);
                     let ri_old = candidate.ri;
                     let rj_old = candidate.rj;
+                    timer.start(65);
                     update_ele_config(
                         candidate.mi,
                         ri_old,
@@ -301,6 +330,8 @@ pub fn vmc_make_sample_real(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(65);
+                    timer.start(66);
                     calculate_new_pf_m_two2_real_flat(
                         candidate.mi,
                         candidate.spin,
@@ -317,7 +348,10 @@ pub fn vmc_make_sample_real(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(66);
+                    timer.start(67);
                     let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -327,6 +361,7 @@ pub fn vmc_make_sample_real(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(68);
                         update_m_all_two_real_flat(
                             candidate.mi,
                             candidate.spin,
@@ -344,6 +379,7 @@ pub fn vmc_make_sample_real(
                             n_site,
                             n_elec,
                         );
+                        timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
@@ -372,6 +408,7 @@ pub fn vmc_make_sample_real(
                             n_elec,
                         );
                     }
+                    timer.stop(33);
                 }
                 _ => {}
             }
@@ -379,6 +416,7 @@ pub fn vmc_make_sample_real(
             // Periodic Pfaffian recomputation to keep numerical drift in
             // check (mirrors the upstream `n_accept > n_site` guard).
             if n_accept_window > n_site {
+                timer.start(34);
                 if calc_m_all_real(
                     &tmp_ele_idx,
                     &state.slater_matrix.slater_elm_real,
@@ -396,11 +434,13 @@ pub fn vmc_make_sample_real(
                         calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
                 }
                 n_accept_window = 0;
+                timer.stop(34);
             }
         }
 
         // Save samples after warm-up.
         if out_step + n_vmc_sample >= n_out_step {
+            timer.start(35);
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
                 state
@@ -421,6 +461,7 @@ pub fn vmc_make_sample_real(
                     .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
+            timer.stop(35);
         }
     }
 
@@ -453,6 +494,16 @@ pub fn vmc_make_sample(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
 ) -> SampleStats {
+    vmc_make_sample_timed(data, state, rng, &mut CTimer::<false>::new())
+}
+
+/// Run the sampler with call-site-specific C timer sections.
+pub fn vmc_make_sample_timed<const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
@@ -464,7 +515,7 @@ pub fn vmc_make_sample(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.gutzwiller_terms.len() + data.jastrow_terms.len();
+    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -477,6 +528,7 @@ pub fn vmc_make_sample(
     let mut tmp_ele_num = state.electron_config.tmp_ele_num.clone();
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
 
+    timer.start(30);
     let burn_flag = state.electron_config.counter[9] != 0;
     if burn_flag {
         tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
@@ -534,11 +586,13 @@ pub fn vmc_make_sample(
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
 
+    timer.stop(30);
     for out_step in 0..n_out_step {
         for _in_step in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Hopping => {
+                    timer.start(31);
                     let candidate = make_candidate_hopping(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -547,9 +601,12 @@ pub fn vmc_make_sample(
                         &loc_spn,
                         rng,
                     );
+                    timer.stop(31);
                     if candidate.reject {
                         continue;
                     }
+                    timer.start(32);
+                    timer.start(60);
                     update_ele_config(
                         candidate.mi,
                         candidate.ri,
@@ -570,6 +627,8 @@ pub fn vmc_make_sample(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(60);
+                    timer.start(61);
                     crate::sampling::updates::calculate_new_pf_m2_complex_flat(
                         candidate.mi,
                         candidate.spin,
@@ -584,7 +643,10 @@ pub fn vmc_make_sample(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(61);
+                    timer.start(62);
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -594,6 +656,7 @@ pub fn vmc_make_sample(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(63);
                         crate::sampling::updates::update_m_all_complex_flat(
                             candidate.mi,
                             candidate.spin,
@@ -607,6 +670,7 @@ pub fn vmc_make_sample(
                             n_site,
                             n_elec,
                         );
+                        timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         state.slater_matrix.pf_m.copy_from_slice(&pf_m_new);
                         log_ip_old = log_ip_new;
@@ -625,8 +689,10 @@ pub fn vmc_make_sample(
                             n_elec,
                         );
                     }
+                    timer.stop(32);
                 }
                 UpdateType::Exchange => {
+                    timer.start(31);
                     let candidate = make_candidate_exchange(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -635,11 +701,14 @@ pub fn vmc_make_sample(
                         &tmp_ele_num,
                         rng,
                     );
+                    timer.stop(31);
                     if candidate.reject {
                         continue;
                     }
+                    timer.start(33);
                     let ri_old = candidate.ri;
                     let rj_old = candidate.rj;
+                    timer.start(65);
                     update_ele_config(
                         candidate.mi,
                         ri_old,
@@ -681,6 +750,8 @@ pub fn vmc_make_sample(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(65);
+                    timer.start(66);
                     crate::sampling::updates::calculate_new_pf_m_two2_complex_flat(
                         candidate.mi,
                         candidate.spin,
@@ -697,7 +768,10 @@ pub fn vmc_make_sample(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(66);
+                    timer.start(67);
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -707,6 +781,7 @@ pub fn vmc_make_sample(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(68);
                         crate::sampling::updates::update_m_all_two_complex_flat(
                             candidate.mi,
                             candidate.spin,
@@ -724,6 +799,7 @@ pub fn vmc_make_sample(
                             n_site,
                             n_elec,
                         );
+                        timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
@@ -752,11 +828,13 @@ pub fn vmc_make_sample(
                             n_elec,
                         );
                     }
+                    timer.stop(33);
                 }
                 _ => {}
             }
 
             if n_accept_window > n_site {
+                timer.start(34);
                 if calc_m_all_complex(
                     &tmp_ele_idx,
                     &state.slater_matrix.slater_elm,
@@ -774,10 +852,12 @@ pub fn vmc_make_sample(
                         calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
                 }
                 n_accept_window = 0;
+                timer.stop(34);
             }
         }
 
         if out_step + n_vmc_sample >= n_out_step {
+            timer.start(35);
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
                 state
@@ -798,6 +878,7 @@ pub fn vmc_make_sample(
                     .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
+            timer.stop(35);
         }
     }
 
@@ -867,6 +948,16 @@ pub fn vmc_make_sample_fsz(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
 ) -> SampleStats {
+    vmc_make_sample_fsz_timed(data, state, rng, &mut CTimer::<false>::new())
+}
+
+/// Run the sampler with call-site-specific C timer sections.
+pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
@@ -878,7 +969,7 @@ pub fn vmc_make_sample_fsz(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.gutzwiller_terms.len() + data.jastrow_terms.len();
+    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -892,6 +983,7 @@ pub fn vmc_make_sample_fsz(
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
     let mut tmp_ele_spn = state.electron_config.tmp_ele_spn.clone();
 
+    timer.start(30);
     let burn_flag = state.electron_config.counter[9] != 0;
     if burn_flag {
         tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
@@ -952,11 +1044,13 @@ pub fn vmc_make_sample_fsz(
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
 
+    timer.stop(30);
     for out_step in 0..n_out_step {
         for _ in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Exchange => {
+                    timer.start(31);
                     let cand = make_candidate_exchange_fsz(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -966,9 +1060,11 @@ pub fn vmc_make_sample_fsz(
                         n_size,
                         rng,
                     );
+                    timer.stop(31);
                     if cand.reject {
                         continue;
                     }
+                    timer.start(33);
                     let s = cand.spin;
                     let t = 1 - s;
                     let mi = cand.mi;
@@ -976,6 +1072,7 @@ pub fn vmc_make_sample_fsz(
                     let rj = cand.rj;
                     let mj = tmp_ele_cfg[rj + t as usize * n_site] as usize;
 
+                    timer.start(65);
                     update_ele_config_fsz(
                         mi,
                         ri,
@@ -1019,6 +1116,8 @@ pub fn vmc_make_sample_fsz(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(65);
+                    timer.start(66);
                     crate::sampling::updates::calculate_new_pf_m_two_fsz_complex_flat(
                         mi,
                         s,
@@ -1036,7 +1135,10 @@ pub fn vmc_make_sample_fsz(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(66);
+                    timer.start(67);
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -1046,6 +1148,7 @@ pub fn vmc_make_sample_fsz(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(68);
                         let _ = crate::pfaffian::calc_m_all_fsz_complex(
                             &tmp_ele_idx,
                             &tmp_ele_spn,
@@ -1058,6 +1161,7 @@ pub fn vmc_make_sample_fsz(
                             n_elec,
                             &pool,
                         );
+                        timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
@@ -1088,8 +1192,10 @@ pub fn vmc_make_sample_fsz(
                             n_site,
                         );
                     }
+                    timer.stop(33);
                 }
                 UpdateType::LocalSpinFlip => {
+                    timer.start(31);
                     let cand = make_candidate_local_spin_flip_localspin(
                         &tmp_ele_idx,
                         &tmp_ele_spn,
@@ -1097,9 +1203,12 @@ pub fn vmc_make_sample_fsz(
                         n_size,
                         rng,
                     );
+                    timer.stop(31);
                     if cand.reject {
                         continue;
                     }
+                    timer.start(36);
+                    timer.start(600);
                     update_ele_config_fsz(
                         cand.mi,
                         cand.ri,
@@ -1113,6 +1222,8 @@ pub fn vmc_make_sample_fsz(
                         n_site,
                     );
                     proj_cnt_new.copy_from_slice(&tmp_ele_proj_cnt);
+                    timer.stop(600);
+                    timer.start(601);
                     crate::sampling::updates::calculate_new_pf_m2_fsz_complex_flat(
                         cand.mi,
                         cand.spin_to,
@@ -1128,7 +1239,10 @@ pub fn vmc_make_sample_fsz(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(601);
+                    timer.start(602);
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(602);
                     let decision = metropolis_decision(
                         0.0,
                         Complex64::new(0.0, 0.0),
@@ -1137,6 +1251,7 @@ pub fn vmc_make_sample_fsz(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(603);
                         let _ = crate::pfaffian::calc_m_all_fsz_complex(
                             &tmp_ele_idx,
                             &tmp_ele_spn,
@@ -1149,6 +1264,7 @@ pub fn vmc_make_sample_fsz(
                             n_elec,
                             &pool,
                         );
+                        timer.stop(603);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -1166,8 +1282,10 @@ pub fn vmc_make_sample_fsz(
                             n_site,
                         );
                     }
+                    timer.stop(36);
                 }
                 UpdateType::Hopping => {
+                    timer.start(31);
                     let cand = make_candidate_hopping_fsz(
                         &tmp_ele_idx,
                         &tmp_ele_cfg,
@@ -1178,9 +1296,12 @@ pub fn vmc_make_sample_fsz(
                         two_sz,
                         rng,
                     );
+                    timer.stop(31);
                     if cand.reject {
                         continue;
                     }
+                    timer.start(32);
+                    timer.start(60);
                     update_ele_config_fsz(
                         cand.mi,
                         cand.ri,
@@ -1202,6 +1323,8 @@ pub fn vmc_make_sample_fsz(
                         &tmp_ele_num,
                         data,
                     );
+                    timer.stop(60);
+                    timer.start(61);
                     crate::sampling::updates::calculate_new_pf_m2_fsz_complex_flat(
                         cand.mi,
                         cand.spin_to,
@@ -1217,7 +1340,10 @@ pub fn vmc_make_sample_fsz(
                         n_site,
                         n_elec,
                     );
+                    timer.stop(61);
+                    timer.start(62);
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
                         log_proj_delta,
@@ -1227,6 +1353,7 @@ pub fn vmc_make_sample_fsz(
                         rng,
                     );
                     if decision.accepted {
+                        timer.start(63);
                         let _ = crate::pfaffian::calc_m_all_fsz_complex(
                             &tmp_ele_idx,
                             &tmp_ele_spn,
@@ -1239,6 +1366,7 @@ pub fn vmc_make_sample_fsz(
                             n_elec,
                             &pool,
                         );
+                        timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
@@ -1257,10 +1385,12 @@ pub fn vmc_make_sample_fsz(
                             n_site,
                         );
                     }
+                    timer.stop(32);
                 }
                 _ => {}
             }
             if n_accept_window > n_site {
+                timer.start(34);
                 let _ = crate::pfaffian::calc_m_all_fsz_complex(
                     &tmp_ele_idx,
                     &tmp_ele_spn,
@@ -1276,9 +1406,11 @@ pub fn vmc_make_sample_fsz(
                 log_ip_old =
                     calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
                 n_accept_window = 0;
+                timer.stop(34);
             }
         }
         if out_step + n_vmc_sample >= n_out_step {
+            timer.start(35);
             let sample = out_step + n_vmc_sample - n_out_step;
             if sample < n_vmc_sample {
                 state
@@ -1303,6 +1435,7 @@ pub fn vmc_make_sample_fsz(
                     .copy_from_slice(&tmp_ele_proj_cnt);
                 saved += 1;
             }
+            timer.stop(35);
         }
     }
     state.electron_config.tmp_ele_idx = tmp_ele_idx;

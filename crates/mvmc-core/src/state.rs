@@ -501,7 +501,7 @@ impl SROptData {
 pub struct OptDataPoint {
     /// Energy at this iteration.
     pub energy: Complex64,
-    /// Parameter snapshot used to compute `energy`.
+    /// Synchronized parameters after the SR update for this measured energy.
     pub parameters: Vec<Complex64>,
 }
 

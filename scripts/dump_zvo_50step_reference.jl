@@ -5,8 +5,8 @@
 # modpara.def), and writes the first 50 raw `zvo_out.dat` lines to:
 #   reference/<model>/zvo_out_first50.dat
 #
-# Run against the bundled Julia-mVMC checkout (requires Julia 1.11):
-#   julia +1.11 --project=extern/Julia-mVMC scripts/dump_zvo_50step_reference.jl
+# Run against the bundled Julia-mVMC checkout (reference Julia 1.13.1):
+#   julia +1.13.1 --project=extern/Julia-mVMC scripts/dump_zvo_50step_reference.jl
 
 using MVMCOptimizers
 

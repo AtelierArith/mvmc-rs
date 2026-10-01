@@ -30,8 +30,16 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
 
     let tmp = tempdir_in_target();
     let out_dir = tmp.join("out");
-    mvmc_core::run_para_opt_from_namelist(&namelist, 10, Some(1), Some(&out_dir))
-        .expect("10-step run completes");
+    mvmc_core::run_para_opt_from_namelist(
+        &namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(10),
+            seed: Some(1),
+            output_dir: Some(out_dir.clone()),
+            ..mvmc_core::RunConfig::new(10, "real")
+        },
+    )
+    .expect("10-step run completes");
 
     let got = fs::read_to_string(out_dir.join("zvo_out.dat")).expect("zvo_out.dat written");
     let expected = fs::read_to_string(reference).expect("reference readable");

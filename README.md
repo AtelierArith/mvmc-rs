@@ -132,9 +132,8 @@ Options:
 --reps <N>           measured repetitions (default: 3)
 --warmups <N>        warmup repetitions, excluded from timing (default: 1)
 --threads <N>        pin BLAS / OpenMP / Julia threads on both sides
---blas-backend       build mvmc-cli with `--features blas-backend`
 --model <NAME>       benchmark one model; repeatable
---julia-root <DIR>   Julia-mVMC checkout (default: ../extern/Julia-mVMC)
+--julia-root <DIR>   Julia-mVMC checkout (default: extern/Julia-mVMC)
 --csv <PATH>         CSV output (default: target/bench/julia_vs_rust.csv)
 --keep-output        keep per-run zvo_out.dat / zqp_opt.dat files
 ```
@@ -161,35 +160,66 @@ at compile time:
 
 | Feature | Default | Rank-2 update (`pfaffian_ltl!`) | `dsktf2` rank-2 | trtri / trmm | scal | Bit parity vs Julia |
 |---|---|---|---|---|---|---|
-| (none) | yes | scalar | scalar (upper-triangular only) | scalar | scalar | bit-deterministic, full buffer match |
-| `blas-backend` | opt-in | `dger` / `zgeru` ×2 | scalar (preserves lower triangle) | `dtrtri` / `dtrmm` (`ztrtri` / `ztrmm`) | `dscal` / `zscal` | within ≤1e-13 |
+| (none) | standalone pfapack only | scalar | scalar (upper-triangular only) | scalar | scalar | deterministic scalar reference; may differ from Julia |
+| `blas-backend` | mvmc-core / CLI | `dger` / `zgeru` ×2 | scalar (preserves lower triangle) | `dtrtri` / `dtrmm` (`ztrtri` / `ztrmm`) | `dscal` / `zscal` | exact-bit gates against Julia 1.13.1 |
 
 Why a hybrid in BLAS mode? Julia's `julia_dsktf2!` itself replaces
 `BLAS.ger!` with an upper-triangle-only scalar loop because the LTL
 output contract preserves the strict lower triangle. We mirror that
-choice byte-for-byte so the `tests/fixtures/dump_pfapack_reference/`
+operation order so the `tests/fixtures/dump_pfapack_reference/`
 golden diff passes in both backends. The dense Pfaffian rank-2 update,
 the unit-upper trtri, and the trmm Mᵀ · A pass are the actual hot path
 for `vmc_sampling` and are dispatched to BLAS.
 
-Build & run examples with BLAS on. On macOS, install Homebrew OpenBLAS
-first because the BLAS backend expects the Fortran BLAS/LAPACK symbols
-from OpenBLAS rather than Accelerate:
+The optimizer always enables the BLAS/LAPACK backend, including small
+matrices. Scalar shortcuts can change the inputs to SR-CG by a few ulps
+and significantly change its truncated solution. Standalone pfapack
+retains its scalar reference backend. On macOS, install Homebrew OpenBLAS
+first for the standard optimizer and SR-CG BLAS/LAPACK kernels:
 
 ```bash
 brew install openblas
 ```
 
 `openblas` is keg-only on macOS; the Rust build scripts add the Homebrew
-library path automatically when `--features blas-backend` is enabled. On
+library path automatically for the optimizer. On
 Linux, install the system OpenBLAS/LAPACK package, for example
 `libopenblas-dev` on Debian/Ubuntu.
 
+The ordinary complex optimizer follows Julia's `julia_zsktf2_turbo!`
+operation order. FSZ follows its separate ordinary LTL and direct-division
+inverse path; on macOS that reference path uses Accelerate. The Rust
+implementation selects those numerical kernels without calling a native
+PfaPack wrapper.
+
+Standard SR-CG (`NSRCG=1`) has exact-bit Julia 1.13.1 gates for the real,
+complex, FSZ Heisenberg and real Hubbard examples: runs of 1, 2, 3, and 50 optimizer steps
+check final parameters, energy, every saved configuration, the next full SFMT
+block, and the complete SRinfo output. The fixed-input gate also checks every CG iterate through
+both the 20th and 40th residual refreshes. Run the reference checks with:
+
 ```bash
-cargo run --release -p mvmc-cli --features blas-backend --example heisenberg_chain_real
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_fixed_parity.jl
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_fixed_parity.jl --sampled
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=real
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=cmp
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=fsz
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=hubbard
+```
+
+Direct SR (`NSRCG=0`) checks the same models with `NStore=0` and `NStore=1`.
+Real stored Gram construction follows Julia's SYRK dispatch and upper-triangle
+copy; complex construction preserves its sequential sample sum. Projection
+ratios and Metropolis probabilities use Julia's Float64 exponential. The
+direct solver's sampled matrices, gradients, factors, and solutions also have
+exact-bit fixtures. See `tests/fixtures/sr_direct/README.md` for settings and
+the `scripts/check_sr_direct_runner_parity.jl` reference commands.
+
+```bash
+cargo run --release -p mvmc-cli --example heisenberg_chain_real
 
 # Benchmark in the same configuration:
-cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1 --blas-backend
+cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1
 ```
 
 ## Out of scope for v0.1 (mirrors Julia-mVMC v0.1)

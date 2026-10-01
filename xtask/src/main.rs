@@ -46,7 +46,6 @@ struct BenchConfig {
     csv: PathBuf,
     keep_output: bool,
     threads: Option<usize>,
-    blas_backend: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -90,19 +89,13 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
         Some(n) => println!("threads    : {n} (pinned on both Rust & Julia)"),
         None => println!("threads    : <inherit env> (consider --threads N for fairness)"),
     }
-    println!(
-        "rust BLAS  : {}",
-        if config.blas_backend {
-            "on (--features blas-backend)"
-        } else {
-            "off (pure-Rust kernels)"
-        }
-    );
+    println!("pfapack    : BLAS/LAPACK (required for Julia numerical parity)");
+    println!("SR backend : BLAS GEMV for CG; LAPACK for the direct solver");
     println!("julia root : {}", config.julia_root.display());
     println!("csv        : {}", config.csv.display());
     println!();
 
-    build_rust_examples(&workspace, &config)?;
+    build_rust_examples(&workspace)?;
 
     let run_root = workspace
         .join("target")
@@ -149,14 +142,13 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
     let mut reps = 3usize;
     let mut warmups = 1usize;
     let mut model_names: Vec<String> = Vec::new();
-    let mut julia_root = workspace.join("../extern/Julia-mVMC");
+    let mut julia_root = workspace.join("extern/Julia-mVMC");
     let mut csv = workspace
         .join("target")
         .join("bench")
         .join("julia_vs_rust.csv");
     let mut keep_output = false;
     let mut threads: Option<usize> = None;
-    let mut blas_backend = false;
 
     let mut idx = 0;
     while idx < args.len() {
@@ -181,7 +173,6 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
                 idx += 1;
                 threads = Some(parse_value(args.get(idx), "--threads")?);
             }
-            "--blas-backend" => blas_backend = true,
             "--model" => {
                 idx += 1;
                 model_names.push(
@@ -242,7 +233,6 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
         csv,
         keep_output,
         threads,
-        blas_backend,
     })
 }
 
@@ -256,7 +246,7 @@ where
         .map_err(|_| format!("invalid value for {flag}"))
 }
 
-fn build_rust_examples(workspace: &Path, config: &BenchConfig) -> Result<(), String> {
+fn build_rust_examples(workspace: &Path) -> Result<(), String> {
     println!("building Rust release examples...");
     let mut command = Command::new("cargo");
     command
@@ -265,9 +255,6 @@ fn build_rust_examples(workspace: &Path, config: &BenchConfig) -> Result<(), Str
         .arg("-p")
         .arg("mvmc-cli")
         .arg("--examples");
-    if config.blas_backend {
-        command.arg("--features").arg("blas-backend");
-    }
     let output = command
         .current_dir(workspace)
         .output()
@@ -366,6 +353,7 @@ fn run_julia_model(
 
     let mut command = Command::new("julia");
     command
+        .arg("+1.13.1")
         .arg(format!("--project={}", julia_root.display()))
         .arg("--startup-file=no")
         .arg("--history-file=no");
@@ -644,7 +632,6 @@ fn print_bench_help() {
     println!("  --reps <N>           measured repetitions [default: 3]");
     println!("  --warmups <N>        warmup repetitions [default: 1]");
     println!("  --threads <N>        pin BLAS / OpenMP / Julia threads on both sides");
-    println!("  --blas-backend       build mvmc-cli with --features blas-backend");
     println!("  --model <NAME>       benchmark one model; repeatable");
     println!("  --julia-root <DIR>   Julia-mVMC checkout [default: ../extern/Julia-mVMC]");
     println!("  --csv <PATH>         CSV output [default: target/bench/julia_vs_rust.csv]");
@@ -685,6 +672,7 @@ function run_once(iter::Int)
     result = MVMCOptimizers.run_para_opt_from_namelist(
         namelist;
         nsteps = steps,
+        nsmp = steps,
         mode = mode,
         output_dir = out_dir,
     )
