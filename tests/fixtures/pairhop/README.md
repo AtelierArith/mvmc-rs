@@ -1,4 +1,4 @@
-# PairHop input contract
+# PairHop input, energy and production parity
 
 These fixtures port and extend the canonical `test_parsers.jl` PairHop tests.
 Each input row `(i,j,value)` becomes `(i,j,value)` then `(j,i,value)`, including
@@ -32,8 +32,53 @@ OpenBLAS 0.3.30 ILP64, one BLAS thread. The fixture records this configuration;
 parsing and parameter initialization perform no BLAS operations. Vendored
 sources are unchanged.
 
-This milestone implements the input contract. Library and CLI still reject
-PairHop under #22 before parameter initialization or RNG consumption, including
-programmatically supplied terms without a namelist. Normal/FSZ local-energy
-integration, equivalence to InterAll and deterministic production comparisons
-are required before enabling it or completing the issue.
+Normal and FSZ local energy accumulate the directed terms in source order,
+before Exchange. `energy_normal.txt` and `energy_fsz.txt` reuse the independently
+verified InterAll Green states and inverse bits, including real and complex
+matrices, reordered FSZ electron labels and unequal spin populations. The
+Hamiltonian input covers duplicates, self-pairs, invalid sites and nonzero
+off-diagonal pair transfers. Pure and combined energies match the original
+Julia Hamiltonian bits. Independent Fock-space signs and analytic four-electron
+Pfaffians use `atol=2e-12, rtol=0`; corresponding InterAll operators agree at
+`atol=2e-14, rtol=0`. These tolerances apply only to the independent numerical
+identities; source energy, sampling and RNG comparisons are exact.
+
+The canonical normal InterAll accumulator accesses nonexistent `term.sites`
+fields. Its equivalence check therefore evaluates the parsed InterAll operators
+through the original `green_func2`, as documented in the script. FSZ equivalence
+uses the original InterAll Hamiltonian directly. Normal InterAll production
+remains gated under #23; the general real FSZ runner remains gated under #43.
+
+Canonical `hubbard_chain_pairhop_real` and `hubbard_chain_pairhop_fsz` inputs
+run through the library and CLI. The original Julia `pairhop_equivalent.jl`
+and the Rust port pass the canonical one-step C checks without changing their
+tolerances. Same-seed Julia 1.13.1 fixtures under `sr_cg/pairhop_*_runner` and
+`sr_direct/pairhop_*_{runner,store_runner}` compare initialization flags,
+parameter bits, energy bits, saved configurations, occupations, projections,
+FSZ spins, burn buffers, counters and all 624 subsequent SFMT words at
+1, 2, 3 and 50 optimization steps. Direct SR covers NStore=0/1; SR-CG covers
+its supported NStore=0 path. The canonical sample counts (100 real, 2000 FSZ)
+and all proposal/burn settings are retained. Fixed-input Gram matrices, SR
+matrix/gradient, Cholesky factor and solution also match Julia bits.
+
+The larger FSZ direct-SR case exposed a BLAS thread-count difference: Rust's
+OpenMP OpenBLAS 0.3.34 LP64 defaults to eight threads and ignores
+`OPENBLAS_NUM_THREADS=1`. Explicit `openblas_set_num_threads(1)` reproduces
+Julia's one-thread OpenBLAS 0.3.30 ILP64 factors. This process-wide serial
+setting is shared by direct SR and SR-CG. Additional complex FSZ intermediate
+state evidence is documented in `../complex_fsz/README.md`. Vendored sources
+remain unchanged.
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_pairhop_green_parity.jl
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_pairhop_reference.jl
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=pairhop_real
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=pairhop_fsz
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=pairhop_real --store=0
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=pairhop_real --store=1
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=pairhop_fsz --store=0
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=pairhop_fsz --store=1
+cargo test -p mvmc-core --locked pairhop
+cargo test -p mvmc-core --locked stored_direct_sr_gram_matches_sampled_julia_bits
+cargo test -p mvmc-core --locked sampled_direct_sr_matrix_gradient_factor_and_solution_match_julia
+```

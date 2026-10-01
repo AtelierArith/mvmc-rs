@@ -133,7 +133,7 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
             // table, so the fixture actually covers successful retries.
             let mut first = VmcOptimizationState::zeros(3, 1, 0, 0, 1, 1, false, true);
             let c = &mut first.electron_config;
-            mvmc_core::sampling::make_initial_sample_fsz(
+            mvmc_core::sampling::generate_initial_fsz_configuration(
                 &mut c.tmp_ele_idx,
                 &mut c.tmp_ele_cfg,
                 &mut c.tmp_ele_num,

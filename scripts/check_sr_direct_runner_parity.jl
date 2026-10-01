@@ -6,7 +6,7 @@ BLAS.set_num_threads(1)
 const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
-CASE in ("real", "cmp", "fsz", "hubbard", "interall") || error("Unknown case: $CASE")
+CASE in ("real", "cmp", "fsz", "hubbard", "interall", "pairhop_real", "pairhop_fsz") || error("Unknown case: $CASE")
 if "--general" in ARGS
     CASE == "fsz" || error("--general requires --case=fsz")
     "--write" in ARGS && error("General must verify the existing AP/P fixtures")
@@ -73,6 +73,9 @@ end
         if CASE == "interall"
             namelist = joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def")
         end
+        if startswith(CASE,"pairhop_")
+            namelist = joinpath(@__DIR__,"..","extern","Julia-mVMC","test","integration","reference","hubbard_chain_"*CASE,"inputs","namelist.def")
+        end
         data = parse_expert_mode_files(namelist)
         data.modpara.nsr_opt_itr_step = steps
         data.modpara.nsr_opt_itr_smp = steps
@@ -120,7 +123,7 @@ end
             for vals in (configs.ele_idx, configs.ele_cfg, configs.ele_num, configs.ele_proj_cnt)
                 println(io, join(vals, " "))
             end
-            if CASE == "interall"
+            if CASE in ("interall","pairhop_fsz")
                 println(io, join(configs.ele_spn, " "))
                 println(io, join(configs.burn_ele_idx, " "))
                 println(io, join(vcat(configs.counter[1:9],configs.counter[11]), " "))

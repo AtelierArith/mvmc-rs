@@ -46,7 +46,6 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 #[test]
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in [
-        "PairHop",
         "InterAll",
         "DH2",
         "DH4",
@@ -104,11 +103,12 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
 }
 
 #[test]
-fn retained_pairhop_payload_is_rejected_before_initialization_with_or_without_namelist() {
+fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/pairhop/namelist.def");
     for has_namelist in [true, false] {
         let mut data = mvmc_expert_parsers::parse_expert_mode_files(&root).unwrap();
+        data.i_flg_orbital_general = 1;
         if !has_namelist {
             data.namelist.clear();
         }
@@ -126,7 +126,7 @@ fn retained_pairhop_payload_is_rejected_before_initialization_with_or_without_na
         )
         .unwrap_err();
         assert!(
-            error.contains("PairHop") && error.contains("issue #22"),
+            error.contains("real FSZ") && error.contains("issue #43"),
             "{error}"
         );
         assert_eq!(data.modpara, before.modpara);

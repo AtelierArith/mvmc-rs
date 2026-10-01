@@ -10,7 +10,7 @@
 //! calculate_oo, finalize_oo_store)` accumulators that feed the SR step.
 //! Transfer and general fixed-Sz/FSZ Green ratios are implemented. FSZ local
 //! energy includes InterAll; its runner support remains gated by validation.
-//! PairHopping and fixed-Sz InterAll production contributions are pending.
+//! Fixed-Sz InterAll production contributions are pending.
 
 #![allow(
     clippy::too_many_arguments,
@@ -122,7 +122,9 @@ pub fn calculate_log_ip_complex(
     data: &ExpertModeData,
 ) -> Complex64 {
     let ip = calculate_ip_complex(pf_m, qp_start, qp_end, data);
-    let mag = ip.norm() + 1.0e-100;
+    // Julia's complex path takes log(ip) directly, including log(0).
+    // A nonfinite initial overlap triggers the sampler's original remake.
+    let mag = ip.norm();
     Complex64::new(mag.ln(), ip.arg())
 }
 
@@ -997,6 +999,33 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
     }
     timer.stop(71);
     timer.start(72);
+    for term in &data.pair_hop_terms {
+        let n_site = data.modpara.nsite;
+        if !(0..n_site).contains(&term.site1) || !(0..n_site).contains(&term.site2) {
+            continue;
+        }
+        let ri = term.site1 as usize;
+        let rj = term.site2 as usize;
+        e += term.value
+            * green_func2_fsz(
+                ri,
+                rj,
+                ri,
+                rj,
+                0,
+                0,
+                1,
+                1,
+                ip,
+                data,
+                state,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+                ele_spn,
+            );
+    }
     if !data.exchange_terms.is_empty() && ip.norm() > 0.0 {
         let n_site = data.modpara.nsite as usize;
         for term in &data.exchange_terms {
@@ -1450,9 +1479,34 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         }
     }
 
-    // Exchange terms (2-body).
+    // Julia accumulates PairHop before Exchange in the two-body section.
     timer.stop(71);
     timer.start(72);
+    for term in &data.pair_hop_terms {
+        if !(0..data.modpara.nsite).contains(&term.site1)
+            || !(0..data.modpara.nsite).contains(&term.site2)
+        {
+            continue;
+        }
+        let ri = term.site1 as usize;
+        let rj = term.site2 as usize;
+        e += term.value
+            * green_func2(
+                ri,
+                rj,
+                ri,
+                rj,
+                0,
+                1,
+                ip,
+                data,
+                state,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+            );
+    }
     if !data.exchange_terms.is_empty() && ip.norm() > 0.0 {
         for term in &data.exchange_terms {
             let ri = term.site1;
@@ -1593,7 +1647,14 @@ mod tests {
     fn stored_direct_sr_gram_matches_sampled_julia_bits() {
         let root =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/sr_direct");
-        for case in ["real", "cmp", "fsz", "hubbard"] {
+        for case in [
+            "real",
+            "cmp",
+            "fsz",
+            "hubbard",
+            "pairhop_real",
+            "pairhop_fsz",
+        ] {
             let fixture =
                 std::fs::read_to_string(root.join(format!("{case}_store_runner/gram.txt")))
                     .unwrap();
@@ -1611,7 +1672,7 @@ mod tests {
             };
             let store = parse(lines.next().unwrap());
             let expected = parse(lines.next().unwrap());
-            let actual = if matches!(case, "cmp" | "fsz") {
+            let actual = if matches!(case, "cmp" | "fsz" | "pairhop_fsz") {
                 let store: Vec<Complex64> = store
                     .chunks_exact(2)
                     .map(|z| Complex64::new(z[0], z[1]))

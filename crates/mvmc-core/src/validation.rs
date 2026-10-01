@@ -57,9 +57,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
-    if !data.pair_hop_terms.is_empty() {
-        return Err("PairHop local energy is not implemented yet (issue #22)".into());
-    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
@@ -96,7 +93,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             "SpinJastrow" => {
                 return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
             }
-            "PairHop" => Some(22),
+            "PairHop" => None,
             "InterAll" => None,
             "DH2" | "DoublonHolon2Site" => Some(24),
             "DH4" | "DoublonHolon4Site" => Some(25),

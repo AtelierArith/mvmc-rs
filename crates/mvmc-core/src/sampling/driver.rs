@@ -21,7 +21,8 @@ use crate::observables::{calculate_log_ip_complex, calculate_log_ip_real};
 use crate::pfaffian::{calc_m_all_complex, calc_m_all_real};
 use crate::sampling::candidate::{
     get_update_type, make_candidate_exchange, make_candidate_exchange_fsz, make_candidate_hopping,
-    make_candidate_hopping_fsz, make_candidate_local_spin_flip_localspin, UpdateType,
+    make_candidate_hopping_fsz, make_candidate_local_spin_flip_conduction,
+    make_candidate_local_spin_flip_localspin, FszHoppingCandidate, UpdateType,
 };
 use crate::sampling::initial::make_initial_sample;
 use crate::sampling::metropolis::metropolis_decision;
@@ -976,9 +977,19 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     };
 
     timer.start(30);
-    let burn_flag = state.electron_config.counter[9] != 0;
+    let mut burn_flag = state.electron_config.counter[9] != 0;
+    let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     if burn_flag {
         state.electron_config.restore_burn_fsz();
+    } else if crate::sampling::initial::make_initial_sample_fsz(
+        data, state, rng, 0, n_qp_full, &pool,
+    )
+    .is_err()
+    {
+        return SampleStats {
+            accepted: 0,
+            saved: 0,
+        };
     }
     let mut tmp_ele_idx = state.electron_config.tmp_ele_idx.clone();
     let mut tmp_ele_cfg = state.electron_config.tmp_ele_cfg.clone();
@@ -986,26 +997,6 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
     let mut tmp_ele_spn = state.electron_config.tmp_ele_spn.clone();
 
-    if !burn_flag
-        && crate::sampling::initial::make_initial_sample_fsz(
-            &mut tmp_ele_idx,
-            &mut tmp_ele_cfg,
-            &mut tmp_ele_num,
-            &mut tmp_ele_proj_cnt,
-            &mut tmp_ele_spn,
-            data,
-            &loc_spn,
-            rng,
-        )
-        .is_err()
-    {
-        return SampleStats {
-            accepted: 0,
-            saved: 0,
-        };
-    }
-
-    let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     if crate::pfaffian::calc_m_all_fsz_complex(
         &tmp_ele_idx,
         &tmp_ele_spn,
@@ -1026,6 +1017,44 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
         };
     }
     let mut log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+
+    if !log_ip_old.re.is_finite() || !log_ip_old.im.is_finite() {
+        if crate::sampling::initial::make_initial_sample_fsz(data, state, rng, 0, n_qp_full, &pool)
+            .is_err()
+        {
+            return SampleStats {
+                accepted: 0,
+                saved: 0,
+            };
+        }
+        let c = &state.electron_config;
+        tmp_ele_idx.copy_from_slice(&c.tmp_ele_idx);
+        tmp_ele_cfg.copy_from_slice(&c.tmp_ele_cfg);
+        tmp_ele_num.copy_from_slice(&c.tmp_ele_num);
+        tmp_ele_proj_cnt.copy_from_slice(&c.tmp_ele_proj_cnt);
+        tmp_ele_spn.copy_from_slice(&c.tmp_ele_spn);
+        if crate::pfaffian::calc_m_all_fsz_complex(
+            &tmp_ele_idx,
+            &tmp_ele_spn,
+            &state.slater_matrix.slater_elm,
+            &mut state.slater_matrix.inv_m,
+            &mut state.slater_matrix.pf_m,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+            &pool,
+        )
+        .is_err()
+        {
+            return SampleStats {
+                accepted: 0,
+                saved: 0,
+            };
+        }
+        log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+        burn_flag = false;
+    }
 
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![Complex64::new(0.0, 0.0); n_qp_full];
@@ -1252,17 +1281,19 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     );
                     if decision.accepted {
                         timer.start(603);
-                        let _ = crate::pfaffian::calc_m_all_fsz_complex(
+                        crate::sampling::updates::update_m_all_fsz_complex_flat(
+                            cand.mi,
+                            cand.spin_to,
                             &tmp_ele_idx,
                             &tmp_ele_spn,
                             &state.slater_matrix.slater_elm,
-                            &mut state.slater_matrix.inv_m,
+                            state.slater_matrix.inv_m.as_mut_slice(),
+                            inv_stride,
                             &mut state.slater_matrix.pf_m,
                             0,
                             n_qp_full,
                             n_site,
                             n_elec,
-                            &pool,
                         );
                         timer.stop(603);
                         log_ip_old = log_ip_new;
@@ -1288,16 +1319,39 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                 UpdateType::Hopping => {
                     state.electron_config.counter[0] += 1;
                     timer.start(31);
-                    let cand = make_candidate_hopping_fsz(
-                        &tmp_ele_idx,
-                        &tmp_ele_cfg,
-                        &tmp_ele_spn,
-                        &loc_spn,
-                        n_site,
-                        n_size,
-                        two_sz,
-                        rng,
-                    );
+                    // The complex source counts both proposals as hopping and,
+                    // unlike its real FSZ driver, flips conduction spins when
+                    // TwoSz is fixed. Preserve the short-circuit draw order.
+                    let cand = if two_sz == -1 && rng.genrand_real2() < 0.5 {
+                        make_candidate_hopping_fsz(
+                            &tmp_ele_idx,
+                            &tmp_ele_cfg,
+                            &tmp_ele_spn,
+                            &loc_spn,
+                            n_site,
+                            n_size,
+                            two_sz,
+                            rng,
+                        )
+                    } else {
+                        let flip = make_candidate_local_spin_flip_conduction(
+                            &tmp_ele_idx,
+                            &tmp_ele_cfg,
+                            &tmp_ele_spn,
+                            &loc_spn,
+                            n_site,
+                            n_size,
+                            rng,
+                        );
+                        FszHoppingCandidate {
+                            mi: flip.mi,
+                            ri: flip.ri,
+                            rj: flip.rj,
+                            spin: flip.spin,
+                            spin_to: flip.spin_to,
+                            reject: flip.reject,
+                        }
+                    };
                     timer.stop(31);
                     if cand.reject {
                         continue;
@@ -1356,17 +1410,19 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     );
                     if decision.accepted {
                         timer.start(63);
-                        let _ = crate::pfaffian::calc_m_all_fsz_complex(
+                        crate::sampling::updates::update_m_all_fsz_complex_flat(
+                            cand.mi,
+                            cand.spin_to,
                             &tmp_ele_idx,
                             &tmp_ele_spn,
                             &state.slater_matrix.slater_elm,
-                            &mut state.slater_matrix.inv_m,
+                            state.slater_matrix.inv_m.as_mut_slice(),
+                            inv_stride,
                             &mut state.slater_matrix.pf_m,
                             0,
                             n_qp_full,
                             n_site,
                             n_elec,
-                            &pool,
                         );
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
