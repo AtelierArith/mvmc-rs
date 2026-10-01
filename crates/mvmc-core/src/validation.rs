@@ -57,6 +57,9 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
+    if !data.inter_all_terms.is_empty() {
+        return Err("InterAll local energy is not implemented yet (issue #23)".into());
+    }
     for (kind, _) in &data.namelist {
         let issue = match kind.as_str() {
             "SpinJastrow" => {

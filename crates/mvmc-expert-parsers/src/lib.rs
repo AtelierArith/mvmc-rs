@@ -19,8 +19,9 @@ pub mod utils;
 
 pub use types::{
     CoulombInterTerm, CoulombIntraTerm, ExchangeTerm, ExpertModeData, GreenOneTerm, GreenTwoTerm,
-    GutzwillerTerm, HundTerm, JastrowTerm, LocSpinTerm, ModParaParameters, OrbitalTerm,
-    ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin, TransferTerm, ValidationResult,
+    GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm, ModParaParameters,
+    OrbitalTerm, ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin, TransferTerm,
+    ValidationResult,
 };
 
 pub use utils::validation::{
@@ -39,7 +40,8 @@ use std::io;
 use std::path::Path;
 
 use crate::parsers::{
-    coulomb, exchange, green, gutzwiller, hund, jastrow, locspin, modpara, orbital, qptrans, trans,
+    coulomb, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara, orbital,
+    qptrans, trans,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -104,7 +106,8 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
         if !full_path.is_file() {
             // Julia's parameter overlays are optional, including referenced
             // files that are absent. Their reader handles them after seeding.
-            if file_type.starts_with("In") {
+            // InterAll is a Hamiltonian definition, not a parameter overlay.
+            if file_type.starts_with("In") && file_type != "InterAll" {
                 continue;
             }
             tracing::warn!("File not found: {}", full_path.display());
@@ -191,6 +194,9 @@ fn parse_file_by_type(
         }
         "Exchange" => {
             data.exchange_terms = exchange::parse_exchange_def(path)?;
+        }
+        "InterAll" => {
+            data.inter_all_terms = interall::parse_interall_def(path)?;
         }
         "Gutzwiller" => {
             let content = read_def_file(path)?;
