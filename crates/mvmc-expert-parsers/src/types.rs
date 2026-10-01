@@ -914,6 +914,68 @@ impl ExpertModeData {
         ]
     }
 
+    /// Pack indexed RBM values in canonical section order; unmapped slots are zero.
+    /// When programmatic mappings disagree, the last row supplies the coefficient.
+    pub fn rbm_parameters(&self) -> Vec<Complex64> {
+        fn scatter<T: RbmParameter>(terms: &[T], values: &mut [Complex64]) {
+            for term in terms {
+                if term.idx() >= 0 {
+                    if let Some(value) = values.get_mut(term.idx() as usize) {
+                        *value = term.value();
+                    }
+                }
+            }
+        }
+        let sizes = self.rbm_section_sizes();
+        let mut values = vec![Complex64::new(0.0, 0.0); sizes.iter().sum()];
+        let mut offset = 0;
+        scatter(
+            &self.charge_rbm_phys_layer_terms,
+            &mut values[offset..offset + sizes[0]],
+        );
+        offset += sizes[0];
+        scatter(
+            &self.spin_rbm_phys_layer_terms,
+            &mut values[offset..offset + sizes[1]],
+        );
+        offset += sizes[1];
+        scatter(
+            &self.general_rbm_phys_layer_terms,
+            &mut values[offset..offset + sizes[2]],
+        );
+        offset += sizes[2];
+        scatter(
+            &self.charge_rbm_hidden_layer_terms,
+            &mut values[offset..offset + sizes[3]],
+        );
+        offset += sizes[3];
+        scatter(
+            &self.spin_rbm_hidden_layer_terms,
+            &mut values[offset..offset + sizes[4]],
+        );
+        offset += sizes[4];
+        scatter(
+            &self.general_rbm_hidden_layer_terms,
+            &mut values[offset..offset + sizes[5]],
+        );
+        offset += sizes[5];
+        scatter(
+            &self.charge_rbm_phys_hidden_terms,
+            &mut values[offset..offset + sizes[6]],
+        );
+        offset += sizes[6];
+        scatter(
+            &self.spin_rbm_phys_hidden_terms,
+            &mut values[offset..offset + sizes[7]],
+        );
+        offset += sizes[7];
+        scatter(
+            &self.general_rbm_phys_hidden_terms,
+            &mut values[offset..offset + sizes[8]],
+        );
+        values
+    }
+
     /// Whether any RBM mapping exists, independent of declared or inferred widths.
     pub fn has_rbm_terms(&self) -> bool {
         !self.charge_rbm_phys_layer_terms.is_empty()

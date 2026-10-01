@@ -1,0 +1,14 @@
+ModPara ../modpara.def
+Gutzwiller ../gutz.def
+Jastrow ../jast.def
+Orbital ../orbital.def
+ChargeRBM_PhysLayer ../ChargeRBM_PhysLayer.def
+InChargeRBM_PhysLayer overlay.def
+GeneralRBM_PhysLayer ../GeneralRBM_PhysLayer.def
+InGeneralRBM_PhysLayer overlay.def
+GeneralRBM_HiddenLayer ../GeneralRBM_HiddenLayer.def
+InGeneralRBM_HiddenLayer overlay.def
+SpinRBM_PhysHidden ../SpinRBM_PhysHidden.def
+InSpinRBM_PhysHidden overlay.def
+InChargeRBM_PhysLayer missing.def
+InChargeRBM_Unknown overlay.def
