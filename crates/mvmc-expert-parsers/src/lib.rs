@@ -4,7 +4,8 @@
 //!
 //! Phase 3 status: the parsers, types and orchestration needed to
 //! round-trip the four upstream `examples/inputs/*` namelists are
-//! implemented. The remaining upstream modules (RBM, doublon-holon,
+//! implemented, including strict DH2 definitions and their parameter layout.
+//! The remaining upstream modules (RBM, DH4,
 //! backflow) stay as skeleton stubs and
 //! will land alongside Phase 4 once `mvmc-core` actually consumes them.
 //!
@@ -18,10 +19,10 @@ pub mod types;
 pub mod utils;
 
 pub use types::{
-    CoulombInterTerm, CoulombIntraTerm, ExchangeTerm, ExpertModeData, GreenOneTerm, GreenTwoTerm,
-    GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm, ModParaParameters,
-    OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin,
-    TransferTerm, ValidationResult,
+    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex,
+    ExchangeTerm, ExpertModeData, GreenOneTerm, GreenTwoTerm, GutzwillerTerm, HundTerm,
+    InterAllTerm, JastrowTerm, LocSpinTerm, ModParaParameters, OrbitalTerm, PairHopTerm,
+    ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin, TransferTerm, ValidationResult,
 };
 
 pub use utils::validation::{
@@ -32,7 +33,8 @@ pub use utils::validation::{
 
 pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
-    is_jastrow_optimized, is_slater_optimized, set_orbital_opt_flags, set_projection_opt_flags,
+    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_orbital_opt_flags,
+    set_projection_opt_flags,
 };
 
 use std::collections::BTreeMap;
@@ -40,8 +42,8 @@ use std::io;
 use std::path::Path;
 
 use crate::parsers::{
-    coulomb, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara, orbital,
-    pairhop, qptrans, trans,
+    coulomb, doublon_holon, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara,
+    orbital, pairhop, qptrans, trans,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -70,7 +72,8 @@ pub enum ParseError {
 /// child files are logged via [`tracing::warn`] and skipped, matching
 /// the C / Julia "continue on error" policy. Unknown keywords in the
 /// namelist are silently ignored (the round-trip set covers everything
-/// the four `examples/inputs/*` cases use).
+/// the four `examples/inputs/*` cases use). DH2 definitions are required
+/// when listed: read/format failures return an error as in Julia.
 pub fn parse_expert_mode_files<P: AsRef<Path>>(
     namelist_path: P,
 ) -> Result<ExpertModeData, ParseError> {
@@ -104,6 +107,14 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     for (file_type, file_name) in &file_list {
         let full_path = base_dir.join(file_name);
         if !full_path.is_file() {
+            if matches!(file_type.as_str(), "DH2" | "DoublonHolon2Site") {
+                return Err(ParseError::InvalidInput {
+                    message: format!(
+                        "Required {file_type} file not found: {}",
+                        full_path.display()
+                    ),
+                });
+            }
             // Julia's parameter overlays are optional, including referenced
             // files that are absent. Their reader handles them after seeding.
             // InterAll is a Hamiltonian definition, not a parameter overlay.
@@ -118,6 +129,14 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
             continue;
         }
         if let Err(e) = parse_file_by_type(&mut data, file_type, &full_path, &mut orbital_flags) {
+            if matches!(file_type.as_str(), "DH2" | "DoublonHolon2Site") {
+                return Err(ParseError::InvalidInput {
+                    message: format!(
+                        "Error parsing required {file_type} file {}: {e}",
+                        full_path.display()
+                    ),
+                });
+            }
             data.input_errors.push(format!(
                 "error parsing {file_type} file {}: {e}",
                 full_path.display()
@@ -131,7 +150,8 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
         }
     }
 
-    // Slater flags need all projection counts and AP/P declared widths.
+    // Both DH2 and Slater flags need the final projection layout.
+    set_dh_opt_flags(&mut data);
     set_orbital_opt_flags(&mut data, &orbital_flags);
 
     // Mirror the post-parse pass from upstream:
@@ -207,6 +227,24 @@ fn parse_file_by_type(
         }
         "InterAll" => {
             data.inter_all_terms = interall::parse_interall_def(path)?;
+        }
+        "DH2" | "DoublonHolon2Site" => {
+            let section = doublon_holon::parse_doublon_holon_2site_def(path, data.modpara.nsite)?;
+            let definition = section.data.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Failed to parse DH2 file '{}': {}",
+                        path.display(),
+                        section.error_message
+                    ),
+                )
+            })?;
+            data.doublon_holon_2site_indices = definition.indices;
+            data.doublon_holon_2site_complex = definition.is_complex;
+            data.doublon_holon_2site_params =
+                vec![num_complex::Complex64::new(0.0, 0.0); definition.opt_flags.len()];
+            data.doublon_holon_2site_opt_flags = definition.opt_flags;
         }
         "Gutzwiller" => {
             let content = read_def_file(path)?;

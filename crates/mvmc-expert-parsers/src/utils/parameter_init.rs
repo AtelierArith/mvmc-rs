@@ -7,7 +7,7 @@
 //! Slater values that seed the optimiser match Julia + C exactly. The
 //! caller MUST seed the SFMT RNG before calling [`init_parameter`].
 //!
-//! Phase-4 scope: real Slater initialisation only (`AllComplexFlag == 0`).
+//! Real/complex Slater initialization includes Gutzwiller/Jastrow/DH2 declarations.
 //! RBM init lives behind `flag_rbm` and currently no-ops because the
 //! Phase-3 parsers do not surface RBM terms; once RBM parsers land,
 //! drop the parking logic here.
@@ -26,7 +26,7 @@ pub fn all_complex_flag(data: &ExpertModeData) -> bool {
     let g = data.gutzwiller_terms.iter().any(|t| t.is_complex);
     let j = data.jastrow_terms.iter().any(|t| t.is_complex);
     let o = data.orbital_terms.iter().any(|t| t.is_complex);
-    g || j || o
+    g || j || data.doublon_holon_2site_complex || o
 }
 
 /// Number of unique Slater (orbital) parameters. Mirrors
@@ -50,6 +50,8 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     for term in data.jastrow_terms.iter_mut() {
         term.value = Complex64::new(0.0, 0.0);
     }
+    data.doublon_holon_2site_params
+        .fill(Complex64::new(0.0, 0.0));
 
     let all_complex = all_complex_flag(data);
     let n_proj = data.projection_layout().n_proj;

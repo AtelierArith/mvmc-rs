@@ -1,0 +1,7 @@
+Nsite 3
+NCond -1
+NElec 1
+NMPTrans 1
+NVMCSample 1
+NVMCWarmUp 0
+RndSeed 11272
