@@ -249,7 +249,7 @@ pub fn calculate_new_pf_m_two2_real_flat(
         fill_vecs_normal_real(
             qp, rsa, rsb, ele_idx, slater_elm, &mut vec_a, &mut vec_b, n_site, n_elec,
         );
-        let ratio = two_ratio_real(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
+        let ratio = two_ratio_real::<false>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
         pf_m_new[qp] = ratio * pf_m[qp];
     }
 }
@@ -343,7 +343,7 @@ pub fn calculate_new_pf_m_two_fsz_real_flat(
         fill_vecs_fsz_real(
             qp, rsa, rsb, ele_idx, ele_spn, slater_elm, &mut vec_a, &mut vec_b, n_site,
         );
-        let ratio = two_ratio_real(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
+        let ratio = two_ratio_real::<true>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
         pf_m_new[qp] = ratio * pf_m[qp];
     }
 }
@@ -1109,7 +1109,7 @@ fn two_ratio_complex(
     inv_ab * vec_ba + inv_ab * bma + p_a * q_b - p_b * q_a
 }
 
-fn two_ratio_real(
+fn two_ratio_real<const FSZ: bool>(
     msa: usize,
     msb: usize,
     inv: &[f64],
@@ -1132,8 +1132,26 @@ fn two_ratio_real(
         q_b += inv_b * vec_b[msi];
     }
     let inv_ab = inv[inv_base + msa * n_size + msb];
-    let bma = two_hop_bilinear_real(inv, inv_base, n_size, vec_a, vec_b);
+    let bma = if FSZ {
+        two_hop_bilinear_fsz_real(inv, inv_base, n_size, vec_a, vec_b)
+    } else {
+        two_hop_bilinear_real(inv, inv_base, n_size, vec_a, vec_b)
+    };
     inv_ab * vec_ba + inv_ab * bma + p_a * q_b - p_b * q_a
+}
+
+// Real FSZ uses Julia's scalar nested loop, without @turbo or fused
+// multiply-add. The normal real path below has a different reduction tree.
+fn two_hop_bilinear_fsz_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..n {
+        let mut tmp = 0.0;
+        for j in 0..n {
+            tmp += inv[base + i * n + j] * a[j];
+        }
+        sum += b[i] * tmp;
+    }
+    sum
 }
 
 /// Julia LoopVectorization's AVX2 reduction: four inner lanes and six outer
@@ -1157,6 +1175,42 @@ fn two_hop_bilinear_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fsz_bilinear_matches_julia_scalar_reduction_bits() {
+        let inputs = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");
+        let expected = include_str!("../../../../tests/fixtures/real_fsz/bilinear.txt");
+        let mut lines = inputs
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'));
+        let mut differences = 0;
+        for row in expected.lines().filter(|l| !l.starts_with('#')) {
+            let mut fields = row.split_whitespace();
+            let n: usize = fields.next().unwrap().parse().unwrap();
+            let bits = u64::from_str_radix(fields.next().unwrap(), 16).unwrap();
+            assert_eq!(lines.next().unwrap().parse::<usize>().unwrap(), n);
+            let values: Vec<_> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect();
+            let actual = two_hop_bilinear_fsz_real(
+                &values[1..1 + n * n],
+                0,
+                n,
+                &values[1 + n * n..1 + n * n + n],
+                &values[1 + n * n + n..],
+            );
+            assert_eq!(actual.to_bits(), bits, "size {n}");
+            differences += usize::from(bits != values[0].to_bits());
+        }
+        assert!(lines.next().is_none());
+        assert!(
+            differences > 0,
+            "fixtures must distinguish the scalar and vectorized paths"
+        );
+    }
 
     #[test]
     fn two_hop_bilinear_matches_julia_vectorized_reduction_bits() {

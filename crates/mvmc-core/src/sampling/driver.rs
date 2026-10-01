@@ -902,7 +902,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     }
 }
 
-fn update_ele_config_fsz(
+pub(super) fn update_ele_config_fsz(
     mi: usize,
     org_r: usize,
     dst_r: usize,
@@ -922,7 +922,7 @@ fn update_ele_config_fsz(
     ele_num[dst_r + dst_spn as usize * n_site] = 1;
 }
 
-fn revert_ele_config_fsz(
+pub(super) fn revert_ele_config_fsz(
     mi: usize,
     org_r: usize,
     dst_r: usize,
