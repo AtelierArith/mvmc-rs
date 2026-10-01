@@ -324,16 +324,24 @@ pub(crate) fn update_parameter_value(
     delta_imag: f64,
     n_proj: usize,
 ) {
-    let n_gutz = data.projection_layout().n_gutzwiller;
+    let layout = data.projection_layout();
+    let n_gutz = layout.n_gutzwiller;
     let delta = Complex64::new(delta_real, delta_imag);
     if para_idx < n_gutz {
         if let Some(term) = data.gutzwiller_terms.get_mut(para_idx) {
             term.value += delta;
         }
-    } else if para_idx < n_proj {
-        let jastrow_idx = para_idx - n_gutz;
+    } else if para_idx < layout.dh2_offset {
+        let jastrow_idx = para_idx - layout.jastrow_offset;
         if jastrow_idx < data.jastrow_terms.len() {
             data.jastrow_terms[jastrow_idx].value += delta;
+        }
+    } else if para_idx < n_proj {
+        if let Some(value) = data
+            .doublon_holon_2site_params
+            .get_mut(para_idx - layout.dh2_offset)
+        {
+            *value += delta;
         }
     } else {
         let orbital_idx = (para_idx - n_proj) as i64;
@@ -412,6 +420,9 @@ mod tests {
             "hubbard",
             "pairhop_real",
             "pairhop_fsz",
+            "dh2_real",
+            "dh2_cmp",
+            "dh2_fsz",
         ]
         .into_iter()
         .flat_map(|case| [(case, 0), (case, 1)])
@@ -444,7 +455,7 @@ mod tests {
                     .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                     .collect()
             };
-            let complex = matches!(case, "cmp" | "fsz" | "pairhop_fsz");
+            let complex = matches!(case, "cmp" | "fsz" | "pairhop_fsz" | "dh2_cmp" | "dh2_fsz");
             let mut state = VmcOptimizationState::zeros(1, 1, 0, size - 1, 1, 1, complex, false);
             let oo = read(lines.next().unwrap());
             let ho = read(lines.next().unwrap());
@@ -467,7 +478,9 @@ mod tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let namelist = if case.starts_with("pairhop_") {
+            let namelist = if let Some(mode) = case.strip_prefix("dh2_") {
+                root.join(format!("tests/fixtures/dh2/production_{mode}/namelist.def"))
+            } else if case.starts_with("pairhop_") {
                 root.join(format!("extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def"))
             } else {
                 root.join("extern/Julia-mVMC/examples/inputs")

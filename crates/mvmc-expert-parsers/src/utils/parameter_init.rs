@@ -120,9 +120,36 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     }
 }
 
-/// `SyncModifiedParameter()` mirror — rescales the Slater block so that
-/// `max |Slater[i]| <= D_AMP_MAX`. Matches `parameter.c:159-161`.
-pub fn sync_modified_parameter(data: &mut ExpertModeData) {
+/// Synchronize DH2/Gutzwiller/Jastrow real gauges when enabled, then rescale
+/// Slater to `D_AMP_MAX`. Correlation shifts can be disabled as in Julia.
+pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bool) {
+    let layout = data.projection_layout();
+    let real_flag = |i: usize| data.optimization_flags.get(2 * i).copied().unwrap_or(false);
+    let shift_dh = layout.n_dh2 > 0
+        && layout.n_gutzwiller > 0
+        && (0..layout.n_gutzwiller).all(real_flag)
+        && (0..6 * layout.n_dh2).all(|i| real_flag(layout.dh2_offset + i));
+    if shift_correlations && shift_dh {
+        let mut g_shift = 0.0;
+        let stride = 2 * layout.n_dh2;
+        for group in 0..stride {
+            if group + 2 * stride < data.doublon_holon_2site_params.len() {
+                let params = &mut data.doublon_holon_2site_params;
+                let shift =
+                    (params[group].re + params[group + stride].re + params[group + 2 * stride].re)
+                        / 3.0;
+                params[group].re -= shift;
+                params[group + stride].re -= shift;
+                params[group + 2 * stride].re -= shift;
+                g_shift += shift;
+            }
+        }
+        if g_shift != 0.0 {
+            for term in &mut data.gutzwiller_terms {
+                term.value.re += g_shift;
+            }
+        }
+    }
     // Optional Gutzwiller / Jastrow shift mirroring the Julia
     // `flag_shift_gj` block. Active only when every parameter is
     // optimized. Empty flags mean all active, as in Julia's local sync.
@@ -131,7 +158,7 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData) {
     let all_active = data.optimization_flags.is_empty()
         || ((0..n_gutz).all(|i| super::opt_flag::is_gutzwiller_optimized(data, i))
             && (0..n_jast).all(|i| super::opt_flag::is_jastrow_optimized(data, i)));
-    if n_gutz > 0 && n_jast > 0 && all_active {
+    if shift_correlations && n_gutz > 0 && n_jast > 0 && all_active {
         let total = n_gutz + n_jast;
         let mut shift = 0.0;
         for term in &data.gutzwiller_terms {
@@ -169,7 +196,7 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData) {
 /// `initialize_parameters!` — init + sync.
 pub fn initialize_parameters(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     init_parameter(data, rng);
-    sync_modified_parameter(data);
+    sync_modified_parameter(data, false);
 }
 
 #[cfg(test)]
@@ -212,7 +239,7 @@ mod tests {
         let mut d = data_with_orbitals(2);
         d.orbital_terms[0].value = Complex64::new(8.0, 0.0);
         d.orbital_terms[1].value = Complex64::new(-4.0, 0.0);
-        sync_modified_parameter(&mut d);
+        sync_modified_parameter(&mut d, true);
         assert!((d.orbital_terms[0].value.re - 4.0).abs() < 1e-15);
         assert!((d.orbital_terms[1].value.re - (-2.0)).abs() < 1e-15);
     }

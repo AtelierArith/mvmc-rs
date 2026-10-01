@@ -16,5 +16,5 @@ use crate::reducer::Reducer;
 ///
 /// Mirrors `MVMCOptimizers.jl/src/parameter_sync.jl`.
 pub fn sync_modified_parameter<R: Reducer + ?Sized>(data: &mut ExpertModeData, _reducer: &R) {
-    sync_inner(data);
+    sync_inner(data, true);
 }

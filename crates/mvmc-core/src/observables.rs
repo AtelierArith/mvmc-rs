@@ -1162,7 +1162,9 @@ fn calh1_direct_projection_ratio(
     let n = data.modpara.nsite as usize;
     let ng = data.n_gutzwiller_idx.max(0) as usize;
     let nj = data.n_jastrow_idx.max(0) as usize;
-    if (ng == 0 && !data.gutzwiller_terms.is_empty())
+    if !data.doublon_holon_2site_indices.is_empty()
+        || !data.doublon_holon_2site_params.is_empty()
+        || (ng == 0 && !data.gutzwiller_terms.is_empty())
         || (nj == 0 && !data.jastrow_terms.is_empty())
         || ng > data.gutzwiller_terms.len()
         || nj > data.jastrow_terms.len()
@@ -1654,6 +1656,9 @@ mod tests {
             "hubbard",
             "pairhop_real",
             "pairhop_fsz",
+            "dh2_real",
+            "dh2_cmp",
+            "dh2_fsz",
         ] {
             let fixture =
                 std::fs::read_to_string(root.join(format!("{case}_store_runner/gram.txt")))
@@ -1672,7 +1677,7 @@ mod tests {
             };
             let store = parse(lines.next().unwrap());
             let expected = parse(lines.next().unwrap());
-            let actual = if matches!(case, "cmp" | "fsz" | "pairhop_fsz") {
+            let actual = if matches!(case, "cmp" | "fsz" | "pairhop_fsz" | "dh2_cmp" | "dh2_fsz") {
                 let store: Vec<Complex64> = store
                     .chunks_exact(2)
                     .map(|z| Complex64::new(z[0], z[1]))

@@ -132,7 +132,7 @@ pub fn parse_indexed_input_parameter_file_strict(
 /// Read optional overlays after initial.def and before synchronization.
 /// Missing referenced files are skipped; applied records follow namelist order.
 /// Supported factors are Gutzwiller, Jastrow and normal/AP/Parallel/General
-/// orbitals. Unsupported DH/RBM/OptTrans records return an explicit error until
+/// orbitals and strict DH2. Unsupported DH4/RBM/OptTrans records return an explicit error until
 /// their data models are implemented. Each strict overlay commits atomically;
 /// earlier successful overlays remain applied if a later record fails.
 pub fn read_input_parameters(
@@ -199,9 +199,24 @@ pub fn read_input_parameters(
                     }
                 }
             }
-            "InDH2" | "InDH4" | "InOptTrans" => {
-                return Err(format!("{kind} overlay is not implemented yet"))
+            "InDH2" => {
+                let layout = data.projection_layout();
+                let expected = 6 * layout.n_dh2;
+                if data.doublon_holon_2site_params.len() != expected {
+                    return Err(format!(
+                        "InDH2 target parameter length mismatch: got {}, expected {expected}",
+                        data.doublon_holon_2site_params.len()
+                    ));
+                }
+                let params = parse_indexed_input_parameter_file_strict(
+                    &path,
+                    layout.n_dh2,
+                    expected,
+                    "InDH2",
+                )?;
+                data.doublon_holon_2site_params.copy_from_slice(&params);
             }
+            "InDH4" | "InOptTrans" => return Err(format!("{kind} overlay is not implemented yet")),
             kind if kind.starts_with("InChargeRBM_")
                 || kind.starts_with("InSpinRBM_")
                 || kind.starts_with("InGeneralRBM_") =>

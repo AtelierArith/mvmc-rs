@@ -1,12 +1,11 @@
-//! DH2 definitions cannot bypass the production gate through library-owned data.
-use mvmc_core::{vmc_para_opt, ExpertModeData, SingleProcessReducer, VmcOptimizationState};
+//! DH2 production support and canonical complex-mode selection.
+use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::all_complex_flag};
 use num_complex::Complex64;
-use sfmt19937::Sfmt19937Rng;
 use std::path::Path;
 
 #[test]
-fn parsed_and_programmatic_dh2_fail_before_mutation_rng_or_matrix_access() {
+fn supported_dh2_sections_pass_runtime_validation_with_or_without_namelist() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh2");
     for name in [
         "orbital_first",
@@ -16,73 +15,10 @@ fn parsed_and_programmatic_dh2_fail_before_mutation_rng_or_matrix_access() {
         "empty",
         "replacement",
     ] {
-        for only_field in 0..=4 {
-            let mut data =
-                parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
-            if only_field > 0 {
-                data.namelist.clear();
-                if only_field != 1 {
-                    data.doublon_holon_2site_indices.clear();
-                }
-                if only_field != 2 {
-                    data.doublon_holon_2site_params.clear();
-                }
-                if only_field != 3 {
-                    data.doublon_holon_2site_opt_flags.clear();
-                }
-                if only_field != 4 {
-                    data.doublon_holon_2site_complex = false;
-                }
-            }
-            // Empty or real definitions can lack the selected isolated field.
-            if only_field > 0
-                && data.doublon_holon_2site_indices.is_empty()
-                && data.doublon_holon_2site_params.is_empty()
-                && data.doublon_holon_2site_opt_flags.is_empty()
-                && !data.doublon_holon_2site_complex
-            {
-                continue;
-            }
-            let before = data.clone();
-            let mut rng = Sfmt19937Rng::new(11272);
-            let mut probe = Sfmt19937Rng::new(11272);
-            let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
-            let error = vmc_para_opt(
-                &mut data,
-                &mut state,
-                &mut rng,
-                None,
-                &SingleProcessReducer,
-                mvmc_core::OptimizationOptions::default(),
-            )
-            .unwrap_err();
-            assert!(
-                error.contains("DH2") && error.contains("issue #24"),
-                "{name} {only_field}: {error}"
-            );
-            assert_eq!(data.modpara, before.modpara);
-            assert_eq!(data.optimization_flags, before.optimization_flags);
-            assert_eq!(data.orbital_terms, before.orbital_terms);
-            assert_eq!(
-                data.doublon_holon_2site_indices,
-                before.doublon_holon_2site_indices
-            );
-            assert_eq!(
-                data.doublon_holon_2site_params,
-                before.doublon_holon_2site_params
-            );
-            assert_eq!(
-                data.doublon_holon_2site_opt_flags,
-                before.doublon_holon_2site_opt_flags
-            );
-            assert_eq!(
-                data.doublon_holon_2site_complex,
-                before.doublon_holon_2site_complex
-            );
-            for _ in 0..624 {
-                assert_eq!(rng.gen_rand32(), probe.gen_rand32());
-            }
-        }
+        let mut data = parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        data.namelist.clear();
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }
 
@@ -109,5 +45,37 @@ fn dh2_runtime_mode_matches_original_flags_declarations_and_loaded_values() {
         // Initializing Slater parameters uses declarations, never loaded values
         // or the optional runtime override; changing this would alter draw count.
         assert_eq!(all_complex_flag(&data), row[0] != 0, "{line}");
+    }
+}
+
+#[test]
+fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_output() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    for mode in ["real", "cmp", "fsz"] {
+        let result = mvmc_core::run_para_opt_from_namelist(
+            root.join(format!("dh2/production_{mode}/namelist.def")),
+            mvmc_core::RunConfig {
+                nsmp: Some(3),
+                ..mvmc_core::RunConfig::new(3, mode)
+            },
+        )
+        .unwrap();
+        let reference = root.join(format!("sr_direct/dh2_{mode}_store_runner"));
+        for name in [
+            "zvo_out.dat",
+            "zvo_var.dat",
+            "zqp_opt.dat",
+            "zqp_gutzwiller_opt.dat",
+            "zqp_jastrow_opt.dat",
+            "zqp_orbital_opt.dat",
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
+                std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap(),
+                "{mode} {name}"
+            );
+        }
+        assert!(!result.output_dir.join("zqp_dh2_opt.dat").exists());
+        std::fs::remove_dir_all(result.output_dir).unwrap();
     }
 }

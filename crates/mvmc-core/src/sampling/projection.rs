@@ -13,7 +13,47 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use mvmc_expert_parsers::ExpertModeData;
+use mvmc_expert_parsers::{ExpertModeData, ProjectionLayout};
+
+/// Source DH tails are rebuilt after the incremental Gutzwiller/Jastrow work.
+/// Repeated neighbors contribute repeatedly, and self-neighbors are retained.
+fn recompute_dh_counts(
+    proj_cnt: &mut [i64],
+    ele_num: &[i64],
+    data: &ExpertModeData,
+    layout: ProjectionLayout,
+) {
+    if layout.n_dh2 == 0 {
+        return;
+    }
+    let stop = layout.n_proj.min(proj_cnt.len());
+    if layout.dh2_offset < stop {
+        proj_cnt[layout.dh2_offset..stop].fill(0);
+    }
+    let n_site = data.modpara.nsite as usize;
+    for (definition, table) in data.doublon_holon_2site_indices.iter().enumerate() {
+        for site in 0..n_site {
+            let occupation = ele_num[site] + ele_num[n_site + site];
+            if occupation == 1 {
+                continue;
+            }
+            let class = occupation / 2;
+            let wanted = if class == 0 { 1 } else { 0 };
+            let opposite = table.neighbors[site]
+                .iter()
+                .filter(|&&neighbor| {
+                    let neighbor = neighbor as usize;
+                    ele_num[neighbor] == wanted && ele_num[n_site + neighbor] == wanted
+                })
+                .count();
+            let index =
+                layout.dh2_offset + definition + (class as usize + 2 * opposite) * layout.n_dh2;
+            if index < proj_cnt.len() {
+                proj_cnt[index] += 1;
+            }
+        }
+    }
+}
 
 /// Initialise `loc_spn[ri] = 1` for sites flagged as local-spin in
 /// `data.locspin_terms` (mirrors `init_loc_spn!`).
@@ -34,7 +74,7 @@ pub fn init_loc_spn(loc_spn: &mut [i64], data: &ExpertModeData) {
 /// Layout (mirrors upstream):
 /// * `proj_cnt` is indexed by the projection-parameter index, with the
 ///   Gutzwiller block first (`n_gutzwiller_idx` slots) followed by the
-///   Jastrow block (`n_jastrow_idx` slots).
+///   Jastrow block (`n_jastrow_idx` slots), then six bins per DH2 table.
 /// * `ele_num` has length `2 * n_site`: `[ele_num[0..n_site]]` is the
 ///   up-spin occupancy and `[ele_num[n_site..2*n_site]]` is down.
 pub fn make_proj_cnt(proj_cnt: &mut [i64], ele_num: &[i64], data: &ExpertModeData) {
@@ -120,6 +160,7 @@ pub fn make_proj_cnt(proj_cnt: &mut [i64], ele_num: &[i64], data: &ExpertModeDat
             }
         }
     }
+    recompute_dh_counts(proj_cnt, ele_num, data, data.projection_layout());
 }
 
 /// Incrementally update the projection counters after a single-spin
@@ -245,10 +286,11 @@ pub fn update_proj_cnt(
             }
         }
     }
+    recompute_dh_counts(proj_cnt_new, ele_num, data, data.projection_layout());
 }
 
 /// `log_proj_val(proj_cnt, data)` -- sum of `Re(Proj[idx]) * proj_cnt[idx]`
-/// over the Gutzwiller + Jastrow blocks. Mirrors upstream.
+/// over all projection blocks. DH2 imaginary parts do not enter this value.
 pub fn log_proj_val(proj_cnt: &[i64], data: &ExpertModeData) -> f64 {
     let mut z = 0.0_f64;
     for (value, &count) in data.projection_parameters().iter().zip(proj_cnt) {
