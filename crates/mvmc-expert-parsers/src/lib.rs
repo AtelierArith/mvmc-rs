@@ -4,8 +4,8 @@
 //!
 //! Phase 3 status: the parsers, types and orchestration needed to
 //! round-trip the four upstream `examples/inputs/*` namelists are
-//! implemented, including strict DH2 definitions and their parameter layout.
-//! The remaining upstream modules (RBM, DH4,
+//! implemented, including strict DH2/DH4 definitions and their parameter layout.
+//! The remaining upstream modules (RBM,
 //! backflow) stay as skeleton stubs and
 //! will land alongside Phase 4 once `mvmc-core` actually consumes them.
 //!
@@ -20,9 +20,10 @@ pub mod utils;
 
 pub use types::{
     CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex,
-    ExchangeTerm, ExpertModeData, GreenOneTerm, GreenTwoTerm, GutzwillerTerm, HundTerm,
-    InterAllTerm, JastrowTerm, LocSpinTerm, ModParaParameters, OrbitalTerm, PairHopTerm,
-    ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin, TransferTerm, ValidationResult,
+    DoublonHolon4SiteDefinition, DoublonHolon4SiteIndex, ExchangeTerm, ExpertModeData,
+    GreenOneTerm, GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
+    ModParaParameters, OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry,
+    QuantumProjectionWeights, Spin, TransferTerm, ValidationResult,
 };
 
 pub use utils::validation::{
@@ -73,7 +74,7 @@ pub enum ParseError {
 /// child files are logged via [`tracing::warn`] and skipped, matching
 /// the C / Julia "continue on error" policy. Unknown keywords in the
 /// namelist are silently ignored (the round-trip set covers everything
-/// the four `examples/inputs/*` cases use). DH2 definitions are required
+/// the four `examples/inputs/*` cases use). DH2/DH4 definitions are required
 /// when listed: read/format failures return an error as in Julia.
 pub fn parse_expert_mode_files<P: AsRef<Path>>(
     namelist_path: P,
@@ -108,7 +109,10 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     for (file_type, file_name) in &file_list {
         let full_path = base_dir.join(file_name);
         if !full_path.is_file() {
-            if matches!(file_type.as_str(), "DH2" | "DoublonHolon2Site") {
+            if matches!(
+                file_type.as_str(),
+                "DH2" | "DoublonHolon2Site" | "DH4" | "DoublonHolon4Site"
+            ) {
                 return Err(ParseError::InvalidInput {
                     message: format!(
                         "Required {file_type} file not found: {}",
@@ -130,7 +134,10 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
             continue;
         }
         if let Err(e) = parse_file_by_type(&mut data, file_type, &full_path, &mut orbital_flags) {
-            if matches!(file_type.as_str(), "DH2" | "DoublonHolon2Site") {
+            if matches!(
+                file_type.as_str(),
+                "DH2" | "DoublonHolon2Site" | "DH4" | "DoublonHolon4Site"
+            ) {
                 return Err(ParseError::InvalidInput {
                     message: format!(
                         "Error parsing required {file_type} file {}: {e}",
@@ -151,7 +158,7 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
         }
     }
 
-    // Both DH2 and Slater flags need the final projection layout.
+    // DH and Slater flags need the final projection layout.
     set_dh_opt_flags(&mut data);
     set_orbital_opt_flags(&mut data, &orbital_flags);
 
@@ -246,6 +253,24 @@ fn parse_file_by_type(
             data.doublon_holon_2site_params =
                 vec![num_complex::Complex64::new(0.0, 0.0); definition.opt_flags.len()];
             data.doublon_holon_2site_opt_flags = definition.opt_flags;
+        }
+        "DH4" | "DoublonHolon4Site" => {
+            let section = doublon_holon::parse_doublon_holon_4site_def(path, data.modpara.nsite)?;
+            let definition = section.data.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Failed to parse DH4 file '{}': {}",
+                        path.display(),
+                        section.error_message
+                    ),
+                )
+            })?;
+            data.doublon_holon_4site_indices = definition.indices;
+            data.doublon_holon_4site_complex = definition.is_complex;
+            data.doublon_holon_4site_params =
+                vec![num_complex::Complex64::new(0.0, 0.0); definition.opt_flags.len()];
+            data.doublon_holon_4site_opt_flags = definition.opt_flags;
         }
         "Gutzwiller" => {
             let content = read_def_file(path)?;

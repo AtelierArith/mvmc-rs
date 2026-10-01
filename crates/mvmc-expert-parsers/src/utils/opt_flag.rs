@@ -69,12 +69,12 @@ pub fn set_orbital_opt_flags(data: &mut ExpertModeData, flags: &BTreeMap<i64, i6
     }
 }
 
-/// Fold DH2 row-ordered flags into the final projection layout.
-/// Real DH2 parameters always have false imaginary flags; defaults and flags
+/// Fold DH2/DH4 row-ordered flags into the final projection layout.
+/// Real DH parameters always have false imaginary flags; defaults and flags
 /// of other factors are preserved, including incomplete programmatic arrays.
 pub fn set_dh_opt_flags(data: &mut ExpertModeData) {
     let layout = data.projection_layout();
-    if layout.n_dh2 == 0 {
+    if layout.n_dh2 == 0 && layout.n_dh4 == 0 {
         return;
     }
     ensure_optimization_flags_size(data, 2 * layout.n_proj);
@@ -83,6 +83,13 @@ pub fn set_dh_opt_flags(data: &mut ExpertModeData) {
         if component < data.optimization_flags.len() {
             data.optimization_flags[component] = flag;
             data.optimization_flags[component + 1] = data.doublon_holon_2site_complex && flag;
+        }
+    }
+    for (index, &flag) in data.doublon_holon_4site_opt_flags.iter().enumerate() {
+        let component = 2 * (layout.dh4_offset + index);
+        if component < data.optimization_flags.len() {
+            data.optimization_flags[component] = flag;
+            data.optimization_flags[component + 1] = data.doublon_holon_4site_complex && flag;
         }
     }
 }

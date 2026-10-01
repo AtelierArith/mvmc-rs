@@ -1,0 +1,6 @@
+ModPara modpara.def
+DH2 ../dh2/multi.def
+DH4 multi.def
+Gutzwiller gutz.def
+Jastrow jast.def
+Orbital orbital.def

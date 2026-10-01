@@ -7,7 +7,7 @@
 //! rejected by these upstream validators. Strict parameter loading is a
 //! separate operation. Rust's `Spin` type guarantees valid 0/1 spin codes.
 //!
-//! RBM and DH4 validators await their data representations.
+//! RBM and DH4 validators remain pending production integration.
 
 use crate::types::{
     CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, ExpertModeData, GutzwillerTerm,

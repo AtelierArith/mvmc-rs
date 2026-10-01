@@ -1,7 +1,10 @@
-//! Atomic C-compatible DH2 neighbor definitions from `doublon_holon_parser.jl`.
+//! Atomic C-compatible DH2/DH4 neighbor definitions from `doublon_holon_parser.jl`.
 use std::{io, path::Path};
 
-use crate::types::{DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex};
+use crate::types::{
+    DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex, DoublonHolon4SiteDefinition,
+    DoublonHolon4SiteIndex,
+};
 use crate::utils::file::{clean_line, read_def_file};
 
 /// Original parser status, diagnostic and last body-line number.
@@ -29,6 +32,36 @@ pub fn parse_doublon_holon_2site_def(
     nsite: i64,
 ) -> io::Result<Dh2ParseResult> {
     Ok(parse_doublon_holon_2site_content(
+        &read_def_file(path)?,
+        nsite,
+    ))
+}
+
+/// Original parser status, diagnostic and last body-line number.
+/// Failed sections retain no partially parsed definition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dh4ParseResult {
+    /// Complete definition, or None on any parsing error.
+    pub data: Option<DoublonHolon4SiteDefinition>,
+    /// First error, matching the canonical parser text.
+    pub error_message: String,
+    /// Last neighbor/flag body line reached; header/count failures leave zero.
+    pub line_number: usize,
+}
+
+impl Dh4ParseResult {
+    /// Whether the entire definition is valid.
+    pub fn is_success(&self) -> bool {
+        self.data.is_some()
+    }
+}
+
+/// Read a strict DH4 file, distinguishing filesystem errors from format errors.
+pub fn parse_doublon_holon_4site_def(
+    path: impl AsRef<Path>,
+    nsite: i64,
+) -> io::Result<Dh4ParseResult> {
+    Ok(parse_doublon_holon_4site_content(
         &read_def_file(path)?,
         nsite,
     ))
@@ -172,6 +205,127 @@ pub fn parse_doublon_holon_2site_content(content: &str, nsite: i64) -> Dh2ParseR
             line_number,
         },
         Err(error_message) => Dh2ParseResult {
+            data: None,
+            error_message,
+            line_number,
+        },
+    }
+}
+
+/// Parse exactly Nsite*NDH4 neighbor rows followed by 10*NDH4 optimization rows.
+///
+/// Neighbor rows may be unordered; definitions are stored by index and center.
+/// Flags use row order and only validate (then ignore) their first column.
+/// Header labels are not validated, matching the original positional format.
+pub fn parse_doublon_holon_4site_content(content: &str, nsite: i64) -> Dh4ParseResult {
+    let mut line_number = 0;
+    let parse = (|| {
+        if nsite <= 0 {
+            return Err("Nsite must be positive before parsing DH4".into());
+        }
+        let lines: Vec<_> = content.split('\n').collect();
+        if lines.len() < 5 {
+            return Err("DH4 file must include 5 header lines".into());
+        }
+        let n_dh4 = header_value(&lines, 2, "NDoublonHolon4siteIdx")?;
+        let complex_type = header_value(&lines, 3, "ComplexType")?;
+        if n_dh4 < 0 {
+            return Err("NDoublonHolon4siteIdx must be non-negative".into());
+        }
+        let rows: Vec<_> = lines
+            .iter()
+            .enumerate()
+            .skip(5)
+            .filter_map(|(i, line)| {
+                let parts = tokens(line);
+                (!parts.is_empty()).then_some((i + 1, parts))
+            })
+            .collect();
+        // Julia Int arithmetic wraps; reject row-count mismatches before allocation.
+        let expected_main = nsite.wrapping_mul(n_dh4);
+        let expected_opt = 10_i64.wrapping_mul(n_dh4);
+        let expected_total = expected_main.wrapping_add(expected_opt);
+        if rows.len() as i64 != expected_total {
+            return Err(format!(
+                "DH4 row count mismatch: got {}, expected {expected_total} ({expected_main} neighbor rows + {expected_opt} opt rows)", rows.len()
+            ));
+        }
+        let mut indices: Vec<_> = (0..n_dh4)
+            .map(|_| DoublonHolon4SiteIndex {
+                neighbors: vec![[-1; 4]; nsite as usize],
+            })
+            .collect();
+        // Column-major (definition,site), matching Julia's seen matrix.
+        let mut seen = vec![false; expected_main as usize];
+        for (number, parts) in rows.iter().take(expected_main as usize) {
+            line_number = *number;
+            if parts.len() != 6 {
+                return Err(format!("line {number}: expected 'i x0 x1 x2 x3 n'"));
+            }
+            let site = integer(parts[0], *number, "center site")?;
+            let x0 = integer(parts[1], *number, "neighbor 0")?;
+            let x1 = integer(parts[2], *number, "neighbor 1")?;
+            let x2 = integer(parts[3], *number, "neighbor 2")?;
+            let x3 = integer(parts[4], *number, "neighbor 3")?;
+            let idx = integer(parts[5], *number, "DH4 index")?;
+            check_site(site, nsite, *number, "center")?;
+            check_site(x0, nsite, *number, "neighbor 0")?;
+            check_site(x1, nsite, *number, "neighbor 1")?;
+            check_site(x2, nsite, *number, "neighbor 2")?;
+            check_site(x3, nsite, *number, "neighbor 3")?;
+            if !(0..n_dh4).contains(&idx) {
+                return Err(format!(
+                    "line {number}: DH4 index {idx} out of range [0, {}]",
+                    n_dh4 - 1
+                ));
+            }
+            let seen_index = idx as usize + n_dh4 as usize * site as usize;
+            if seen[seen_index] {
+                return Err(format!(
+                    "line {number}: duplicate DH4 row for index {idx} site {site}"
+                ));
+            }
+            seen[seen_index] = true;
+            indices[idx as usize].neighbors[site as usize] = [x0, x1, x2, x3];
+        }
+        // Julia findfirst walks the (definition,site) matrix in column-major order.
+        if let Some(missing) = seen.iter().position(|&present| !present) {
+            let idx = missing % n_dh4 as usize;
+            let site = missing / n_dh4 as usize;
+            return Err(format!(
+                "missing DH4 neighbor row for index {idx} site {site}"
+            ));
+        }
+        let mut opt_flags = Vec::with_capacity(expected_opt as usize);
+        for (number, parts) in rows.iter().skip(expected_main as usize) {
+            line_number = *number;
+            if parts.len() != 2 {
+                return Err(format!(
+                    "line {number}: expected 'local_param_index opt_flag'"
+                ));
+            }
+            integer(parts[0], *number, "ignored local parameter index")?;
+            let flag = integer(parts[1], *number, "opt flag")?;
+            if flag != 0 && flag != 1 {
+                return Err(format!(
+                    "line {number}: opt flag must be 0 or 1, got {flag}"
+                ));
+            }
+            opt_flags.push(flag != 0);
+        }
+        Ok(DoublonHolon4SiteDefinition {
+            indices,
+            opt_flags,
+            is_complex: complex_type != 0,
+        })
+    })();
+    match parse {
+        Ok(data) => Dh4ParseResult {
+            data: Some(data),
+            error_message: String::new(),
+            line_number,
+        },
+        Err(error_message) => Dh4ParseResult {
             data: None,
             error_message,
             line_number,

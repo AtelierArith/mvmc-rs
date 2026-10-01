@@ -3,8 +3,8 @@
 //! Port target: `MVMCExpertModeParsers.jl/src/types/expert_types.jl`.
 //!
 //! Phase 3 status: the round-trip subset is implemented (`ModPara`, the
-//! simple term structs, DH2 definitions, plus `ExpertModeData`). The RBM /
-//! DH4 / backflow tree from the upstream Julia file is still pending
+//! simple term structs, DH2/DH4 definitions, plus `ExpertModeData`). The RBM /
+//! backflow tree from the upstream Julia file is still pending
 //! and will land alongside Phase 4. Anything not used by the four
 //! upstream `examples/inputs/*/namelist.def` test cases is omitted on
 //! purpose.
@@ -33,7 +33,7 @@ pub struct ProjectionLayout {
     pub n_spinjastrow: usize,
     /// Number of DH2 neighbor-definition tables, with six parameters each.
     pub n_dh2: usize,
-    /// Number of DH4 tables (zero until that data model is implemented).
+    /// Number of DH4 neighbor-definition tables, with ten parameters each.
     pub n_dh4: usize,
     /// Start of Gutzwiller parameters (zero).
     pub gutzwiller_offset: usize,
@@ -501,6 +501,24 @@ pub struct DoublonHolon2SiteDefinition {
     pub is_complex: bool,
 }
 
+/// C-compatible DH4 neighbor table for one definition index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoublonHolon4SiteIndex {
+    /// One fixed-width row per center site, containing four neighbor site IDs.
+    pub neighbors: Vec<[i64; 4]>,
+}
+
+/// Complete strict DH4 definition; optimization indices are intentionally ignored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoublonHolon4SiteDefinition {
+    /// Tables indexed by the final column of each neighbor row.
+    pub indices: Vec<DoublonHolon4SiteIndex>,
+    /// Ten flags per table, in input row order.
+    pub opt_flags: Vec<bool>,
+    /// Whether the header's ComplexType integer is nonzero.
+    pub is_complex: bool,
+}
+
 /// Owned container for all parsed Expert-mode `.def` data.
 #[derive(Debug, Clone, Default)]
 pub struct ExpertModeData {
@@ -553,6 +571,15 @@ pub struct ExpertModeData {
     pub doublon_holon_2site_opt_flags: Vec<bool>,
     /// DH2 ComplexType declaration, including empty definitions.
     pub doublon_holon_2site_complex: bool,
+
+    /// DH4 tables in definition-index order; neighbor site IDs are zero-based.
+    pub doublon_holon_4site_indices: Vec<DoublonHolon4SiteIndex>,
+    /// Ten complex parameters per DH4 table, in C projection order.
+    pub doublon_holon_4site_params: Vec<Complex64>,
+    /// Local real optimization flags in input row order.
+    pub doublon_holon_4site_opt_flags: Vec<bool>,
+    /// DH4 ComplexType declaration, including empty definitions.
+    pub doublon_holon_4site_complex: bool,
 
     /// Orbital (site1, site2, idx, sign) entries.
     pub orbital_terms: Vec<OrbitalTerm>,
@@ -627,18 +654,19 @@ impl ExpertModeData {
         let dh2_offset = n_gutzwiller + n_jastrow;
         let n_dh2 = self.doublon_holon_2site_indices.len();
         let dh4_offset = dh2_offset + 6 * n_dh2;
+        let n_dh4 = self.doublon_holon_4site_indices.len();
         ProjectionLayout {
             n_gutzwiller,
             n_jastrow,
             n_spinjastrow: 0,
             n_dh2,
-            n_dh4: 0,
+            n_dh4,
             gutzwiller_offset: 0,
             jastrow_offset: n_gutzwiller,
             spinjastrow_offset: dh2_offset,
             dh2_offset,
             dh4_offset,
-            n_proj: dh4_offset,
+            n_proj: dh4_offset + 10 * n_dh4,
         }
     }
 
@@ -664,6 +692,14 @@ impl ExpertModeData {
             .enumerate()
         {
             values[layout.dh2_offset + i] = value;
+        }
+        for (i, &value) in self
+            .doublon_holon_4site_params
+            .iter()
+            .take(10 * layout.n_dh4)
+            .enumerate()
+        {
+            values[layout.dh4_offset + i] = value;
         }
         values
     }
