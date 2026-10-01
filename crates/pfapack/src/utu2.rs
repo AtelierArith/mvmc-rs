@@ -82,10 +82,14 @@ where
             sign_negative = !sign_negative;
         }
     }
-    if sign_negative {
-        pf = -pf;
-    }
-    pf
+    // Julia returns T(sign) * pfaff, including complex multiplication's
+    // signed-zero arithmetic. Unary negation differs on a real-axis result.
+    let sign = if sign_negative {
+        T::pfaf_zero() - T::pfaf_one()
+    } else {
+        T::pfaf_one()
+    };
+    sign * pf
 }
 
 // ---------------------------------------------------------------------------
