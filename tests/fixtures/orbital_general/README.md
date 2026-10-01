@@ -23,6 +23,8 @@ julia +1.13.1 --project=extern/Julia-mVMC scripts/check_orbital_general_parity.j
 
 The source version is Julia-mVMC v0.5.0 (`c2ea432`, numerical sources unchanged
 in the pinned `8bb1b9e` reference), on Intel macOS with one BLAS thread.
+Julia uses OpenBLAS 0.3.30 (ILP64, Haswell); Rust validation uses Homebrew
+OpenBLAS 0.3.34 (LP64), with the FSZ inverse's macOS Accelerate kernels.
 The fixture header records the Julia BLAS configuration. These checks follow
 upstream `test_orbital_qptrans_utils.jl` and `test_unit_slater_update.jl`; they
 compare all floating-point bits, including signed zeros.
