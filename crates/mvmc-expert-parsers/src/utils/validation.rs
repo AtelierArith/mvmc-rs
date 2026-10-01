@@ -7,11 +7,12 @@
 //! rejected by these upstream validators. Strict parameter loading is a
 //! separate operation. Rust's `Spin` type guarantees valid 0/1 spin codes.
 //!
-//! RBM and DH4 validators remain pending production integration.
+//! RBM validators remain pending production integration.
 
 use crate::types::{
-    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, ExpertModeData, GutzwillerTerm,
-    JastrowTerm, ModParaParameters, OrbitalTerm, TransferTerm, ValidationResult,
+    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, DoublonHolon4SiteIndex,
+    ExpertModeData, GutzwillerTerm, JastrowTerm, ModParaParameters, OrbitalTerm, TransferTerm,
+    ValidationResult,
 };
 
 /// Validate ModPara dimensions, electron/spin consistency, and VMC/SR settings.
@@ -228,6 +229,28 @@ pub fn validate_doublon_holon_2site_indices(
     ValidationResult::new(errors, Vec::new())
 }
 
+/// Validate strict DH4 table shape and neighbors in definition/site/column order.
+pub fn validate_doublon_holon_4site_indices(
+    indices: &[DoublonHolon4SiteIndex],
+    nsite: i64,
+) -> ValidationResult {
+    let mut errors = Vec::new();
+    for (index, table) in indices.iter().enumerate() {
+        if table.neighbors.len() as i64 != nsite {
+            errors.push(format!("DH4 index {index}: neighbors must be {nsite} x 4"));
+            continue;
+        }
+        for (site, row) in table.neighbors.iter().enumerate() {
+            for (column, &neighbor) in row.iter().enumerate() {
+                if !(0..nsite).contains(&neighbor) {
+                    errors.push(format!("DH4 index {index} site {site} neighbor {column}={neighbor} out of range [0, {}]",nsite-1));
+                }
+            }
+        }
+    }
+    ValidationResult::new(errors, Vec::new())
+}
+
 /// Combine ModPara and currently supported term-family validators in Julia order.
 pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
     let mut result = validate_modpara_params(&data.modpara);
@@ -240,6 +263,7 @@ pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
         validate_jastrow_terms(&data.jastrow_terms, nsite),
         validate_orbital_terms(&data.orbital_terms, nsite),
         validate_doublon_holon_2site_indices(&data.doublon_holon_2site_indices, nsite),
+        validate_doublon_holon_4site_indices(&data.doublon_holon_4site_indices, nsite),
     ] {
         result.errors.extend(family.errors);
         result.warnings.extend(family.warnings);

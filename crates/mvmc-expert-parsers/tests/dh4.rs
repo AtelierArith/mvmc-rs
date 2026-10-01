@@ -193,3 +193,40 @@ fn final_layout_component_flags_projection_packing_initial_values_and_rng_match_
     }
     assert!(lines.next().is_none());
 }
+
+#[test]
+fn combined_validation_reports_dh4_shapes_and_all_four_neighbors_in_source_order() {
+    let mut d = mvmc_expert_parsers::ExpertModeData::new();
+    d.modpara.nsite = 3;
+    d.doublon_holon_4site_indices = vec![
+        mvmc_expert_parsers::DoublonHolon4SiteIndex {
+            neighbors: vec![[0; 4]; 2],
+        },
+        mvmc_expert_parsers::DoublonHolon4SiteIndex {
+            neighbors: vec![[-1, 3, 0, 0], [2, i64::MAX, 0, 0], [0; 4]],
+        },
+        mvmc_expert_parsers::DoublonHolon4SiteIndex {
+            neighbors: vec![[0; 4]; 3],
+        },
+    ];
+    let result = mvmc_expert_parsers::validate_expert_mode_data(&d);
+    let errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| e.starts_with("DH4"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        errors,
+        vec![
+            "DH4 index 0: neighbors must be 3 x 4".to_string(),
+            "DH4 index 1 site 0 neighbor 0=-1 out of range [0, 2]".to_string(),
+            "DH4 index 1 site 0 neighbor 1=3 out of range [0, 2]".to_string(),
+            format!(
+                "DH4 index 1 site 1 neighbor 1={} out of range [0, 2]",
+                i64::MAX
+            ),
+        ]
+    );
+    assert!(!result.is_valid);
+}

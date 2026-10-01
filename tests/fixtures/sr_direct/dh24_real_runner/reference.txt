@@ -1,0 +1,2 @@
+# Julia 1.13.1; LBTConfig([ILP64] libopenblas64_.0.3.30.dylib); threads=1; seed=1
+# Nonzero InDH2+InDH4; normal modes use canonical Hubbard sample=100, FSZ uses canonical PairHop sample=2000 without PairHop; warmup=10; dh24_real

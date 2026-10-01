@@ -123,29 +123,56 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     }
 }
 
-/// Synchronize DH2/Gutzwiller/Jastrow real gauges when enabled, then rescale
+/// Synchronize DH2/DH4/Gutzwiller/Jastrow real gauges when enabled, then rescale
 /// Slater to `D_AMP_MAX`. Correlation shifts can be disabled as in Julia.
 pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bool) {
     let layout = data.projection_layout();
     let real_flag = |i: usize| data.optimization_flags.get(2 * i).copied().unwrap_or(false);
-    let shift_dh = layout.n_dh2 > 0
-        && layout.n_gutzwiller > 0
-        && (0..layout.n_gutzwiller).all(real_flag)
+    let all_gutz = layout.n_gutzwiller > 0 && (0..layout.n_gutzwiller).all(real_flag);
+    let shift_dh2 = layout.n_dh2 > 0
+        && all_gutz
         && (0..6 * layout.n_dh2).all(|i| real_flag(layout.dh2_offset + i));
-    if shift_correlations && shift_dh {
+    let shift_dh4 = layout.n_dh4 > 0
+        && all_gutz
+        && (0..10 * layout.n_dh4).all(|i| real_flag(layout.dh4_offset + i));
+    if shift_correlations {
         let mut g_shift = 0.0;
-        let stride = 2 * layout.n_dh2;
-        for group in 0..stride {
-            if group + 2 * stride < data.doublon_holon_2site_params.len() {
-                let params = &mut data.doublon_holon_2site_params;
-                let shift =
-                    (params[group].re + params[group + stride].re + params[group + 2 * stride].re)
+        if shift_dh2 {
+            let stride = 2 * layout.n_dh2;
+            for group in 0..stride {
+                if group + 2 * stride < data.doublon_holon_2site_params.len() {
+                    let params = &mut data.doublon_holon_2site_params;
+                    let shift = (params[group].re
+                        + params[group + stride].re
+                        + params[group + 2 * stride].re)
                         / 3.0;
-                params[group].re -= shift;
-                params[group + stride].re -= shift;
-                params[group + 2 * stride].re -= shift;
-                g_shift += shift;
+                    params[group].re -= shift;
+                    params[group + stride].re -= shift;
+                    params[group + 2 * stride].re -= shift;
+                    g_shift += shift;
+                }
             }
+        }
+        if shift_dh4 {
+            let stride = 2 * layout.n_dh4;
+            let mut dh4_shift = 0.0;
+            for group in 0..stride {
+                if group + 4 * stride < data.doublon_holon_4site_params.len() {
+                    let params = &mut data.doublon_holon_4site_params;
+                    // Julia sums the five-bin generator in order, then adds
+                    // the complete DH4 compensation to the DH2 compensation.
+                    let mut shift = params[group].re;
+                    for bin in 1..5 {
+                        shift += params[group + bin * stride].re;
+                    }
+                    shift /= 5.0;
+                    for bin in 0..5 {
+                        params[group + bin * stride].re -= shift;
+                    }
+                    dh4_shift += shift;
+                }
+            }
+            g_shift += dh4_shift;
         }
         if g_shift != 0.0 {
             for term in &mut data.gutzwiller_terms {

@@ -65,6 +65,14 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     {
         *value = parameter(layout.dh2_offset + index);
     }
+    for (index, value) in data
+        .doublon_holon_4site_params
+        .iter_mut()
+        .take(10 * layout.n_dh4)
+        .enumerate()
+    {
+        *value = parameter(layout.dh4_offset + index);
+    }
     for term in &mut data.orbital_terms {
         if term.idx >= 0 && (term.idx as usize) < n_orbital {
             term.value = parameter(layout.n_proj + term.idx as usize);
@@ -78,7 +86,7 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
 /// Missing files and invalid records emit a warning and return `Ok(false)`,
 /// matching Julia's recoverable contract. Other file-reading failures propagate
 /// as I/O errors, as Julia's `read` does. No RNG draws or normalization occur.
-/// DH2 follows Jastrow before Slater; DH4/RBM/OptTrans await their data models.
+/// DH2 and DH4 follow Jastrow before Slater; RBM/OptTrans are pending.
 pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io::Result<bool> {
     let path = path.as_ref();
     if !path.is_file() {

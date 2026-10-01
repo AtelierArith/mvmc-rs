@@ -1,11 +1,11 @@
-//! Reject parsed and programmatic DH4 until its full production path passes parity.
+//! DH4 production support and canonical runtime-mode selection.
 use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::all_complex_flag};
 use num_complex::Complex64;
 use std::path::Path;
 
 #[test]
-fn parsed_dh4_sections_remain_rejected_before_initialization_or_output() {
+fn parsed_and_programmatic_dh4_sections_pass_runtime_validation() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh4");
     for name in [
         "orbital_first",
@@ -23,22 +23,9 @@ fn parsed_dh4_sections_remain_rejected_before_initialization_or_output() {
         "general",
     ] {
         let mut data = parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
-        assert!(
-            mvmc_core::validation::validate_para_opt(&data)
-                .unwrap_err()
-                .contains("issue #25"),
-            "{name}"
-        );
-        // Empty real definitions have no programmatic representation after clearing the namelist.
-        if name != "empty_real" {
-            data.namelist.clear();
-            assert!(
-                mvmc_core::validation::validate_para_opt(&data)
-                    .unwrap_err()
-                    .contains("issue #25"),
-                "{name}"
-            );
-        }
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        data.namelist.clear();
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }
 
@@ -63,66 +50,46 @@ fn dh4_runtime_mode_matches_original_flags_declarations_and_loaded_values() {
             "{line}"
         );
         assert_eq!(all_complex_flag(&data), row[0] != 0, "{line}");
-        assert!(mvmc_core::validation::validate_para_opt(&data)
-            .unwrap_err()
-            .contains("issue #25"));
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }
 
 #[test]
-fn dh4_runner_rejection_preserves_parameters_rng_and_creates_no_output() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh4");
-    for name in [
-        "orbital_first",
-        "real",
-        "empty",
-        "empty_real",
-        "ap_parallel",
-        "general",
+fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store_outputs() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    for case in [
+        "dh4_real",
+        "dh4_cmp",
+        "dh4_fsz",
+        "dh24_real",
+        "dh24_cmp",
+        "dh24_fsz",
     ] {
-        let path = root.join(format!("namelist_{name}.def"));
-        let mut data = parse_expert_mode_files(&path).unwrap();
-        for value in &mut data.doublon_holon_4site_params {
-            *value = Complex64::new(0.25, -0.125);
-        }
-        let before = data.clone();
-        let mut rng = sfmt19937::Sfmt19937Rng::new(11272);
-        let mut probe = sfmt19937::Sfmt19937Rng::new(11272);
-        let mut state = mvmc_core::VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
-        let output =
-            std::env::temp_dir().join(format!("mvmc-dh4-gate-{}-{name}", std::process::id()));
-        assert!(!output.exists());
-        let error = mvmc_core::vmc_para_opt(
-            &mut data,
-            &mut state,
-            &mut rng,
-            Some(&output),
-            &mvmc_core::SingleProcessReducer,
-            mvmc_core::OptimizationOptions::default(),
-        )
-        .unwrap_err();
-        assert!(error.contains("issue #25"), "{name}: {error}");
-        assert_eq!(data.modpara, before.modpara);
-        assert_eq!(data.optimization_flags, before.optimization_flags);
-        assert_eq!(data.projection_parameters(), before.projection_parameters());
-        assert_eq!(data.orbital_terms, before.orbital_terms);
-        assert_eq!(
-            data.doublon_holon_4site_indices,
-            before.doublon_holon_4site_indices
-        );
-        for _ in 0..624 {
-            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
-        }
-        assert!(!output.exists());
-        let error = mvmc_core::run_para_opt_from_namelist(
-            &path,
+        let result = mvmc_core::run_para_opt_from_namelist(
+            root.join(format!("dh4/production_{case}/namelist.def")),
             mvmc_core::RunConfig {
-                output_dir: Some(output.clone()),
-                ..mvmc_core::RunConfig::new(1, "real")
+                nsmp: Some(3),
+                ..mvmc_core::RunConfig::new(3, case.rsplit_once('_').unwrap().1)
             },
         )
-        .unwrap_err();
-        assert!(error.contains("issue #25"), "{name}: {error}");
-        assert!(!output.exists());
+        .unwrap();
+        let reference = root.join(format!("sr_direct/{case}_store_runner"));
+        for name in [
+            "zvo_out.dat",
+            "zvo_var.dat",
+            "zqp_opt.dat",
+            "zqp_gutzwiller_opt.dat",
+            "zqp_jastrow_opt.dat",
+            "zqp_orbital_opt.dat",
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
+                std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap(),
+                "{case} {name}"
+            );
+        }
+        assert!(!result.output_dir.join("zqp_dh2_opt.dat").exists());
+        assert!(!result.output_dir.join("zqp_dh4_opt.dat").exists());
+        std::fs::remove_dir_all(result.output_dir).unwrap();
     }
 }

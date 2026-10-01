@@ -88,13 +88,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             }
         }
     }
-    if !data.doublon_holon_4site_indices.is_empty()
-        || !data.doublon_holon_4site_params.is_empty()
-        || !data.doublon_holon_4site_opt_flags.is_empty()
-        || data.doublon_holon_4site_complex
-    {
-        return Err("DH4 is not implemented yet (issue #25)".into());
-    }
     for (kind, _) in &data.namelist {
         let issue = match kind.as_str() {
             "SpinJastrow" => {
@@ -103,7 +96,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             "PairHop" => None,
             "InterAll" => None,
             "DH2" | "DoublonHolon2Site" | "InDH2" => None,
-            "DH4" | "DoublonHolon4Site" | "InDH4" => Some(25),
+            "DH4" | "DoublonHolon4Site" | "InDH4" => None,
             "OptTrans" => Some(27),
             "TwoBodyGEx" => Some(30),
             k if k.starts_with("ChargeRBM_")

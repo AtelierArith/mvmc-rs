@@ -163,18 +163,14 @@ fn check_pairhop_energy(
 
 #[test]
 fn exhaustive_four_site_two_body_ratios_match_original_julia() {
-    check_normal_green(false);
+    check_normal_green("");
 }
 #[test]
 fn exhaustive_dh2_normal_two_body_ratios_match_original_julia() {
-    check_normal_green(true);
+    check_normal_green("dh2");
 }
-fn check_normal_green(dh2: bool) {
-    let input = if dh2 {
-        include_str!("../../../tests/fixtures/dh2/green_normal.txt")
-    } else {
-        include_str!("../../../tests/fixtures/interall/green_normal.txt")
-    };
+fn check_normal_green(factor: &str) {
+    let input = green_fixture(factor, "green_normal.txt");
     let mut lines = input.lines().filter(|l| !l.starts_with('#'));
     let mut pairhop = include_str!("../../../tests/fixtures/pairhop/energy_normal.txt")
         .lines()
@@ -186,8 +182,11 @@ fn check_normal_green(dh2: bool) {
         let num = integers(lines.next().unwrap());
         let cnt = integers(lines.next().unwrap());
         let mut data = green_data(complex);
-        if dh2 {
+        if matches!(factor, "dh2" | "dh24") {
             add_dh2_green_model(&mut data);
+        }
+        if matches!(factor, "dh4" | "dh24") {
+            add_dh4_green_model(&mut data);
         }
         let mut state = VmcOptimizationState::zeros(
             4,
@@ -307,7 +306,7 @@ fn check_normal_green(dh2: bool) {
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
         assert_eq!(energy.re.to_bits(), expected_energy.re.to_bits());
         assert_eq!(energy.im.to_bits(), expected_energy.im.to_bits());
-        if !dh2 {
+        if factor.is_empty() {
             check_pairhop_energy(
                 &data,
                 &mut state,
@@ -321,25 +320,21 @@ fn check_normal_green(dh2: bool) {
         assert_eq!(state.slater_matrix.inv_m_real.as_slice(), before_real);
     }
     assert!(lines.next().is_none());
-    if !dh2 {
+    if factor.is_empty() {
         assert!(pairhop.next().is_none());
     }
 }
 
 #[test]
 fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
-    check_fsz_green(false);
+    check_fsz_green("");
 }
 #[test]
 fn exhaustive_dh2_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
-    check_fsz_green(true);
+    check_fsz_green("dh2");
 }
-fn check_fsz_green(dh2: bool) {
-    let input = if dh2 {
-        include_str!("../../../tests/fixtures/dh2/green_fsz.txt")
-    } else {
-        include_str!("../../../tests/fixtures/interall/green_fsz.txt")
-    };
+fn check_fsz_green(factor: &str) {
+    let input = green_fixture(factor, "green_fsz.txt");
     let mut lines = input.lines().filter(|l| !l.starts_with('#'));
     let mut pairhop = include_str!("../../../tests/fixtures/pairhop/energy_fsz.txt")
         .lines()
@@ -352,8 +347,11 @@ fn check_fsz_green(dh2: bool) {
         let num = integers(lines.next().unwrap());
         let cnt = integers(lines.next().unwrap());
         let mut data = green_data(complex);
-        if dh2 {
+        if matches!(factor, "dh2" | "dh24") {
             add_dh2_green_model(&mut data);
+        }
+        if matches!(factor, "dh4" | "dh24") {
+            add_dh4_green_model(&mut data);
         }
         data.i_flg_orbital_general = 1;
         let mut state = VmcOptimizationState::zeros(
@@ -465,7 +463,7 @@ fn check_fsz_green(dh2: bool) {
             [energy.re.to_bits(), energy.im.to_bits()],
             [expected[0].re.to_bits(), expected[0].im.to_bits()]
         );
-        if !dh2 {
+        if factor.is_empty() {
             check_pairhop_energy(
                 &data,
                 &mut state,
@@ -488,7 +486,53 @@ fn check_fsz_green(dh2: bool) {
         );
     }
     assert!(lines.next().is_none());
-    if !dh2 {
+    if factor.is_empty() {
         assert!(pairhop.next().is_none());
     }
+}
+
+fn green_fixture(factor: &str, name: &str) -> String {
+    let directory = match factor {
+        "" => "interall",
+        "dh2" => "dh2",
+        "dh4" => "dh4/kernels",
+        "dh24" => "dh4/combined",
+        _ => panic!("unknown factor {factor}"),
+    };
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures")
+            .join(directory)
+            .join(name),
+    )
+    .unwrap()
+}
+fn add_dh4_green_model(data: &mut ExpertModeData) {
+    data.doublon_holon_4site_indices = vec![
+        mvmc_expert_parsers::DoublonHolon4SiteIndex {
+            neighbors: vec![[1, 2, 3, 0], [0, 2, 3, 1], [0, 1, 3, 2], [0, 1, 2, 3]],
+        },
+        mvmc_expert_parsers::DoublonHolon4SiteIndex {
+            neighbors: vec![[1, 1, 1, 1], [1, 1, 3, 3], [3, 3, 0, 0], [2, 2, 2, 2]],
+        },
+    ];
+    data.doublon_holon_4site_params = (1..=20)
+        .map(|i| Complex64::new(i as f64 / 128.0, -(i as f64) / 256.0))
+        .collect();
+}
+#[test]
+fn exhaustive_dh4_normal_two_body_ratios_match_original_julia() {
+    check_normal_green("dh4");
+}
+#[test]
+fn exhaustive_dh24_normal_two_body_ratios_match_original_julia() {
+    check_normal_green("dh24");
+}
+#[test]
+fn exhaustive_dh4_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+    check_fsz_green("dh4");
+}
+#[test]
+fn exhaustive_dh24_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+    check_fsz_green("dh24");
 }
