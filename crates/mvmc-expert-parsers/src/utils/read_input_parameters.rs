@@ -132,8 +132,8 @@ pub fn parse_indexed_input_parameter_file_strict(
 /// Read optional overlays after initial.def and before synchronization.
 /// Missing referenced files are skipped; applied records follow namelist order.
 /// Supported factors are Gutzwiller, Jastrow and normal/AP/Parallel/General
-/// orbitals and strict DH2/DH4. Unsupported RBM/OptTrans records return an explicit error until
-/// their data models are implemented. Each strict overlay commits atomically;
+/// orbitals, strict DH2/DH4, and the nine indexed RBM sections. OptTrans
+/// records remain unsupported. Each strict overlay commits atomically;
 /// earlier successful overlays remain applied if a later record fails.
 pub fn read_input_parameters(
     data: &mut ExpertModeData,
@@ -238,7 +238,20 @@ pub fn read_input_parameters(
                 || kind.starts_with("InSpinRBM_")
                 || kind.starts_with("InGeneralRBM_") =>
             {
-                return Err(format!("{kind} overlay is not implemented yet"))
+                let params =
+                    parse_input_parameter_file(&path).map_err(|error| error.to_string())?;
+                if let Some(section) = crate::parsers::rbm::SECTION_NAMES
+                    .iter()
+                    .position(|&name| kind.strip_prefix("In") == Some(name))
+                {
+                    data.visit_rbm_terms_mut(|index, term| {
+                        if index == section {
+                            if let Some(&value) = params.get(&term.idx()) {
+                                term.set_value(value);
+                            }
+                        }
+                    });
+                }
             }
             _ => {}
         }

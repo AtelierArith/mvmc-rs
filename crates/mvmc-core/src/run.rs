@@ -99,7 +99,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
     let n_proj = data.projection_layout().n_proj;
     let n_orb = n_slater(data);
-    let n_para = n_proj + n_orb;
+    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
     data.ensure_optimization_flags(n_para);
     let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
@@ -580,7 +580,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_proj = data.projection_layout().n_proj;
     let n_orb = n_slater(data);
-    let n_para = n_proj + n_orb;
+    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
     let n_sp = data.modpara.nsp_gauss_leg.max(1) as usize;
     let n_mp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
     let n_opt = data.n_qp_opt_trans.max(1) as usize;
@@ -603,6 +603,14 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
 mod mode_tests {
     use super::*;
     use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
+
+    #[test]
+    fn rbm_state_places_all_nine_blocks_between_projection_and_slater() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/rbm/namelist_all.def");
+        let data = parse_expert_mode_files(path).unwrap();
+        assert_eq!(state_from_data(&data).sr_opt.sr_opt_size, 37);
+    }
 
     fn data() -> ExpertModeData {
         let mut data = ExpertModeData::new();

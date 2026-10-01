@@ -17,11 +17,12 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     }
     let layout = data.projection_layout();
     let n_orbital = n_slater(data);
-    let n_parameters = layout.n_proj + n_orbital;
+    let n_rbm = data.count_rbm_parameters();
+    let n_parameters = layout.n_proj + n_rbm + n_orbital;
     let expected = 6 + 3 * n_parameters;
     if values.len() < expected {
         return Err(format!(
-            "too short: got {} floats, expected {expected} (6 + 3*(NProj={} + NRBM=0 + NSlater={n_orbital} + NOptTrans=0))",
+            "too short: got {} floats, expected {expected} (6 + 3*(NProj={} + NRBM={n_rbm} + NSlater={n_orbital} + NOptTrans=0))",
             values.len(), layout.n_proj
         ));
     }
@@ -73,9 +74,20 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     {
         *value = parameter(layout.dh4_offset + index);
     }
+    let sizes = data.rbm_section_sizes();
+    let mut offsets = [layout.n_proj; 9];
+    for i in 1..9 {
+        offsets[i] = offsets[i - 1] + sizes[i - 1];
+    }
+    data.visit_rbm_terms_mut(|section, term| {
+        let index = term.idx();
+        if index >= 0 && (index as usize) < sizes[section] {
+            term.set_value(parameter(offsets[section] + index as usize));
+        }
+    });
     for term in &mut data.orbital_terms {
         if term.idx >= 0 && (term.idx as usize) < n_orbital {
-            term.value = parameter(layout.n_proj + term.idx as usize);
+            term.value = parameter(layout.n_proj + n_rbm + term.idx as usize);
         }
     }
     Ok(n_parameters)
@@ -86,7 +98,7 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
 /// Missing files and invalid records emit a warning and return `Ok(false)`,
 /// matching Julia's recoverable contract. Other file-reading failures propagate
 /// as I/O errors, as Julia's `read` does. No RNG draws or normalization occur.
-/// DH2 and DH4 follow Jastrow before Slater; RBM/OptTrans are pending.
+/// DH2/DH4 follow Jastrow, then the nine RBM sections and Slater; OptTrans is pending.
 pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io::Result<bool> {
     let path = path.as_ref();
     if !path.is_file() {
@@ -109,7 +121,7 @@ pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io
 ///
 /// Rejects missing files, malformed tokens, non-finite values, incorrect record
 /// lengths and models with no parameters. Rejected records leave data unchanged.
-/// The supported layout is six diagnostics followed by projection/Slater triples.
+/// The supported layout is six diagnostics followed by projection/RBM/Slater triples.
 pub fn read_opt_para_file(
     data: &mut ExpertModeData,
     path: impl AsRef<Path>,

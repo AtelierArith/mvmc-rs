@@ -16,7 +16,7 @@
 //! * **4.3.2 — RBM counters + log-cosh ratios** ([`rbm`]): pure-Rust
 //!   ports of `make_rbm_cnt`, `update_rbm_cnt_hopping!`,
 //!   `log_rbm_ratio`, `log_rbm_val`, `_rbm_log_cosh_stable` using a
-//!   synthetic `RbmConfig` until the Phase-3 RBM parsers land.
+//!   borrowed view of the canonical parser terms.
 //! * **4.3.3a — normal-mode candidate generators** ([`candidate`]):
 //!   `get_update_type`, `make_candidate_hopping`,
 //!   `make_candidate_exchange`; SFMT draw-order parity is covered by
@@ -61,9 +61,8 @@ pub use projection::{
     update_ele_config, update_proj_cnt,
 };
 pub use rbm::{
-    log_cosh_stable, log_rbm_ratio, log_rbm_val, make_rbm_cnt, update_rbm_cnt_hopping, RbmConfig,
-    RbmGeneralPhysHiddenTerm, RbmGeneralPhysLayerTerm, RbmHiddenLayerTerm, RbmPhysHiddenTerm,
-    RbmPhysLayerTerm,
+    log_cosh_stable, log_rbm_ratio, log_rbm_val, make_rbm_cnt, set_rbm_diff,
+    update_rbm_cnt_hopping, RbmConfig,
 };
 pub use updates::{
     calculate_new_pf_m2_complex_flat, calculate_new_pf_m2_fsz_complex_flat,

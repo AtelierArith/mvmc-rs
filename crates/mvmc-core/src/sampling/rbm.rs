@@ -4,84 +4,16 @@
 //! `log_rbm_ratio`, `log_rbm_val`, `_rbm_log_cosh_stable` in
 //! `MVMCOptimizers.jl/src/vmc_sampling.jl`.
 //!
-//! ## Scope
-//!
-//! This module ships the bit-faithful kernels, but it does **not** yet
-//! wire them through [`mvmc_expert_parsers::ExpertModeData`] -- the
-//! Phase 3 RBM parsers are still pending, so the parsed-data carrier
-//! has no RBM term vectors to feed in. The 4 upstream namelists used
-//! by the round-trip suite contain no RBM blocks, so this is safe: the
-//! kernels return the same `0` / no-op as Julia's
-//! `has_rbm_terms(data) == false` branch.
-//!
-//! Callers (and the parity dumper at
-//! `extern/Julia-mVMC/tools/dump_rbm_reference.jl`) construct an
-//! [`RbmConfig`] manually — the borrow-only view bundles the 9 RBM
-//! term slices, the three `nneuron_*` widths, and the global `n_site`
-//! / `nblock_size_rbm_ratio`. Once Phase 3 RBM parsers land, an
-//! `impl<'a> From<&'a ExpertModeData> for RbmConfig<'a>` will close the
-//! loop without touching any of these kernels.
+//! Kernels borrow the nine canonical parser term sections through [`RbmConfig`].
+//! Parameter indices and hidden-neuron counter widths are separate layouts.
 
 use num_complex::Complex64;
 
-/// Charge / spin / general RBM physical-layer term (one parameter per
-/// (site, idx) pair).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RbmPhysLayerTerm {
-    /// Physical site index `ri`.
-    pub site: i64,
-    /// Parameter slot inside the family (0-based).
-    pub idx: i64,
-    /// Parameter value `RBM[idx]`.
-    pub value: Complex64,
-}
-
-/// General-RBM physical-layer term (carries an explicit spin).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RbmGeneralPhysLayerTerm {
-    /// Physical site `ri`.
-    pub site: i64,
-    /// 0 = up, 1 = down.
-    pub spin: u8,
-    /// Parameter slot inside the family (0-based).
-    pub idx: i64,
-    /// Parameter value `RBM[idx]`.
-    pub value: Complex64,
-}
-
-/// Charge / spin / general RBM hidden-layer term (one parameter per
-/// hidden neuron).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RbmHiddenLayerTerm {
-    /// Hidden-neuron index `hi`.
-    pub site: i64,
-    /// Parameter value.
-    pub value: Complex64,
-}
-
-/// Charge / spin physical-hidden coupling term.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RbmPhysHiddenTerm {
-    /// Physical site `ri`.
-    pub site1: i64,
-    /// Hidden neuron `hi`.
-    pub site2: i64,
-    /// Coupling parameter.
-    pub value: Complex64,
-}
-
-/// General physical-hidden coupling term (carries a spin index).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RbmGeneralPhysHiddenTerm {
-    /// Physical site `ri`.
-    pub site1: i64,
-    /// 0 = up, 1 = down.
-    pub spin: u8,
-    /// Hidden neuron `hi`.
-    pub site2: i64,
-    /// Coupling parameter.
-    pub value: Complex64,
-}
+use mvmc_expert_parsers::{
+    ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, ExpertModeData,
+    GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm,
+    SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm, SpinRBMPhysLayerTerm,
+};
 
 /// Borrow-only view of the RBM terms + scalar config needed by the
 /// kernels in this module.
@@ -105,25 +37,46 @@ pub struct RbmConfig<'a> {
     pub nneuron_general: usize,
 
     /// Charge RBM physical-layer terms.
-    pub charge_phys: &'a [RbmPhysLayerTerm],
+    pub charge_phys: &'a [ChargeRBMPhysLayerTerm],
     /// Spin RBM physical-layer terms.
-    pub spin_phys: &'a [RbmPhysLayerTerm],
+    pub spin_phys: &'a [SpinRBMPhysLayerTerm],
     /// General RBM physical-layer terms.
-    pub general_phys: &'a [RbmGeneralPhysLayerTerm],
+    pub general_phys: &'a [GeneralRBMPhysLayerTerm],
 
     /// Charge RBM hidden-layer terms.
-    pub charge_hidden: &'a [RbmHiddenLayerTerm],
+    pub charge_hidden: &'a [ChargeRBMHiddenLayerTerm],
     /// Spin RBM hidden-layer terms.
-    pub spin_hidden: &'a [RbmHiddenLayerTerm],
+    pub spin_hidden: &'a [SpinRBMHiddenLayerTerm],
     /// General RBM hidden-layer terms.
-    pub general_hidden: &'a [RbmHiddenLayerTerm],
+    pub general_hidden: &'a [GeneralRBMHiddenLayerTerm],
 
     /// Charge phys-hidden coupling terms.
-    pub charge_phys_hidden: &'a [RbmPhysHiddenTerm],
+    pub charge_phys_hidden: &'a [ChargeRBMPhysHiddenTerm],
     /// Spin phys-hidden coupling terms.
-    pub spin_phys_hidden: &'a [RbmPhysHiddenTerm],
+    pub spin_phys_hidden: &'a [SpinRBMPhysHiddenTerm],
     /// General phys-hidden coupling terms.
-    pub general_phys_hidden: &'a [RbmGeneralPhysHiddenTerm],
+    pub general_phys_hidden: &'a [GeneralRBMPhysHiddenTerm],
+}
+
+impl<'a> From<&'a ExpertModeData> for RbmConfig<'a> {
+    fn from(data: &'a ExpertModeData) -> Self {
+        Self {
+            n_site: data.modpara.nsite.max(0) as usize,
+            nblock_size_rbm_ratio: data.modpara.nblock_size_rbm_ratio.max(1) as usize,
+            nneuron_charge: data.modpara.nneuron_charge.max(0) as usize,
+            nneuron_spin: data.modpara.nneuron_spin.max(0) as usize,
+            nneuron_general: data.modpara.nneuron_general.max(0) as usize,
+            charge_phys: &data.charge_rbm_phys_layer_terms,
+            spin_phys: &data.spin_rbm_phys_layer_terms,
+            general_phys: &data.general_rbm_phys_layer_terms,
+            charge_hidden: &data.charge_rbm_hidden_layer_terms,
+            spin_hidden: &data.spin_rbm_hidden_layer_terms,
+            general_hidden: &data.general_rbm_hidden_layer_terms,
+            charge_phys_hidden: &data.charge_rbm_phys_hidden_terms,
+            spin_phys_hidden: &data.spin_rbm_phys_hidden_terms,
+            general_phys_hidden: &data.general_rbm_phys_hidden_terms,
+        }
+    }
 }
 
 impl<'a> RbmConfig<'a> {
@@ -253,7 +206,7 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
     }
     for term in cfg.general_phys {
         let ri = term.site;
-        if ri < 0 || (ri as usize) >= n_site || term.spin > 1 {
+        if ri < 0 || (ri as usize) >= n_site || !(0..=1).contains(&term.spin) {
             continue;
         }
         let idx = term.idx;
@@ -314,7 +267,7 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
         let hi = term.site2;
         if ri < 0
             || (ri as usize) >= n_site
-            || term.spin > 1
+            || !(0..=1).contains(&term.spin)
             || hi < 0
             || (hi as usize) >= n_general_neuron
         {
@@ -408,7 +361,7 @@ pub fn update_rbm_cnt_hopping(
         if pos >= rbm_cnt_new.len() {
             continue;
         }
-        let r = term.site + (term.spin as i64) * (n_site as i64);
+        let r = term.site + term.spin * (n_site as i64);
         if r == rsi {
             rbm_cnt_new[pos] -= Complex64::new(2.0, 0.0);
         } else if r == rsj {
@@ -449,7 +402,7 @@ pub fn update_rbm_cnt_hopping(
         if pos >= rbm_cnt_new.len() {
             continue;
         }
-        let r = term.site1 + (term.spin as i64) * (n_site as i64);
+        let r = term.site1 + term.spin * (n_site as i64);
         if r == rsi {
             rbm_cnt_new[pos] -= Complex64::new(2.0, 0.0) * term.value;
         } else if r == rsj {
@@ -584,7 +537,7 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
     }
     for term in cfg.general_phys {
         let ri = term.site;
-        if ri < 0 || (ri as usize) >= n_site || term.spin > 1 {
+        if ri < 0 || (ri as usize) >= n_site || !(0..=1).contains(&term.spin) {
             continue;
         }
         let rsi = (ri as usize) + (term.spin as usize) * n_site;
@@ -640,7 +593,7 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
         let hi = term.site2;
         if ri < 0
             || (ri as usize) >= n_site
-            || term.spin > 1
+            || !(0..=1).contains(&term.spin)
             || hi < 0
             || (hi as usize) >= n_general
         {
@@ -661,6 +614,180 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
         z += log_cosh_stable(v);
     }
     z
+}
+
+// Julia Base uses this expression for ComplexF64 tanh.
+fn julia_tanh(z: Complex64) -> Complex64 {
+    let (x, y) = (z.re, z.im);
+    if x.is_nan() && y == 0.0 {
+        return Complex64::new(x, y);
+    }
+    if 4.0 * x.abs() > f64::MAX.asinh() {
+        let sign = y * if y.is_finite() {
+            (2.0 * y.abs()).sin()
+        } else {
+            1.0
+        };
+        return Complex64::new(1.0f64.copysign(x), 0.0f64.copysign(sign));
+    }
+    let tangent = y.tan();
+    let beta = 1.0 + tangent * tangent;
+    let s = x.sinh();
+    let rho = (1.0 + s * s).sqrt();
+    if tangent.is_infinite() {
+        Complex64::new(rho / s, 1.0 / tangent)
+    } else {
+        Complex64::new(beta * rho * s, tangent) / (1.0 + beta * s * s)
+    }
+}
+
+/// Write RBM derivatives into a view starting after the projection block.
+/// Physical slots are assigned; hidden/coupling contributions accumulate,
+/// including shared indices. Short views remain untouched as in Julia.
+pub fn set_rbm_diff(
+    out: &mut [Complex64],
+    cnt: &[Complex64],
+    ele_num: &[i64],
+    cfg: &RbmConfig<'_>,
+) {
+    let widths = [
+        cfg.n_charge_phys(),
+        cfg.n_spin_phys(),
+        cfg.n_general_phys(),
+        max_idx_plus_one(cfg.charge_hidden.iter().map(|t| t.idx)),
+        max_idx_plus_one(cfg.spin_hidden.iter().map(|t| t.idx)),
+        max_idx_plus_one(cfg.general_hidden.iter().map(|t| t.idx)),
+        max_idx_plus_one(cfg.charge_phys_hidden.iter().map(|t| t.idx)),
+        max_idx_plus_one(cfg.spin_phys_hidden.iter().map(|t| t.idx)),
+        max_idx_plus_one(cfg.general_phys_hidden.iter().map(|t| t.idx)),
+    ];
+    let total = widths.iter().sum::<usize>();
+    if total == 0 || out.len() < 2 * total {
+        return;
+    }
+    let physical = widths[..3].iter().sum::<usize>();
+    let hidden = widths[3..6].iter().sum::<usize>();
+    let neurons = [
+        cfg.n_charge_neuron(),
+        cfg.n_spin_neuron(),
+        cfg.n_general_neuron(),
+    ];
+    let cnt_offsets = [
+        physical,
+        physical + neurons[0],
+        physical + neurons[0] + neurons[1],
+    ];
+    let imaginary = Complex64::new(0.0, 1.0);
+    for (index, &value) in cnt.iter().take(physical).enumerate() {
+        out[2 * index] = value;
+        out[2 * index + 1] = imaginary * value;
+    }
+    for term in cfg.charge_hidden {
+        let (hi, index) = (term.site, term.idx);
+        if hi < 0 || index < 0 || hi as usize >= neurons[0] || index as usize >= widths[3] {
+            continue;
+        }
+        let counter = cnt_offsets[0] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let value = julia_tanh(value);
+        let parameter = physical + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
+    for term in cfg.spin_hidden {
+        let (hi, index) = (term.site, term.idx);
+        if hi < 0 || index < 0 || hi as usize >= neurons[1] || index as usize >= widths[4] {
+            continue;
+        }
+        let counter = cnt_offsets[1] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let value = julia_tanh(value);
+        let parameter = physical + widths[3] + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
+    for term in cfg.general_hidden {
+        let (hi, index) = (term.site, term.idx);
+        if hi < 0 || index < 0 || hi as usize >= neurons[2] || index as usize >= widths[5] {
+            continue;
+        }
+        let counter = cnt_offsets[2] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let value = julia_tanh(value);
+        let parameter = physical + widths[3] + widths[4] + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
+    for term in cfg.charge_phys_hidden {
+        let (ri, hi, index) = (term.site1, term.site2, term.idx);
+        if ri < 0
+            || ri as usize >= cfg.n_site
+            || hi < 0
+            || index < 0
+            || hi as usize >= neurons[0]
+            || index as usize >= widths[6]
+        {
+            continue;
+        }
+        let counter = cnt_offsets[0] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let xi = (ele_num[ri as usize] + ele_num[ri as usize + cfg.n_site] - 1) as f64;
+        let value = xi * julia_tanh(value);
+        let parameter = physical + hidden + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
+    for term in cfg.spin_phys_hidden {
+        let (ri, hi, index) = (term.site1, term.site2, term.idx);
+        if ri < 0
+            || ri as usize >= cfg.n_site
+            || hi < 0
+            || index < 0
+            || hi as usize >= neurons[1]
+            || index as usize >= widths[7]
+        {
+            continue;
+        }
+        let counter = cnt_offsets[1] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let xi = (ele_num[ri as usize] - ele_num[ri as usize + cfg.n_site]) as f64;
+        let value = xi * julia_tanh(value);
+        let parameter = physical + hidden + widths[6] + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
+    for term in cfg.general_phys_hidden {
+        let (ri, hi, index) = (term.site1, term.site2, term.idx);
+        if ri < 0
+            || ri as usize >= cfg.n_site
+            || hi < 0
+            || index < 0
+            || hi as usize >= neurons[2]
+            || index as usize >= widths[8]
+            || !(0..=1).contains(&term.spin)
+        {
+            continue;
+        }
+        let counter = cnt_offsets[2] + hi as usize;
+        let Some(&value) = cnt.get(counter) else {
+            continue;
+        };
+        let xi = (2 * ele_num[ri as usize + term.spin as usize * cfg.n_site] - 1) as f64;
+        let value = xi * julia_tanh(value);
+        let parameter = physical + hidden + widths[6] + widths[7] + index as usize;
+        out[2 * parameter] += value;
+        out[2 * parameter + 1] += imaginary * value;
+    }
 }
 
 #[cfg(test)]
@@ -713,15 +840,17 @@ mod tests {
         // 2 sites, 2 charge-phys terms (one per site, both idx=0 so the
         // single counter sums (n0+n1-1) over both sites).
         let terms = vec![
-            RbmPhysLayerTerm {
+            ChargeRBMPhysLayerTerm {
                 site: 0,
                 idx: 0,
                 value: Complex64::new(0.3, 0.0),
+                is_complex: false,
             },
-            RbmPhysLayerTerm {
+            ChargeRBMPhysLayerTerm {
                 site: 1,
                 idx: 0,
                 value: Complex64::new(0.7, 0.0),
+                is_complex: false,
             },
         ];
         let cfg = RbmConfig {
@@ -757,15 +886,17 @@ mod tests {
     #[test]
     fn update_then_make_match_for_charge_phys() {
         let terms = vec![
-            RbmPhysLayerTerm {
+            ChargeRBMPhysLayerTerm {
                 site: 0,
                 idx: 0,
                 value: Complex64::new(0.3, 0.0),
+                is_complex: false,
             },
-            RbmPhysLayerTerm {
+            ChargeRBMPhysLayerTerm {
                 site: 1,
                 idx: 0,
                 value: Complex64::new(0.7, 0.0),
+                is_complex: false,
             },
         ];
         let cfg = RbmConfig {

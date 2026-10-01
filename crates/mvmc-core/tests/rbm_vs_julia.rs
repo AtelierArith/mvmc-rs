@@ -14,8 +14,11 @@ use std::path::{Path, PathBuf};
 
 use mvmc_core::sampling::rbm::{
     log_rbm_ratio, log_rbm_val, make_rbm_cnt, update_rbm_cnt_hopping, RbmConfig,
-    RbmGeneralPhysHiddenTerm, RbmGeneralPhysLayerTerm, RbmHiddenLayerTerm, RbmPhysHiddenTerm,
-    RbmPhysLayerTerm,
+};
+use mvmc_expert_parsers::{
+    ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, ExpertModeData,
+    GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm,
+    SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm, SpinRBMPhysLayerTerm,
 };
 use num_complex::Complex64;
 
@@ -162,165 +165,184 @@ fn load_fixture(path: &Path) -> Fixture {
     }
 }
 
-fn synthetic_config<'a>(
-    f: &Fixture,
-    charge_phys: &'a [RbmPhysLayerTerm],
-    spin_phys: &'a [RbmPhysLayerTerm],
-    general_phys: &'a [RbmGeneralPhysLayerTerm],
-    charge_hidden: &'a [RbmHiddenLayerTerm],
-    spin_hidden: &'a [RbmHiddenLayerTerm],
-    general_hidden: &'a [RbmHiddenLayerTerm],
-    charge_ph: &'a [RbmPhysHiddenTerm],
-    spin_ph: &'a [RbmPhysHiddenTerm],
-    general_ph: &'a [RbmGeneralPhysHiddenTerm],
-) -> RbmConfig<'a> {
-    RbmConfig {
-        n_site: f.n_site,
-        nblock_size_rbm_ratio: f.nblock_size_rbm_ratio,
-        nneuron_charge: f.nneuron_charge,
-        nneuron_spin: f.nneuron_spin,
-        nneuron_general: f.nneuron_general,
-        charge_phys,
-        spin_phys,
-        general_phys,
-        charge_hidden,
-        spin_hidden,
-        general_hidden,
-        charge_phys_hidden: charge_ph,
-        spin_phys_hidden: spin_ph,
-        general_phys_hidden: general_ph,
-    }
-}
-
-fn build_terms() -> (
-    Vec<RbmPhysLayerTerm>,
-    Vec<RbmPhysLayerTerm>,
-    Vec<RbmGeneralPhysLayerTerm>,
-    Vec<RbmHiddenLayerTerm>,
-    Vec<RbmHiddenLayerTerm>,
-    Vec<RbmHiddenLayerTerm>,
-    Vec<RbmPhysHiddenTerm>,
-    Vec<RbmPhysHiddenTerm>,
-    Vec<RbmGeneralPhysHiddenTerm>,
-) {
+fn build_data(f: &Fixture) -> ExpertModeData {
     let c = |re, im| Complex64::new(re, im);
-    (
-        vec![
-            RbmPhysLayerTerm {
-                site: 0,
-                idx: 0,
-                value: c(0.11, 0.02),
-            },
-            RbmPhysLayerTerm {
-                site: 2,
-                idx: 1,
-                value: c(-0.03, 0.07),
-            },
-        ],
-        vec![
-            RbmPhysLayerTerm {
-                site: 0,
-                idx: 0,
-                value: c(0.05, -0.01),
-            },
-            RbmPhysLayerTerm {
-                site: 3,
-                idx: 1,
-                value: c(-0.08, 0.02),
-            },
-        ],
-        vec![
-            RbmGeneralPhysLayerTerm {
-                site: 1,
-                spin: 0,
-                idx: 0,
-                value: c(0.04, 0.03),
-            },
-            RbmGeneralPhysLayerTerm {
-                site: 2,
-                spin: 1,
-                idx: 1,
-                value: c(-0.06, -0.02),
-            },
-        ],
-        vec![
-            RbmHiddenLayerTerm {
-                site: 0,
-                value: c(0.20, -0.04),
-            },
-            RbmHiddenLayerTerm {
-                site: 1,
-                value: c(-0.15, 0.05),
-            },
-            RbmHiddenLayerTerm {
-                site: 2,
-                value: c(0.07, 0.01),
-            },
-        ],
-        vec![
-            RbmHiddenLayerTerm {
-                site: 0,
-                value: c(-0.12, 0.08),
-            },
-            RbmHiddenLayerTerm {
-                site: 1,
-                value: c(0.09, -0.03),
-            },
-        ],
-        vec![
-            RbmHiddenLayerTerm {
-                site: 0,
-                value: c(0.05, 0.02),
-            },
-            RbmHiddenLayerTerm {
-                site: 1,
-                value: c(-0.04, 0.06),
-            },
-        ],
-        vec![
-            RbmPhysHiddenTerm {
-                site1: 0,
-                site2: 0,
-                value: c(0.13, 0.02),
-            },
-            RbmPhysHiddenTerm {
-                site1: 1,
-                site2: 1,
-                value: c(-0.05, 0.04),
-            },
-            RbmPhysHiddenTerm {
-                site1: 3,
-                site2: 2,
-                value: c(0.03, -0.07),
-            },
-        ],
-        vec![
-            RbmPhysHiddenTerm {
-                site1: 0,
-                site2: 0,
-                value: c(-0.09, 0.02),
-            },
-            RbmPhysHiddenTerm {
-                site1: 2,
-                site2: 1,
-                value: c(0.06, 0.05),
-            },
-        ],
-        vec![
-            RbmGeneralPhysHiddenTerm {
-                site1: 1,
-                spin: 0,
-                site2: 0,
-                value: c(0.10, -0.03),
-            },
-            RbmGeneralPhysHiddenTerm {
-                site1: 2,
-                spin: 1,
-                site2: 1,
-                value: c(-0.07, 0.09),
-            },
-        ],
-    )
+    let mut data = ExpertModeData::new();
+    data.modpara.nsite = f.n_site as i64;
+    data.modpara.nblock_size_rbm_ratio = f.nblock_size_rbm_ratio as i64;
+    data.modpara.nneuron_charge = f.nneuron_charge as i64;
+    data.modpara.nneuron_spin = f.nneuron_spin as i64;
+    data.modpara.nneuron_general = f.nneuron_general as i64;
+    data.charge_rbm_phys_layer_terms = vec![
+        ChargeRBMPhysLayerTerm {
+            site: 0,
+            idx: 0,
+            value: c(0.11, 0.02),
+
+            is_complex: true,
+        },
+        ChargeRBMPhysLayerTerm {
+            site: 2,
+            idx: 1,
+            value: c(-0.03, 0.07),
+
+            is_complex: true,
+        },
+    ];
+    data.spin_rbm_phys_layer_terms = vec![
+        SpinRBMPhysLayerTerm {
+            site: 0,
+            idx: 0,
+            value: c(0.05, -0.01),
+
+            is_complex: true,
+        },
+        SpinRBMPhysLayerTerm {
+            site: 3,
+            idx: 1,
+            value: c(-0.08, 0.02),
+
+            is_complex: true,
+        },
+    ];
+    data.general_rbm_phys_layer_terms = vec![
+        GeneralRBMPhysLayerTerm {
+            site: 1,
+            spin: 0,
+            idx: 0,
+            value: c(0.04, 0.03),
+
+            is_complex: true,
+        },
+        GeneralRBMPhysLayerTerm {
+            site: 2,
+            spin: 1,
+            idx: 1,
+            value: c(-0.06, -0.02),
+
+            is_complex: true,
+        },
+    ];
+    data.charge_rbm_hidden_layer_terms = vec![
+        ChargeRBMHiddenLayerTerm {
+            site: 0,
+            value: c(0.20, -0.04),
+
+            idx: 0,
+            is_complex: true,
+        },
+        ChargeRBMHiddenLayerTerm {
+            site: 1,
+            value: c(-0.15, 0.05),
+
+            idx: 1,
+            is_complex: true,
+        },
+        ChargeRBMHiddenLayerTerm {
+            site: 2,
+            value: c(0.07, 0.01),
+
+            idx: 2,
+            is_complex: true,
+        },
+    ];
+    data.spin_rbm_hidden_layer_terms = vec![
+        SpinRBMHiddenLayerTerm {
+            site: 0,
+            value: c(-0.12, 0.08),
+
+            idx: 0,
+            is_complex: true,
+        },
+        SpinRBMHiddenLayerTerm {
+            site: 1,
+            value: c(0.09, -0.03),
+
+            idx: 1,
+            is_complex: true,
+        },
+    ];
+    data.general_rbm_hidden_layer_terms = vec![
+        GeneralRBMHiddenLayerTerm {
+            site: 0,
+            value: c(0.05, 0.02),
+
+            idx: 0,
+            is_complex: true,
+        },
+        GeneralRBMHiddenLayerTerm {
+            site: 1,
+            value: c(-0.04, 0.06),
+
+            idx: 1,
+            is_complex: true,
+        },
+    ];
+    data.charge_rbm_phys_hidden_terms = vec![
+        ChargeRBMPhysHiddenTerm {
+            site1: 0,
+            site2: 0,
+            value: c(0.13, 0.02),
+
+            idx: 0,
+            is_complex: true,
+        },
+        ChargeRBMPhysHiddenTerm {
+            site1: 1,
+            site2: 1,
+            value: c(-0.05, 0.04),
+
+            idx: 0,
+            is_complex: true,
+        },
+        ChargeRBMPhysHiddenTerm {
+            site1: 3,
+            site2: 2,
+            value: c(0.03, -0.07),
+
+            idx: 0,
+            is_complex: true,
+        },
+    ];
+    data.spin_rbm_phys_hidden_terms = vec![
+        SpinRBMPhysHiddenTerm {
+            site1: 0,
+            site2: 0,
+            value: c(-0.09, 0.02),
+
+            idx: 0,
+            is_complex: true,
+        },
+        SpinRBMPhysHiddenTerm {
+            site1: 2,
+            site2: 1,
+            value: c(0.06, 0.05),
+
+            idx: 0,
+            is_complex: true,
+        },
+    ];
+    data.general_rbm_phys_hidden_terms = vec![
+        GeneralRBMPhysHiddenTerm {
+            site1: 1,
+            spin: 0,
+            site2: 0,
+            value: c(0.10, -0.03),
+
+            idx: 0,
+            is_complex: true,
+        },
+        GeneralRBMPhysHiddenTerm {
+            site1: 2,
+            spin: 1,
+            site2: 1,
+            value: c(-0.07, 0.09),
+
+            idx: 0,
+            is_complex: true,
+        },
+    ];
+    data
 }
 
 fn close(a: Complex64, b: Complex64) -> bool {
@@ -331,29 +353,8 @@ fn close(a: Complex64, b: Complex64) -> bool {
 #[test]
 fn synthetic_rbm_matches_julia() {
     let fx = load_fixture(&fixture_path("synthetic.txt"));
-    let (
-        charge_phys,
-        spin_phys,
-        general_phys,
-        charge_hidden,
-        spin_hidden,
-        general_hidden,
-        charge_ph,
-        spin_ph,
-        general_ph,
-    ) = build_terms();
-    let cfg = synthetic_config(
-        &fx,
-        &charge_phys,
-        &spin_phys,
-        &general_phys,
-        &charge_hidden,
-        &spin_hidden,
-        &general_hidden,
-        &charge_ph,
-        &spin_ph,
-        &general_ph,
-    );
+    let data = build_data(&fx);
+    let cfg = RbmConfig::from(&data);
 
     let cnt_old = make_rbm_cnt(&fx.ele_old, &cfg);
     assert_eq!(cnt_old.len(), fx.cnt_old.len());

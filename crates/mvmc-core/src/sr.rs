@@ -59,7 +59,7 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
 ) -> i32 {
     let n_proj = data.projection_layout().n_proj;
     let n_orb = n_slater(data);
-    let n_para = n_proj + n_orb;
+    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
     if n_para == 0 {
         return 0;
     }
@@ -122,7 +122,7 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
 ) -> i32 {
     let n_proj = data.projection_layout().n_proj;
     let n_orb = n_slater(data);
-    let n_para = n_proj + n_orb;
+    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
     if n_para == 0 {
         return 0;
     }
@@ -350,8 +350,22 @@ pub(crate) fn update_parameter_value(
         {
             *value += delta;
         }
+    } else if para_idx < n_proj + data.count_rbm_parameters() {
+        let sizes = data.rbm_section_sizes();
+        let mut offsets = [n_proj; 9];
+        for i in 1..9 {
+            offsets[i] = offsets[i - 1] + sizes[i - 1];
+        }
+        data.visit_rbm_terms_mut(|section, term| {
+            if term.idx() >= 0
+                && (term.idx() as usize) < sizes[section]
+                && offsets[section] + term.idx() as usize == para_idx
+            {
+                term.set_value(term.value() + delta);
+            }
+        });
     } else {
-        let orbital_idx = (para_idx - n_proj) as i64;
+        let orbital_idx = (para_idx - n_proj - data.count_rbm_parameters()) as i64;
         for term in data.orbital_terms.iter_mut() {
             if term.idx == orbital_idx {
                 term.value += delta;
@@ -542,6 +556,102 @@ mod tests {
             exact("factor", &s, &read(lines.next().unwrap()));
             exact("solution", &g, &read(lines.next().unwrap()));
         }
+    }
+
+    #[test]
+    fn rbm_indexed_updates_and_sparse_values_match_original_julia() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/rbm/production");
+        let text = std::fs::read_to_string(root.join("updates.txt")).unwrap();
+        let mut lines = text.lines().filter(|line| !line.starts_with('#'));
+        let bits = |values: &[Complex64]| {
+            values
+                .iter()
+                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                .collect::<Vec<_>>()
+        };
+        let expected = |line: &str| {
+            line.split_whitespace()
+                .map(|word| u64::from_str_radix(word, 16).unwrap())
+                .collect::<Vec<_>>()
+        };
+        while let Some(case) = lines.next() {
+            let file = root.join(format!("namelist_{case}.def"));
+            let mut data = mvmc_expert_parsers::parse_expert_mode_files(&file).unwrap();
+            mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(
+                &mut data, &file,
+            )
+            .unwrap();
+            let counts: Vec<usize> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|s| s.parse().unwrap())
+                .collect();
+            let nproj = data.projection_layout().n_proj;
+            let nrbm = data.count_rbm_parameters();
+            let npara = nproj + nrbm + mvmc_expert_parsers::utils::parameter_init::n_slater(&data);
+            assert_eq!([nproj, nrbm, npara], counts.as_slice(), "{case}");
+            let snapshot = |d: &mut ExpertModeData| {
+                let mut values = d.projection_parameters();
+                d.visit_rbm_terms_mut(|_, t| values.push(t.value()));
+                values.extend(d.orbital_terms.iter().map(|t| t.value));
+                bits(&values)
+            };
+            assert_eq!(
+                snapshot(&mut data),
+                expected(lines.next().unwrap()),
+                "{case} before"
+            );
+            assert_eq!(
+                bits(&data.rbm_parameters()),
+                expected(lines.next().unwrap()),
+                "{case} packed before"
+            );
+            for index in 0..npara {
+                update_parameter_value(
+                    &mut data,
+                    index,
+                    (index + 1) as f64 / 128.0,
+                    -((index + 1) as f64) / 256.0,
+                    nproj,
+                );
+            }
+            assert_eq!(
+                snapshot(&mut data),
+                expected(lines.next().unwrap()),
+                "{case} after"
+            );
+            assert_eq!(
+                bits(&data.rbm_parameters()),
+                expected(lines.next().unwrap()),
+                "{case} packed after"
+            );
+        }
+    }
+
+    #[test]
+    fn rbm_parameter_updates_hit_all_shared_rows_and_leave_slater_at_final_offset() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/rbm/namelist_tied.def");
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files(path).unwrap();
+        let n_proj = data.projection_layout().n_proj;
+        let n_rbm = data.count_rbm_parameters();
+        update_parameter_value(&mut data, n_proj, 0.5, -0.25, n_proj);
+        assert_eq!(
+            data.charge_rbm_phys_layer_terms[0].value,
+            Complex64::new(0.5, -0.25)
+        );
+        assert_eq!(
+            data.charge_rbm_phys_layer_terms[1].value,
+            Complex64::new(0.5, -0.25)
+        );
+        assert!(data
+            .orbital_terms
+            .iter()
+            .all(|t| t.value == Complex64::new(0.0, 0.0)));
+        update_parameter_value(&mut data, n_proj + n_rbm + 1, -0.25, 0.5, n_proj);
+        assert_eq!(data.orbital_terms[1].value, Complex64::new(-0.25, 0.5));
     }
 
     fn two_parameter_problem(complex: bool) -> (ExpertModeData, VmcOptimizationState) {
