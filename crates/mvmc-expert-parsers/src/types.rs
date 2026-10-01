@@ -3,8 +3,8 @@
 //! Port target: `MVMCExpertModeParsers.jl/src/types/expert_types.jl`.
 //!
 //! Phase 3 status: the round-trip subset is implemented (`ModPara`, the
-//! 8 simple term structs, plus `ExpertModeData`). The RBM / doublon-
-//! holon / backflow tree from the upstream Julia file is still pending
+//! simple term structs, DH2 definitions, plus `ExpertModeData`). The RBM /
+//! DH4 / backflow tree from the upstream Julia file is still pending
 //! and will land alongside Phase 4. Anything not used by the four
 //! upstream `examples/inputs/*/namelist.def` test cases is omitted on
 //! purpose.
@@ -29,10 +29,22 @@ pub struct ProjectionLayout {
     pub n_gutzwiller: usize,
     /// Jastrow parameter count, preferring a positive declared width.
     pub n_jastrow: usize,
+    /// SpinJastrow count (zero; unsupported by the canonical runtime).
+    pub n_spinjastrow: usize,
+    /// Number of DH2 neighbor-definition tables, with six parameters each.
+    pub n_dh2: usize,
+    /// Number of DH4 tables (zero until that data model is implemented).
+    pub n_dh4: usize,
     /// Start of Gutzwiller parameters (zero).
     pub gutzwiller_offset: usize,
     /// Start of Jastrow parameters after the declared Gutzwiller block.
     pub jastrow_offset: usize,
+    /// Start of the empty SpinJastrow block.
+    pub spinjastrow_offset: usize,
+    /// Start of DH2 parameters after Gutzwiller/Jastrow.
+    pub dh2_offset: usize,
+    /// Start of DH4 parameters after the six-component DH2 blocks.
+    pub dh4_offset: usize,
     /// Total projection parameter count.
     pub n_proj: usize,
 }
@@ -471,10 +483,25 @@ impl QuantumProjectionWeights {
     }
 }
 
+/// C-compatible DH2 neighbor table for one definition index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoublonHolon2SiteIndex {
+    /// One fixed-width row per center site, containing two neighbor site IDs.
+    pub neighbors: Vec<[i64; 2]>,
+}
+
+/// Complete strict DH2 definition; optimization indices are intentionally ignored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoublonHolon2SiteDefinition {
+    /// Tables indexed by the final column of each neighbor row.
+    pub indices: Vec<DoublonHolon2SiteIndex>,
+    /// Six flags per table, in input row order.
+    pub opt_flags: Vec<bool>,
+    /// Whether the header's ComplexType integer is nonzero.
+    pub is_complex: bool,
+}
+
 /// Owned container for all parsed Expert-mode `.def` data.
-///
-/// Phase 3 covers the data the four upstream `examples/inputs/*` cases
-/// need; RBM / doublon-holon / backflow / OptTrans payloads land later.
 #[derive(Debug, Clone, Default)]
 pub struct ExpertModeData {
     /// `modpara.def` payload.
@@ -517,6 +544,15 @@ pub struct ExpertModeData {
     pub n_jastrow_idx: i64,
     /// `JastrowIdx[ri+1, rj+1]` (row-major; -1 for unset diagonals).
     pub jastrow_idx: Vec<Vec<i64>>,
+
+    /// DH2 tables in definition-index order; neighbor site IDs are zero-based.
+    pub doublon_holon_2site_indices: Vec<DoublonHolon2SiteIndex>,
+    /// Six complex parameters per DH2 table, in C projection order.
+    pub doublon_holon_2site_params: Vec<Complex64>,
+    /// Local real optimization flags in input row order.
+    pub doublon_holon_2site_opt_flags: Vec<bool>,
+    /// DH2 ComplexType declaration, including empty definitions.
+    pub doublon_holon_2site_complex: bool,
 
     /// Orbital (site1, site2, idx, sign) entries.
     pub orbital_terms: Vec<OrbitalTerm>,
@@ -588,12 +624,21 @@ impl ExpertModeData {
         } else {
             self.jastrow_terms.len()
         };
+        let dh2_offset = n_gutzwiller + n_jastrow;
+        let n_dh2 = self.doublon_holon_2site_indices.len();
+        let dh4_offset = dh2_offset + 6 * n_dh2;
         ProjectionLayout {
             n_gutzwiller,
             n_jastrow,
+            n_spinjastrow: 0,
+            n_dh2,
+            n_dh4: 0,
             gutzwiller_offset: 0,
             jastrow_offset: n_gutzwiller,
-            n_proj: n_gutzwiller + n_jastrow,
+            spinjastrow_offset: dh2_offset,
+            dh2_offset,
+            dh4_offset,
+            n_proj: dh4_offset,
         }
     }
 
@@ -611,6 +656,14 @@ impl ExpertModeData {
         }
         for (i, term) in self.jastrow_terms.iter().take(layout.n_jastrow).enumerate() {
             values[layout.jastrow_offset + i] = term.value;
+        }
+        for (i, &value) in self
+            .doublon_holon_2site_params
+            .iter()
+            .take(6 * layout.n_dh2)
+            .enumerate()
+        {
+            values[layout.dh2_offset + i] = value;
         }
         values
     }

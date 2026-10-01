@@ -94,7 +94,9 @@ pub fn parse_gutzwiller_content(content: &str) -> GutzwillerSection {
             .unwrap_or(0);
         terms.push(GutzwillerTerm {
             site,
-            value: Complex64::new(0.0, 0.0),
+            // The canonical index parser stores the parameter index as its
+            // placeholder value; init_parameter later resets it to zero.
+            value: Complex64::new(idx_val as f64, 0.0),
             is_complex,
         });
     }
