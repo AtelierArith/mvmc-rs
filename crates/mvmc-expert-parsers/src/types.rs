@@ -294,6 +294,35 @@ pub struct ExchangeTerm {
     pub value: f64,
 }
 
+/// General interaction `value * c†(site0,spin0) c(site1,spin1)
+/// c†(site2,spin2) c(site3,spin3)`, in the input operator order.
+///
+/// Indices are raw integers as in Julia's parser; parsing does not enforce
+/// lattice or spin bounds. Coefficients do not select the wavefunction mode.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InterAllTerm {
+    /// First creation operator's site (0-based).
+    pub site0: i64,
+    /// First creation operator's spin (0 = up, 1 = down).
+    pub spin0: i64,
+    /// First annihilation operator's site (0-based).
+    pub site1: i64,
+    /// First annihilation operator's spin.
+    pub spin1: i64,
+    /// Second creation operator's site (0-based).
+    pub site2: i64,
+    /// Second creation operator's spin.
+    pub spin2: i64,
+    /// Second annihilation operator's site (0-based).
+    pub site3: i64,
+    /// Second annihilation operator's spin.
+    pub spin3: i64,
+    /// Complex coupling, including signed zeros.
+    pub value: Complex64,
+    /// Julia's coefficient classification: `abs(imag(value)) > 1e-14`.
+    pub is_complex: bool,
+}
+
 /// `LocSpin` term (locspn.def).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocSpinTerm {
@@ -455,6 +484,8 @@ pub struct ExpertModeData {
     pub hund_terms: Vec<HundTerm>,
     /// Exchange coupling terms.
     pub exchange_terms: Vec<ExchangeTerm>,
+    /// General four-fermion interactions, in file order without deduplication.
+    pub inter_all_terms: Vec<InterAllTerm>,
 
     /// Local-spin specifiers.
     pub locspin_terms: Vec<LocSpinTerm>,

@@ -66,6 +66,44 @@ fn unported_sections_cannot_silently_change_the_model() {
 }
 
 #[test]
+fn retained_interall_payload_is_rejected_before_initialization_with_or_without_namelist() {
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/interall");
+    for has_namelist in [true, false] {
+        let mut data =
+            mvmc_expert_parsers::parse_expert_mode_files(root.join("namelist.def")).unwrap();
+        if !has_namelist {
+            data.namelist.clear();
+        }
+        assert!(!mvmc_core::run::get_all_complex_flag(&data));
+        let before = data.clone();
+        let mut rng = Sfmt19937Rng::new(1);
+        let mut probe = Sfmt19937Rng::new(1);
+        let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            None,
+            &SingleProcessReducer,
+            mvmc_core::OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("InterAll") && error.contains("issue #23"),
+            "{error}"
+        );
+        assert_eq!(data.modpara, before.modpara);
+        assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.optimization_flags, before.optimization_flags);
+        assert_eq!(data.inter_all_terms, before.inter_all_terms);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+        }
+    }
+}
+
+#[test]
 fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_are_absent() {
     let dir = std::env::temp_dir().join(format!("mvmc-optional-overlay-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

@@ -1,0 +1,6 @@
+Nsite 4
+NElec 1
+RndSeed 11272
+NVMCSample 2
+NVMCWarmUp 1
+NVMCInterval 1
