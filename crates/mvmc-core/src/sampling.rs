@@ -27,6 +27,7 @@
 
 pub mod candidate;
 pub mod driver;
+mod fsz_real;
 pub mod initial;
 pub mod metropolis;
 pub mod one_move;
@@ -41,6 +42,7 @@ pub use candidate::{
     FszHoppingCandidate, HoppingCandidate, LocalSpinFlipCandidate, UpdateType,
 };
 pub use driver::{vmc_make_sample, vmc_make_sample_fsz, vmc_make_sample_real, SampleStats};
+pub use fsz_real::vmc_make_sample_fsz_real;
 pub use initial::{
     make_initial_sample, make_initial_sample_fsz, make_initial_sample_fsz_real,
     make_initial_sample_init_loc_spn,
