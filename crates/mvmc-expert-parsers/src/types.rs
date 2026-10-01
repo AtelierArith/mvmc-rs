@@ -294,6 +294,18 @@ pub struct ExchangeTerm {
     pub value: f64,
 }
 
+/// Directed pair hopping `value * c†(site1,up) c(site2,up)
+/// c†(site1,down) c(site2,down)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PairHopTerm {
+    /// Pair destination (0-based).
+    pub site1: i64,
+    /// Pair source (0-based).
+    pub site2: i64,
+    /// Real coupling; each input row supplies both directed terms.
+    pub value: f64,
+}
+
 /// General interaction `value * c†(site0,spin0) c(site1,spin1)
 /// c†(site2,spin2) c(site3,spin3)`, in the input operator order.
 ///
@@ -484,6 +496,8 @@ pub struct ExpertModeData {
     pub hund_terms: Vec<HundTerm>,
     /// Exchange coupling terms.
     pub exchange_terms: Vec<ExchangeTerm>,
+    /// Directed pair hopping, expanded forward/reverse in input order.
+    pub pair_hop_terms: Vec<PairHopTerm>,
     /// General four-fermion interactions, in file order without deduplication.
     pub inter_all_terms: Vec<InterAllTerm>,
 
