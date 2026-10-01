@@ -164,3 +164,39 @@ fn final_layout_component_flags_projection_packing_initial_values_and_rng_match_
     }
     assert!(lines.next().is_none());
 }
+#[test]
+fn combined_validation_reports_dh_table_shapes_and_neighbors_in_source_order() {
+    let mut d = mvmc_expert_parsers::ExpertModeData::new();
+    d.modpara.nsite = 3;
+    d.doublon_holon_2site_indices = vec![
+        mvmc_expert_parsers::DoublonHolon2SiteIndex {
+            neighbors: vec![[0, 0]; 2],
+        },
+        mvmc_expert_parsers::DoublonHolon2SiteIndex {
+            neighbors: vec![[-1, 3], [2, i64::MAX], [0, 0]],
+        },
+        mvmc_expert_parsers::DoublonHolon2SiteIndex {
+            neighbors: vec![[0, 0]; 3],
+        },
+    ];
+    let result = mvmc_expert_parsers::validate_expert_mode_data(&d);
+    let dh_errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| e.starts_with("DH2"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        dh_errors,
+        vec![
+            "DH2 index 0: neighbors must be 3 x 2".to_string(),
+            "DH2 index 1 site 0 neighbor 0=-1 out of range [0, 2]".to_string(),
+            "DH2 index 1 site 0 neighbor 1=3 out of range [0, 2]".to_string(),
+            format!(
+                "DH2 index 1 site 1 neighbor 1={} out of range [0, 2]",
+                i64::MAX
+            ),
+        ]
+    );
+    assert!(!result.is_valid);
+}

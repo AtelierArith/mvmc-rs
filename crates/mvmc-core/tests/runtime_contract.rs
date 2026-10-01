@@ -47,15 +47,12 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in [
         "InterAll",
-        "DH2",
         "DH4",
-        "DoublonHolon2Site",
         "DoublonHolon4Site",
         "OptTrans",
         "TwoBodyGEx",
         "SpinJastrow",
         "GeneralRBM_PhysHidden",
-        "InDH2",
     ] {
         let mut data = ExpertModeData::new();
         data.namelist.push((kind.into(), "missing.def".into()));

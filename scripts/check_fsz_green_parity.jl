@@ -2,6 +2,8 @@
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("FSZ Green fixtures require Julia 1.13.1")
 BLAS.set_num_threads(1)
+include(joinpath(@__DIR__,"dh2_green_model.jl"))
+const DH2 = "--dh2" in ARGS
 hex(v) = join(string.(reinterpret(UInt64, collect(reinterpret(Float64, v))); base=16, pad=16), " ")
 
 function overlap(num, slater)
@@ -22,9 +24,17 @@ function explicit_operator(operators,num,cnt,data,state)
         isodd(sum(moved[1:rs])) && (sign = -sign)
         moved[rs+1] = Int(create)
     end
-    new_cnt = zeros(Int,2)
+    new_cnt = zeros(Int,length(cnt))
     MVMCOptimizers.make_proj_cnt!(new_cnt,moved,data)
-    ratio = exp(0.125*(new_cnt[1]-cnt[1])-0.2*(new_cnt[2]-cnt[2]))
+    ratio = if DH2
+        z=0.0
+        for (i,value) in enumerate(MVMCExpertModeParsers.projection_parameters(data))
+            z += real(value)*(new_cnt[i]-cnt[i])
+        end
+        exp(z)
+    else
+        exp(0.125*(new_cnt[1]-cnt[1])-0.2*(new_cnt[2]-cnt[2]))
+    end
     conj(sign*ratio*overlap(moved,state.slater_matrix.slater_elm)/overlap(num,state.slater_matrix.slater_elm))
 end
 
@@ -43,8 +53,9 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
         data.gutzwiller_terms = [MVMCExpertModeParsers.GutzwillerTerm(0,0.125+0im,false)]
         data.n_jastrow_idx = 1; data.jastrow_idx = [i==j ? -1 : 0 for i in 1:4,j in 1:4]
         data.jastrow_terms = [MVMCExpertModeParsers.JastrowTerm(0,1,-0.2+0im,false)]
+        DH2 && add_dh2_green_model!(data)
         MVMCExpertModeParsers.init_qp_weight!(data)
-        state = MVMCOptimizers.VMCOptimizationState(4,2,2,0,2,1,complex,true)
+        state = MVMCOptimizers.VMCOptimizationState(4,2,MVMCExpertModeParsers.projection_layout(data).n_proj,0,2,1,complex,true)
         mat = state.slater_matrix
         for qp in 0:1, i in 0:7, j in (i+1):7
             z = ComplexF64(((17i+13j+7qp)%31-15)/7+0.125,
@@ -57,7 +68,7 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
             rs = idx[m+1]+spins[m+1]*4
             num[rs+1] = 1; cfg[rs+1] = m
         end
-        cnt = zeros(Int,2); MVMCOptimizers.make_proj_cnt!(cnt,num,data)
+        cnt = zeros(Int,MVMCExpertModeParsers.projection_layout(data).n_proj); MVMCOptimizers.make_proj_cnt!(cnt,num,data)
         @test MVMCOptimizers.calculate_m_all_fsz!(idx,spins,1,3,data,state) == 0
         # Both authoritative FSZ Green families read complex inverse/Pfaffian
         # buffers, even for a real Slater table. Serialize those original inputs.
@@ -114,6 +125,6 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
         @test isapprox(full,expected_full; atol=2e-14,rtol=0)
         println(io,hex(ComplexF64[base,full]))
     end
-    actual = String(take!(io)); path = joinpath(@__DIR__,"..","tests","fixtures","interall","green_fsz.txt")
+    actual = String(take!(io)); path = joinpath(@__DIR__,"..","tests","fixtures",DH2 ? "dh2" : "interall","green_fsz.txt")
     if "--write" in ARGS; write(path,actual); else; @test actual == read(path,String); end
 end

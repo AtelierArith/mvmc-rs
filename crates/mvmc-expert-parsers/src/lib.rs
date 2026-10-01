@@ -26,9 +26,10 @@ pub use types::{
 };
 
 pub use utils::validation::{
-    validate_coulomb_inter_terms, validate_coulomb_intra_terms, validate_expert_mode_data,
-    validate_gutzwiller_terms, validate_jastrow_terms, validate_modpara_params,
-    validate_orbital_terms, validate_transfer_terms,
+    validate_coulomb_inter_terms, validate_coulomb_intra_terms,
+    validate_doublon_holon_2site_indices, validate_expert_mode_data, validate_gutzwiller_terms,
+    validate_jastrow_terms, validate_modpara_params, validate_orbital_terms,
+    validate_transfer_terms,
 };
 
 pub use utils::opt_flag::{

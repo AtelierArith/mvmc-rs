@@ -131,7 +131,7 @@ fn fixed_correlation_blocks_disable_gauge_shift_but_not_slater_normalization() {
     let before_g = data.gutzwiller_terms.clone();
     let before_j = data.jastrow_terms.clone();
     for _ in 0..3 {
-        sync_modified_parameter(&mut data);
+        sync_modified_parameter(&mut data, true);
         assert_eq!(data.gutzwiller_terms, before_g);
         assert_eq!(data.jastrow_terms, before_j);
     }
@@ -186,7 +186,7 @@ fn declared_projection_widths_determine_slater_flag_and_rng_offsets() {
         false,
         false,
     );
-    sync_modified_parameter(&mut data);
+    sync_modified_parameter(&mut data, true);
     assert_eq!(data.gutzwiller_terms[0].value.re, 1.0);
     assert_eq!(
         data.jastrow_terms[0].value.re, 2.0,

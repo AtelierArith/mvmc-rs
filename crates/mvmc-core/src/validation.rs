@@ -57,13 +57,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
-    if !data.doublon_holon_2site_indices.is_empty()
-        || !data.doublon_holon_2site_params.is_empty()
-        || !data.doublon_holon_2site_opt_flags.is_empty()
-        || data.doublon_holon_2site_complex
-    {
-        return Err("DH2 production projection is not implemented yet (issue #24)".into());
-    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
@@ -102,7 +95,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             }
             "PairHop" => None,
             "InterAll" => None,
-            "DH2" | "DoublonHolon2Site" => Some(24),
+            "DH2" | "DoublonHolon2Site" | "InDH2" => None,
             "DH4" | "DoublonHolon4Site" => Some(25),
             "OptTrans" => Some(27),
             "TwoBodyGEx" => Some(30),

@@ -6,8 +6,8 @@ use mvmc_core::observables::{
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::{
-    CoulombInterTerm, CoulombIntraTerm, ExchangeTerm, GutzwillerTerm, HundTerm, InterAllTerm,
-    JastrowTerm, PairHopTerm,
+    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, ExchangeTerm, GutzwillerTerm,
+    HundTerm, InterAllTerm, JastrowTerm, PairHopTerm,
 };
 use num_complex::Complex64;
 
@@ -54,6 +54,20 @@ fn green_data(complex: bool) -> ExpertModeData {
     }];
     init_qp_weight(&mut data);
     data
+}
+
+fn add_dh2_green_model(data: &mut ExpertModeData) {
+    data.doublon_holon_2site_indices = vec![
+        DoublonHolon2SiteIndex {
+            neighbors: vec![[1, 2], [0, 2], [0, 1], [0, 1]],
+        },
+        DoublonHolon2SiteIndex {
+            neighbors: vec![[0, 0], [0, 0], [3, 3], [2, 2]],
+        },
+    ];
+    data.doublon_holon_2site_params = (1..=12)
+        .map(|i| Complex64::new(i as f64 / 128.0, -(i as f64) / 256.0))
+        .collect();
 }
 
 fn check_pairhop_energy(
@@ -149,7 +163,18 @@ fn check_pairhop_energy(
 
 #[test]
 fn exhaustive_four_site_two_body_ratios_match_original_julia() {
-    let input = include_str!("../../../tests/fixtures/interall/green_normal.txt");
+    check_normal_green(false);
+}
+#[test]
+fn exhaustive_dh2_normal_two_body_ratios_match_original_julia() {
+    check_normal_green(true);
+}
+fn check_normal_green(dh2: bool) {
+    let input = if dh2 {
+        include_str!("../../../tests/fixtures/dh2/green_normal.txt")
+    } else {
+        include_str!("../../../tests/fixtures/interall/green_normal.txt")
+    };
     let mut lines = input.lines().filter(|l| !l.starts_with('#'));
     let mut pairhop = include_str!("../../../tests/fixtures/pairhop/energy_normal.txt")
         .lines()
@@ -161,7 +186,19 @@ fn exhaustive_four_site_two_body_ratios_match_original_julia() {
         let num = integers(lines.next().unwrap());
         let cnt = integers(lines.next().unwrap());
         let mut data = green_data(complex);
-        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, complex, false);
+        if dh2 {
+            add_dh2_green_model(&mut data);
+        }
+        let mut state = VmcOptimizationState::zeros(
+            4,
+            2,
+            data.projection_layout().n_proj,
+            0,
+            2,
+            1,
+            complex,
+            false,
+        );
         let slater = complex_bits(lines.next().unwrap());
         state
             .slater_matrix
@@ -270,24 +307,39 @@ fn exhaustive_four_site_two_body_ratios_match_original_julia() {
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
         assert_eq!(energy.re.to_bits(), expected_energy.re.to_bits());
         assert_eq!(energy.im.to_bits(), expected_energy.im.to_bits());
-        check_pairhop_energy(
-            &data,
-            &mut state,
-            ip,
-            [&idx, &cfg, &num, &cnt],
-            None,
-            &complex_bits(pairhop.next().unwrap()),
-        );
+        if !dh2 {
+            check_pairhop_energy(
+                &data,
+                &mut state,
+                ip,
+                [&idx, &cfg, &num, &cnt],
+                None,
+                &complex_bits(pairhop.next().unwrap()),
+            );
+        }
         assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
         assert_eq!(state.slater_matrix.inv_m_real.as_slice(), before_real);
     }
     assert!(lines.next().is_none());
-    assert!(pairhop.next().is_none());
+    if !dh2 {
+        assert!(pairhop.next().is_none());
+    }
 }
 
 #[test]
 fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
-    let input = include_str!("../../../tests/fixtures/interall/green_fsz.txt");
+    check_fsz_green(false);
+}
+#[test]
+fn exhaustive_dh2_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+    check_fsz_green(true);
+}
+fn check_fsz_green(dh2: bool) {
+    let input = if dh2 {
+        include_str!("../../../tests/fixtures/dh2/green_fsz.txt")
+    } else {
+        include_str!("../../../tests/fixtures/interall/green_fsz.txt")
+    };
     let mut lines = input.lines().filter(|l| !l.starts_with('#'));
     let mut pairhop = include_str!("../../../tests/fixtures/pairhop/energy_fsz.txt")
         .lines()
@@ -300,8 +352,20 @@ fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
         let num = integers(lines.next().unwrap());
         let cnt = integers(lines.next().unwrap());
         let mut data = green_data(complex);
+        if dh2 {
+            add_dh2_green_model(&mut data);
+        }
         data.i_flg_orbital_general = 1;
-        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, complex, true);
+        let mut state = VmcOptimizationState::zeros(
+            4,
+            2,
+            data.projection_layout().n_proj,
+            0,
+            2,
+            1,
+            complex,
+            true,
+        );
         let slater = complex_bits(lines.next().unwrap());
         state
             .slater_matrix
@@ -401,14 +465,16 @@ fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
             [energy.re.to_bits(), energy.im.to_bits()],
             [expected[0].re.to_bits(), expected[0].im.to_bits()]
         );
-        check_pairhop_energy(
-            &data,
-            &mut state,
-            ip,
-            [&idx, &cfg, &num, &cnt],
-            Some(&spins),
-            &complex_bits(pairhop.next().unwrap()),
-        );
+        if !dh2 {
+            check_pairhop_energy(
+                &data,
+                &mut state,
+                ip,
+                [&idx, &cfg, &num, &cnt],
+                Some(&spins),
+                &complex_bits(pairhop.next().unwrap()),
+            );
+        }
         assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
         data.inter_all_terms = mvmc_expert_parsers::parsers::interall::parse_interall_content(
             "0 0 0 0 3 1 3 1 -0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n0 0 0 1 2 0 2 1 0.125 -0.25\n1 1 2 0 2 0 0 1 -0.25 -0.375\n1 1 0 0 2 0 3 1 0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n-1 0 0 1 3 1 3 0 0.25 0.125\n"
@@ -422,5 +488,7 @@ fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
         );
     }
     assert!(lines.next().is_none());
-    assert!(pairhop.next().is_none());
+    if !dh2 {
+        assert!(pairhop.next().is_none());
+    }
 }

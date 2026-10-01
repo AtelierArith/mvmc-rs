@@ -98,7 +98,7 @@ pub fn output_data(
     let etot = state.energy.etot;
     let etot2 = state.energy.etot2;
     let variance = if etot.norm() > 1.0e-14 {
-        ((etot2 - etot * etot) / (etot * etot)).re
+        crate::julia_complex::divide(etot2 - etot * etot, etot * etot).re
     } else {
         0.0
     };
@@ -118,8 +118,8 @@ pub fn output_data(
         format_c_double(variance),
         // sztot / sztot2 are written without the leading space in the
         // upstream format string ("%.18e" rather than "% .18e").
-        format_args!("{:.18e}", sztot),
-        format_args!("{:.18e}", sztot2),
+        format_c_double(sztot).trim_start(),
+        format_c_double(sztot2).trim_start(),
     )?;
 
     let var_path = output_path(&format!("{head}_var.dat"), output_dir)?;
