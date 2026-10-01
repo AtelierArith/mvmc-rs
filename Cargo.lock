@@ -1601,7 +1601,7 @@ dependencies = [
 [[package]]
 name = "tenferro-ad"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "computegraph",
  "lru",
@@ -1618,12 +1618,12 @@ dependencies = [
 [[package]]
 name = "tenferro-core-ops"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 
 [[package]]
 name = "tenferro-cpu"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "faer",
  "num-complex",
@@ -1639,7 +1639,7 @@ dependencies = [
 [[package]]
 name = "tenferro-einsum"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "computegraph",
  "lru",
@@ -1657,7 +1657,7 @@ dependencies = [
 [[package]]
 name = "tenferro-internal-extension-macros"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1667,7 +1667,7 @@ dependencies = [
 [[package]]
 name = "tenferro-internal-ops"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "computegraph",
  "num-complex",
@@ -1681,7 +1681,7 @@ dependencies = [
 [[package]]
 name = "tenferro-runtime"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "computegraph",
  "lru",
@@ -1697,7 +1697,7 @@ dependencies = [
 [[package]]
 name = "tenferro-tensor"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "num-complex",
  "num-traits",
@@ -1710,7 +1710,7 @@ dependencies = [
 [[package]]
 name = "tenferro-tensor-core"
 version = "0.1.0"
-source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=761ba620ff39235fef3b3641f84a084d179f2438#761ba620ff39235fef3b3641f84a084d179f2438"
+source = "git+https://github.com/tensor4all/tenferro-rs.git?rev=3b4136ca3a3d53cbbdd5096954a470d9407ad25e#3b4136ca3a3d53cbbdd5096954a470d9407ad25e"
 dependencies = [
  "num-complex",
  "smallvec",
