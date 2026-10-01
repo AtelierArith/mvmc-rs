@@ -8,8 +8,8 @@
 //! CoulombInter, Hund (cheap density-density), Exchange (uses the 2-body
 //! Green function), plus the `(set_projection_diff, calculate_oo_real,
 //! calculate_oo, finalize_oo_store)` accumulators that feed the SR step.
-//! Transfer / PairHopping / InterAll terms are still pending and will
-//! land alongside the QP-trans-aware `slater_elm_diff` port.
+//! Transfer and general fixed-Sz two-body Green ratios are implemented.
+//! PairHopping / InterAll production contributions are still pending.
 
 #![allow(
     clippy::too_many_arguments,
@@ -453,14 +453,15 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
     e
 }
 
-/// `green_func2(ri, rj, rj, ri, s, t, ...)` for the Heisenberg exchange
-/// term. This is the only 2-body Green function the Phase-4 gate touches
-/// because the exchange contribution requires it; for other 2-body
-/// operators (PairHop, InterAll) the call sites can land in a follow-up.
+/// Fixed-Sz ratio for `c†(ri,spin) c(rj,spin)
+/// c†(rk,spin_other) c(rl,spin_other)`, matching Julia's `green_func2`.
+/// Coincident indices reduce to densities or one-body ratios before hopping.
 #[allow(clippy::too_many_arguments)]
-pub fn green_func_exchange(
+pub fn green_func2(
     ri: usize,
     rj: usize,
+    rk: usize,
+    rl: usize,
     spin: u8,
     spin_other: u8,
     ip: Complex64,
@@ -474,15 +475,80 @@ pub fn green_func_exchange(
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     let n_qp_full = state.slater_matrix.pf_m.len();
-    if ri == rj || n_elec == 0 || n_site == 0 {
+    if n_elec == 0 || n_site == 0 {
         return Complex64::new(0.0, 0.0);
     }
-    // Pre-conditions matching `green_func2`'s early returns for the
-    // exchange tile.
+    let one = |ri, rj, s, state: &mut VmcOptimizationState| {
+        green_func1(
+            ri,
+            rj,
+            s,
+            s,
+            ip,
+            data,
+            state,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+        )
+    };
+    let zero = Complex64::new(0.0, 0.0);
+    let rsi = ri + spin as usize * n_site;
+    let rsj = rj + spin as usize * n_site;
+    let rtk = rk + spin_other as usize * n_site;
+    if spin == spin_other {
+        if rk == rl {
+            return if ele_num[rtk] == 0 {
+                zero
+            } else {
+                one(ri, rj, spin, state)
+            };
+        } else if rj == rl {
+            return zero;
+        } else if ri == rl {
+            return if ele_num[rsi] == 0 {
+                zero
+            } else if rj == rk {
+                Complex64::new((1 - ele_num[rsj]) as f64, 0.0)
+            } else {
+                -one(rk, rj, spin, state)
+            };
+        } else if rj == rk {
+            return if ele_num[rsj] == 1 {
+                zero
+            } else {
+                one(ri, rl, spin, state)
+            };
+        } else if ri == rk {
+            return zero;
+        } else if ri == rj {
+            return if ele_num[rsi] == 0 {
+                zero
+            } else {
+                one(rk, rl, spin, state)
+            };
+        }
+    } else if rk == rl {
+        return if ele_num[rtk] == 0 {
+            zero
+        } else if ri == rj {
+            Complex64::new(ele_num[rsi] as f64, 0.0)
+        } else {
+            one(ri, rj, spin, state)
+        };
+    } else if ri == rj {
+        return if ele_num[rsi] == 0 {
+            zero
+        } else {
+            one(rk, rl, spin_other, state)
+        };
+    }
+    // General case: apply the rightmost hop before the leftmost hop.
     if ele_num[ri + spin as usize * n_site] != 0
         || ele_num[rj + spin as usize * n_site] != 1
-        || ele_num[rj + spin_other as usize * n_site] != 0
-        || ele_num[ri + spin_other as usize * n_site] != 1
+        || ele_num[rk + spin_other as usize * n_site] != 0
+        || ele_num[rl + spin_other as usize * n_site] != 1
     {
         return Complex64::new(0.0, 0.0);
     }
@@ -494,7 +560,7 @@ pub fn green_func_exchange(
     let mut proj_final = vec![0_i64; n_proj];
 
     let mj = ele_cfg[rj + spin as usize * n_site];
-    let mi = ele_cfg[ri + spin_other as usize * n_site];
+    let mi = ele_cfg[rl + spin_other as usize * n_site];
     if mj < 0 || mi < 0 {
         return Complex64::new(0.0, 0.0);
     }
@@ -502,14 +568,13 @@ pub fn green_func_exchange(
     let msj = mj + spin as usize * n_elec;
     let msi = mi + spin_other as usize * n_elec;
 
-    // Julia green_func2 applies the t hop (ri -> rj) before the s hop
-    // (rj -> ri), and passes that same order to the two-electron update.
-    my_ele_idx[msi] = rj as i64;
-    my_ele_num[ri + spin_other as usize * n_site] = 0;
-    my_ele_num[rj + spin_other as usize * n_site] = 1;
+    // Preserve Julia's hop order in projection and Pfaffian updates.
+    my_ele_idx[msi] = rk as i64;
+    my_ele_num[rl + spin_other as usize * n_site] = 0;
+    my_ele_num[rk + spin_other as usize * n_site] = 1;
     update_proj_cnt(
-        ri as i64,
-        rj as i64,
+        rl as i64,
+        rk as i64,
         spin_other,
         &mut proj_mid,
         ele_proj_cnt,
@@ -533,16 +598,14 @@ pub fn green_func_exchange(
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
     let proj_ratio = julia_exp(log_proj_delta);
 
-    let _ = my_ele_num;
-
     // Fast path: rank-2 Woodbury Pfaffian update for real mode.
     //
     // Port of `calculate_new_pf_m_two2_real!` from upstream
     // `MVMCOptimizers.jl/src/vmc_sampling.jl`. Uses the cached
     // `inv_m_real` and `slater_elm_real` to compute the new Pfaffian in
-    // O(N²) instead of the O(N³) full recomputation below.
+    // O(N²), using the same two-electron proposal kernels as sampling.
     //
-    // `mi` (spin_other) hops ri→rj first, then `mj` (spin) hops rj→ri.
+    // `mi` (spin_other) hops rl→rk first, then `mj` (spin) hops rj→ri.
     // After both hops, `my_ele_idx` holds
     // the updated electron positions, from which `rsa` and `rsb` are
     // derived inside `calculate_new_pf_m_two2_real_flat`.
@@ -1072,7 +1135,7 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
 
 /// Non-FSZ 1-body Green function `<c†_{ri,spin} c_{rj,spin}> / <Ψ|x>`.
 ///
-/// Mirrors `green_func1` from `MVMCOptimizers.jl/src/green_func_calc.jl`
+/// Mirrors `green_func1` from `MVMCOptimizers.jl/src/vmc_main_cal.jl`
 /// for the non-FSZ (i_flg_orbital_general == 0) path. The calculation
 /// applies to same-spin hops (spin_create == spin_annihilate); for
 /// different-spin Transfer terms (spin-flip hops) in a non-FSZ basis the
@@ -1095,7 +1158,7 @@ pub fn green_func1(
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
-    green_func1_timed(
+    green_func1_impl::<false, false>(
         ri,
         rj,
         spin_create,
@@ -1168,8 +1231,42 @@ fn calh1_direct_projection_ratio(
     Some(julia_exp(z))
 }
 
-/// Evaluate this kernel with call-site-specific section and diagnostic timers.
+/// Evaluate Transfer's main-calculation one-body kernel with section timers.
+/// Real mode follows its direct-projection and real-quotient arithmetic.
 pub fn green_func1_timed<const TIMED: bool>(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    timer: &mut CTimer<TIMED>,
+) -> Complex64 {
+    green_func1_impl::<TIMED, true>(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        timer,
+    )
+}
+
+// Transfer's real main-calculation path uses direct projection arithmetic and
+// a real quotient. General Green operators use Julia's projection-count ratio
+// and complex quotient, including one-body reductions of two-body operators.
+fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
     ri: usize,
     rj: usize,
     spin_create: u8,
@@ -1248,7 +1345,7 @@ pub fn green_func1_timed<const TIMED: bool>(
 
     timer.stop_diag(921, diag);
     timer.start_diag(922, diag);
-    let direct_ratio = if !crate::run::get_all_complex_flag(data) {
+    let direct_ratio = if TRANSFER && !crate::run::get_all_complex_flag(data) {
         calh1_direct_projection_ratio(rj, ri, &my_ele_num, data)
     } else {
         None
@@ -1290,7 +1387,11 @@ pub fn green_func1_timed<const TIMED: bool>(
         timer.start_diag(924, diag);
         let new_ip = calculate_ip_real(&new_pf, 0, n_qp_full, data);
         timer.stop_diag(924, diag);
-        return Complex64::new(proj_ratio * new_ip / ip.re, 0.0);
+        return if TRANSFER {
+            Complex64::new(proj_ratio * new_ip / ip.re, 0.0)
+        } else {
+            crate::julia_complex::divide(Complex64::new(proj_ratio * new_ip, 0.0), ip).conj()
+        };
     }
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     calculate_new_pf_m2_complex_flat(
@@ -1408,12 +1509,14 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         for term in &data.exchange_terms {
             let ri = term.site1;
             let rj = term.site2;
-            if ri < 0 || rj < 0 || ri == rj || (ri as usize) >= n_site || (rj as usize) >= n_site {
+            if ri < 0 || rj < 0 || (ri as usize) >= n_site || (rj as usize) >= n_site {
                 continue;
             }
-            let g01 = green_func_exchange(
+            let g01 = green_func2(
                 ri as usize,
                 rj as usize,
+                rj as usize,
+                ri as usize,
                 0,
                 1,
                 ip,
@@ -1424,9 +1527,11 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 ele_num,
                 ele_proj_cnt,
             );
-            let g10 = green_func_exchange(
+            let g10 = green_func2(
                 ri as usize,
                 rj as usize,
+                rj as usize,
+                ri as usize,
                 1,
                 0,
                 ip,
