@@ -215,6 +215,13 @@ direct solver's sampled matrices, gradients, factors, and solutions also have
 exact-bit fixtures. See `tests/fixtures/sr_direct/README.md` for settings and
 the `scripts/check_sr_direct_runner_parity.jl` reference commands.
 
+Pure `OrbitalGeneral` uses combined spin-site coordinates in its cached
+`2*Nsite` index/sign matrices, shared by FSZ Slater updates and derivatives.
+Explicit General and equivalent AP/P inputs have exact-bit matrix/derivative
+checks and same-seed 50-step direct-SR/CG gates. See
+[the General fixtures](tests/fixtures/orbital_general/README.md) for inputs and
+reference commands. Real FSZ execution remains tracked by issue #43.
+
 ```bash
 cargo run --release -p mvmc-cli --example heisenberg_chain_real
 

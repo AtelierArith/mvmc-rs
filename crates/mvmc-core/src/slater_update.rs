@@ -1,10 +1,7 @@
-//! Phase 4 — Slater-element table updater.
-//!
-//! Port target: `update_slater_elm_fcmp!` in
-//! `MVMCOptimizers.jl/src/slater_update.jl`. The Phase-4 cut covers
-//! the `i_flg_orbital_general == 0` branch with `OrbitalAntiParallel`
-//! tables (the Heisenberg / Hubbard examples). Full FSZ and
-//! `OrbitalParallel` translations land alongside the full FSZ port.
+//! Normal and FSZ Slater-element table updates from Julia's cached orbital
+//! matrices in `MVMCOptimizers.jl/src/slater_update.jl`.
+
+use std::borrow::Cow;
 
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
@@ -136,13 +133,14 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     }
 }
 
-/// `update_slater_elm_fsz!(data, state)` mirror for the AP+P FSZ fixtures.
+/// `update_slater_elm_fsz!(data, state)` for pure General and AP+P orbitals.
 ///
 /// FSZ uses an explicit `2*n_site × 2*n_site` orbital matrix and does not
 /// apply spin projection (`NSPGaussLeg` is treated as 1). QP translation is
 /// applied to the site index and the spin offset is kept explicit.
 pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     data.normalize_projection_count();
+    data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
     if n_site == 0 {
         return;
@@ -182,7 +180,6 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
                 if trj >= n_site {
                     continue;
                 }
-                let qpsgn = sgni * sgnj;
                 for si in 0..2 {
                     for sj in 0..2 {
                         let rsi = ri + si * n_site;
@@ -193,13 +190,17 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
                         let idx_ji = orbital_idx[trj_s][tri_s];
                         let slt_ij = if idx_ij >= 0 && (idx_ij as usize) < slater.len() {
                             slater[idx_ij as usize]
-                                * Complex64::new((orbital_sgn[tri_s][trj_s] * qpsgn) as f64, 0.0)
+                                * orbital_sgn[tri_s][trj_s] as f64
+                                * sgni as f64
+                                * sgnj as f64
                         } else {
                             Complex64::new(0.0, 0.0)
                         };
                         let slt_ji = if idx_ji >= 0 && (idx_ji as usize) < slater.len() {
                             slater[idx_ji as usize]
-                                * Complex64::new((orbital_sgn[trj_s][tri_s] * qpsgn) as f64, 0.0)
+                                * orbital_sgn[trj_s][tri_s] as f64
+                                * sgni as f64
+                                * sgnj as f64
                         } else {
                             Complex64::new(0.0, 0.0)
                         };
@@ -214,13 +215,30 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
     }
 }
 
+type OrbitalMatrix<'a> = Cow<'a, [Vec<i64>]>;
+
 pub(crate) fn build_orbital_idx_sgn_matrices_fsz(
     data: &ExpertModeData,
     n_site: usize,
-) -> (Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<Complex64>) {
+) -> (OrbitalMatrix<'_>, OrbitalMatrix<'_>, Vec<Complex64>) {
     debug_assert_eq!(n_site, data.modpara.nsite.max(0) as usize);
-    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
-    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    let (orbital_idx, orbital_sgn) = match (&data.orbital_idx_matrix, &data.orbital_sgn_matrix) {
+        (Some(idx), Some(sgn)) => (Cow::Borrowed(idx.as_slice()), Cow::Borrowed(sgn.as_slice())),
+        _ => {
+            let (idx, sgn) = data.build_orbital_matrices();
+            (Cow::Owned(idx), Cow::Owned(sgn))
+        }
+    };
+    // Julia's value table uses the largest mapped index; declared widths
+    // still determine the parameter and derivative layout.
+    let n_slater = data
+        .orbital_terms
+        .iter()
+        .map(|term| term.idx)
+        .max()
+        .unwrap_or(0)
+        .max(0) as usize
+        + 1;
     let mut slater = vec![Complex64::new(0.0, 0.0); n_slater];
     for term in &data.orbital_terms {
         if term.idx >= 0 && (term.idx as usize) < slater.len() {
@@ -234,6 +252,133 @@ pub(crate) fn build_orbital_idx_sgn_matrices_fsz(
 mod tests {
     use super::*;
     use mvmc_expert_parsers::OrbitalTerm;
+
+    #[test]
+    fn general_slater_and_derivatives_match_julia_with_sparse_and_cached_layouts() {
+        use crate::slater_derivative::{slater_elm_diff_fsz_with_scratch, SlaterDerivativeScratch};
+        use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
+        use mvmc_expert_parsers::{parse_expert_mode_files, QPTransEntry};
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/orbital_general");
+        let golden = std::fs::read_to_string(root.join("matrices.txt")).unwrap();
+        let mut lines = golden.lines().filter(|line| !line.starts_with('#'));
+        let ints = |line: &str| -> Vec<i64> {
+            line.split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect()
+        };
+        let complexes = |line: &str| -> Vec<Complex64> {
+            let vals: Vec<_> = line
+                .split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect();
+            vals.chunks_exact(2)
+                .map(|z| Complex64::new(z[0], z[1]))
+                .collect()
+        };
+        let bits = |vals: &[Complex64]| -> Vec<u64> {
+            vals.iter()
+                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+                .collect()
+        };
+        while let Some(header) = lines.next() {
+            let fields: Vec<_> = header.split_whitespace().collect();
+            let kind = fields[0];
+            let boundary: i64 = fields[1].parse().unwrap();
+            let n: usize = fields[2].parse().unwrap();
+            let input = if kind == "cached" { "general" } else { kind };
+            let mut data =
+                parse_expert_mode_files(root.join(format!("namelist_{input}.def"))).unwrap();
+            assert_eq!(data.modpara.nelec, 2);
+            data.modpara.nmp_trans = 2 * boundary;
+            data.orbital_idx_matrix = None;
+            data.orbital_sgn_matrix = None;
+            data.ensure_orbital_idx_matrix();
+            if kind == "cached" {
+                let idx = data.orbital_idx_matrix.as_mut().unwrap();
+                idx[0][1] = 4;
+                idx[1][0] = 4;
+                let sgn = data.orbital_sgn_matrix.as_mut().unwrap();
+                sgn[0][1] = -1;
+                sgn[1][0] = 1;
+            }
+            assert_eq!(
+                data.orbital_idx_matrix
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                ints(lines.next().unwrap()),
+                "{header} indices"
+            );
+            assert_eq!(
+                data.orbital_sgn_matrix
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                ints(lines.next().unwrap()),
+                "{header} signs"
+            );
+            for term in &mut data.orbital_terms {
+                term.value =
+                    Complex64::new((term.idx + 1) as f64 / 7.0, (term.idx % 3 - 1) as f64 / 5.0);
+            }
+            data.n_qp_trans = 2;
+            data.para_qp_trans = vec![Complex64::new(1.0, 0.0), Complex64::new(-0.375, 0.0)];
+            data.qp_trans_entries = [[0, 1, 2], [1, 2, 0]]
+                .into_iter()
+                .enumerate()
+                .map(|(qp, map)| QPTransEntry {
+                    weight: data.para_qp_trans[qp],
+                    site_map: map.to_vec(),
+                    site_sign: if boundary > 0 || qp == 0 {
+                        vec![1, 1, 1]
+                    } else {
+                        vec![-1, 1, -1]
+                    },
+                })
+                .collect();
+            init_qp_weight(&mut data);
+            let mut state = VmcOptimizationState::zeros(3, 2, 0, n, 2, 1, true, true);
+            state
+                .slater_matrix
+                .pf_m
+                .copy_from_slice(&complexes(lines.next().unwrap()));
+            let inverse = complexes(lines.next().unwrap());
+            for qp in 0..2 {
+                state
+                    .slater_matrix
+                    .inv_m
+                    .qp_matrix_slice_mut(qp)
+                    .copy_from_slice(&inverse[qp * 16..(qp + 1) * 16]);
+            }
+            let ip = complexes(lines.next().unwrap())[0];
+            let expected_slater = complexes(lines.next().unwrap());
+            let expected_o = complexes(lines.next().unwrap());
+            update_slater_elm_fsz(&mut data, &mut state);
+            assert_eq!(
+                bits(state.slater_matrix.slater_elm.as_slice()),
+                bits(&expected_slater),
+                "{header} Slater"
+            );
+            let mut o = vec![Complex64::new(0.0, 0.0); 2 * n];
+            slater_elm_diff_fsz_with_scratch(
+                &mut o,
+                ip,
+                &[0, 1, 1, 2],
+                &[0, 0, 1, 1],
+                &data,
+                &state.slater_matrix,
+                &mut SlaterDerivativeScratch::new(),
+            );
+            assert_eq!(bits(&o), bits(&expected_o), "{header} derivative");
+        }
+    }
 
     #[test]
     fn pure_general_spin_site_indices_and_sparse_signs_match_julia() {
