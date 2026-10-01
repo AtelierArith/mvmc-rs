@@ -104,6 +104,45 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
 }
 
 #[test]
+fn interall_mode_and_invalid_spin_failures_precede_rng_consumption_and_output() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/interall/spin_chain/namelist.def");
+    for mode in ["real", "spin"] {
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files(&root).unwrap();
+        if mode == "real" {
+            data.complex_flags = vec![0];
+        } else {
+            data.inter_all_terms[0].spin2 = 2;
+        }
+        let before = data.clone();
+        let mut rng = Sfmt19937Rng::new(1);
+        let mut probe = Sfmt19937Rng::new(1);
+        let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            None,
+            &SingleProcessReducer,
+            mvmc_core::OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        let expected = if mode == "real" {
+            "issue #43"
+        } else {
+            "spin2 must be 0 or 1"
+        };
+        assert!(error.contains(expected), "{error}");
+        assert_eq!(data.modpara, before.modpara);
+        assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.inter_all_terms, before.inter_all_terms);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+        }
+    }
+}
+
+#[test]
 fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_are_absent() {
     let dir = std::env::temp_dir().join(format!("mvmc-optional-overlay-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

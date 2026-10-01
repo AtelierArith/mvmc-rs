@@ -961,7 +961,6 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
-    let n_site2 = 2 * n_site;
     let n_qp_full = state.slater_matrix.pf_m.len();
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
@@ -969,7 +968,6 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -977,31 +975,29 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
         ws.loc_spn.clone()
     };
 
+    timer.start(30);
+    let burn_flag = state.electron_config.counter[9] != 0;
+    if burn_flag {
+        state.electron_config.restore_burn_fsz();
+    }
     let mut tmp_ele_idx = state.electron_config.tmp_ele_idx.clone();
     let mut tmp_ele_cfg = state.electron_config.tmp_ele_cfg.clone();
     let mut tmp_ele_num = state.electron_config.tmp_ele_num.clone();
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
     let mut tmp_ele_spn = state.electron_config.tmp_ele_spn.clone();
 
-    timer.start(30);
-    let burn_flag = state.electron_config.counter[9] != 0;
-    if burn_flag {
-        tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
-        tmp_ele_cfg.copy_from_slice(&state.electron_config.burn_ele_cfg[..n_site2]);
-        tmp_ele_num.copy_from_slice(&state.electron_config.burn_ele_num[..n_site2]);
-        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.burn_ele_proj_cnt[..n_proj]);
-        tmp_ele_spn.copy_from_slice(&state.electron_config.burn_ele_spn[..n_size]);
-    } else if crate::sampling::initial::make_initial_sample_fsz(
-        &mut tmp_ele_idx,
-        &mut tmp_ele_cfg,
-        &mut tmp_ele_num,
-        &mut tmp_ele_proj_cnt,
-        &mut tmp_ele_spn,
-        data,
-        &loc_spn,
-        rng,
-    )
-    .is_err()
+    if !burn_flag
+        && crate::sampling::initial::make_initial_sample_fsz(
+            &mut tmp_ele_idx,
+            &mut tmp_ele_cfg,
+            &mut tmp_ele_num,
+            &mut tmp_ele_proj_cnt,
+            &mut tmp_ele_spn,
+            data,
+            &loc_spn,
+            rng,
+        )
+        .is_err()
     {
         return SampleStats {
             accepted: 0,
@@ -1045,11 +1041,13 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let mut saved = 0usize;
 
     timer.stop(30);
+    state.electron_config.counter.fill(0);
     for out_step in 0..n_out_step {
         for _ in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Exchange => {
+                    state.electron_config.counter[2] += 1;
                     timer.start(31);
                     let cand = make_candidate_exchange_fsz(
                         &tmp_ele_idx,
@@ -1164,6 +1162,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
+                        state.electron_config.counter[3] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
                     } else {
@@ -1195,6 +1194,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     timer.stop(33);
                 }
                 UpdateType::LocalSpinFlip => {
+                    state.electron_config.counter[4] += 1;
                     timer.start(31);
                     let cand = make_candidate_local_spin_flip_localspin(
                         &tmp_ele_idx,
@@ -1266,6 +1266,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         );
                         timer.stop(603);
                         log_ip_old = log_ip_new;
+                        state.electron_config.counter[5] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
                     } else {
@@ -1285,6 +1286,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     timer.stop(36);
                 }
                 UpdateType::Hopping => {
+                    state.electron_config.counter[0] += 1;
                     timer.start(31);
                     let cand = make_candidate_hopping_fsz(
                         &tmp_ele_idx,
@@ -1369,6 +1371,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
+                        state.electron_config.counter[1] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
                     } else {
@@ -1443,16 +1446,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_num = tmp_ele_num;
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
     state.electron_config.tmp_ele_spn = tmp_ele_spn;
-    state.electron_config.burn_ele_idx[..n_size]
-        .copy_from_slice(&state.electron_config.tmp_ele_idx[..n_size]);
-    state.electron_config.burn_ele_cfg[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_cfg[..n_site2]);
-    state.electron_config.burn_ele_num[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_num[..n_site2]);
-    state.electron_config.burn_ele_proj_cnt[..n_proj]
-        .copy_from_slice(&state.electron_config.tmp_ele_proj_cnt[..n_proj]);
-    state.electron_config.burn_ele_spn[..n_size]
-        .copy_from_slice(&state.electron_config.tmp_ele_spn[..n_size]);
+    state.electron_config.save_burn_fsz();
     state.electron_config.counter[9] = 1;
 
     SampleStats {

@@ -6,7 +6,7 @@ BLAS.set_num_threads(1)
 const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
-CASE in ("real", "cmp", "fsz", "hubbard") || error("Unknown case: $CASE")
+CASE in ("real", "cmp", "fsz", "hubbard", "interall") || error("Unknown case: $CASE")
 if "--general" in ARGS
     CASE == "fsz" || error("--general requires --case=fsz")
     "--write" in ARGS && error("General must verify the existing AP/P fixtures")
@@ -38,12 +38,32 @@ function verify(name, actual)
         @test actual == read(path, String)
     end
 end
+if CASE == "interall"
+    @testset "InterAll input and initialization boundary" begin
+        data = parse_expert_mode_files(joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def"))
+        @test length(data.inter_all_terms) == 26
+        @test data.i_flg_orbital_general == 1 && MVMCOptimizers.get_all_complex_flag(data)
+        rng = SFMT19937RNG(); Random.seed!(rng,1)
+        MVMCExpertModeParsers.init_parameter!(data; rng)
+        MVMCExpertModeParsers.sync_modified_parameter!(data)
+        MVMCExpertModeParsers.init_qp_weight!(data)
+        values = vcat([t.value for t in data.gutzwiller_terms],
+                      [t.value for t in data.jastrow_terms], [t.value for t in data.orbital_terms])
+        verify("initial-flags.txt",join(Int.(data.optimization_flags)," ")*"\n")
+        verify("initial-parameters.txt",hex(collect(reinterpret(Float64,values)))*"\n")
+        verify("initial-rng.txt",join([rand(rng,UInt32) for _ in 1:624]," ")*"\n")
+        verify("reference.txt","# Julia $VERSION; $(BLAS.get_config()); threads=1\n# Julia-mVMC 8bb1b9e; numerical sources c2ea432; seed=1; six-site XYZ spin chain with imaginary Hermitian InterAll coefficients\n")
+    end
+end
 @testset "SR-CG $CASE deterministic prefix runs" begin
     for steps in PREFIXES
         input = CASE == "hubbard" ? "hubbard_chain_real" : "heisenberg_chain_" * CASE
         namelist = joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "examples", "inputs", input, "namelist.def")
         if "--general" in ARGS
             namelist = joinpath(@__DIR__, "..", "tests", "fixtures", "orbital_general", "heisenberg", "namelist.def")
+        end
+        if CASE == "interall"
+            namelist = joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def")
         end
         data = parse_expert_mode_files(namelist)
         data.modpara.nsr_opt_itr_step = steps
@@ -63,6 +83,11 @@ end
             io = IOBuffer()
             for vals in (configs.ele_idx, configs.ele_cfg, configs.ele_num, configs.ele_proj_cnt)
                 println(io, join(vals, " "))
+            end
+            if CASE == "interall"
+                println(io, join(configs.ele_spn, " "))
+                println(io, join(configs.burn_ele_idx, " "))
+                println(io, join(vcat(configs.counter[1:9],configs.counter[11]), " "))
             end
             verify("step-$steps-configs.txt", String(take!(io)))
             verify("step-$steps-rng.txt", join([rand(rng, UInt32) for _ in 1:624], " ")*"\n")

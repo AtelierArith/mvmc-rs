@@ -41,11 +41,10 @@ BLAS configuration; parsing and initialization here perform no BLAS operations.
 SFMT.jl wraps a global stream, so the script snapshots each initialization before
 reseeding for the independent comparison.
 
-This milestone implements the input contract only. Both parsed requests and
-programmatically supplied nonempty `inter_all_terms` remain rejected by the
-optimizer before initialization or RNG consumption under issue #23. General
-two-body Green ratios, local-energy integration, and deterministic production
-comparisons remain required before enabling or completing that issue.
+The input-contract milestone initially rejected both parsed requests and
+programmatically supplied nonempty `inter_all_terms` before initialization or
+RNG consumption. The Green and production comparisons below now enable complex
+FSZ InterAll; issue #23 remains open for the normal-mode production path.
 
 The canonical normal-mode `calculate_hamiltonian` currently accesses
 `term.sites`, while its `InterAllTerm` type contains `site0` through `site3`
@@ -87,8 +86,8 @@ reductions use Julia's projection-count ratio and complex quotient. The real
 Transfer calculation retains its specialized direct projection/real quotient
 arithmetic; applying that fast arithmetic to a general one-body reduction
 produced a one-ULP mismatch in the new exhaustive test. The test was kept exact
-and the call-site dispatch was corrected. The main calculation still rejects
-InterAll until the FSZ kernels and production integration are verified.
+and the call-site dispatch was corrected. The normal-mode calculation retains
+its InterAll restriction pending the reference accumulator correction.
 Same-site Exchange now reduces to `2 * J * n_up * n_down`, matching Julia,
 instead of being discarded by the previous exchange-only call site.
 
@@ -122,5 +121,49 @@ cargo test -p mvmc-core --locked --test two_body_green
 The source FSZ Green families read complex Pfaffian/inverse buffers even when
 `all_complex=false`. These tests serialize those original buffers for both real
 and complex Slater inputs; they do not claim a real FSZ production calculation
-or SR dispatch. The optimizer's InterAll rejection remains in place until a
-full deterministic runner comparison passes. No vendored source is modified.
+or SR dispatch. No vendored source is modified.
+
+## Complex FSZ production gate
+
+`spin_chain/namelist.def` uses the existing six-site General orbital layout and
+local-spin input with a 26-term Hermitian InterAll Hamiltonian: alternating
+`0.7 Sx_i Sx_j`, `0.5 Sy_i Sy_j`, `0.9 Sz_i Sz_j` bonds and imaginary conjugate
+couplings. It exercises both spin-conserving and spin-changing terms, density
+reductions, imaginary coefficients and antiperiodic orbital signs. Wavefunction
+declarations and initialization select complex FSZ independently of the
+Hamiltonian coefficients.
+
+The original optimizer and numerical kernels run with only observation hooks.
+`sr_cg/interall_runner`, `sr_direct/interall_runner` and
+`sr_direct/interall_store_runner` record independent same-seed prefix runs at
+1, 2, 3 and 50 steps for SR-CG and direct SR with both NStore settings. Rust
+compares all parameter and energy bits, saved configurations/occupancies/
+projection counts/spins, combined burn-in storage, attempted/accepted move
+counters and the next 624 SFMT words. SR-CG's complete SR-info output also
+matches. The initial boundary additionally checks component flags, initialized
+parameters and the next RNG block before sampling. Each independent prefix
+is seeded once; observing its RNG happens after the run and cannot change it.
+`reference.txt` records Julia/BLAS versions and settings.
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case=interall
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=interall --store=0
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=interall --store=1
+cargo test -p mvmc-core --locked interall_fsz --lib
+```
+
+The new complete-state checks exposed two existing complex FSZ differences:
+Rust stored burn data in separate shadow arrays and left most of the canonical
+combined buffer empty, and it omitted the attempted/accepted statistics.
+Both real and complex FSZ sampling now save/restore Julia's combined order
+`indices, configuration, occupancy, projection, spins`. Complex FSZ statistics
+are reset and updated at the same proposal/acceptance points, including rejected
+proposals. Existing real FSZ fixtures now compare the actual combined buffer
+directly, strengthening the previous semantic comparison.
+
+Complex FSZ InterAll is enabled in library and CLI validation. Invalid spins
+for a term with valid sites fail before initialization/RNG consumption;
+out-of-range sites retain Julia's skip rule. Normal fixed-Sz InterAll remains
+rejected under #23 because of the documented reference accumulator discrepancy.
+Real FSZ InterAll remains rejected under #43 pending its complete calculation/SR
+path. A parsed payload or kernel fixture does not override those restrictions.

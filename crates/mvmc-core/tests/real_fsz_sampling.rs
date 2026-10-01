@@ -130,14 +130,7 @@ fn real_fsz_sampler_matches_julia_configurations_counters_inverse_and_full_rng_b
         {
             assert_eq!(actual, &expected, "{header} {label}");
         }
-        let actual_burn: Vec<_> = c.burn_ele_idx[..4]
-            .iter()
-            .chain(c.burn_ele_cfg[..8].iter())
-            .chain(c.burn_ele_num[..8].iter())
-            .chain(c.burn_ele_proj_cnt[..2].iter())
-            .chain(c.burn_ele_spn[..4].iter())
-            .copied()
-            .collect();
+        let actual_burn = c.burn_ele_idx[..26].to_vec();
         assert_eq!(actual_burn, burn, "{header} burn");
         assert_eq!(
             s.slater_matrix
