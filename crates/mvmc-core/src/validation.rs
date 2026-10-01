@@ -57,6 +57,9 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
+    if !data.pair_hop_terms.is_empty() {
+        return Err("PairHop local energy is not implemented yet (issue #22)".into());
+    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {

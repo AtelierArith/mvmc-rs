@@ -20,8 +20,8 @@ pub mod utils;
 pub use types::{
     CoulombInterTerm, CoulombIntraTerm, ExchangeTerm, ExpertModeData, GreenOneTerm, GreenTwoTerm,
     GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm, ModParaParameters,
-    OrbitalTerm, ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin, TransferTerm,
-    ValidationResult,
+    OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry, QuantumProjectionWeights, Spin,
+    TransferTerm, ValidationResult,
 };
 
 pub use utils::validation::{
@@ -41,7 +41,7 @@ use std::path::Path;
 
 use crate::parsers::{
     coulomb, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara, orbital,
-    qptrans, trans,
+    pairhop, qptrans, trans,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -194,6 +194,16 @@ fn parse_file_by_type(
         }
         "Exchange" => {
             data.exchange_terms = exchange::parse_exchange_def(path)?;
+        }
+        "PairHop" => {
+            let section = pairhop::parse_pairhop_def(path)?;
+            if !section.is_success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    section.errors.join("; "),
+                ));
+            }
+            data.pair_hop_terms = section.terms;
         }
         "InterAll" => {
             data.inter_all_terms = interall::parse_interall_def(path)?;
