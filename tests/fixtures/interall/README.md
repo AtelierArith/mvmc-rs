@@ -91,3 +91,36 @@ and the call-site dispatch was corrected. The main calculation still rejects
 InterAll until the FSZ kernels and production integration are verified.
 Same-site Exchange now reduces to `2 * J * n_up * n_down`, matching Julia,
 instead of being discarded by the previous exchange-only call site.
+
+## General FSZ Green ratios and local energy
+
+`green_fsz.txt` records all 24,576 four-site/four-spin two-body operators and
+384 one-body operators for real and complex Slater tables. Six cases cover
+balanced and imbalanced spin populations, independent electron-label ordering,
+double occupancy, coincident combined spin/site indices, two QP planes and
+nonzero Gutzwiller/Jastrow values. Every output bit, including signed zeros,
+matches the original `green_func1_fsz`/`green_func1_fsz2` and
+`green_func2_fsz`/`green_func2_fsz2` kernels. Rust uses one general FSZ two-body
+API and preserves the source's rightmost-hop-first order. The old exchange-only
+helper is removed; FSZ Exchange uses the general kernel, including same-site
+terms.
+
+Julia independently applies every operator in a sorted Fock basis and checks
+the result using analytic four-electron Pfaffians at fixed `atol=2e-12,
+rtol=0`. The serialized specialized and full Hamiltonian energies include
+Coulomb/Hund/Exchange, arbitrary complex InterAll coefficients, repeated terms,
+spin-changing and one-body reduction cases, and an out-of-range site skipped
+as in the source. Rust matches both energy bits. The independent specialized
+operator expansion and its InterAll extension use `atol=2e-14, rtol=0`.
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_fsz_green_parity.jl --write
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_fsz_green_parity.jl
+cargo test -p mvmc-core --locked --test two_body_green
+```
+
+The source FSZ Green families read complex Pfaffian/inverse buffers even when
+`all_complex=false`. These tests serialize those original buffers for both real
+and complex Slater inputs; they do not claim a real FSZ production calculation
+or SR dispatch. The optimizer's InterAll rejection remains in place until a
+full deterministic runner comparison passes. No vendored source is modified.

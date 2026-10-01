@@ -8,8 +8,9 @@
 //! CoulombInter, Hund (cheap density-density), Exchange (uses the 2-body
 //! Green function), plus the `(set_projection_diff, calculate_oo_real,
 //! calculate_oo, finalize_oo_store)` accumulators that feed the SR step.
-//! Transfer and general fixed-Sz two-body Green ratios are implemented.
-//! PairHopping / InterAll production contributions are still pending.
+//! Transfer and general fixed-Sz/FSZ Green ratios are implemented. FSZ local
+//! energy includes InterAll; its runner support remains gated by validation.
+//! PairHopping and fixed-Sz InterAll production contributions are pending.
 
 #![allow(
     clippy::too_many_arguments,
@@ -26,10 +27,13 @@ use crate::sampling::projection::update_proj_cnt;
 use crate::sampling::updates::{
     calculate_new_pf_m2_complex_flat, calculate_new_pf_m2_fsz_complex_flat,
     calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_complex_flat,
-    calculate_new_pf_m_two2_real_flat, calculate_new_pf_m_two_fsz_complex_flat,
+    calculate_new_pf_m_two2_real_flat,
 };
 use crate::state::VmcOptimizationState;
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
+
+mod fsz_green;
+pub use fsz_green::green_func2_fsz;
 
 /// Reset the accumulators that `vmc_main_cal!` clears at the top of each
 /// SR step (`clear_phys_quantity!` in upstream).
@@ -928,104 +932,7 @@ pub fn green_func1_fsz(
     crate::julia_complex::divide(numerator, ip).conj()
 }
 
-/// FSZ Exchange Green ratio, using Julia's hop and normalization order.
-#[allow(clippy::too_many_arguments)]
-pub fn green_func_exchange_fsz(
-    ri: usize,
-    rj: usize,
-    spin: u8,
-    spin_other: u8,
-    ip: Complex64,
-    data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
-    ele_idx: &[i64],
-    ele_cfg: &[i64],
-    ele_num: &[i64],
-    ele_proj_cnt: &[i64],
-    ele_spn: &[i64],
-) -> Complex64 {
-    let n_site = data.modpara.nsite as usize;
-    let n_elec = data.modpara.nelec as usize;
-    let n_qp_full = state.slater_matrix.pf_m.len();
-    if ri == rj || n_elec == 0 || n_site == 0 {
-        return Complex64::new(0.0, 0.0);
-    }
-    if ele_num[ri + spin as usize * n_site] != 0
-        || ele_num[rj + spin as usize * n_site] != 1
-        || ele_num[rj + spin_other as usize * n_site] != 0
-        || ele_num[ri + spin_other as usize * n_site] != 1
-    {
-        return Complex64::new(0.0, 0.0);
-    }
-    let n_proj = ele_proj_cnt.len();
-    let mut my_ele_idx = ele_idx.to_vec();
-    let mut my_ele_spn = ele_spn.to_vec();
-    let mut my_ele_num = ele_num.to_vec();
-    let mut proj_mid = vec![0_i64; n_proj];
-    let mut proj_final = vec![0_i64; n_proj];
-
-    let mj = ele_cfg[rj + spin as usize * n_site];
-    let mi = ele_cfg[ri + spin_other as usize * n_site];
-    if mj < 0 || mi < 0 {
-        return Complex64::new(0.0, 0.0);
-    }
-    let (mj, mi) = (mj as usize, mi as usize);
-    my_ele_idx[mi] = rj as i64;
-    my_ele_spn[mi] = spin_other as i64;
-    my_ele_num[ri + spin_other as usize * n_site] = 0;
-    my_ele_num[rj + spin_other as usize * n_site] = 1;
-    update_proj_cnt(
-        ri as i64,
-        rj as i64,
-        spin_other,
-        &mut proj_mid,
-        ele_proj_cnt,
-        &my_ele_num,
-        data,
-    );
-    my_ele_idx[mj] = ri as i64;
-    my_ele_spn[mj] = spin as i64;
-    my_ele_num[rj + spin as usize * n_site] = 0;
-    my_ele_num[ri + spin as usize * n_site] = 1;
-    update_proj_cnt(
-        rj as i64,
-        ri as i64,
-        spin,
-        &mut proj_final,
-        &proj_mid,
-        &my_ele_num,
-        data,
-    );
-
-    let proj_ratio = julia_exp(crate::sampling::projection::log_proj_ratio(
-        &proj_final,
-        ele_proj_cnt,
-        data,
-    ));
-    let n_size = 2 * n_elec;
-    let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
-    calculate_new_pf_m_two_fsz_complex_flat(
-        mi,
-        spin_other,
-        mj,
-        spin,
-        &mut new_pf,
-        &my_ele_idx,
-        &my_ele_spn,
-        &state.slater_matrix.slater_elm,
-        state.slater_matrix.inv_m.as_slice(),
-        n_size * n_size + 1,
-        &state.slater_matrix.pf_m,
-        0,
-        n_qp_full,
-        n_site,
-        n_elec,
-    );
-    let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    crate::julia_complex::divide(Complex64::new(proj_ratio, 0.0) * new_ip, ip).conj()
-}
-
-/// FSZ local Hamiltonian for the Heisenberg/Hubbard fixture path.
+/// FSZ local Hamiltonian, including general four-spin InterAll contributions.
 pub fn calculate_local_energy_fsz(
     ip: Complex64,
     data: &ExpertModeData,
@@ -1095,13 +1002,17 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
         for term in &data.exchange_terms {
             let ri = term.site1;
             let rj = term.site2;
-            if ri < 0 || rj < 0 || ri == rj || (ri as usize) >= n_site || (rj as usize) >= n_site {
+            if ri < 0 || rj < 0 || (ri as usize) >= n_site || (rj as usize) >= n_site {
                 continue;
             }
-            let g01 = green_func_exchange_fsz(
+            let g01 = green_func2_fsz(
                 ri as usize,
                 rj as usize,
+                rj as usize,
+                ri as usize,
                 0,
+                0,
+                1,
                 1,
                 ip,
                 data,
@@ -1112,10 +1023,14 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
                 ele_proj_cnt,
                 ele_spn,
             );
-            let g10 = green_func_exchange_fsz(
+            let g10 = green_func2_fsz(
                 ri as usize,
                 rj as usize,
+                rj as usize,
+                ri as usize,
                 1,
+                1,
+                0,
                 0,
                 ip,
                 data,
@@ -1128,6 +1043,39 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
             );
             e += term.value * (g01 + g10);
         }
+    }
+    for term in &data.inter_all_terms {
+        let sites = [term.site0, term.site1, term.site2, term.site3];
+        if sites
+            .iter()
+            .any(|&site| site < 0 || site >= data.modpara.nsite)
+        {
+            continue;
+        }
+        let spins = [term.spin0, term.spin1, term.spin2, term.spin3];
+        assert!(
+            spins.iter().all(|spin| (0..=1).contains(spin)),
+            "invalid InterAll spin index"
+        );
+        e += term.value
+            * green_func2_fsz(
+                sites[0] as usize,
+                sites[1] as usize,
+                sites[2] as usize,
+                sites[3] as usize,
+                spins[0] as u8,
+                spins[1] as u8,
+                spins[2] as u8,
+                spins[3] as u8,
+                ip,
+                data,
+                state,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+                ele_spn,
+            );
     }
     timer.stop(72);
     e
