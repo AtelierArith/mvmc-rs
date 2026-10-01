@@ -1152,6 +1152,13 @@ mod callback_tests {
             .join("../../extern/Julia-mVMC/examples/inputs")
             .join(name)
             .join("namelist.def");
+        prepared_namelist(steps, &path)
+    }
+
+    fn prepared_namelist(
+        steps: i64,
+        path: &Path,
+    ) -> (ExpertModeData, VmcOptimizationState, Sfmt19937Rng) {
         let mut data = parse_expert_mode_files(path).unwrap();
         data.modpara.nsr_opt_itr_step = steps;
         data.modpara.nsr_opt_itr_smp = steps;
@@ -1497,6 +1504,18 @@ mod callback_tests {
     }
 
     #[test]
+    fn general_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks() {
+        check_sr_prefixes("general", true, 0);
+    }
+
+    #[test]
+    fn general_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng() {
+        for store in [0, 1] {
+            check_sr_prefixes("general", false, store);
+        }
+    }
+
+    #[test]
     fn hubbard_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks() {
         check_sr_prefixes("hubbard", true, 0);
     }
@@ -1530,6 +1549,7 @@ mod callback_tests {
     }
 
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
+        let reference_case = if case == "general" { "fsz" } else { case };
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(if cg {
                 "../../tests/fixtures/sr_cg"
@@ -1537,7 +1557,7 @@ mod callback_tests {
                 "../../tests/fixtures/sr_direct"
             })
             .join(format!(
-                "{case}{}",
+                "{reference_case}{}",
                 if store == 0 {
                     "_runner"
                 } else {
@@ -1555,7 +1575,15 @@ mod callback_tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let (mut data, mut state, mut rng) = prepared_case(steps, &name);
+            let (mut data, mut state, mut rng) = if case == "general" {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../tests/fixtures/orbital_general/heisenberg/namelist.def"),
+                )
+            } else {
+                prepared_case(steps, &name)
+            };
             data.modpara.nsrcg = i64::from(cg);
             data.modpara.nstore_o = store;
             let dir = fresh_output_directory().unwrap();

@@ -133,14 +133,18 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
 
     // Mirror the post-parse pass from upstream:
     //   - If only `OrbitalAntiParallel` is parsed, the orbital mode stays
-    //     at 0; if both AP and P appear, switch to general mode. Setting
-    //     `i_flg_orbital_general = 1` in the explicit `OrbitalGeneral`
-    //     branch is left for Phase 4 along with the supporting parsers.
+    //     at 0; if both AP and P appear, switch to general mode.
     if data.i_flg_orbital_general == 0
         && data.i_flg_orbital_anti_parallel == 1
         && data.i_flg_orbital_parallel == 1
     {
         data.i_flg_orbital_general = 1;
+    }
+
+    // Julia builds the lookup matrices after judging the orbital mode,
+    // before initialization and runtime projection-count normalization.
+    if !data.orbital_terms.is_empty() {
+        data.ensure_orbital_idx_matrix();
     }
 
     // `ncond` propagation (matches `readdef.c:593`): Ne = (Nlocspin + Ncond) / 2.

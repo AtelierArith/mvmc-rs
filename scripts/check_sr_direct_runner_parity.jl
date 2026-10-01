@@ -7,6 +7,10 @@ const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
 CASE in ("real", "cmp", "fsz", "hubbard") || error("Unknown case: $CASE")
+if "--general" in ARGS
+    CASE == "fsz" || error("--general requires --case=fsz")
+    "--write" in ARGS && error("General must verify the existing AP/P fixtures")
+end
 const PREFIXES = let opts = filter(a -> startswith(a, "--steps="), ARGS)
     isempty(opts) ? [1, 2, 3, 50] : parse.(Int, split(split(only(opts), "="; limit=2)[2], ","))
 end
@@ -63,6 +67,9 @@ end
 @testset "Direct SR $CASE deterministic prefix runs" begin
     for steps in PREFIXES
         namelist = joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "examples", "inputs", (CASE == "hubbard" ? "hubbard_chain_real" : "heisenberg_chain_" * CASE), "namelist.def")
+        if "--general" in ARGS
+            namelist = joinpath(@__DIR__, "..", "tests", "fixtures", "orbital_general", "heisenberg", "namelist.def")
+        end
         data = parse_expert_mode_files(namelist)
         data.modpara.nsr_opt_itr_step = steps
         data.modpara.nsr_opt_itr_smp = steps

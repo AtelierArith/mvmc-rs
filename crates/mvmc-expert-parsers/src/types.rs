@@ -503,8 +503,10 @@ pub struct ExpertModeData {
     /// `NQPOptTrans` (defaults to 1; tracked for the future OptTrans port).
     pub n_qp_opt_trans: i64,
 
-    /// `OrbitalIdx[ri+1, rj+1] = idx` lookup matrix (row-major, `nsite`
-    /// rows / columns). Populated lazily by [`ExpertModeData::ensure_orbital_idx_matrix`].
+    /// `OrbitalIdx[ri+1, rj+1] = idx` lookup matrix (row-major). General
+    /// orbitals use `2*nsite` rows and columns, including spin offsets;
+    /// normal orbitals use `nsite`. Built after parsing or on demand by
+    /// [`ExpertModeData::ensure_orbital_idx_matrix`].
     pub orbital_idx_matrix: Option<Vec<Vec<i64>>>,
     /// `OrbitalSgn[ri+1, rj+1]`, same shape as `orbital_idx_matrix`.
     pub orbital_sgn_matrix: Option<Vec<Vec<i64>>>,
@@ -590,7 +592,7 @@ impl ExpertModeData {
     /// Build (and cache) the dense `OrbitalIdx[ri+1, rj+1]` lookup matrix
     /// for the current `orbital_terms`. Mirrors
     /// `MVMCExpertModeParsers.jl/src/utils/orbital_qptrans_utils.jl ::
-    /// build_orbital_idx_matrix!`.
+    /// build_orbital_sgn_matrix!`.
     ///
     /// Cells without an entry have index zero. Signs follow the original
     /// boundary condition, including Julia's periodic sign override.
