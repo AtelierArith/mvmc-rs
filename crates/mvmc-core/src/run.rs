@@ -459,7 +459,12 @@ pub fn get_all_complex_flag(data: &ExpertModeData) -> bool {
     if !data.complex_flags.is_empty() {
         return data.complex_flags.iter().any(|&flag| flag != 0);
     }
-    data.doublon_holon_2site_complex
+    data.doublon_holon_4site_complex
+        || data
+            .doublon_holon_4site_params
+            .iter()
+            .any(|value| value.im != 0.0)
+        || data.doublon_holon_2site_complex
         || data
             .doublon_holon_2site_params
             .iter()
