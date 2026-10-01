@@ -53,3 +53,41 @@ instead. That reference path raises a missing-field error. The FSZ Hamiltonian
 uses the four explicit pairs and the `green_func2_fsz` / `green_func2_fsz2`
 dispatch. The normal-mode reference discrepancy must be resolved explicitly
 before claiming a normal-mode production comparison.
+
+## General fixed-Sz Green ratios
+
+`green_normal.txt` records the original `green_func2` results for all 4-site
+index combinations and both spins of each operator, on two configurations in
+each of real and complex mode (4096 operators). The configurations cover
+separate and doubly occupied sites. Every case includes two QP planes with
+unequal weights, Gutzwiller and Jastrow projection, and all coincident-index
+branches. Input Slater tables, Pfaffians, inverses, overlap, occupations and
+projection counts are serialized alongside the outputs.
+
+Rust compares every output bit, including signed zeros, using the supplied
+inverse inputs in its padded QP layout. Julia independently applies the four
+creation/annihilation operators in a sorted occupation basis, evaluates
+analytic 4-by-4 Pfaffians for the new state and checks every ratio with fixed
+absolute tolerance `2e-12` (relative tolerance zero). The independent formula
+has a different arithmetic order from the update kernels. Equivalent
+CoulombIntra, CoulombInter, Hund and Exchange sums (including same-site
+Exchange) agree with the original
+specialized Hamiltonian with absolute tolerance `2e-14`; Rust also compares
+that Hamiltonian's energy bits. Green evaluation leaves the inverse/Pfaffian
+state unchanged.
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_two_body_green_parity.jl --write
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_two_body_green_parity.jl
+cargo test -p mvmc-core --locked --test two_body_green
+```
+
+The general helper replaces the old exchange-only kernel. General one-body
+reductions use Julia's projection-count ratio and complex quotient. The real
+Transfer calculation retains its specialized direct projection/real quotient
+arithmetic; applying that fast arithmetic to a general one-body reduction
+produced a one-ULP mismatch in the new exhaustive test. The test was kept exact
+and the call-site dispatch was corrected. The main calculation still rejects
+InterAll until the FSZ kernels and production integration are verified.
+Same-site Exchange now reduces to `2 * J * n_up * n_down`, matching Julia,
+instead of being discarded by the previous exchange-only call site.
