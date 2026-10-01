@@ -77,8 +77,16 @@ fn run_and_compare(julia: &Path, model: &Model) -> Result<(), String> {
     }
 
     let out_dir = tempdir(model.name);
-    mvmc_core::run_para_opt_from_namelist(&namelist, N_STEPS, Some(1), Some(&out_dir))
-        .map_err(|e| format!("{}: run failed: {e}", model.name))?;
+    mvmc_core::run_para_opt_from_namelist(
+        &namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(N_STEPS as i64),
+            seed: Some(1),
+            output_dir: Some(out_dir.clone()),
+            ..mvmc_core::RunConfig::new(N_STEPS as i64, "real")
+        },
+    )
+    .map_err(|e| format!("{}: run failed: {e}", model.name))?;
 
     let got_str = fs::read_to_string(out_dir.join("zvo_out.dat"))
         .map_err(|e| format!("{}: zvo_out.dat unreadable: {e}", model.name))?;

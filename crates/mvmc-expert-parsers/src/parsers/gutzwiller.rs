@@ -12,7 +12,7 @@
 //!    to it. This matches upstream behaviour for the 4 supported inputs
 //!    where each site has its own Gutzwiller index slot.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
 use std::path::Path;
 
@@ -32,6 +32,8 @@ pub struct GutzwillerSection {
     pub is_complex: bool,
     /// `site -> idx` (0-based) lookup for ALL sites listed in the file.
     pub site_idx_map: HashMap<i64, i64>,
+    /// Per-parameter optimization flags, as listed in the trailing section.
+    pub opt_flags: BTreeMap<i64, i64>,
 }
 
 /// Parse a `gutzwilleridx.def` file from disk.
@@ -49,9 +51,10 @@ pub fn parse_gutzwiller_content(content: &str) -> GutzwillerSection {
     let mut seen_sites: BTreeSet<i64> = BTreeSet::new();
     let mut seen_idx: BTreeSet<i64> = BTreeSet::new();
     let mut in_opt_section = false;
+    let mut opt_flags = BTreeMap::new();
 
     let start_line = if has_header { 5 } else { 0 };
-    for line in &lines[start_line..] {
+    for line in lines.get(start_line..).unwrap_or_default() {
         let tokens = split_def_line(line);
         if tokens.len() < 2 {
             continue;
@@ -65,7 +68,7 @@ pub fn parse_gutzwiller_content(content: &str) -> GutzwillerSection {
             in_opt_section = true;
         }
         if in_opt_section {
-            // idx -> opt_flag (we don't model OptFlag yet)
+            opt_flags.insert(a, b);
             continue;
         }
         site_idx_map.insert(a, b);
@@ -104,6 +107,7 @@ pub fn parse_gutzwiller_content(content: &str) -> GutzwillerSection {
         n_gutzwiller_idx,
         is_complex,
         site_idx_map,
+        opt_flags,
     }
 }
 
@@ -116,7 +120,10 @@ pub(crate) fn read_idx_header(lines: &[&str], n_keyword: &str) -> (i64, bool, bo
 
     if lines.len() > 1 {
         let tokens = split_def_line(lines[1]);
-        if tokens.len() >= 2 && tokens[0] == n_keyword {
+        if tokens.len() >= 2
+            && (tokens[0] == n_keyword
+                || (n_keyword == "NOrbitalIdx" && tokens[0].starts_with("NOrbital")))
+        {
             n_idx = safe_parse_int(tokens[1], 0);
             has_header = true;
         }

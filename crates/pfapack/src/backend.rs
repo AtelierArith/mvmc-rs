@@ -46,10 +46,42 @@ pub trait BlasScalar:
     + crate::pfaffian::PfafOne
     + BlasKernels
 {
+    fn fsz_trtri(a: &mut [Self], lda: usize, n: usize) {
+        trtri_uu_inplace(a, lda, 0, 1, n);
+    }
+    fn fsz_trmm(m: &[Self], a: &mut [Self], n: usize) {
+        trmm_lutu(m, a, n);
+    }
+    /// Reciprocal using the Julia scalar operation.
+    fn julia_inv(self) -> Self;
+    /// Division using the Julia scalar operation.
+    fn julia_div(self, rhs: Self) -> Self;
 }
 
-impl BlasScalar for f64 {}
-impl BlasScalar for Complex64 {}
+impl BlasScalar for f64 {
+    fn julia_inv(self) -> Self {
+        1.0 / self
+    }
+    fn julia_div(self, rhs: Self) -> Self {
+        self / rhs
+    }
+}
+impl BlasScalar for Complex64 {
+    #[cfg(all(target_os = "macos", feature = "blas-backend"))]
+    fn fsz_trtri(a: &mut [Self], lda: usize, n: usize) {
+        accelerate_fsz::trtri(a, lda, n);
+    }
+    #[cfg(all(target_os = "macos", feature = "blas-backend"))]
+    fn fsz_trmm(m: &[Self], a: &mut [Self], n: usize) {
+        accelerate_fsz::trmm(m, a, n);
+    }
+    fn julia_inv(self) -> Self {
+        crate::julia_complex::reciprocal(self)
+    }
+    fn julia_div(self, rhs: Self) -> Self {
+        crate::julia_complex::divide(self, rhs)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // skr2_neg: A += α (x yᵀ − y xᵀ)  (skew-symmetric rank-2 update)
@@ -177,6 +209,7 @@ fn idx(lda: usize, row: usize, col: usize) -> usize {
     col * lda + row
 }
 
+#[cfg(not(feature = "blas-backend"))]
 #[inline]
 fn scalar_trtri_uu_impl<T>(a: &mut [T], lda: usize, row0: usize, col0: usize, n: usize)
 where
@@ -372,10 +405,6 @@ mod blas_impl {
         }
 
         fn trtri_uu(a: &mut [f64], lda: usize, row0: usize, col0: usize, n: usize) {
-            if n <= 64 {
-                scalar_trtri_uu_impl(a, lda, row0, col0, n);
-                return;
-            }
             let n_i = as_i32(n, "n");
             let lda_i = as_i32(lda, "lda");
             let mut info: i32 = 0;
@@ -389,10 +418,6 @@ mod blas_impl {
         }
 
         fn trmm_lutu(m: &[f64], a: &mut [f64], n: usize) {
-            if n <= 64 {
-                scalar_trmm_lutu_impl(m, a, n);
-                return;
-            }
             let n_i = as_i32(n, "n");
             unsafe {
                 blas::dtrmm(b'L', b'U', b'T', b'U', n_i, n_i, 1.0, m, n_i, a, n_i);
@@ -448,10 +473,6 @@ mod blas_impl {
         }
 
         fn trtri_uu(a: &mut [Complex64], lda: usize, row0: usize, col0: usize, n: usize) {
-            if n <= 32 {
-                scalar_trtri_uu_impl(a, lda, row0, col0, n);
-                return;
-            }
             let n_i = as_i32(n, "n");
             let lda_i = as_i32(lda, "lda");
             let mut info: i32 = 0;
@@ -464,10 +485,6 @@ mod blas_impl {
         }
 
         fn trmm_lutu(m: &[Complex64], a: &mut [Complex64], n: usize) {
-            if n <= 32 {
-                scalar_trmm_lutu_impl(m, a, n);
-                return;
-            }
             let n_i = as_i32(n, "n");
             // For complex 'T' = transpose (no conjugate). Julia's call
             // `BLAS.trmm!('L','U','T','U', 1.0, M, A)` likewise uses 'T'.
@@ -626,5 +643,138 @@ mod tests {
         trmm_lutu::<Complex64>(&m, &mut got, n);
 
         assert_complex_slices_close(&got, &want);
+    }
+}
+
+// Julia's macOS FSZ native inverse links Accelerate, whereas its pure-Julia
+// inverse goes through libblastrampoline/OpenBLAS. Resolve the former's symbols
+// from its own library handle so OpenBLAS cannot interpose LP64 symbols.
+#[cfg(all(target_os = "macos", feature = "blas-backend"))]
+mod accelerate_fsz {
+    use num_complex::Complex64;
+    use std::ffi::{c_char, c_int, c_void};
+    use std::sync::OnceLock;
+    type Trtri = unsafe extern "C" fn(
+        *const c_char,
+        *const c_char,
+        *const i32,
+        *mut Complex64,
+        *const i32,
+        *mut i32,
+    );
+    type Trmm = unsafe extern "C" fn(
+        *const c_char,
+        *const c_char,
+        *const c_char,
+        *const c_char,
+        *const i32,
+        *const i32,
+        *const Complex64,
+        *const Complex64,
+        *const i32,
+        *mut Complex64,
+        *const i32,
+    );
+    unsafe extern "C" {
+        fn dlopen(path: *const c_char, mode: c_int) -> *mut c_void;
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    fn kernels() -> &'static (Trtri, Trmm) {
+        static KERNELS: OnceLock<(Trtri, Trmm)> = OnceLock::new();
+        KERNELS.get_or_init(|| unsafe {
+            let handle = dlopen(
+                c"/System/Library/Frameworks/Accelerate.framework/Accelerate".as_ptr(),
+                2 | 4,
+            );
+            assert!(
+                !handle.is_null(),
+                "Cannot load Julia FSZ reference BLAS provider"
+            );
+            let trtri = dlsym(handle, c"ztrtri_".as_ptr());
+            let trmm = dlsym(handle, c"ztrmm_".as_ptr());
+            assert!(
+                !trtri.is_null() && !trmm.is_null(),
+                "Missing FSZ reference BLAS kernels"
+            );
+            (
+                std::mem::transmute::<*mut c_void, Trtri>(trtri),
+                std::mem::transmute::<*mut c_void, Trmm>(trmm),
+            )
+        })
+    }
+    pub(super) fn trtri(a: &mut [Complex64], lda: usize, n: usize) {
+        if n < 2 {
+            return;
+        }
+        let ni = i32::try_from(n).unwrap();
+        let ld = i32::try_from(lda).unwrap();
+        assert!(lda >= n, "FSZ trtri leading dimension is too small");
+        let required = lda
+            .checked_mul(n)
+            .and_then(|offset| offset.checked_add(n))
+            .expect("FSZ trtri matrix size overflow");
+        assert!(a.len() >= required, "FSZ trtri matrix buffer is too short");
+        let mut info = 0;
+        // SAFETY: the checked buffer contains the n*n submatrix at column 1
+        // with leading lda >= n; both dimensions fit the LP64 ABI.
+        unsafe {
+            kernels().0(
+                c"U".as_ptr(),
+                c"U".as_ptr(),
+                &ni,
+                a.as_mut_ptr().add(lda),
+                &ld,
+                &mut info,
+            );
+        }
+        assert_eq!(info, 0, "FSZ trtri failed");
+    }
+    pub(super) fn trmm(m: &[Complex64], a: &mut [Complex64], n: usize) {
+        if n == 0 {
+            return;
+        }
+        let ni = i32::try_from(n).unwrap();
+        let required = n.checked_mul(n).expect("FSZ trmm matrix size overflow");
+        assert!(
+            m.len() >= required && a.len() >= required,
+            "FSZ trmm matrix buffer is too short"
+        );
+        let one = Complex64::new(1., 0.);
+        // SAFETY: both nonaliasing matrices have n*n entries and leading n.
+        unsafe {
+            kernels().1(
+                c"L".as_ptr(),
+                c"U".as_ptr(),
+                c"T".as_ptr(),
+                c"U".as_ptr(),
+                &ni,
+                &ni,
+                &one,
+                m.as_ptr(),
+                &ni,
+                a.as_mut_ptr(),
+                &ni,
+            );
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        #[should_panic(expected = "FSZ trtri matrix buffer is too short")]
+        fn trtri_rejects_short_buffer_before_ffi() {
+            let mut a = [Complex64::new(0.0, 0.0); 4];
+            trtri(&mut a, 2, 2);
+        }
+
+        #[test]
+        #[should_panic(expected = "FSZ trmm matrix buffer is too short")]
+        fn trmm_rejects_short_buffer_before_ffi() {
+            let m = [Complex64::new(0.0, 0.0); 3];
+            let mut a = [Complex64::new(0.0, 0.0); 4];
+            trmm(&m, &mut a, 2);
+        }
     }
 }

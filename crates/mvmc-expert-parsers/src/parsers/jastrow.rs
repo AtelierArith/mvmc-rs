@@ -5,6 +5,7 @@
 //! list, parses the `NJastrowIdx` / `ComplexType` header, and exposes
 //! the symmetric `jastrow_idx[ri+1, rj+1]` matrix.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
@@ -23,6 +24,8 @@ pub struct JastrowSection {
     pub n_jastrow_idx: i64,
     /// `ComplexType` flag.
     pub is_complex: bool,
+    /// Per-parameter flags from the trailing OptFlag section.
+    pub opt_flags: BTreeMap<i64, i64>,
 }
 
 /// Parse a `jastrowidx.def` file from disk.
@@ -39,19 +42,26 @@ pub fn parse_jastrow_content(content: &str) -> JastrowSection {
     let start_line = if has_header { 5 } else { 0 };
     let mut terms = Vec::new();
     let mut in_opt_section = false;
-    for line in &lines[start_line..] {
+    let mut opt_flags = BTreeMap::new();
+    for line in lines.get(start_line..).unwrap_or_default() {
         let tokens = split_def_line(line);
         if tokens.is_empty() {
             continue;
         }
-        if tokens.len() == 2 {
-            if !terms.is_empty() {
-                in_opt_section = true;
+        if tokens.len() == 2 && !terms.is_empty() {
+            in_opt_section = true;
+        }
+        if in_opt_section {
+            if tokens.len() >= 2 {
+                let idx = safe_parse_int(tokens[0], -1);
+                let flag = safe_parse_int(tokens[1], -1);
+                if idx >= 0 && flag >= 0 {
+                    opt_flags.insert(idx, flag);
+                }
             }
-            // We don't surface OptFlag yet -- skip.
             continue;
         }
-        if in_opt_section || tokens.len() < 3 {
+        if tokens.len() < 3 {
             continue;
         }
         let site1 = safe_parse_int(tokens[0], -1);
@@ -77,6 +87,7 @@ pub fn parse_jastrow_content(content: &str) -> JastrowSection {
         },
         n_jastrow_idx,
         is_complex,
+        opt_flags,
     }
 }
 

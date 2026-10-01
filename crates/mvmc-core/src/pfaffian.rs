@@ -33,7 +33,8 @@
 
 use num_complex::Complex64;
 use pfapack::{
-    dsktf2, utu2inv_complex, utu2inv_real, utu2pfa_complex, utu2pfa_real, zsktf2, SqMat,
+    dsktf2, utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real,
+    zsktf2, zsktf2_turbo, SqMat,
 };
 
 use crate::state::{
@@ -322,7 +323,7 @@ fn calc_m_all_child_complex(
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
-        zsktf2(&mut a, &mut ws.pivots[..n_size])
+        zsktf2_turbo(&mut a, &mut ws.pivots[..n_size])
             .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_complex(&a, &ws.pivots[..n_size])
     };
@@ -388,7 +389,7 @@ fn calc_m_all_child_fsz_complex(
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
         let mut m_work = SqMat::new(&mut ws.m_work_complex[..n_size * n_size], n_size);
-        utu2inv_complex(
+        utu2inv_complex_fsz(
             &mut a,
             &ws.pivots[..n_size],
             &mut ws.v_t_complex[..n_size - 1],

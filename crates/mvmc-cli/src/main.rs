@@ -11,6 +11,9 @@
 //!   --nsteps <N>      SR optimisation steps  [default: value in modpara.def]
 //!   --out-dir <DIR>   Output directory       [default: namelist parent dir]
 //!   --seed <N>        RNG seed override      [default: RndSeed in modpara.def]
+//!   --nsmp <N>        Final averaging window [default: NSROptItrSmp]
+//!   --mode <MODE>     Sanity label: real/cmp/fsz [default: inferred]
+//!   --initial-def <auto|none|PATH> Starting parameter file [default: auto]
 //!   --help / -h       Print this help text
 //!
 //! Environment:
@@ -29,6 +32,9 @@ fn print_usage(program: &str) {
     eprintln!("  --nsteps <N>    SR optimisation steps [default: NSROptItrStep in modpara.def]");
     eprintln!("  --out-dir <DIR> Output directory      [default: namelist parent dir]");
     eprintln!("  --seed <N>      RNG seed override     [default: RndSeed in modpara.def]");
+    eprintln!("  --nsmp <N>      Final averaging window [default: NSROptItrSmp]");
+    eprintln!("  --mode <MODE>   Sanity label: real, cmp or fsz [default: inferred]");
+    eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
     eprintln!("  --help, -h      Print this help");
     eprintln!();
     eprintln!("Environment:");
@@ -41,9 +47,12 @@ fn main() {
 
     // ── argument parsing (no external crate dependency) ──────────────────────
     let mut namelist: Option<PathBuf> = None;
-    let mut nsteps_arg: Option<usize> = None;
+    let mut nsteps_arg: Option<i64> = None;
     let mut out_dir_arg: Option<PathBuf> = None;
     let mut seed_arg: Option<i64> = None;
+    let mut nsmp_arg: Option<i64> = None;
+    let mut mode_arg: Option<String> = None;
+    let mut initial_def = mvmc_core::InitialDef::Auto;
 
     let mut idx = 1;
     while idx < args.len() {
@@ -54,15 +63,60 @@ fn main() {
             }
             "--nsteps" => {
                 idx += 1;
-                nsteps_arg = args.get(idx).and_then(|s| s.parse().ok());
+                nsteps_arg = Some(args.get(idx).and_then(|s| s.parse().ok()).unwrap_or_else(
+                    || {
+                        eprintln!("error: --nsteps requires an integer");
+                        process::exit(2)
+                    },
+                ));
             }
             "--out-dir" => {
                 idx += 1;
-                out_dir_arg = args.get(idx).map(PathBuf::from);
+                out_dir_arg = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
+                    eprintln!("error: --out-dir requires a directory");
+                    process::exit(2)
+                }));
             }
             "--seed" => {
                 idx += 1;
-                seed_arg = args.get(idx).and_then(|s| s.parse().ok());
+                seed_arg = Some(
+                    args.get(idx)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or_else(|| {
+                            eprintln!("error: --seed requires an integer");
+                            process::exit(2)
+                        }),
+                );
+            }
+            "--nsmp" => {
+                idx += 1;
+                nsmp_arg = Some(
+                    args.get(idx)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or_else(|| {
+                            eprintln!("error: --nsmp requires an integer");
+                            process::exit(2)
+                        }),
+                );
+            }
+            "--mode" => {
+                idx += 1;
+                mode_arg = Some(args.get(idx).cloned().unwrap_or_else(|| {
+                    eprintln!("error: --mode requires real, cmp or fsz");
+                    process::exit(2)
+                }));
+            }
+            "--initial-def" => {
+                idx += 1;
+                initial_def = match args.get(idx).map(String::as_str) {
+                    Some("auto") => mvmc_core::InitialDef::Auto,
+                    Some("none") => mvmc_core::InitialDef::None,
+                    Some(path) => mvmc_core::InitialDef::Path(PathBuf::from(path)),
+                    None => {
+                        eprintln!("error: --initial-def requires auto, none or a path");
+                        process::exit(2)
+                    }
+                };
             }
             flag if flag.starts_with('-') => {
                 eprintln!("error: unknown flag `{flag}`");
@@ -96,7 +150,7 @@ fn main() {
     }
 
     // MVMC_NSTEPS env var (CLI flag takes precedence)
-    let nsteps_env: Option<usize> = std::env::var("MVMC_NSTEPS")
+    let nsteps_env: Option<i64> = std::env::var("MVMC_NSTEPS")
         .ok()
         .and_then(|s| s.parse().ok());
     let nsteps_override = nsteps_arg.or(nsteps_env);
@@ -104,10 +158,6 @@ fn main() {
     // Default output dir: namelist's parent directory.
     let out_dir: PathBuf =
         out_dir_arg.unwrap_or_else(|| namelist.parent().unwrap_or(Path::new(".")).join("output"));
-    if let Err(e) = std::fs::create_dir_all(&out_dir) {
-        eprintln!("error: cannot create output dir {}: {e}", out_dir.display());
-        process::exit(1);
-    }
 
     // ── banner ────────────────────────────────────────────────────────────────
     println!("=== mvmc — Julia-mVMC Rust port ===");
@@ -122,10 +172,14 @@ fn main() {
     println!();
 
     // ── peek at modpara to determine defaults and show model info ─────────────
-    let nsteps = match mvmc_expert_parsers::parse_expert_mode_files(&namelist) {
+    let (nsteps, inferred_mode) = match mvmc_expert_parsers::parse_expert_mode_files(&namelist) {
         Ok(data) => {
+            if let Err(e) = mvmc_core::validation::validate_para_opt(&data) {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
             let p = &data.modpara;
-            let nsteps_modpara = p.nsr_opt_itr_step.max(0) as usize;
+            let nsteps_modpara = p.nsr_opt_itr_step;
             let nsteps = nsteps_override.unwrap_or(nsteps_modpara);
             println!(
                 "model    : Nsite={} Nelec={} NSROptItrStep={}",
@@ -137,23 +191,36 @@ fn main() {
                 p.nvmc_sample, p.nvmc_warmup
             );
             println!();
-            nsteps
+            let mode = if data.i_flg_orbital_general != 0 {
+                "fsz"
+            } else if mvmc_core::get_all_complex_flag(&data) {
+                "cmp"
+            } else {
+                "real"
+            };
+            (nsteps, mode)
         }
         Err(e) => {
-            // Fall back: if we can't parse, use the override or a safe default.
-            eprintln!("warning: could not pre-parse modpara ({e}), using nsteps override or 0");
-            nsteps_override.unwrap_or(0)
+            eprintln!("error: could not parse Expert input: {e}");
+            process::exit(1);
         }
     };
 
-    if nsteps == 0 {
+    if nsteps <= 0 {
         eprintln!("error: NSROptItrStep is 0 — nothing to run. Use --nsteps <N>.");
         process::exit(1);
     }
 
     // ── run ───────────────────────────────────────────────────────────────────
     let t0 = Instant::now();
-    let result = mvmc_core::run_para_opt_from_namelist(&namelist, nsteps, seed_arg, Some(&out_dir));
+    let config = mvmc_core::RunConfig {
+        nsmp: nsmp_arg,
+        seed: seed_arg,
+        output_dir: Some(out_dir),
+        initial_def,
+        ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
+    };
+    let result = mvmc_core::run_para_opt_from_namelist(&namelist, config);
     let elapsed = t0.elapsed();
 
     // ── result ────────────────────────────────────────────────────────────────
@@ -162,34 +229,15 @@ fn main() {
             println!();
             println!(
                 "=== Completed {} SR steps in {:.2}s ===",
-                summary.nsteps,
+                summary.effective_nsteps,
                 elapsed.as_secs_f64()
             );
-            if let Some(ref d) = summary.output_dir {
-                println!("Output files written to: {}", d.display());
-                // List key files that were created.
-                for fname in &["zvo_out.dat", "zvo_var.dat", "zqp_opt.dat"] {
-                    let p = d.join(fname);
-                    if p.exists() {
-                        println!("  {fname}");
-                    }
-                }
-            }
-            // Print the last energy line for quick sanity-check.
-            if let Some(ref d) = summary.output_dir {
-                let zvo = d.join("zvo_out.dat");
-                if let Ok(content) = std::fs::read_to_string(&zvo) {
-                    if let Some(last) = content.lines().rfind(|l| !l.trim().is_empty()) {
-                        let tokens: Vec<&str> = last.split_whitespace().collect();
-                        if let Some(e_str) = tokens.first() {
-                            if let Ok(e) = e_str.parse::<f64>() {
-                                println!();
-                                println!("Final energy (last SR step): {e:.10}");
-                            }
-                        }
-                    }
-                }
-            }
+            println!("Output files written to: {}", summary.output_dir.display());
+            println!("Final energy / site: {:.10}", summary.final_energy_per_site);
+            println!(
+                "Final-window means ({} steps): {:?}",
+                summary.effective_nsmp, summary.ctest_values
+            );
         }
         Err(e) => {
             eprintln!("error: run failed: {e}");

@@ -1,0 +1,97 @@
+//! Declared widths reserve parameter slots even when mappings are sparse.
+use std::fs;
+use std::path::PathBuf;
+
+use mvmc_expert_parsers::parse_expert_mode_files;
+use mvmc_expert_parsers::parsers::orbital::parse_orbital_content;
+use mvmc_expert_parsers::utils::parameter_init::init_parameter;
+use sfmt19937::Sfmt19937Rng;
+
+fn definition(header: &str, width: usize, rows: &str) -> String {
+    format!("===\n{header} {width}\nComplexType 0\n===\n===\n{rows}")
+}
+
+fn fixture(name: &str, namelist: &str, ap: &str, parallel: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("mvmc-orbital-{name}-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("namelist.def"), namelist).unwrap();
+    fs::write(dir.join("ap.def"), ap).unwrap();
+    fs::write(dir.join("p.def"), parallel).unwrap();
+    dir
+}
+
+#[test]
+fn sparse_ap_and_parallel_use_declared_widths_and_rng_consumption() {
+    let dir = fixture(
+        "sparse",
+        "OrbitalAntiParallel ap.def\nOrbitalParallel p.def\n",
+        &definition("NOrbitalAntiParallel", 7, "0 1 0\n1 0 1\n"),
+        &definition("NOrbitalParallel", 3, "0 1 0\n"),
+    );
+    let mut data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    assert_eq!(data.n_orbital_anti_parallel, 7);
+    assert_eq!(data.modpara.n_orbital_idx, 13);
+    assert_eq!(
+        data.orbital_terms.iter().map(|t| t.idx).collect::<Vec<_>>(),
+        [0, 1, 7, 8]
+    );
+    let mut rng = Sfmt19937Rng::new(1);
+    let mut probe = Sfmt19937Rng::new(1);
+    init_parameter(&mut data, &mut rng);
+    // Live Julia v0.5.0 / SFMT v0.1.0 reference, seed 1. Require exact
+    // IEEE-754 values and the next RNG word, not a statistical tolerance.
+    for (term, expected) in data.orbital_terms.iter().zip([
+        -0.3232123088091612_f64,
+        0.201519466470927,
+        -0.2580129294656217,
+        -0.6150796245783567,
+    ]) {
+        assert_eq!(term.value.re.to_bits(), expected.to_bits());
+        assert_eq!(term.value.im, 0.0);
+    }
+    // Julia initializes max(mapped_idx)+1 slots, not all declared slots.
+    for _ in 0..9 {
+        probe.genrand_real2();
+    }
+    assert_eq!(rng.gen_rand32(), 3_397_707_788);
+    assert_eq!(probe.gen_rand32(), 3_397_707_788);
+    for _ in 0..624 {
+        assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn empty_declared_ap_still_reserves_parallel_offset() {
+    let dir = fixture(
+        "empty",
+        "Orbital ap.def\nOrbitalParallel p.def\n",
+        &definition("NOrbitalIdx", 7, ""),
+        &definition("NOrbitalParallel", 3, "0 1 0\n"),
+    );
+    let data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    assert_eq!(data.n_orbital_anti_parallel, 7);
+    assert_eq!(data.modpara.n_orbital_idx, 13);
+    assert_eq!(
+        data.orbital_terms.iter().map(|t| t.idx).collect::<Vec<_>>(),
+        [7, 8]
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn parallel_before_ap_fails_before_any_file_is_parsed() {
+    let dir = fixture("order", "OrbitalParallel p.def\nOrbital ap.def\n", "", "");
+    let error = parse_expert_mode_files(dir.join("namelist.def")).unwrap_err();
+    assert!(error.to_string().contains("must be listed after"));
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn general_and_headerless_counts_follow_their_input_contracts() {
+    let general = parse_orbital_content(&definition("NOrbitalGeneral", 9, "0 3 1\n"));
+    assert_eq!(general.n_orbital_idx, 9);
+    assert_eq!(general.terms.len(), 1);
+    let legacy = parse_orbital_content("0 1 2\n1 0 0\n");
+    assert_eq!(legacy.n_orbital_idx, 3);
+}

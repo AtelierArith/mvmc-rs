@@ -8,6 +8,7 @@
 //! QPFixWeight` fan-out so the Pfaffian / sampler downstream sees the
 //! same per-QP weights as Julia/C.
 
+use super::julia_trig;
 use num_complex::Complex64;
 
 use crate::types::{ExpertModeData, QuantumProjectionWeights};
@@ -31,7 +32,7 @@ pub fn gauss_legendre(x1: f64, x2: f64, n: usize) -> (Vec<f64>, Vec<f64>) {
     for i in 0..m {
         // C: z = cos(pi * (i + 0.75) / (n + 0.5)). The Julia port uses
         // i (0-based) + 0.75 so the same expression carries over.
-        let mut z = (std::f64::consts::PI * ((i as f64) + 0.75) / (n_f + 0.5)).cos();
+        let mut z = julia_trig::cos(std::f64::consts::PI * ((i as f64) + 0.75) / (n_f + 0.5));
         let mut pp;
         loop {
             let mut p1 = 1.0;
@@ -70,7 +71,7 @@ pub fn legendre_poly(x: f64, n: i64) -> f64 {
     let mut p03 = x;
     for i in 2..=n {
         let if_ = i as f64;
-        p03 = ((2.0 * if_ - 1.0) * x * p02 - (if_ - 1.0) * p01) / if_;
+        p03 = (1.0 / if_) * ((2.0 * if_ - 1.0) * x * p02 - (if_ - 1.0) * p01);
         p01 = p02;
         p02 = p03;
     }
@@ -120,16 +121,17 @@ pub fn init_qp_weight_inplace(
         let (beta, weight_gl) = gauss_legendre(0.0, std::f64::consts::PI, n_leg);
         for i in 0..n_leg {
             let beta_i = beta[i];
-            let cos_h = (0.5 * beta_i).cos();
-            let sin_h = (0.5 * beta_i).sin();
+            let cos_h = julia_trig::cos(0.5 * beta_i);
+            let sin_h = julia_trig::sin(0.5 * beta_i);
             weights.spgl_cos[i] = Complex64::new(cos_h, 0.0);
             weights.spgl_sin[i] = Complex64::new(sin_h, 0.0);
             weights.spgl_cos_sin[i] = Complex64::new(cos_h * sin_h, 0.0);
             weights.spgl_cos_cos[i] = Complex64::new(cos_h * cos_h, 0.0);
             weights.spgl_sin_sin[i] = Complex64::new(sin_h * sin_h, 0.0);
 
-            let cos_beta = beta_i.cos();
-            let w = 0.5 * beta_i.sin() * weight_gl[i] * legendre_poly(cos_beta, nsp_stot);
+            let cos_beta = julia_trig::cos(beta_i);
+            let w =
+                0.5 * julia_trig::sin(beta_i) * weight_gl[i] * legendre_poly(cos_beta, nsp_stot);
             for j in 0..nmp_trans {
                 let idx = i + j * n_leg;
                 if j < para_qp_trans.len() {
@@ -170,6 +172,7 @@ pub fn update_qp_weight(weights: &mut QuantumProjectionWeights, opt_trans: &[Com
 
 /// `data.qp_weights = init_qp_weight!(data)` mirror.
 pub fn init_qp_weight(data: &mut ExpertModeData) {
+    data.normalize_projection_count();
     let mut weights = data.qp_weights.take().unwrap_or_default();
     init_qp_weight_inplace(
         &mut weights,
@@ -211,5 +214,31 @@ mod tests {
         assert_eq!(weights.qp_fix_weight, para);
         assert_eq!(weights.qp_full_weight, para);
         assert_eq!(weights.spgl_cos, vec![Complex64::new(1.0, 0.0)]);
+    }
+
+    #[test]
+    fn zero_translation_count_normalizes_before_weight_allocation() {
+        let mut zero = ExpertModeData::new();
+        zero.modpara.nmp_trans = 0;
+        zero.modpara.nsp_gauss_leg = 1;
+        zero.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
+        let mut one = zero.clone();
+        one.modpara.nmp_trans = 1;
+        init_qp_weight(&mut zero);
+        init_qp_weight(&mut one);
+        assert_eq!(zero.modpara.nmp_trans, 1);
+        assert_eq!(zero.qp_weights, one.qp_weights);
+        assert_eq!(zero.qp_weights.unwrap().qp_full_weight.len(), 1);
+    }
+
+    #[test]
+    fn projection_allocation_retains_negative_boundary_marker() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = -2;
+        data.modpara.nsp_gauss_leg = 1;
+        data.para_qp_trans = vec![Complex64::new(1.0, 0.0); 2];
+        init_qp_weight(&mut data);
+        assert_eq!(data.modpara.nmp_trans, -2);
+        assert_eq!(data.qp_weights.unwrap().qp_full_weight.len(), 2);
     }
 }

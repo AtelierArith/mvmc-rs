@@ -1,16 +1,16 @@
 fn main() {
-    // Link against OpenBLAS (LP64) to get dpotrf_ / dpotrs_.
+    // Link OpenBLAS (LP64) for CG dgemv_ and direct-SR dpotrf_ / dpotrs_.
     //
     // On macOS the Homebrew openblas formula installs to a keg-only prefix
     // (/usr/local/opt/openblas on Intel, /opt/homebrew/opt/openblas on ARM)
     // because macOS provides its own BLAS/LAPACK via Accelerate.  We must
     // therefore add the library search path explicitly.
     //
-    // Julia uses OpenBLAS (ILP64 variant) internally, so linking the LP64
-    // Homebrew build brings us closer to Julia's dpotrf/dpotrs floating-point
-    // operation ordering than Accelerate does.  Full bit-identical agreement
-    // would require the ILP64 variant with 64-bit integer arguments; LP64 is
-    // the practical next-best option without coupling to Julia's private libs.
+    // Julia uses OpenBLAS with the ILP64 integer ABI. The Rust BLAS/LAPACK
+    // wrappers use LP64; argument widths must match their linked backend.
+    // ABI width alone does not determine floating-point parity. Backend
+    // version, CPU kernels, reduction order, and solver inputs all matter.
+    // The fixed-input CG fixtures compare numerical bits against Julia 1.13.1.
     //
     // Linux: a system `libopenblas-dev` / `liblapack-dev` package satisfies
     // `-l openblas` just the same.

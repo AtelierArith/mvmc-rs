@@ -1132,20 +1132,57 @@ fn two_ratio_real(
         q_b += inv_b * vec_b[msi];
     }
     let inv_ab = inv[inv_base + msa * n_size + msb];
-    let mut bma = 0.0;
-    for msi in 0..n_size {
-        let mut tmp = 0.0;
-        for msj in 0..n_size {
-            tmp += inv[inv_base + msi * n_size + msj] * vec_a[msj];
-        }
-        bma += vec_b[msi] * tmp;
-    }
+    let bma = two_hop_bilinear_real(inv, inv_base, n_size, vec_a, vec_b);
     inv_ab * vec_ba + inv_ab * bma + p_a * q_b - p_b * q_a
+}
+
+/// Julia LoopVectorization's AVX2 reduction: four inner lanes and six outer
+/// accumulators. Keep this tree explicit; a scalar fold or blanket FMA changes
+/// Green ratios and eventually the SR-CG gradient even with identical samples.
+fn two_hop_bilinear_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    let mut outer = [0.0_f64; 6];
+    for i in 0..n {
+        let mut inner = [0.0_f64; 4];
+        for j in 0..n {
+            let lane = j % 4;
+            inner[lane] = inv[base + i * n + j].mul_add(a[j], inner[lane]);
+        }
+        let dot = (inner[0] + inner[2]) + (inner[1] + inner[3]);
+        let lane = i % 6;
+        outer[lane] = b[i].mul_add(dot, outer[lane]);
+    }
+    (outer[4] + (outer[0] + outer[2])) + (outer[5] + (outer[3] + outer[1]))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_hop_bilinear_matches_julia_vectorized_reduction_bits() {
+        let fixture = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");
+        let mut lines = fixture
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'));
+        while let Some(line) = lines.next() {
+            let n: usize = line.parse().unwrap();
+            let values: Vec<f64> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect();
+            assert_eq!(values.len(), 1 + n * n + 2 * n);
+            let actual = two_hop_bilinear_real(
+                &values[1..1 + n * n],
+                0,
+                n,
+                &values[1 + n * n..1 + n * n + n],
+                &values[1 + n * n + n..],
+            );
+            assert_eq!(actual.to_bits(), values[0].to_bits(), "size {n}");
+        }
+    }
 
     #[test]
     fn real_normal_smoke() {

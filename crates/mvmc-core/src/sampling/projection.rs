@@ -40,8 +40,8 @@ pub fn init_loc_spn(loc_spn: &mut [i64], data: &ExpertModeData) {
 pub fn make_proj_cnt(proj_cnt: &mut [i64], ele_num: &[i64], data: &ExpertModeData) {
     let n_site = data.modpara.nsite as usize;
     let n_proj = proj_cnt.len();
-    let n_gutz = data.n_gutzwiller_idx as usize;
-    let n_jast = data.n_jastrow_idx as usize;
+    let n_gutz = data.projection_layout().n_gutzwiller;
+    let n_jast = data.projection_layout().n_jastrow;
     let gutz_idx = data.gutzwiller_idx.as_slice();
     let jastrow_idx = &data.jastrow_idx;
 
@@ -146,7 +146,7 @@ pub fn update_proj_cnt(
 ) {
     let n_site = data.modpara.nsite as usize;
     let n_proj = proj_cnt_new.len();
-    let n_gutz = data.n_gutzwiller_idx as usize;
+    let n_gutz = data.projection_layout().n_gutzwiller;
     let gutz_idx = data.gutzwiller_idx.as_slice();
     let jastrow_idx = &data.jastrow_idx;
 
@@ -251,21 +251,8 @@ pub fn update_proj_cnt(
 /// over the Gutzwiller + Jastrow blocks. Mirrors upstream.
 pub fn log_proj_val(proj_cnt: &[i64], data: &ExpertModeData) -> f64 {
     let mut z = 0.0_f64;
-    let n_proj = proj_cnt.len();
-    let mut idx = 0usize;
-    for term in &data.gutzwiller_terms {
-        if idx >= n_proj {
-            break;
-        }
-        z += term.value.re * proj_cnt[idx] as f64;
-        idx += 1;
-    }
-    for term in &data.jastrow_terms {
-        if idx >= n_proj {
-            break;
-        }
-        z += term.value.re * proj_cnt[idx] as f64;
-        idx += 1;
+    for (value, &count) in data.projection_parameters().iter().zip(proj_cnt) {
+        z += value.re * count as f64;
     }
     z
 }
@@ -273,22 +260,14 @@ pub fn log_proj_val(proj_cnt: &[i64], data: &ExpertModeData) -> f64 {
 /// `log_proj_ratio(new, old, data)` -- sum of
 /// `Re(Proj[idx]) * (new[idx] - old[idx])`.
 pub fn log_proj_ratio(proj_cnt_new: &[i64], proj_cnt_old: &[i64], data: &ExpertModeData) -> f64 {
-    let n = proj_cnt_new.len().min(proj_cnt_old.len());
     let mut z = 0.0_f64;
-    let mut idx = 0usize;
-    for term in &data.gutzwiller_terms {
-        if idx >= n {
-            break;
-        }
-        z += term.value.re * (proj_cnt_new[idx] - proj_cnt_old[idx]) as f64;
-        idx += 1;
-    }
-    for term in &data.jastrow_terms {
-        if idx >= n {
-            break;
-        }
-        z += term.value.re * (proj_cnt_new[idx] - proj_cnt_old[idx]) as f64;
-        idx += 1;
+    for ((value, &new), &old) in data
+        .projection_parameters()
+        .iter()
+        .zip(proj_cnt_new)
+        .zip(proj_cnt_old)
+    {
+        z += value.re * (new - old) as f64;
     }
     z
 }
@@ -446,6 +425,18 @@ mod tests {
         let proj_cnt_old = vec![0_i64; 2];
         let ratio = log_proj_ratio(&proj_cnt, &proj_cnt_old, &data);
         assert!((ratio - val).abs() < 1e-15);
+    }
+
+    #[test]
+    fn sparse_projection_values_use_declared_offsets() {
+        let mut data = small_data();
+        data.n_gutzwiller_idx = 3;
+        data.n_jastrow_idx = 4;
+        data.gutzwiller_terms[0].value.re = 1.0;
+        data.jastrow_terms[0].value.re = 2.0;
+        let counts = [1, 9, 9, 2, 9, 9, 9];
+        assert_eq!(log_proj_val(&counts, &data), 5.0);
+        assert_eq!(log_proj_ratio(&counts, &[0; 7], &data), 5.0);
     }
 
     #[test]

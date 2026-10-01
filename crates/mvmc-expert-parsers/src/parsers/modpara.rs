@@ -63,10 +63,12 @@ fn apply_param(p: &mut ModParaParameters, name: &str, value: &str) {
         "DSROptRedCut" => p.dsr_opt_red_cut = safe_parse_float(value, 1e-6),
         "DSROptStaDel" => p.dsr_opt_sta_del = safe_parse_float(value, 0.0),
         "DSROptStepDt" => p.dsr_opt_step_dt = safe_parse_float(value, 0.01),
-        "DSROptCGTol" => p.dsr_opt_cg_tol = safe_parse_float(value, 1e-6),
-        "NSROptCGMaxIter" => p.nsr_opt_cg_max_iter = safe_parse_int(value, 1000),
+        "DSROptCGTol" => p.dsr_opt_cg_tol = safe_parse_float(value, 1e-10),
+        "NSROptCGMaxIter" => p.nsr_opt_cg_max_iter = safe_parse_int(value, 0),
         // SR solver selection
         "NSRCG" => p.nsrcg = safe_parse_int(value, 0),
+        "useDiagScale" => p.use_diag_scale = safe_parse_int(value, 0),
+        "RescaleSmat" => p.rescale_smat = safe_parse_int(value, 0),
         "NStore" => p.nstore_o = safe_parse_int(value, 1),
         // RNG
         "RndSeed" => p.rnd_seed = safe_parse_int(value, 11272),

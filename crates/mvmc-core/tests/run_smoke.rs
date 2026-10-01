@@ -33,8 +33,16 @@ fn heisenberg_chain_real_runs_one_sr_step() {
 
     let tmp = tempdir_in_target();
     let out_dir = tmp.join("out");
-    let summary = mvmc_core::run_para_opt_from_namelist(&namelist, 1, Some(1), Some(&out_dir))
-        .expect("run completes");
+    let summary = mvmc_core::run_para_opt_from_namelist(
+        &namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(1),
+            seed: Some(1),
+            output_dir: Some(out_dir.clone()),
+            ..mvmc_core::RunConfig::new(1, "real")
+        },
+    )
+    .expect("run completes");
     let zvo = out_dir.join("zvo_out.dat");
     let content = fs::read_to_string(&zvo).expect("zvo_out.dat written");
     let line = content.lines().next().expect("at least one line");
@@ -44,7 +52,7 @@ fn heisenberg_chain_real_runs_one_sr_step() {
         .expect("first column present");
     let energy: f64 = first_token.parse().expect("energy column is f64");
     assert!(energy.is_finite(), "energy must be finite, got {energy}");
-    assert_eq!(summary.nsteps, 1);
+    assert_eq!(summary.effective_nsteps, 1);
 }
 
 fn tempdir_in_target() -> PathBuf {

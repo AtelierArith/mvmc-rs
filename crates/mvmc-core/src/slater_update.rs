@@ -17,6 +17,7 @@ use crate::state::VmcOptimizationState;
 /// `qptransidx.def` translation maps. `QPOptTrans` is identity in the
 /// v0.1 fixtures (`n_qp_opt_trans == 1`).
 pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
+    data.normalize_projection_count();
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
     let weights = match data.qp_weights.as_ref() {
@@ -66,8 +67,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri >= n_site {
                 continue;
@@ -79,8 +79,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj >= n_site {
                     continue;
@@ -143,6 +142,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
 /// apply spin projection (`NSPGaussLeg` is treated as 1). QP translation is
 /// applied to the site index and the spin offset is kept explicit.
 pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
+    data.normalize_projection_count();
     let n_site = data.modpara.nsite.max(0) as usize;
     if n_site == 0 {
         return;
@@ -165,8 +165,7 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
                 .copied()
                 .unwrap_or(ori as i64) as usize;
             let sgni = trans
-                .and_then(|t| t.site_sign.get(ori))
-                .copied()
+                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
                 .unwrap_or(1);
             if tri >= n_site {
                 continue;
@@ -178,8 +177,7 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
                     .copied()
                     .unwrap_or(orj as i64) as usize;
                 let sgnj = trans
-                    .and_then(|t| t.site_sign.get(orj))
-                    .copied()
+                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
                     .unwrap_or(1);
                 if trj >= n_site {
                     continue;
@@ -220,72 +218,139 @@ pub(crate) fn build_orbital_idx_sgn_matrices_fsz(
     data: &ExpertModeData,
     n_site: usize,
 ) -> (Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<Complex64>) {
-    let n_site2 = 2 * n_site;
-    let mut orbital_idx = vec![vec![-1_i64; n_site2]; n_site2];
-    let mut orbital_sgn = vec![vec![0_i64; n_site2]; n_site2];
-    let max_idx = data.orbital_terms.iter().map(|t| t.idx).max().unwrap_or(0);
-    let mut slater = vec![Complex64::new(0.0, 0.0); (max_idx + 1).max(1) as usize];
-
+    debug_assert_eq!(n_site, data.modpara.nsite.max(0) as usize);
+    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    let mut slater = vec![Complex64::new(0.0, 0.0); n_slater];
     for term in &data.orbital_terms {
         if term.idx >= 0 && (term.idx as usize) < slater.len() {
             slater[term.idx as usize] = term.value;
         }
     }
+    (orbital_idx, orbital_sgn, slater)
+}
 
-    let n_anti_parallel =
-        if data.i_flg_orbital_anti_parallel == 1 && data.i_flg_orbital_parallel == 1 {
-            let mut pair_min = i64::MAX;
-            for (i, lhs) in data.orbital_terms.iter().enumerate() {
-                for rhs in data.orbital_terms.iter().skip(i + 1) {
-                    if lhs.site1 == rhs.site1
-                        && lhs.site2 == rhs.site2
-                        && lhs.sign == rhs.sign
-                        && (lhs.idx - rhs.idx).abs() == 1
-                    {
-                        pair_min = pair_min.min(lhs.idx.min(rhs.idx));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mvmc_expert_parsers::OrbitalTerm;
+
+    #[test]
+    fn pure_general_spin_site_indices_and_sparse_signs_match_julia() {
+        for nmp in [1, -1] {
+            let mut data = ExpertModeData::new();
+            data.modpara.nsite = 2;
+            data.modpara.nmp_trans = nmp;
+            data.i_flg_orbital_general = 1;
+            data.modpara.n_orbital_idx = 2;
+            data.orbital_terms = vec![OrbitalTerm {
+                site1: 2,
+                site2: 3,
+                idx: 1,
+                value: Complex64::new(0.3, 0.2),
+                is_complex: true,
+                sign: -1,
+            }];
+            let (indices, signs, values) = build_orbital_idx_sgn_matrices_fsz(&data, 2);
+            assert_eq!(indices[2][3], 1);
+            assert_eq!(indices[3][2], 1);
+            assert_eq!(indices[0][3], 0);
+            assert_eq!(values[1], Complex64::new(0.3, 0.2));
+            if nmp > 0 {
+                for (i, row) in signs.iter().enumerate() {
+                    for (j, &sign) in row.iter().enumerate() {
+                        assert_eq!(sign, (j as i64 - i as i64).signum());
                     }
                 }
-            }
-            if pair_min == i64::MAX {
-                (n_site * n_site) as i64
             } else {
-                pair_min
+                assert_eq!(signs[2][3], -1);
+                assert_eq!(signs[3][2], 1);
+                assert_eq!(signs[0][3], 0);
             }
-        } else {
-            0
-        };
-
-    for term in &data.orbital_terms {
-        if term.site1 < 0 || term.site2 < 0 {
-            continue;
-        }
-        let site1 = term.site1 as usize;
-        let site2 = term.site2 as usize;
-        if site1 >= n_site || site2 >= n_site {
-            continue;
-        }
-        if data.i_flg_orbital_anti_parallel == 1 && term.idx < n_anti_parallel {
-            let all_i = site1;
-            let all_j = site2 + n_site;
-            orbital_idx[all_i][all_j] = term.idx;
-            orbital_sgn[all_i][all_j] = term.sign;
-            orbital_idx[all_j][all_i] = term.idx;
-            orbital_sgn[all_j][all_i] = -term.sign;
-        } else {
-            let rel_idx = term.idx - n_anti_parallel;
-            let is_down_down = rel_idx % 2 == 1;
-            let (all_i, all_j) = if is_down_down {
-                (site1 + n_site, site2 + n_site)
+            data.modpara.nsp_gauss_leg = 1;
+            data.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
+            mvmc_expert_parsers::utils::qp_weight::init_qp_weight(&mut data);
+            let mut state = VmcOptimizationState::zeros(2, 1, 0, 2, 1, 1, true, true);
+            update_slater_elm_fsz(&mut data, &mut state);
+            // Live Julia v0.5.0: F(2,3)=+/- (0.6+0.4im),
+            // F(3,2)=-F(2,3); every unmapped cell is zero here.
+            let expected = if nmp > 0 {
+                Complex64::new(0.6, 0.4)
             } else {
-                (site1, site2)
+                Complex64::new(-0.6, -0.4)
             };
-            orbital_idx[all_i][all_j] = term.idx;
-            orbital_sgn[all_i][all_j] = term.sign;
-            if all_i != all_j {
-                orbital_idx[all_j][all_i] = term.idx;
-                orbital_sgn[all_j][all_i] = -term.sign;
-            }
+            assert_eq!(state.slater_matrix.slater_elm.get(0, 2, 3), expected);
+            assert_eq!(state.slater_matrix.slater_elm.get(0, 3, 2), -expected);
+            assert_eq!(
+                state.slater_matrix.slater_elm.get(0, 0, 3),
+                Complex64::new(0.0, 0.0)
+            );
         }
     }
-    (orbital_idx, orbital_sgn, slater)
+
+    #[test]
+    fn translation_signs_apply_only_with_antiperiodic_boundaries() {
+        use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
+        use mvmc_expert_parsers::QPTransEntry;
+        for nmp in [1, -1] {
+            let mut data = ExpertModeData::new();
+            data.modpara.nsite = 2;
+            data.modpara.nmp_trans = nmp;
+            data.modpara.nsp_gauss_leg = 1;
+            data.modpara.n_orbital_idx = 1;
+            for i in 0..2 {
+                for j in 0..2 {
+                    data.orbital_terms.push(OrbitalTerm {
+                        site1: i,
+                        site2: j,
+                        idx: 0,
+                        value: Complex64::new(2.0, 0.0),
+                        is_complex: false,
+                        sign: 1,
+                    });
+                }
+            }
+            data.qp_trans_entries.push(QPTransEntry {
+                weight: Complex64::new(1.0, 0.0),
+                site_map: vec![0, 1],
+                site_sign: vec![1, -1],
+            });
+            data.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
+            init_qp_weight(&mut data);
+            let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
+            update_slater_elm(&mut data, &mut state);
+            assert_eq!(
+                state.slater_matrix.slater_elm.get(0, 0, 3),
+                Complex64::new(if nmp > 0 { 2.0 } else { -2.0 }, 0.0)
+            );
+        }
+    }
+
+    #[test]
+    fn fsz_uses_explicit_ap_boundary_even_with_adjacent_duplicate_mappings() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.n_orbital_anti_parallel = 7;
+        data.modpara.n_orbital_idx = 13;
+        data.i_flg_orbital_anti_parallel = 1;
+        data.i_flg_orbital_parallel = 1;
+        data.i_flg_orbital_general = 1;
+        data.orbital_terms = [0, 1, 7, 8]
+            .into_iter()
+            .map(|idx| OrbitalTerm {
+                site1: 0,
+                site2: 1,
+                idx,
+                value: Complex64::new(idx as f64, 0.0),
+                is_complex: true,
+                sign: 1,
+            })
+            .collect();
+        let (indices, signs, _) = build_orbital_idx_sgn_matrices_fsz(&data, 2);
+        assert_eq!(indices[0][3], 1);
+        assert_eq!(indices[3][0], 1);
+        assert_eq!(signs[3][0], -1);
+        assert_eq!(indices[0][1], 7);
+        assert_eq!(indices[2][3], 8);
+    }
 }

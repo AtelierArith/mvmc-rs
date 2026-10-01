@@ -14,8 +14,11 @@
 #![warn(missing_docs)]
 
 pub mod average;
+pub mod c_timer;
 pub mod counter;
+pub mod initial_params;
 pub mod io;
+pub use pfapack::julia_complex;
 pub mod observables;
 pub mod pfaffian;
 pub mod qp;
@@ -25,14 +28,18 @@ pub mod sampling;
 mod slater_derivative;
 pub mod slater_update;
 pub mod sr;
+pub mod sr_cg;
 pub mod state;
 pub mod sync;
+pub mod validation;
 
+pub use initial_params::{read_initial_def, read_opt_para_file};
 pub use mvmc_expert_parsers::ExpertModeData;
 pub use pfaffian::{calc_m_all_complex, calc_m_all_real, CalcMAllError};
 pub use reducer::{Reducer, SingleProcessReducer};
 pub use run::{
-    read_initial_def, run_para_opt_from_namelist, vmc_para_opt, RunSummary, FALLBACK_SEED,
+    get_all_complex_flag, run_para_opt_from_namelist, vmc_para_opt, vmc_para_opt_timed, InitialDef,
+    OptimizationOptions, RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
 };
 pub use sampling::driver::{vmc_make_sample, vmc_make_sample_real, SampleStats};
 pub use state::{

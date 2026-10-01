@@ -12,7 +12,30 @@ use std::path::{Path, PathBuf};
 
 use mvmc_expert_parsers::ExpertModeData;
 
-use crate::state::VmcOptimizationState;
+use crate::state::{OptDataPoint, VmcOptimizationState};
+
+/// Store a synchronized parameter snapshot with the just-measured energy.
+/// Preserves Julia's Gutzwiller/Jastrow/orbital term order, including repeated
+/// orbital mappings. Gaps in the zero-based sample index are empty snapshots.
+pub fn store_opt_data(data: &ExpertModeData, state: &mut VmcOptimizationState, sample_idx: usize) {
+    let parameters = data
+        .gutzwiller_terms
+        .iter()
+        .map(|term| term.value)
+        .chain(data.jastrow_terms.iter().map(|term| term.value))
+        .chain(data.orbital_terms.iter().map(|term| term.value))
+        .collect();
+    if state.opt_data.len() <= sample_idx {
+        state.opt_data.resize_with(sample_idx + 1, || OptDataPoint {
+            energy: num_complex::Complex64::new(0.0, 0.0),
+            parameters: Vec::new(),
+        });
+    }
+    state.opt_data[sample_idx] = OptDataPoint {
+        energy: state.energy.etot,
+        parameters,
+    };
+}
 
 /// Format a `f64` the way C’s `"% .18e"` does (sign-or-space
 /// followed by a normalised mantissa with 18 fractional digits).
@@ -171,6 +194,55 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
             format_c_double(term.value.im)
         )?;
     }
+    drop(f);
+    output_parameter_block(
+        &head,
+        "gutzwiller",
+        "NGutzwillerIdx",
+        data.gutzwiller_terms.iter().map(|term| term.value),
+        output_dir,
+    )?;
+    output_parameter_block(
+        &head,
+        "jastrow",
+        "NJastrowIdx",
+        data.jastrow_terms.iter().map(|term| term.value),
+        output_dir,
+    )?;
+    output_parameter_block(
+        &head,
+        "orbital",
+        "NOrbitalIdx",
+        data.orbital_terms.iter().map(|term| term.value),
+        output_dir,
+    )?;
+    Ok(())
+}
+
+fn output_parameter_block(
+    head: &str,
+    suffix: &str,
+    label: &str,
+    values: impl ExactSizeIterator<Item = num_complex::Complex64>,
+    output_dir: Option<&Path>,
+) -> io::Result<()> {
+    if values.len() == 0 {
+        return Ok(());
+    }
+    let path = output_path(&format!("{head}_{suffix}_opt.dat"), output_dir)?;
+    let mut file = File::create(path)?;
+    writeln!(file, "===============================")?;
+    writeln!(file, "{label} {}", values.len())?;
+    writeln!(file, "===============================")?;
+    writeln!(file, "===============================")?;
+    for (index, value) in values.enumerate() {
+        writeln!(
+            file,
+            "{index} {} {} ",
+            format_c_double(value.re),
+            format_c_double(value.im)
+        )?;
+    }
     Ok(())
 }
 
@@ -191,5 +263,59 @@ mod tests {
         assert_eq!(format_c_double(1.5), " 1.500000000000000000e+00");
         assert_eq!(format_c_double(-2.0), "-2.000000000000000000e+00");
         assert_eq!(format_c_double(0.0), " 0.000000000000000000e+00");
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
+    use num_complex::Complex64;
+
+    #[test]
+    fn history_keeps_mapping_order_shared_entries_and_owned_snapshots() {
+        let mut data = ExpertModeData::new();
+        data.gutzwiller_terms.push(GutzwillerTerm {
+            site: 0,
+            value: Complex64::new(1.0, 2.0),
+            is_complex: true,
+        });
+        data.jastrow_terms.push(JastrowTerm {
+            site1: 0,
+            site2: 1,
+            value: Complex64::new(3.0, 4.0),
+            is_complex: true,
+        });
+        for idx in [1, 0, 1] {
+            data.orbital_terms.push(OrbitalTerm {
+                site1: 0,
+                site2: 1,
+                idx,
+                value: Complex64::new(idx as f64 + 5.0, 0.0),
+                is_complex: true,
+                sign: 1,
+            });
+        }
+        let mut state = VmcOptimizationState::zeros(2, 1, 2, 4, 1, 1, true, false);
+        state.energy.etot = Complex64::new(-1.0, 0.25);
+        store_opt_data(&data, &mut state, 2);
+        assert_eq!(state.opt_data.len(), 3);
+        assert!(state.opt_data[0].parameters.is_empty());
+        assert_eq!(state.opt_data[0].energy, Complex64::new(0.0, 0.0));
+        assert_eq!(state.opt_data[2].energy, state.energy.etot);
+        let expected = vec![
+            Complex64::new(1.0, 2.0),
+            Complex64::new(3.0, 4.0),
+            Complex64::new(6.0, 0.0),
+            Complex64::new(5.0, 0.0),
+            Complex64::new(6.0, 0.0),
+        ];
+        assert_eq!(state.opt_data[2].parameters, expected);
+        data.orbital_terms[0].value = Complex64::new(9.0, 0.0);
+        store_opt_data(&data, &mut state, 3);
+        assert_eq!(state.opt_data[2].parameters, expected);
+        assert_eq!(state.opt_data[3].parameters[2], Complex64::new(9.0, 0.0));
+        store_opt_data(&data, &mut state, 0);
+        assert_eq!(state.opt_data.len(), 4);
     }
 }
