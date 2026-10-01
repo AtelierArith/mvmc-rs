@@ -16,7 +16,7 @@
 use mvmc_expert_parsers::ExpertModeData;
 use sfmt19937::Sfmt19937Rng;
 
-use crate::pfaffian::{calc_m_all_fsz_real, CalcMAllError};
+use crate::pfaffian::{calc_m_all_fsz_complex, calc_m_all_fsz_real, CalcMAllError};
 use crate::sampling::projection::{init_loc_spn, make_proj_cnt};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 
@@ -144,8 +144,8 @@ mod tests {
     }
 }
 
-/// FSZ `make_initial_sample_fsz!` mirror.
-pub fn make_initial_sample_fsz(
+/// The integer configuration-generation stage shared by Julia's FSZ initializers.
+pub fn generate_initial_fsz_configuration(
     ele_idx: &mut [i64],
     ele_cfg: &mut [i64],
     ele_num: &mut [i64],
@@ -218,6 +218,53 @@ pub fn make_initial_sample_fsz(
     Ok(())
 }
 
+/// Julia's complex FSZ initializer, including all 101 Pfaffian-validation attempts.
+/// Failed attempts consume their original SFMT draws and retain the last state.
+pub fn make_initial_sample_fsz(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    qp_start: usize,
+    qp_end: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    let n_site = data.modpara.nsite as usize;
+    let n_elec = data.modpara.nelec as usize;
+    init_loc_spn(&mut state.workspace.loc_spn, data);
+    for attempt in 0..=100 {
+        let c = &mut state.electron_config;
+        generate_initial_fsz_configuration(
+            &mut c.tmp_ele_idx,
+            &mut c.tmp_ele_cfg,
+            &mut c.tmp_ele_num,
+            &mut c.tmp_ele_proj_cnt,
+            &mut c.tmp_ele_spn,
+            data,
+            &state.workspace.loc_spn,
+            rng,
+        )
+        .expect("FSZ configuration generation does not fail");
+        let mat = &mut state.slater_matrix;
+        match calc_m_all_fsz_complex(
+            &c.tmp_ele_idx,
+            &c.tmp_ele_spn,
+            &mat.slater_elm,
+            &mut mat.inv_m,
+            &mut mat.pf_m,
+            qp_start,
+            qp_end,
+            n_site,
+            n_elec,
+            pool,
+        ) {
+            Ok(()) => return Ok(()),
+            Err(error) if attempt == 100 => return Err(error),
+            Err(_) => {}
+        }
+    }
+    unreachable!("the last failed attempt returns its error")
+}
+
 /// Julia's real FSZ initialization, including Pfaffian validation and up to
 /// 101 attempts. Every failed attempt consumes its original SFMT draws;
 /// the last attempted configuration is retained when the limit is reached.
@@ -234,7 +281,7 @@ pub fn make_initial_sample_fsz_real(
     init_loc_spn(&mut state.workspace.loc_spn, data);
     for attempt in 0..=100 {
         let c = &mut state.electron_config;
-        make_initial_sample_fsz(
+        generate_initial_fsz_configuration(
             &mut c.tmp_ele_idx,
             &mut c.tmp_ele_cfg,
             &mut c.tmp_ele_num,

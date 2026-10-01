@@ -832,7 +832,7 @@ fn update_one_complex(
     }
     let tmp = vec1[msa];
     *pf *= -tmp;
-    let inv_vec1_a = -Complex64::new(1.0, 0.0) / tmp;
+    let inv_vec1_a = crate::julia_complex::divide(-Complex64::new(1.0, 0.0), tmp);
     for msi in 0..n_size {
         vec2[msi] = inv[base + msa * n_size + msi] * inv_vec1_a;
     }

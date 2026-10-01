@@ -362,6 +362,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     if n == 0 {
         return Ok(());
     }
+    crate::serial_blas::initialize();
     let n_i32 = n as i32;
     let lda = n_i32;
     let mut info = 0_i32;
@@ -404,9 +405,16 @@ mod tests {
     #[test]
     fn sampled_direct_sr_matrix_gradient_factor_and_solution_match_julia() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        for (case, store) in ["real", "cmp", "fsz", "hubbard"]
-            .into_iter()
-            .flat_map(|case| [(case, 0), (case, 1)])
+        for (case, store) in [
+            "real",
+            "cmp",
+            "fsz",
+            "hubbard",
+            "pairhop_real",
+            "pairhop_fsz",
+        ]
+        .into_iter()
+        .flat_map(|case| [(case, 0), (case, 1)])
         {
             let suffix = if store == 0 {
                 "_runner"
@@ -436,7 +444,7 @@ mod tests {
                     .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                     .collect()
             };
-            let complex = matches!(case, "cmp" | "fsz");
+            let complex = matches!(case, "cmp" | "fsz" | "pairhop_fsz");
             let mut state = VmcOptimizationState::zeros(1, 1, 0, size - 1, 1, 1, complex, false);
             let oo = read(lines.next().unwrap());
             let ho = read(lines.next().unwrap());
@@ -459,12 +467,14 @@ mod tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let data = mvmc_expert_parsers::parse_expert_mode_files(
+            let namelist = if case.starts_with("pairhop_") {
+                root.join(format!("extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def"))
+            } else {
                 root.join("extern/Julia-mVMC/examples/inputs")
                     .join(name)
-                    .join("namelist.def"),
-            )
-            .unwrap();
+                    .join("namelist.def")
+            };
+            let data = mvmc_expert_parsers::parse_expert_mode_files(namelist).unwrap();
             let mut s = vec![0.0; n * n];
             let mut g = vec![0.0; n];
             let build = if complex {
@@ -481,28 +491,17 @@ mod tests {
                 data.modpara.dsr_opt_sta_del,
                 data.modpara.dsr_opt_step_dt,
             );
-            let bits = |values: &[f64]| values.iter().map(|v| v.to_bits()).collect::<Vec<_>>();
-            assert_eq!(
-                bits(&s),
-                bits(&read(lines.next().unwrap())),
-                "{case} matrix"
-            );
-            assert_eq!(
-                bits(&g),
-                bits(&read(lines.next().unwrap())),
-                "{case} gradient"
-            );
+            let exact = |label: &str, actual: &[f64], expected: &[f64]| {
+                assert_eq!(actual.len(), expected.len());
+                for (i, (a, e)) in actual.iter().zip(expected).enumerate() {
+                    assert_eq!(a.to_bits(), e.to_bits(), "{case} {label}[{i}]: {a} vs {e}");
+                }
+            };
+            exact("matrix", &s, &read(lines.next().unwrap()));
+            exact("gradient", &g, &read(lines.next().unwrap()));
             cholesky_solve(&mut s, &mut g, n).unwrap();
-            assert_eq!(
-                bits(&s),
-                bits(&read(lines.next().unwrap())),
-                "{case} factor"
-            );
-            assert_eq!(
-                bits(&g),
-                bits(&read(lines.next().unwrap())),
-                "{case} solution"
-            );
+            exact("factor", &s, &read(lines.next().unwrap()));
+            exact("solution", &g, &read(lines.next().unwrap()));
         }
     }
 

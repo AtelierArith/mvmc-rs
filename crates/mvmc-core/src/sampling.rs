@@ -44,8 +44,8 @@ pub use candidate::{
 pub use driver::{vmc_make_sample, vmc_make_sample_fsz, vmc_make_sample_real, SampleStats};
 pub use fsz_real::vmc_make_sample_fsz_real;
 pub use initial::{
-    make_initial_sample, make_initial_sample_fsz, make_initial_sample_fsz_real,
-    make_initial_sample_init_loc_spn,
+    generate_initial_fsz_configuration, make_initial_sample, make_initial_sample_fsz,
+    make_initial_sample_fsz_real, make_initial_sample_init_loc_spn,
 };
 pub use metropolis::{metropolis_decision, metropolis_weight, MetropolisDecision};
 pub use one_move::{

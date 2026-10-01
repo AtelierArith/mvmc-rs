@@ -300,6 +300,7 @@ impl SampledSrOperator {
         if self.samples == 0 {
             z.fill(0.0);
         } else {
+            crate::serial_blas::initialize();
             let rows = i32::try_from(n).expect("CG component count must fit BLAS LP64");
             let cols = i32::try_from(self.samples).expect("CG sample count must fit BLAS LP64");
             // SAFETY: matrix buffers have exactly rows*cols entries, leading

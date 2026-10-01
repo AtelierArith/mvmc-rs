@@ -1514,6 +1514,35 @@ mod callback_tests {
     }
 
     #[test]
+    fn pairhop_real_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng() {
+        for case in ["pairhop_real", "pairhop_fsz"] {
+            check_sr_prefixes(case, true, 0);
+        }
+    }
+
+    #[test]
+    fn pairhop_real_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng() {
+        for case in ["pairhop_real", "pairhop_fsz"] {
+            for store in [0, 1] {
+                check_sr_prefixes(case, false, store);
+            }
+        }
+    }
+
+    #[test]
+    fn pairhop_real_and_fsz_initial_flags_parameters_and_rng_match_julia() {
+        for case in ["pairhop_real", "pairhop_fsz"] {
+            let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def"));
+            let (data, _, mut rng) = prepared_namelist(1, &input);
+            assert_eq!(data.pair_hop_terms.len(), 2);
+            assert_eq!(get_all_complex_flag(&data), case == "pairhop_fsz");
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../../tests/fixtures/sr_cg/{case}_runner"));
+            check_initial_boundary(&data, &mut rng, &root);
+        }
+    }
+
+    #[test]
     fn interall_fsz_direct_prefixes_match_julia_parameters_spins_samples_energy_and_rng() {
         for store in [0, 1] {
             check_sr_prefixes("interall", false, store);
@@ -1529,6 +1558,14 @@ mod callback_tests {
         assert!(get_all_complex_flag(&data));
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/sr_cg/interall_runner");
+        check_initial_boundary(&data, &mut rng, &root);
+    }
+
+    fn check_initial_boundary(
+        data: &ExpertModeData,
+        rng: &mut sfmt19937::Sfmt19937Rng,
+        root: &Path,
+    ) {
         let flags: Vec<bool> = fs::read_to_string(root.join("initial-flags.txt"))
             .unwrap()
             .split_whitespace()
@@ -1628,7 +1665,12 @@ mod callback_tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let (mut data, mut state, mut rng) = if case == "interall" {
+            let (mut data, mut state, mut rng) = if case.starts_with("pairhop_") {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def")),
+                )
+            } else if case == "interall" {
                 prepared_namelist(
                     steps,
                     &Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1698,7 +1740,7 @@ mod callback_tests {
                     .collect();
                 assert_eq!(actual, &expected, "step {steps} {name}");
             }
-            if case == "interall" {
+            if matches!(case, "interall" | "pairhop_fsz") {
                 for (name, actual) in [
                     ("spins", &state.electron_config.ele_spn),
                     ("burn", &state.electron_config.burn_ele_idx),
