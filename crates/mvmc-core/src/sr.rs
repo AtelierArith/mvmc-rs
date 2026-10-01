@@ -336,10 +336,17 @@ pub(crate) fn update_parameter_value(
         if jastrow_idx < data.jastrow_terms.len() {
             data.jastrow_terms[jastrow_idx].value += delta;
         }
-    } else if para_idx < n_proj {
+    } else if para_idx < layout.dh4_offset {
         if let Some(value) = data
             .doublon_holon_2site_params
             .get_mut(para_idx - layout.dh2_offset)
+        {
+            *value += delta;
+        }
+    } else if para_idx < n_proj {
+        if let Some(value) = data
+            .doublon_holon_4site_params
+            .get_mut(para_idx - layout.dh4_offset)
         {
             *value += delta;
         }
@@ -423,6 +430,12 @@ mod tests {
             "dh2_real",
             "dh2_cmp",
             "dh2_fsz",
+            "dh4_real",
+            "dh4_cmp",
+            "dh4_fsz",
+            "dh24_real",
+            "dh24_cmp",
+            "dh24_fsz",
         ]
         .into_iter()
         .flat_map(|case| [(case, 0), (case, 1)])
@@ -455,7 +468,18 @@ mod tests {
                     .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                     .collect()
             };
-            let complex = matches!(case, "cmp" | "fsz" | "pairhop_fsz" | "dh2_cmp" | "dh2_fsz");
+            let complex = matches!(
+                case,
+                "cmp"
+                    | "fsz"
+                    | "pairhop_fsz"
+                    | "dh2_cmp"
+                    | "dh2_fsz"
+                    | "dh4_cmp"
+                    | "dh4_fsz"
+                    | "dh24_cmp"
+                    | "dh24_fsz"
+            );
             let mut state = VmcOptimizationState::zeros(1, 1, 0, size - 1, 1, 1, complex, false);
             let oo = read(lines.next().unwrap());
             let ho = read(lines.next().unwrap());
@@ -480,6 +504,8 @@ mod tests {
             };
             let namelist = if let Some(mode) = case.strip_prefix("dh2_") {
                 root.join(format!("tests/fixtures/dh2/production_{mode}/namelist.def"))
+            } else if case.starts_with("dh4_") || case.starts_with("dh24_") {
+                root.join(format!("tests/fixtures/dh4/production_{case}/namelist.def"))
             } else if case.starts_with("pairhop_") {
                 root.join(format!("extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def"))
             } else {

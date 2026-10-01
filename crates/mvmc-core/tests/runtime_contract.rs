@@ -47,8 +47,6 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in [
         "InterAll",
-        "DH4",
-        "DoublonHolon4Site",
         "OptTrans",
         "TwoBodyGEx",
         "SpinJastrow",

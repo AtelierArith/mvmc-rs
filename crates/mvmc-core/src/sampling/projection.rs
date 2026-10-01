@@ -23,7 +23,7 @@ fn recompute_dh_counts(
     data: &ExpertModeData,
     layout: ProjectionLayout,
 ) {
-    if layout.n_dh2 == 0 {
+    if layout.n_dh2 == 0 && layout.n_dh4 == 0 {
         return;
     }
     let stop = layout.n_proj.min(proj_cnt.len());
@@ -53,6 +53,28 @@ fn recompute_dh_counts(
             }
         }
     }
+    for (definition, table) in data.doublon_holon_4site_indices.iter().enumerate() {
+        for site in 0..n_site {
+            let occupation = ele_num[site] + ele_num[n_site + site];
+            if occupation == 1 {
+                continue;
+            }
+            let class = occupation / 2;
+            let wanted = if class == 0 { 1 } else { 0 };
+            let opposite = table.neighbors[site]
+                .iter()
+                .filter(|&&neighbor| {
+                    let neighbor = neighbor as usize;
+                    ele_num[neighbor] == wanted && ele_num[n_site + neighbor] == wanted
+                })
+                .count();
+            let index =
+                layout.dh4_offset + definition + (class as usize + 2 * opposite) * layout.n_dh4;
+            if index < proj_cnt.len() {
+                proj_cnt[index] += 1;
+            }
+        }
+    }
 }
 
 /// Initialise `loc_spn[ri] = 1` for sites flagged as local-spin in
@@ -74,7 +96,7 @@ pub fn init_loc_spn(loc_spn: &mut [i64], data: &ExpertModeData) {
 /// Layout (mirrors upstream):
 /// * `proj_cnt` is indexed by the projection-parameter index, with the
 ///   Gutzwiller block first (`n_gutzwiller_idx` slots) followed by the
-///   Jastrow block (`n_jastrow_idx` slots), then six bins per DH2 table.
+///   Jastrow block (`n_jastrow_idx` slots), then six components per DH2 table and ten per DH4 table.
 /// * `ele_num` has length `2 * n_site`: `[ele_num[0..n_site]]` is the
 ///   up-spin occupancy and `[ele_num[n_site..2*n_site]]` is down.
 pub fn make_proj_cnt(proj_cnt: &mut [i64], ele_num: &[i64], data: &ExpertModeData) {

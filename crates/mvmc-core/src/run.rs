@@ -1175,7 +1175,9 @@ mod callback_tests {
         data.modpara.nsr_opt_itr_smp = steps;
         let mut rng = Sfmt19937Rng::new(1);
         init_parameter(&mut data, &mut rng);
-        if !data.doublon_holon_2site_indices.is_empty() {
+        if !data.doublon_holon_2site_indices.is_empty()
+            || !data.doublon_holon_4site_indices.is_empty()
+        {
             read_input_parameters(&mut data, path).unwrap();
         }
         sync_modified_parameter(&mut data, true);
@@ -1608,6 +1610,123 @@ mod callback_tests {
     }
 
     #[test]
+    fn dh4_and_dh24_loaded_flags_parameters_rng_and_post_sync_history_match_original_source() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh4");
+        let bits = |text: &str| -> Vec<u64> {
+            text.split_whitespace()
+                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .collect()
+        };
+        let serialize = |values: Vec<Complex64>| -> Vec<u64> {
+            values
+                .iter()
+                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+                .collect()
+        };
+        for mode in [
+            "dh4_real",
+            "dh4_cmp",
+            "dh4_fsz",
+            "dh24_real",
+            "dh24_cmp",
+            "dh24_fsz",
+        ] {
+            let (mut data, mut state, mut rng) =
+                prepared_namelist(3, &root.join(format!("production_{mode}/namelist.def")));
+            let input = fs::read_to_string(root.join(format!("loaded-{mode}.txt"))).unwrap();
+            let mut lines = input.lines().skip(1);
+            assert_eq!(
+                data.optimization_flags,
+                lines
+                    .next()
+                    .unwrap()
+                    .split_whitespace()
+                    .map(|s| s == "1")
+                    .collect::<Vec<_>>()
+            );
+            let values = data
+                .projection_parameters()
+                .into_iter()
+                .chain(data.orbital_terms.iter().map(|t| t.value))
+                .collect();
+            assert_eq!(
+                serialize(values),
+                bits(lines.next().unwrap()),
+                "{mode} loaded values"
+            );
+            let mut probe = rng.clone();
+            assert_eq!(
+                (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
+                lines
+                    .next()
+                    .unwrap()
+                    .split_whitespace()
+                    .map(|s| s.parse::<u32>().unwrap())
+                    .collect::<Vec<_>>(),
+                "{mode} loaded RNG"
+            );
+            assert!(lines.next().is_none());
+            let dir = fresh_output_directory().unwrap();
+            vmc_para_opt(
+                &mut data,
+                &mut state,
+                &mut rng,
+                Some(&dir),
+                &SingleProcessReducer,
+                OptimizationOptions::default(),
+            )
+            .unwrap();
+            let text = fs::read_to_string(root.join(format!("history-{mode}.txt"))).unwrap();
+            let mut lines = text.lines().skip(1);
+            assert_eq!(state.opt_data.len(), 3);
+            for point in &state.opt_data {
+                assert_eq!(
+                    serialize(vec![point.energy]),
+                    bits(lines.next().unwrap()),
+                    "{mode} history energy"
+                );
+                assert_eq!(
+                    serialize(point.parameters.clone()),
+                    bits(lines.next().unwrap()),
+                    "{mode} history values"
+                );
+            }
+            assert!(lines.next().is_none());
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn dh4_and_dh24_real_complex_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng() {
+        for case in [
+            "dh4_real",
+            "dh4_cmp",
+            "dh4_fsz",
+            "dh24_real",
+            "dh24_cmp",
+            "dh24_fsz",
+        ] {
+            check_sr_prefixes(case, true, 0);
+        }
+    }
+    #[test]
+    fn dh4_real_complex_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng() {
+        for case in ["dh4_real", "dh4_cmp", "dh4_fsz"] {
+            for store in 0..=1 {
+                check_sr_prefixes(case, false, store);
+            }
+        }
+    }
+    #[test]
+    fn dh24_real_complex_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng() {
+        for case in ["dh24_real", "dh24_cmp", "dh24_fsz"] {
+            for store in 0..=1 {
+                check_sr_prefixes(case, false, store);
+            }
+        }
+    }
+
+    #[test]
     fn dh2_real_complex_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng() {
         for case in ["dh2_real", "dh2_cmp", "dh2_fsz"] {
             check_sr_prefixes(case, true, 0);
@@ -1782,6 +1901,13 @@ mod callback_tests {
                         "../../tests/fixtures/dh2/production_{mode}/namelist.def"
                     )),
                 )
+            } else if case.starts_with("dh4_") || case.starts_with("dh24_") {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                        "../../tests/fixtures/dh4/production_{case}/namelist.def"
+                    )),
+                )
             } else if case.starts_with("pairhop_") {
                 prepared_namelist(
                     steps,
@@ -1828,6 +1954,7 @@ mod callback_tests {
                 .map(|t| t.value)
                 .chain(data.jastrow_terms.iter().map(|t| t.value))
                 .chain(data.doublon_holon_2site_params.iter().copied())
+                .chain(data.doublon_holon_4site_params.iter().copied())
                 .chain(data.orbital_terms.iter().map(|t| t.value));
             let actual: Vec<u64> = values
                 .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
@@ -1858,7 +1985,10 @@ mod callback_tests {
                     .collect();
                 assert_eq!(actual, &expected, "step {steps} {name}");
             }
-            if matches!(case, "interall" | "pairhop_fsz" | "dh2_fsz") {
+            if matches!(
+                case,
+                "interall" | "pairhop_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz"
+            ) {
                 for (name, actual) in [
                     ("spins", &state.electron_config.ele_spn),
                     ("burn", &state.electron_config.burn_ele_idx),
@@ -1886,7 +2016,7 @@ mod callback_tests {
                     read("SRinfo")
                 );
             }
-            if case.starts_with("dh2_") {
+            if case.starts_with("dh2_") || case.starts_with("dh4_") || case.starts_with("dh24_") {
                 for name in [
                     "zvo_out.dat",
                     "zvo_var.dat",
@@ -1902,6 +2032,7 @@ mod callback_tests {
                     );
                 }
                 assert!(!dir.join("zqp_dh2_opt.dat").exists());
+                assert!(!dir.join("zqp_dh4_opt.dat").exists());
             }
             fs::remove_dir_all(dir).unwrap();
         }
