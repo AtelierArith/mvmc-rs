@@ -16,7 +16,9 @@
 use mvmc_expert_parsers::ExpertModeData;
 use sfmt19937::Sfmt19937Rng;
 
+use crate::pfaffian::{calc_m_all_fsz_real, CalcMAllError};
 use crate::sampling::projection::{init_loc_spn, make_proj_cnt};
+use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 
 /// Result of [`make_initial_sample`]. `Ok(())` matches upstream's
 /// `info = 0`; `Err(())` matches `info != 0` (too many retries).
@@ -214,4 +216,49 @@ pub fn make_initial_sample_fsz(
     }
     make_proj_cnt(ele_proj_cnt, ele_num, data);
     Ok(())
+}
+
+/// Julia's real FSZ initialization, including Pfaffian validation and up to
+/// 101 attempts. Every failed attempt consumes its original SFMT draws;
+/// the last attempted configuration is retained when the limit is reached.
+pub fn make_initial_sample_fsz_real(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    qp_start: usize,
+    qp_end: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    let n_site = data.modpara.nsite as usize;
+    let n_elec = data.modpara.nelec as usize;
+    init_loc_spn(&mut state.workspace.loc_spn, data);
+    for attempt in 0..=100 {
+        let c = &mut state.electron_config;
+        make_initial_sample_fsz(
+            &mut c.tmp_ele_idx,
+            &mut c.tmp_ele_cfg,
+            &mut c.tmp_ele_num,
+            &mut c.tmp_ele_proj_cnt,
+            &mut c.tmp_ele_spn,
+            data,
+            &state.workspace.loc_spn,
+            rng,
+        )
+        .expect("FSZ configuration generation does not fail");
+        match calc_m_all_fsz_real(
+            &c.tmp_ele_idx,
+            &c.tmp_ele_spn,
+            &mut state.slater_matrix,
+            qp_start,
+            qp_end,
+            n_site,
+            n_elec,
+            pool,
+        ) {
+            Ok(()) => return Ok(()),
+            Err(error) if attempt == 100 => return Err(error),
+            Err(_) => {}
+        }
+    }
+    unreachable!("the last failed attempt returns its error")
 }

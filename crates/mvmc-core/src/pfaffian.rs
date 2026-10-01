@@ -38,7 +38,8 @@ use pfapack::{
 };
 
 use crate::state::{
-    InvMColMajor, PfaPackMode, PfaPackWorkspace, SlaterElmFlat, ThreadedPfaPackWorkspace,
+    InvMColMajor, PfaPackMode, PfaPackWorkspace, SlaterElmFlat, SlaterMatrixData,
+    ThreadedPfaPackWorkspace,
 };
 
 /// Lower bound on the squared Frobenius norm before we treat the
@@ -227,6 +228,14 @@ pub fn calc_m_all_fsz_complex(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
+    // Julia computes into workspace planes, then publishes the entire range
+    // only after every Pfaffian is finite. Failed initialization retries must
+    // not publish a partly calculated inverse or Pfaffian table.
+    if qp_start == qp_end {
+        return Ok(());
+    }
+    let mut inv_temp = InvMColMajor::zeros(qp_end, n_elec);
+    let mut pf_temp = vec![Complex64::default(); qp_end];
     let mut ws = pool.take();
     let result = (qp_start..qp_end).try_for_each(|qp| {
         calc_m_all_child_fsz_complex(
@@ -234,15 +243,67 @@ pub fn calc_m_all_fsz_complex(
             ele_idx,
             ele_spn,
             slater_elm,
-            inv_m,
-            &mut pf_m[qp],
+            &mut inv_temp,
+            &mut pf_temp[qp],
             n_site,
             n_elec,
             &mut ws,
         )
     });
     pool.release(ws);
-    result
+    result?;
+    for qp in qp_start..qp_end {
+        inv_m
+            .qp_matrix_slice_mut(qp)
+            .copy_from_slice(inv_temp.qp_matrix_slice(qp));
+        pf_m[qp] = pf_temp[qp];
+    }
+    Ok(())
+}
+
+/// Julia's `calculate_m_all_fsz_real!`: calculate through the complex FSZ
+/// kernel, then copy real parts into the real Pfaffian and inverse shadows.
+///
+/// The complex Slater table is authoritative even in real mode. Only the
+/// half-open QP range is copied; inverse scratch pads are left untouched.
+/// Failed calculations publish neither complex nor real results.
+pub fn calc_m_all_fsz_real(
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    matrix: &mut SlaterMatrixData,
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    assert!(qp_start <= qp_end && qp_end <= matrix.pf_m_real.len());
+    assert!(qp_end <= matrix.inv_m_real.n_qp_full());
+    assert_eq!(matrix.inv_m_real.n_size(), 2 * n_elec);
+    calc_m_all_fsz_complex(
+        ele_idx,
+        ele_spn,
+        &matrix.slater_elm,
+        &mut matrix.inv_m,
+        &mut matrix.pf_m,
+        qp_start,
+        qp_end,
+        n_site,
+        n_elec,
+        pool,
+    )?;
+    for qp in qp_start..qp_end {
+        matrix.pf_m_real[qp] = matrix.pf_m[qp].re;
+        for (dst, src) in matrix
+            .inv_m_real
+            .qp_matrix_slice_mut(qp)
+            .iter_mut()
+            .zip(matrix.inv_m.qp_matrix_slice(qp))
+        {
+            *dst = src.re;
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -368,16 +429,14 @@ fn calc_m_all_child_fsz_complex(
     assemble_inv_m_fsz_complex(
         qp, ele_idx, ele_spn, slater_elm, inv_m, n_size, n_site, n_site2,
     )?;
-    if frobenius_norm_sqr_complex(inv_m, qp) < MIN_ABS2 {
-        return Err(CalcMAllError::AllZero { qp });
-    }
-
     ensure_workspace_complex(ws, n_size);
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
-        zsktf2(&mut a, &mut ws.pivots[..n_size])
-            .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
+        // The authoritative FSZ path ignores the factorization's zero-pivot
+        // status and checks only whether the resulting Pfaffian is finite.
+        // This includes a zero Pfaffian with a nonfinite inverse.
+        let _ = zsktf2(&mut a, &mut ws.pivots[..n_size]);
         utu2pfa_complex(&a, &ws.pivots[..n_size])
     };
     if !pf_value.re.is_finite() || !pf_value.im.is_finite() {

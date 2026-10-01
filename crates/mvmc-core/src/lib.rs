@@ -35,7 +35,9 @@ pub mod validation;
 
 pub use initial_params::{read_initial_def, read_opt_para_file};
 pub use mvmc_expert_parsers::ExpertModeData;
-pub use pfaffian::{calc_m_all_complex, calc_m_all_real, CalcMAllError};
+pub use pfaffian::{
+    calc_m_all_complex, calc_m_all_fsz_complex, calc_m_all_fsz_real, calc_m_all_real, CalcMAllError,
+};
 pub use reducer::{Reducer, SingleProcessReducer};
 pub use run::{
     get_all_complex_flag, run_para_opt_from_namelist, vmc_para_opt, vmc_para_opt_timed, InitialDef,

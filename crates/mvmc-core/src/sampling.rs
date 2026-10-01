@@ -41,7 +41,10 @@ pub use candidate::{
     FszHoppingCandidate, HoppingCandidate, LocalSpinFlipCandidate, UpdateType,
 };
 pub use driver::{vmc_make_sample, vmc_make_sample_fsz, vmc_make_sample_real, SampleStats};
-pub use initial::{make_initial_sample, make_initial_sample_fsz, make_initial_sample_init_loc_spn};
+pub use initial::{
+    make_initial_sample, make_initial_sample_fsz, make_initial_sample_fsz_real,
+    make_initial_sample_init_loc_spn,
+};
 pub use metropolis::{metropolis_decision, metropolis_weight, MetropolisDecision};
 pub use one_move::{
     attempt_exchange_move, attempt_hopping_move, run_generated_hopping_mini_loop,
