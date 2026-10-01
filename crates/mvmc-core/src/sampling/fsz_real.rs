@@ -52,21 +52,7 @@ pub fn vmc_make_sample_fsz_real(
     }
     let config = &mut state.electron_config;
     if burn_flag {
-        config
-            .tmp_ele_idx
-            .copy_from_slice(&config.burn_ele_idx[..n_size]);
-        config
-            .tmp_ele_cfg
-            .copy_from_slice(&config.burn_ele_cfg[..2 * n_site]);
-        config
-            .tmp_ele_num
-            .copy_from_slice(&config.burn_ele_num[..2 * n_site]);
-        config
-            .tmp_ele_proj_cnt
-            .copy_from_slice(&config.burn_ele_proj_cnt[..n_proj]);
-        config
-            .tmp_ele_spn
-            .copy_from_slice(&config.burn_ele_spn[..n_size]);
+        config.restore_burn_fsz();
     }
     calc_m_all_fsz_real(
         &config.tmp_ele_idx,
@@ -416,16 +402,12 @@ pub fn vmc_make_sample_fsz_real(
             saved += 1;
         }
     }
-    config.burn_ele_idx[..n_size].copy_from_slice(&ele_idx);
-    config.burn_ele_cfg[..2 * n_site].copy_from_slice(&ele_cfg);
-    config.burn_ele_num[..2 * n_site].copy_from_slice(&ele_num);
-    config.burn_ele_proj_cnt[..n_proj].copy_from_slice(&ele_proj_cnt);
-    config.burn_ele_spn[..n_size].copy_from_slice(&ele_spn);
     config.tmp_ele_idx = ele_idx;
     config.tmp_ele_cfg = ele_cfg;
     config.tmp_ele_num = ele_num;
     config.tmp_ele_proj_cnt = ele_proj_cnt;
     config.tmp_ele_spn = ele_spn;
+    config.save_burn_fsz();
     config.counter[9] = 1;
     Ok(SampleStats { accepted, saved })
 }

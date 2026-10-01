@@ -57,8 +57,36 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
-    if !data.inter_all_terms.is_empty() {
-        return Err("InterAll local energy is not implemented yet (issue #23)".into());
+    let has_interall = !data.inter_all_terms.is_empty()
+        || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
+    if has_interall {
+        if data.i_flg_orbital_general == 0 {
+            return Err("InterAll in fixed-Sz mode is not implemented yet (issue #23): the Julia reference accumulator accesses a nonexistent term.sites field".into());
+        }
+        if !crate::run::get_all_complex_flag(data) {
+            return Err("real FSZ InterAll is not implemented yet (issue #43)".into());
+        }
+        for (index, term) in data.inter_all_terms.iter().enumerate() {
+            // Julia skips out-of-range sites before using any spin indices.
+            if [term.site0, term.site1, term.site2, term.site3]
+                .iter()
+                .any(|&site| site < 0 || site >= p.nsite)
+            {
+                continue;
+            }
+            for (name, spin) in [
+                ("spin0", term.spin0),
+                ("spin1", term.spin1),
+                ("spin2", term.spin2),
+                ("spin3", term.spin3),
+            ] {
+                if !(0..=1).contains(&spin) {
+                    return Err(format!(
+                        "InterAll term {index}: {name} must be 0 or 1; got {spin}"
+                    ));
+                }
+            }
+        }
     }
     for (kind, _) in &data.namelist {
         let issue = match kind.as_str() {
@@ -66,7 +94,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
                 return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
             }
             "PairHop" => Some(22),
-            "InterAll" => Some(23),
+            "InterAll" => None,
             "DH2" | "DoublonHolon2Site" => Some(24),
             "DH4" | "DoublonHolon4Site" => Some(25),
             "OptTrans" => Some(27),

@@ -1509,6 +1509,59 @@ mod callback_tests {
     }
 
     #[test]
+    fn interall_fsz_cg_prefixes_match_julia_parameters_spins_samples_energy_and_rng() {
+        check_sr_prefixes("interall", true, 0);
+    }
+
+    #[test]
+    fn interall_fsz_direct_prefixes_match_julia_parameters_spins_samples_energy_and_rng() {
+        for store in [0, 1] {
+            check_sr_prefixes("interall", false, store);
+        }
+    }
+
+    #[test]
+    fn interall_fsz_initial_flags_parameters_and_rng_match_julia_before_sampling() {
+        let input = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/interall/spin_chain/namelist.def");
+        let (data, _, mut rng) = prepared_namelist(1, &input);
+        assert_eq!(data.inter_all_terms.len(), 26);
+        assert!(get_all_complex_flag(&data));
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/sr_cg/interall_runner");
+        let flags: Vec<bool> = fs::read_to_string(root.join("initial-flags.txt"))
+            .unwrap()
+            .split_whitespace()
+            .map(|v| v == "1")
+            .collect();
+        assert_eq!(data.optimization_flags, flags);
+        let bits: Vec<u64> = fs::read_to_string(root.join("initial-parameters.txt"))
+            .unwrap()
+            .split_whitespace()
+            .map(|v| u64::from_str_radix(v, 16).unwrap())
+            .collect();
+        let values = data
+            .gutzwiller_terms
+            .iter()
+            .map(|t| t.value)
+            .chain(data.jastrow_terms.iter().map(|t| t.value))
+            .chain(data.orbital_terms.iter().map(|t| t.value));
+        let actual: Vec<_> = values
+            .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+            .collect();
+        assert_eq!(actual, bits);
+        let words: Vec<u32> = fs::read_to_string(root.join("initial-rng.txt"))
+            .unwrap()
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert_eq!(words.len(), 624);
+        for expected in words {
+            assert_eq!(rng.gen_rand32(), expected);
+        }
+    }
+
+    #[test]
     fn general_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng() {
         for store in [0, 1] {
             check_sr_prefixes("general", false, store);
@@ -1575,7 +1628,13 @@ mod callback_tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let (mut data, mut state, mut rng) = if case == "general" {
+            let (mut data, mut state, mut rng) = if case == "interall" {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../tests/fixtures/interall/spin_chain/namelist.def"),
+                )
+            } else if case == "general" {
                 prepared_namelist(
                     steps,
                     &Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1639,6 +1698,22 @@ mod callback_tests {
                     .collect();
                 assert_eq!(actual, &expected, "step {steps} {name}");
             }
+            if case == "interall" {
+                for (name, actual) in [
+                    ("spins", &state.electron_config.ele_spn),
+                    ("burn", &state.electron_config.burn_ele_idx),
+                    ("counters", &state.electron_config.counter.to_vec()),
+                ] {
+                    let expected: Vec<i64> = lines
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .map(|v| v.parse().unwrap())
+                        .collect();
+                    assert_eq!(actual, &expected, "step {steps} {name}");
+                }
+            }
+            assert!(lines.next().is_none());
             let expected: Vec<u32> = read("rng")
                 .split_whitespace()
                 .map(|v| v.parse().unwrap())

@@ -553,7 +553,8 @@ pub struct ElectronConfiguration {
     /// Burn-in spin buffer (FSZ only).
     pub burn_ele_spn: Vec<i64>,
 
-    /// 10 statistics counters (hopping attempts, accepts, ...).
+    /// Julia sampling counters 1–9, followed by counter 11's burn marker.
+    /// Counter 10 is reserved in Julia and omitted here.
     pub counter: [i64; 10],
 }
 
@@ -604,6 +605,45 @@ impl ElectronConfiguration {
             burn_ele_proj_cnt: vec![0; n_proj],
             burn_ele_spn,
             counter: [0; 10],
+        }
+    }
+
+    /// Julia FSZ burn storage: indices, configuration, occupancy, projection, spins.
+    pub(crate) fn save_burn_fsz(&mut self) {
+        let size = self.tmp_ele_idx.len()
+            + self.tmp_ele_cfg.len()
+            + self.tmp_ele_num.len()
+            + self.tmp_ele_proj_cnt.len()
+            + self.tmp_ele_spn.len();
+        if self.burn_ele_idx.len() < size {
+            self.burn_ele_idx.resize(size, 0);
+        }
+        let mut offset = 0;
+        for values in [
+            &self.tmp_ele_idx,
+            &self.tmp_ele_cfg,
+            &self.tmp_ele_num,
+            &self.tmp_ele_proj_cnt,
+            &self.tmp_ele_spn,
+        ] {
+            self.burn_ele_idx[offset..offset + values.len()].copy_from_slice(values);
+            offset += values.len();
+        }
+    }
+
+    /// Restore all FSZ scratch buffers from the canonical combined burn storage.
+    pub(crate) fn restore_burn_fsz(&mut self) {
+        let mut offset = 0;
+        for values in [
+            &mut self.tmp_ele_idx,
+            &mut self.tmp_ele_cfg,
+            &mut self.tmp_ele_num,
+            &mut self.tmp_ele_proj_cnt,
+            &mut self.tmp_ele_spn,
+        ] {
+            let len = values.len();
+            values.copy_from_slice(&self.burn_ele_idx[offset..offset + len]);
+            offset += len;
         }
     }
 
