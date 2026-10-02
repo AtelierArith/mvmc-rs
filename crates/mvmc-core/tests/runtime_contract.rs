@@ -47,6 +47,21 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 }
 
 #[test]
+fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
+    let mut data = ExpertModeData::new();
+    data.modpara.lanczos_mode = 1;
+    data.modpara.nmp_trans = 1;
+    data.i_flg_orbital_general = 1;
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(error.contains("FSZ/general") && error.contains("issue #31"));
+
+    data.i_flg_orbital_general = 0;
+    data.modpara.nsplit_size = 2;
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(error.contains("NSplitSize") && error.contains("issue #36"));
+}
+
+#[test]
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in ["InterAll", "TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
