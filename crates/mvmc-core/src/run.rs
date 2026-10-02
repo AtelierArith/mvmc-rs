@@ -36,7 +36,7 @@ use crate::io::{output_data, output_opt_data, store_opt_data};
 use crate::observables::clear_phys_quantity;
 use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::slater_update::{update_slater_elm, update_slater_elm_fsz};
-use crate::state::VmcOptimizationState;
+use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use crate::sync::sync_modified_parameter as sync_modified;
 use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
 
@@ -843,6 +843,36 @@ mod mode_tests {
         data
     }
 
+    #[test]
+    fn real_fsz_observation_refresh_populates_real_shadow() {
+        let mut data = data();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, true);
+        state
+            .slater_matrix
+            .slater_elm
+            .set(0, 0, 3, Complex64::new(1.0, 0.0));
+        state
+            .slater_matrix
+            .slater_elm
+            .set(0, 3, 0, Complex64::new(-1.0, 0.0));
+        let pool = ThreadedPfaPackWorkspace::new(2, 1);
+        refresh_fsz_observation_matrix(&data, &mut state, false, &[0, 1], &[0, 1], &pool).unwrap();
+        assert_ne!(state.slater_matrix.pf_m_real[0].to_bits(), 0);
+        assert_eq!(state.slater_matrix.pf_m[0].im, 0.0);
+        assert_eq!(
+            state.slater_matrix.pf_m[0].re.to_bits(),
+            state.slater_matrix.pf_m_real[0].to_bits()
+        );
+        assert!(state
+            .slater_matrix
+            .inv_m_real
+            .qp_matrix_slice(0)
+            .iter()
+            .any(|value| value.to_bits() != 0));
+    }
+
     // Julia test_unit_types.jl checks that complex SROptData has no real
     // buffers. Exercise the actual runner allocation for each factor family.
     #[test]
@@ -1200,19 +1230,8 @@ fn accumulate_observables<const TIMED: bool>(
         timer.start(40);
         // Refresh Pfaffian for the saved walker.
         let info = if use_fsz {
-            crate::pfaffian::calc_m_all_fsz_complex(
-                &ele_idx,
-                &ele_spn,
-                &state.slater_matrix.slater_elm,
-                &mut state.slater_matrix.inv_m,
-                &mut state.slater_matrix.pf_m,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
-            )
-            .err()
+            refresh_fsz_observation_matrix(data, state, all_complex, &ele_idx, &ele_spn, &pool)
+                .err()
         } else if all_complex {
             crate::pfaffian::calc_m_all_complex(
                 &ele_idx,
@@ -1599,6 +1618,49 @@ fn accumulate_observables<const TIMED: bool>(
         .chain(&mut state.sr_opt.sr_opt_o_store_real)
     {
         *value += 0.0;
+    }
+}
+
+/// Rebuild the saved-walker Pfaffian using the mode selected by C's
+/// `AllComplexFlag`. Real-FSZ must refresh its real shadows before the shared
+/// observable kernels consume them.
+fn refresh_fsz_observation_matrix(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    all_complex: bool,
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), crate::pfaffian::CalcMAllError> {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_qp_full = state.slater_matrix.pf_m.len();
+    if all_complex {
+        crate::pfaffian::calc_m_all_fsz_complex(
+            ele_idx,
+            ele_spn,
+            &state.slater_matrix.slater_elm,
+            &mut state.slater_matrix.inv_m,
+            &mut state.slater_matrix.pf_m,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+            pool,
+        )
+    } else {
+        crate::pfaffian::calc_m_all_fsz_real(
+            ele_idx,
+            ele_spn,
+            &mut state.slater_matrix,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+            pool,
+        )?;
+        sync_real_fsz_shadow(state);
+        Ok(())
     }
 }
 
