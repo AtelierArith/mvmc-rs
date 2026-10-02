@@ -95,11 +95,10 @@ six output view sizes. Each real/imaginary pair is committed only when
 both slots exist; skipped slots retain their original values. The projection
 script also runs the canonical Slater-update unit contracts.
 
-These milestones validate inputs, initialization, full-record loading,
-QP-weight refresh, nonidentity Slater tables, derivative kernels and the
-SR/synchronization contracts below. Production OptTrans execution remains
-gated by issue #27 until main-calculation derivative placement and
-deterministic serial trajectories have passed Julia parity.
+These fixtures validate inputs, initialization, full-record loading, QP-weight
+refresh, nonidentity Slater tables, derivative kernels and the SR/synchronization
+contracts below. Production serial OptTrans is enabled after the trajectory
+gates described below.
 
 `sr.txt` covers six active/inactive/all-factor layouts, real and complex
 SR buffers, direct and CG solvers, and real/imaginary/both/fixed component
@@ -127,6 +126,65 @@ julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_sr_parity.jl
 ```
 
 The script also runs unmodified canonical stochastic-optimization and
-parameter-synchronization unit tests. Main-calculation derivative placement
-and deterministic nonidentity serial trajectories remain before production
-can be enabled.
+parameter-synchronization unit tests.
+
+
+`slater_threshold.txt` covers 54 cases across real normal, complex normal and
+complex FSZ modes, both translation boundary signs and nine orbital vectors.
+Cases include zero/signed zero, values immediately below/equal/above `1e-14`,
+complex amplitudes and duplicate orbital indices with later zero/tiny values.
+Canonical normal Slater construction ignores amplitudes at or below `1e-14`
+and preserves earlier nonzero indexed values; FSZ construction does not apply
+that cutoff and overwrites duplicates. Each table component is compared by bits.
+
+`grouped.txt` covers 18 combinations of declared sectors, active parameter width
+and mapping-vector count for `NSplitSize=2`. Julia rejects any of these counts
+above one. Rust preserves this permanent OptTrans restriction before its
+remaining general split implementation gate; single-sector serial inputs pass.
+
+Production fixtures use `run_opt_real`, `run_opt_cmp`, `run_opt_fsz` and
+`run_opt_dh24_rbm_cmp`. Each has three nonidentity OptTrans sectors and preserves
+its canonical base sampling settings (normal sample=100, FSZ sample=2000,
+warmup=10). The combined model includes nonzero DH2, DH4 and all nine RBM
+sections. No changes to reference source, reseeding or tolerance relaxation
+were made.
+
+Direct (`NStore=0/1`) and CG runs are stored under `sr_direct/opt*_runner`,
+`sr_direct/opt*_store_runner` and `sr_cg/opt*_runner`. Prefixes 1/2/3/50 compare
+all parameter and energy component bits, saved indices/configurations/occupations/
+projection counts, burn configuration, move counters, FSZ spins and the next
+624 SFMT words. The CG directories also record initial flags, parameters and
+RNG blocks. First-step sampled OO/HO, stored sample columns, covariance matrix,
+gradient, Cholesky factor and solved update are separate exact-bit gates.
+Indexed output files and CG diagnostics are byte-for-byte comparisons. The
+canonical writer includes OptTrans in the full record and omits a dedicated
+OptTrans file.
+
+Eleven model/solver combinations complete all 50 steps. The real `NStore=0`
+Direct run returns native SR status 1 at zero-based step 29; prefixes 27/28/29
+also isolate the last successful updates. Rust reproduces the failure step,
+unchanged failed-step parameters, saved configurations, RNG block and output
+boundary. Julia's sampler may return early while its optimization loop still
+accumulates saved configurations; Rust follows that behavior. Normal initial
+Pfaffian retry/regeneration count and nonfinite-log remaking follow the source.
+Real projected logarithms use the Julia 1.13.1 arithmetic port.
+
+This run also exposed canonical LAPACK behavior: `potrf!` returns positive INFO
+without throwing, and the source optimizer ignores it before `potrs!`. Rust
+continues with that partial factor and rejects nonfinite solved updates before
+mutation. `sr_failure/potrf_status.txt` checks indefinite and singular covariances
+in both real and complex modes against the original optimizer.
+
+To verify all production paths:
+
+```sh
+for case in opt_real opt_cmp opt_fsz opt_dh24_rbm_cmp; do
+    julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case="$case" --store=0
+    julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case="$case" --store=1
+    julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_runner_parity.jl --case="$case"
+done
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_direct_runner_parity.jl --case=opt_real --store=0 --steps=27,28,29
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_failure_parity.jl
+cargo test -p mvmc-core --release opttrans
+cargo test -p mvmc-cli --test runtime_contract --release opttrans
+```

@@ -322,7 +322,7 @@ fn nonidentity_slater_matrices_and_derivatives_match_canonical_julia() {
         }
         bits(sr, lines.next().unwrap(), header);
         let mut opt = vec![Complex64::new(7.0, -9.0); 6];
-        mvmc_core::observables::opt_trans_diff(&mut opt, ip, &data, &state);
+        mvmc_core::observables::opt_trans_diff(&mut opt, ip, &data, &state.slater_matrix.pf_m);
         bits(opt, lines.next().unwrap(), header);
         cases += 1;
     }
@@ -358,10 +358,67 @@ fn opttrans_derivative_bounds_empty_inputs_and_partial_pfaffians_match_julia() {
             &mut opt,
             Complex64::new(1.25, -0.75),
             &data,
-            &state,
+            &state.slater_matrix.pf_m,
         );
         bits(opt, lines.next().unwrap(), header);
         cases += 1;
     }
     assert_eq!(cases, 162);
+}
+
+#[test]
+fn slater_amplitude_cutoff_and_duplicate_values_match_canonical_julia() {
+    let text = std::fs::read_to_string(root().join("slater_threshold.txt")).unwrap();
+    let mut lines = text.lines().filter(|l| !l.starts_with('#'));
+    let mut cases = 0;
+    while let Some(header) = lines.next() {
+        let f: Vec<_> = header.split_whitespace().collect();
+        let mut data = projection_model(f[0], 1, f[1].parse().unwrap(), "complete");
+        let cutoff = 1e-14_f64;
+        let value = match f[2] {
+            "negative_zero" => Complex64::new(-0.0, -0.0),
+            "below" => Complex64::new(f64::from_bits(cutoff.to_bits() - 1), 0.0),
+            "equal" => Complex64::new(cutoff, 0.0),
+            "above" => Complex64::new(f64::from_bits(cutoff.to_bits() + 1), 0.0),
+            "complex_below" => Complex64::new(1e-15, -1e-15),
+            "complex_above" => Complex64::new(1e-14, -1e-14),
+            "duplicate_zero" | "duplicate_tiny" => Complex64::new(2e-14, 0.0),
+            "zero" => Complex64::new(0.0, 0.0),
+            _ => panic!("{header}"),
+        };
+        for t in &mut data.orbital_terms {
+            t.value = value;
+        }
+        if f[2].starts_with("duplicate") {
+            let mut term = data.orbital_terms[1];
+            term.value = if f[2] == "duplicate_zero" {
+                Complex64::new(0.0, 0.0)
+            } else {
+                Complex64::new(1e-15, 0.0)
+            };
+            data.orbital_terms.push(term);
+        }
+        let mut state = mvmc_core::VmcOptimizationState::zeros(
+            4,
+            1,
+            0,
+            data.modpara.n_orbital_idx as usize + 3,
+            6,
+            1,
+            f[0] != "real",
+            f[0] == "fsz",
+        );
+        if f[0] == "fsz" {
+            mvmc_core::slater_update::update_slater_elm_fsz(&mut data, &mut state);
+        } else {
+            mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
+        }
+        bits(
+            state.slater_matrix.slater_elm.as_slice().iter().copied(),
+            lines.next().unwrap(),
+            header,
+        );
+        cases += 1;
+    }
+    assert_eq!(cases, 54);
 }

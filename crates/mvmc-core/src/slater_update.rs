@@ -41,7 +41,10 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     let mut slater = vec![Complex64::new(0.0, 0.0); n_orb];
     for term in &data.orbital_terms {
         let idx = term.idx;
-        if idx >= 0 && (idx as usize) < n_orb {
+        if idx >= 0
+            && (idx as usize) < n_orb
+            && mvmc_expert_parsers::utils::julia_hypot::hypot(term.value.re, term.value.im) > 1e-14
+        {
             slater[idx as usize] = term.value;
         }
     }

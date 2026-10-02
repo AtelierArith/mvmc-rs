@@ -90,3 +90,26 @@ values(d) = vcat(P.projection_parameters(d), [t.value for terms in O._rbm_parame
     end
     verify("sync.txt", String(take!(io)))
 end
+
+@testset "OptTrans grouped support matrix" begin
+    io = IOBuffer()
+    println(io, "# Julia $VERSION; canonical validate_supported_para_opt_data; NSplitSize=2")
+    for declared in (1,2), width in (0,1,2), maps in (0,1,2)
+        d = P.ExpertModeData()
+        d.modpara.nsplit_size = 2
+        d.n_qp_opt_trans = declared
+        d.opt_trans = zeros(ComplexF64,width)
+        d.qp_opt_trans = [Int[] for _ in 1:maps]
+        err = try
+            O.validate_supported_para_opt_data(d)
+            ""
+        catch e
+            sprint(showerror,e)
+        end
+        rejected = declared > 1 || width > 1 || maps > 1
+        @test isempty(err) == !rejected
+        rejected && @test occursin("OptTrans",err)
+        println(io, "$declared $width $maps $(Int(rejected))")
+    end
+    verify("grouped.txt", String(take!(io)))
+end

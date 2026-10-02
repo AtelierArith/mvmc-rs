@@ -52,10 +52,14 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
         ));
     }
     if p.nsplit_size > 1 {
+        if data.n_qp_opt_trans.max(1) > 1 || data.opt_trans.len() > 1 || data.qp_opt_trans.len() > 1
+        {
+            return Err(format!(
+                "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
+                p.nsplit_size, data.n_qp_opt_trans
+            ));
+        }
         return Err("NSplitSize > 1 is not implemented yet (issue #36)".into());
-    }
-    if data.n_qp_opt_trans > 1 || !data.opt_trans.is_empty() {
-        return Err("OptTrans is not implemented yet (issue #27)".into());
     }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
@@ -97,7 +101,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             "InterAll" => None,
             "DH2" | "DoublonHolon2Site" | "InDH2" => None,
             "DH4" | "DoublonHolon4Site" | "InDH4" => None,
-            "OptTrans" => Some(27),
+            "OptTrans" | "InOptTrans" => None,
             "TwoBodyGEx" => Some(30),
             k if k.starts_with("ChargeRBM_")
                 || k.starts_with("SpinRBM_")

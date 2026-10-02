@@ -613,8 +613,9 @@ pub(crate) fn update_parameter_value(
 /// agreement also requires matching input construction and BLAS kernels;
 /// fixed sampled-input and end-to-end gates check those separately.
 ///
-/// Returns `Err(())` on LAPACK failure or any nonfinite solved update,
-/// before the caller mutates parameters, matching Julia's post-solve check.
+/// Returns `Err(())` on an illegal LAPACK argument or nonfinite solved update,
+/// before parameter mutation. Julia's `potrf!` returns positive INFO without
+/// throwing, and canonical SR discards that status before calling `potrs!`.
 fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     if n == 0 {
         return Ok(());
@@ -627,7 +628,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     unsafe {
         dpotrf_(b"U".as_ptr(), &n_i32, s.as_mut_ptr(), &lda, &mut info);
     }
-    if info != 0 {
+    if info < 0 {
         return Err(());
     }
     let nrhs = 1_i32;
@@ -684,6 +685,10 @@ mod tests {
             "rbm_dh24_cmp",
             "rbm_fsz",
             "rbm_reference_cmp",
+            "opt_real",
+            "opt_cmp",
+            "opt_fsz",
+            "opt_dh24_rbm_cmp",
         ]
         .into_iter()
         .flat_map(|case| {
@@ -737,6 +742,9 @@ mod tests {
                     | "rbm_dh24_cmp"
                     | "rbm_fsz"
                     | "rbm_reference_cmp"
+                    | "opt_cmp"
+                    | "opt_fsz"
+                    | "opt_dh24_rbm_cmp"
             );
             let mut state = VmcOptimizationState::zeros(1, 1, 0, size - 1, 1, 1, complex, false);
             let oo = read(lines.next().unwrap());
@@ -762,6 +770,8 @@ mod tests {
             };
             let namelist = if case == "rbm_reference_cmp" {
                 root.join("extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def")
+            } else if case.starts_with("opt_") {
+                root.join(format!("tests/fixtures/opttrans/run_{case}/namelist.def"))
             } else if case.starts_with("rbm_") {
                 root.join(format!("tests/fixtures/rbm/run_{case}/namelist.def"))
             } else if let Some(mode) = case.strip_prefix("dh2_") {
@@ -988,15 +998,53 @@ mod tests {
     }
 
     #[test]
-    fn failed_factorization_preserves_all_parameters() {
-        let (mut data, mut state) = two_parameter_problem(false);
-        // Positive diagonals keep both active, but the covariance is indefinite.
-        state.sr_opt.sr_opt_oo_real[5] = 2.0;
-        state.sr_opt.sr_opt_oo_real[7] = 2.0;
-        state.sr_opt.sr_opt_ho_real[2] = 1.0;
-        let before = data.orbital_terms.clone();
-        assert_eq!(stochastic_opt_real(&mut data, &mut state), 1);
-        assert_eq!(data.orbital_terms, before);
+    fn positive_potrf_status_and_finite_check_match_canonical_julia() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/sr_failure/potrf_status.txt");
+        let text = std::fs::read_to_string(path).unwrap();
+        let mut lines = text.lines().filter(|l| !l.starts_with('#'));
+        let mut cases = 0;
+        while let Some(header) = lines.next() {
+            let fields: Vec<_> = header.split_whitespace().collect();
+            let complex = fields[0] == "1";
+            let (mut data, mut state) = two_parameter_problem(complex);
+            let covariance = if fields[1] == "indefinite" { 2.0 } else { 1.0 };
+            let off = if complex { 2 } else { 1 };
+            let size = off * 3;
+            if complex {
+                state.sr_opt.sr_opt_oo[off * size + 2 * off] = Complex64::new(covariance, 0.0);
+                state.sr_opt.sr_opt_oo[2 * off * size + off] = Complex64::new(covariance, 0.0);
+                state.sr_opt.sr_opt_ho[2 * off] = Complex64::new(1.0, 0.0);
+            } else {
+                state.sr_opt.sr_opt_oo_real[off * size + 2 * off] = covariance;
+                state.sr_opt.sr_opt_oo_real[2 * off * size + off] = covariance;
+                state.sr_opt.sr_opt_ho_real[2 * off] = 1.0;
+            }
+            let solve = if complex {
+                stochastic_opt_complex
+            } else {
+                stochastic_opt_real
+            };
+            assert_eq!(
+                solve(&mut data, &mut state),
+                fields[2].parse::<i32>().unwrap(),
+                "{header}"
+            );
+            let actual: Vec<_> = data
+                .orbital_terms
+                .iter()
+                .flat_map(|t| [t.value.re.to_bits(), t.value.im.to_bits()])
+                .collect();
+            let expected: Vec<_> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .collect();
+            assert_eq!(actual, expected, "{header}");
+            cases += 1;
+        }
+        assert_eq!(cases, 4);
     }
 
     #[test]

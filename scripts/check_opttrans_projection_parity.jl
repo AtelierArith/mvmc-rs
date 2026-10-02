@@ -93,4 +93,20 @@ end
         println(io, hex(opt))
     end
     verify("opt_derivatives.txt", String(take!(io)))
+    io = IOBuffer()
+    println(io,"# Julia $VERSION; $(BLAS.get_config()); threads=1; canonical Slater amplitude cutoff and duplicate values")
+    for mode in ("real","complex","fsz"), boundary in (-1,1), case in ("zero","negative_zero","below","equal","above","complex_below","complex_above","duplicate_zero","duplicate_tiny")
+        d = model(mode,1,boundary,"complete")
+        value = case == "negative_zero" ? ComplexF64(-0.0,-0.0) : case == "below" ? ComplexF64(prevfloat(1e-14),0) : case == "equal" ? ComplexF64(1e-14,0) : case == "above" ? ComplexF64(nextfloat(1e-14),0) : case == "complex_below" ? ComplexF64(1e-15,-1e-15) : case == "complex_above" ? ComplexF64(1e-14,-1e-14) : startswith(case,"duplicate") ? ComplexF64(2e-14,0) : ComplexF64(0,0)
+        for t in d.orbital_terms; t.value = value; end
+        if startswith(case,"duplicate")
+            t=deepcopy(d.orbital_terms[2]);t.value = case == "duplicate_zero" ? ComplexF64(0,0) : ComplexF64(1e-15,0)
+            push!(d.orbital_terms,t)
+        end
+        state=O.VMCOptimizationState(4,1,0,d.modpara.n_orbital_idx+3,6,1,mode!="real",mode=="fsz")
+        mode=="fsz" ? O.update_slater_elm_fsz!(d,state) : O.update_slater_elm_fcmp!(d,state)
+        println(io,"$mode $boundary $case")
+        println(io,hex(state.slater_matrix.slater_elm))
+    end
+    verify("slater_threshold.txt",String(take!(io)))
 end
