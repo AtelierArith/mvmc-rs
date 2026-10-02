@@ -441,15 +441,41 @@ pub fn run_para_opt_from_namelist(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
 ) -> Result<RunSummary, String> {
+    run_para_opt_from_namelist_with_reducer(namelist_path, config, &SingleProcessReducer)
+}
+
+/// Run optimization with a caller-provided all-reduce backend.
+///
+/// The MPI-enabled application initializes [`crate::mpi::MpiContext`] and
+/// passes it here.  Keeping initialization outside the library preserves MPI
+/// ownership and allows ordinary Rust callers to continue using the serial
+/// entry point without linking an MPI implementation.
+pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ?Sized>(
+    namelist_path: impl AsRef<Path>,
+    config: RunConfig,
+    reducer: &R,
+) -> Result<RunSummary, String> {
     validate_run_options(&config)?;
     let flags = TimerEnv::from_env();
     if flags.legacy_warning() {
         eprintln!("warning: MVMC_TIMER is deprecated; use MVMC_C_TIMER=1 for the C-compatible zvo_CalcTimer.dat timer.");
     }
     if flags.enabled() {
-        run_para_opt_timed(namelist_path, config, &mut CTimer::<true>::new(), flags)
+        run_para_opt_timed(
+            namelist_path,
+            config,
+            reducer,
+            &mut CTimer::<true>::new(),
+            flags,
+        )
     } else {
-        run_para_opt_timed(namelist_path, config, &mut CTimer::<false>::new(), flags)
+        run_para_opt_timed(
+            namelist_path,
+            config,
+            reducer,
+            &mut CTimer::<false>::new(),
+            flags,
+        )
     }
 }
 
@@ -472,9 +498,10 @@ fn validate_run_options(config: &RunConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn run_para_opt_timed<const TIMED: bool>(
+fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
+    reducer: &R,
     timer: &mut CTimer<TIMED>,
     flags: TimerEnv,
 ) -> Result<RunSummary, String> {
@@ -507,7 +534,13 @@ fn run_para_opt_timed<const TIMED: bool>(
     }
 
     // Preserve Julia's init -> initial.def -> In*.def -> sync -> QP phase order.
-    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, config.seed, 0, || {
+    let group1 = i64::try_from(reducer.rank()).map_err(|_| {
+        format!(
+            "MPI rank {} does not fit in the seed offset",
+            reducer.rank()
+        )
+    })?;
+    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, config.seed, group1, || {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_secs() as i64)
@@ -560,7 +593,7 @@ fn run_para_opt_timed<const TIMED: bool>(
         &mut state,
         &mut rng,
         Some(&output_dir),
-        &SingleProcessReducer,
+        reducer,
         OptimizationOptions::default(),
         timer,
     )?;
