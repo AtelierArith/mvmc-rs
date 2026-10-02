@@ -1,4 +1,6 @@
 //! Julia's directed expansion, strict section errors, and initialization contract.
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 use std::path::{Path, PathBuf};
@@ -70,12 +72,13 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut data = parse_expert_mode_files(root().join("namelist.def")).unwrap();
     assert!(!all_complex_flag(&data));
-    let flags: Vec<bool> = lines
+    let flags: Vec<i64> = lines
         .next()
         .unwrap()
         .split_whitespace()
-        .map(|s| s == "1")
+        .map(|s| s.parse::<i64>().unwrap())
         .collect();
+    let flags = historical_optimization_flags::c_orbital_representation(&data, flags);
     assert_eq!(data.optimization_flags, flags);
     let original = data.pair_hop_terms.clone();
     let mut plain = data.clone();

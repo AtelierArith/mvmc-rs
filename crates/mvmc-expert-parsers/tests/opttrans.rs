@@ -1,4 +1,6 @@
 mod common;
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
@@ -16,7 +18,7 @@ fn root() -> PathBuf {
 fn opttrans_sector_count_and_real_only_component_flags_follow_julia() {
     let data = parse_expert_mode_files(root().join("namelist_valid.def")).unwrap();
     assert_eq!(data.n_qp_opt_trans, 2);
-    assert_eq!(data.optimization_flags, vec![true, false, true, false]);
+    assert_eq!(data.optimization_flags, vec![1, 0, 1, 0]);
 }
 
 fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
@@ -140,18 +142,24 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
             parse_expert_mode_files(root().join(format!("namelist_{}.def", fields[0]))).unwrap();
         match fields[1] {
             "complex" => data.modpara.complex_flag = 1,
-            "inactive" => data.optimization_flags.fill(false),
+            "inactive" => data.optimization_flags.fill(0),
             "empty_para" => data.para_qp_opt_trans.clear(),
             "parsed" => {}
             _ => panic!("unknown mode: {header}"),
         }
         data.opt_trans.fill(Complex64::new(7.0, -9.0));
+        let flags = historical_optimization_flags::c_orbital_representation(
+            &data,
+            integers::<i64>(lines.next().unwrap()),
+        );
+        // Julia stored these raw positive flags as bool. This old workload
+        // checks initialization (>0); raw integer assembly has native C tests.
         assert_eq!(
             data.optimization_flags
                 .iter()
-                .map(|&v| i64::from(v))
+                .map(|&v| i64::from(v > 0))
                 .collect::<Vec<_>>(),
-            integers::<i64>(lines.next().unwrap()),
+            flags,
             "{header}"
         );
         assert_eq!(

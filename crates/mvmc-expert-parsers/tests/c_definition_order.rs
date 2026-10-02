@@ -129,7 +129,7 @@ fn every_namelist_permutation_preserves_c_ap_parallel_layout_and_boundary_signs(
                 data.optimization_flags
                     .iter()
                     .step_by(2)
-                    .map(|&flag| i64::from(flag))
+                    .copied()
                     .collect::<Vec<_>>(),
                 flags.iter().step_by(2).copied().collect::<Vec<_>>(),
                 "{header} {order:?}"

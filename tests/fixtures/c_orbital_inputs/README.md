@@ -45,3 +45,34 @@ python3 scripts/check_orbital_contracts_c_parity.py
 python3 scripts/check_orbital_contracts_c_parity.py --write
 python3 scripts/check_general_orbital_c_parity.py
 ```
+
+`ap_hubbard_six_complex.def` retains the complete thirty-six mappings, twelve
+slots and active flags of the historical real Hubbard input, while explicitly
+declaring complex orbitals. C's orbital flag writers use the orbital headers,
+not the overall DH/G/J complex decision. The original mixed-DH Julia inputs
+relied on global complex mode implicitly activating imaginary orbital flags;
+C leaves those real-AP imaginary cells untouched. The five `namelist_*_cmp.def`
+replacements use this explicit complex AP section for DH2/DH4/combined-DH/RBM/
+OptTrans historical SR/RNG regressions. All other input paths and numerical
+fixtures remain unchanged. The actual C AP reader accepts the section as the
+additional case in `c_reader_contracts.txt`; this does not prove the other
+families' complete C contracts or the original mixed-header C trajectory.
+
+The nine files under `historical_binary_rbm/` copy the historical RBM mappings
+and declarations, changing only the second flag from 2 to 1. Julia converted
+both values to true; C initializes both but selects only 1 for SR. The five
+RBM namelists and the combined OptTrans/RBM namelist use these explicit binary
+inputs to retain the OLD Julia SR/RNG regression. Original inputs and goldens
+are unchanged; production raw flag 2 remains fixed for SR, verified separately
+by native C eligibility and both Rust solver tests. These RBM copies are legacy
+numerical models, not evidence of complete C RBM input acceptance: the declared
+width/mapping/count gaps remain #26. Reproduce all explicit input replacements
+with `python3 scripts/prepare_historical_integer_flag_inputs.py --write` (omit
+`--write` to verify).
+
+`ap_hubbard_six_flag2.def` is a complete real AP section with all twelve raw
+flags equal to 2, accepted separately by the actual C reader. The CLI test
+compares one and three SR steps: initialized coefficients are nonzero and stay
+unchanged, while the same workload with flag 1 changes them. This tests native
+integer eligibility through the actual CLI; it does not assert full C sampling
+or RNG equivalence. It uses the original Hamiltonian with G/J factors omitted.

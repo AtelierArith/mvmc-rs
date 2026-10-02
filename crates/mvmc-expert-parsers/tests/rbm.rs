@@ -1,9 +1,11 @@
 mod common;
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 use common::historical_kernel_model as parse_expert_mode_files;
 use std::path::PathBuf;
 
 #[test]
-fn all_nine_rbm_sections_apply_source_flags_at_mapped_widths() {
+fn all_nine_rbm_sections_keep_raw_flags_at_historical_mapped_widths() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/rbm");
     for name in [
         "ChargeRBM_PhysLayer",
@@ -20,7 +22,7 @@ fn all_nine_rbm_sections_apply_source_flags_at_mapped_widths() {
         let complex = name.starts_with("General");
         assert_eq!(
             data.optimization_flags,
-            vec![true, complex, true, complex, false, false],
+            vec![1, i64::from(complex), 2, 2 * i64::from(complex), 0, 0],
             "{name}"
         );
     }
@@ -157,7 +159,7 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
         match mode {
             "complex" => data.modpara.complex_flag = 1,
             "missing_flags" => data.optimization_flags.clear(),
-            "inactive" => data.optimization_flags.fill(false),
+            "inactive" => data.optimization_flags.fill(0),
             "truncated" => data.optimization_flags.truncate(2),
             "zero_neuron" | "negative_neuron" => {
                 data.modpara.nneuron = if mode == "zero_neuron" { 0 } else { -7 };
@@ -180,13 +182,23 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
             sizes.iter().sum::<usize>(),
             "{header}"
         );
-        let flags: Vec<bool> = lines
+        let flags: Vec<i64> = lines
             .next()
             .unwrap()
             .split_whitespace()
-            .map(|s| s == "1")
+            .map(|s| s.parse::<i64>().unwrap())
             .collect();
-        assert_eq!(data.optimization_flags, flags, "{header}");
+        let flags = historical_optimization_flags::c_orbital_representation(&data, flags);
+        // Archived Julia initialization records stored positive raw flags as
+        // bool. Native component assembly tests assert the full integer values.
+        assert_eq!(
+            data.optimization_flags
+                .iter()
+                .map(|&v| i64::from(v > 0))
+                .collect::<Vec<_>>(),
+            flags,
+            "{header}"
+        );
         data.visit_rbm_terms_mut(|_, t| t.set_value(Complex64::new(7.0, -9.0)));
         let mut rng = Sfmt19937Rng::new(11272);
         init_parameter(&mut data, &mut rng);

@@ -210,7 +210,9 @@ fn rbm_namelists_reach_production_and_match_source_output() {
         "rbm_fsz",
     ] {
         let out = dir.0.join(case);
-        let namelist = root.join(format!("rbm/run_{case}/namelist.def"));
+        // Explicit legacy binary inputs preserve these Julia SR goldens.
+        // Native integer flag 2 remains fixed for SR in production.
+        let namelist = root.join(format!("c_orbital_inputs/namelist_{case}.def"));
         let data = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
             .arg(&namelist)
@@ -241,12 +243,92 @@ fn rbm_namelists_reach_production_and_match_source_output() {
 }
 
 #[test]
+fn positive_nonunit_flags_initialize_but_stay_fixed_through_cli_sr_steps() {
+    let dir = TestDir::new("c-integer-flags");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real");
+    let mut namelist = String::new();
+    for line in fs::read_to_string(source.join("namelist.def"))
+        .unwrap()
+        .lines()
+    {
+        let words: Vec<_> = line.split_whitespace().collect();
+        if matches!(words[0], "Gutzwiller" | "Jastrow") {
+            continue;
+        }
+        let input = if words[0] == "Orbital" {
+            dir.0.join("orbital.def")
+        } else if words[0] == "ModPara" {
+            let text = fs::read_to_string(source.join(words[1])).unwrap();
+            fs::write(
+                dir.0.join("modpara.def"),
+                text + "\nNVMCSample 50\nNStore 1\n",
+            )
+            .unwrap();
+            dir.0.join("modpara.def")
+        } else {
+            source.join(words[1])
+        };
+        namelist.push_str(&format!("{} {}\n", words[0], input.display()));
+    }
+    fs::write(dir.0.join("namelist.def"), namelist).unwrap();
+    let run = |flag: i64, steps: usize| {
+        let orbital =
+            fs::read_to_string(root.join("c_orbital_inputs/ap_hubbard_six_flag2.def")).unwrap();
+        let mut lines: Vec<String> = orbital.lines().map(str::to_owned).collect();
+        for (index, row) in lines.iter_mut().skip(5 + 36).enumerate() {
+            *row = format!("{index} {flag}");
+        }
+        fs::write(dir.0.join("orbital.def"), lines.join("\n") + "\n").unwrap();
+        let out = dir.0.join(format!("flag{flag}-steps{steps}"));
+        let result = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+            .arg(dir.0.join("namelist.def"))
+            .args([
+                "--nsteps",
+                &steps.to_string(),
+                "--nsmp",
+                "1",
+                "--seed",
+                "1",
+                "--initial-def",
+                "none",
+                "--out-dir",
+            ])
+            .arg(&out)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        fs::read_to_string(out.join("zqp_opt.dat")).unwrap()
+    };
+    // Actual C InitParameter accepts >0; its SR filter requires exactly 1.
+    // The complete AP flag-2 input is separately accepted by the native reader.
+    let fixed = run(2, 1);
+    assert!(fixed
+        .split_whitespace()
+        .map(|v| v.parse::<f64>().unwrap())
+        .any(|v| v != 0.0));
+    assert_eq!(fixed, run(2, 3));
+    // Positive binary control proves this workload exercises an effective SR
+    // update and would detect incorrectly treating flag 2 as a bool true.
+    assert_ne!(run(1, 1), run(1, 3));
+}
+
+#[test]
 fn nonidentity_opttrans_namelists_reach_production_and_match_source_output() {
     let dir = TestDir::new("opttrans");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
         let out = dir.0.join(case);
-        let namelist = root.join(format!("opttrans/run_{case}/namelist.def"));
+        let namelist = if case == "opt_dh24_rbm_cmp" {
+            root.join("c_orbital_inputs/namelist_opt_dh24_rbm_cmp.def")
+        } else {
+            root.join(format!("opttrans/run_{case}/namelist.def"))
+        };
         let data = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
             .arg(&namelist)

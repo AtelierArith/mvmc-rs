@@ -242,7 +242,7 @@ fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
         let path = if reference {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def")
         } else {
-            root().join(format!("run_{case}/namelist.def"))
+            root().join(format!("../c_orbital_inputs/namelist_{case}.def"))
         };
         for steps in [1, 3] {
             let mut config = mvmc_core::RunConfig::new(

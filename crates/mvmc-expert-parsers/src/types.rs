@@ -491,7 +491,7 @@ pub struct DoublonHolon2SiteDefinition {
     /// Tables indexed by the final column of each neighbor row.
     pub indices: Vec<DoublonHolon2SiteIndex>,
     /// Six flags per table, in input row order.
-    pub opt_flags: Vec<bool>,
+    pub opt_flags: Vec<i64>,
     /// Whether the header's ComplexType integer is nonzero.
     pub is_complex: bool,
 }
@@ -509,7 +509,7 @@ pub struct DoublonHolon4SiteDefinition {
     /// Tables indexed by the final column of each neighbor row.
     pub indices: Vec<DoublonHolon4SiteIndex>,
     /// Ten flags per table, in input row order.
-    pub opt_flags: Vec<bool>,
+    pub opt_flags: Vec<i64>,
     /// Whether the header's ComplexType integer is nonzero.
     pub is_complex: bool,
 }
@@ -799,7 +799,7 @@ pub struct ExpertModeData {
     /// Six complex parameters per DH2 table, in C projection order.
     pub doublon_holon_2site_params: Vec<Complex64>,
     /// Local real optimization flags in input row order.
-    pub doublon_holon_2site_opt_flags: Vec<bool>,
+    pub doublon_holon_2site_opt_flags: Vec<i64>,
     /// DH2 ComplexType declaration, including empty definitions.
     pub doublon_holon_2site_complex: bool,
 
@@ -808,7 +808,7 @@ pub struct ExpertModeData {
     /// Ten complex parameters per DH4 table, in C projection order.
     pub doublon_holon_4site_params: Vec<Complex64>,
     /// Local real optimization flags in input row order.
-    pub doublon_holon_4site_opt_flags: Vec<bool>,
+    pub doublon_holon_4site_opt_flags: Vec<i64>,
     /// DH4 ComplexType declaration, including empty definitions.
     pub doublon_holon_4site_complex: bool,
 
@@ -880,10 +880,10 @@ pub struct ExpertModeData {
     /// `OrbitalSgn[ri+1, rj+1]`, same shape as `orbital_idx_matrix`.
     pub orbital_sgn_matrix: Option<Vec<Vec<i64>>>,
 
-    /// `OptFlag[2*i + spin]` flags. `true` -> optimised, `false` -> fixed.
-    /// Mirrors `optimization_flags::Vector{Bool}` in upstream. Empty
-    /// until `vmc_para_opt` populates it on the first step.
-    pub optimization_flags: Vec<bool>,
+    /// C `OptFlag[2*i + component]` integer flags for real/imaginary parts.
+    /// Initialization tests the real flag against >0; SR and gauge selection
+    /// require exactly 1. Definition readers populate this array before use.
+    pub optimization_flags: Vec<i64>,
 
     /// Optional authoritative runtime ComplexType flags. An empty vector
     /// selects inference from factor declarations and current values.
@@ -1174,13 +1174,13 @@ impl ExpertModeData {
         values
     }
 
-    /// Populate `optimization_flags` with `true` entries for every
+    /// Populate `optimization_flags` with `1` entries for every
     /// (real, imag) slot of the `n_para` variational parameters. Mirrors
     /// the `if isempty(data.optimization_flags) ... fill!(true, 2*n_para)`
     /// guard at the top of upstream `vmc_para_opt!` and `stochastic_opt!`.
     pub fn ensure_optimization_flags(&mut self, n_para: usize) {
         if self.optimization_flags.is_empty() {
-            self.optimization_flags = vec![true; 2 * n_para];
+            self.optimization_flags = vec![1; 2 * n_para];
         }
     }
 

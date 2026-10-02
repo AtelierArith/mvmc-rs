@@ -57,6 +57,9 @@ def cases(root):
                               ("orbital_general/parallel", "P", 3)):
         yield "historical_" + name.replace("/", "_"), mode, nsite, (root / f"tests/fixtures/{name}.def").read_text()
 
+    yield "fixture_ap_hubbard_six_complex", "AP", 6, (root / "tests/fixtures/c_orbital_inputs/ap_hubbard_six_complex.def").read_text()
+    yield "fixture_ap_hubbard_six_flag2", "AP", 6, (root / "tests/fixtures/c_orbital_inputs/ap_hubbard_six_flag2.def").read_text()
+
 
 def main():
     parser = argparse.ArgumentParser()

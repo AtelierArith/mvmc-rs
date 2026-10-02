@@ -1,4 +1,6 @@
 //! Exact Julia parser contract; Hamiltonian support has a separate runtime gate.
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 use std::path::{Path, PathBuf};
@@ -76,12 +78,13 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
     let mut data = parse_expert_mode_files(root().join("namelist.def")).unwrap();
     assert!(data.inter_all_terms.iter().any(|term| term.is_complex));
     assert!(!all_complex_flag(&data));
-    let flags: Vec<bool> = lines
+    let flags: Vec<i64> = lines
         .next()
         .unwrap()
         .split_whitespace()
-        .map(|s| s == "1")
+        .map(|s| s.parse::<i64>().unwrap())
         .collect();
+    let flags = historical_optimization_flags::c_orbital_representation(&data, flags);
     assert_eq!(data.optimization_flags, flags);
     let original = data.inter_all_terms.clone();
     let mut plain = data.clone();

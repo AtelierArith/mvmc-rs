@@ -64,7 +64,7 @@ fn model_with_dh2(combined: bool) -> ExpertModeData {
             .map(|i| Complex64::new(i as f64 / 8.0, -(i as f64) / 16.0))
             .collect();
     }
-    d.optimization_flags = vec![true; 2 * d.projection_layout().n_proj];
+    d.optimization_flags = vec![1; 2 * d.projection_layout().n_proj];
     d
 }
 fn source_fixture(name: &str, combined: bool) -> String {
@@ -162,11 +162,11 @@ fn check_dh_gauge_matches_julia_declared_flags_compensation_and_shift_order(comb
             "all" | "disabled" => {}
             "fixed_dh2" => {
                 if combined {
-                    d.optimization_flags[2 * layout.dh2_offset] = false;
+                    d.optimization_flags[2 * layout.dh2_offset] = 0;
                 }
             }
-            "fixed_gutz" => d.optimization_flags[4] = false,
-            "fixed_dh" => d.optimization_flags[2 * (layout.dh4_offset + 19)] = false,
+            "fixed_gutz" => d.optimization_flags[4] = 0,
+            "fixed_dh" => d.optimization_flags[2 * (layout.dh4_offset + 19)] = 0,
             "empty_flags" => d.optimization_flags.clear(),
             "short_flags" => d.optimization_flags.truncate(15),
             "partial_params" => d.doublon_holon_4site_params.truncate(18),
@@ -354,8 +354,8 @@ fn check_direct_sr_updates_each_dh_component_without_writing_other_projection_sl
                 d.modpara.dsr_opt_red_cut = 0.0;
                 d.modpara.dsr_opt_sta_del = 0.0;
                 d.modpara.dsr_opt_step_dt = 0.25;
-                d.optimization_flags = vec![false; 2 * layout.n_proj];
-                d.optimization_flags[2 * target + imaginary] = true;
+                d.optimization_flags = vec![0; 2 * layout.n_proj];
+                d.optimization_flags[2 * target + imaginary] = 1;
                 let before = d.projection_parameters();
                 let mut state = VmcOptimizationState::zeros(
                     4,

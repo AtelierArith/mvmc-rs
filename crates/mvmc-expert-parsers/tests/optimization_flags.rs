@@ -70,22 +70,22 @@ fn parsed(
 #[test]
 fn shared_indices_and_ap_parallel_offsets_populate_global_component_flags() {
     let data = parsed("complex", 1, true);
-    let mut expected = vec![true, false, false, false, false, false, true, true];
+    let mut expected = vec![1, 0, 0, 0, 0, 0, 1, 1];
     for active in [
         false, true, true, true, true, true, true, true, true, false, false,
     ] {
-        expected.extend([active, active]);
+        expected.extend([i64::from(active), 0]);
     }
     assert_eq!(data.optimization_flags, expected);
     assert_eq!(data.gutzwiller_idx, [0, 0, 1]);
 }
 
 #[test]
-fn real_projection_imaginary_flags_and_orbital_defaults_match_julia() {
+fn real_projection_and_orbital_imaginary_flags_are_deterministic_zero() {
     let data = parsed("real", 0, false);
     assert_eq!(
         data.optimization_flags,
-        [true, false, false, false, false, false, true, false, false, true, true, true]
+        [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0]
     );
 }
 
@@ -185,7 +185,7 @@ fn declared_projection_widths_determine_slater_flag_and_rng_offsets() {
     });
     set_orbital_opt_flags(&mut data, &[(0, 0)].into());
     assert_eq!(data.optimization_flags.len(), 16);
-    assert!(!data.optimization_flags[14]);
+    assert_eq!(data.optimization_flags[14], 0);
     assert_eq!(
         data.projection_parameters()
             .iter()

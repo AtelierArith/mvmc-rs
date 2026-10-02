@@ -67,12 +67,7 @@ fn complete_six_column_general_rows_flags_and_matrices_match_c() {
             .flatten()
             .copied()
             .collect();
-        let flags: Vec<_> = data
-            .optimization_flags
-            .iter()
-            .step_by(2)
-            .map(|&flag| i64::from(flag))
-            .collect();
+        let flags: Vec<_> = data.optimization_flags.iter().step_by(2).copied().collect();
         if indices != integers(record[2])
             || signs != integers(record[3])
             || flags != integers(record[4])

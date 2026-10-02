@@ -1,4 +1,6 @@
 //! Canonical strict DH2 table and final projection-layout contracts.
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 use std::path::{Path, PathBuf};
@@ -74,13 +76,25 @@ fn check_bits(values: impl IntoIterator<Item = Complex64>, line: &str, label: &s
 }
 
 #[test]
-fn strict_tables_neighbors_flags_errors_and_last_line_match_original_julia() {
+fn historical_julia_diagnostics_except_c_integer_flag_extensions() {
     let fixture = std::fs::read_to_string(root().join("parser.txt")).unwrap();
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     while let Some(header) = lines.next() {
         let parts: Vec<_> = header.split_whitespace().collect();
         let content = std::fs::read_to_string(root().join(format!("{}.def", parts[0]))).unwrap();
         let result = parse_doublon_holon_2site_content(&content, parts[1].parse().unwrap());
+        // Julia rejected these integer flags; the native C DH readers accept
+        // them. Keep the historical diagnostic record unchanged and verify
+        // the new values separately against c_dh_flags.txt.
+        if matches!(parts[0], "negative_opt" | "opt_bounds" | "nonbinary_opt") {
+            assert!(result.is_success(), "{header}");
+            assert_eq!(
+                result.data.as_ref().unwrap().opt_flags[0],
+                if parts[0] == "negative_opt" { -1 } else { 2 }
+            );
+            lines.next().unwrap(); // archived Julia error text
+            continue;
+        }
         assert_eq!(result.is_success(), parts[2] == "1", "{header}");
         assert_eq!(
             result.line_number,
@@ -98,10 +112,7 @@ fn strict_tables_neighbors_flags_errors_and_last_line_match_original_julia() {
             }
             assert_eq!(
                 definition.opt_flags,
-                integers(lines.next().unwrap())
-                    .into_iter()
-                    .map(|i| i != 0)
-                    .collect::<Vec<_>>(),
+                integers(lines.next().unwrap()),
                 "{header}"
             );
         }
@@ -144,14 +155,11 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
             integers(lines.next().unwrap()),
             "{name} layout"
         );
-        assert_eq!(
-            data.optimization_flags,
-            integers(lines.next().unwrap())
-                .into_iter()
-                .map(|i| i != 0)
-                .collect::<Vec<_>>(),
-            "{name} flags"
+        let expected_flags = historical_optimization_flags::c_orbital_representation(
+            &data,
+            integers(lines.next().unwrap()),
         );
+        assert_eq!(data.optimization_flags, expected_flags, "{name} flags");
         let mode = integers(lines.next().unwrap());
         assert_eq!(data.doublon_holon_2site_complex, mode[0] != 0);
         assert_eq!(all_complex_flag(&data), mode[1] != 0);

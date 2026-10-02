@@ -147,7 +147,7 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
 
     let mut smat_to_para_idx: Vec<usize> = Vec::new();
     for pi in 0..(2 * n_para) {
-        let opt = data.optimization_flags.get(pi).copied().unwrap_or(false);
+        let opt = data.optimization_flags.get(pi).copied().unwrap_or(0) == 1;
         if !opt {
             continue;
         }
@@ -224,11 +224,7 @@ fn collect_active_real(
     let cut = s_diag_max * data.modpara.dsr_opt_red_cut;
     let mut smat_to_para_idx: Vec<usize> = Vec::new();
     for pi in 0..n_para {
-        let opt_real = data
-            .optimization_flags
-            .get(2 * pi)
-            .copied()
-            .unwrap_or(false);
+        let opt_real = data.optimization_flags.get(2 * pi).copied().unwrap_or(0) == 1;
         if !opt_real {
             continue;
         }
@@ -416,10 +412,11 @@ mod opttrans_tests {
             data.modpara.dsr_opt_step_dt = 0.125;
             data.modpara.dsr_opt_red_cut = 1e-8;
             data.modpara.nvmc_sample = 8;
-            data.optimization_flags = vec![false; 2 * n];
+            data.optimization_flags = vec![0; 2 * n];
             for i in n - no..n {
-                data.optimization_flags[2 * i] = matches!(fields[3], "real" | "both");
-                data.optimization_flags[2 * i + 1] = matches!(fields[3], "imag" | "both");
+                data.optimization_flags[2 * i] = i64::from(matches!(fields[3], "real" | "both"));
+                data.optimization_flags[2 * i + 1] =
+                    i64::from(matches!(fields[3], "imag" | "both"));
             }
             let mut state = VmcOptimizationState::zeros(
                 data.modpara.nsite as usize,
@@ -956,7 +953,7 @@ mod tests {
         data.modpara.n_orbital_idx = 2;
         data.slater_params = vec![Complex64::new(2.0, 0.0), Complex64::new(3.0, 0.0)];
         data.modpara.dsr_opt_sta_del = 0.0;
-        data.optimization_flags = vec![true, false, true, false];
+        data.optimization_flags = vec![1, 0, 1, 0];
         data.orbital_terms = (0..2)
             .map(|idx| OrbitalTerm {
                 site1: 0,
@@ -1051,7 +1048,7 @@ mod tests {
     fn incomplete_flags_keep_missing_components_fixed() {
         for complex in [false, true] {
             let (mut data, mut state) = two_parameter_problem(complex);
-            data.optimization_flags = vec![true, false];
+            data.optimization_flags = vec![1, 0];
             let before = data.slater_params[data.orbital_terms[1].idx as usize];
             let solve = if complex {
                 stochastic_opt_complex
@@ -1131,7 +1128,7 @@ mod tests {
             value: Complex64::new(5.0, 0.2),
             is_complex: false,
         });
-        data.optimization_flags = vec![false, false, true, false];
+        data.optimization_flags = vec![0, 0, 1, 0];
         let before_g = data.gutzwiller_terms.clone();
         let before_j = data.jastrow_terms[0].value;
         let mut state = VmcOptimizationState::zeros(2, 1, 2, 2, 1, 1, false, false);
