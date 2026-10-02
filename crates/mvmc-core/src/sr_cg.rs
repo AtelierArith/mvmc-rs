@@ -57,7 +57,7 @@ pub fn stochastic_opt_cg(
     let mut diag_cut = 0;
     for (pi, &v) in variance.iter().enumerate() {
         let flag = if complex { pi } else { 2 * pi };
-        if data.optimization_flags.get(flag).copied().unwrap_or(0) != 1 {
+        if !crate::sr::component_is_optimized(data, flag) {
             opt_cut += 1;
         } else if v < threshold {
             diag_cut += 1;

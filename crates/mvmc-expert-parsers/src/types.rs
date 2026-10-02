@@ -889,6 +889,10 @@ pub struct ExpertModeData {
     /// require exactly 1. Definition readers populate this array before use.
     pub optimization_flags: Vec<i64>,
 
+    /// Whether `optimization_flags` uses C's consecutive OptTrans writes.
+    /// This is set only by the C-facing OptTrans parser.
+    pub c_opt_trans_flags: bool,
+
     /// Optional authoritative runtime ComplexType flags. An empty vector
     /// selects inference from factor declarations and current values.
     pub complex_flags: Vec<i64>,
@@ -956,6 +960,7 @@ impl Default for ExpertModeData {
             orbital_idx_matrix: Default::default(),
             orbital_sgn_matrix: Default::default(),
             optimization_flags: Default::default(),
+            c_opt_trans_flags: false,
             complex_flags: Default::default(),
             qp_weights: Default::default(),
         }
