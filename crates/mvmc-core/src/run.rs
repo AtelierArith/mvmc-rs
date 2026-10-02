@@ -459,26 +459,7 @@ pub fn get_all_complex_flag(data: &ExpertModeData) -> bool {
     if !data.complex_flags.is_empty() {
         return data.complex_flags.iter().any(|&flag| flag != 0);
     }
-    data.doublon_holon_4site_complex
-        || data
-            .doublon_holon_4site_params
-            .iter()
-            .any(|value| value.im != 0.0)
-        || data.doublon_holon_2site_complex
-        || data
-            .doublon_holon_2site_params
-            .iter()
-            .any(|value| value.im != 0.0)
-        || data.orbital_terms.iter().any(|term| term.is_complex)
-        || data.slater_params.iter().any(|value| value.im != 0.0)
-        || data
-            .gutzwiller_terms
-            .iter()
-            .any(|term| term.is_complex || term.value.im != 0.0)
-        || data
-            .jastrow_terms
-            .iter()
-            .any(|term| term.is_complex || term.value.im != 0.0)
+    mvmc_expert_parsers::utils::parameter_init::all_complex_flag(data)
 }
 
 fn resolve_seed_with_clock(
@@ -674,10 +655,13 @@ mod mode_tests {
     }
 
     #[test]
-    fn imaginary_loaded_parameter_selects_complex_execution() {
+    fn imaginary_loaded_parameter_does_not_change_c_header_mode() {
         let mut data = data();
         data.slater_params[data.orbital_terms[0].idx as usize].im = 0.5;
-        assert!(state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
+        let state = state_from_data(&data);
+        // C's AllComplexFlag is decided from definition headers before
+        // loading values; an imaginary overlay cannot change the buffers.
+        assert!(!state.sr_opt.sr_opt_oo_real.is_empty());
     }
 
     #[test]
@@ -805,7 +789,7 @@ mod mode_tests {
     }
 
     #[test]
-    fn imaginary_projection_values_select_complex_execution() {
+    fn imaginary_projection_values_do_not_change_c_header_mode() {
         for gutzwiller in [true, false] {
             let mut data = data();
             if gutzwiller {
@@ -823,16 +807,10 @@ mod mode_tests {
                 });
             }
             let state = state_from_data(&data);
-            // Live Julia v0.5.0: sr_size=3, complex OO=48, HO=6,
-            // O=6, sample store=6, all four real buffers empty.
-            assert_eq!(state.sr_opt.sr_opt_oo.len(), 48);
-            assert_eq!(state.sr_opt.sr_opt_ho.len(), 6);
-            assert_eq!(state.sr_opt.sr_opt_o.len(), 6);
-            assert_eq!(state.sr_opt.sr_opt_o_store.len(), 6);
-            assert!(state.sr_opt.sr_opt_oo_real.is_empty());
-            assert!(state.sr_opt.sr_opt_ho_real.is_empty());
-            assert!(state.sr_opt.sr_opt_o_real.is_empty());
-            assert!(state.sr_opt.sr_opt_o_store_real.is_empty());
+            assert!(!state.sr_opt.sr_opt_oo_real.is_empty());
+            assert!(!state.sr_opt.sr_opt_ho_real.is_empty());
+            assert!(!state.sr_opt.sr_opt_o_real.is_empty());
+            assert!(!state.sr_opt.sr_opt_o_store_real.is_empty());
         }
     }
 }
