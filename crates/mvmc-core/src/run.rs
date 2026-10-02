@@ -1442,7 +1442,7 @@ fn accumulate_observables<const TIMED: bool>(
                         term.site3 as usize,
                         term.site4 as usize,
                         crate::observables::spin_code(term.spin1),
-                        crate::observables::spin_code(term.spin2),
+                        crate::observables::spin_code(term.spin3),
                         ip,
                         data,
                         state,
@@ -1453,6 +1453,23 @@ fn accumulate_observables<const TIMED: bool>(
                     )
                 };
             }
+            let lanczos_green = if data.modpara.lanczos_mode > 1 {
+                Some(crate::observables::calculate_lanczos_green(
+                    e,
+                    ip,
+                    data,
+                    state,
+                    &ele_idx,
+                    &ele_cfg,
+                    &ele_num,
+                    &ele_proj_cnt,
+                    &one_body,
+                    &direct,
+                    all_complex,
+                ))
+            } else {
+                None
+            };
             let phys = state.phys_quantities.as_mut().expect("checked above");
             for (index, value) in one_body.iter().copied().enumerate() {
                 phys.local_cis_ajs[index] = value;
@@ -1467,6 +1484,25 @@ fn accumulate_observables<const TIMED: bool>(
             for (index, value) in direct.into_iter().enumerate() {
                 phys.local_cis_ajs_ckt_alt_dc[index] = value;
                 phys.phys_cis_ajs_ckt_alt_dc[index] += value;
+            }
+            if let Some(values) = lanczos_green {
+                for (dst, src) in phys.phys_lanczos_qcisajsq.iter_mut().zip(values.one_body) {
+                    *dst += src;
+                }
+                for (dst, src) in phys
+                    .phys_lanczos_qcisajscktaltq
+                    .iter_mut()
+                    .zip(values.factored_two_body)
+                {
+                    *dst += src;
+                }
+                for (dst, src) in phys
+                    .phys_lanczos_qcisajscktaltq_dc
+                    .iter_mut()
+                    .zip(values.direct_two_body)
+                {
+                    *dst += src;
+                }
             }
         }
 
@@ -1592,6 +1628,15 @@ fn accumulate_observables<const TIMED: bool>(
         if count != 0.0 {
             let denominator = Complex64::new(count, 0.0);
             for value in &mut phys.phys_lanczos_qqqq {
+                *value /= denominator;
+            }
+            for value in &mut phys.phys_lanczos_qcisajsq {
+                *value /= denominator;
+            }
+            for value in &mut phys.phys_lanczos_qcisajscktaltq {
+                *value /= denominator;
+            }
+            for value in &mut phys.phys_lanczos_qcisajscktaltq_dc {
                 *value /= denominator;
             }
             for value in &mut phys.phys_cis_ajs {
