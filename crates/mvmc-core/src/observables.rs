@@ -1063,6 +1063,7 @@ pub fn green_func1(
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
+    let mut scratch = GreenScratch::default();
     green_func1_impl::<false, false>(
         ri,
         rj,
@@ -1075,8 +1076,18 @@ pub fn green_func1(
         ele_cfg,
         ele_num,
         ele_proj_cnt,
+        &mut scratch,
         &mut CTimer::<false>::new(),
     )
+}
+
+#[derive(Default)]
+pub(crate) struct GreenScratch {
+    ele_idx: Vec<i64>,
+    ele_num: Vec<i64>,
+    proj_new: Vec<i64>,
+    new_pf_real: Vec<f64>,
+    new_pf_complex: Vec<Complex64>,
 }
 
 // The cached real Transfer path evaluates the moved configuration directly.
@@ -1157,6 +1168,39 @@ pub fn green_func1_timed<const TIMED: bool>(
     ele_proj_cnt: &[i64],
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
+    let mut scratch = GreenScratch::default();
+    green_func1_timed_with_scratch(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        &mut scratch,
+        timer,
+    )
+}
+
+pub(crate) fn green_func1_timed_with_scratch<const TIMED: bool>(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    scratch: &mut GreenScratch,
+    timer: &mut CTimer<TIMED>,
+) -> Complex64 {
     green_func1_impl::<TIMED, true>(
         ri,
         rj,
@@ -1169,6 +1213,7 @@ pub fn green_func1_timed<const TIMED: bool>(
         ele_cfg,
         ele_num,
         ele_proj_cnt,
+        scratch,
         timer,
     )
 }
@@ -1188,6 +1233,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
     ele_cfg: &[i64],
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
+    scratch: &mut GreenScratch,
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
     let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
@@ -1232,31 +1278,34 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
     let msj = mj + spin_annihilate as usize * n_elec; // full index in ele_idx
 
     // Build proposed electron configuration: move electron msj from rj → ri.
-    let mut my_ele_idx = ele_idx.to_vec();
-    let mut my_ele_num = ele_num.to_vec();
-    my_ele_idx[msj] = ri as i64;
-    my_ele_num[dst] = 1;
-    my_ele_num[src] = 0;
+    scratch.ele_idx.clear();
+    scratch.ele_idx.extend_from_slice(ele_idx);
+    scratch.ele_num.clear();
+    scratch.ele_num.extend_from_slice(ele_num);
+    scratch.ele_idx[msj] = ri as i64;
+    scratch.ele_num[dst] = 1;
+    scratch.ele_num[src] = 0;
 
     timer.stop_diag(927, diag);
     timer.start_diag(921, diag);
     // Update projection counts for the hop rj → ri (same spin).
     let n_proj = ele_proj_cnt.len();
-    let mut proj_new = vec![0_i64; n_proj];
+    scratch.proj_new.resize(n_proj, 0);
+    scratch.proj_new.fill(0);
     update_proj_cnt(
         rj as i64,
         ri as i64,
         spin_create,
-        &mut proj_new,
+        &mut scratch.proj_new,
         ele_proj_cnt,
-        &my_ele_num,
+        &scratch.ele_num,
         data,
     );
 
     timer.stop_diag(921, diag);
     timer.start_diag(922, diag);
     let direct_ratio = if TRANSFER && !crate::run::get_all_complex_flag(data) {
-        calh1_direct_projection_ratio(rj, ri, &my_ele_num, data)
+        calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, data)
     } else {
         None
     };
@@ -1264,7 +1313,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         ratio
     } else if n_proj > 0 {
         julia_exp(crate::sampling::projection::log_proj_ratio(
-            &proj_new,
+            &scratch.proj_new,
             ele_proj_cnt,
             data,
         ))
@@ -1272,19 +1321,20 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         1.0
     };
 
-    let proj_ratio = with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data);
+    let proj_ratio = with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data);
     timer.stop_diag(922, diag);
     // The main-calculation state keeps one pad slot per QP; Julia's
     // wrapper compacts the same inverse planes before its Green helper.
     let inv_stride = (2 * n_elec).pow(2) + 1;
     if !state.slater_matrix.pf_m_real.is_empty() {
-        let mut new_pf = vec![0.0; n_qp_full];
+        scratch.new_pf_real.resize(n_qp_full, 0.0);
+        scratch.new_pf_real.fill(0.0);
         timer.start_diag(923, diag);
         calculate_new_pf_m2_real_flat(
             mj,
             spin_annihilate,
-            &mut new_pf,
-            &my_ele_idx,
+            &mut scratch.new_pf_real,
+            &scratch.ele_idx,
             &state.slater_matrix.slater_elm_real,
             state.slater_matrix.inv_m_real.as_slice(),
             inv_stride,
@@ -1296,7 +1346,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         );
         timer.stop_diag(923, diag);
         timer.start_diag(924, diag);
-        let new_ip = calculate_ip_real(&new_pf, 0, n_qp_full, data);
+        let new_ip = calculate_ip_real(&scratch.new_pf_real, 0, n_qp_full, data);
         timer.stop_diag(924, diag);
         return if TRANSFER && !data.has_rbm_terms() {
             Complex64::new(proj_ratio.re * new_ip / ip.re, 0.0)
@@ -1304,12 +1354,15 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
             crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip, 0.0), ip).conj()
         };
     }
-    let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
+    scratch
+        .new_pf_complex
+        .resize(n_qp_full, Complex64::new(0.0, 0.0));
+    scratch.new_pf_complex.fill(Complex64::new(0.0, 0.0));
     calculate_new_pf_m2_complex_flat(
         mj,
         spin_annihilate,
-        &mut new_pf,
-        &my_ele_idx,
+        &mut scratch.new_pf_complex,
+        &scratch.ele_idx,
         &state.slater_matrix.slater_elm,
         state.slater_matrix.inv_m.as_slice(),
         inv_stride,
@@ -1319,7 +1372,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         n_site,
         n_elec,
     );
-    let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
+    let new_ip = calculate_ip_complex(&scratch.new_pf_complex, 0, n_qp_full, data);
     crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
 }
 
@@ -1373,6 +1426,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             && !crate::run::get_all_complex_flag(data)
             && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
         let mut transfer_energy = 0.0;
+        let mut green_scratch = GreenScratch::default();
         for term in &data.transfer_terms {
             if term.site1 < 0 || term.site2 < 0 {
                 continue;
@@ -1386,7 +1440,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             let spin_annihilate = spin_code(term.spin2);
             let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
             timer.start_diag(920, diag);
-            let g1 = green_func1_timed(
+            let g1 = green_func1_timed_with_scratch(
                 ri,
                 rj,
                 spin_create,
@@ -1398,6 +1452,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 ele_cfg,
                 ele_num,
                 ele_proj_cnt,
+                &mut green_scratch,
                 timer,
             );
             timer.stop_diag(920, diag);
