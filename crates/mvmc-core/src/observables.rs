@@ -80,6 +80,13 @@ pub fn clear_phys_quantity(state: &mut VmcOptimizationState) {
     for x in state.sr_opt.sr_opt_o_real.iter_mut() {
         *x = 0.0;
     }
+    if let Some(phys) = state.phys_quantities.as_mut() {
+        phys.local_cis_ajs.fill(Complex64::new(0.0, 0.0));
+        phys.phys_cis_ajs.fill(Complex64::new(0.0, 0.0));
+        phys.phys_cis_ajs_ckt_alt.fill(Complex64::new(0.0, 0.0));
+        phys.local_cis_ajs_ckt_alt_dc.fill(Complex64::new(0.0, 0.0));
+        phys.phys_cis_ajs_ckt_alt_dc.fill(Complex64::new(0.0, 0.0));
+    }
 }
 
 /// Accumulate one sampled TwoBodyGEx product in canonical term order.
@@ -731,7 +738,7 @@ pub fn slater_elm_diff(
     );
 }
 
-fn spin_code(spin: Spin) -> u8 {
+pub(crate) fn spin_code(spin: Spin) -> u8 {
     match spin {
         Spin::Up => 0,
         Spin::Down => 1,

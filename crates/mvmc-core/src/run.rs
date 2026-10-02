@@ -112,7 +112,24 @@ pub fn prepare_phys_cal_from_namelist(
 /// Parameter optimization and SR are intentionally absent. The preparation's
 /// cloned data consumes the one C-compatible initialization draw block, while
 /// the returned `data` remains the fixed loaded parameter set.
-pub fn vmc_phys_cal(mut preparation: PhysCalPreparation) -> Result<PhysCalResult, String> {
+pub fn vmc_phys_cal(preparation: PhysCalPreparation) -> Result<PhysCalResult, String> {
+    vmc_phys_cal_inner(preparation, None)
+}
+
+/// Run PhysCal and write indexed Green files under `output_dir`.
+pub fn vmc_phys_cal_to_dir(
+    preparation: PhysCalPreparation,
+    output_dir: impl AsRef<Path>,
+) -> Result<PhysCalResult, String> {
+    let output_dir = output_dir.as_ref();
+    std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
+    vmc_phys_cal_inner(preparation, Some(output_dir))
+}
+
+fn vmc_phys_cal_inner(
+    mut preparation: PhysCalPreparation,
+    output_dir: Option<&Path>,
+) -> Result<PhysCalResult, String> {
     let mut init_data = preparation.data.clone();
     init_parameter(&mut init_data, &mut preparation.rng);
     if preparation.data.modpara.nmp_trans == 0 {
@@ -131,7 +148,7 @@ pub fn vmc_phys_cal(mut preparation: PhysCalPreparation) -> Result<PhysCalResult
         update_slater_elm(&mut preparation.data, &mut state);
     }
     let iterations = preparation.data.modpara.n_data_qty_smp.max(0) as usize;
-    for _ in 0..iterations {
+    for sample in 0..iterations {
         if use_fsz {
             if all_complex {
                 crate::sampling::driver::vmc_make_sample_fsz(
@@ -169,6 +186,10 @@ pub fn vmc_phys_cal(mut preparation: PhysCalPreparation) -> Result<PhysCalResult
             use_fsz,
             &mut CTimer::<false>::new(),
         );
+        if let Some(output_dir) = output_dir {
+            crate::io::output_phys_data(&preparation.data, &state, sample, Some(output_dir))
+                .map_err(|error| error.to_string())?;
+        }
     }
     Ok(PhysCalResult {
         data: preparation.data,
@@ -1308,6 +1329,96 @@ fn accumulate_observables<const TIMED: bool>(
         state.energy.sztot += Complex64::new(w * sz, 0.0);
         state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
 
+        if state.phys_quantities.is_some() {
+            let mut one_body = vec![Complex64::new(0.0, 0.0); data.green_one_terms.len()];
+            for (index, term) in data.green_one_terms.iter().enumerate() {
+                one_body[index] = if use_fsz {
+                    crate::observables::green_func1_fsz(
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        crate::observables::spin_code(term.spin1),
+                        crate::observables::spin_code(term.spin2),
+                        ip,
+                        data,
+                        state,
+                        &ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                        &ele_spn,
+                    )
+                } else {
+                    crate::observables::green_func1(
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        crate::observables::spin_code(term.spin1),
+                        crate::observables::spin_code(term.spin2),
+                        ip,
+                        data,
+                        state,
+                        &ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                    )
+                };
+            }
+            let mut direct = vec![Complex64::new(0.0, 0.0); data.green_two_terms.len()];
+            for (index, term) in data.green_two_terms.iter().enumerate() {
+                direct[index] = if use_fsz {
+                    crate::observables::green_func2_fsz(
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        term.site3 as usize,
+                        term.site4 as usize,
+                        crate::observables::spin_code(term.spin1),
+                        crate::observables::spin_code(term.spin2),
+                        crate::observables::spin_code(term.spin3),
+                        crate::observables::spin_code(term.spin4),
+                        ip,
+                        data,
+                        state,
+                        &ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                        &ele_spn,
+                    )
+                } else {
+                    crate::observables::green_func2(
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        term.site3 as usize,
+                        term.site4 as usize,
+                        crate::observables::spin_code(term.spin1),
+                        crate::observables::spin_code(term.spin2),
+                        ip,
+                        data,
+                        state,
+                        &ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                    )
+                };
+            }
+            let phys = state.phys_quantities.as_mut().expect("checked above");
+            for (index, value) in one_body.iter().copied().enumerate() {
+                phys.local_cis_ajs[index] = value;
+                phys.phys_cis_ajs[index] += value;
+            }
+            crate::observables::accumulate_two_body_gex_sample(
+                &mut phys.phys_cis_ajs_ckt_alt,
+                &one_body,
+                &data.green_two_ex_indices,
+                Complex64::new(w, 0.0),
+            );
+            for (index, value) in direct.into_iter().enumerate() {
+                phys.local_cis_ajs_ckt_alt_dc[index] = value;
+                phys.phys_cis_ajs_ckt_alt_dc[index] += value;
+            }
+        }
+
         timer.stop_diag(946, diag);
         timer.stop_diag(940, diag);
         timer.start_diag(940, diag);
@@ -1424,6 +1535,21 @@ fn accumulate_observables<const TIMED: bool>(
             }
         }
         timer.stop(43);
+    }
+    if let Some(phys) = state.phys_quantities.as_mut() {
+        let count = state.energy.wc.re;
+        if count != 0.0 {
+            let denominator = Complex64::new(count, 0.0);
+            for value in &mut phys.phys_cis_ajs {
+                *value /= denominator;
+            }
+            for value in &mut phys.phys_cis_ajs_ckt_alt {
+                *value /= denominator;
+            }
+            for value in &mut phys.phys_cis_ajs_ckt_alt_dc {
+                *value /= denominator;
+            }
+        }
     }
     if use_store {
         timer.start(45);
