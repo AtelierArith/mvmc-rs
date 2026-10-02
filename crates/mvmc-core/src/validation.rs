@@ -55,7 +55,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
                 p.nsplit_size, data.n_qp_opt_trans
             ));
         }
-        return Err("NSplitSize > 1 grouped execution is not implemented yet (issue #36)".into());
     }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
