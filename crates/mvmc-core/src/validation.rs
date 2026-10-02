@@ -66,9 +66,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
         if data.i_flg_orbital_general == 0 {
             return Err("InterAll requires the general-orbital fixed-Sz path; non-FSZ InterAll is unsupported".into());
         }
-        if !crate::run::get_all_complex_flag(data) {
-            return Err("real FSZ InterAll is not implemented yet (issue #43)".into());
-        }
         for (index, term) in data.inter_all_terms.iter().enumerate() {
             // Julia skips out-of-range sites before using any spin indices.
             if [term.site0, term.site1, term.site2, term.site3]

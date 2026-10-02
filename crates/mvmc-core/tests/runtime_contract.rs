@@ -138,6 +138,32 @@ fn complex_fixed_sz_interall_passes_runtime_validation() {
 }
 
 #[test]
+fn real_fixed_sz_interall_passes_runtime_validation() {
+    let mut data = ExpertModeData::new();
+    data.modpara.nsite = 2;
+    data.modpara.nelec = 1;
+    data.modpara.nvmc_sample = 1;
+    data.modpara.nvmc_interval = 1;
+    data.modpara.nmp_trans = 1;
+    data.i_flg_orbital_general = 1;
+    data.complex_flags = vec![0];
+    data.inter_all_terms
+        .push(mvmc_expert_parsers::InterAllTerm {
+            site0: 0,
+            spin0: 0,
+            site1: 1,
+            spin1: 0,
+            site2: 1,
+            spin2: 1,
+            site3: 0,
+            spin3: 1,
+            value: num_complex::Complex64::new(0.25, 0.0),
+            is_complex: false,
+        });
+    assert!(mvmc_core::validation::validate_para_opt(&data).is_ok());
+}
+
+#[test]
 fn real_fsz_pairhop_is_not_rejected_by_issue_43_gate() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/pairhop/namelist.def");
@@ -169,13 +195,9 @@ fn real_fsz_pairhop_is_not_rejected_by_issue_43_gate() {
 fn interall_mode_and_invalid_spin_failures_precede_rng_consumption_and_output() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/interall/spin_chain/namelist.def");
-    for mode in ["real", "spin"] {
+    for _ in ["spin"] {
         let mut data = historical_orbital_model::historical_kernel_model(&root).unwrap();
-        if mode == "real" {
-            data.complex_flags = vec![0];
-        } else {
-            data.inter_all_terms[0].spin2 = 2;
-        }
+        data.inter_all_terms[0].spin2 = 2;
         let before = data.clone();
         let mut rng = Sfmt19937Rng::new(1);
         let mut probe = Sfmt19937Rng::new(1);
@@ -189,12 +211,7 @@ fn interall_mode_and_invalid_spin_failures_precede_rng_consumption_and_output() 
             mvmc_core::OptimizationOptions::default(),
         )
         .unwrap_err();
-        let expected = if mode == "real" {
-            "issue #43"
-        } else {
-            "spin2 must be 0 or 1"
-        };
-        assert!(error.contains(expected), "{error}");
+        assert!(error.contains("spin2 must be 0 or 1"), "{error}");
         assert_eq!(data.modpara, before.modpara);
         assert_eq!(data.orbital_terms, before.orbital_terms);
         assert_eq!(data.slater_params, before.slater_params);
