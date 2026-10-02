@@ -1484,6 +1484,124 @@ pub fn calculate_local_energy(
     )
 }
 
+/// Calculate the second Lanczos Hamiltonian moment for diagonal and transfer
+/// terms. The moved configuration is evaluated with the same local-energy
+/// kernel as the original sample, preserving the Julia operator order.
+/// PairHop, Exchange, InterAll, and FSZ callers remain outside this helper.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn calculate_lanczos_h2_transfer(
+    h1: Complex64,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    all_complex: bool,
+) -> Complex64 {
+    let mut h2 = h1 * calculate_hamiltonian_diagonal(ele_num, data);
+    let original_slater = state.slater_matrix.clone();
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_qp_full = state.slater_matrix.pf_m.len();
+    let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
+    let mut scratch = GreenScratch::default();
+
+    for term in &data.transfer_terms {
+        let ri = term.site1;
+        let rj = term.site2;
+        let spin_create = term.spin1.as_code();
+        let spin_annihilate = term.spin2.as_code();
+        if ri < 0
+            || rj < 0
+            || ri as usize >= n_site
+            || rj as usize >= n_site
+            || spin_create != spin_annihilate
+        {
+            continue;
+        }
+        let green = green_func1_impl::<false, true>(
+            ri as usize,
+            rj as usize,
+            spin_create,
+            spin_annihilate,
+            ip,
+            data,
+            state,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            &mut scratch,
+            &mut CTimer::<false>::new(),
+        );
+        if green.norm() == 0.0 {
+            continue;
+        }
+        let src = rj as usize + spin_annihilate as usize * n_site;
+        let dst = ri as usize + spin_create as usize * n_site;
+        let moved_idx = scratch.ele_idx.clone();
+        let moved_num = scratch.ele_num.clone();
+        let moved_proj = scratch.proj_new.clone();
+        let mut moved_cfg = ele_cfg.to_vec();
+        let Some(electron) = ele_cfg[src].checked_abs().map(|v| v as usize) else {
+            continue;
+        };
+        moved_cfg[src] = -1;
+        moved_cfg[dst] = electron as i64;
+
+        if all_complex {
+            let _ = crate::pfaffian::calc_m_all_complex(
+                &moved_idx,
+                &state.slater_matrix.slater_elm,
+                &mut state.slater_matrix.inv_m,
+                &mut state.slater_matrix.pf_m,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+        } else {
+            let _ = crate::pfaffian::calc_m_all_real(
+                &moved_idx,
+                &state.slater_matrix.slater_elm_real,
+                &mut state.slater_matrix.inv_m_real,
+                &mut state.slater_matrix.pf_m_real,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+        }
+        let moved_ip = if all_complex {
+            calculate_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data)
+        } else {
+            Complex64::new(
+                calculate_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data),
+                0.0,
+            )
+        };
+        if moved_ip.norm() > 0.0 {
+            let moved_h = calculate_local_energy(
+                moved_ip,
+                data,
+                state,
+                &moved_idx,
+                &moved_cfg,
+                &moved_num,
+                &moved_proj,
+            );
+            h2 += -term.value * moved_h * green.conj();
+        }
+        state.slater_matrix = original_slater.clone();
+    }
+    state.slater_matrix = original_slater;
+    h2
+}
+
 /// Evaluate this kernel with call-site-specific section and diagnostic timers.
 pub fn calculate_local_energy_timed<const TIMED: bool>(
     ip: Complex64,
