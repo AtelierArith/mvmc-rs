@@ -1123,10 +1123,12 @@ fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
     }
     mix(u64::from(data.has_rbm_terms()));
     mix(data.gutzwiller_idx.len() as u64);
+    mix(data.n_gutzwiller_idx as u64);
     for &index in &data.gutzwiller_idx {
         mix(index as u64);
     }
     mix(data.jastrow_idx.len() as u64);
+    mix(data.n_jastrow_idx as u64);
     for row in &data.jastrow_idx {
         mix(row.len() as u64);
         for &index in row {
@@ -1849,6 +1851,10 @@ mod tests {
         data.gutzwiller_idx = vec![0, 1];
         refresh_transfer_cache(&data, &mut state);
         assert_ne!(state.transfer_cache.signature, before_mapping);
+        let before_width = state.transfer_cache.signature;
+        data.n_gutzwiller_idx = 1;
+        refresh_transfer_cache(&data, &mut state);
+        assert_ne!(state.transfer_cache.signature, before_width);
 
         data.doublon_holon_2site_indices
             .push(mvmc_expert_parsers::DoublonHolon2SiteIndex {
