@@ -245,8 +245,15 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     timer: &mut CTimer<TIMED>,
 ) -> Result<(), String> {
     crate::validation::validate_para_opt(data)?;
-    if reducer.world_size() != 1 {
-        return Err("MPI execution is not implemented yet (issue #35)".into());
+    let world_size = reducer.world_size();
+    let rank = reducer.rank();
+    if world_size > 1 && data.modpara.nsplit_size != 1 {
+        return Err("MPI sample-parallel execution requires NSplitSize = 1 (issue #35)".into());
+    }
+    if rank >= world_size {
+        return Err(format!(
+            "MPI rank {rank} is outside world size {world_size}"
+        ));
     }
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
@@ -255,6 +262,11 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
     let use_fsz = i_flg_general != 0;
+    if world_size > 1 {
+        let total_samples = data.modpara.nvmc_sample.max(0) as usize;
+        let local = crate::parallel::partition_range(total_samples, world_size, rank);
+        data.modpara.nvmc_sample = (local.end - local.start) as i64;
+    }
     timer.start(2);
     for step in 0..n_steps {
         timer.start(20);
@@ -304,6 +316,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
 
         timer.stop(4);
         timer.start(21);
+        reduce_accumulators(state, reducer);
         timer.start_diag(960, timer.diagnostics.weightavg);
         // 4. Weighted averages + counter reduction.
         timer.start_diag(962, timer.diagnostics.weightavg);
@@ -326,7 +339,9 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
 
         // 5. Output.
         timer.start(22);
-        output_data(data, state, step, output_dir).map_err(|e| e.to_string())?;
+        if rank == 0 {
+            output_data(data, state, step, output_dir).map_err(|e| e.to_string())?;
+        }
         timer.stop(22);
 
         if options.skip_sr {
@@ -367,7 +382,9 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         }
     }
 
-    output_opt_data(data, output_dir).map_err(|e| e.to_string())?;
+    if rank == 0 {
+        output_opt_data(data, output_dir).map_err(|e| e.to_string())?;
+    }
     timer.stop(2);
     Ok(())
 }
@@ -571,6 +588,99 @@ fn fresh_output_directory() -> Result<std::path::PathBuf, String> {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error.to_string()),
         }
+    }
+}
+
+/// Sum the per-rank sample accumulators before normalization and SR.
+///
+/// Sampling buffers remain rank-local; only quantities that feed the global
+/// weighted averages are reduced.  This mirrors Julia's `WeightAverage!`
+/// boundary and keeps rank-local configurations available for diagnostics.
+fn reduce_accumulators<R: Reducer + ?Sized>(state: &mut VmcOptimizationState, reducer: &R) {
+    let mut energy = [
+        state.energy.wc,
+        state.energy.etot,
+        state.energy.etot2,
+        state.energy.sztot,
+        state.energy.sztot2,
+    ];
+    reducer.allreduce_sum_c64(&mut energy);
+    [
+        &mut state.energy.wc,
+        &mut state.energy.etot,
+        &mut state.energy.etot2,
+        &mut state.energy.sztot,
+        &mut state.energy.sztot2,
+    ]
+    .into_iter()
+    .zip(energy)
+    .for_each(|(dst, value)| *dst = value);
+
+    reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_oo);
+    reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_ho);
+    if !state.sr_opt.sr_opt_oo_real.is_empty() {
+        reducer.allreduce_sum_f64(&mut state.sr_opt.sr_opt_oo_real);
+        reducer.allreduce_sum_f64(&mut state.sr_opt.sr_opt_ho_real);
+    }
+    if let Some(phys) = state.phys_quantities.as_mut() {
+        reducer.allreduce_sum_c64(&mut phys.phys_cis_ajs);
+        reducer.allreduce_sum_c64(&mut phys.phys_cis_ajs_ckt_alt);
+        reducer.allreduce_sum_c64(&mut phys.phys_cis_ajs_ckt_alt_dc);
+        reducer.allreduce_sum_c64(&mut phys.phys_lanczos_qqqq);
+        reducer.allreduce_sum_c64(&mut phys.phys_lanczos_qcisajsq);
+        reducer.allreduce_sum_c64(&mut phys.phys_lanczos_qcisajscktaltq);
+        reducer.allreduce_sum_c64(&mut phys.phys_lanczos_qcisajscktaltq_dc);
+    }
+}
+
+#[cfg(test)]
+mod mpi_tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct ScalingReducer {
+        world: usize,
+        rank: usize,
+    }
+
+    impl Reducer for ScalingReducer {
+        fn allreduce_sum_f64(&self, values: &mut [f64]) {
+            for value in values {
+                *value *= self.world as f64;
+            }
+        }
+
+        fn allreduce_sum_c64(&self, values: &mut [Complex64]) {
+            for value in values {
+                *value *= self.world as f64;
+            }
+        }
+
+        fn allreduce_sum_i64(&self, values: &mut [i64]) {
+            for value in values {
+                *value *= self.world as i64;
+            }
+        }
+
+        fn world_size(&self) -> usize {
+            self.world
+        }
+
+        fn rank(&self) -> usize {
+            self.rank
+        }
+    }
+
+    #[test]
+    fn sample_parallel_reduction_sums_energy_and_sr_buffers() {
+        let mut state = VmcOptimizationState::zeros(2, 2, 0, 1, 1, 2, true, false);
+        state.energy.wc = Complex64::new(3.0, 0.0);
+        state.sr_opt.sr_opt_oo[0] = Complex64::new(4.0, -1.0);
+        state.sr_opt.sr_opt_ho[0] = Complex64::new(-2.0, 0.5);
+        reduce_accumulators(&mut state, &ScalingReducer { world: 2, rank: 1 });
+        assert_eq!(state.energy.wc, Complex64::new(6.0, 0.0));
+        assert_eq!(state.sr_opt.sr_opt_oo[0], Complex64::new(8.0, -2.0));
+        assert_eq!(state.sr_opt.sr_opt_ho[0], Complex64::new(-4.0, 1.0));
     }
 }
 

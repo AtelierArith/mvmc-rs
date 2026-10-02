@@ -31,9 +31,6 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
 
 /// Validate parameter-optimization entry points before initialization or IO.
 pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
-    if mpi_requested(|key| std::env::var(key).ok()) {
-        return Err("MPI execution is not implemented yet (issue #35)".into());
-    }
     let p = &data.modpara;
     validate_supported_modpara(p)?;
     if p.lanczos_mode > 0 {
@@ -58,7 +55,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
                 p.nsplit_size, data.n_qp_opt_trans
             ));
         }
-        return Err("NSplitSize > 1 is not implemented yet (issue #36)".into());
+        return Err("NSplitSize > 1 grouped execution is not implemented yet (issue #36)".into());
     }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
