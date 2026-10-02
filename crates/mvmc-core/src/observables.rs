@@ -1922,6 +1922,44 @@ mod tests {
     }
 
     #[test]
+    fn real_transfer_fast_green_matches_generic_and_local_energy() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+            site1: 1,
+            spin1: Spin::Up,
+            site2: 0,
+            spin2: Spin::Up,
+            value: Complex64::new(0.75, 0.0),
+        });
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+        state.slater_matrix.pf_m_real[0] = 1.0;
+        // The one-electron real quotient is nonzero and deterministic:
+        // inv row 0 contracts with the moved Slater row to give -1.
+        state.slater_matrix.inv_m_real.as_mut_slice()[0] = 1.0;
+        state.slater_matrix.slater_elm_real.set(0, 1, 0, 1.0);
+        let idx = [0_i64, 0];
+        let cfg = [0_i64, -1, -1, -1];
+        let num = [1_i64, 0, 0, 0];
+        let counts: [i64; 0] = [];
+        let ip = Complex64::new(1.0, 0.0);
+
+        let generic = green_func1(1, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &counts);
+        refresh_transfer_cache(&data, &mut state);
+        let mut timer = CTimer::<false>::new();
+        let fast = green_func1_timed(
+            1, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &counts, &mut timer,
+        );
+        assert_eq!(fast.re.to_bits(), generic.re.to_bits());
+        assert_eq!(fast.im, generic.im);
+
+        let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &counts);
+        assert_eq!(energy.re, -data.transfer_terms[0].value.re * generic.re);
+        assert_eq!(energy.im, 0.0);
+    }
+
+    #[test]
     fn set_projection_diff_writes_real_block() {
         let mut buf = vec![Complex64::new(0.0, 0.0); 8];
         let proj = vec![3_i64, -2_i64, 5_i64];
