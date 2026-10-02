@@ -51,7 +51,7 @@ Do not accept discrepancies as Monte Carlo noise or statistical fluctuations. Co
 
 ## Commit & Pull Request Guidelines
 
-Recent history uses short imperative commit subjects such as `Optimize utu2 inverse slice access` and `Add SIMD plus BLAS benchmark variant`. Keep commits focused and avoid mixing generated benchmark artifacts with code changes unless the report is requested. Pull requests should describe the numerical behavior changed, list commands run, mention enabled features such as `simd-backend` or `blas-backend`, and link related issues. Include benchmark report paths when performance claims are made.
+Recent history uses short imperative commit subjects such as `Optimize utu2 inverse slice access` and `Add SIMD plus BLAS benchmark variant`. Keep commits focused and avoid mixing generated benchmark artifacts with code changes unless the report is requested. Pull requests should describe the numerical behavior changed, list commands run, mention enabled features such as `simd-backend` or `blas-backend`, and link related issues. Every pull request body must explicitly identify the related issue with `Closes #...` when it completes the issue or `Related to #...` when the issue remains open. Include benchmark report paths when performance claims are made.
 
 For the issue #56 implementation work, commit each validated implementation milestone, create a pull request, and merge it into `main` before starting the next milestone on a new branch. This workflow is authorized by the user; do not ask for confirmation at each commit, pull request, or merge. Keep issues open until their full acceptance criteria have been implemented and verified.
 
