@@ -192,6 +192,7 @@ pub fn set_opt_trans_c_opt_flags(data: &mut ExpertModeData) {
     if count == 0 {
         return;
     }
+    data.c_opt_trans_flags = true;
     let fidx = data.projection_layout().n_proj + n_slater(data);
     let required = 2
         * (data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data) + count);

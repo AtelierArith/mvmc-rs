@@ -16,6 +16,25 @@ use num_complex::Complex64;
 use crate::c_timer::CTimer;
 use crate::state::VmcOptimizationState;
 
+/// Select an SR component using either Rust's pair layout or C's native
+/// consecutive OptTrans flag writes.
+pub(crate) fn component_is_optimized(data: &ExpertModeData, component: usize) -> bool {
+    let layout = data.projection_layout();
+    let opt_start = layout.n_proj + data.count_rbm_parameters() + n_slater(data);
+    let parameter = component / 2;
+    if data.c_opt_trans_flags
+        && parameter >= opt_start
+        && parameter < opt_start + data.count_opt_trans_parameters()
+    {
+        if component % 2 != 0 {
+            return false;
+        }
+        let c_index = layout.n_proj + n_slater(data) + (parameter - opt_start);
+        return data.optimization_flags.get(c_index).copied() == Some(1);
+    }
+    data.optimization_flags.get(component).copied() == Some(1)
+}
+
 // Fortran LAPACK symbols provided by the system LAPACK library linked via
 // `build.rs`.  The Fortran calling convention passes scalars by pointer and
 // appends a trailing underscore to the routine name.
@@ -147,7 +166,7 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
 
     let mut smat_to_para_idx: Vec<usize> = Vec::new();
     for pi in 0..(2 * n_para) {
-        let opt = data.optimization_flags.get(pi).copied().unwrap_or(0) == 1;
+        let opt = component_is_optimized(data, pi);
         if !opt {
             continue;
         }
@@ -224,7 +243,7 @@ fn collect_active_real(
     let cut = s_diag_max * data.modpara.dsr_opt_red_cut;
     let mut smat_to_para_idx: Vec<usize> = Vec::new();
     for pi in 0..n_para {
-        let opt_real = data.optimization_flags.get(2 * pi).copied().unwrap_or(0) == 1;
+        let opt_real = component_is_optimized(data, 2 * pi);
         if !opt_real {
             continue;
         }
@@ -318,6 +337,19 @@ mod opttrans_tests {
 
     fn root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/opttrans")
+    }
+
+    #[test]
+    fn c_opttrans_flags_select_native_consecutive_writes() {
+        let mut data = ExpertModeData::new();
+        data.n_gutzwiller_idx = 3;
+        data.opt_trans = vec![Complex64::new(0.5, 0.0), Complex64::new(0.75, 0.0)];
+        data.c_opt_trans_flags = true;
+        data.optimization_flags = vec![0, 0, 0, 1, 1, 0, 0];
+        assert!(component_is_optimized(&data, 6));
+        assert!(!component_is_optimized(&data, 7));
+        assert!(component_is_optimized(&data, 8));
+        assert!(!component_is_optimized(&data, 9));
     }
 
     fn model(name: &str) -> ExpertModeData {
