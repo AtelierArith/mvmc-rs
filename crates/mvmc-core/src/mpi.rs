@@ -31,6 +31,9 @@ pub struct MpiContext {
 /// are confined to the group communicator (`comm1` in the Julia runner).
 pub struct MpiGroupContext {
     communicator: ::mpi::topology::SimpleCommunicator,
+    /// Cross-group communicator (`comm2` in Julia/C), connecting equal local
+    /// ranks from every QP/sample group.
+    cross_communicator: ::mpi::topology::SimpleCommunicator,
     assignment: GroupAssignment,
 }
 
@@ -135,8 +138,32 @@ impl MpiContext {
             .world
             .split_by_color_with_key(color, key)
             .ok_or_else(|| "MPI communicator split returned MPI_UNDEFINED".to_string())?;
+        // Julia's comm2 groups ranks by their local comm1 rank.  The first
+        // reduction over comm1 combines sample partitions within each group;
+        // the second reduction over comm2 combines the resulting group totals
+        // exactly once across groups.
+        let cross_color =
+            Color::with_value(i32::try_from(assignment.local_rank).map_err(|_| {
+                format!(
+                    "MPI local rank {} does not fit in an MPI color",
+                    assignment.local_rank
+                )
+            })?);
+        let cross_key = Key::with_value(i32::try_from(assignment.group).map_err(|_| {
+            format!(
+                "MPI group index {} does not fit in an MPI key",
+                assignment.group
+            )
+        })?);
+        let cross_communicator = self
+            .world
+            .split_by_color_with_key(cross_color, cross_key)
+            .ok_or_else(|| {
+                "MPI cross-group communicator split returned MPI_UNDEFINED".to_string()
+            })?;
         Ok(MpiGroupContext {
             communicator,
+            cross_communicator,
             assignment,
         })
     }
@@ -202,6 +229,11 @@ impl MpiGroupContext {
     pub fn communicator(&self) -> &::mpi::topology::SimpleCommunicator {
         &self.communicator
     }
+
+    /// Borrow the cross-group communicator used for the second reduction.
+    pub fn cross_communicator(&self) -> &::mpi::topology::SimpleCommunicator {
+        &self.cross_communicator
+    }
 }
 
 impl Reducer for MpiGroupContext {
@@ -211,7 +243,8 @@ impl Reducer for MpiGroupContext {
             let mut reduced = vec![0.0; chunk.len()];
             self.communicator
                 .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
-            chunk.copy_from_slice(&reduced);
+            self.cross_communicator
+                .all_reduce_into(&reduced, chunk, SystemOperation::sum());
         }
     }
 
@@ -226,9 +259,21 @@ impl Reducer for MpiGroupContext {
                 .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
             self.communicator
                 .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
+            let mut global_real = vec![0.0; chunk.len()];
+            let mut global_imag = vec![0.0; chunk.len()];
+            self.cross_communicator.all_reduce_into(
+                &reduced_real,
+                &mut global_real,
+                SystemOperation::sum(),
+            );
+            self.cross_communicator.all_reduce_into(
+                &reduced_imag,
+                &mut global_imag,
+                SystemOperation::sum(),
+            );
             for (value, (real, imag)) in chunk
                 .iter_mut()
-                .zip(reduced_real.into_iter().zip(reduced_imag))
+                .zip(global_real.into_iter().zip(global_imag))
             {
                 *value = Complex64::new(real, imag);
             }
@@ -241,7 +286,8 @@ impl Reducer for MpiGroupContext {
             let mut reduced = vec![0_i64; chunk.len()];
             self.communicator
                 .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
-            chunk.copy_from_slice(&reduced);
+            self.cross_communicator
+                .all_reduce_into(&reduced, chunk, SystemOperation::sum());
         }
     }
 
