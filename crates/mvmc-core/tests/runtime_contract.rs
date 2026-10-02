@@ -45,7 +45,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 
 #[test]
 fn unported_sections_cannot_silently_change_the_model() {
-    for kind in ["InterAll", "OptTrans", "TwoBodyGEx", "SpinJastrow"] {
+    for kind in ["InterAll", "TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
         data.namelist.push((kind.into(), "missing.def".into()));
         let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
@@ -54,33 +54,16 @@ fn unported_sections_cannot_silently_change_the_model() {
 }
 
 #[test]
-fn active_opttrans_is_rejected_before_rng_consumption_even_with_one_sector() {
+fn active_serial_opttrans_passes_validation_including_single_sector_payloads() {
     for count in [1, 2] {
         let mut data = ExpertModeData::new();
         data.n_qp_opt_trans = count;
         data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); count as usize];
-        let before = data.clone();
-        let mut rng = Sfmt19937Rng::new(1);
-        let mut probe = Sfmt19937Rng::new(1);
-        let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
-        let error = vmc_para_opt(
-            &mut data,
-            &mut state,
-            &mut rng,
-            None,
-            &SingleProcessReducer,
-            mvmc_core::OptimizationOptions::default(),
-        )
-        .unwrap_err();
-        assert!(
-            error.contains("OptTrans") && error.contains("issue #27"),
-            "{error}"
-        );
-        assert_eq!(data.opt_trans, before.opt_trans);
-        assert_eq!(data.optimization_flags, before.optimization_flags);
-        for _ in 0..624 {
-            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
-        }
+        data.namelist
+            .push(("OptTrans".into(), "opttrans.def".into()));
+        data.namelist
+            .push(("InOptTrans".into(), "optional.def".into()));
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }
 
@@ -215,6 +198,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
         "InOrbitalAntiParallel",
         "InOrbitalParallel",
         "InOrbitalGeneral",
+        "InOptTrans",
     ] {
         namelist.push_str(&format!("{kind} absent.def\n"));
     }
@@ -223,4 +207,46 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
     assert!(data.input_errors.is_empty());
     mvmc_core::validation::validate_para_opt(&data).unwrap();
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use() {
+    let fixture = include_str!("../../../tests/fixtures/opttrans/grouped.txt");
+    for line in fixture.lines().filter(|s| !s.starts_with('#')) {
+        let fields = line
+            .split_whitespace()
+            .map(|s| s.parse::<usize>().unwrap())
+            .collect::<Vec<_>>();
+        let mut data = ExpertModeData::new();
+        data.modpara.nsplit_size = 2;
+        data.n_qp_opt_trans = fields[0] as i64;
+        data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); fields[1]];
+        data.qp_opt_trans = vec![vec![]; fields[2]];
+        let before = data.clone();
+        let mut rng = Sfmt19937Rng::new(1);
+        let mut probe = rng.clone();
+        let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            None,
+            &SingleProcessReducer,
+            mvmc_core::OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        if fields[3] == 1 {
+            assert!(
+                error.contains("OptTrans") && error.contains("not supported"),
+                "{line}: {error}"
+            );
+        } else {
+            assert!(error.contains("issue #36"), "{line}: {error}");
+        }
+        assert_eq!(data.opt_trans, before.opt_trans);
+        assert_eq!(data.optimization_flags, before.optimization_flags);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+        }
+    }
 }

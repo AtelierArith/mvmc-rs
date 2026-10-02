@@ -130,7 +130,7 @@ pub fn calculate_log_ip_real(
     data: &ExpertModeData,
 ) -> f64 {
     let ip = calculate_ip_real(pf_m_real, qp_start, qp_end, data);
-    (ip.abs() + 1.0e-100).ln()
+    mvmc_expert_parsers::utils::julia_log::log(ip.abs() + 1.0e-100)
 }
 
 /// Complex `calculate_log_ip_fcmp` mirror.
@@ -723,7 +723,7 @@ pub fn opt_trans_diff(
     sr_opt_o: &mut [Complex64],
     ip: Complex64,
     data: &ExpertModeData,
-    state: &VmcOptimizationState,
+    pf_m: &[Complex64],
 ) {
     let Some(weights) = data.qp_weights.as_ref() else {
         return;
@@ -735,7 +735,7 @@ pub fn opt_trans_diff(
     for sector in 0..data.count_opt_trans_parameters() {
         let mut acc = Complex64::new(0.0, 0.0);
         for (j, &weight) in weights.qp_fix_weight.iter().enumerate() {
-            if let Some(&pf) = state.slater_matrix.pf_m.get(sector * n_fix + j) {
+            if let Some(&pf) = pf_m.get(sector * n_fix + j) {
                 acc += weight * pf;
             }
         }

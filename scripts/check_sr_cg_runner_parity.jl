@@ -6,11 +6,13 @@ BLAS.set_num_threads(1)
 const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
-CASE in ("real", "cmp", "fsz", "hubbard", "interall", "pairhop_real", "pairhop_fsz", "dh2_real", "dh2_cmp", "dh2_fsz", "dh4_real", "dh4_cmp", "dh4_fsz", "dh24_real", "dh24_cmp", "dh24_fsz", "rbm_real", "rbm_cmp", "rbm_general_cmp", "rbm_dh24_cmp", "rbm_fsz", "rbm_reference_cmp") || error("Unknown case: $CASE")
+CASE in ("real", "cmp", "fsz", "hubbard", "interall", "pairhop_real", "pairhop_fsz", "dh2_real", "dh2_cmp", "dh2_fsz", "dh4_real", "dh4_cmp", "dh4_fsz", "dh24_real", "dh24_cmp", "dh24_fsz", "rbm_real", "rbm_cmp", "rbm_general_cmp", "rbm_dh24_cmp", "rbm_fsz", "rbm_reference_cmp", "opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp") || error("Unknown case: $CASE")
 pairhop_namelist() = joinpath(@__DIR__,"..","extern","Julia-mVMC","test","integration","reference","hubbard_chain_"*CASE,"inputs","namelist.def")
 const DH_CASE = startswith(CASE,"dh2_") || startswith(CASE,"dh4_") || startswith(CASE,"dh24_")
 const RBM_CASE = startswith(CASE,"rbm_")
-const LOADED_CASE = DH_CASE || RBM_CASE
+const OPT_CASE = startswith(CASE,"opt_")
+const LOADED_CASE = DH_CASE || RBM_CASE || OPT_CASE
+opt_namelist() = joinpath(@__DIR__,"..","tests","fixtures","opttrans","run_"*CASE,"namelist.def")
 rbm_namelist() = CASE == "rbm_reference_cmp" ? joinpath(@__DIR__,"..","extern","Julia-mVMC","test","integration","reference","general_rbm_cmp","inputs","namelist.def") : joinpath(@__DIR__,"..","tests","fixtures","rbm","run_"*CASE,"namelist.def")
 const SEED = CASE == "rbm_reference_cmp" ? 12395 : 1
 rbm_values(data) = ComplexF64[t.value for section in MVMCOptimizers._rbm_parameter_sections(data) for t in section]
@@ -33,7 +35,7 @@ function capture_source_step!(step, data, state; failed=false)
     failed && (FAILURE_STEP[] = step)
     @assert failed || (CASE == "rbm_fsz" || real(state.energy.wc)>0) && isfinite(state.energy.etot) "Original source produced no finite weighted samples"
     params = vcat([t.value for t in data.gutzwiller_terms],
-                  [t.value for t in data.jastrow_terms], data.doublon_holon_2site_params, data.doublon_holon_4site_params, rbm_values(data), [t.value for t in data.orbital_terms])
+                  [t.value for t in data.jastrow_terms], data.doublon_holon_2site_params, data.doublon_holon_4site_params, rbm_values(data), [t.value for t in data.orbital_terms], data.opt_trans)
     SNAPSHOTS[] = (copy(params), state.energy.etot, deepcopy(state.electron_config))
 end
 # Add only an observation hook to a copy of the authoritative optimizer.
@@ -54,12 +56,17 @@ function verify(name, actual)
         @test actual == read(path, String)
     end
 end
-if CASE == "interall" || startswith(CASE,"pairhop_")
+if CASE == "interall" || startswith(CASE,"pairhop_") || OPT_CASE
     @testset "$CASE input and initialization boundary" begin
-        data = parse_expert_mode_files(CASE == "interall" ? joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def") : pairhop_namelist())
+        namelist = OPT_CASE ? opt_namelist() : CASE == "interall" ? joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def") : pairhop_namelist()
+        data = parse_expert_mode_files(namelist)
         if CASE == "interall"
             @test length(data.inter_all_terms) == 26
             @test data.i_flg_orbital_general == 1 && MVMCOptimizers.get_all_complex_flag(data)
+        elseif OPT_CASE
+            @test data.n_qp_opt_trans == 3 && length(data.para_qp_opt_trans) == 3
+            @test data.i_flg_orbital_general == Int(CASE == "opt_fsz")
+            @test MVMCOptimizers.get_all_complex_flag(data) == (CASE != "opt_real")
         else
             @test length(data.pair_hop_terms) == 2
             @test data.i_flg_orbital_general == Int(CASE == "pairhop_fsz")
@@ -77,12 +84,12 @@ if CASE == "interall" || startswith(CASE,"pairhop_")
         end
         MVMCExpertModeParsers.init_qp_weight!(data)
         values = vcat([t.value for t in data.gutzwiller_terms],
-                      [t.value for t in data.jastrow_terms], data.doublon_holon_2site_params, data.doublon_holon_4site_params, rbm_values(data), [t.value for t in data.orbital_terms])
+                      [t.value for t in data.jastrow_terms], data.doublon_holon_2site_params, data.doublon_holon_4site_params, rbm_values(data), [t.value for t in data.orbital_terms], data.opt_trans)
         verify("initial-flags.txt",join(Int.(data.optimization_flags)," ")*"\n")
         verify("initial-parameters.txt",hex(collect(reinterpret(Float64,values)))*"\n")
         verify("initial-rng.txt",join([rand(rng,UInt32) for _ in 1:624]," ")*"\n")
         model = CASE == "interall" ? "six-site XYZ spin chain with imaginary Hermitian InterAll coefficients" : "canonical hubbard_chain_"*CASE*" inputs, unchanged sampling settings"
-        verify("reference.txt","# Julia $VERSION; $(BLAS.get_config()); threads=1\n# Julia-mVMC 8bb1b9e; numerical sources c2ea432; seed=1; $model\n")
+        !OPT_CASE && verify("reference.txt","# Julia $VERSION; $(BLAS.get_config()); threads=1\n# Julia-mVMC 8bb1b9e; numerical sources c2ea432; seed=1; $model\n")
     end
 end
 @testset "SR-CG $CASE deterministic prefix runs" begin
@@ -104,6 +111,7 @@ end
         if RBM_CASE
             namelist = rbm_namelist()
         end
+        OPT_CASE && (namelist = opt_namelist())
         data = parse_expert_mode_files(namelist)
         data.modpara.nsr_opt_itr_step = steps
         data.modpara.nsr_opt_itr_smp = steps
@@ -122,8 +130,8 @@ end
         mktempdir() do dir
             FAILURE_STEP[] = -1
             info = MVMCOptimizers.source_cg_oracle!(data; rng, output_dir=dir)
-            @test info == 0 || (CASE == "rbm_fsz" && steps == 50 && info == 1)
-            RBM_CASE && verify("step-$steps-status.txt", "$info $(FAILURE_STEP[])\n")
+            @test info == 0 || (CASE == "rbm_fsz" && steps == 50 && info == 1) || (OPT_CASE && info == 1)
+            (RBM_CASE || OPT_CASE) && verify("step-$steps-status.txt", "$info $(FAILURE_STEP[])\n")
             params, energy, configs = SNAPSHOTS[]
             doubles = Float64[]
             for z in params; append!(doubles, (real(z), imag(z))); end
@@ -133,11 +141,11 @@ end
             for vals in (configs.ele_idx, configs.ele_cfg, configs.ele_num, configs.ele_proj_cnt)
                 println(io, join(vals, " "))
             end
-            if CASE in ("interall","pairhop_fsz","dh2_fsz","dh4_fsz","dh24_fsz","rbm_fsz")
+            if CASE in ("interall","pairhop_fsz","dh2_fsz","dh4_fsz","dh24_fsz","rbm_fsz","opt_fsz")
                 println(io, join(configs.ele_spn, " "))
                 println(io, join(configs.burn_ele_idx, " "))
                 println(io, join(vcat(configs.counter[1:9],configs.counter[11]), " "))
-            elseif RBM_CASE
+            elseif RBM_CASE || OPT_CASE
                 println(io, join(configs.burn_ele_idx, " "))
                 println(io, join(vcat(configs.counter[1:9],configs.counter[11]), " "))
             end
@@ -154,7 +162,10 @@ end
                 end
                 @test !isfile(joinpath(dir,"zqp_dh2_opt.dat")) # Canonical writer omits DH coefficients.
                 @test !isfile(joinpath(dir,"zqp_dh4_opt.dat"))
-                if RBM_CASE
+                if OPT_CASE
+                    verify("reference.txt","# Julia $VERSION; $(BLAS.get_config()); threads=1; seed=$SEED\n# Julia-mVMC 8bb1b9e; numerical sources c2ea432; nonidentity three-sector OptTrans; original base sampling settings; "*CASE*"\n")
+                    @test !isfile(joinpath(dir,"zqp_opttrans_opt.dat"))
+                elseif RBM_CASE
                     verify("reference.txt","# Julia $VERSION; $(BLAS.get_config()); threads=1; seed=$SEED\n# Julia-mVMC 8bb1b9e; numerical sources c2ea432; "*(CASE == "rbm_reference_cmp" ? "canonical GeneralRBM initial.def and unchanged input/sampling settings" : "nonzero InRBM overlays")*"; "*CASE*"\n")
                     @test !isfile(joinpath(dir,"zqp_rbm_opt.dat"))
                 else

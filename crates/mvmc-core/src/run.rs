@@ -16,9 +16,7 @@ use std::fs;
 use std::path::Path;
 
 use mvmc_expert_parsers::parse_expert_mode_files;
-use mvmc_expert_parsers::utils::parameter_init::init_parameter;
-#[cfg(test)]
-use mvmc_expert_parsers::utils::parameter_init::n_slater;
+use mvmc_expert_parsers::utils::parameter_init::{init_parameter, n_slater};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use mvmc_expert_parsers::ExpertModeData;
@@ -116,10 +114,11 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         } else {
             update_slater_elm(data, state);
         }
+        crate::qp::update_qp_weight_for(data);
         timer.stop(20);
         timer.start(3);
         // 2. Sampler.
-        let stats = if use_fsz {
+        if use_fsz {
             crate::sampling::driver::vmc_make_sample_fsz_timed(data, state, rng, timer)
         } else if !all_complex {
             crate::sampling::driver::vmc_make_sample_real_timed(data, state, rng, timer)
@@ -127,10 +126,9 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             crate::sampling::driver::vmc_make_sample_timed(data, state, rng, timer)
         };
         timer.stop(3);
-        if stats.saved == 0 {
-            return Err(format!("vmc_para_opt: no samples saved at step {step}"));
-        }
 
+        // Julia proceeds after a void sampler early return, retaining the saved
+        // configurations. Any nonfinite SR result then stops before mutation.
         // 3. Main accumulator.
         timer.start(4);
         timer.start(24);
@@ -896,7 +894,7 @@ fn accumulate_observables<const TIMED: bool>(
     state.sr_opt.sr_opt_o_store.fill(Complex64::new(0.0, 0.0));
     state.sr_opt.sr_opt_o_store_real.fill(0.0);
     let n_rbm = data.count_rbm_parameters();
-    let n_orb_total = sr_opt_size.saturating_sub(1 + n_proj + n_rbm);
+    let n_orb_total = n_slater(data);
     let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
     let mut slater_derivative_scratch = crate::slater_derivative::SlaterDerivativeScratch::new();
 
@@ -1115,6 +1113,22 @@ fn accumulate_observables<const TIMED: bool>(
                 timer.stop_diag(930, timer.diagnostics.slater);
             }
             timer.stop(42);
+        }
+        let n_opt = data.count_opt_trans_parameters();
+        let opt_offset = slater_offset + 2 * n_orb_total;
+        let opt_end = opt_offset + 2 * n_opt;
+        if n_opt > 0 && opt_end <= state.sr_opt.sr_opt_o.len() {
+            let diag = !use_fsz && timer.diagnostics.maincal;
+            timer.start_diag(940, diag);
+            timer.start_diag(949, diag);
+            crate::observables::opt_trans_diff(
+                &mut state.sr_opt.sr_opt_o[opt_offset..opt_end],
+                ip,
+                data,
+                &state.slater_matrix.pf_m,
+            );
+            timer.stop_diag(949, diag);
+            timer.stop_diag(940, diag);
         }
         timer.start(43);
         if all_complex && use_store {
@@ -1870,12 +1884,19 @@ mod callback_tests {
             .split_whitespace()
             .map(|v| u64::from_str_radix(v, 16).unwrap())
             .collect();
+        let mut mapped = data.clone();
+        let mut rbm_values = Vec::new();
+        mapped.visit_rbm_terms_mut(|_, t| rbm_values.push(t.value()));
         let values = data
             .gutzwiller_terms
             .iter()
             .map(|t| t.value)
             .chain(data.jastrow_terms.iter().map(|t| t.value))
-            .chain(data.orbital_terms.iter().map(|t| t.value));
+            .chain(data.doublon_holon_2site_params.iter().copied())
+            .chain(data.doublon_holon_4site_params.iter().copied())
+            .chain(rbm_values)
+            .chain(data.orbital_terms.iter().map(|t| t.value))
+            .chain(data.opt_trans.iter().copied());
         let actual: Vec<_> = values
             .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
             .collect();
@@ -1934,6 +1955,46 @@ mod callback_tests {
     #[test]
     fn rbm_complex_direct_prefixes_match_source_parameters_samples_energy_and_rng() {
         check_sr_prefixes("rbm_cmp", false, 0);
+    }
+
+    #[test]
+    fn opttrans_initial_flags_parameters_and_rng_match_julia_before_sampling() {
+        for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
+            let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                "../../tests/fixtures/opttrans/run_{case}/namelist.def"
+            ));
+            let (data, _, mut rng) = prepared_namelist(1, &input);
+            assert_eq!(data.opt_trans.len(), 3);
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../../tests/fixtures/sr_cg/{case}_runner"));
+            check_initial_boundary(&data, &mut rng, &root);
+        }
+    }
+
+    #[test]
+    fn opttrans_real_direct_prefixes_match_source_parameters_samples_energy_and_rng() {
+        check_sr_prefixes("opt_real", false, 0);
+    }
+
+    #[test]
+    fn opttrans_complex_fsz_and_all_factor_direct_prefixes_match_source() {
+        for case in ["opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
+            check_sr_prefixes(case, false, 0);
+        }
+    }
+
+    #[test]
+    fn opttrans_stored_direct_prefixes_match_source() {
+        for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
+            check_sr_prefixes(case, false, 1);
+        }
+    }
+
+    #[test]
+    fn opttrans_cg_prefixes_match_source() {
+        for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
+            check_sr_prefixes(case, true, 0);
+        }
     }
 
     #[test]
@@ -2002,6 +2063,10 @@ mod callback_tests {
             ));
         let prefixes = if !cg && case == "hubbard" {
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 50]
+        } else if !cg && store == 0 && case == "opt_real" {
+            // Cover the last successful update, changed acceptance decisions,
+            // and the following native sampler/SR failure separately.
+            vec![1, 2, 3, 27, 28, 29, 50]
         } else {
             vec![1, 2, 3, 50]
         };
@@ -2027,6 +2092,13 @@ mod callback_tests {
                 init_qp_weight(&mut data);
                 let state = state_from_data(&data);
                 (data, state, rng)
+            } else if case.starts_with("opt_") {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                        "../../tests/fixtures/opttrans/run_{case}/namelist.def"
+                    )),
+                )
             } else if case.starts_with("rbm_") {
                 prepared_namelist(
                     steps,
@@ -2078,7 +2150,7 @@ mod callback_tests {
                 &SingleProcessReducer,
                 OptimizationOptions::default(),
             );
-            let failed = if case == "rbm_fsz" {
+            let failed = if case == "rbm_fsz" || case.starts_with("opt_") {
                 let status =
                     fs::read_to_string(root.join(format!("step-{steps}-status.txt"))).unwrap();
                 let mut status = status.split_whitespace();
@@ -2097,7 +2169,7 @@ mod callback_tests {
             let read = |kind: &str| {
                 fs::read_to_string(root.join(format!("step-{steps}-{kind}.txt"))).unwrap()
             };
-            if case.starts_with("rbm_") {
+            if case.starts_with("rbm_") || case.starts_with("opt_") {
                 let mut probe = rng.clone();
                 let expected: Vec<u32> = read("rng")
                     .split_whitespace()
@@ -2142,7 +2214,8 @@ mod callback_tests {
                 .chain(data.doublon_holon_2site_params.iter().copied())
                 .chain(data.doublon_holon_4site_params.iter().copied())
                 .chain(rbm_values)
-                .chain(data.orbital_terms.iter().map(|t| t.value));
+                .chain(data.orbital_terms.iter().map(|t| t.value))
+                .chain(data.opt_trans.iter().copied());
             let actual: Vec<u64> = values
                 .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
                 .collect();
@@ -2156,7 +2229,7 @@ mod callback_tests {
                 bits(&read("energy")),
                 "step {steps} energy"
             );
-            if case.starts_with("rbm_") && steps == 1 && !cg {
+            if (case.starts_with("rbm_") || case.starts_with("opt_")) && steps == 1 && !cg {
                 let fixture = fs::read_to_string(root.join("fixed-input.txt")).unwrap();
                 let lines: Vec<&str> = fixture.lines().filter(|l| !l.starts_with('#')).collect();
                 let complex_bits = |values: &[Complex64]| -> Vec<u64> {
@@ -2225,7 +2298,13 @@ mod callback_tests {
             }
             if matches!(
                 case,
-                "interall" | "pairhop_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz" | "rbm_fsz"
+                "interall"
+                    | "pairhop_fsz"
+                    | "dh2_fsz"
+                    | "dh4_fsz"
+                    | "dh24_fsz"
+                    | "rbm_fsz"
+                    | "opt_fsz"
             ) {
                 for (name, actual) in [
                     ("spins", &state.electron_config.ele_spn),
@@ -2241,7 +2320,10 @@ mod callback_tests {
                     assert_eq!(actual, &expected, "step {steps} {name}");
                 }
             }
-            if case.starts_with("rbm_") && case != "rbm_fsz" {
+            if (case.starts_with("rbm_") || case.starts_with("opt_"))
+                && case != "rbm_fsz"
+                && case != "opt_fsz"
+            {
                 for (name, actual) in [
                     ("burn", &state.electron_config.burn_ele_idx),
                     ("counters", &state.electron_config.counter.to_vec()),
@@ -2272,6 +2354,7 @@ mod callback_tests {
                 || case.starts_with("dh4_")
                 || case.starts_with("dh24_")
                 || case.starts_with("rbm_")
+                || case.starts_with("opt_")
             {
                 for name in [
                     "zvo_out.dat",

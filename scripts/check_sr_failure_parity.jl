@@ -23,6 +23,31 @@ function problem(complex)
     end
     data,state
 end
+
+@testset "Direct SR canonical positive potrf status handling" begin
+    io = IOBuffer()
+    println(io,"# Julia $VERSION; $(BLAS.get_config()); threads=1; positive potrf INFO is ignored by canonical stochastic_opt!")
+    for complex in (false,true), kind in ("indefinite","singular")
+        data,state = problem(complex)
+        off = complex ? 2 : 1
+        size = off*3
+        oo = complex ? state.sr_opt.sr_opt_oo : state.sr_opt.sr_opt_oo_real
+        covariance = kind == "indefinite" ? 2.0 : 1.0
+        oo[off*size+2off+1] = covariance
+        oo[2off*size+off+1] = covariance
+        info = MVMCOptimizers.stochastic_opt!(data,state)
+        @test info == (kind == "indefinite" ? 0 : 1)
+        println(io,"$(Int(complex)) $kind $info")
+        println(io,join([string(reinterpret(UInt64,x);base=16,pad=16) for t in data.orbital_terms for x in (real(t.value),imag(t.value))]," "))
+    end
+    path = joinpath(@__DIR__,"..","tests","fixtures","sr_failure","potrf_status.txt")
+    actual = String(take!(io))
+    if "--write" in ARGS
+        mkpath(dirname(path)); write(path,actual)
+    else
+        @test actual == read(path,String)
+    end
+end
 @testset "Direct SR finite check and missing component flags" begin
     for complex in (false,true), kind in (:variance,:gradient,:flags)
         data,state = problem(complex)

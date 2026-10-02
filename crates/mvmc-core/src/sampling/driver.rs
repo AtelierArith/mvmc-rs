@@ -133,25 +133,77 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
 
     // Initial Pfaffian / inv_m.
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
-    if calc_m_all_real(
-        &tmp_ele_idx,
-        &state.slater_matrix.slater_elm_real,
-        &mut state.slater_matrix.inv_m_real,
-        &mut state.slater_matrix.pf_m_real,
-        0,
-        n_qp_full,
-        n_site,
-        n_elec,
-        &pool,
-    )
-    .is_err()
-    {
+    let mut initialized = false;
+    for _ in 0..100 {
+        if calc_m_all_real(
+            &tmp_ele_idx,
+            &state.slater_matrix.slater_elm_real,
+            &mut state.slater_matrix.inv_m_real,
+            &mut state.slater_matrix.pf_m_real,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+            &pool,
+        )
+        .is_ok()
+        {
+            initialized = true;
+            break;
+        }
+        // Julia also regenerates after the final failed calculation.
+        if make_initial_sample(
+            &mut tmp_ele_idx,
+            &mut tmp_ele_cfg,
+            &mut tmp_ele_num,
+            &mut tmp_ele_proj_cnt,
+            data,
+            &loc_spn,
+            rng,
+        )
+        .is_err()
+        {
+            break;
+        }
+    }
+    if !initialized {
         return SampleStats {
             accepted: 0,
             saved: 0,
         };
     }
     let mut log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+    if !log_ip_old.is_finite() {
+        if make_initial_sample(
+            &mut tmp_ele_idx,
+            &mut tmp_ele_cfg,
+            &mut tmp_ele_num,
+            &mut tmp_ele_proj_cnt,
+            data,
+            &loc_spn,
+            rng,
+        )
+        .is_err()
+            || calc_m_all_real(
+                &tmp_ele_idx,
+                &state.slater_matrix.slater_elm_real,
+                &mut state.slater_matrix.inv_m_real,
+                &mut state.slater_matrix.pf_m_real,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .is_err()
+        {
+            return SampleStats {
+                accepted: 0,
+                saved: 0,
+            };
+        }
+        log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+    }
 
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![0.0_f64; n_qp_full];

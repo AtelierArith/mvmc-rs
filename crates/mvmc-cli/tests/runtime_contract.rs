@@ -230,3 +230,80 @@ fn rbm_namelists_reach_production_and_match_source_output() {
         }
     }
 }
+
+#[test]
+fn nonidentity_opttrans_namelists_reach_production_and_match_source_output() {
+    let dir = TestDir::new("opttrans");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
+        let out = dir.0.join(case);
+        let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+            .arg(root.join(format!("opttrans/run_{case}/namelist.def")))
+            .args(["--nsteps", "1", "--nsmp", "1", "--seed", "1", "--out-dir"])
+            .arg(&out)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{case}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for name in ["zvo_out.dat", "zqp_opt.dat"] {
+            assert_eq!(
+                fs::read_to_string(out.join(name)).unwrap(),
+                fs::read_to_string(
+                    root.join(format!("sr_direct/{case}_store_runner/step-1-{name}"))
+                )
+                .unwrap(),
+                "{case} {name}"
+            );
+        }
+        assert!(!out.join("zqp_opttrans_opt.dat").exists());
+    }
+}
+
+#[test]
+fn opttrans_source_sr_failure_reaches_cli_status_and_preserves_output_boundary() {
+    let dir = TestDir::new("opttrans-failed-sr");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let input = root.join("opttrans/run_opt_real").canonicalize().unwrap();
+    let mut namelist = String::new();
+    for line in fs::read_to_string(input.join("namelist.def"))
+        .unwrap()
+        .lines()
+    {
+        let mut words = line.split_whitespace();
+        let kind = words.next().unwrap();
+        let path = input.join(words.next().unwrap());
+        let path = if kind == "ModPara" {
+            let mut text = fs::read_to_string(path).unwrap();
+            text.push_str("\nNStore 0\n");
+            let path = dir.0.join("modpara.def");
+            fs::write(&path, text).unwrap();
+            path
+        } else {
+            path
+        };
+        namelist.push_str(&format!("{kind} {}\n", path.display()));
+    }
+    fs::write(dir.0.join("namelist.def"), namelist).unwrap();
+    let out = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(dir.0.join("namelist.def"))
+        .args(["--nsteps", "50", "--nsmp", "50", "--seed", "1", "--out-dir"])
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("direct SR failed at step 29"), "{error}");
+    for name in ["zvo_out.dat", "zvo_var.dat"] {
+        assert_eq!(
+            fs::read_to_string(out.join(name)).unwrap(),
+            fs::read_to_string(root.join(format!("sr_direct/opt_real_runner/step-50-{name}")))
+                .unwrap(),
+            "{name}"
+        );
+    }
+    assert!(!out.join("zqp_opt.dat").exists());
+}
