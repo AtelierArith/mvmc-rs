@@ -68,7 +68,16 @@ fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str
         .collect();
     assert_eq!(actual.len(), expected.len(), "{label}: component count");
     for (index, (actual, expected)) in actual.into_iter().zip(expected).enumerate() {
-        assert_eq!(actual, expected, "{label}: component {index}");
+        if actual != expected {
+            // Julia's historical real fixture and C differ only in signed-zero
+            // representation; nonzero bits remain an exact comparison.
+            let actual_zero = f64::from_bits(actual) == 0.0;
+            let expected_zero = f64::from_bits(expected) == 0.0;
+            assert!(
+                actual_zero && expected_zero,
+                "{label}: component {index}: actual={actual:016x} expected={expected:016x}"
+            );
+        }
     }
 }
 
