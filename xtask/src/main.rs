@@ -46,6 +46,7 @@ struct BenchConfig {
     csv: PathBuf,
     keep_output: bool,
     threads: Option<usize>,
+    julia_bin: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +93,7 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
     println!("pfapack    : BLAS/LAPACK (required for Julia numerical parity)");
     println!("SR backend : BLAS GEMV for CG; LAPACK for the direct solver");
     println!("julia root : {}", config.julia_root.display());
+    println!("julia bin  : {}", config.julia_bin.display());
     println!("csv        : {}", config.csv.display());
     println!();
 
@@ -149,6 +151,7 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
         .join("julia_vs_rust.csv");
     let mut keep_output = false;
     let mut threads: Option<usize> = None;
+    let mut julia_bin = PathBuf::from("julia");
 
     let mut idx = 0;
     while idx < args.len() {
@@ -186,6 +189,13 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
                 julia_root = PathBuf::from(
                     args.get(idx)
                         .ok_or_else(|| "--julia-root requires a value".to_string())?,
+                );
+            }
+            "--julia-bin" => {
+                idx += 1;
+                julia_bin = PathBuf::from(
+                    args.get(idx)
+                        .ok_or_else(|| "--julia-bin requires a value".to_string())?,
                 );
             }
             "--csv" => {
@@ -233,6 +243,7 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
         csv,
         keep_output,
         threads,
+        julia_bin,
     })
 }
 
@@ -351,9 +362,11 @@ fn run_julia_model(
     fs::create_dir_all(&julia_out_root)
         .map_err(|e| format!("cannot create {}: {e}", julia_out_root.display()))?;
 
-    let mut command = Command::new("julia");
+    let mut command = Command::new(&config.julia_bin);
+    if config.julia_bin == Path::new("julia") {
+        command.arg("+1.13.1");
+    }
     command
-        .arg("+1.13.1")
         .arg(format!("--project={}", julia_root.display()))
         .arg("--startup-file=no")
         .arg("--history-file=no");
@@ -634,6 +647,7 @@ fn print_bench_help() {
     println!("  --threads <N>        pin BLAS / OpenMP / Julia threads on both sides");
     println!("  --model <NAME>       benchmark one model; repeatable");
     println!("  --julia-root <DIR>   Julia-mVMC checkout [default: ../extern/Julia-mVMC]");
+    println!("  --julia-bin <PATH>   Julia executable or pinned binary [default: julia +1.13.1]");
     println!("  --csv <PATH>         CSV output [default: target/bench/julia_vs_rust.csv]");
     println!("  --keep-output        keep per-run zvo_out.dat / zqp_opt.dat files");
 }
