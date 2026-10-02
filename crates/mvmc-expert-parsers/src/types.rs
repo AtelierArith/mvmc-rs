@@ -878,6 +878,8 @@ pub struct ExpertModeData {
     pub green_two_terms: Vec<GreenTwoTerm>,
     /// Factored two-body Green measurements, in canonical C pair order.
     pub green_two_ex_terms: Vec<GreenTwoExTerm>,
+    /// Indices of the two one-body factors for each TwoBodyGEx term.
+    pub green_two_ex_indices: Vec<(usize, usize)>,
 
     /// `qptransidx.def` payload.
     pub qp_trans_entries: Vec<QPTransEntry>,
@@ -974,6 +976,7 @@ impl Default for ExpertModeData {
             green_one_terms: Default::default(),
             green_two_terms: Default::default(),
             green_two_ex_terms: Default::default(),
+            green_two_ex_indices: Default::default(),
             qp_trans_entries: Default::default(),
             n_qp_trans: Default::default(),
             para_qp_trans: Default::default(),
@@ -993,6 +996,43 @@ impl Default for ExpertModeData {
 }
 
 impl ExpertModeData {
+    /// Append missing OneBodyG constituents in TwoBodyGEx order and retain
+    /// references into the resulting canonical one-body list.
+    pub fn canonicalize_green_two_ex(&mut self) {
+        self.green_two_ex_indices.clear();
+        for term in self.green_two_ex_terms.clone() {
+            let first = GreenOneTerm {
+                site1: term.site1,
+                spin1: term.spin1,
+                site2: term.site2,
+                spin2: term.spin2,
+            };
+            let second = GreenOneTerm {
+                site1: term.site3,
+                spin1: term.spin3,
+                site2: term.site4,
+                spin2: term.spin4,
+            };
+            let first_index = self
+                .green_one_terms
+                .iter()
+                .position(|candidate| *candidate == first)
+                .unwrap_or_else(|| {
+                    self.green_one_terms.push(first);
+                    self.green_one_terms.len() - 1
+                });
+            let second_index = self
+                .green_one_terms
+                .iter()
+                .position(|candidate| *candidate == second)
+                .unwrap_or_else(|| {
+                    self.green_one_terms.push(second);
+                    self.green_one_terms.len() - 1
+                });
+            self.green_two_ex_indices.push((first_index, second_index));
+        }
+    }
+
     /// Active optimized-translation parameter count, independent of mappings.
     pub fn count_opt_trans_parameters(&self) -> usize {
         self.opt_trans.len()
