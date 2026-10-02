@@ -52,7 +52,7 @@ pub fn vmc_make_sample_fsz_real(
     }
     let config = &mut state.electron_config;
     if burn_flag {
-        config.restore_burn_fsz();
+        config.restore_burn();
     }
     calc_m_all_fsz_real(
         &config.tmp_ele_idx,
@@ -407,7 +407,7 @@ pub fn vmc_make_sample_fsz_real(
     config.tmp_ele_num = ele_num;
     config.tmp_ele_proj_cnt = ele_proj_cnt;
     config.tmp_ele_spn = ele_spn;
-    config.save_burn_fsz();
+    config.save_burn();
     config.counter[9] = 1;
     Ok(SampleStats { accepted, saved })
 }

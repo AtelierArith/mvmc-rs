@@ -1,4 +1,4 @@
-//! Phase 4.3.5a — Metropolis accept/reject common scaffold.
+//! Metropolis accept/reject logic shared by production samplers.
 //!
 //! Port target: the repeated acceptance block in `vmc_make_sample!`
 //! (`vmc_sampling.jl`):
@@ -16,9 +16,8 @@
 //! accept if w > r_metro
 //! ```
 //!
-//! This module intentionally implements only the pure decision logic;
-//! the outer `vmc_make_sample!` loop wires candidate generation,
-//! projection/RBM updates, Pfaffian updates, and revert/commit later.
+//! The production sampler supplies candidate generation, projection/RBM counters,
+//! Pfaffian updates and accepted/rejected configuration handling.
 
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
@@ -45,7 +44,7 @@ pub fn metropolis_weight(
     log_ip_new: Complex64,
     log_ip_old: Complex64,
 ) -> f64 {
-    let exponent = 2.0 * (log_proj_delta + log_rbm_delta.re + (log_ip_new - log_ip_old).re);
+    let exponent = 2.0 * ((log_proj_delta + log_rbm_delta.re + log_ip_new.re) - log_ip_old.re);
     let weight = mvmc_expert_parsers::utils::julia_exp::exp(exponent);
     if weight.is_finite() {
         weight
@@ -76,6 +75,20 @@ pub fn metropolis_decision(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rbm_acceptance_preserves_julia_left_associative_log_additions() {
+        let actual = metropolis_weight(
+            1.0e16,
+            Complex64::new(0.0, 0.0),
+            Complex64::new(-1.0e16, 0.0),
+            Complex64::new(-1.0, 0.0),
+        );
+        assert_eq!(
+            actual.to_bits(),
+            mvmc_expert_parsers::utils::julia_exp::exp(2.0).to_bits()
+        );
+    }
 
     #[test]
     fn nonfinite_weight_is_rejected() {

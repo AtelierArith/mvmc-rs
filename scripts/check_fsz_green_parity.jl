@@ -4,6 +4,8 @@ VERSION == v"1.13.1" || error("FSZ Green fixtures require Julia 1.13.1")
 BLAS.set_num_threads(1)
 include(joinpath(@__DIR__,"dh2_green_model.jl"))
 include(joinpath(@__DIR__,"dh4_green_model.jl"))
+include(joinpath(@__DIR__,"rbm_green_model.jl"))
+const RBM = "--rbm" in ARGS
 const DH2 = "--dh2" in ARGS
 const DH4 = "--dh4" in ARGS
 const COMBINED = "--dh24" in ARGS
@@ -39,6 +41,7 @@ function explicit_operator(operators,num,cnt,data,state)
     else
         exp(0.125*(new_cnt[1]-cnt[1])-0.2*(new_cnt[2]-cnt[2]))
     end
+    RBM && (ratio *= exp(MVMCOptimizers.log_rbm_val(moved,data)-MVMCOptimizers.log_rbm_val(num,data)))
     conj(sign*ratio*overlap(moved,state.slater_matrix.slater_elm)/overlap(num,state.slater_matrix.slater_elm))
 end
 
@@ -59,6 +62,7 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
         data.jastrow_terms = [MVMCExpertModeParsers.JastrowTerm(0,1,-0.2+0im,false)]
         (DH2 || COMBINED) && add_dh2_green_model!(data)
         (DH4 || COMBINED) && add_dh4_green_model!(data)
+        RBM && add_rbm_green_model!(data)
         MVMCExpertModeParsers.init_qp_weight!(data)
         state = MVMCOptimizers.VMCOptimizationState(4,2,MVMCExpertModeParsers.projection_layout(data).n_proj,0,2,1,complex,true)
         mat = state.slater_matrix
@@ -130,6 +134,6 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
         @test isapprox(full,expected_full; atol=2e-14,rtol=0)
         println(io,hex(ComplexF64[base,full]))
     end
-    actual = String(take!(io)); path = joinpath(@__DIR__,"..","tests","fixtures",COMBINED ? "dh4/combined" : DH4 ? "dh4/kernels" : DH2 ? "dh2" : "interall","green_fsz.txt")
+    actual = String(take!(io)); path = joinpath(@__DIR__,"..","tests","fixtures",RBM ? "rbm/production" : COMBINED ? "dh4/combined" : DH4 ? "dh4/kernels" : DH2 ? "dh2" : "interall","green_fsz.txt")
     if "--write" in ARGS; write(path,actual); else; @test actual == read(path,String); end
 end

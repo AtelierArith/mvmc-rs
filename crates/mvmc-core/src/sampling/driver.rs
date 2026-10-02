@@ -72,7 +72,6 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
-    let n_site2 = 2 * n_site;
     let n_qp_full = state.slater_matrix.pf_m.len();
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
@@ -80,7 +79,6 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -111,10 +109,11 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     timer.start(30);
     let burn_flag = state.electron_config.counter[9] != 0;
     if burn_flag {
-        tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
-        tmp_ele_cfg.copy_from_slice(&state.electron_config.burn_ele_cfg[..n_site2]);
-        tmp_ele_num.copy_from_slice(&state.electron_config.burn_ele_num[..n_site2]);
-        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.burn_ele_proj_cnt[..n_proj]);
+        state.electron_config.restore_burn();
+        tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
+        tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
+        tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
+        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
     } else if make_initial_sample(
         &mut tmp_ele_idx,
         &mut tmp_ele_cfg,
@@ -167,12 +166,14 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
 
+    state.electron_config.counter.fill(0);
     timer.stop(30);
     for out_step in 0..n_out_step {
         for _in_step in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Hopping => {
+                    state.electron_config.counter[0] += 1;
                     timer.start(31);
                     let candidate = make_candidate_hopping(
                         &tmp_ele_idx,
@@ -257,6 +258,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
+                        state.electron_config.counter[1] += 1;
                     } else {
                         revert_ele_config(
                             candidate.mi,
@@ -470,14 +472,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
     state.electron_config.tmp_ele_num = tmp_ele_num;
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
-    state.electron_config.burn_ele_idx[..n_size]
-        .copy_from_slice(&state.electron_config.tmp_ele_idx[..n_size]);
-    state.electron_config.burn_ele_cfg[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_cfg[..n_site2]);
-    state.electron_config.burn_ele_num[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_num[..n_site2]);
-    state.electron_config.burn_ele_proj_cnt[..n_proj]
-        .copy_from_slice(&state.electron_config.tmp_ele_proj_cnt[..n_proj]);
+    state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
 
     SampleStats {
@@ -508,7 +503,6 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
-    let n_site2 = 2 * n_site;
     let n_qp_full = state.slater_matrix.pf_m.len();
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
@@ -516,7 +510,6 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
-    let n_proj = data.projection_layout().n_proj;
 
     let loc_spn = {
         let ws = &mut state.workspace;
@@ -530,12 +523,13 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
 
     timer.start(30);
-    let burn_flag = state.electron_config.counter[9] != 0;
+    let mut burn_flag = state.electron_config.counter[9] != 0;
     if burn_flag {
-        tmp_ele_idx.copy_from_slice(&state.electron_config.burn_ele_idx[..n_size]);
-        tmp_ele_cfg.copy_from_slice(&state.electron_config.burn_ele_cfg[..n_site2]);
-        tmp_ele_num.copy_from_slice(&state.electron_config.burn_ele_num[..n_site2]);
-        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.burn_ele_proj_cnt[..n_proj]);
+        state.electron_config.restore_burn();
+        tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
+        tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
+        tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
+        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
     } else if make_initial_sample(
         &mut tmp_ele_idx,
         &mut tmp_ele_cfg,
@@ -554,25 +548,87 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     }
 
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
-    if calc_m_all_complex(
-        &tmp_ele_idx,
-        &state.slater_matrix.slater_elm,
-        &mut state.slater_matrix.inv_m,
-        &mut state.slater_matrix.pf_m,
-        0,
-        n_qp_full,
-        n_site,
-        n_elec,
-        &pool,
-    )
-    .is_err()
-    {
+    let mut initial_ok = false;
+    for _ in 0..100 {
+        if calc_m_all_complex(
+            &tmp_ele_idx,
+            &state.slater_matrix.slater_elm,
+            &mut state.slater_matrix.inv_m,
+            &mut state.slater_matrix.pf_m,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+            &pool,
+        )
+        .is_ok()
+        {
+            initial_ok = true;
+            break;
+        }
+        // Julia regenerates even on the last failed retry.
+        if make_initial_sample(
+            &mut tmp_ele_idx,
+            &mut tmp_ele_cfg,
+            &mut tmp_ele_num,
+            &mut tmp_ele_proj_cnt,
+            data,
+            &loc_spn,
+            rng,
+        )
+        .is_err()
+        {
+            return SampleStats {
+                accepted: 0,
+                saved: 0,
+            };
+        }
+    }
+    if !initial_ok {
         return SampleStats {
             accepted: 0,
             saved: 0,
         };
     }
     let mut log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+    let rbm_cfg = crate::sampling::rbm::RbmConfig::from(data);
+    let use_rbm = data.has_rbm_terms();
+    let mut rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+    let mut rbm_cnt_new = vec![Complex64::new(0.0, 0.0); rbm_cnt_old.len()];
+    if !log_ip_old.re.is_finite() || !log_ip_old.im.is_finite() {
+        if make_initial_sample(
+            &mut tmp_ele_idx,
+            &mut tmp_ele_cfg,
+            &mut tmp_ele_num,
+            &mut tmp_ele_proj_cnt,
+            data,
+            &loc_spn,
+            rng,
+        )
+        .is_err()
+            || calc_m_all_complex(
+                &tmp_ele_idx,
+                &state.slater_matrix.slater_elm,
+                &mut state.slater_matrix.inv_m,
+                &mut state.slater_matrix.pf_m,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .is_err()
+        {
+            return SampleStats {
+                accepted: 0,
+                saved: 0,
+            };
+        }
+        log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+        rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+        rbm_cnt_new.resize(rbm_cnt_old.len(), Complex64::new(0.0, 0.0));
+        burn_flag = false;
+    }
 
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![Complex64::new(0.0, 0.0); n_qp_full];
@@ -587,12 +643,14 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
 
+    state.electron_config.counter.fill(0);
     timer.stop(30);
     for out_step in 0..n_out_step {
         for _in_step in 0..n_in_step {
             let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
             match update_type {
                 UpdateType::Hopping => {
+                    state.electron_config.counter[0] += 1;
                     timer.start(31);
                     let candidate = make_candidate_hopping(
                         &tmp_ele_idx,
@@ -649,13 +707,21 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
                     timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        log_ip_new,
-                        log_ip_old,
-                        rng,
-                    );
+                    let rbm_delta = if use_rbm {
+                        crate::sampling::rbm::update_rbm_cnt_hopping(
+                            &mut rbm_cnt_new,
+                            &rbm_cnt_old,
+                            candidate.ri as i64,
+                            candidate.rj as i64,
+                            candidate.spin,
+                            &rbm_cfg,
+                        );
+                        crate::sampling::rbm::log_rbm_ratio(&rbm_cnt_new, &rbm_cnt_old, &rbm_cfg)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    let decision =
+                        metropolis_decision(log_proj_delta, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(63);
                         crate::sampling::updates::update_m_all_complex_flat(
@@ -673,10 +739,14 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                         );
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
+                        if use_rbm {
+                            rbm_cnt_old.copy_from_slice(&rbm_cnt_new);
+                        }
                         state.slater_matrix.pf_m.copy_from_slice(&pf_m_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
+                        state.electron_config.counter[1] += 1;
                     } else {
                         revert_ele_config(
                             candidate.mi,
@@ -774,13 +844,30 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                     let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
                     timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        log_ip_new,
-                        log_ip_old,
-                        rng,
-                    );
+                    let rbm_delta = if use_rbm {
+                        crate::sampling::rbm::update_rbm_cnt_hopping(
+                            &mut rbm_cnt_new,
+                            &rbm_cnt_old,
+                            ri_old as i64,
+                            rj_old as i64,
+                            candidate.spin,
+                            &rbm_cfg,
+                        );
+                        let mid = rbm_cnt_new.clone();
+                        crate::sampling::rbm::update_rbm_cnt_hopping(
+                            &mut rbm_cnt_new,
+                            &mid,
+                            rj_old as i64,
+                            ri_old as i64,
+                            candidate.spin_other,
+                            &rbm_cfg,
+                        );
+                        crate::sampling::rbm::log_rbm_ratio(&rbm_cnt_new, &rbm_cnt_old, &rbm_cfg)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    let decision =
+                        metropolis_decision(log_proj_delta, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(68);
                         crate::sampling::updates::update_m_all_two_complex_flat(
@@ -802,6 +889,9 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                         );
                         timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
+                        if use_rbm {
+                            rbm_cnt_old.copy_from_slice(&rbm_cnt_new);
+                        }
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -851,6 +941,10 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                 {
                     log_ip_old =
                         calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+                    if use_rbm {
+                        rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                        rbm_cnt_new.resize(rbm_cnt_old.len(), Complex64::new(0.0, 0.0));
+                    }
                 }
                 n_accept_window = 0;
                 timer.stop(34);
@@ -887,14 +981,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
     state.electron_config.tmp_ele_num = tmp_ele_num;
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
-    state.electron_config.burn_ele_idx[..n_size]
-        .copy_from_slice(&state.electron_config.tmp_ele_idx[..n_size]);
-    state.electron_config.burn_ele_cfg[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_cfg[..n_site2]);
-    state.electron_config.burn_ele_num[..n_site2]
-        .copy_from_slice(&state.electron_config.tmp_ele_num[..n_site2]);
-    state.electron_config.burn_ele_proj_cnt[..n_proj]
-        .copy_from_slice(&state.electron_config.tmp_ele_proj_cnt[..n_proj]);
+    state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
 
     SampleStats {
@@ -980,7 +1067,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let mut burn_flag = state.electron_config.counter[9] != 0;
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     if burn_flag {
-        state.electron_config.restore_burn_fsz();
+        state.electron_config.restore_burn();
     } else if crate::sampling::initial::make_initial_sample_fsz(
         data, state, rng, 0, n_qp_full, &pool,
     )
@@ -1502,7 +1589,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_num = tmp_ele_num;
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
     state.electron_config.tmp_ele_spn = tmp_ele_spn;
-    state.electron_config.save_burn_fsz();
+    state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
 
     SampleStats {

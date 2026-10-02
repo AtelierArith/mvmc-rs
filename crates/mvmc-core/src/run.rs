@@ -878,7 +878,8 @@ fn accumulate_observables<const TIMED: bool>(
     let use_store = data.modpara.nstore_o != 0 || data.modpara.nsrcg != 0;
     state.sr_opt.sr_opt_o_store.fill(Complex64::new(0.0, 0.0));
     state.sr_opt.sr_opt_o_store_real.fill(0.0);
-    let n_orb_total = sr_opt_size.saturating_sub(1 + n_proj);
+    let n_rbm = data.count_rbm_parameters();
+    let n_orb_total = sr_opt_size.saturating_sub(1 + n_proj + n_rbm);
     let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
     let mut slater_derivative_scratch = crate::slater_derivative::SlaterDerivativeScratch::new();
 
@@ -1030,6 +1031,10 @@ fn accumulate_observables<const TIMED: bool>(
             )
         };
         timer.stop(41);
+        // Julia rejects the sum, including overflow of otherwise finite parts.
+        if !(e.re + e.im).is_finite() {
+            continue;
+        }
         timer.start_diag(940, diag);
         timer.start_diag(946, diag);
         let sz = crate::observables::calculate_sz(&ele_num, n_site);
@@ -1049,7 +1054,20 @@ fn accumulate_observables<const TIMED: bool>(
             *slot = Complex64::new(0.0, 0.0);
         }
         crate::observables::set_projection_diff(&mut state.sr_opt.sr_opt_o, &ele_proj_cnt, n_proj);
-        let slater_offset = 2 * (1 + n_proj);
+        // Normal Julia main-calculation reserves all RBM derivative slots.
+        // Its FSZ main-calculation places Slater immediately after projection.
+        if !use_fsz && n_rbm > 0 {
+            let cfg = crate::sampling::rbm::RbmConfig::from(data);
+            let cnt = crate::sampling::rbm::make_rbm_cnt(&ele_num, &cfg);
+            let offset = 2 * (1 + n_proj);
+            crate::sampling::rbm::set_rbm_diff(
+                &mut state.sr_opt.sr_opt_o[offset..offset + 2 * n_rbm],
+                &cnt,
+                &ele_num,
+                &cfg,
+            );
+        }
+        let slater_offset = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
         timer.stop_diag(948, diag);
         timer.stop_diag(940, diag);
         if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
@@ -1153,6 +1171,26 @@ fn accumulate_observables<const TIMED: bool>(
         }
         timer.stop(45);
     }
+    // Julia merges the local SR accumulator into cleared global arrays.
+    // Keep the addition: it turns negative zero into positive zero.
+    for value in state
+        .sr_opt
+        .sr_opt_oo
+        .iter_mut()
+        .chain(&mut state.sr_opt.sr_opt_ho)
+        .chain(&mut state.sr_opt.sr_opt_o_store)
+    {
+        *value = Complex64::new(0.0, 0.0) + *value;
+    }
+    for value in state
+        .sr_opt
+        .sr_opt_oo_real
+        .iter_mut()
+        .chain(&mut state.sr_opt.sr_opt_ho_real)
+        .chain(&mut state.sr_opt.sr_opt_o_store_real)
+    {
+        *value += 0.0;
+    }
 }
 
 #[cfg(test)]
@@ -1185,6 +1223,7 @@ mod callback_tests {
         init_parameter(&mut data, &mut rng);
         if !data.doublon_holon_2site_indices.is_empty()
             || !data.doublon_holon_4site_indices.is_empty()
+            || data.has_rbm_terms()
         {
             read_input_parameters(&mut data, path).unwrap();
         }
@@ -1875,6 +1914,59 @@ mod callback_tests {
         }
     }
 
+    #[test]
+    fn rbm_complex_direct_prefixes_match_source_parameters_samples_energy_and_rng() {
+        check_sr_prefixes("rbm_cmp", false, 0);
+    }
+
+    #[test]
+    fn rbm_real_and_general_complex_direct_prefixes_match_source() {
+        for case in ["rbm_real", "rbm_general_cmp"] {
+            check_sr_prefixes(case, false, 0);
+        }
+    }
+    #[test]
+    fn rbm_real_and_complex_cg_prefixes_match_source() {
+        for case in ["rbm_real", "rbm_cmp", "rbm_general_cmp"] {
+            check_sr_prefixes(case, true, 0);
+        }
+    }
+
+    #[test]
+    fn rbm_dh24_direct_and_cg_prefixes_match_source() {
+        check_sr_prefixes("rbm_dh24_cmp", false, 0);
+        check_sr_prefixes("rbm_dh24_cmp", true, 0);
+    }
+
+    #[test]
+    fn rbm_fsz_direct_prefixes_match_source_including_failure_state() {
+        check_sr_prefixes("rbm_fsz", false, 0);
+    }
+
+    #[test]
+    fn rbm_fsz_cg_prefixes_match_source_including_empty_weight_steps() {
+        check_sr_prefixes("rbm_fsz", true, 0);
+    }
+
+    #[test]
+    fn rbm_stored_direct_prefixes_match_source() {
+        for case in [
+            "rbm_real",
+            "rbm_cmp",
+            "rbm_general_cmp",
+            "rbm_dh24_cmp",
+            "rbm_fsz",
+        ] {
+            check_sr_prefixes(case, false, 1);
+        }
+    }
+
+    #[test]
+    fn canonical_general_rbm_complex_reference_direct_and_cg_match_source() {
+        check_sr_prefixes("rbm_reference_cmp", false, 1);
+        check_sr_prefixes("rbm_reference_cmp", true, 0);
+    }
+
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
         let reference_case = if case == "general" { "fsz" } else { case };
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1902,7 +1994,29 @@ mod callback_tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let (mut data, mut state, mut rng) = if let Some(mode) = case.strip_prefix("dh2_") {
+            let (mut data, mut state, mut rng) = if case == "rbm_reference_cmp" {
+                let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def");
+                let mut data = parse_expert_mode_files(&path).unwrap();
+                data.modpara.nsr_opt_itr_step = steps;
+                data.modpara.nsr_opt_itr_smp = steps;
+                let mut rng = Sfmt19937Rng::new(12395);
+                init_parameter(&mut data, &mut rng);
+                assert!(
+                    read_initial_def(&mut data, path.parent().unwrap().join("initial.def"))
+                        .unwrap()
+                );
+                read_input_parameters(&mut data, &path).unwrap();
+                sync_modified_parameter(&mut data, true);
+                init_qp_weight(&mut data);
+                let state = state_from_data(&data);
+                (data, state, rng)
+            } else if case.starts_with("rbm_") {
+                prepared_namelist(
+                    steps,
+                    &Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join(format!("../../tests/fixtures/rbm/run_{case}/namelist.def")),
+                )
+            } else if let Some(mode) = case.strip_prefix("dh2_") {
                 prepared_namelist(
                     steps,
                     &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
@@ -1939,23 +2053,70 @@ mod callback_tests {
             data.modpara.nsrcg = i64::from(cg);
             data.modpara.nstore_o = store;
             let dir = fresh_output_directory().unwrap();
-            vmc_para_opt(
+            let result = vmc_para_opt(
                 &mut data,
                 &mut state,
                 &mut rng,
                 Some(&dir),
                 &SingleProcessReducer,
                 OptimizationOptions::default(),
-            )
-            .unwrap();
+            );
+            let failed = if case == "rbm_fsz" {
+                let status =
+                    fs::read_to_string(root.join(format!("step-{steps}-status.txt"))).unwrap();
+                let mut status = status.split_whitespace();
+                let info: i32 = status.next().unwrap().parse().unwrap();
+                let step: i32 = status.next().unwrap().parse().unwrap();
+                if info != 0 {
+                    assert_eq!(result.unwrap_err(), format!("vmc_para_opt: direct SR failed at step {step} (status {info}); parameters were not updated"));
+                } else {
+                    result.unwrap();
+                }
+                info != 0
+            } else {
+                result.unwrap();
+                false
+            };
             let read = |kind: &str| {
                 fs::read_to_string(root.join(format!("step-{steps}-{kind}.txt"))).unwrap()
             };
+            if case.starts_with("rbm_") {
+                let mut probe = rng.clone();
+                let expected: Vec<u32> = read("rng")
+                    .split_whitespace()
+                    .map(|v| v.parse().unwrap())
+                    .collect();
+                assert_eq!(
+                    (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
+                    expected,
+                    "{case} step {steps} RNG before numerical checks"
+                );
+                let configurations = read("configs");
+                for ((name, actual), line) in [
+                    ("indices", &state.electron_config.ele_idx),
+                    ("configuration", &state.electron_config.ele_cfg),
+                    ("occupation", &state.electron_config.ele_num),
+                ]
+                .into_iter()
+                .zip(configurations.lines())
+                {
+                    let expected: Vec<i64> = line
+                        .split_whitespace()
+                        .map(|v| v.parse().unwrap())
+                        .collect();
+                    assert_eq!(
+                        actual, &expected,
+                        "{case} step {steps} {name} before numerical checks"
+                    );
+                }
+            }
             let bits = |text: &str| -> Vec<u64> {
                 text.split_whitespace()
                     .map(|v| u64::from_str_radix(v, 16).unwrap())
                     .collect()
             };
+            let mut rbm_values = Vec::new();
+            data.visit_rbm_terms_mut(|_, t| rbm_values.push(t.value()));
             let values = data
                 .gutzwiller_terms
                 .iter()
@@ -1963,6 +2124,7 @@ mod callback_tests {
                 .chain(data.jastrow_terms.iter().map(|t| t.value))
                 .chain(data.doublon_holon_2site_params.iter().copied())
                 .chain(data.doublon_holon_4site_params.iter().copied())
+                .chain(rbm_values)
                 .chain(data.orbital_terms.iter().map(|t| t.value));
             let actual: Vec<u64> = values
                 .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
@@ -1977,6 +2139,57 @@ mod callback_tests {
                 bits(&read("energy")),
                 "step {steps} energy"
             );
+            if case.starts_with("rbm_") && steps == 1 && !cg {
+                let fixture = fs::read_to_string(root.join("fixed-input.txt")).unwrap();
+                let lines: Vec<&str> = fixture.lines().filter(|l| !l.starts_with('#')).collect();
+                let complex_bits = |values: &[Complex64]| -> Vec<u64> {
+                    values
+                        .iter()
+                        .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                        .collect()
+                };
+                let (oo, ho) = if get_all_complex_flag(&data) {
+                    (
+                        complex_bits(&state.sr_opt.sr_opt_oo),
+                        complex_bits(&state.sr_opt.sr_opt_ho),
+                    )
+                } else {
+                    (
+                        state
+                            .sr_opt
+                            .sr_opt_oo_real
+                            .iter()
+                            .map(|v| v.to_bits())
+                            .collect(),
+                        state
+                            .sr_opt
+                            .sr_opt_ho_real
+                            .iter()
+                            .map(|v| v.to_bits())
+                            .collect(),
+                    )
+                };
+                assert_eq!(oo, bits(lines[2]), "{case} sampled SR OO");
+                assert_eq!(ho, bits(lines[3]), "{case} sampled SR HO");
+                if store == 1 {
+                    let fixture = fs::read_to_string(root.join("gram.txt")).unwrap();
+                    let expected = bits(fixture.lines().nth(1).unwrap());
+                    let actual = if get_all_complex_flag(&data) {
+                        complex_bits(&state.sr_opt.sr_opt_o_store)
+                    } else {
+                        state
+                            .sr_opt
+                            .sr_opt_o_store_real
+                            .iter()
+                            .map(|v| v.to_bits())
+                            .collect()
+                    };
+                    assert_eq!(actual.len(), expected.len());
+                    for (i, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+                        assert_eq!(actual, expected, "{case} sampled SR O store component {i}");
+                    }
+                }
+            }
             let conf = read("configs");
             let mut lines = conf.lines();
             for (name, actual) in [
@@ -1995,7 +2208,7 @@ mod callback_tests {
             }
             if matches!(
                 case,
-                "interall" | "pairhop_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz"
+                "interall" | "pairhop_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz" | "rbm_fsz"
             ) {
                 for (name, actual) in [
                     ("spins", &state.electron_config.ele_spn),
@@ -2011,6 +2224,20 @@ mod callback_tests {
                     assert_eq!(actual, &expected, "step {steps} {name}");
                 }
             }
+            if case.starts_with("rbm_") && case != "rbm_fsz" {
+                for (name, actual) in [
+                    ("burn", &state.electron_config.burn_ele_idx),
+                    ("counters", &state.electron_config.counter.to_vec()),
+                ] {
+                    let expected: Vec<i64> = lines
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .map(|v| v.parse().unwrap())
+                        .collect();
+                    assert_eq!(actual, &expected, "{case} step {steps} {name}");
+                }
+            }
             assert!(lines.next().is_none());
             let expected: Vec<u32> = read("rng")
                 .split_whitespace()
@@ -2024,7 +2251,11 @@ mod callback_tests {
                     read("SRinfo")
                 );
             }
-            if case.starts_with("dh2_") || case.starts_with("dh4_") || case.starts_with("dh24_") {
+            if case.starts_with("dh2_")
+                || case.starts_with("dh4_")
+                || case.starts_with("dh24_")
+                || case.starts_with("rbm_")
+            {
                 for name in [
                     "zvo_out.dat",
                     "zvo_var.dat",
@@ -2033,11 +2264,19 @@ mod callback_tests {
                     "zqp_jastrow_opt.dat",
                     "zqp_orbital_opt.dat",
                 ] {
-                    assert_eq!(
-                        fs::read_to_string(dir.join(name)).unwrap(),
-                        fs::read_to_string(root.join(format!("step-{steps}-{name}"))).unwrap(),
-                        "{case} {steps} {name}"
-                    );
+                    if failed && name.starts_with("zqp_") {
+                        assert!(!dir.join(name).exists(), "{case} {steps} {name}");
+                        assert_eq!(
+                            fs::read_to_string(root.join(format!("step-{steps}-{name}"))).unwrap(),
+                            "# absent after source SR failure\n"
+                        );
+                    } else {
+                        assert_eq!(
+                            fs::read_to_string(dir.join(name)).unwrap(),
+                            fs::read_to_string(root.join(format!("step-{steps}-{name}"))).unwrap(),
+                            "{case} {steps} {name}"
+                        );
+                    }
                 }
                 assert!(!dir.join("zqp_dh2_opt.dat").exists());
                 assert!(!dir.join("zqp_dh4_opt.dat").exists());
@@ -2157,6 +2396,61 @@ mod callback_tests {
                     .iter()
                     .all(|&v| v == 0.0));
             }
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn nonfinite_local_energy_skips_energy_sr_and_sample_store() {
+        for case in [
+            "heisenberg_chain_real",
+            "heisenberg_chain_cmp",
+            "heisenberg_chain_fsz",
+        ] {
+            let (mut data, mut state, mut rng) = prepared_case(1, case);
+            data.modpara.nstore_o = 1;
+            let dir = fresh_output_directory().unwrap();
+            vmc_para_opt(
+                &mut data,
+                &mut state,
+                &mut rng,
+                Some(&dir),
+                &SingleProcessReducer,
+                OptimizationOptions {
+                    skip_sr: true,
+                    ..OptimizationOptions::default()
+                },
+            )
+            .unwrap();
+            assert!(state.energy.wc.re > 0.0);
+            data.coulomb_intra_terms = vec![mvmc_expert_parsers::CoulombIntraTerm {
+                site: 0,
+                value: f64::NAN,
+            }];
+            clear_phys_quantity(&mut state);
+            let complex = get_all_complex_flag(&data);
+            let fsz = data.i_flg_orbital_general != 0;
+            accumulate_observables(&data, &mut state, complex, fsz, &mut CTimer::<false>::new());
+            assert_eq!(state.energy.wc, Complex64::new(0.0, 0.0), "{case}");
+            assert_eq!(state.energy.etot, Complex64::new(0.0, 0.0), "{case}");
+            assert!(state
+                .sr_opt
+                .sr_opt_oo
+                .iter()
+                .all(|&z| z == Complex64::new(0.0, 0.0)));
+            assert!(state
+                .sr_opt
+                .sr_opt_ho
+                .iter()
+                .all(|&z| z == Complex64::new(0.0, 0.0)));
+            assert!(state
+                .sr_opt
+                .sr_opt_o_store
+                .iter()
+                .all(|&z| z == Complex64::new(0.0, 0.0)));
+            assert!(state.sr_opt.sr_opt_oo_real.iter().all(|&v| v == 0.0));
+            assert!(state.sr_opt.sr_opt_ho_real.iter().all(|&v| v == 0.0));
+            assert!(state.sr_opt.sr_opt_o_store_real.iter().all(|&v| v == 0.0));
             fs::remove_dir_all(dir).unwrap();
         }
     }

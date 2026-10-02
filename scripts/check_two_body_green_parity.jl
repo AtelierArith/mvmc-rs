@@ -5,6 +5,8 @@ VERSION == v"1.13.1" || error("Two-body fixtures require Julia 1.13.1")
 BLAS.set_num_threads(1)
 include(joinpath(@__DIR__,"dh2_green_model.jl"))
 include(joinpath(@__DIR__,"dh4_green_model.jl"))
+include(joinpath(@__DIR__,"rbm_green_model.jl"))
+const RBM = "--rbm" in ARGS
 const DH2 = "--dh2" in ARGS
 const DH4 = "--dh4" in ARGS
 const COMBINED = "--dh24" in ARGS
@@ -50,6 +52,7 @@ function explicit_operator(ri,rj,rk,rl,s,t,num,cnt,data,state)
     else
         exp(0.125*(new_cnt[1]-cnt[1]) - 0.2*(new_cnt[2]-cnt[2]))
     end
+    RBM && (ratio *= exp(MVMCOptimizers.log_rbm_val(moved,data)-MVMCOptimizers.log_rbm_val(num,data)))
     conj(sign*ratio*analytic_overlap(moved,state.slater_matrix.slater_elm) /
          analytic_overlap(num,state.slater_matrix.slater_elm))
 end
@@ -69,6 +72,7 @@ println(io,"# Original green_func2; exhaustive 4-site indices and spins; analyti
         data.jastrow_terms = [MVMCExpertModeParsers.JastrowTerm(0,1,-0.2+0im,false)]
         (DH2 || COMBINED) && add_dh2_green_model!(data)
         (DH4 || COMBINED) && add_dh4_green_model!(data)
+        RBM && add_rbm_green_model!(data)
         MVMCExpertModeParsers.init_qp_weight!(data)
         state = MVMCOptimizers.VMCOptimizationState(4,2,MVMCExpertModeParsers.projection_layout(data).n_proj,0,2,1,complex,false)
         mat = state.slater_matrix
@@ -117,6 +121,6 @@ println(io,"# Original green_func2; exhaustive 4-site indices and spins; analyti
         end
     end
     actual = String(take!(io))
-    path = joinpath(@__DIR__,"..","tests","fixtures",COMBINED ? "dh4/combined" : DH4 ? "dh4/kernels" : DH2 ? "dh2" : "interall","green_normal.txt")
+    path = joinpath(@__DIR__,"..","tests","fixtures",RBM ? "rbm/production" : COMBINED ? "dh4/combined" : DH4 ? "dh4/kernels" : DH2 ? "dh2" : "interall","green_normal.txt")
     if "--write" in ARGS; write(path,actual); else; @test actual == read(path,String); end
 end

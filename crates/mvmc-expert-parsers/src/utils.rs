@@ -19,7 +19,10 @@ pub mod read_input_parameters;
 pub mod qp_weight;
 
 mod julia_hypot;
-mod julia_trig;
+/// Julia Float64 logarithmic operations for deterministic kernels.
+pub mod julia_log;
+/// Julia Float64 trigonometric and hyperbolic operations for deterministic kernels.
+pub mod julia_trig;
 
 /// Julia's Float64 exponential operation for deterministic projection ratios.
 pub mod julia_exp;

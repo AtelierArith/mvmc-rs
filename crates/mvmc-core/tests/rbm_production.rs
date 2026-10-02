@@ -76,13 +76,7 @@ fn exact(got: &[Complex64], expected: &[Complex64], context: &str) {
     };
     assert_eq!(bits(got), bits(expected), "{context}");
 }
-fn close(got: &[Complex64], expected: &[Complex64], context: &str) {
-    assert_eq!(got.len(), expected.len(), "{context}");
-    // Fixed kernel tolerance, independent of RNG/trajectory checks.
-    for (i, (a, b)) in got.iter().zip(expected).enumerate() {
-        assert!((*a - *b).norm() <= 5e-14, "{context} [{i}]: {a:?} vs {b:?}");
-    }
-}
+
 #[test]
 fn parsed_rbm_counter_incremental_ratios_and_all_derivatives_match_original_julia() {
     let fixture = std::fs::read_to_string(root().join("production/kernels.txt")).unwrap();
@@ -105,8 +99,8 @@ fn parsed_rbm_counter_incremental_ratios_and_all_derivatives_match_original_juli
         exact(&cnt, &complex_line(lines.next().unwrap()), header);
         let mut derivative = vec![Complex64::new(0.0, 0.0); 2 * data.count_rbm_parameters()];
         set_rbm_diff(&mut derivative, &cnt, &occupation, &cfg);
-        close(&derivative, &complex_line(lines.next().unwrap()), header);
-        close(
+        exact(&derivative, &complex_line(lines.next().unwrap()), header);
+        exact(
             &[log_rbm_val(&occupation, &cfg)],
             &complex_line(lines.next().unwrap()),
             header,
@@ -121,7 +115,7 @@ fn parsed_rbm_counter_incremental_ratios_and_all_derivatives_match_original_juli
                         &complex_line(lines.next().unwrap()),
                         &format!("{header} hop {ri} {rj} {spin}"),
                     );
-                    close(
+                    exact(
                         &[log_rbm_ratio(&new, &cnt, &cfg)],
                         &complex_line(lines.next().unwrap()),
                         header,
@@ -199,5 +193,61 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
         assert!(read_opt_para_file(&mut data, &invalid).is_err());
         exact(&snapshot(&mut data), &before, case);
         std::fs::remove_file(invalid).unwrap();
+    }
+}
+
+#[test]
+fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
+    for case in [
+        "rbm_real",
+        "rbm_cmp",
+        "rbm_general_cmp",
+        "rbm_dh24_cmp",
+        "rbm_fsz",
+        "rbm_reference_cmp",
+    ] {
+        let reference = case == "rbm_reference_cmp";
+        let path = if reference {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def")
+        } else {
+            root().join(format!("run_{case}/namelist.def"))
+        };
+        for steps in [1, 3] {
+            let mut config = mvmc_core::RunConfig::new(
+                steps,
+                if case == "rbm_real" {
+                    "real"
+                } else if case == "rbm_fsz" {
+                    "fsz"
+                } else {
+                    "cmp"
+                },
+            );
+            config.nsmp = Some(steps);
+            if !reference {
+                config.seed = Some(1);
+            }
+            let summary = mvmc_core::run_para_opt_from_namelist(&path, config).unwrap();
+            assert_eq!(summary.status, 0);
+            assert_eq!(summary.effective_nsteps, steps as usize);
+            assert_eq!(summary.effective_nsmp, steps as usize);
+            let fixture = root().join(format!("../sr_direct/{case}_store_runner"));
+            for name in [
+                "zvo_out.dat",
+                "zvo_var.dat",
+                "zqp_opt.dat",
+                "zqp_gutzwiller_opt.dat",
+                "zqp_jastrow_opt.dat",
+                "zqp_orbital_opt.dat",
+            ] {
+                assert_eq!(
+                    std::fs::read_to_string(summary.output_dir.join(name)).unwrap(),
+                    std::fs::read_to_string(fixture.join(format!("step-{steps}-{name}"))).unwrap(),
+                    "{case} {steps} {name}"
+                );
+            }
+            assert!(!summary.output_dir.join("zqp_rbm_opt.dat").exists());
+            std::fs::remove_dir_all(summary.output_dir).unwrap();
+        }
     }
 }

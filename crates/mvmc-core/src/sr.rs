@@ -450,10 +450,21 @@ mod tests {
             "dh24_real",
             "dh24_cmp",
             "dh24_fsz",
+            "rbm_real",
+            "rbm_cmp",
+            "rbm_general_cmp",
+            "rbm_dh24_cmp",
+            "rbm_fsz",
+            "rbm_reference_cmp",
         ]
         .into_iter()
-        .flat_map(|case| [(case, 0), (case, 1)])
-        {
+        .flat_map(|case| {
+            if case == "rbm_reference_cmp" {
+                vec![(case, 1)]
+            } else {
+                vec![(case, 0), (case, 1)]
+            }
+        }) {
             let suffix = if store == 0 {
                 "_runner"
             } else {
@@ -493,6 +504,11 @@ mod tests {
                     | "dh4_fsz"
                     | "dh24_cmp"
                     | "dh24_fsz"
+                    | "rbm_cmp"
+                    | "rbm_general_cmp"
+                    | "rbm_dh24_cmp"
+                    | "rbm_fsz"
+                    | "rbm_reference_cmp"
             );
             let mut state = VmcOptimizationState::zeros(1, 1, 0, size - 1, 1, 1, complex, false);
             let oo = read(lines.next().unwrap());
@@ -516,7 +532,11 @@ mod tests {
             } else {
                 format!("heisenberg_chain_{case}")
             };
-            let namelist = if let Some(mode) = case.strip_prefix("dh2_") {
+            let namelist = if case == "rbm_reference_cmp" {
+                root.join("extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def")
+            } else if case.starts_with("rbm_") {
+                root.join(format!("tests/fixtures/rbm/run_{case}/namelist.def"))
+            } else if let Some(mode) = case.strip_prefix("dh2_") {
                 root.join(format!("tests/fixtures/dh2/production_{mode}/namelist.def"))
             } else if case.starts_with("dh4_") || case.starts_with("dh24_") {
                 root.join(format!("tests/fixtures/dh4/production_{case}/namelist.def"))
