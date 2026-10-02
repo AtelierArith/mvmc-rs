@@ -21,6 +21,7 @@ blas = { workspace = true }
 lapack = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+rayon = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }

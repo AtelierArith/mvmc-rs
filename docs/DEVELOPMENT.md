@@ -125,3 +125,28 @@ profile and 84.498 s for `test-fast`, excluding compilation and discovery. Use
 `test-fast` for subsequent full runs. All-target, all-feature Clippy with
 `-D warnings`, the workspace doctest command and `cargo fmt --all --check` also
 passed; the workspace currently contains no runnable doctests.
+
+## Optional inner-kernel threading
+
+The independent QP loop in the Pfaffian setup can be enabled without changing
+the sequential sampling/RNG contract. The default is one worker. Set
+`MVMC_RS_INNER_THREADS` to the requested worker count and
+`MVMC_RS_INNER_THRESHOLD` to the minimum QP range length; each worker owns a
+scratch workspace and results are copied back in QP order.
+
+For example, the deterministic `spin_chain_lanczos` parity gate was measured
+on 2026-10-03 with the same BLAS settings and warm Cargo target:
+
+```sh
+env -u MVMC_RS_INNER_THREADS -u MVMC_RS_INNER_THRESHOLD \
+  MVMC_RS_LANCZOS_PHYSICAL=1 MVMC_RS_LANCZOS_MODEL=spin_chain_lanczos \
+  cargo nextest run -p mvmc-core --test lanczos_transfer_physcal
+env MVMC_RS_INNER_THREADS=2 MVMC_RS_INNER_THRESHOLD=1 \
+  MVMC_RS_LANCZOS_PHYSICAL=1 MVMC_RS_LANCZOS_MODEL=spin_chain_lanczos \
+  cargo nextest run -p mvmc-core --test lanczos_transfer_physcal
+```
+
+The sequential and two-worker runs both passed the full Julia fixture gate;
+wall time was 189.10 s and 185.92 s respectively on the recorded host. The
+small difference is workload and host dependent, so this control should be
+benchmarked with the target model before enabling it by default.

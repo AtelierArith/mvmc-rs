@@ -33,6 +33,7 @@ pub mod sr;
 pub mod sr_cg;
 pub mod state;
 pub mod sync;
+pub mod threading;
 pub mod validation;
 
 pub use initial_params::{read_initial_def, read_opt_para_file};
