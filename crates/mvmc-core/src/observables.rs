@@ -1121,6 +1121,13 @@ fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
         mix(value.re.to_bits());
         mix(value.im.to_bits());
     }
+    mix(u64::from(data.has_rbm_terms()));
+    mix(data.gutzwiller_idx.len() as u64);
+    mix(data.jastrow_idx.len() as u64);
+    mix(data.doublon_holon_2site_indices.len() as u64);
+    mix(data.doublon_holon_2site_params.len() as u64);
+    mix(data.doublon_holon_4site_indices.len() as u64);
+    mix(data.doublon_holon_4site_params.len() as u64);
     hash
 }
 
@@ -1783,6 +1790,47 @@ mod tests {
         refresh_transfer_cache(&data, &mut state);
         assert_ne!(state.transfer_cache.signature, first);
         assert_eq!(state.transfer_cache.terms[0].value.re, 2.0);
+    }
+
+    #[test]
+    fn real_transfer_cache_eligibility_matches_julia_fast_path_requirements() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Up,
+            value: Complex64::new(1.0, 0.0),
+        });
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+        refresh_transfer_cache(&data, &mut state);
+        assert!(state.transfer_cache.all_real);
+        assert!(state.transfer_cache.direct_projection_eligible);
+
+        data.charge_rbm_phys_layer_terms
+            .push(mvmc_expert_parsers::ChargeRBMPhysLayerTerm {
+                site: 0,
+                idx: 0,
+                value: Complex64::new(0.25, 0.0),
+                is_complex: false,
+            });
+        refresh_transfer_cache(&data, &mut state);
+        assert!(!state.transfer_cache.direct_projection_eligible);
+        data.charge_rbm_phys_layer_terms.clear();
+
+        data.doublon_holon_2site_indices
+            .push(mvmc_expert_parsers::DoublonHolon2SiteIndex {
+                neighbors: vec![[1, 1], [0, 0]],
+            });
+        refresh_transfer_cache(&data, &mut state);
+        assert!(!state.transfer_cache.direct_projection_eligible);
+        data.doublon_holon_2site_indices.clear();
+
+        data.complex_flags = vec![1];
+        refresh_transfer_cache(&data, &mut state);
+        assert!(!state.transfer_cache.all_real);
     }
 
     #[test]
