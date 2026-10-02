@@ -16,6 +16,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         return;
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC");
+    let mode = std::env::var("MVMC_RS_LANCZOS_MODE").unwrap_or_else(|_| "real".into());
     let requested_model = std::env::var("MVMC_RS_LANCZOS_MODEL").ok();
     for model in [
         "hubbard_chain_real",
@@ -40,7 +41,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
             std::env::temp_dir().join(format!("mvmc-lanczos-{model}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&output);
         let preparation =
-            mvmc_core::prepare_phys_cal_from_namelist(&namelist, &opt_para, "real", Some(1))
+            mvmc_core::prepare_phys_cal_from_namelist(&namelist, &opt_para, &mode, Some(1))
                 .unwrap();
         mvmc_core::vmc_phys_cal_to_dir(preparation, &output).unwrap();
 
