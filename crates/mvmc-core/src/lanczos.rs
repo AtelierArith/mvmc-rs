@@ -28,6 +28,31 @@ pub enum LanczosEnergyError {
     InvalidStationaryPoint,
 }
 
+/// Accumulate one sample's 16 flattened QQQQ moments.
+pub fn accumulate_lanczos_qqqq(
+    dst: &mut [Complex64],
+    weight: f64,
+    h1: Complex64,
+    h2: Complex64,
+    all_complex: bool,
+) -> Result<(), LanczosEnergyError> {
+    if dst.len() != 16 {
+        return Err(LanczosEnergyError::QqqqTooShort);
+    }
+    let lslq = [Complex64::new(1.0, 0.0), h1, h1, h2];
+    for (i0, slot) in dst.iter_mut().enumerate() {
+        let rj = i0 % 2;
+        let ri = (i0 / 2) % 2;
+        let rp = (i0 / 4) % 2;
+        let rq = (i0 / 8) % 2;
+        let left = lslq[rq * 2 + ri];
+        let right = lslq[rp * 2 + rj];
+        let left = if all_complex { left.conj() } else { left };
+        *slot += weight * left * right;
+    }
+    Ok(())
+}
+
 /// Calculate the lower-energy two-step Lanczos estimate from flattened QQQQ moments.
 ///
 /// The indexing and operation order follow Julia-mVMC's `_lanczos_energy`; the
@@ -156,5 +181,22 @@ mod tests {
             lanczos_energy(&values),
             Err(LanczosEnergyError::NonFiniteEquation)
         );
+    }
+
+    #[test]
+    fn accumulates_qqqq_in_julia_flattened_order() {
+        let mut actual = vec![Complex64::new(0.0, 0.0); 16];
+        accumulate_lanczos_qqqq(
+            &mut actual,
+            2.0,
+            Complex64::new(2.0, 3.0),
+            Complex64::new(5.0, 7.0),
+            true,
+        )
+        .unwrap();
+        assert_eq!(actual[0], Complex64::new(2.0, 0.0));
+        assert_eq!(actual[1], Complex64::new(4.0, 6.0));
+        assert_eq!(actual[2], Complex64::new(4.0, -6.0));
+        assert_eq!(actual[15], Complex64::new(148.0, 0.0));
     }
 }
