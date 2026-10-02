@@ -100,6 +100,7 @@ pub fn prepare_phys_cal_from_namelist(
     let n_para_consumed = read_opt_para_file(&mut data, opt_para_path)?;
     read_input_parameters(&mut data, namelist_path)?;
     sync_modified_parameter(&mut data, false);
+    crate::validation::validate_phys_cal(&data)?;
     Ok(PhysCalPreparation {
         data,
         rng,

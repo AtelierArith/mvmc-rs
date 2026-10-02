@@ -177,6 +177,39 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate the currently supported serial PhysCal combinations.
+pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
+    if mpi_requested(|key| std::env::var(key).ok()) {
+        return Err("MPI PhysCal is not implemented yet (issue #35)".into());
+    }
+    let p = &data.modpara;
+    validate_supported_modpara(p)?;
+    if p.nsplit_size > 1 {
+        return Err("NSplitSize > 1 PhysCal is not implemented yet (issue #36)".into());
+    }
+    if p.lanczos_mode > 0 {
+        if data.i_flg_orbital_general != 0 {
+            return Err(
+                "Lanczos PhysCal for FSZ/general orbitals is not implemented yet (issue #31)"
+                    .into(),
+            );
+        }
+        if data
+            .transfer_terms
+            .iter()
+            .any(|term| term.spin1 != term.spin2)
+        {
+            return Err(
+                "spin-changing Transfer is unsupported for Lanczos PhysCal (issue #31)".into(),
+            );
+        }
+        if !data.inter_all_terms.is_empty() {
+            return Err("InterAll Lanczos PhysCal is not implemented yet (issue #31)".into());
+        }
+    }
+    Ok(())
+}
+
 fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
     if get("JULIA_MVMC_MPI").is_some_and(|v| v == "1")
         || get("OMPI_COMM_WORLD_SIZE").is_some()
