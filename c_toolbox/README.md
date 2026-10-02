@@ -18,6 +18,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `integer_flags.c` | Production AP/P header normalization, raw integer flags, coefficient bits, native SFMT and SR selection, 70 cases | `python3 scripts/check_integer_flags_c_parity.py` |
 | `projection_flags.c` | Native DH2/DH4 raw-flag readers, 24 cases; real gauge eligibility, 86 cases | `python3 scripts/check_projection_flags_c_parity.py` |
 | `gutzwiller_contracts.c` | Physical headers, complete site mappings and raw ordered flags, 144 cases | `python3 scripts/check_gutzwiller_contracts_c_parity.py` |
+| `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
@@ -111,4 +112,19 @@ Bad site indices are excluded from native execution because C writes the site
 array before checking bounds. Malformed integer scans and out-of-range parameter
 indices also have separate bounded Rust diagnostics. These checks establish this
 reader's supported contract, not full C validation, initialization, MPI or
-sampling parity. Jastrow and RBM complete readers remain separate work in #21.
+sampling parity. RBM complete readers remain separate work in #21/#26.
+
+The Jastrow probe extracts the actual header, `GetInfoJastrow`, `GetInfoOpt`
+and site-check functions. Its 144 cases cover directed pairs, count errors,
+raw signed flags and a nonzero Gutzwiller offset. `jastrow_projection.c` adds
+actual `MakeProjCnt` and `UpdateProjCnt` bodies from `projection.c`, supplying
+two Gutzwiller slots, disabled DH factors and eight occupancy patterns. All
+1,795 initial/count-update workloads across 60 complete tables are serialized
+as checked-in Rust expectations; legal moves in both directions are included.
+The reader preserves asymmetric entries, while C's projection kernels always
+look up the upper-triangle index. Duplicate tables with unwritten cells are
+excluded from kernel execution. Unwritten index=-1 and imaginary=0 sentinels
+are documented, and neither driver establishes native malloc initialization,
+full sampling, MPI, global complex-header or OptTrans behavior. The script
+also reproduces the complete three-site historical replacement without editing
+its three original input files. Details: `tests/fixtures/jastrow/README.md`.

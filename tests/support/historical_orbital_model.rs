@@ -1,6 +1,6 @@
 //! Historical Julia kernel models, constructed after validating complete inputs.
 //!
-//! Checked-in C input replacements supply complete AP/P/General rows and flags.
+//! Checked-in C replacements supply complete AP/P/General/Jastrow rows and flags.
 //! Sparse spatial tables are then restored programmatically for the historical
 //! coefficient/kernel regression checks. Those sparse models are not evidence
 //! that C accepts the original incomplete definition files. Production parsing
@@ -38,6 +38,7 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
     let mut original_orbitals = Vec::new();
     let mut rewritten = String::new();
     let mut changed = false;
+    let mut changed_orbitals = false;
     for line in content.lines() {
         let fields: Vec<_> = line.split_whitespace().collect();
         if fields.len() < 2 || fields[0].starts_with('#') {
@@ -49,8 +50,16 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         let replacement = replacements
             .iter()
             .find(|(name, _)| absolute == root.join(name));
-        let selected = if let Some((_, target)) = replacement {
+        let jastrow_replacement = fields[0] == "Jastrow"
+            && ["dh2/jast.def", "dh4/jast.def", "rbm/jast.def"]
+                .iter()
+                .any(|name| absolute == root.join(name));
+        let selected = if jastrow_replacement {
             changed = true;
+            root.join("jastrow/c_three.def")
+        } else if let Some((_, target)) = replacement {
+            changed = true;
+            changed_orbitals = true;
             root.join("c_orbital_inputs").join(target)
         } else {
             absolute.clone()
@@ -79,14 +88,15 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         mvmc_expert_parsers::parse_expert_mode_files(&namelist).map_err(|error| error.to_string());
     std::fs::remove_dir_all(&dir).map_err(|error| error.to_string())?;
     let mut data = result?;
-    if data
-        .input_errors
-        .iter()
-        .any(|error| error.starts_with("error parsing Orbital"))
-    {
+    if data.input_errors.iter().any(|error| {
+        error.starts_with("error parsing Orbital") || error.starts_with("error parsing Jastrow")
+    }) {
         return Err(data.input_errors.join("; "));
     }
     data.namelist = metadata;
+    if !changed_orbitals {
+        return Ok(data);
+    }
     original_orbitals.sort_by_key(|(kind, _)| kind == "OrbitalParallel");
     let mut terms = Vec::new();
     for (kind, original) in original_orbitals {

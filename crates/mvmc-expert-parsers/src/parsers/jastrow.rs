@@ -1,154 +1,131 @@
-//! `jastrowidx.def` parser.
-//!
-//! Port of `MVMCExpertModeParsers.jl/src/parsers/jastrow_parser.jl`.
-//! Restricted to the round-trip subset: builds the `(site1, site2, idx)`
-//! list, parses the `NJastrowIdx` / `ComplexType` header, and exposes
-//! the symmetric `jastrow_idx[ri+1, rj+1]` matrix.
-
+//! Authoritative C Jastrow headers, directed mappings and ordered raw flags.
+use crate::types::JastrowTerm;
+use crate::utils::file::read_def_file;
+use num_complex::Complex64;
 use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
-use num_complex::Complex64;
-
-use crate::types::JastrowTerm;
-use crate::utils::file::{read_def_file, safe_parse_int, split_def_line};
-
-/// Output of [`parse_jastrow_content`].
+/// Declared coefficients, directional site indices and flag assignments.
 #[derive(Debug, Clone, Default)]
 pub struct JastrowSection {
-    /// `(site1, site2, idx)` terms.
+    /// One coefficient slot per declared parameter, including unmapped slots.
     pub terms: Vec<JastrowTerm>,
-    /// `NJastrowIdx`.
+    /// Declared coefficient count.
     pub n_jastrow_idx: i64,
-    /// `ComplexType` flag.
+    /// Positive local complex header enables imaginary flag writes.
     pub is_complex: bool,
-    /// Per-parameter flags from the trailing OptFlag section.
+    /// Raw flags assigned by pair order, ignoring printed labels.
     pub opt_flags: BTreeMap<i64, i64>,
+    /// Directional site-to-parameter table. Unwritten cells are deterministic -1.
+    pub idx_matrix: Vec<Vec<i64>>,
 }
 
-/// Parse a `jastrowidx.def` file from disk.
-pub fn parse_jastrow_def<P: AsRef<Path>>(path: P) -> io::Result<JastrowSection> {
-    let content = read_def_file(path)?;
-    Ok(parse_jastrow_content(&content))
+/// Read a complete C Jastrow definition for the supplied geometry.
+pub fn parse_jastrow_def<P: AsRef<Path>>(path: P, nsite: i64) -> io::Result<JastrowSection> {
+    parse_jastrow_content(&read_def_file(path)?, nsite)
 }
 
-/// Parse a `jastrowidx.def` payload from memory.
-pub fn parse_jastrow_content(content: &str) -> JastrowSection {
-    let lines: Vec<&str> = content.lines().collect();
-    let (n_jastrow_idx, is_complex, has_header) = read_idx_header(&lines, "NJastrowIdx");
-
-    let start_line = if has_header { 5 } else { 0 };
-    let mut terms = Vec::new();
-    let mut in_opt_section = false;
+/// Parse five physical headers, Nsite*(Nsite-1) directed triples and flag pairs.
+/// Unsafe indices and malformed C scans receive bounded Rust diagnostics.
+pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSection> {
+    let invalid = |message: &str| io::Error::new(io::ErrorKind::InvalidData, message);
+    let lines: Vec<_> = content.lines().collect();
+    if lines.len() < 5 {
+        return Err(invalid("Jastrow definition requires five header lines"));
+    }
+    let n_jastrow_idx = c_fields(lines[1])
+        .nth(1)
+        .and_then(|field| field.parse::<i32>().ok())
+        .filter(|&width| width > 0)
+        .ok_or_else(|| invalid("Jastrow declaration on line 2 must have a positive width"))?
+        as i64;
+    let is_complex = c_fields(lines[2])
+        .nth(1)
+        .and_then(|field| field.parse::<i32>().ok())
+        .unwrap_or(0)
+        > 0;
+    let nsite = usize::try_from(nsite)
+        .ok()
+        .filter(|&count| count >= 2)
+        .ok_or_else(|| invalid("Jastrow definitions require at least two sites"))?;
+    let n_mapping = nsite
+        .checked_mul(nsite - 1)
+        .ok_or_else(|| invalid("Jastrow mapping count overflows"))?;
+    let mapping_fields = n_mapping
+        .checked_mul(3)
+        .ok_or_else(|| invalid("Jastrow mapping field count overflows"))?;
+    let expected_fields = (n_jastrow_idx as usize)
+        .checked_mul(2)
+        .and_then(|count| count.checked_add(mapping_fields))
+        .ok_or_else(|| invalid("Jastrow field count overflows"))?;
+    let body = lines[5..].join("\n");
+    let fields: Vec<_> = c_fields(&body).collect();
+    if fields.len() != expected_fields {
+        return Err(invalid(
+            "Jastrow requires Nsite*(Nsite-1) directed triples and exactly the declared flag pairs",
+        ));
+    }
+    let integer = |field: &str| {
+        field
+            .parse::<i32>()
+            .map(i64::from)
+            .map_err(|_| invalid("invalid integer in Jastrow definition"))
+    };
+    let mut idx_matrix = vec![vec![-1; nsite]; nsite];
+    for triple in fields[..mapping_fields].chunks_exact(3) {
+        let site1 = integer(triple[0])?;
+        let site2 = integer(triple[1])?;
+        let idx = integer(triple[2])?;
+        if site1 < 0 || site2 < 0 || site1 >= nsite as i64 || site2 >= nsite as i64 {
+            return Err(invalid("Jastrow site is outside Nsite"));
+        }
+        if site1 == site2 {
+            return Err(invalid("Jastrow mappings require distinct sites"));
+        }
+        if idx < 0 || idx >= n_jastrow_idx {
+            return Err(invalid(
+                "Jastrow parameter index is outside the declared width",
+            ));
+        }
+        idx_matrix[site1 as usize][site2 as usize] = idx;
+    }
     let mut opt_flags = BTreeMap::new();
-    for line in lines.get(start_line..).unwrap_or_default() {
-        let tokens = split_def_line(line);
-        if tokens.is_empty() {
-            continue;
-        }
-        if tokens.len() == 2 && !terms.is_empty() {
-            in_opt_section = true;
-        }
-        if in_opt_section {
-            if tokens.len() >= 2 {
-                let idx = safe_parse_int(tokens[0], -1);
-                let flag = safe_parse_int(tokens[1], -1);
-                if idx >= 0 && flag >= 0 {
-                    opt_flags.insert(idx, flag);
-                }
+    for (index, pair) in fields[mapping_fields..].chunks_exact(2).enumerate() {
+        let _printed_index = integer(pair[0])?;
+        opt_flags.insert(index as i64, integer(pair[1])?);
+    }
+    // Terms represent the dense coefficient array, not individual mapping rows.
+    // Site metadata is a deterministic representative; kernels use idx_matrix.
+    let mut representatives = vec![(0, 1); n_jastrow_idx as usize];
+    let mut assigned = vec![false; n_jastrow_idx as usize];
+    for (site1, row) in idx_matrix.iter().enumerate() {
+        for (site2, &idx) in row.iter().enumerate() {
+            if idx >= 0 && !assigned[idx as usize] {
+                representatives[idx as usize] = (site1 as i64, site2 as i64);
+                assigned[idx as usize] = true;
             }
-            continue;
         }
-        if tokens.len() < 3 {
-            continue;
-        }
-        let site1 = safe_parse_int(tokens[0], -1);
-        let site2 = safe_parse_int(tokens[1], -1);
-        if site1 < 0 || site2 < 0 {
-            continue;
-        }
-        let _idx = safe_parse_int(tokens[2], -1); // recorded in JastrowTerm.value later
-        terms.push(JastrowTerm {
+    }
+    let terms = representatives
+        .into_iter()
+        .map(|(site1, site2)| JastrowTerm {
             site1,
             site2,
             value: Complex64::new(0.0, 0.0),
             is_complex,
-        });
-    }
-
-    JastrowSection {
-        terms: if n_jastrow_idx > 0 && (terms.len() as i64) > n_jastrow_idx {
-            terms.truncate(n_jastrow_idx as usize);
-            terms
-        } else {
-            terms
-        },
+        })
+        .collect();
+    Ok(JastrowSection {
+        terms,
         n_jastrow_idx,
         is_complex,
         opt_flags,
-    }
+        idx_matrix,
+    })
 }
 
-/// Build the symmetric `JastrowIdx[ri+1, rj+1] = idx` matrix from a
-/// `jastrowidx.def` payload, in the same shape the upstream Julia
-/// helper `build_jastrow_idx_matrix` returns: `Vec<Vec<i64>>` with the
-/// outer dimension `nsite` and inner dimension `nsite`. Unset entries
-/// stay at `-1`.
-pub fn build_jastrow_idx_matrix(content: &str, nsite: usize) -> (Vec<Vec<i64>>, i64) {
-    if nsite == 0 {
-        return (Vec::new(), 0);
-    }
-    let mut matrix = vec![vec![-1i64; nsite]; nsite];
-    let lines: Vec<&str> = content.lines().collect();
-    let (n_jastrow_idx, _is_complex, _has_header) = read_idx_header(&lines, "NJastrowIdx");
-
-    let start_line = 5usize;
-    for line in lines.iter().skip(start_line) {
-        let tokens = split_def_line(line);
-        if tokens.len() == 2 {
-            break; // entered the opt-flag block
-        }
-        if tokens.len() < 3 {
-            continue;
-        }
-        let site1 = safe_parse_int(tokens[0], -1);
-        let site2 = safe_parse_int(tokens[1], -1);
-        let idx = safe_parse_int(tokens[2], -1);
-        if site1 >= 0
-            && (site1 as usize) < nsite
-            && site2 >= 0
-            && (site2 as usize) < nsite
-            && idx >= 0
-        {
-            matrix[site1 as usize][site2 as usize] = idx;
-            matrix[site2 as usize][site1 as usize] = idx;
-        }
-    }
-    (matrix, n_jastrow_idx)
-}
-
-// Legacy Jastrow header reader; the Gutzwiller reader uses physical C headers.
-fn read_idx_header(lines: &[&str], n_keyword: &str) -> (i64, bool, bool) {
-    let mut n_idx = 0i64;
-    let mut complex_type = 0i64;
-    let mut has_header = false;
-
-    if lines.len() > 1 {
-        let tokens = split_def_line(lines[1]);
-        if tokens.len() >= 2
-            && (tokens[0] == n_keyword
-                || (n_keyword == "NOrbitalIdx" && tokens[0].starts_with("NOrbital")))
-        {
-            n_idx = safe_parse_int(tokens[1], 0);
-            has_header = true;
-        }
-    }
-    if has_header && lines.len() > 2 {
-        let tokens = split_def_line(lines[2]);
-        if tokens.len() >= 2 && tokens[0] == "ComplexType" {
-            complex_type = safe_parse_int(tokens[1], 0);
-        }
-    }
-    (n_idx, complex_type != 0, has_header)
+fn c_fields(text: &str) -> impl Iterator<Item = &str> {
+    text.split([' ', '\t', '\n', '\r', '\x0b', '\x0c'])
+        .filter(|field| !field.is_empty())
 }

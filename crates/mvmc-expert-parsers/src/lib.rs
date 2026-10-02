@@ -383,7 +383,7 @@ fn parse_file_by_type(
         }
         "Jastrow" => {
             let content = read_def_file(path)?;
-            let section = jastrow::parse_jastrow_content(&content);
+            let section = jastrow::parse_jastrow_content(&content, data.modpara.nsite)?;
             data.jastrow_terms = section.terms;
             data.n_jastrow_idx = section.n_jastrow_idx;
             set_projection_opt_flags(
@@ -393,12 +393,7 @@ fn parse_file_by_type(
                 false,
                 section.is_complex,
             );
-            let nsite = data.modpara.nsite;
-            if nsite > 0 {
-                let (matrix, n_idx) = jastrow::build_jastrow_idx_matrix(&content, nsite as usize);
-                data.jastrow_idx = matrix;
-                data.n_jastrow_idx = n_idx;
-            }
+            data.jastrow_idx = section.idx_matrix;
         }
         "Orbital" | "OrbitalAntiParallel" => {
             let section = orbital::parse_orbital_def(
