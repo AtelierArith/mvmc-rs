@@ -14,7 +14,8 @@ members = [
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.82"
+# No MSRV floor: toolchain selection is delegated entirely to
+# `rust-toolchain.toml`, which always tracks the latest `stable`.
 authors = ["ManyVariableVariationalMonteCarlo.jl contributors"]
 repository = "https://github.com/atelierarith/ManyVariableVariationalMonteCarlo.jl"
 homepage = "https://github.com/atelierarith/ManyVariableVariationalMonteCarlo.jl"
@@ -31,9 +32,9 @@ num-complex = "0.4"
 ndarray = "0.16"
 rand_core = "0.6"
 pulp = { version = "0.22.2", default-features = false, features = ["std"] }
-tenferro-tensor = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "3b4136ca3a3d53cbbdd5096954a470d9407ad25e", default-features = false }
-tenferro-cpu = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "3b4136ca3a3d53cbbdd5096954a470d9407ad25e", default-features = false, features = ["cpu-faer"] }
-tenferro-einsum = { git = "https://github.com/tensor4all/tenferro-rs.git", rev = "3b4136ca3a3d53cbbdd5096954a470d9407ad25e", default-features = false, features = ["cpu-faer"] }
+tenferro-tensor = { version = "0.7.1", default-features = false }
+tenferro-cpu = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
+tenferro-einsum = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
 
 # --- BLAS / LAPACK plumbing.
 #

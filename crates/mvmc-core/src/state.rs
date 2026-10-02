@@ -30,7 +30,7 @@ use std::sync::Mutex;
 
 use num_complex::Complex64;
 use pfapack::PivotIndex1Based;
-use tenferro_tensor::{Buffer, TypedTensor};
+use tenferro_tensor::{TensorScalar, TypedTensor};
 
 // ---------------------------------------------------------------------------
 // Storage-order newtypes
@@ -39,14 +39,14 @@ use tenferro_tensor::{Buffer, TypedTensor};
 /// Slater-element table, **row-major** in `(ri + si * Nsite, rj + sj * Nsite)`
 /// inside one QP plane. Upstream sizes it as `Vector{T}` of length
 /// `n_qp_full * (2*n_site)^2`; we keep the same layout.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SlaterElmFlat<T> {
     data: TypedTensor<T>,
     n_qp_full: usize,
     n_site2: usize, // 2 * n_site
 }
 
-impl<T: Copy + Default> SlaterElmFlat<T> {
+impl<T: TensorScalar + Default> SlaterElmFlat<T> {
     /// Allocate a zero-filled table for `n_qp_full` QPs and `n_site` sites.
     pub fn zeros(n_qp_full: usize, n_site: usize) -> Self {
         let n_site2 = 2 * n_site;
@@ -62,18 +62,15 @@ impl<T: Copy + Default> SlaterElmFlat<T> {
     }
 }
 
-impl<T> SlaterElmFlat<T> {
+impl<T: TensorScalar> SlaterElmFlat<T> {
     fn host_storage(&self) -> &[T] {
-        match self.data.buffer() {
-            Buffer::Host(data) => data,
-            Buffer::Backend(_) => {
-                panic!("SlaterElmFlat requires host-backed tenferro storage")
-            }
-        }
+        self.data
+            .host_data()
+            .expect("SlaterElmFlat requires host-backed tenferro storage")
     }
 }
 
-impl<T: Copy> SlaterElmFlat<T> {
+impl<T: TensorScalar> SlaterElmFlat<T> {
     /// Number of QP planes.
     pub fn n_qp_full(&self) -> usize {
         self.n_qp_full
@@ -146,7 +143,20 @@ impl<T: Copy> SlaterElmFlat<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for SlaterElmFlat<T> {
+impl<T: TensorScalar> Clone for SlaterElmFlat<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self
+                .data
+                .duplicate()
+                .expect("SlaterElmFlat requires host-backed tenferro storage"),
+            n_qp_full: self.n_qp_full,
+            n_site2: self.n_site2,
+        }
+    }
+}
+
+impl<T: TensorScalar + PartialEq> PartialEq for SlaterElmFlat<T> {
     fn eq(&self, other: &Self) -> bool {
         self.n_qp_full == other.n_qp_full
             && self.n_site2 == other.n_site2
@@ -157,14 +167,14 @@ impl<T: PartialEq> PartialEq for SlaterElmFlat<T> {
 /// Inverse-matrix table, **column-major** in `(mi + si * Ne, mj + sj * Ne)`
 /// inside one QP plane, with the upstream `+1` pad slot per QP that
 /// `vmc_sampling.jl:3236` reserves for the Pfaffian buffer.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct InvMColMajor<T> {
     data: TypedTensor<T>,
     n_qp_full: usize,
     n_size: usize, // 2 * n_elec
 }
 
-impl<T: Copy + Default> InvMColMajor<T> {
+impl<T: TensorScalar + Default> InvMColMajor<T> {
     /// Allocate a zero-filled table for `n_qp_full` QPs and `n_elec` electrons.
     pub fn zeros(n_qp_full: usize, n_elec: usize) -> Self {
         let n_size = 2 * n_elec;
@@ -182,18 +192,15 @@ impl<T: Copy + Default> InvMColMajor<T> {
     }
 }
 
-impl<T> InvMColMajor<T> {
+impl<T: TensorScalar> InvMColMajor<T> {
     fn host_storage(&self) -> &[T] {
-        match self.data.buffer() {
-            Buffer::Host(data) => data,
-            Buffer::Backend(_) => {
-                panic!("InvMColMajor requires host-backed tenferro storage")
-            }
-        }
+        self.data
+            .host_data()
+            .expect("InvMColMajor requires host-backed tenferro storage")
     }
 }
 
-impl<T: Copy> InvMColMajor<T> {
+impl<T: TensorScalar> InvMColMajor<T> {
     /// Number of QP planes.
     pub fn n_qp_full(&self) -> usize {
         self.n_qp_full
@@ -293,7 +300,20 @@ impl<T: Copy> InvMColMajor<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for InvMColMajor<T> {
+impl<T: TensorScalar> Clone for InvMColMajor<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self
+                .data
+                .duplicate()
+                .expect("InvMColMajor requires host-backed tenferro storage"),
+            n_qp_full: self.n_qp_full,
+            n_size: self.n_size,
+        }
+    }
+}
+
+impl<T: TensorScalar + PartialEq> PartialEq for InvMColMajor<T> {
     fn eq(&self, other: &Self) -> bool {
         self.n_qp_full == other.n_qp_full
             && self.n_size == other.n_size

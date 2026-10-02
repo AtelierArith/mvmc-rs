@@ -6,7 +6,6 @@ description = "Pfaffian / LTL decomposition for skew-symmetric matrices (port of
 # src/utu2.rs (derived from xrq-phys/Pfaffine). See ../../THIRD_PARTY_LICENSES.md.
 license = "BSD-3-Clause AND MPL-2.0"
 edition.workspace = true
-rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
