@@ -2228,7 +2228,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             // Match C's calHCA: form the local H overlap first, then apply
             // the transfer coefficient.  The grouping is observable for the
             // ill-conditioned Full Lanczos alpha equation.
-            let hca = moved_h * green.conj();
+            let hca = moved_h * green;
             h2 += (-term.value) * hca;
         }
         state.slater_matrix = original_slater.clone();
@@ -2312,7 +2312,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 &moved_num,
                 &moved_proj,
             );
-            let hcaca = moved_h * green.conj();
+            let hcaca = moved_h * green;
             h2 += term.value * hcaca;
         }
         state.slater_matrix = original_slater.clone();
@@ -2324,6 +2324,9 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         let (Some(ri), Some(rj)) = (ri, rj) else {
             continue;
         };
+        // C's calculateHW accumulates both exchange spin channels into a
+        // temporary before applying ParaExchange. Preserve that grouping.
+        let mut exchange = Complex64::new(0.0, 0.0);
         for (first_spin, second_spin) in [(0_u8, 1_u8), (1_u8, 0_u8)] {
             let Some((moved_idx, moved_cfg, moved_num, moved_proj)) = lanczos_apply_two_body(
                 ele_idx,
@@ -2372,10 +2375,11 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 n_qp_full,
                 &pool,
             ) {
-                let hcaca = moved_h * green.conj();
-                h2 += term.value * hcaca;
+                let hcaca = moved_h * green;
+                exchange += hcaca;
             }
         }
+        h2 += term.value * exchange;
     }
     state.slater_matrix = original_slater;
     h2
