@@ -264,6 +264,17 @@ fn run_with_selected_backend(
         #[cfg(feature = "mpi")]
         {
             let context = mvmc_core::mpi::MpiContext::initialize()?;
+            let parsed = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
+                namelist,
+                config.enable_opt_trans.unwrap_or(false),
+            )
+            .map_err(|error| error.to_string())?;
+            if parsed.modpara.nsplit_size > 1 {
+                let group = context.split_groups(parsed.modpara.nsplit_size as usize)?;
+                return mvmc_core::run_para_opt_from_namelist_with_reducer(
+                    namelist, config, &group,
+                );
+            }
             return mvmc_core::run_para_opt_from_namelist_with_reducer(namelist, config, &context);
         }
         #[cfg(not(feature = "mpi"))]
