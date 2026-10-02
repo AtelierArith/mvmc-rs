@@ -90,16 +90,25 @@ or `crates/pfapack/src/*.rs` to refresh the goldens.
 
 ## Input and parameter contracts
 
-Current parameter work uses unmodified Julia 1.13.1 with
+The historical Julia parameter checks use unmodified Julia 1.13.1 with
 `extern/Julia-mVMC/Manifest-v1.13.toml`, canonical source HEAD `8bb1b9e8` and
 numerical/parser source `c2ea4327`. These checks do not regenerate or relabel
 the historical numerical fixtures described above.
+
+C `extern/mVMC-1.3.0/` is now authoritative. The Julia descriptions below
+record historical coverage; they do not establish C compatibility where
+readers, flags or numerical behavior differ. C-derived expectations and
+optional standalone generators are documented in [projection counts](projection_count/README.md),
+[orbital contracts](orbital_general/README.md) and
+[initial/fixed records](initial_records/README.md). Normal Rust tests use
+checked-in fixtures and never compile, invoke or read `c_toolbox/`.
 
 | Contract | Source checks | Rust coverage |
 | --- | --- | --- |
 | Component flags (#21) | `scripts/check_parser_contracts_parity.jl`; family parser scripts | `mvmc-expert-parsers/tests/optimization_flags.rs`; DH/RBM/OptTrans initialization fixtures |
 | Optional In*.def overlays (#20) | `scripts/check_input_overlays_parity.jl`; family parser/loading scripts | `mvmc-expert-parsers/tests/input_overlays.rs`; DH/RBM/OptTrans parser and loaded-boundary fixtures |
 | Atomic initial/fixed loading (#28) | `scripts/check_initial_params_parity.jl`; `scripts/check_opttrans_load_weights_parity.jl`; RBM production loading script | `mvmc-core/tests/initial_params.rs`, `opttrans.rs`, `runner_config.rs`; family full-record checks |
+| C complete initial/fixed records (#28, partial) | `scripts/check_initial_records_c_parity.py` | `mvmc-core/tests/c_initial_records.rs`; C scalar expectations in `opttrans.rs` |
 
 Global flags and parameter offsets include projection, DH2/DH4, all nine RBM
 sections, declared Slater/AP/P slots and active OptTrans weights. Flags preserve
@@ -118,12 +127,16 @@ permissive numeric fallbacks. Parallel/DH2/DH4/OptTrans overlays validate their
 whole indexed record before mutation. Missing optional files are skipped; an
 invalid later strict overlay does not revert earlier successful overlays.
 
-Initial and optimized loaders share validation of every diagnostic, coefficient
-and gradient token, finite values, and exact six-header-plus-triples length.
-The record uses declared/reserved widths rather than row counts and includes
-DH/RBM/OptTrans tails. Invalid files preserve all parameters. Optional initial
-loading returns false for missing/malformed files; strict fixed loading returns
-an error. The runner's Auto/Path/None policy handles optional files separately.
+Initial and optimized loaders now share C complete-record conversion: six
+diagnostics followed by parameter triples, with the final complete record
+taking precedence. Empty files leave coefficients unchanged; numeric nonfinite
+values and overflow/underflow are accepted as C converts them. This supersedes
+the historical Julia finite/single-record rejection expectations. Declared
+Slater storage includes unmapped slots; complete declared RBM storage remains
+under #26. Malformed nonnumeric or incomplete files retain bounded atomic Rust
+errors, independently of C's unchecked-scan behavior. Optional loading returns
+false for missing/malformed files; strict fixed loading returns an error. The
+runner's Auto/Path/None policy handles optional files separately.
 
 Family details and reproduction commands are in [DH2](dh2/README.md),
 [DH4](dh4/README.md), [RBM](rbm/README.md) and [OptTrans](opttrans/README.md).

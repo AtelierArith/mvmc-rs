@@ -36,10 +36,9 @@ pub(crate) fn julia_parse_int(token: &str) -> Option<i64> {
     i64::from_str_radix(&signed, radix).ok()
 }
 
-/// Julia Float64 tryparse uses the C decimal/hexadecimal conversion. It rejects
-/// overflow and nonzero literals rounded to zero, but accepts finite subnormals
-/// and explicit nonfinite tokens (which strict callers reject separately).
-pub fn julia_parse_float(token: &str) -> Option<f64> {
+/// Parse a complete C floating-point field. Like fscanf's valid numeric inputs,
+/// range errors produce their rounded value, including zero or infinity.
+pub fn c_parse_float(token: &str) -> Option<f64> {
     extern "C" {
         fn strtod(input: *const c_char, end: *mut *mut c_char) -> f64;
     }
@@ -52,6 +51,14 @@ pub fn julia_parse_float(token: &str) -> Option<f64> {
     if token.is_empty() || end != input.as_ptr().wrapping_add(token.len()).cast_mut() {
         return None;
     }
+    Some(value)
+}
+
+/// Julia Float64 tryparse uses the C decimal/hexadecimal conversion. It rejects
+/// overflow and nonzero literals rounded to zero, but accepts finite subnormals
+/// and explicit nonfinite tokens (which strict callers reject separately).
+pub fn julia_parse_float(token: &str) -> Option<f64> {
+    let value = c_parse_float(token)?;
     let unsigned = token
         .strip_prefix(['+', '-'])
         .unwrap_or(token)
