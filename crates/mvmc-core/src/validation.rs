@@ -64,7 +64,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
         if data.i_flg_orbital_general == 0 {
-            return Err("InterAll in fixed-Sz mode is not implemented yet (issue #23): the Julia reference accumulator accesses a nonexistent term.sites field".into());
+            return Err("InterAll requires the general-orbital fixed-Sz path; non-FSZ InterAll is unsupported".into());
         }
         if !crate::run::get_all_complex_flag(data) {
             return Err("real FSZ InterAll is not implemented yet (issue #43)".into());

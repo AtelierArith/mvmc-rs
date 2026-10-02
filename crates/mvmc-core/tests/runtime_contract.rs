@@ -96,7 +96,7 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         )
         .unwrap_err();
         assert!(
-            error.contains("InterAll") && error.contains("issue #23"),
+            error.contains("InterAll") && error.contains("non-FSZ"),
             "{error}"
         );
         assert_eq!(data.modpara, before.modpara);
@@ -108,6 +108,33 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
             assert_eq!(rng.gen_rand32(), probe.gen_rand32());
         }
     }
+}
+
+#[test]
+fn complex_fixed_sz_interall_passes_runtime_validation() {
+    let mut data = ExpertModeData::new();
+    data.modpara.nsite = 2;
+    data.modpara.nelec = 1;
+    data.modpara.nvmc_sample = 1;
+    data.modpara.nvmc_interval = 1;
+    data.modpara.nmp_trans = 1;
+    data.i_flg_orbital_general = 1;
+    data.complex_flags = vec![1];
+    data.inter_all_terms
+        .push(mvmc_expert_parsers::InterAllTerm {
+            site0: 0,
+            spin0: 0,
+            site1: 1,
+            spin1: 0,
+            site2: 1,
+            spin2: 1,
+            site3: 0,
+            spin3: 1,
+            value: num_complex::Complex64::new(0.25, 0.0),
+            is_complex: false,
+        });
+    let result = mvmc_core::validation::validate_para_opt(&data);
+    assert!(result.is_ok(), "{result:?}");
 }
 
 #[test]
