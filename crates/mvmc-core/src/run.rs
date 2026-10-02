@@ -588,7 +588,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
     let n_qp_full = n_sp * n_mp * n_opt;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let all_complex = get_all_complex_flag(data);
-    VmcOptimizationState::zeros(
+    let mut state = VmcOptimizationState::zeros(
         n_site,
         n_elec,
         n_proj,
@@ -597,7 +597,15 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
         n_vmc_sample,
         all_complex,
         data.i_flg_orbital_general != 0,
-    )
+    );
+    if data.modpara.vmc_calc_mode != 0 {
+        state.phys_quantities = Some(crate::state::PhysicalQuantities::zeros(
+            data.green_one_terms.len(),
+            data.green_two_ex_terms.len(),
+            data.green_two_terms.len(),
+        ));
+    }
+    state
 }
 
 /// Make real-FSZ sampling results visible to the shared observable kernels.
@@ -633,7 +641,9 @@ fn sync_real_fsz_shadow(state: &mut VmcOptimizationState) {
 #[cfg(test)]
 mod mode_tests {
     use super::*;
-    use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
+    use mvmc_expert_parsers::{
+        GreenOneTerm, GreenTwoExTerm, GreenTwoTerm, GutzwillerTerm, JastrowTerm, OrbitalTerm, Spin,
+    };
 
     #[test]
     fn opttrans_state_reserves_active_width_after_projection_rbm_and_slater() {
@@ -720,6 +730,43 @@ mod mode_tests {
     #[test]
     fn all_real_parameters_allocate_real_state() {
         assert!(!state_from_data(&data()).sr_opt.sr_opt_oo_real.is_empty());
+    }
+
+    #[test]
+    fn physcal_state_allocates_green_measurement_buffers() {
+        let mut data = data();
+        data.modpara.vmc_calc_mode = 1;
+        data.green_one_terms.push(GreenOneTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Up,
+        });
+        data.green_two_terms.push(GreenTwoTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Up,
+            site3: 1,
+            spin3: Spin::Down,
+            site4: 0,
+            spin4: Spin::Down,
+        });
+        data.green_two_ex_terms.push(GreenTwoExTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Up,
+            site3: 1,
+            spin3: Spin::Down,
+            site4: 0,
+            spin4: Spin::Down,
+        });
+        let state = state_from_data(&data);
+        let phys = state.phys_quantities.expect("PhysCal buffers");
+        assert_eq!(phys.local_cis_ajs.len(), 1);
+        assert_eq!(phys.phys_cis_ajs_ckt_alt.len(), 1);
+        assert_eq!(phys.local_cis_ajs_ckt_alt_dc.len(), 1);
     }
 
     #[test]
