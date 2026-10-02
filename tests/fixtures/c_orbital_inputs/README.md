@@ -76,3 +76,12 @@ compares one and three SR steps: initialized coefficients are nonzero and stay
 unchanged, while the same workload with flag 1 changes them. This tests native
 integer eligibility through the actual CLI; it does not assert full C sampling
 or RNG equivalence. It uses the original Hamiltonian with G/J factors omitted.
+
+For legacy three-site models, the test constructor also replaces the incomplete
+DH2/DH4/RBM upper-only Jastrow input with `../jastrow/c_three.def`. It adds the
+three reversed mappings using the original parameter indices, retaining all
+three slots and original binary flags. Actual C accepts this replacement and
+rejects the three original files, as recorded in `../jastrow/c_reader_contracts.txt`.
+The directional production reader does not synthesize reverse rows. Original
+inputs and numerical goldens remain unchanged, and the complete six-site
+upstream Jastrow inputs retain their existing matrices and coefficients.

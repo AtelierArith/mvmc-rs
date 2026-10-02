@@ -249,8 +249,8 @@ pub fn update_proj_cnt(
         }
     }
 
-    // Jastrow block. Symmetric: `JastrowIdx[ra, rb] = JastrowIdx[rb, ra]`,
-    // upstream looks the smaller index up first.
+    // C keeps directional mappings; projection kernels always look up the
+    // upper-triangle entry, with the smaller site index first.
     let offset = n_gutz;
     if !jastrow_idx.is_empty() {
         let get_idx = |ra: usize, rb: usize| -> i64 {
