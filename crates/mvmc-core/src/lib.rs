@@ -21,6 +21,7 @@ pub mod io;
 pub mod lanczos;
 pub use pfapack::julia_complex;
 pub mod observables;
+pub mod parallel;
 pub mod pfaffian;
 pub mod qp;
 pub mod reducer;
