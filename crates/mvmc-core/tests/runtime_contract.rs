@@ -54,6 +54,37 @@ fn unported_sections_cannot_silently_change_the_model() {
 }
 
 #[test]
+fn active_opttrans_is_rejected_before_rng_consumption_even_with_one_sector() {
+    for count in [1, 2] {
+        let mut data = ExpertModeData::new();
+        data.n_qp_opt_trans = count;
+        data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); count as usize];
+        let before = data.clone();
+        let mut rng = Sfmt19937Rng::new(1);
+        let mut probe = Sfmt19937Rng::new(1);
+        let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            None,
+            &SingleProcessReducer,
+            mvmc_core::OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("OptTrans") && error.contains("issue #27"),
+            "{error}"
+        );
+        assert_eq!(data.opt_trans, before.opt_trans);
+        assert_eq!(data.optimization_flags, before.optimization_flags);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+        }
+    }
+}
+
+#[test]
 fn retained_interall_payload_is_rejected_before_initialization_with_or_without_namelist() {
     let root =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/interall");

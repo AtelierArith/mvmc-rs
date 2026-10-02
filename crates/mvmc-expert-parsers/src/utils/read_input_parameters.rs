@@ -1,7 +1,7 @@
 //! Julia-compatible optional parameter overlays, applied in namelist order.
 use super::file::{
-    clean_line, parse_namelist_content, read_def_file, safe_parse_float, safe_parse_int,
-    split_def_line,
+    clean_line, julia_parse_float, julia_parse_int, parse_namelist_content, read_def_file,
+    safe_parse_float, safe_parse_int, split_def_line,
 };
 use super::parameter_init::n_slater;
 use crate::types::ExpertModeData;
@@ -70,9 +70,8 @@ pub fn parse_indexed_input_parameter_file_strict(
     let count = header
         .get(1)
         .ok_or_else(|| format!("{label}: {location}:2 missing count header"))?;
-    let count = count
-        .parse::<i64>()
-        .map_err(|_| format!("{location}:2: invalid count '{count}'"))?;
+    let count =
+        julia_parse_int(count).ok_or_else(|| format!("{location}:2: invalid count '{count}'"))?;
     if count < 0 || count as usize != expected_header_count {
         return Err(format!("{label}: header count mismatch in {location}: got {count}, expected {expected_header_count}"));
     }
@@ -91,9 +90,8 @@ pub fn parse_indexed_input_parameter_file_strict(
             ));
         }
         rows += 1;
-        let index = tokens[0]
-            .parse::<i64>()
-            .map_err(|_| format!("{location}:{line_number}: invalid index '{}'", tokens[0]))?;
+        let index = julia_parse_int(tokens[0])
+            .ok_or_else(|| format!("{location}:{line_number}: invalid index '{}'", tokens[0]))?;
         if index < 0 || index as usize >= expected_param_count {
             return Err(format!(
                 "{label}: index {index} out of range [0, {}] in {location}:{line_number}",
@@ -107,9 +105,8 @@ pub fn parse_indexed_input_parameter_file_strict(
             ));
         }
         let parse_float = |token: &str, field: &str| -> Result<f64, String> {
-            let value = token
-                .parse::<f64>()
-                .map_err(|_| format!("{location}:{line_number}: invalid {field} '{token}'"))?;
+            let value = julia_parse_float(token)
+                .ok_or_else(|| format!("{location}:{line_number}: invalid {field} '{token}'"))?;
             if !value.is_finite() {
                 return Err(format!(
                     "{location}:{line_number}: non-finite {field} '{token}'"
@@ -132,8 +129,8 @@ pub fn parse_indexed_input_parameter_file_strict(
 /// Read optional overlays after initial.def and before synchronization.
 /// Missing referenced files are skipped; applied records follow namelist order.
 /// Supported factors are Gutzwiller, Jastrow and normal/AP/Parallel/General
-/// orbitals, strict DH2/DH4, and the nine indexed RBM sections. OptTrans
-/// records remain unsupported. Each strict overlay commits atomically;
+/// orbitals, strict DH2/DH4/OptTrans, and the nine indexed RBM sections.
+/// Each strict overlay commits atomically;
 /// earlier successful overlays remain applied if a later record fails.
 pub fn read_input_parameters(
     data: &mut ExpertModeData,
@@ -233,7 +230,22 @@ pub fn read_input_parameters(
                 )?;
                 data.doublon_holon_4site_params.copy_from_slice(&params);
             }
-            "InOptTrans" => return Err(format!("{kind} overlay is not implemented yet")),
+            "InOptTrans" => {
+                let expected = data.count_opt_trans_parameters();
+                if expected == 0 {
+                    return Err(
+                        "InOptTrans target parameter length mismatch: OptTrans is not active"
+                            .into(),
+                    );
+                }
+                let params = parse_indexed_input_parameter_file_strict(
+                    &path,
+                    expected,
+                    expected,
+                    "InOptTrans",
+                )?;
+                data.opt_trans.copy_from_slice(&params);
+            }
             kind if kind.starts_with("InChargeRBM_")
                 || kind.starts_with("InSpinRBM_")
                 || kind.starts_with("InGeneralRBM_") =>

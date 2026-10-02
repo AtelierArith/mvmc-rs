@@ -1,0 +1,17 @@
+ModPara ../rbm/modpara.def
+Gutzwiller ../rbm/gutz.def
+Jastrow ../rbm/jast.def
+DH2 ../dh2/multi.def
+DH4 ../dh4/multi.def
+Orbital ../rbm/orbital.def
+ChargeRBM_PhysLayer ../rbm/ChargeRBM_PhysLayer.def
+SpinRBM_PhysLayer ../rbm/SpinRBM_PhysLayer.def
+GeneralRBM_PhysLayer ../rbm/GeneralRBM_PhysLayer.def
+ChargeRBM_HiddenLayer ../rbm/ChargeRBM_HiddenLayer.def
+SpinRBM_HiddenLayer ../rbm/SpinRBM_HiddenLayer.def
+GeneralRBM_HiddenLayer ../rbm/GeneralRBM_HiddenLayer.def
+ChargeRBM_PhysHidden ../rbm/ChargeRBM_PhysHidden.def
+SpinRBM_PhysHidden ../rbm/SpinRBM_PhysHidden.def
+GeneralRBM_PhysHidden ../rbm/GeneralRBM_PhysHidden.def
+TransSym qptrans.def
+OptTrans layout.def
