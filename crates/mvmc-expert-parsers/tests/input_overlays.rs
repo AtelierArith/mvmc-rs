@@ -54,11 +54,11 @@ fn permissive_parser_preserves_julia_fallback_and_last_duplicate() {
     fs::remove_dir_all(dir).unwrap();
 }
 #[test]
-fn overlays_follow_namelist_order_and_exact_declared_parallel_offset() {
+fn overlays_follow_c_keyword_order_and_exact_declared_parallel_offset() {
     let dir = directory("order");
     fs::write(
         dir.join("namelist.def"),
-        "InOrbitalParallel p.def\nInOrbitalGeneral g.def\nInOrbital missing.def\n",
+        "InOrbitalGeneral g.def\nInOrbitalParallel p.def\nInOrbital missing.def\n",
     )
     .unwrap();
     fs::write(dir.join("p.def"), definition(2, "1 20 0.2\n0 10 0.1\n")).unwrap();
@@ -80,6 +80,29 @@ fn overlays_follow_namelist_order_and_exact_declared_parallel_offset() {
             Complex64::new(30.0, 0.3)
         ]
     );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn duplicate_c_overlay_keywords_are_rejected_before_mutation() {
+    let dir = directory("duplicate-keyword");
+    fs::write(
+        dir.join("namelist.def"),
+        "InOrbitalGeneral first.def\nInOrbitalGeneral second.def\n",
+    )
+    .unwrap();
+    fs::write(dir.join("first.def"), definition(1, "0 1 0\n")).unwrap();
+    fs::write(dir.join("second.def"), definition(1, "0 2 0\n")).unwrap();
+    let mut data = data();
+    let error = read_input_parameters(&mut data, dir.join("namelist.def")).unwrap_err();
+    assert!(
+        error.contains("duplicate keyword InOrbitalGeneral"),
+        "{error}"
+    );
+    assert!(data
+        .slater_params
+        .iter()
+        .all(|&value| value == Complex64::new(7.0, 0.0)));
     fs::remove_dir_all(dir).unwrap();
 }
 #[test]
