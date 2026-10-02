@@ -7,7 +7,9 @@ def materialize(root, name, body, sources, write):
         f"{source.name} sha256={hashlib.sha256(source.read_bytes()).hexdigest()}"
         for source in sources
     )
-    notice = sources[0].read_text().split("#include", 1)[0]
+    upstream = sources[0].read_text()
+    notice = (upstream.split("#include", 1)[0] if "#include" in upstream
+              else upstream.split("*/", 1)[0] + "*/\n")
     result = (f"/* Generated verbatim from authoritative mVMC-1.3.0: {provenance}.\n"
               " * Regenerate with the corresponding scripts/check_*_c_parity.py --write.\n"
               " * This optional C oracle is not a Rust test/build dependency. */\n"

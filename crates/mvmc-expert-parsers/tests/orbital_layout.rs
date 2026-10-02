@@ -88,14 +88,14 @@ fn empty_positive_width_ap_is_rejected_instead_of_reserving_a_valid_definition()
 }
 
 #[test]
-fn historical_general_rows_retain_declared_width_but_headerless_definitions_fail() {
+fn complete_general_rows_retain_unused_declared_slots_but_headerless_definitions_fail() {
     let general = parse_orbital_content(
-        &definition("NOrbitalGeneral", 9, "0 3 1\n"),
+        &definition("NOrbitalGeneral", 9, "0 0 1 0 1 1\n0 0 0 1 1 1\n0 0 1 1 1 1\n1 0 0 1 1 1\n1 0 1 1 1 1\n0 1 1 1 1 1\n0 1\n1 1\n2 1\n3 1\n4 1\n5 1\n6 1\n7 1\n8 1\n"),
         2,
         OrbitalKind::General,
     )
     .unwrap();
     assert_eq!(general.n_orbital_idx, 9);
-    assert_eq!(general.terms.len(), 1);
+    assert_eq!(general.terms.len(), 6);
     assert!(parse_orbital_content("0 1 2\n1 0 0\n", 2, OrbitalKind::AntiParallel).is_err());
 }

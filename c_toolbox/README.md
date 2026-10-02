@@ -13,6 +13,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `projection_count.c` | C count/sign conversion and QP kernels, 10 cases | `python3 scripts/check_projection_count_c_parity.py` |
 | `orbital_order.c` | Filename registry, fixed keyword order and complete AP/P readers, 480 cases | `python3 scripts/check_orbital_order_c_parity.py` |
 | `orbital_contracts.c` | AP/P physical headers, mapping/flag counts and row-order real flags, 90 cases | `python3 scripts/check_orbital_contracts_c_parity.py` |
+| `general_orbital.c` | General spin-coordinate reader, counts/signs/flags, 184 cases; actual FSZ Slater and derivative kernels, 104 cases | `python3 scripts/check_general_orbital_c_parity.py` |
 | `orbital_initialization.c` | Declared Slater initialization, loading, normalization, native SFMT and shared coefficient matrix, 49 cases | `python3 scripts/check_orbital_initialization_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
@@ -22,14 +23,15 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 The `.inc` files contain extracted function bodies or specifically delimited
 reader blocks. Each records the original copyright/license notice and SHA-256
 of its upstream source. The scripts verify every stored excerpt against C before
-compiling it. Function extraction uses balanced braces; keyword-loop extraction
+compiling it. Function extraction uses balanced braces (the General extractor
+ignores braces in comments and string literals); keyword-loop extraction
 ends before the upstream status print, and the AP header switch block ends at
 `KWOrbitalGeneral`. Driver files hold only the comparison environment and cases.
 The canonical C files are not modified. `.gitattributes` preserves trailing
 whitespace in these verbatim `.inc` excerpts; driver files follow normal checks.
 
 The scripts build into temporary directories with Apple clang 17 (`cc`) on
-Intel macOS. All use `-O0`; projection, initialization and initial-record checks use
+Intel macOS. All use `-O0`; General, projection, initialization and initial-record checks use
 `-ffp-contract=off`, and both parameter checks also use `-DMEXP=19937` and the
 original `src/sfmt/SFMT.c`. The other reader programs need no BLAS, SFMT or MPI library.
 The fixed-width RBM/header and flag audits also work directly, for example:
@@ -53,3 +55,16 @@ claimed to satisfy C's complete-row contract. Native C all-zero Slater
 normalization and Rust's current zero guard remain a separate #46 discrepancy;
 the recorded all-zero normalized rows are not asserted as Rust parity. Reader
 audit differences remain tracked by #21/#26/#27 and are not completion claims.
+
+The General probe extracts `GetInfoOrbitalGeneral` from `readdef.c` and both
+`UpdateSlaterElm_fsz` and `SlaterElmDiff_fsz` from `slater_fsz.c`. It reuses the
+stored common header/flag/site-check functions, supplies two translations and
+one identity OptTrans, and serializes fixed binary coefficients, Pfaffians,
+inverse matrices and overlap. Matrix allocation is explicitly zeroed, including
+untouched diagonals and cells omitted by duplicate mappings: those values are
+probe plumbing, not evidence of upstream malloc initialization. Normal and
+antiperiodic reader signs, all spin blocks, declared unmapped slots and optional
+index/sign carry are checked. Unsafe incomplete coordinate scans and invalid
+spins/parameter indices are excluded from C execution; Rust diagnostics have
+separate tests. This probe does not establish multi-OptTrans derivative parity
+or the C CLI's activation policy (#27).

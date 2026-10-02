@@ -1,12 +1,11 @@
-//! C AP/P declared widths and complete mapping/flag sections.
-//! General's historical combined-coordinate reader remains scoped under #41.
+//! C AP/P/General declared widths and complete mapping/flag sections.
 
 use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
 use crate::types::OrbitalTerm;
-use crate::utils::file::{read_def_file, safe_parse_int, split_def_line};
+use crate::utils::file::read_def_file;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Orbital mapping geometry selected by the namelist keyword.
@@ -15,7 +14,7 @@ pub enum OrbitalKind {
     AntiParallel,
     /// Upper-triangle spatial pairs, expanded into both equal-spin blocks.
     Parallel,
-    /// General spin-site mappings; the six-column C port is tracked by #41.
+    /// Six-column General mappings, converted to combined spin-site coordinates.
     General,
 }
 
@@ -65,22 +64,22 @@ pub fn parse_orbital_content(
         .and_then(|field| field.parse::<i32>().ok())
         .unwrap_or(0)
         > 0;
-    if kind == OrbitalKind::General {
-        return Ok(parse_general_rows(&lines[5..], n_orbital_idx, is_complex));
-    }
     let nsite = usize::try_from(nsite)
         .ok()
         .filter(|&count| count > 0)
-        .ok_or_else(|| invalid("AP/P orbital definitions require a positive Nsite"))?;
+        .ok_or_else(|| invalid("orbital definitions require a positive Nsite"))?;
     if kind == OrbitalKind::Parallel && nsite < 2 {
         return Err(invalid(
             "parallel orbital definitions require at least two sites",
         ));
     }
-    let n_mapping = if kind == OrbitalKind::Parallel {
-        nsite.checked_mul(nsite - 1).map(|count| count / 2)
-    } else {
-        nsite.checked_mul(nsite)
+    let n_mapping = match kind {
+        OrbitalKind::Parallel => nsite.checked_mul(nsite - 1).map(|count| count / 2),
+        OrbitalKind::AntiParallel => nsite.checked_mul(nsite),
+        OrbitalKind::General => nsite
+            .checked_mul(nsite)
+            .and_then(|count| count.checked_mul(2))
+            .and_then(|count| count.checked_sub(nsite)),
     }
     .ok_or_else(|| invalid("orbital mapping count overflows"))?;
     let body = &lines[5..];
@@ -88,8 +87,10 @@ pub fn parse_orbital_content(
         return Err(invalid("incomplete orbital mapping section"));
     }
     let mut terms = Vec::new();
-    // sscanf leaves the preceding sign in place for three-column mappings.
+    // sscanf retains initialized/preceding optional values: AP/P sign, and
+    // General's index/sign following the four required coordinate fields.
     let mut sign = 1;
+    let mut general_idx = 0;
     for line in &body[..n_mapping] {
         let fields: Vec<_> = c_fields(line).collect();
         let integer = |position: usize| {
@@ -99,21 +100,43 @@ pub fn parse_orbital_content(
                 .map(i64::from)
                 .ok_or_else(|| invalid("invalid integer in orbital mapping section"))
         };
-        let site1 = integer(0)?;
-        let site2 = integer(1)?;
-        let idx = integer(2)?;
+        let (mut site1, mut site2, idx) = if kind == OrbitalKind::General {
+            if fields.len() >= 5 {
+                general_idx = integer(4)?;
+            }
+            (integer(0)?, integer(2)?, general_idx)
+        } else {
+            (integer(0)?, integer(1)?, integer(2)?)
+        };
         if site1 < 0 || site2 < 0 || site1 >= nsite as i64 || site2 >= nsite as i64 {
             return Err(invalid("orbital mapping site is outside Nsite"));
         }
         if kind == OrbitalKind::Parallel && site1 >= site2 {
             return Err(invalid("parallel orbital mappings require site1 < site2"));
         }
+        if kind == OrbitalKind::General {
+            let spin1 = integer(1)?;
+            let spin2 = integer(3)?;
+            if !(0..=1).contains(&spin1) || !(0..=1).contains(&spin2) {
+                return Err(invalid("General orbital spin must be zero or one"));
+            }
+            site1 += spin1 * nsite as i64;
+            site2 += spin2 * nsite as i64;
+            if site1 >= site2 {
+                return Err(invalid(
+                    "General orbital mappings require site1 + spin1*Nsite < site2 + spin2*Nsite",
+                ));
+            }
+            if fields.len() >= 6 {
+                sign = integer(5)?;
+            }
+        }
         if idx < 0 || idx >= n_orbital_idx {
             return Err(invalid(
                 "orbital parameter index is outside the declared width",
             ));
         }
-        if fields.len() >= 4 {
+        if kind != OrbitalKind::General && fields.len() >= 4 {
             sign = integer(3)?;
         }
         terms.push(OrbitalTerm {
@@ -154,59 +177,4 @@ pub fn parse_orbital_content(
 fn c_fields(text: &str) -> impl Iterator<Item = &str> {
     text.split([' ', '\t', '\n', '\r', '\x0b', '\x0c'])
         .filter(|field| !field.is_empty())
-}
-
-fn parse_general_rows(lines: &[&str], n_orbital_idx: i64, is_complex: bool) -> OrbitalSection {
-    let mut terms = Vec::new();
-    let mut processing_idx = true;
-    let mut opt_flags = BTreeMap::new();
-    for line in lines {
-        let tokens = split_def_line(line);
-        if tokens.is_empty() {
-            continue;
-        }
-        if tokens.len() == 2 {
-            if processing_idx && !terms.is_empty() {
-                processing_idx = false;
-            }
-            if !processing_idx {
-                let idx = safe_parse_int(tokens[0], -1);
-                let flag = safe_parse_int(tokens[1], 0);
-                if idx >= 0 {
-                    opt_flags.insert(idx, flag);
-                }
-            }
-            continue;
-        }
-        if !processing_idx || tokens.len() < 3 {
-            continue;
-        }
-        let site1 = safe_parse_int(tokens[0], -1);
-        let site2 = safe_parse_int(tokens[1], -1);
-        let idx = safe_parse_int(tokens[2], -1);
-        if site1 < 0 || site2 < 0 || idx < 0 {
-            continue;
-        }
-        let mut sign = 1i64;
-        if tokens.len() >= 4 {
-            let parsed = safe_parse_int(tokens[3], 1);
-            if parsed == 1 || parsed == -1 {
-                sign = parsed;
-            }
-        }
-        terms.push(OrbitalTerm {
-            site1,
-            site2,
-            idx,
-            is_complex,
-            sign,
-        });
-    }
-
-    OrbitalSection {
-        terms,
-        n_orbital_idx,
-        is_complex,
-        opt_flags,
-    }
 }

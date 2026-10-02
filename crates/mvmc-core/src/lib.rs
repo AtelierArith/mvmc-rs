@@ -51,5 +51,8 @@ pub use state::{
     ThreadedPfaPackWorkspace, VmcOptimizationState,
 };
 #[cfg(test)]
+#[path = "../../../tests/support/c_general_fsz.rs"]
+mod c_general_fsz;
+#[cfg(test)]
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
