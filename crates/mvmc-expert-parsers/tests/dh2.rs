@@ -23,13 +23,34 @@ fn dh2_reserves_six_dense_parameters_per_index_before_orbital_flags() {
 }
 
 #[test]
-fn required_dh2_missing_invalid_and_pre_modpara_definitions_fail_during_parsing() {
+fn required_dh2_missing_invalid_and_missing_modpara_definitions_fail_during_parsing() {
     for name in ["invalid", "missing", "before_modpara"] {
         assert!(
             parse_expert_mode_files(root().join(format!("namelist_{name}.def"))).is_err(),
             "{name}"
         );
     }
+}
+
+#[test]
+fn c_reads_modpara_before_a_dh2_definition_listed_first() {
+    let dir = std::env::temp_dir().join(format!("mvmc-dh2-order-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("namelist.def"),
+        format!(
+            "DH2 {}\nModPara {}\n",
+            root().join("complex.def").display(),
+            root().join("modpara.def").display()
+        ),
+    )
+    .unwrap();
+    let data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    assert_eq!(data.modpara.nsite, 3);
+    assert_eq!(data.projection_layout().n_dh2, 1);
+    assert_eq!(data.doublon_holon_2site_indices.len(), 1);
+    assert_eq!(data.doublon_holon_2site_params.len(), 6);
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 fn integers(line: &str) -> Vec<i64> {

@@ -112,12 +112,29 @@ fn strict_definitions_errors_and_atomic_replacements_match_canonical_julia() {
 }
 
 #[test]
-fn component_layout_initial_values_and_next_rng_state_match_canonical_julia() {
+fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_and_c_order() {
     let fixture = std::fs::read_to_string(root().join("initial.txt")).unwrap();
-    let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
+    let records: Vec<_> = fixture
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .collect();
+    assert_eq!(records.len() % 10, 0);
     let mut cases = 0;
-    while let Some(header) = lines.next() {
+    for record in records.chunks_exact(10) {
+        let header = record[0];
         let fields: Vec<_> = header.split_whitespace().collect();
+        // C reads ModPara before OptTrans regardless of namelist order.
+        // Keep Julia's historical skipped-definition records unchanged;
+        // compare these reordered inputs to the equivalent valid layout.
+        let expected = if fields[0] == "before_modpara" {
+            records
+                .chunks_exact(10)
+                .find(|row| row[0] == format!("layout {}", fields[1]))
+                .unwrap()
+        } else {
+            record
+        };
+        let mut lines = expected[1..].iter().copied();
         let mut data =
             parse_expert_mode_files(root().join(format!("namelist_{}.def", fields[0]))).unwrap();
         match fields[1] {

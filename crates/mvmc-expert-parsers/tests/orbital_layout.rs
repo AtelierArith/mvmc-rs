@@ -80,14 +80,6 @@ fn empty_declared_ap_still_reserves_parallel_offset() {
 }
 
 #[test]
-fn parallel_before_ap_fails_before_any_file_is_parsed() {
-    let dir = fixture("order", "OrbitalParallel p.def\nOrbital ap.def\n", "", "");
-    let error = parse_expert_mode_files(dir.join("namelist.def")).unwrap_err();
-    assert!(error.to_string().contains("must be listed after"));
-    fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
 fn general_and_headerless_counts_follow_their_input_contracts() {
     let general = parse_orbital_content(&definition("NOrbitalGeneral", 9, "0 3 1\n"));
     assert_eq!(general.n_orbital_idx, 9);

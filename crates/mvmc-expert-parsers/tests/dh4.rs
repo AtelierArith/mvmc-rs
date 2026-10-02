@@ -26,19 +26,22 @@ fn dh4_reserves_ten_dense_parameters_per_index_after_dh2_before_orbital_flags() 
 }
 
 #[test]
-fn required_dh4_missing_invalid_and_pre_modpara_definitions_fail_during_parsing() {
-    for name in [
-        "invalid",
-        "missing",
-        "before_modpara",
-        "invalid_alias",
-        "missing_alias",
-    ] {
+fn required_dh4_missing_and_invalid_definitions_fail_during_parsing() {
+    for name in ["invalid", "missing", "invalid_alias", "missing_alias"] {
         assert!(
             parse_expert_mode_files(root().join(format!("namelist_{name}.def"))).is_err(),
             "{name}"
         );
     }
+}
+
+#[test]
+fn c_reads_modpara_before_a_dh4_definition_listed_first() {
+    let data = parse_expert_mode_files(root().join("namelist_before_modpara.def")).unwrap();
+    assert_eq!(data.modpara.nsite, 3);
+    assert_eq!(data.projection_layout().n_dh4, 1);
+    assert_eq!(data.doublon_holon_4site_indices.len(), 1);
+    assert_eq!(data.doublon_holon_4site_params.len(), 10);
 }
 
 fn integers(line: &str) -> Vec<i64> {
