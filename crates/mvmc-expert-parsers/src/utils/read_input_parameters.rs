@@ -6,7 +6,11 @@ use super::file::{
 use super::parameter_init::n_slater;
 use crate::types::ExpertModeData;
 use num_complex::Complex64;
-use std::{collections::BTreeMap, io, path::Path};
+use std::{
+    collections::{BTreeMap, HashSet},
+    io,
+    path::Path,
+};
 
 /// Parse a permissive In*.def record, retaining Julia's numeric fallbacks.
 /// Missing files produce an empty map; duplicate indices keep the last value.
@@ -139,10 +143,22 @@ pub fn read_input_parameters(
     let namelist_path = namelist_path.as_ref();
     let base_dir = namelist_path.parent().unwrap_or_else(|| Path::new("."));
     let content = read_def_file(namelist_path).map_err(|error| error.to_string())?;
+    let mut overlays = Vec::new();
+    let mut seen = HashSet::new();
     for (kind, filename) in parse_namelist_content(&content) {
         if !kind.starts_with("In") {
             continue;
         }
+        if overlay_order(&kind).is_some() && !seen.insert(kind.clone()) {
+            return Err(format!(
+                "duplicate keyword {kind} in {}",
+                namelist_path.display()
+            ));
+        }
+        overlays.push((overlay_order(&kind).unwrap_or(usize::MAX), kind, filename));
+    }
+    overlays.sort_by_key(|(order, _, _)| *order);
+    for (_, kind, filename) in overlays {
         let path = base_dir.join(filename);
         if !path.is_file() {
             continue;
@@ -264,4 +280,31 @@ pub fn read_input_parameters(
         }
     }
     Ok(())
+}
+
+/// C's `GetFileName` stores each keyword in a fixed slot and the reader then
+/// visits those slots in keyword order, independently of their textual order
+/// in `namelist.def`. Keep the overlay phase on the same order.
+fn overlay_order(kind: &str) -> Option<usize> {
+    const ORDER: &[&str] = &[
+        "InGutzwiller",
+        "InJastrow",
+        "InDH2",
+        "InDH4",
+        "InChargeRBM_HiddenLayer",
+        "InChargeRBM_PhysLayer",
+        "InChargeRBM_PhysHidden",
+        "InSpinRBM_HiddenLayer",
+        "InSpinRBM_PhysLayer",
+        "InSpinRBM_PhysHidden",
+        "InGeneralRBM_HiddenLayer",
+        "InGeneralRBM_PhysLayer",
+        "InGeneralRBM_PhysHidden",
+        "InOrbital",
+        "InOrbitalAntiParallel",
+        "InOrbitalParallel",
+        "InOrbitalGeneral",
+        "InOptTrans",
+    ];
+    ORDER.iter().position(|candidate| *candidate == kind)
 }
