@@ -1354,14 +1354,10 @@ fn accumulate_observables<const TIMED: bool>(
         state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
 
         // The Lanczos path evaluates H on each moved configuration. Transfer
-        // and PairHop use the Julia operator order; Exchange, InterAll, and
-        // FSZ remain gated until their corresponding operator moves are
+        // Transfer, PairHop and Exchange use the Julia operator order;
+        // InterAll and FSZ remain gated until their operator moves are
         // ported.
-        if data.modpara.lanczos_mode > 0
-            && data.exchange_terms.is_empty()
-            && data.inter_all_terms.is_empty()
-            && !use_fsz
-        {
+        if data.modpara.lanczos_mode > 0 && data.inter_all_terms.is_empty() && !use_fsz {
             let h2 = crate::observables::calculate_lanczos_h2_transfer(
                 e,
                 ip,
