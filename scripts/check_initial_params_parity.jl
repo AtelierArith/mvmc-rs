@@ -1,5 +1,6 @@
 # Run with Julia 1.13.1 and the pinned Julia-mVMC workspace environment.
 using Test, MVMCOptimizers, MVMCExpertModeParsers
+VERSION == v"1.13.1" || error("Parameter contract verification requires Julia 1.13.1")
 include(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCOptimizers.jl", "test_unit", "test_unit_read_opt_para.jl"))
 
 @testset "declared sparse projection and shared orbital loading" begin

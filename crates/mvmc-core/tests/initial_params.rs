@@ -176,3 +176,132 @@ fn errors_report_the_first_bad_field_even_in_unused_diagnostics_and_gradients() 
         fs::remove_file(path).unwrap();
     }
 }
+
+#[test]
+fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
+    use mvmc_core::{sr, sync::sync_modified_parameter_local, VmcOptimizationState};
+    use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::init_parameter};
+    use sfmt19937::Sfmt19937Rng;
+    let dir = std::env::temp_dir().join(format!("mvmc-fixed-sr-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let definition = |name: &str, width: usize, complex: usize, rows: &str| {
+        format!("===\n{name} {width}\nComplexType {complex}\n===\n===\n{rows}")
+    };
+    fs::write(dir.join("modpara.def"), "Nsite 3\nNElec 1\n").unwrap();
+    fs::write(
+        dir.join("g.def"),
+        definition("NGutzwillerIdx", 2, 0, "0 0\n1 0\n2 1\n0 1\n1 0\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("o.def"),
+        definition("NOrbitalIdx", 2, 0, "0 1 0\n1 0 1\n0 0\n1 1\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("namelist.def"),
+        "ModPara modpara.def\nOrbitalAntiParallel o.def\nGutzwiller g.def\nJastrow j.def\n",
+    )
+    .unwrap();
+    let text = include_str!("../../../tests/fixtures/sr_failure/fixed_flag_steps.txt");
+    let mut lines = text.lines().filter(|line| !line.starts_with('#'));
+    for complex_jastrow in [0, 1] {
+        fs::write(
+            dir.join("j.def"),
+            definition(
+                "NJastrowIdx",
+                2,
+                complex_jastrow,
+                "0 1 0\n1 2 1\n0 0\n1 1\n",
+            ),
+        )
+        .unwrap();
+        let mut data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+        let header = lines
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(|s| s.parse::<usize>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            header,
+            [complex_jastrow, data.count_variational_parameters()]
+        );
+        let flags = lines
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(|s| s == "1")
+            .collect::<Vec<_>>();
+        assert_eq!(data.optimization_flags, flags);
+        let mut rng = Sfmt19937Rng::new(1);
+        init_parameter(&mut data, &mut rng);
+        for (i, t) in data.gutzwiller_terms.iter_mut().enumerate() {
+            t.value = Complex64::new((i + 1) as f64, 0.2);
+        }
+        for (i, t) in data.jastrow_terms.iter_mut().enumerate() {
+            t.value = Complex64::new((i + 3) as f64, 0.5);
+        }
+        data.orbital_terms[0].value = Complex64::new(1.0, 0.0);
+        data.orbital_terms[1].value = Complex64::new(2.0, 0.0);
+        for _ in 0..3 {
+            sync_modified_parameter_local(&mut data, true);
+        }
+        data.modpara.dsr_opt_sta_del = 0.0;
+        data.modpara.dsr_opt_step_dt = 0.125;
+        let n = data.count_variational_parameters();
+        let complex = complex_jastrow != 0;
+        data.complex_flags = vec![i64::from(complex)];
+        let off = if complex { 2 } else { 1 };
+        let size = off * (n + 1);
+        for step in 1..=3 {
+            let mut state = VmcOptimizationState::zeros(3, 1, 4, n, 1, 1, complex, false);
+            state.energy.wc = Complex64::new(1.0, 0.0);
+            for component in off..size {
+                let covariance = 1.0 + step as f64 / 4.0;
+                let gradient = (component + 1) as f64 / 16.0;
+                if complex {
+                    state.sr_opt.sr_opt_oo[component * size + component] =
+                        Complex64::new(covariance, 0.0);
+                    state.sr_opt.sr_opt_ho[component] = Complex64::new(gradient, 0.0);
+                } else {
+                    state.sr_opt.sr_opt_oo_real[component * size + component] = covariance;
+                    state.sr_opt.sr_opt_ho_real[component] = gradient;
+                }
+            }
+            let status = if complex {
+                sr::stochastic_opt_complex(&mut data, &mut state)
+            } else {
+                sr::stochastic_opt_real(&mut data, &mut state)
+            };
+            assert_eq!(status, 0);
+            sync_modified_parameter_local(&mut data, true);
+            assert_eq!(data.gutzwiller_terms[1].value, Complex64::new(2.0, 0.2));
+            assert_eq!(data.jastrow_terms[0].value, Complex64::new(3.0, 0.5));
+            let expected = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .collect::<Vec<_>>();
+            let actual = values(&data)
+                .into_iter()
+                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "complex={complex}, step={step}");
+            assert_eq!(data.optimization_flags, flags);
+        }
+        let expected = lines
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(|s| s.parse::<u32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),
+            expected
+        );
+    }
+    assert!(lines.next().is_none());
+    fs::remove_dir_all(dir).unwrap();
+}

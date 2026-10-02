@@ -1,6 +1,8 @@
 # Julia v0.5.0 reference for Rust validation and optimization flag tests.
 # Run under Julia 1.13.1 with the pinned Julia-mVMC workspace packages.
-using Test, Random, SFMT, MVMCExpertModeParsers, MVMCOptimizers
+using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
+VERSION == v"1.13.1" || error("Parser contract verification requires Julia 1.13.1")
+BLAS.set_num_threads(1)
 include(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCExpertModeParsers.jl", "test", "test_validation.jl"))
 
 @testset "validation severity controls" begin
@@ -15,6 +17,9 @@ include(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCExpertModeParsers.
     @test r.is_valid && isempty(r.errors) && isempty(r.warnings)
 end
 
+const fixed_steps = IOBuffer()
+println(fixed_steps,"# Julia $VERSION; $(BLAS.get_config()); threads=1; canonical parsed flags, three direct SR/sync steps; seed=1")
+hex(values) = join([string(reinterpret(UInt64,x);base=16,pad=16) for v in values for x in (real(v),imag(v))]," ")
 definition(name, width, complex, rows) = "===\n$name $width\nComplexType $complex\n===\n===\n$rows"
 @testset "parsed component flags, draws, and gauge shifts" begin
     for (jastrow_complex, parallel) in ((1,true),(0,false),(1,false))
@@ -40,6 +45,14 @@ definition(name, width, complex, rows) = "===\n$name $width\nComplexType $comple
                 for _ in 1:624
                     hash = (hash ⊻ UInt64(rand(rng,UInt32))) * UInt64(0x100000001b3)
                 end
+                @test hash == UInt64(16445735861883055124)
+                expected = ComplexF64[
+                    0.0+0.0im, -0.22854561532191836+0.14249578128268756im,
+                    -0.299485566106154-0.1347245207905717im,
+                    -0.28930135836557447+0.17361291906410883im,
+                    0.0+0.0im, 0.0+0.0im,
+                ]
+                @test reinterpret(UInt64, [t.value for t in d.orbital_terms]) == reinterpret(UInt64, expected)
                 println("post-init SFMT block hash=", hash)
                 println("Slater=", [t.value for t in d.orbital_terms])
             else
@@ -54,7 +67,43 @@ definition(name, width, complex, rows) = "===\n$name $width\nComplexType $comple
                     @test [t.value for t in d.jastrow_terms] == j
                 end
                 @test [t.value for t in d.orbital_terms] == ComplexF64[2,4]
+                d.modpara.dsr_opt_sta_del = 0.0
+                d.modpara.dsr_opt_step_dt = 0.125
+                n = MVMCExpertModeParsers.count_variational_parameters(d)
+                complex = jastrow_complex != 0
+                # Pin the runtime mode to the supplied real/complex SR buffers.
+                d.complex_flags = [Int(complex)]
+                println(fixed_steps,"$jastrow_complex $n")
+                println(fixed_steps,join(Int.(d.optimization_flags)," "))
+                for step in 1:3
+                    state=MVMCOptimizers.VMCOptimizationState(3,1,4,n,1,1,complex,false)
+                    state.energy.wc=1.0+0.0im
+                    off=complex ? 2 : 1
+                    size=off*(n+1)
+                    oo=complex ? state.sr_opt.sr_opt_oo : state.sr_opt.sr_opt_oo_real
+                    ho=complex ? state.sr_opt.sr_opt_ho : state.sr_opt.sr_opt_ho_real
+                    for component in off:size-1
+                        oo[component*size+component+1]=1.0+step/4
+                        ho[component+1]=(component+1)/16
+                    end
+                    @test MVMCOptimizers.stochastic_opt!(d,state)==0
+                    MVMCOptimizers.sync_modified_parameter!(d)
+                    @test d.gutzwiller_terms[2].value == g[2]
+                    @test d.jastrow_terms[1].value == j[1]
+                    println(fixed_steps,hex(vcat([t.value for t in d.gutzwiller_terms],[t.value for t in d.jastrow_terms],[t.value for t in d.orbital_terms])))
+                end
+                println(fixed_steps,join([rand(rng,UInt32) for _ in 1:624]," "))
             end
         end
+    end
+end
+
+@testset "Parsed fixed-component SR step fixture" begin
+    path=joinpath(@__DIR__,"..","tests","fixtures","sr_failure","fixed_flag_steps.txt")
+    actual=String(take!(fixed_steps))
+    if "--write" in ARGS
+        write(path,actual)
+    else
+        @test actual == read(path,String)
     end
 end

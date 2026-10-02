@@ -1,5 +1,6 @@
 # Julia v0.5.0 oracle for Rust input_overlays.rs.
 using Test, MVMCExpertModeParsers
+VERSION == v"1.13.1" || error("Parameter contract verification requires Julia 1.13.1")
 include(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCExpertModeParsers.jl", "test", "test_read_input_parameters.jl"))
 
 @testset "permissive fallback, duplicates and ordered shared mappings" begin
