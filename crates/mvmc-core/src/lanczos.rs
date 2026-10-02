@@ -181,6 +181,23 @@ mod tests {
             lanczos_energy(&values),
             Err(LanczosEnergyError::NonFiniteEquation)
         );
+
+        let values = moments(
+            -2.152457446309748,
+            -2.9568890514902515,
+            0.6960797422130414,
+            3.1910420776032336,
+            2.2685266679515284,
+        );
+        assert_eq!(
+            lanczos_energy(&values),
+            Err(LanczosEnergyError::NegativeDiscriminant)
+        );
+
+        assert_eq!(
+            lanczos_energy(&moments(0.0, 1.0, 0.0, 0.0, 1.0)),
+            Err(LanczosEnergyError::InvalidStationaryPoint)
+        );
     }
 
     #[test]
