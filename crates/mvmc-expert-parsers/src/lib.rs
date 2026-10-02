@@ -358,7 +358,7 @@ fn parse_file_by_type(
         }
         "Gutzwiller" => {
             let content = read_def_file(path)?;
-            let section = gutzwiller::parse_gutzwiller_content(&content);
+            let section = gutzwiller::parse_gutzwiller_content(&content, data.modpara.nsite)?;
             data.gutzwiller_terms = section.terms;
             data.n_gutzwiller_idx = section.n_gutzwiller_idx;
             set_projection_opt_flags(

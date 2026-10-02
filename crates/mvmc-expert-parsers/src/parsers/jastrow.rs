@@ -11,7 +11,6 @@ use std::path::Path;
 
 use num_complex::Complex64;
 
-use crate::parsers::gutzwiller::read_idx_header;
 use crate::types::JastrowTerm;
 use crate::utils::file::{read_def_file, safe_parse_int, split_def_line};
 
@@ -127,4 +126,29 @@ pub fn build_jastrow_idx_matrix(content: &str, nsite: usize) -> (Vec<Vec<i64>>, 
         }
     }
     (matrix, n_jastrow_idx)
+}
+
+// Legacy Jastrow header reader; the Gutzwiller reader uses physical C headers.
+fn read_idx_header(lines: &[&str], n_keyword: &str) -> (i64, bool, bool) {
+    let mut n_idx = 0i64;
+    let mut complex_type = 0i64;
+    let mut has_header = false;
+
+    if lines.len() > 1 {
+        let tokens = split_def_line(lines[1]);
+        if tokens.len() >= 2
+            && (tokens[0] == n_keyword
+                || (n_keyword == "NOrbitalIdx" && tokens[0].starts_with("NOrbital")))
+        {
+            n_idx = safe_parse_int(tokens[1], 0);
+            has_header = true;
+        }
+    }
+    if has_header && lines.len() > 2 {
+        let tokens = split_def_line(lines[2]);
+        if tokens.len() >= 2 && tokens[0] == "ComplexType" {
+            complex_type = safe_parse_int(tokens[1], 0);
+        }
+    }
+    (n_idx, complex_type != 0, has_header)
 }
