@@ -1090,6 +1090,85 @@ pub(crate) struct GreenScratch {
     new_pf_complex: Vec<Complex64>,
 }
 
+fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    let mut mix = |value: u64| {
+        hash ^= value;
+        hash = hash.wrapping_mul(0x100000001b3);
+    };
+    mix(data.modpara.nsite as u64);
+    mix(data.modpara.nelec as u64);
+    mix(u64::from(crate::run::get_all_complex_flag(data)));
+    for term in &data.transfer_terms {
+        mix(term.site1 as u64);
+        mix(term.site2 as u64);
+        mix(term.spin1.as_code() as u64);
+        mix(term.spin2.as_code() as u64);
+        mix(term.value.re.to_bits());
+        mix(term.value.im.to_bits());
+    }
+    for term in &data.gutzwiller_terms {
+        mix(term.value.re.to_bits());
+        mix(term.value.im.to_bits());
+    }
+    for term in &data.jastrow_terms {
+        mix(term.value.re.to_bits());
+        mix(term.value.im.to_bits());
+    }
+    mix(data.rbm_params.len() as u64);
+    for value in &data.rbm_params {
+        mix(value.re.to_bits());
+        mix(value.im.to_bits());
+    }
+    hash
+}
+
+fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationState) {
+    let signature = transfer_cache_signature(data);
+    if state.transfer_cache.signature == signature {
+        return;
+    }
+    let all_real = !crate::run::get_all_complex_flag(data)
+        && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let direct_projection_eligible = !data.has_rbm_terms()
+        && data.doublon_holon_2site_indices.is_empty()
+        && data.doublon_holon_2site_params.is_empty()
+        && data.doublon_holon_4site_indices.is_empty()
+        && data.doublon_holon_4site_params.is_empty()
+        && (data.n_gutzwiller_idx == 0 || data.gutzwiller_idx.len() >= n_site)
+        && (data.n_jastrow_idx == 0
+            || (data.jastrow_idx.len() >= n_site
+                && data
+                    .jastrow_idx
+                    .iter()
+                    .take(n_site)
+                    .all(|row| row.len() >= n_site)));
+    state.transfer_cache.terms = data
+        .transfer_terms
+        .iter()
+        .filter_map(|term| {
+            if term.site1 < 0
+                || term.site2 < 0
+                || term.site1 as usize >= n_site
+                || term.site2 as usize >= n_site
+            {
+                return None;
+            }
+            Some(crate::state::TransferTermMetadata {
+                site1: term.site1 as usize,
+                site2: term.site2 as usize,
+                spin1: term.spin1.as_code(),
+                spin2: term.spin2.as_code(),
+                value: term.value,
+            })
+        })
+        .collect();
+    state.transfer_cache.signature = signature;
+    state.transfer_cache.all_real = all_real;
+    state.transfer_cache.direct_projection_eligible = direct_projection_eligible;
+}
+
 // The cached real Transfer path evaluates the moved configuration directly.
 // Its Jastrow subtraction must precede multiplication by the site charge.
 fn calh1_direct_projection_ratio(
@@ -1304,7 +1383,10 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
 
     timer.stop_diag(921, diag);
     timer.start_diag(922, diag);
-    let direct_ratio = if TRANSFER && !crate::run::get_all_complex_flag(data) {
+    let direct_ratio = if TRANSFER
+        && !crate::run::get_all_complex_flag(data)
+        && state.transfer_cache.direct_projection_eligible
+    {
         calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, data)
     } else {
         None
@@ -1422,22 +1504,16 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     // The convention in upstream Julia is `e_local += -T * G1` where G1 is
     // the 1-body Green function ratio. Same-spin hops only for non-FSZ.
     if !data.transfer_terms.is_empty() && ip.norm() > 0.0 {
-        let real_transfer = !data.has_rbm_terms()
-            && !crate::run::get_all_complex_flag(data)
-            && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
+        refresh_transfer_cache(data, state);
+        let real_transfer = state.transfer_cache.all_real;
         let mut transfer_energy = 0.0;
         let mut green_scratch = GreenScratch::default();
-        for term in &data.transfer_terms {
-            if term.site1 < 0 || term.site2 < 0 {
-                continue;
-            }
-            let ri = term.site1 as usize;
-            let rj = term.site2 as usize;
-            if ri >= n_site || rj >= n_site {
-                continue;
-            }
-            let spin_create = spin_code(term.spin1);
-            let spin_annihilate = spin_code(term.spin2);
+        for index in 0..state.transfer_cache.terms.len() {
+            let term = state.transfer_cache.terms[index];
+            let ri = term.site1;
+            let rj = term.site2;
+            let spin_create = term.spin1;
+            let spin_annihilate = term.spin2;
             let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
             timer.start_diag(920, diag);
             let g1 = green_func1_timed_with_scratch(
@@ -1565,6 +1641,29 @@ mod tests {
         let e = calculate_hamiltonian_diagonal(&ele_num, &data);
         assert!((e.re - 4.0).abs() < 1e-15);
         assert!(e.im.abs() < 1e-15);
+    }
+
+    #[test]
+    fn transfer_cache_rebuilds_when_coefficients_change() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Up,
+            value: Complex64::new(1.0, 0.0),
+        });
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+        refresh_transfer_cache(&data, &mut state);
+        let first = state.transfer_cache.signature;
+        assert_eq!(state.transfer_cache.terms.len(), 1);
+        assert!(state.transfer_cache.all_real);
+        data.transfer_terms[0].value.re = 2.0;
+        refresh_transfer_cache(&data, &mut state);
+        assert_ne!(state.transfer_cache.signature, first);
+        assert_eq!(state.transfer_cache.terms[0].value.re, 2.0);
     }
 
     #[test]
