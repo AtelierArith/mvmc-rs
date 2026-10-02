@@ -2225,7 +2225,11 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 &moved_num,
                 &moved_proj,
             );
-            h2 += -term.value * moved_h * green.conj();
+            // Match C's calHCA: form the local H overlap first, then apply
+            // the transfer coefficient.  The grouping is observable for the
+            // ill-conditioned Full Lanczos alpha equation.
+            let hca = moved_h * green.conj();
+            h2 += (-term.value) * hca;
         }
         state.slater_matrix = original_slater.clone();
     }
@@ -2308,7 +2312,8 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 &moved_num,
                 &moved_proj,
             );
-            h2 += term.value * moved_h * green.conj();
+            let hcaca = moved_h * green.conj();
+            h2 += term.value * hcaca;
         }
         state.slater_matrix = original_slater.clone();
     }
@@ -2367,7 +2372,8 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 n_qp_full,
                 &pool,
             ) {
-                h2 += term.value * moved_h * green.conj();
+                let hcaca = moved_h * green.conj();
+                h2 += term.value * hcaca;
             }
         }
     }
