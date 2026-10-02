@@ -1352,21 +1352,32 @@ fn accumulate_observables<const TIMED: bool>(
         state.energy.sztot += Complex64::new(w * sz, 0.0);
         state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
 
-        // For a purely diagonal Hamiltonian, H|x⟩ is proportional to |x⟩,
-        // so the second Lanczos moment is exactly e². The off-diagonal H²
-        // path is added when the dedicated Lanczos operator kernel is wired.
+        // The transfer-only Lanczos path evaluates H on each moved
+        // configuration. PairHop, Exchange, InterAll, and FSZ remain gated
+        // until their corresponding operator moves are ported.
         if data.modpara.lanczos_mode > 0
-            && data.transfer_terms.is_empty()
             && data.pair_hop_terms.is_empty()
             && data.exchange_terms.is_empty()
             && data.inter_all_terms.is_empty()
+            && !use_fsz
         {
+            let h2 = crate::observables::calculate_lanczos_h2_transfer(
+                e,
+                ip,
+                data,
+                state,
+                &ele_idx,
+                &ele_cfg,
+                &ele_num,
+                &ele_proj_cnt,
+                all_complex,
+            );
             if let Some(phys) = state.phys_quantities.as_mut() {
                 let _ = crate::lanczos::accumulate_lanczos_qqqq(
                     &mut phys.phys_lanczos_qqqq,
                     w,
                     e,
-                    e * e,
+                    h2,
                     all_complex,
                 );
             }
