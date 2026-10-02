@@ -960,6 +960,14 @@ impl ExpertModeData {
         self.opt_trans.len()
     }
 
+    /// Total active width in projection, RBM, Slater and OptTrans order.
+    pub fn count_variational_parameters(&self) -> usize {
+        self.projection_layout().n_proj
+            + self.count_rbm_parameters()
+            + crate::utils::parameter_init::n_slater(self)
+            + self.count_opt_trans_parameters()
+    }
+
     /// Construct an empty `ExpertModeData`.
     pub fn new() -> Self {
         Self::default()

@@ -1,7 +1,8 @@
 //! Julia 1.13.1 Base/math.jl Float64 hypot for parameter normalization.
 //! MIT Julia contributors; full notice in ../../LICENSE-julia-math.
 
-pub(super) fn hypot(x: f64, y: f64) -> f64 {
+/// Compute the complex amplitude with Julia's rounding and scaling order.
+pub fn hypot(x: f64, y: f64) -> f64 {
     let (mut ax, mut ay) = (x.abs(), y.abs());
     if ax.is_infinite() || ay.is_infinite() {
         return f64::INFINITY;
