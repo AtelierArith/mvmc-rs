@@ -1,6 +1,6 @@
 //! Historical Julia kernel models, constructed after validating complete inputs.
 //!
-//! Five checked-in C input replacements supply complete AP/P rows and flags.
+//! Checked-in C input replacements supply complete AP/P/General rows and flags.
 //! Sparse spatial tables are then restored programmatically for the historical
 //! coefficient/kernel regression checks. Those sparse models are not evidence
 //! that C accepts the original incomplete definition files. Production parsing
@@ -25,6 +25,13 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         ("interall/orbital.def", "ap_four.def"),
         ("orbital_general/ap.def", "ap_general_three.def"),
         ("orbital_general/parallel.def", "p_general_three.def"),
+        ("orbital_general/general.def", "general_three.def"),
+        ("orbital_general/sparse.def", "general_sparse_three.def"),
+        (
+            "orbital_general/heisenberg/general.def",
+            "general_heisenberg_six.def",
+        ),
+        ("dh4/general_orbital.def", "general_three_real.def"),
     ];
     let content = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
     let mut metadata = Vec::new();
@@ -50,7 +57,7 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         };
         if matches!(
             fields[0],
-            "Orbital" | "OrbitalAntiParallel" | "OrbitalParallel"
+            "Orbital" | "OrbitalAntiParallel" | "OrbitalParallel" | "OrbitalGeneral"
         ) {
             original_orbitals.push((fields[0].to_owned(), absolute));
         }

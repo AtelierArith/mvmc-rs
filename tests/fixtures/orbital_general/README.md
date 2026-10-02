@@ -1,4 +1,4 @@
-# C orbital contracts and historical Julia General parity
+# C orbital contracts and compatible historical Julia General parity
 
 C comparison drivers and verbatim extracted source are stored in
 `c_toolbox/`; generator commands below are optional developer checks. Rust
@@ -39,9 +39,58 @@ establish C input compatibility: C's General reader expects six columns
 (`site spin site spin index sign`), while the Julia parser uses combined
 coordinates. C's positive-width orbital definitions require complete mapping
 and flag row counts; its header reader rejects zero widths. AP/P header,
-mapping-count and flag-pair validation now follows C. General's remaining
-format/row contract is tracked by #41, and must be verified before treating
-the Julia-only General cases as supported C inputs.
+mapping-count and flag-pair validation follows C, including the General reader
+described below. The original Julia-only combined-coordinate files remain
+historical evidence; new complete six-column files provide C inputs.
+
+## C General input, Slater and derivative checks
+
+`c_general_reader.txt` records 184 native C General reader cases, with 104
+accepted and 80 rejected sections. Each five-line record contains dimensions,
+boundary, header/status, the encoded definition, indices, signs and real flags;
+the final three rows are blank for rejected sections. It covers all spin
+blocks, two/three sites, real/complex headers, both boundaries, declared
+unmapped slots, all mapping/flag count errors, reordered/duplicate rows,
+folded/split flags and label-independent row-order assignment, invalid sites,
+lower/diagonal pairs, arbitrary integer/zero signs and optional index/sign
+carry. Four complete replacements include a six-site General model. C counts
+mapping rows without checking uniqueness; duplicate rows leave cells untouched.
+
+General coordinates are `site_i spin_i site_j spin_j index sign`, converted to
+`site + spin*Nsite`. Every row requires combined `i < j`; the mapping count is
+`2*Nsite*Nsite-Nsite`. C initializes index/sign to 0/1 and retains the preceding
+values when the fifth/sixth fields are omitted. All coordinate fields are
+required by Rust; invalid spins, unsafe parameter indices, malformed fields
+and count overflow produce bounded errors without executing unsafe C accesses.
+The C probe explicitly zeroes its arrays, including untouched diagonal and
+duplicate-row cells. Recorded untouched zeros describe probe plumbing, not
+native C malloc contents. Periodic mode resets all off-diagonal signs to
+upper +1/lower -1; antiperiodic mode preserves input signs and their negatives.
+
+`c_general_kernels.txt` contains 104 eight-line records: dimensions/flags,
+definition, fixed coefficients, two Pfaffians, two compact row-major inverse
+planes, overlap, two full Slater planes and both derivative columns for every
+declared slot. The oracle compiles the verbatim C `UpdateSlaterElm_fsz` and
+`SlaterElmDiff_fsz` bodies, supplies two nontrivial QP translations with boundary
+signs and weights 1/-0.375, and one identity OptTrans. Rust uses the parsed
+cached index/sign matrices. All Slater entries compare by exact numeric equality;
+derivatives use an explicit absolute complex tolerance of `1e-14` for C versus
+Julia-compatible reciprocal arithmetic. No RNG or sampling tolerance is used.
+These standalone function checks do not establish full C MPI/sampling behavior,
+multi-OptTrans derivatives or CLI activation (#27), integer/component flag
+policy (#21), normal SPGL arithmetic (#42), or other definition families.
+
+Both fixtures record authoritative source SHA-256 hashes. Generation uses
+Apple clang 17 `-O0 -ffp-contract=off`, with no BLAS, MPI or Julia runtime.
+Cargo reads only the checked-in fixture files, even when the toolbox and C
+source directory are absent.
+
+```sh
+python3 scripts/check_general_orbital_c_parity.py
+python3 scripts/check_general_orbital_c_parity.py --write
+cargo test -p mvmc-expert-parsers --locked --test c_general_orbital
+cargo test -p mvmc-core --locked --lib c_general_fsz
+```
 
 ## C AP/P input validation
 
@@ -137,7 +186,7 @@ Julia regression checks, alongside the new C shared-coefficient check.
 
 Full MPI execution, full C input validation and Monte Carlo trajectories are
 outside this standalone oracle. C General's six-column parser and complete
-mapping/flag-row validation remain #41/#40 acceptance work. Vendored source,
+mapping/flag-row validation are now checked separately above. Vendored source,
 reference pins and historical Julia fixture files are unchanged. Production
 history/output checks convert historical duplicated orbital rows to declared
 index order, asserting identical duplicate bit/string rows and complete coverage

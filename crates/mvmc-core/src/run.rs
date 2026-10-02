@@ -1869,7 +1869,7 @@ mod callback_tests {
     #[test]
     fn interall_fsz_initial_flags_parameters_and_rng_match_julia_before_sampling() {
         let input = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/interall/spin_chain/namelist.def");
+            .join("../../tests/fixtures/c_orbital_inputs/namelist_interall_fsz.def");
         let (data, _, mut rng) = prepared_namelist(1, &input);
         assert_eq!(data.inter_all_terms.len(), 26);
         assert!(get_all_complex_flag(&data));
@@ -2142,13 +2142,14 @@ mod callback_tests {
                 prepared_namelist(
                     steps,
                     &Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("../../tests/fixtures/interall/spin_chain/namelist.def"),
+                        .join("../../tests/fixtures/c_orbital_inputs/namelist_interall_fsz.def"),
                 )
             } else if case == "general" {
                 prepared_namelist(
                     steps,
-                    &Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("../../tests/fixtures/orbital_general/heisenberg/namelist.def"),
+                    &Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                        "../../tests/fixtures/c_orbital_inputs/namelist_heisenberg_general.def",
+                    ),
                 )
             } else {
                 prepared_case(steps, &name)
