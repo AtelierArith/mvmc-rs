@@ -19,6 +19,7 @@ mod reference_slater;
 use std::fs;
 use std::path::Path;
 
+#[cfg(test)]
 use mvmc_expert_parsers::parse_expert_mode_files;
 use mvmc_expert_parsers::utils::parameter_init::{init_parameter, n_slater};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
@@ -236,6 +237,9 @@ pub struct RunConfig {
     pub seed: Option<i64>,
     /// Initial parameter file selection.
     pub initial_def: InitialDef,
+    /// C-style OptTrans activation. `None` preserves the library's Julia
+    /// definition-file default; `Some(false)` ignores OptTrans definitions.
+    pub enable_opt_trans: Option<bool>,
 }
 
 impl RunConfig {
@@ -248,6 +252,7 @@ impl RunConfig {
             output_dir: None,
             seed: None,
             initial_def: InitialDef::Auto,
+            enable_opt_trans: None,
         }
     }
 }
@@ -299,7 +304,11 @@ fn run_para_opt_timed<const TIMED: bool>(
     timer.start(0);
     timer.start(1);
     timer.start(11);
-    let mut data = parse_expert_mode_files(&namelist_path).map_err(|e| e.to_string())?;
+    let mut data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
+        &namelist_path,
+        config.enable_opt_trans.unwrap_or(true),
+    )
+    .map_err(|e| e.to_string())?;
     timer.stop(11);
     crate::validation::validate_para_opt(&data)?;
     let effective_nsmp = config.nsmp.unwrap_or(data.modpara.nsr_opt_itr_smp);

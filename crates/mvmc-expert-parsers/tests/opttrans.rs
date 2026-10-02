@@ -5,7 +5,7 @@ use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
-use mvmc_expert_parsers::ExpertModeData;
+use mvmc_expert_parsers::{parse_expert_mode_files_with_opt_trans, ExpertModeData};
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 use std::path::PathBuf;
@@ -19,6 +19,18 @@ fn opttrans_sector_count_and_real_only_component_flags_follow_julia() {
     let data = parse_expert_mode_files(root().join("namelist_valid.def")).unwrap();
     assert_eq!(data.n_qp_opt_trans, 2);
     assert_eq!(data.optimization_flags, vec![1, 0, 1, 0]);
+}
+
+#[test]
+fn c_disabled_opttrans_ignores_definition_and_keeps_default_layout() {
+    let data =
+        parse_expert_mode_files_with_opt_trans(root().join("namelist_valid.def"), false).unwrap();
+    assert_eq!(data.n_qp_opt_trans, 1);
+    assert!(data.para_qp_opt_trans.is_empty());
+    assert!(data.opt_trans.is_empty());
+    assert!(data.qp_opt_trans.is_empty());
+    assert!(data.qp_opt_trans_sgn.is_empty());
+    assert!(data.optimization_flags.is_empty());
 }
 
 fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {

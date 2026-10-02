@@ -80,6 +80,18 @@ pub enum ParseError {
 pub fn parse_expert_mode_files<P: AsRef<Path>>(
     namelist_path: P,
 ) -> Result<ExpertModeData, ParseError> {
+    parse_expert_mode_files_with_opt_trans(namelist_path, true)
+}
+
+/// Parse Expert Mode files while explicitly selecting C's OptTrans activation.
+///
+/// C only reads and activates an `OptTrans` definition when `FlagOptTrans` is
+/// enabled by the caller. The default parser preserves Julia's definition-file
+/// behavior; C-facing runners should pass `false` unless their `-o` mode is on.
+pub fn parse_expert_mode_files_with_opt_trans<P: AsRef<Path>>(
+    namelist_path: P,
+    enable_opt_trans: bool,
+) -> Result<ExpertModeData, ParseError> {
     let namelist_path = namelist_path.as_ref();
     let base_dir = namelist_path
         .parent()
@@ -100,6 +112,9 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     let mut definitions: Vec<_> = file_list.iter().collect();
     definitions.sort_by_key(|(kind, _)| definition_order(kind));
     for (file_type, file_name) in definitions {
+        if !enable_opt_trans && matches!(file_type.as_str(), "OptTrans" | "InOptTrans") {
+            continue;
+        }
         let full_path = base_dir.join(file_name);
         if !full_path.is_file() {
             if matches!(
