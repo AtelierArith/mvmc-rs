@@ -18,6 +18,12 @@ use num_complex::Complex64;
 /// All-reduce trait. The single-process implementation is a no-op;
 /// the MPI implementation (Phase 7) will call `MPI_Allreduce(MPI_SUM)`.
 pub trait Reducer {
+    /// Broadcast a complex parameter buffer from `root`.
+    ///
+    /// The serial reducer is a no-op; MPI implementations replace the buffer
+    /// on non-root ranks and leave the root values unchanged.
+    fn broadcast_c64(&self, _root: usize, _buf: &mut [Complex64]) {}
+
     /// In-place sum-reduction across all ranks.
     fn allreduce_sum_f64(&self, buf: &mut [f64]);
     /// In-place sum-reduction across all ranks (complex variant).

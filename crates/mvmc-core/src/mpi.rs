@@ -170,6 +170,17 @@ impl MpiContext {
 }
 
 impl Reducer for MpiContext {
+    fn broadcast_c64(&self, root: usize, values: &mut [Complex64]) {
+        let root = i32::try_from(root).expect("MPI root rank is too large");
+        let mut real: Vec<_> = values.iter().map(|value| value.re).collect();
+        let mut imag: Vec<_> = values.iter().map(|value| value.im).collect();
+        self.world.process_at_rank(root).broadcast_into(&mut real);
+        self.world.process_at_rank(root).broadcast_into(&mut imag);
+        for (value, (real, imag)) in values.iter_mut().zip(real.into_iter().zip(imag)) {
+            *value = Complex64::new(real, imag);
+        }
+    }
+
     fn allreduce_sum_f64(&self, values: &mut [f64]) {
         use ::mpi::collective::SystemOperation;
         for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
@@ -237,6 +248,21 @@ impl MpiGroupContext {
 }
 
 impl Reducer for MpiGroupContext {
+    fn broadcast_c64(&self, root: usize, values: &mut [Complex64]) {
+        let root = i32::try_from(root).expect("MPI group root rank is too large");
+        let mut real: Vec<_> = values.iter().map(|value| value.re).collect();
+        let mut imag: Vec<_> = values.iter().map(|value| value.im).collect();
+        self.communicator
+            .process_at_rank(root)
+            .broadcast_into(&mut real);
+        self.communicator
+            .process_at_rank(root)
+            .broadcast_into(&mut imag);
+        for (value, (real, imag)) in values.iter_mut().zip(real.into_iter().zip(imag)) {
+            *value = Complex64::new(real, imag);
+        }
+    }
+
     fn allreduce_sum_f64(&self, values: &mut [f64]) {
         use ::mpi::collective::SystemOperation;
         for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
