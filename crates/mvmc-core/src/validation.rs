@@ -206,6 +206,21 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
         if !data.inter_all_terms.is_empty() {
             return Err("InterAll Lanczos PhysCal is not implemented yet (issue #31)".into());
         }
+        if p.lanczos_mode > 1 && data.green_two_ex_terms.is_empty() {
+            let mut seen = std::collections::HashSet::new();
+            for term in &data.green_one_terms {
+                let key = (term.site1, term.spin1, term.site2, term.spin2);
+                if !seen.insert(key) {
+                    return Err(format!(
+                        "NLanczosMode = 2 does not support duplicate OneBodyG entries without TwoBodyGEx; duplicate=({}, {}, {}, {}) (issue #32)",
+                        term.site1,
+                        term.spin1.as_code(),
+                        term.site2,
+                        term.spin2.as_code()
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
