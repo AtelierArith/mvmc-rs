@@ -31,7 +31,7 @@ use sfmt19937::Sfmt19937Rng;
 use crate::average::{weight_average_sr_opt, weight_average_sr_opt_real, weight_average_we};
 use crate::c_timer::{CTimer, TimerEnv};
 use crate::counter::reduce_counter;
-use crate::initial_params::read_initial_def;
+use crate::initial_params::{read_initial_def, read_opt_para_file};
 use crate::io::{output_data, output_opt_data, store_opt_data};
 use crate::observables::clear_phys_quantity;
 use crate::reducer::{Reducer, SingleProcessReducer};
@@ -48,6 +48,53 @@ pub const FALLBACK_SEED: i64 = 11272;
 /// Arguments are zero-based step, post-sync parameters, measured energy and status.
 pub type StepCallback<'a> =
     dyn FnMut(usize, &mut ExpertModeData, Complex64, i32) -> Result<(), String> + 'a;
+
+/// Fixed-parameter PhysCal preparation, before the sampling loop owns the
+/// internal initialization and QP-weight setup.
+#[derive(Debug)]
+pub struct PhysCalPreparation {
+    /// Parsed and overlaid Expert data.
+    pub data: ExpertModeData,
+    /// RNG positioned immediately before PhysCal's internal initialization.
+    pub rng: Sfmt19937Rng,
+    /// Number of fixed parameter slots consumed by the record.
+    pub n_para_consumed: usize,
+}
+
+/// Prepare a fixed-parameter PhysCal run using Julia's phase order.
+///
+/// The function deliberately does not call `init_parameter` or
+/// `init_qp_weight`; the PhysCal sampling driver must own those calls so the
+/// fixed values are restored after the single C-compatible initialization RNG
+/// consumption.
+pub fn prepare_phys_cal_from_namelist(
+    namelist_path: impl AsRef<Path>,
+    opt_para_path: impl AsRef<Path>,
+    mode: &str,
+    seed: Option<i64>,
+) -> Result<PhysCalPreparation, String> {
+    if !matches!(mode, "real" | "cmp" | "fsz") {
+        return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
+    }
+    let namelist_path = namelist_path.as_ref();
+    let mut data = mvmc_expert_parsers::parse_expert_mode_files(namelist_path)
+        .map_err(|error| error.to_string())?;
+    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, seed, 0, || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs() as i64)
+            .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
+    })?;
+    let rng = seeded_rng(actual_seed)?;
+    let n_para_consumed = read_opt_para_file(&mut data, opt_para_path)?;
+    read_input_parameters(&mut data, namelist_path)?;
+    sync_modified_parameter(&mut data, false);
+    Ok(PhysCalPreparation {
+        data,
+        rng,
+        n_para_consumed,
+    })
+}
 
 /// Optional controls for the direct optimization loop.
 #[derive(Default)]
@@ -767,6 +814,35 @@ mod mode_tests {
         assert_eq!(phys.local_cis_ajs.len(), 1);
         assert_eq!(phys.phys_cis_ajs_ckt_alt.len(), 1);
         assert_eq!(phys.local_cis_ajs_ckt_alt_dc.len(), 1);
+    }
+
+    #[test]
+    fn physcal_preparation_loads_fixed_parameters_before_rng_consumption() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/opttrans");
+        let parsed = parse_expert_mode_files(root.join("namelist_layout.def")).unwrap();
+        let n_fields = 6 + 3 * parsed.count_variational_parameters();
+        let opt_path =
+            std::env::temp_dir().join(format!("mvmc-physcal-opt-{}", std::process::id()));
+        fs::write(
+            &opt_path,
+            (0..n_fields).map(|_| "0").collect::<Vec<_>>().join(" "),
+        )
+        .unwrap();
+        let prepared = prepare_phys_cal_from_namelist(
+            root.join("namelist_layout.def"),
+            &opt_path,
+            "real",
+            Some(11272),
+        )
+        .expect("fixed PhysCal preparation");
+        fs::remove_file(opt_path).unwrap();
+        assert!(prepared.n_para_consumed > 0);
+        assert!(
+            prepared.data.modpara.vmc_calc_mode == 0 || prepared.data.modpara.vmc_calc_mode == 1
+        );
+        let mut rng = prepared.rng;
+        assert_ne!(rng.gen_rand32(), 0);
     }
 
     #[test]
