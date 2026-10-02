@@ -23,7 +23,7 @@ pub use types::{
     CoulombIntraTerm, DoublonHolon2SiteDefinition, DoublonHolon2SiteIndex,
     DoublonHolon4SiteDefinition, DoublonHolon4SiteIndex, ExchangeTerm, ExpertModeData,
     GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm, GreenOneTerm,
-    GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
+    GreenTwoExTerm, GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
     ModParaParameters, OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry,
     QuantumProjectionWeights, RbmParameter, Spin, SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm,
     SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
@@ -621,6 +621,9 @@ fn parse_file_by_type(
         }
         "TwoBodyG" => {
             data.green_two_terms = green::parse_green_two_def(path)?;
+        }
+        "TwoBodyGEx" => {
+            data.green_two_ex_terms = green::parse_green_two_ex_def(path)?;
         }
         "TransSym" | "QPTrans" => {
             let section = qptrans::parse_qptrans_def(path, data.modpara.nsite)?;
