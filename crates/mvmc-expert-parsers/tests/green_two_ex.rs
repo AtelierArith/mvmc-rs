@@ -72,3 +72,51 @@ fn canonicalization_preserves_existing_duplicates_and_appends_missing_terms() {
     assert_eq!(data.green_one_terms.len(), 3);
     assert_eq!(data.green_two_ex_indices, vec![(0, 2)]);
 }
+
+#[test]
+fn repeated_constituents_keep_each_factored_reference_and_empty_sections_are_noops() {
+    let term = GreenTwoExTerm {
+        site1: 0,
+        spin1: Spin::Up,
+        site2: 1,
+        spin2: Spin::Down,
+        site3: 0,
+        spin3: Spin::Up,
+        site4: 1,
+        spin4: Spin::Down,
+    };
+    let mut data = mvmc_expert_parsers::ExpertModeData::new();
+    data.green_two_ex_terms = vec![term, term];
+    data.canonicalize_green_two_ex();
+    assert_eq!(data.green_one_terms.len(), 1);
+    assert_eq!(data.green_two_ex_indices, vec![(0, 0), (0, 0)]);
+
+    let mut empty = mvmc_expert_parsers::ExpertModeData::new();
+    empty.canonicalize_green_two_ex();
+    assert!(empty.green_one_terms.is_empty());
+    assert!(empty.green_two_ex_indices.is_empty());
+}
+
+#[test]
+fn malformed_referenced_file_is_reported_by_expert_loader() {
+    let dir = std::env::temp_dir().join(format!("mvmc-green-two-ex-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("modpara.def"), "Nsite 4\nNElec 1\nNMPTrans 1\n").unwrap();
+    std::fs::write(
+        dir.join("bad.def"),
+        "# header\nTwoBodyGEx 1\n# h3\n# h4\n# h5\n0 0 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("namelist.def"),
+        "ModPara modpara.def\nTwoBodyGEx bad.def\n",
+    )
+    .unwrap();
+    let data = mvmc_expert_parsers::parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    assert!(data
+        .input_errors
+        .iter()
+        .any(|error| error.contains("error parsing TwoBodyGEx file")));
+    let _ = std::fs::remove_dir_all(dir);
+}
