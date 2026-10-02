@@ -50,3 +50,8 @@ For the issue #56 implementation work, commit each validated implementation mile
 ## Agent-Specific Instructions
 
 Do not revert unrelated user changes. Prefer `rg` for repository searches. Treat `extern/` as reference material unless directed otherwise, and keep generated `target*` directories out of commits.
+
+## Local Agent Skills
+
+- Use [uv-python](skills/uv-python/SKILL.md) for Python execution, scripts, modules, dependency management and environments. Run Python through `uv`; use the project's environment and lock where applicable, or `uv run --no-project` for independent utilities.
+- Use [kache](skills/kache/SKILL.md) when installing, updating, configuring or verifying the Rust compiler cache. Verify the configured binary and an actual cache hit.
