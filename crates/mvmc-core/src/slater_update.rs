@@ -39,9 +39,9 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
 
     let mut slater = vec![Complex64::new(0.0, 0.0); n_orb];
     for (idx, &value) in data.slater_params.iter().take(n_orb).enumerate() {
-        if mvmc_expert_parsers::utils::julia_hypot::hypot(value.re, value.im) > 1e-14 {
-            slater[idx] = value;
-        }
+        // C's UpdateSlaterElm_fcmp reads the declared coefficient directly;
+        // it does not apply Julia's historical 1e-14 amplitude cutoff.
+        slater[idx] = value;
     }
 
     for qp in 0..n_qp_full {

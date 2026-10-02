@@ -447,56 +447,18 @@ fn opttrans_derivative_bounds_empty_inputs_and_partial_pfaffians_match_julia() {
 }
 
 #[test]
-fn historical_julia_slater_cutoff_matches_where_values_are_representable() {
-    let text = std::fs::read_to_string(root().join("slater_threshold.txt")).unwrap();
-    let mut lines = text.lines().filter(|l| !l.starts_with('#'));
-    let mut cases = 0;
-    while let Some(header) = lines.next() {
-        let f: Vec<_> = header.split_whitespace().collect();
-        let mut data = projection_model(f[0], 1, f[1].parse().unwrap(), "complete");
-        let cutoff = 1e-14_f64;
-        let value = match f[2] {
-            "negative_zero" => Complex64::new(-0.0, -0.0),
-            "below" => Complex64::new(f64::from_bits(cutoff.to_bits() - 1), 0.0),
-            "equal" => Complex64::new(cutoff, 0.0),
-            "above" => Complex64::new(f64::from_bits(cutoff.to_bits() + 1), 0.0),
-            "complex_below" => Complex64::new(1e-15, -1e-15),
-            "complex_above" => Complex64::new(1e-14, -1e-14),
-            "duplicate_zero" | "duplicate_tiny" => Complex64::new(2e-14, 0.0),
-            "zero" => Complex64::new(0.0, 0.0),
-            _ => panic!("{header}"),
-        };
-        data.slater_params.fill(value);
-        // These historical Julia cases assign conflicting per-mapping values
-        // to one index. C has one coefficient per index and cannot represent
-        // that input; the dense-array lifecycle tests cover shared slots.
-        if f[2].starts_with("duplicate") {
-            lines.next().unwrap();
-            continue;
-        }
-        let mut state = mvmc_core::VmcOptimizationState::zeros(
-            4,
-            1,
-            0,
-            data.modpara.n_orbital_idx as usize + 3,
-            6,
-            1,
-            f[0] != "real",
-            f[0] == "fsz",
-        );
-        if f[0] == "fsz" {
-            mvmc_core::slater_update::update_slater_elm_fsz(&mut data, &mut state);
-        } else {
-            mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
-        }
-        bits(
-            state.slater_matrix.slater_elm.as_slice().iter().copied(),
-            lines.next().unwrap(),
-            header,
-        );
-        cases += 1;
-    }
-    assert_eq!(cases, 42);
+fn c_normal_slater_preserves_subthreshold_coefficients() {
+    let mut data = projection_model("real", 1, 1, "complete");
+    let value = f64::from_bits(1e-14_f64.to_bits() - 1);
+    data.slater_params.fill(Complex64::new(value, 0.0));
+    let mut state = mvmc_core::VmcOptimizationState::zeros(4, 1, 0, 4, 6, 1, false, false);
+    mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
+    assert!(state
+        .slater_matrix
+        .slater_elm
+        .as_slice()
+        .iter()
+        .any(|entry| entry.re != 0.0));
 }
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
