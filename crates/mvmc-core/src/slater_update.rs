@@ -11,8 +11,7 @@ use crate::state::VmcOptimizationState;
 /// `update_slater_elm_fcmp!(data, state)` mirror for the
 /// `i_flg_orbital_general == 0` path. The Slater table is rebuilt for
 /// every QP plane using the cached orbital-idx matrix and the parsed
-/// `qptransidx.def` translation maps. `QPOptTrans` is identity in the
-/// v0.1 fixtures (`n_qp_opt_trans == 1`).
+/// `qptransidx.def` maps composed after optimized translations and their signs.
 pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     data.normalize_projection_count();
     data.ensure_orbital_idx_matrix();
@@ -55,29 +54,15 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
         let cs = weights.spgl_cos_sin[spidx];
         let cc = weights.spgl_cos_cos[spidx];
         let ss = weights.spgl_sin_sin[spidx];
-        let trans = data.qp_trans_entries.get(mpidx);
+        let optidx = qp / n_qp_fix;
 
         for ri in 0..n_site {
-            let ori = ri;
-            let tri = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
+            let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
             if tri >= n_site {
                 continue;
             }
             for rj in 0..n_site {
-                let orj = rj;
-                let trj = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
+                let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
                 if trj >= n_site {
                     continue;
                 }
@@ -89,8 +74,8 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
                 }
                 let sgn_ij = orb_sgn[tri][trj] * qpsgn;
                 let sgn_ji = orb_sgn[trj][tri] * qpsgn;
-                let slt_ij = slater[idx_ij as usize] * Complex64::new(sgn_ij as f64, 0.0);
-                let slt_ji = slater[idx_ji as usize] * Complex64::new(sgn_ji as f64, 0.0);
+                let slt_ij = slater[idx_ij as usize] * sgn_ij as f64;
+                let slt_ji = slater[idx_ji as usize] * sgn_ji as f64;
 
                 let rsi0 = ri;
                 let rsi1 = ri + n_site;
@@ -155,28 +140,14 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
     for qp in 0..n_qp_full {
         let rem = qp % n_qp_fix;
         let mpidx = rem / n_sp_gauss_leg;
-        let trans = data.qp_trans_entries.get(mpidx);
+        let optidx = qp / n_qp_fix;
         for ri in 0..n_site {
-            let ori = ri;
-            let tri = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
+            let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
             if tri >= n_site {
                 continue;
             }
             for rj in 0..n_site {
-                let orj = rj;
-                let trj = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
+                let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
                 if trj >= n_site {
                     continue;
                 }

@@ -13,6 +13,8 @@ cargo test -p mvmc-expert-parsers --test opttrans
 julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_load_weights_parity.jl --write
 julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_load_weights_parity.jl
 cargo test -p mvmc-core --test opttrans --test initial_params
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_projection_parity.jl --write
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_projection_parity.jl
 ```
 
 The source script also runs the canonical `test_read_input_parameters.jl`
@@ -68,7 +70,33 @@ refresh include active OptTrans sectors; updates replace, grow, shrink and
 clear the runtime vector and rebuild full weights from fixed weights.
 The source script also runs canonical loader and QP-weight unit tests.
 
-These milestones validate inputs, initialization, full-record loading and
-QP-weight refresh. Production OptTrans execution remains gated by issue #27
-until nonidentity Slater projections, derivatives, SR, normalization and
+`projection.txt` covers 120 Slater-table and derivative cases: normal real
+and complex orbitals with one or three quadrature nodes, FSZ complex
+orbitals, periodic and anti-periodic signs, six complete/partial/absent
+mapping arrangements and two parameter-update phases. Matrices compose
+OptTrans before QPTrans, applying both sets of signs. Julia caches orbital
+boundary signs before `vmc_para_opt!` normalizes negative NMPTrans; the
+fixture reproduces that phase while Rust retains the boundary marker and
+uses its absolute value for dimensions. Normal Slater sign multiplication
+uses Julia's real-scalar operation, preserving signed zero.
+
+Supplied deterministic Pfaffians and inverse matrices isolate derivative
+mapping and reduction order from factorization and sampling. The fixtures
+compare every Slater derivative and the separate real/imaginary OptTrans
+derivative pair. They preserve canonical quirks: normal derivatives include
+all sectors on the complete cached-map path but only fixed sectors on the
+generic fallback; FSZ Slater derivatives use only the first fixed sectors.
+The separate OptTrans derivative sums fixed weights and Pfaffians for each
+sector. Public Slater derivative calls share the runtime scratch kernels.
+
+`opt_derivatives.txt` covers 162 cases with zero/one/three active parameters,
+missing/empty/two fixed weights, empty/partial/full Pfaffian vectors and
+six output view sizes. Each real/imaginary pair is committed only when
+both slots exist; skipped slots retain their original values. The projection
+script also runs the canonical Slater-update unit contracts.
+
+These milestones validate inputs, initialization, full-record loading,
+QP-weight refresh, nonidentity Slater tables and derivative kernels.
+Production OptTrans execution remains gated by issue #27 until runtime
+state dimensions, derivative placement, SR updates, normalization and
 deterministic serial trajectories have passed Julia parity.
