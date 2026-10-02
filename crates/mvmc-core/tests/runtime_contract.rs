@@ -57,6 +57,7 @@ fn unported_sections_cannot_silently_change_the_model() {
 fn active_serial_opttrans_passes_validation_including_single_sector_payloads() {
     for count in [1, 2] {
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
         data.n_qp_opt_trans = count;
         data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); count as usize];
         data.namelist
@@ -187,7 +188,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("modpara.def"),
-        "Nsite 2\nNElec 1\nNVMCSample 1\nNVMCInterval 1\n",
+        "Nsite 2\nNElec 1\nNMPTrans 1\nNVMCSample 1\nNVMCInterval 1\n",
     )
     .unwrap();
     let mut namelist = "ModPara modpara.def\n".to_owned();

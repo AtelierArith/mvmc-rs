@@ -90,7 +90,7 @@ pub fn init_qp_weight_inplace(
     opt_trans: &[Complex64],
 ) {
     let nmp_trans = nmp_trans_raw.unsigned_abs() as usize;
-    if nsp_gauss_leg <= 0 || nmp_trans == 0 {
+    if nsp_gauss_leg <= 0 {
         return;
     }
     let n_leg = nsp_gauss_leg as usize;
@@ -172,7 +172,6 @@ pub fn update_qp_weight(weights: &mut QuantumProjectionWeights, opt_trans: &[Com
 
 /// `data.qp_weights = init_qp_weight!(data)` mirror.
 pub fn init_qp_weight(data: &mut ExpertModeData) {
-    data.normalize_projection_count();
     let mut weights = data.qp_weights.take().unwrap_or_default();
     init_qp_weight_inplace(
         &mut weights,
@@ -217,18 +216,74 @@ mod tests {
     }
 
     #[test]
-    fn zero_translation_count_normalizes_before_weight_allocation() {
-        let mut zero = ExpertModeData::new();
-        zero.modpara.nmp_trans = 0;
-        zero.modpara.nsp_gauss_leg = 1;
-        zero.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
-        let mut one = zero.clone();
-        one.modpara.nmp_trans = 1;
-        init_qp_weight(&mut zero);
-        init_qp_weight(&mut one);
-        assert_eq!(zero.modpara.nmp_trans, 1);
-        assert_eq!(zero.qp_weights, one.qp_weights);
-        assert_eq!(zero.qp_weights.unwrap().qp_full_weight.len(), 1);
+    fn zero_translation_count_does_not_create_an_identity_sector() {
+        for leg in [1, 4] {
+            let mut data = ExpertModeData::new();
+            data.modpara.nmp_trans = 0;
+            data.modpara.nsp_gauss_leg = leg;
+            data.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
+            init_qp_weight(&mut data);
+            assert_eq!(data.modpara.nmp_trans, 0);
+            let weights = data.qp_weights.unwrap();
+            assert!(weights.qp_full_weight.is_empty());
+            assert!(weights.qp_fix_weight.is_empty());
+            // C initializes the quadrature independently of translation count.
+            assert_eq!(weights.spgl_cos.len(), leg as usize);
+        }
+    }
+
+    #[test]
+    fn projection_counts_and_weight_bits_match_c_kernels() {
+        let mut lines =
+            include_str!("../../../../tests/fixtures/projection_count/c_contracts.txt").lines();
+        assert!(lines.next().unwrap().contains("actual C"));
+        let parse_bits = |line: &str| -> Vec<u64> {
+            line.split_whitespace()
+                .map(|v| u64::from_str_radix(v, 16).unwrap())
+                .collect()
+        };
+        for _ in 0..10 {
+            let header: Vec<i64> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect();
+            let [raw, count, ap, fixed, full, opt] = header[..] else {
+                panic!("bad C record")
+            };
+            let mut data = ExpertModeData::new();
+            data.modpara.nmp_trans = raw;
+            data.modpara.nsp_gauss_leg = 1;
+            data.para_qp_trans = vec![Complex64::new(1.0, 0.25), Complex64::new(-0.5, -0.125)];
+            if opt != 0 {
+                data.opt_trans = vec![Complex64::new(0.75, 0.5), Complex64::new(-0.25, 0.75)];
+            }
+            init_qp_weight(&mut data);
+            assert_eq!(data.modpara.nmp_trans, raw);
+            assert_eq!(raw.unsigned_abs(), count as u64);
+            assert_eq!(i64::from(raw < 0), ap);
+            let weights = data.qp_weights.unwrap();
+            assert_eq!(weights.qp_fix_weight.len(), fixed as usize);
+            assert_eq!(weights.qp_full_weight.len(), full as usize);
+            for values in [
+                &weights.qp_fix_weight,
+                &weights.qp_full_weight,
+                &weights.spgl_cos,
+                &weights.spgl_sin,
+            ] {
+                let bits: Vec<u64> = values
+                    .iter()
+                    .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                    .collect();
+                assert_eq!(
+                    bits,
+                    parse_bits(lines.next().unwrap()),
+                    "C input {raw}, OptTrans {opt}"
+                );
+            }
+        }
+        assert!(lines.next().is_none());
     }
 
     #[test]

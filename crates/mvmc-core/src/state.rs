@@ -766,7 +766,6 @@ pub struct SlaterMatrixData {
 impl SlaterMatrixData {
     /// Mirror `SlaterMatrixData(n_qp_full, n_site, n_elec, all_complex)`.
     pub fn zeros(n_qp_full: usize, n_site: usize, n_elec: usize, all_complex: bool) -> Self {
-        let n_qp_full = n_qp_full.max(1);
         let n_site = n_site.max(1);
         let n_elec = n_elec.max(1);
         let complex_slater = SlaterElmFlat::<Complex64>::zeros(n_qp_full, n_site);

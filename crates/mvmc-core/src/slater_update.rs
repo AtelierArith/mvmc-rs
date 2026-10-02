@@ -13,7 +13,6 @@ use crate::state::VmcOptimizationState;
 /// every QP plane using the cached orbital-idx matrix and the parsed
 /// `qptransidx.def` maps composed after optimized translations and their signs.
 pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
-    data.normalize_projection_count();
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
     let weights = match data.qp_weights.as_ref() {
@@ -127,7 +126,6 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
 /// apply spin projection (`NSPGaussLeg` is treated as 1). QP translation is
 /// applied to the site index and the spin offset is kept explicit.
 pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
-    data.normalize_projection_count();
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
     if n_site == 0 {
