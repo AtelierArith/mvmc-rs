@@ -304,10 +304,12 @@ fn run_para_opt_timed<const TIMED: bool>(
     timer.start(0);
     timer.start(1);
     timer.start(11);
-    let mut data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
-        &namelist_path,
-        config.enable_opt_trans.unwrap_or(true),
-    )
+    let mut data = match config.enable_opt_trans {
+        Some(enabled) => {
+            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, enabled)
+        }
+        None => mvmc_expert_parsers::parse_expert_mode_files(&namelist_path),
+    }
     .map_err(|e| e.to_string())?;
     timer.stop(11);
     crate::validation::validate_para_opt(&data)?;
