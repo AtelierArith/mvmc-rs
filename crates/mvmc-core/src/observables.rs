@@ -82,6 +82,11 @@ pub fn clear_phys_quantity(state: &mut VmcOptimizationState) {
     }
     if let Some(phys) = state.phys_quantities.as_mut() {
         phys.phys_lanczos_qqqq.fill(Complex64::new(0.0, 0.0));
+        phys.phys_lanczos_qcisajsq.fill(Complex64::new(0.0, 0.0));
+        phys.phys_lanczos_qcisajscktaltq
+            .fill(Complex64::new(0.0, 0.0));
+        phys.phys_lanczos_qcisajscktaltq_dc
+            .fill(Complex64::new(0.0, 0.0));
         phys.local_cis_ajs.fill(Complex64::new(0.0, 0.0));
         phys.phys_cis_ajs.fill(Complex64::new(0.0, 0.0));
         phys.phys_cis_ajs_ckt_alt.fill(Complex64::new(0.0, 0.0));
@@ -1516,6 +1521,8 @@ pub fn calculate_local_energy(
 /// InterAll and FSZ callers remain outside this helper.
 type LanczosMovedConfig = (Vec<i64>, Vec<i64>, Vec<i64>, Vec<i64>);
 
+type LanczosMovedTerm = (Complex64, LanczosMovedConfig);
+
 fn lanczos_apply_one_body(
     ele_idx: &[i64],
     ele_cfg: &[i64],
@@ -1569,6 +1576,31 @@ fn lanczos_apply_one_body(
     Some((moved_idx, moved_cfg, moved_num, moved_proj))
 }
 
+fn lanczos_apply_one_body_terms(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    create_site: usize,
+    annihilate_site: usize,
+    spin: u8,
+    data: &ExpertModeData,
+) -> Vec<LanczosMovedTerm> {
+    lanczos_apply_one_body(
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        create_site,
+        annihilate_site,
+        spin,
+        data,
+    )
+    .into_iter()
+    .map(|moved| (Complex64::new(1.0, 0.0), moved))
+    .collect()
+}
+
 fn lanczos_apply_pair_hop(
     ele_idx: &[i64],
     ele_cfg: &[i64],
@@ -1606,27 +1638,211 @@ fn lanczos_apply_two_body(
     second_spin: u8,
     data: &ExpertModeData,
 ) -> Option<LanczosMovedConfig> {
-    // Julia applies the second (t) factor first, then the first (s) factor.
-    let (idx, cfg, num, proj) = lanczos_apply_one_body(
+    lanczos_apply_two_body_terms(
         ele_idx,
         ele_cfg,
         ele_num,
         ele_proj_cnt,
+        first_create,
+        first_annihilate,
+        second_create,
+        second_annihilate,
+        first_spin,
+        second_spin,
+        data,
+    )
+    .into_iter()
+    .next()
+    .map(|(_, moved)| moved)
+}
+
+/// Apply `c†_{ri,s} c_{rj,s} c†_{rk,t} c_{rl,t}` in Julia's operator order.
+/// The special coincident-index branches preserve the fermionic signs and
+/// diagonal coefficients used by `_lanczos_apply_two_body`.
+fn lanczos_apply_two_body_terms(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    first_create: usize,
+    first_annihilate: usize,
+    second_create: usize,
+    second_annihilate: usize,
+    first_spin: u8,
+    second_spin: u8,
+    data: &ExpertModeData,
+) -> Vec<LanczosMovedTerm> {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    if first_spin > 1
+        || second_spin > 1
+        || [
+            first_create,
+            first_annihilate,
+            second_create,
+            second_annihilate,
+        ]
+        .iter()
+        .any(|&site| site >= n_site)
+    {
+        return Vec::new();
+    }
+    let first_dst = first_create + first_spin as usize * n_site;
+    let first_src = first_annihilate + first_spin as usize * n_site;
+    let second_dst = second_create + second_spin as usize * n_site;
+    let second_src = second_annihilate + second_spin as usize * n_site;
+    let occupied = |site: usize| ele_num.get(site).copied().unwrap_or(0) == 1;
+    let empty = |site: usize| ele_num.get(site).copied().unwrap_or(0) == 0;
+    let same = || {
+        vec![(
+            Complex64::new(1.0, 0.0),
+            (
+                ele_idx.to_vec(),
+                ele_cfg.to_vec(),
+                ele_num.to_vec(),
+                ele_proj_cnt.to_vec(),
+            ),
+        )]
+    };
+    let one = |create: usize,
+               annihilate: usize,
+               spin: u8,
+               idx: &[i64],
+               cfg: &[i64],
+               num: &[i64],
+               proj: &[i64]| {
+        lanczos_apply_one_body_terms(idx, cfg, num, proj, create, annihilate, spin, data)
+    };
+    if first_spin == second_spin {
+        if second_create == second_annihilate {
+            if empty(second_dst) {
+                return Vec::new();
+            }
+            if first_create == first_annihilate {
+                return if occupied(first_dst) {
+                    same()
+                } else {
+                    Vec::new()
+                };
+            }
+            return one(
+                first_create,
+                first_annihilate,
+                first_spin,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+            );
+        }
+        if first_create == first_annihilate {
+            if empty(first_dst) {
+                return Vec::new();
+            }
+            return one(
+                second_create,
+                second_annihilate,
+                second_spin,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+            );
+        }
+        if first_annihilate == second_annihilate
+            || first_create == second_annihilate
+            || first_create == second_create
+        {
+            return Vec::new();
+        }
+        if occupied(first_dst) || empty(first_src) || occupied(second_dst) || empty(second_src) {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        for (coef2, (idx, cfg, num, proj)) in one(
+            second_create,
+            second_annihilate,
+            second_spin,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+        ) {
+            for (coef1, moved) in one(
+                first_create,
+                first_annihilate,
+                first_spin,
+                &idx,
+                &cfg,
+                &num,
+                &proj,
+            ) {
+                result.push((coef1 * coef2, moved));
+            }
+        }
+        return result;
+    }
+
+    if second_create == second_annihilate {
+        if empty(second_dst) {
+            return Vec::new();
+        }
+        if first_create == first_annihilate {
+            return if occupied(first_dst) {
+                same()
+            } else {
+                Vec::new()
+            };
+        }
+        return one(
+            first_create,
+            first_annihilate,
+            first_spin,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+        );
+    }
+    if first_create == first_annihilate {
+        if empty(first_dst) {
+            return Vec::new();
+        }
+        return one(
+            second_create,
+            second_annihilate,
+            second_spin,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+        );
+    }
+    if occupied(first_dst) || empty(first_src) || occupied(second_dst) || empty(second_src) {
+        return Vec::new();
+    }
+    let mut result = Vec::new();
+    for (coef2, (idx, cfg, num, proj)) in one(
         second_create,
         second_annihilate,
         second_spin,
-        data,
-    )?;
-    lanczos_apply_one_body(
-        &idx,
-        &cfg,
-        &num,
-        &proj,
-        first_create,
-        first_annihilate,
-        first_spin,
-        data,
-    )
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+    ) {
+        for (coef1, moved) in one(
+            first_create,
+            first_annihilate,
+            first_spin,
+            &idx,
+            &cfg,
+            &num,
+            &proj,
+        ) {
+            result.push((coef1 * coef2, moved));
+        }
+    }
+    result
 }
 
 fn lanczos_evaluate_moved(
@@ -1689,6 +1905,218 @@ fn lanczos_evaluate_moved(
     };
     state.slater_matrix = original_slater.clone();
     value
+}
+
+/// QPhysQ accumulators produced by Lanczos mode 2 for one sample.
+#[derive(Debug, Default)]
+pub(crate) struct LanczosGreenValues {
+    pub(crate) one_body: Vec<Complex64>,
+    pub(crate) factored_two_body: Vec<Complex64>,
+    pub(crate) direct_two_body: Vec<Complex64>,
+}
+
+fn lanczos_local_value(value: Complex64, all_complex: bool) -> Complex64 {
+    if all_complex {
+        value
+    } else {
+        Complex64::new(value.re, 0.0)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn calculate_lanczos_green(
+    h1: Complex64,
+    _ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    local_one_body: &[Complex64],
+    local_direct_two_body: &[Complex64],
+    all_complex: bool,
+) -> LanczosGreenValues {
+    let n_one = data.green_one_terms.len();
+    let n_factored = data.green_two_ex_indices.len();
+    let n_direct = data.green_two_terms.len();
+    let mut result = LanczosGreenValues {
+        one_body: vec![Complex64::new(0.0, 0.0); 4 * n_one],
+        factored_two_body: vec![Complex64::new(0.0, 0.0); 4 * n_factored],
+        direct_two_body: vec![Complex64::new(0.0, 0.0); 4 * n_direct],
+    };
+    if data.modpara.lanczos_mode < 2 {
+        return result;
+    }
+
+    let original_slater = state.slater_matrix.clone();
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_qp_full = state.slater_matrix.pf_m.len();
+    let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
+    let mut lslca = vec![Complex64::new(0.0, 0.0); 2 * n_one];
+    for (index, value) in local_one_body.iter().copied().enumerate().take(n_one) {
+        lslca[index] = lanczos_local_value(value, all_complex);
+    }
+    for (index, term) in data.green_one_terms.iter().enumerate() {
+        let Some((create, annihilate, spin)) = lanczos_one_body_indices(term, n_site) else {
+            continue;
+        };
+        let mut value = Complex64::new(0.0, 0.0);
+        for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_one_body_terms(
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            create,
+            annihilate,
+            spin,
+            data,
+        ) {
+            if let Some(moved_h) = lanczos_evaluate_moved(
+                &moved_idx,
+                &moved_cfg,
+                &moved_num,
+                &moved_proj,
+                data,
+                state,
+                &original_slater,
+                all_complex,
+                n_site,
+                n_elec,
+                n_qp_full,
+                &pool,
+            ) {
+                // `local_one_body` is Julia's overlap ratio for this
+                // operator; multiplying it by the moved configuration's
+                // local Hamiltonian gives HCA.
+                value += local_one_body.get(index).copied().unwrap_or_default() * moved_h;
+            }
+        }
+        lslca[n_one + index] = lanczos_local_value(value, all_complex);
+    }
+
+    for rq in 0..2 {
+        for rp in 0..2 {
+            let block_one = n_one * (rp + 2 * rq);
+            let right_q = if rp == 0 {
+                Complex64::new(1.0, 0.0)
+            } else {
+                lanczos_local_value(h1, all_complex)
+            };
+            for index in 0..n_one {
+                let left = lslca[rq * n_one + index];
+                result.one_body[block_one + index] +=
+                    lanczos_local_value(left, all_complex).conj() * right_q;
+                if !all_complex {
+                    result.one_body[block_one + index] =
+                        Complex64::new(result.one_body[block_one + index].re, 0.0);
+                }
+            }
+            for (index, &(idx0, idx1)) in data.green_two_ex_indices.iter().enumerate() {
+                if idx0 >= n_one || idx1 >= n_one {
+                    continue;
+                }
+                let left = lslca[rq * n_one + idx0];
+                let right = lslca[rp * n_one + idx1];
+                let left = if all_complex { left.conj() } else { left };
+                let block_factored = n_factored * (rp + 2 * rq);
+                result.factored_two_body[block_factored + index] += left * right;
+            }
+        }
+    }
+
+    let mut hca_direct = vec![Complex64::new(0.0, 0.0); n_direct];
+    for (index, term) in data.green_two_terms.iter().enumerate() {
+        let first_spin = term.spin1.as_code();
+        let second_spin = term.spin3.as_code();
+        let Some(first_create) = usize::try_from(term.site1).ok() else {
+            continue;
+        };
+        let Some(first_annihilate) = usize::try_from(term.site2).ok() else {
+            continue;
+        };
+        let Some(second_create) = usize::try_from(term.site3).ok() else {
+            continue;
+        };
+        let Some(second_annihilate) = usize::try_from(term.site4).ok() else {
+            continue;
+        };
+        let mut value = Complex64::new(0.0, 0.0);
+        for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_two_body_terms(
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            first_create,
+            first_annihilate,
+            second_create,
+            second_annihilate,
+            first_spin,
+            second_spin,
+            data,
+        ) {
+            if let Some(moved_h) = lanczos_evaluate_moved(
+                &moved_idx,
+                &moved_cfg,
+                &moved_num,
+                &moved_proj,
+                data,
+                state,
+                &original_slater,
+                all_complex,
+                n_site,
+                n_elec,
+                n_qp_full,
+                &pool,
+            ) {
+                // As above, the direct Green value supplies the operator
+                // overlap/sign while `moved_h` supplies the Hamiltonian.
+                value += local_direct_two_body
+                    .get(index)
+                    .copied()
+                    .unwrap_or_default()
+                    * moved_h;
+            }
+        }
+        hca_direct[index] = lanczos_local_value(value, all_complex);
+    }
+    for rq in 0..2 {
+        for rp in 0..2 {
+            let block = n_direct * (rp + 2 * rq);
+            let right_q = if rp == 0 {
+                Complex64::new(1.0, 0.0)
+            } else {
+                lanczos_local_value(h1, all_complex)
+            };
+            for index in 0..n_direct {
+                let value = if rq == 0 {
+                    local_direct_two_body
+                        .get(index)
+                        .copied()
+                        .unwrap_or_default()
+                } else {
+                    hca_direct[index]
+                };
+                result.direct_two_body[block + index] +=
+                    lanczos_local_value(value, all_complex) * right_q;
+            }
+        }
+    }
+    state.slater_matrix = original_slater;
+    result
+}
+
+fn lanczos_one_body_indices(
+    term: &mvmc_expert_parsers::GreenOneTerm,
+    n_site: usize,
+) -> Option<(usize, usize, u8)> {
+    let create = usize::try_from(term.site1).ok()?;
+    let annihilate = usize::try_from(term.site2).ok()?;
+    if create >= n_site || annihilate >= n_site || term.spin1 != term.spin2 {
+        return None;
+    }
+    Some((create, annihilate, term.spin1.as_code()))
 }
 
 #[allow(clippy::too_many_arguments)]

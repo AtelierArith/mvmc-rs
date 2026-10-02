@@ -16,11 +16,18 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         return;
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC");
+    let requested_model = std::env::var("MVMC_RS_LANCZOS_MODEL").ok();
     for model in [
         "hubbard_chain_real",
         "hubbard_chain_lanczos",
         "spin_chain_lanczos",
     ] {
+        if requested_model
+            .as_deref()
+            .is_some_and(|requested| requested != model)
+        {
+            continue;
+        }
         let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
@@ -57,6 +64,27 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
                 (actual - expected).abs() <= 1.0e-8,
                 "{model}: {actual} != {expected}"
             );
+        }
+        if model != "hubbard_chain_real" {
+            for name in [
+                "zvo_ls_cisajs_001.dat",
+                "zvo_ls_cisajscktalt_001.dat",
+                "zvo_ls_cisajscktaltex_001.dat",
+            ] {
+                let expected_path = fixture.join("expected").join(name);
+                if !expected_path.is_file() {
+                    continue;
+                }
+                let actual = values(&output.join(name));
+                let expected = values(&expected_path);
+                assert_eq!(actual.len(), expected.len(), "{model}: {name}");
+                for (actual, expected) in actual.iter().zip(expected.iter()) {
+                    assert!(
+                        (actual - expected).abs() <= 1.0e-8,
+                        "{model} {name}: {actual} != {expected}"
+                    );
+                }
+            }
         }
         let _ = fs::remove_dir_all(output);
     }

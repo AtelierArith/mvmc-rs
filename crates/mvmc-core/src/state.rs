@@ -1044,6 +1044,16 @@ impl SamplingWorkspace {
 pub struct PhysicalQuantities {
     /// Weighted-average flattened QQQQ moments for two-step Lanczos PhysCal.
     pub phys_lanczos_qqqq: Vec<Complex64>,
+    /// Weighted-average Lanczos QPhysQ values for one-body Green functions.
+    /// The four contiguous blocks correspond to `(rq, rp) = (0,0), (0,1),
+    /// (1,0), (1,1)` in Julia's flattened order.
+    pub phys_lanczos_qcisajsq: Vec<Complex64>,
+    /// Weighted-average Lanczos QPhysQ values for factored two-body Green
+    /// functions, in the same four-block order.
+    pub phys_lanczos_qcisajscktaltq: Vec<Complex64>,
+    /// Weighted-average Lanczos QPhysQ values for direct two-body Green
+    /// functions, in the same four-block order.
+    pub phys_lanczos_qcisajscktaltq_dc: Vec<Complex64>,
     /// Per-sample 1-body Green function (length `n_cis_ajs`).
     pub local_cis_ajs: Vec<Complex64>,
     /// Weighted-average 1-body Green function (length `n_cis_ajs`).
@@ -1096,6 +1106,12 @@ impl PhysicalQuantities {
     pub fn zeros(n_cis_ajs: usize, n_cis_ajs_ckt_alt: usize, n_cis_ajs_ckt_alt_dc: usize) -> Self {
         Self {
             phys_lanczos_qqqq: vec![Complex64::new(0.0, 0.0); 16],
+            phys_lanczos_qcisajsq: vec![Complex64::new(0.0, 0.0); 4 * n_cis_ajs],
+            phys_lanczos_qcisajscktaltq: vec![Complex64::new(0.0, 0.0); 4 * n_cis_ajs_ckt_alt],
+            phys_lanczos_qcisajscktaltq_dc: vec![
+                Complex64::new(0.0, 0.0);
+                4 * n_cis_ajs_ckt_alt_dc
+            ],
             local_cis_ajs: vec![Complex64::new(0.0, 0.0); n_cis_ajs],
             phys_cis_ajs: vec![Complex64::new(0.0, 0.0); n_cis_ajs],
             phys_cis_ajs_ckt_alt: vec![Complex64::new(0.0, 0.0); n_cis_ajs_ckt_alt],

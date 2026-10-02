@@ -11,6 +11,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use mvmc_expert_parsers::ExpertModeData;
+use num_complex::Complex64;
 
 use crate::state::{OptDataPoint, VmcOptimizationState};
 
@@ -268,8 +269,102 @@ pub fn output_phys_data(
             format_c_double(variance),
             format_c_double(alpha)
         )?;
+
+        if data.modpara.lanczos_mode > 1 {
+            let one_values = lanczos_phys_values(
+                &phys.phys_lanczos_qqqq,
+                &phys.phys_lanczos_qcisajsq,
+                data.green_one_terms.len(),
+                alpha,
+            );
+            let one_rows = data
+                .green_one_terms
+                .iter()
+                .zip(one_values)
+                .map(|(term, value)| {
+                    format!(
+                        "{} {} {} {} {} {}",
+                        term.site1,
+                        crate::observables::spin_code(term.spin1),
+                        term.site2,
+                        crate::observables::spin_code(term.spin2),
+                        format_c_double(value.re),
+                        format_c_double(value.im)
+                    )
+                })
+                .collect();
+            write_rows("ls_cisajs", one_rows)?;
+
+            let direct_values = lanczos_phys_values(
+                &phys.phys_lanczos_qqqq,
+                &phys.phys_lanczos_qcisajscktaltq_dc,
+                data.green_two_terms.len(),
+                alpha,
+            );
+            let direct_rows = data
+                .green_two_terms
+                .iter()
+                .zip(direct_values)
+                .map(|(term, value)| {
+                    format!(
+                        "{} {} {} {} {} {} {} {} {} {}",
+                        term.site1,
+                        crate::observables::spin_code(term.spin1),
+                        term.site2,
+                        crate::observables::spin_code(term.spin2),
+                        term.site3,
+                        crate::observables::spin_code(term.spin3),
+                        term.site4,
+                        crate::observables::spin_code(term.spin4),
+                        format_c_double(value.re),
+                        format_c_double(value.im)
+                    )
+                })
+                .collect();
+            write_rows("ls_cisajscktalt", direct_rows)?;
+
+            let factored_values = lanczos_phys_values(
+                &phys.phys_lanczos_qqqq,
+                &phys.phys_lanczos_qcisajscktaltq,
+                data.green_two_ex_indices.len(),
+                alpha,
+            );
+            let factored_rows = factored_values
+                .into_iter()
+                .map(|value| {
+                    format!(
+                        "{} {}",
+                        format_c_double(value.re),
+                        format_c_double(value.im)
+                    )
+                })
+                .collect();
+            write_rows("ls_cisajscktaltex", factored_rows)?;
+        }
     }
     Ok(())
+}
+
+fn lanczos_phys_values(
+    qqqq: &[Complex64],
+    qphysq: &[Complex64],
+    nphys: usize,
+    alpha: f64,
+) -> Vec<Complex64> {
+    if qqqq.len() < 4 || qphysq.len() != 4 * nphys {
+        return vec![Complex64::new(f64::NAN, f64::NAN); nphys];
+    }
+    let h1 = qqqq[2];
+    let h2_1 = qqqq[3];
+    let dnorm = (Complex64::new(1.0, 0.0) + 2.0 * alpha * h1 + alpha * alpha * h2_1).re;
+    (0..nphys)
+        .map(|index| {
+            (qphysq[index]
+                + alpha * (qphysq[nphys + index] + qphysq[2 * nphys + index])
+                + alpha * alpha * qphysq[3 * nphys + index])
+                / dnorm
+        })
+        .collect()
 }
 
 /// Write the final `zqp_opt.dat` snapshot.
