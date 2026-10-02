@@ -245,4 +245,12 @@ impl Reducer for MpiGroupContext {
     fn supports_grouped_sampling(&self) -> bool {
         true
     }
+
+    fn seed_offset(&self) -> usize {
+        self.assignment.group
+    }
+
+    fn is_output_root(&self) -> bool {
+        self.assignment.group == 0 && self.assignment.local_rank == 0
+    }
 }

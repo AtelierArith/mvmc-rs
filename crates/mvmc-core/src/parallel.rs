@@ -54,6 +54,21 @@ pub struct GroupAssignment {
     pub group_size: usize,
 }
 
+impl GroupAssignment {
+    /// Range assigned to this group when `length` work items are split across
+    /// `nsplit` groups.
+    pub fn group_range(self, length: usize, nsplit: usize) -> Range<usize> {
+        partition_range(length, nsplit, self.group)
+    }
+
+    /// Range assigned to this rank within its group. The returned range is
+    /// relative to the group's start and is therefore suitable for indexing a
+    /// group-local QP/sample buffer.
+    pub fn local_range(self, group_length: usize) -> Range<usize> {
+        partition_range(group_length, self.group_size, self.local_rank)
+    }
+}
+
 /// Validate and calculate the upstream comm0/comm1/comm2 group arithmetic.
 pub fn assign_group(context: LaunchContext, nsplit: usize) -> Result<GroupAssignment, String> {
     if nsplit == 0 {
@@ -136,5 +151,33 @@ mod tests {
     fn partitions_cover_range_without_overlap() {
         let ranges: Vec<_> = (0..3).map(|index| partition_range(8, 3, index)).collect();
         assert_eq!(ranges, vec![0..3, 3..6, 6..8]);
+    }
+
+    #[test]
+    fn grouped_ranges_cover_sample_work_without_overlap_within_each_group() {
+        let assignments: Vec<_> = (0..8)
+            .map(|rank| {
+                assign_group(
+                    LaunchContext {
+                        rank,
+                        world_size: 8,
+                    },
+                    2,
+                )
+                .unwrap()
+            })
+            .collect();
+        let sample_ranges: Vec<_> = assignments
+            .iter()
+            .map(|assignment| {
+                let group = assignment.group_range(10, 2);
+                let local = assignment.local_range(group.len());
+                (group.start + local.start)..(group.start + local.end)
+            })
+            .collect();
+        assert_eq!(
+            sample_ranges,
+            vec![0..2, 2..3, 3..4, 4..5, 5..7, 7..8, 8..9, 9..10]
+        );
     }
 }

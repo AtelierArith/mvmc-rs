@@ -41,6 +41,16 @@ pub trait Reducer {
     fn supports_grouped_sampling(&self) -> bool {
         false
     }
+
+    /// Seed offset for independent group chains.
+    fn seed_offset(&self) -> usize {
+        self.rank()
+    }
+
+    /// Whether this rank owns the process-wide output files.
+    fn is_output_root(&self) -> bool {
+        self.rank() == 0
+    }
 }
 
 /// No-op reducer for the v0.1 single-process build.
