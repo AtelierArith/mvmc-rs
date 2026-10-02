@@ -6,7 +6,8 @@
 //! round-trip the four upstream `examples/inputs/*` namelists are
 //! implemented, including strict DH2/DH4 definitions and their parameter layout.
 //! Nine RBM index sections and initialization follow the canonical layout.
-//! RBM production sampling/SR and backflow remain pending.
+//! OptTrans input contracts are implemented; its production integration and
+//! backflow remain pending.
 //!
 //! License: GPL-3.0-or-later (inherits from upstream).
 
@@ -37,8 +38,8 @@ pub use utils::validation::{
 
 pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
-    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_orbital_opt_flags,
-    set_projection_opt_flags, set_rbm_opt_flags,
+    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_opt_flags,
+    set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags,
 };
 
 use std::collections::BTreeMap;
@@ -47,7 +48,7 @@ use std::path::Path;
 
 use crate::parsers::{
     coulomb, doublon_holon, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara,
-    orbital, pairhop, qptrans, rbm, trans,
+    opttrans, orbital, pairhop, qptrans, rbm, trans,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -180,6 +181,7 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
         offset += size;
     }
     set_orbital_opt_flags(&mut data, &orbital_flags);
+    set_opt_trans_opt_flags(&mut data);
 
     // Mirror the post-parse pass from upstream:
     //   - If only `OrbitalAntiParallel` is parsed, the orbital mode stays
@@ -477,7 +479,16 @@ fn parse_file_by_type(
             data.n_qp_trans = section.n_qp_trans;
             data.qp_trans_entries = section.entries;
             data.para_qp_trans = data.qp_trans_entries.iter().map(|e| e.weight).collect();
+            if data.n_qp_trans > 0
+                && data.modpara.nsite > 0
+                && (data.qp_opt_trans.is_empty() || data.qp_opt_trans_sgn.is_empty())
+            {
+                let count = data.n_qp_opt_trans.max(1) as usize;
+                data.qp_opt_trans = vec![(0..data.modpara.nsite).collect(); count];
+                data.qp_opt_trans_sgn = vec![vec![1; data.modpara.nsite as usize]; count];
+            }
         }
+        "OptTrans" => opttrans::parse_opttrans_def(data, path)?,
         _ => {
             // Unknown / not-yet-supported keyword.
             // Silently skip to match the upstream `@warn`-only policy.

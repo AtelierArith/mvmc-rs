@@ -156,6 +156,9 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
             term.value = slater_values[term.idx as usize];
         }
     }
+    if !data.para_qp_opt_trans.is_empty() {
+        data.opt_trans.clone_from(&data.para_qp_opt_trans);
+    }
 }
 
 /// Synchronize DH2/DH4/Gutzwiller/Jastrow real gauges when enabled, then rescale

@@ -6,11 +6,78 @@
 //! exactly so round-tripping `examples/inputs/*/namelist.def` is
 //! byte-stable.
 
+use std::ffi::{c_char, CString};
 use std::fs;
 use std::io;
 use std::path::Path;
 
 use num_complex::Complex64;
+
+/// Julia's base-detecting strict integer reader, including signed 0x/0o/0b.
+pub(crate) fn julia_parse_int(token: &str) -> Option<i64> {
+    let unsigned = token.strip_prefix(['+', '-']).unwrap_or(token);
+    let (radix, digits) = if let Some(digits) = unsigned.strip_prefix("0x") {
+        (16, digits)
+    } else if let Some(digits) = unsigned.strip_prefix("0o") {
+        (8, digits)
+    } else if let Some(digits) = unsigned.strip_prefix("0b") {
+        (2, digits)
+    } else {
+        return token.parse().ok();
+    };
+    if digits.starts_with(['+', '-']) {
+        return None;
+    }
+    let signed = if token.starts_with('-') {
+        format!("-{digits}")
+    } else {
+        digits.to_owned()
+    };
+    i64::from_str_radix(&signed, radix).ok()
+}
+
+/// Julia Float64 tryparse uses the C decimal/hexadecimal conversion. It rejects
+/// overflow and nonzero literals rounded to zero, but accepts finite subnormals
+/// and explicit nonfinite tokens (which strict callers reject separately).
+pub(crate) fn julia_parse_float(token: &str) -> Option<f64> {
+    extern "C" {
+        fn strtod(input: *const c_char, end: *mut *mut c_char) -> f64;
+    }
+    let input = CString::new(token).ok()?;
+    let mut end = std::ptr::null_mut();
+    // SAFETY: input is NUL-terminated and lives through the call; end is a
+    // valid writable pointer. strtod's end pointer stays within input.
+    let value = unsafe { strtod(input.as_ptr(), &mut end) };
+    // Comparing the pointer is sufficient; no returned memory is dereferenced.
+    if token.is_empty() || end != input.as_ptr().wrapping_add(token.len()).cast_mut() {
+        return None;
+    }
+    let unsigned = token
+        .strip_prefix(['+', '-'])
+        .unwrap_or(token)
+        .to_ascii_lowercase();
+    if value.is_infinite() && !matches!(unsigned.as_str(), "inf" | "infinity") {
+        return None;
+    }
+    if value == 0.0 {
+        let hex = unsigned.starts_with("0x");
+        let mantissa = if hex {
+            unsigned[2..].split('p').next()?
+        } else {
+            unsigned.split('e').next()?
+        };
+        if mantissa.chars().any(|c| {
+            if hex {
+                c.is_ascii_hexdigit() && c != '0'
+            } else {
+                matches!(c, '1'..='9')
+            }
+        }) {
+            return None;
+        }
+    }
+    Some(value)
+}
 
 /// Read a `.def` file in full. Mirrors `read_def_file` in upstream.
 pub fn read_def_file<P: AsRef<Path>>(path: P) -> io::Result<String> {

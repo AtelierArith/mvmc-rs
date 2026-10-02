@@ -54,7 +54,10 @@ pub fn set_orbital_opt_flags(data: &mut ExpertModeData, flags: &BTreeMap<i64, i6
     }
     let n_proj = data.projection_layout().n_proj + data.count_rbm_parameters();
     let complex = all_complex_flag(data);
-    ensure_optimization_flags_size(data, 2 * (n_proj + n_slater(data)));
+    ensure_optimization_flags_size(
+        data,
+        2 * (n_proj + n_slater(data) + data.count_opt_trans_parameters()),
+    );
     for (&idx, &flag) in flags {
         let Ok(idx) = usize::try_from(idx) else {
             continue;
@@ -134,7 +137,10 @@ pub fn set_rbm_opt_flags(
     if flags.is_empty() {
         return;
     }
-    let n_para = data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data);
+    let n_para = data.projection_layout().n_proj
+        + data.count_rbm_parameters()
+        + n_slater(data)
+        + data.count_opt_trans_parameters();
     ensure_optimization_flags_size(data, 2 * n_para);
     for (&idx, &flag) in flags {
         let Ok(idx) = usize::try_from(idx) else {
@@ -147,5 +153,20 @@ pub fn set_rbm_opt_flags(
             data.optimization_flags[component] = flag != 0;
             data.optimization_flags[component + 1] = is_complex && flag != 0;
         }
+    }
+}
+
+/// Activate real OptTrans components after projection, RBM and Slater parameters.
+/// Imaginary components are fixed even when current weights are complex.
+pub fn set_opt_trans_opt_flags(data: &mut ExpertModeData) {
+    let count = data.count_opt_trans_parameters();
+    if count == 0 {
+        return;
+    }
+    let offset = data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data);
+    ensure_optimization_flags_size(data, 2 * (offset + count));
+    for idx in offset..offset + count {
+        data.optimization_flags[2 * idx] = true;
+        data.optimization_flags[2 * idx + 1] = false;
     }
 }

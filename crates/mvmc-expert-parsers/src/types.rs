@@ -753,7 +753,7 @@ impl RbmParameter for GeneralRBMPhysHiddenTerm {
 }
 
 /// Owned container for all parsed Expert-mode `.def` data.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ExpertModeData {
     /// `modpara.def` payload.
     pub modpara: ModParaParameters,
@@ -860,8 +860,16 @@ pub struct ExpertModeData {
     /// `parse_expert_mode_files` so downstream Phase-4 code does not have
     /// to walk `qp_trans_entries`.
     pub para_qp_trans: Vec<num_complex::Complex64>,
-    /// `NQPOptTrans` (defaults to 1; tracked for the future OptTrans port).
+    /// Number of sectors declared by an active `OptTrans` definition.
     pub n_qp_opt_trans: i64,
+    /// Initial real optimized-translation weights from the definition.
+    pub para_qp_opt_trans: Vec<Complex64>,
+    /// Active optimized-translation parameters, after Slater in global order.
+    pub opt_trans: Vec<Complex64>,
+    /// Zero-based optimized-translation site maps, indexed by sector and site.
+    pub qp_opt_trans: Vec<Vec<i64>>,
+    /// Optimized-translation per-site signs, indexed by sector and site.
+    pub qp_opt_trans_sgn: Vec<Vec<i64>>,
 
     /// `OrbitalIdx[ri+1, rj+1] = idx` lookup matrix (row-major). General
     /// orbitals use `2*nsite` rows and columns, including spin offsets;
@@ -885,7 +893,73 @@ pub struct ExpertModeData {
     pub qp_weights: Option<QuantumProjectionWeights>,
 }
 
+impl Default for ExpertModeData {
+    fn default() -> Self {
+        Self {
+            modpara: Default::default(),
+            namelist: Default::default(),
+            input_errors: Default::default(),
+            transfer_terms: Default::default(),
+            coulomb_intra_terms: Default::default(),
+            coulomb_inter_terms: Default::default(),
+            hund_terms: Default::default(),
+            exchange_terms: Default::default(),
+            pair_hop_terms: Default::default(),
+            inter_all_terms: Default::default(),
+            locspin_terms: Default::default(),
+            gutzwiller_terms: Default::default(),
+            n_gutzwiller_idx: Default::default(),
+            gutzwiller_idx: Default::default(),
+            jastrow_terms: Default::default(),
+            n_jastrow_idx: Default::default(),
+            jastrow_idx: Default::default(),
+            doublon_holon_2site_indices: Default::default(),
+            doublon_holon_2site_params: Default::default(),
+            doublon_holon_2site_opt_flags: Default::default(),
+            doublon_holon_2site_complex: Default::default(),
+            doublon_holon_4site_indices: Default::default(),
+            doublon_holon_4site_params: Default::default(),
+            doublon_holon_4site_opt_flags: Default::default(),
+            doublon_holon_4site_complex: Default::default(),
+            charge_rbm_phys_layer_terms: Default::default(),
+            spin_rbm_phys_layer_terms: Default::default(),
+            general_rbm_phys_layer_terms: Default::default(),
+            charge_rbm_hidden_layer_terms: Default::default(),
+            spin_rbm_hidden_layer_terms: Default::default(),
+            general_rbm_hidden_layer_terms: Default::default(),
+            charge_rbm_phys_hidden_terms: Default::default(),
+            spin_rbm_phys_hidden_terms: Default::default(),
+            general_rbm_phys_hidden_terms: Default::default(),
+            orbital_terms: Default::default(),
+            i_flg_orbital_anti_parallel: Default::default(),
+            i_flg_orbital_parallel: Default::default(),
+            i_flg_orbital_general: Default::default(),
+            n_orbital_anti_parallel: Default::default(),
+            green_one_terms: Default::default(),
+            green_two_terms: Default::default(),
+            qp_trans_entries: Default::default(),
+            n_qp_trans: Default::default(),
+            para_qp_trans: Default::default(),
+            n_qp_opt_trans: 1,
+            para_qp_opt_trans: Default::default(),
+            opt_trans: Default::default(),
+            qp_opt_trans: Default::default(),
+            qp_opt_trans_sgn: Default::default(),
+            orbital_idx_matrix: Default::default(),
+            orbital_sgn_matrix: Default::default(),
+            optimization_flags: Default::default(),
+            complex_flags: Default::default(),
+            qp_weights: Default::default(),
+        }
+    }
+}
+
 impl ExpertModeData {
+    /// Active optimized-translation parameter count, independent of mappings.
+    pub fn count_opt_trans_parameters(&self) -> usize {
+        self.opt_trans.len()
+    }
+
     /// Construct an empty `ExpertModeData`.
     pub fn new() -> Self {
         Self::default()
