@@ -92,17 +92,11 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     {
         *value = parameter(layout.dh4_offset + index);
     }
-    let sizes = data.rbm_section_sizes();
-    let mut offsets = [layout.n_proj; 9];
-    for i in 1..9 {
-        offsets[i] = offsets[i - 1] + sizes[i - 1];
-    }
-    data.visit_rbm_terms_mut(|section, term| {
-        let index = term.idx();
-        if index >= 0 && (index as usize) < sizes[section] {
-            term.set_value(parameter(offsets[section] + index as usize));
-        }
-    });
+    data.set_rbm_parameters(
+        (0..n_rbm)
+            .map(|index| parameter(layout.n_proj + index))
+            .collect(),
+    );
     data.slater_params = (0..n_orbital)
         .map(|index| parameter(layout.n_proj + n_rbm + index))
         .collect();

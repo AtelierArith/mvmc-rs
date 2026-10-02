@@ -59,7 +59,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
         .wrapping_add(data.modpara.nneuron_charge)
         .wrapping_add(data.modpara.nneuron_spin)
         .wrapping_add(data.modpara.nneuron_general);
-    let divisor = if neurons > 0 { neurons as f64 } else { 1.0 };
+    let divisor = neurons as f64;
     for (i, slot) in rbm_values.iter_mut().enumerate() {
         // Unlike Slater, absent RBM flags are inactive and consume no draws.
         if data
@@ -80,19 +80,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
             }
         }
     }
-    let mut offsets = [0; 9];
-    for i in 1..9 {
-        offsets[i] = offsets[i - 1] + sizes[i - 1];
-    }
-    data.visit_rbm_terms_mut(|section, term| {
-        let idx = term.idx();
-        let value = if idx >= 0 && (idx as usize) < sizes[section] {
-            rbm_values[offsets[section] + idx as usize]
-        } else {
-            Complex64::new(0.0, 0.0)
-        };
-        term.set_value(value);
-    });
+    data.set_rbm_parameters(rbm_values);
     // C initializes every declared active slot, including unmapped slots.
     let n_s = n_slater(data);
     let mut slater_values = vec![Complex64::new(0.0, 0.0); n_s];

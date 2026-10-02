@@ -1,8 +1,10 @@
-#!/usr/bin/env python3
-"""Explicit legacy Julia SR inputs; not full C family acceptance fixtures."""
+#!/usr/bin/env -S uv run --no-project
+"""Explicit complete C reader inputs for historical numerical control models."""
 import argparse
 import os
 from pathlib import Path
+
+from check_rbm_contracts_c_parity import NAMES, geometry
 
 
 def main():
@@ -29,20 +31,49 @@ def main():
         families.append((case, f"rbm/run_{case}/namelist.def"))
     for name, relative in families:
         original = root / "tests/fixtures" / relative
+        has_rbm = any(line.split()[0] in NAMES for line in original.read_text().splitlines())
         namelist = ""
         for line in original.read_text().splitlines():
             kind, filename = line.split()
             source = Path(os.path.normpath(original.parent / filename))
-            if kind == "Orbital" and name in ("dh2_cmp", "dh4_cmp", "dh24_cmp", "rbm_dh24_cmp", "opt_dh24_rbm_cmp"):
+            if kind == "ModPara" and has_rbm:
+                contents = source.read_text()
+                assert not any(line.split()[0].startswith("Nneuron") for line in contents.splitlines() if line.split())
+                contents += "NneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n"
+                destination = target / f"modpara_{name}.def"
+                outputs[destination] = contents
+                filename = destination.name
+            elif kind.startswith(("InChargeRBM_", "InSpinRBM_", "InGeneralRBM_")):
+                lines = source.read_text().splitlines()
+                assert len(lines) == 8
+                values = {int(row.split()[0]): row.split()[1:] for row in lines[5:]}
+                assert set(values) == {0, 1, 2}
+                lines[1] = "NParameter 4"
+                # C loads section records in row order, ignoring printed labels.
+                lines[5:] = [f"{k} {' '.join(values[k])}" for k in range(3)]+["3 0.0 0.0"]
+                destination = target / f"historical_binary_rbm/rbm_input_{name}.def"
+                contents = "\n".join(lines)+"\n"
+                if destination in outputs: assert outputs[destination] == contents
+                outputs[destination] = contents
+                filename = os.path.relpath(destination, target)
+            elif kind == "Orbital" and name in ("dh2_cmp", "dh4_cmp", "dh24_cmp", "rbm_dh24_cmp", "opt_dh24_rbm_cmp"):
                 filename = "ap_hubbard_six_complex.def"
             elif kind.startswith(("ChargeRBM_", "SpinRBM_", "GeneralRBM_")):
-                # Julia's bool flag assembly made raw flag 2 equivalent to 1.
-                # C does not. These explicit binary inputs preserve the OLD
-                # Julia numerical regression while raw 2 keeps its C semantics
-                # in production and the separate native eligibility tests.
+                # Keep original nonzero mappings and binary active flags; fill
+                # the remaining geometry with a fourth, fixed-zero coefficient.
+                # Mapping it to old inactive index 2 would change the physical
+                # model, since its explicit overlay value is nonzero.
                 lines = source.read_text().splitlines()
                 assert [row.split() for row in lines[-3:]] == [["0","1"],["1","2"],["2","0"]]
-                lines[-2] = "1 1"
+                section = NAMES.index(kind)
+                original_rows = [tuple(map(int, row.split())) for row in lines[5:-3]]
+                assert len(original_rows) == 2
+                assignments = {row[:-1]: row[-1] for row in original_rows}
+                coordinates = geometry(section, 6, 2)
+                assert set(assignments).issubset(coordinates)
+                lines[1] = "NParameter 4"
+                lines[5:] = [" ".join(map(str, coord+(assignments.get(coord, 3),))) for coord in coordinates]
+                lines += ["0 1", "1 1", "2 0", "3 0"]
                 destination = target / "historical_binary_rbm" / source.name
                 contents = "\n".join(lines)+"\n"
                 if destination in outputs: assert outputs[destination] == contents
@@ -58,7 +89,7 @@ def main():
             if not path.exists() or path.read_text()!=text: path.write_text(text)
         else:
             assert path.read_text()==text, f"legacy input changed: {path}"
-    print(f"{len(outputs)} explicit legacy input files verified")
+    print(f"{len(outputs)} explicit complete control input files verified")
 
 
 if __name__ == "__main__":

@@ -550,6 +550,8 @@ fn add_rbm_green_model(data: &mut ExpertModeData) {
     let mut parsed = mvmc_expert_parsers::parse_expert_mode_files(&file).unwrap();
     mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut parsed, &file)
         .unwrap();
+    data.rbm_section_widths = parsed.rbm_section_widths;
+    data.rbm_params = parsed.rbm_params.clone();
     data.charge_rbm_phys_layer_terms = parsed.charge_rbm_phys_layer_terms;
     data.spin_rbm_phys_layer_terms = parsed.spin_rbm_phys_layer_terms;
     data.general_rbm_phys_layer_terms = parsed.general_rbm_phys_layer_terms;

@@ -5,6 +5,10 @@
 //! coefficient/kernel regression checks. Those sparse models are not evidence
 //! that C accepts the original incomplete definition files. Production parsing
 //! always uses the strict reader; this helper is confined to test code.
+//! RBM blocks from archived Julia inputs are explicitly constructed as sparse
+//! internal models; their invalid headers are never passed to production RBM parsing.
+#[path = "historical_rbm_model.rs"]
+mod historical_rbm_model;
 use mvmc_expert_parsers::{ExpertModeData, OrbitalTerm};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -36,6 +40,7 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
     let content = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
     let mut metadata = Vec::new();
     let mut original_orbitals = Vec::new();
+    let mut original_rbm = Vec::new();
     let mut rewritten = String::new();
     let mut changed = false;
     let mut changed_orbitals = false;
@@ -47,6 +52,36 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         metadata.push((fields[0].to_owned(), fields[1].to_owned()));
         let original = path.parent().unwrap().join(fields[1]);
         let absolute = original.canonicalize().unwrap_or(original);
+        if let Some(section) = mvmc_expert_parsers::parsers::rbm::SECTION_NAMES
+            .iter()
+            .position(|&name| fields[0] == name)
+        {
+            if absolute.starts_with(root.join("rbm"))
+                || absolute.starts_with(root.join("c_orbital_inputs/historical_binary_rbm"))
+            {
+                let binary_control =
+                    absolute.starts_with(root.join("c_orbital_inputs/historical_binary_rbm"));
+                let source = if binary_control {
+                    root.join("rbm").join(absolute.file_name().unwrap())
+                } else {
+                    absolute.clone()
+                };
+                let mut text =
+                    std::fs::read_to_string(source).map_err(|error| error.to_string())?;
+                if binary_control {
+                    // The archived model has three slots and two spatial rows.
+                    // Complete C controls now add fixed-zero padding; they are
+                    // verified directly by the native reader/kernel tests.
+                    let old = "0 1\n1 2\n2 0\n";
+                    assert!(text.ends_with(old));
+                    text.truncate(text.len() - old.len());
+                    text.push_str("0 1\n1 1\n2 0\n");
+                }
+                original_rbm.push((section, text));
+                changed = true;
+                continue;
+            }
+        }
         let replacement = replacements
             .iter()
             .find(|(name, _)| absolute == root.join(name));
@@ -94,6 +129,9 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         return Err(data.input_errors.join("; "));
     }
     data.namelist = metadata;
+    if !original_rbm.is_empty() {
+        historical_rbm_model::restore(&mut data, &original_rbm);
+    }
     if !changed_orbitals {
         return Ok(data);
     }

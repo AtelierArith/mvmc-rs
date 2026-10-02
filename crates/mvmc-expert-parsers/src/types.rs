@@ -812,6 +812,10 @@ pub struct ExpertModeData {
     /// DH4 ComplexType declaration, including empty definitions.
     pub doublon_holon_4site_complex: bool,
 
+    /// C declared widths in physical, hidden, physical-hidden family order.
+    pub rbm_section_widths: [usize; 9],
+    /// Complete C RBM coefficient array, including every unmapped slot.
+    pub rbm_params: Vec<Complex64>,
     /// Charge RBM PhysLayer indexed mappings.
     pub charge_rbm_phys_layer_terms: Vec<ChargeRBMPhysLayerTerm>,
     /// Spin RBM PhysLayer indexed mappings.
@@ -922,6 +926,8 @@ impl Default for ExpertModeData {
             doublon_holon_4site_params: Default::default(),
             doublon_holon_4site_opt_flags: Default::default(),
             doublon_holon_4site_complex: Default::default(),
+            rbm_section_widths: [0; 9],
+            rbm_params: Default::default(),
             charge_rbm_phys_layer_terms: Default::default(),
             spin_rbm_phys_layer_terms: Default::default(),
             general_rbm_phys_layer_terms: Default::default(),
@@ -975,89 +981,46 @@ impl ExpertModeData {
         Self::default()
     }
 
-    /// Mapped widths in canonical physical, hidden, physical-hidden family order.
-    /// Header declarations do not reserve unused RBM parameters.
+    /// C declared coefficient widths, independent of spatial mappings.
     pub fn rbm_section_sizes(&self) -> [usize; 9] {
-        fn width<T: RbmParameter>(terms: &[T]) -> usize {
-            terms
-                .iter()
-                .map(RbmParameter::idx)
-                .max()
-                .map_or(0, |idx| idx.wrapping_add(1).max(0) as usize)
-        }
-        [
-            width(&self.charge_rbm_phys_layer_terms),
-            width(&self.spin_rbm_phys_layer_terms),
-            width(&self.general_rbm_phys_layer_terms),
-            width(&self.charge_rbm_hidden_layer_terms),
-            width(&self.spin_rbm_hidden_layer_terms),
-            width(&self.general_rbm_hidden_layer_terms),
-            width(&self.charge_rbm_phys_hidden_terms),
-            width(&self.spin_rbm_phys_hidden_terms),
-            width(&self.general_rbm_phys_hidden_terms),
-        ]
+        self.rbm_section_widths
     }
 
-    /// Pack indexed RBM values in canonical section order; unmapped slots are zero.
-    /// When programmatic mappings disagree, the last row supplies the coefficient.
+    /// Complete coefficient storage in C block order, including unmapped slots.
     pub fn rbm_parameters(&self) -> Vec<Complex64> {
-        fn scatter<T: RbmParameter>(terms: &[T], values: &mut [Complex64]) {
-            for term in terms {
-                if term.idx() >= 0 {
-                    if let Some(value) = values.get_mut(term.idx() as usize) {
-                        *value = term.value();
-                    }
-                }
-            }
-        }
+        self.rbm_params.clone()
+    }
+
+    /// Replace the complete RBM array and update all mapped kernel values.
+    pub fn set_rbm_parameters(&mut self, values: Vec<Complex64>) {
+        assert_eq!(values.len(), self.count_rbm_parameters());
         let sizes = self.rbm_section_sizes();
-        let mut values = vec![Complex64::new(0.0, 0.0); sizes.iter().sum()];
-        let mut offset = 0;
-        scatter(
-            &self.charge_rbm_phys_layer_terms,
-            &mut values[offset..offset + sizes[0]],
-        );
-        offset += sizes[0];
-        scatter(
-            &self.spin_rbm_phys_layer_terms,
-            &mut values[offset..offset + sizes[1]],
-        );
-        offset += sizes[1];
-        scatter(
-            &self.general_rbm_phys_layer_terms,
-            &mut values[offset..offset + sizes[2]],
-        );
-        offset += sizes[2];
-        scatter(
-            &self.charge_rbm_hidden_layer_terms,
-            &mut values[offset..offset + sizes[3]],
-        );
-        offset += sizes[3];
-        scatter(
-            &self.spin_rbm_hidden_layer_terms,
-            &mut values[offset..offset + sizes[4]],
-        );
-        offset += sizes[4];
-        scatter(
-            &self.general_rbm_hidden_layer_terms,
-            &mut values[offset..offset + sizes[5]],
-        );
-        offset += sizes[5];
-        scatter(
-            &self.charge_rbm_phys_hidden_terms,
-            &mut values[offset..offset + sizes[6]],
-        );
-        offset += sizes[6];
-        scatter(
-            &self.spin_rbm_phys_hidden_terms,
-            &mut values[offset..offset + sizes[7]],
-        );
-        offset += sizes[7];
-        scatter(
-            &self.general_rbm_phys_hidden_terms,
-            &mut values[offset..offset + sizes[8]],
-        );
-        values
+        let mut offsets = [0; 9];
+        for index in 1..9 {
+            offsets[index] = offsets[index - 1] + sizes[index - 1];
+        }
+        self.visit_rbm_terms_mut(|section, term| {
+            let idx = term.idx();
+            if idx >= 0 && (idx as usize) < sizes[section] {
+                term.set_value(values[offsets[section] + idx as usize]);
+            }
+        });
+        self.rbm_params = values;
+    }
+
+    /// Update one declared coefficient and every spatial mapping that uses it.
+    pub fn set_rbm_parameter(&mut self, index: usize, value: Complex64) {
+        self.rbm_params[index] = value;
+        let sizes = self.rbm_section_sizes();
+        let mut offsets = [0; 9];
+        for i in 1..9 {
+            offsets[i] = offsets[i - 1] + sizes[i - 1];
+        }
+        self.visit_rbm_terms_mut(|section, term| {
+            if term.idx() >= 0 && offsets[section] + term.idx() as usize == index {
+                term.set_value(value);
+            }
+        });
     }
 
     /// Whether any RBM mapping exists, independent of declared or inferred widths.
@@ -1106,6 +1069,17 @@ impl ExpertModeData {
         }
         for term in &mut self.general_rbm_phys_hidden_terms {
             visit(8, term);
+        }
+    }
+
+    /// Visit declared RBM coefficients in C's canonical nine-section order.
+    pub fn visit_rbm_terms(&self, mut visit: impl FnMut(usize, Complex64)) {
+        let mut offset = 0;
+        for (section, width) in self.rbm_section_sizes().into_iter().enumerate() {
+            for value in &self.rbm_params[offset..offset + width] {
+                visit(section, *value);
+            }
+            offset += width;
         }
     }
 
