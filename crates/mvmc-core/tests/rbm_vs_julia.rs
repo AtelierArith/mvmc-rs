@@ -168,6 +168,8 @@ fn load_fixture(path: &Path) -> Fixture {
 fn build_data(f: &Fixture) -> ExpertModeData {
     let c = |re, im| Complex64::new(re, im);
     let mut data = ExpertModeData::new();
+    data.rbm_section_widths = [2, 2, 2, 3, 2, 2, 1, 1, 1];
+    data.rbm_params = vec![c(0.0, 0.0); 16];
     data.modpara.nsite = f.n_site as i64;
     data.modpara.nblock_size_rbm_ratio = f.nblock_size_rbm_ratio as i64;
     data.modpara.nneuron_charge = f.nneuron_charge as i64;

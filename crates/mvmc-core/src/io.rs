@@ -23,6 +23,7 @@ pub fn store_opt_data(data: &ExpertModeData, state: &mut VmcOptimizationState, s
         .iter()
         .map(|term| term.value)
         .chain(data.jastrow_terms.iter().map(|term| term.value))
+        .chain(data.rbm_params.iter().copied())
         .chain(data.slater_params.iter().copied())
         .collect();
     if state.opt_data.len() <= sample_idx {
@@ -148,6 +149,14 @@ pub fn output_data(
             format_c_double(term.value.im),
         )?;
     }
+    for value in &data.rbm_params {
+        write!(
+            var_file,
+            "{} {} 0.0 ",
+            format_c_double(value.re),
+            format_c_double(value.im),
+        )?;
+    }
     for value in &data.slater_params {
         write!(
             var_file,
@@ -186,6 +195,14 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
             format_c_double(term.value.im)
         )?;
     }
+    for value in &data.rbm_params {
+        writeln!(
+            f,
+            "{} {} ",
+            format_c_double(value.re),
+            format_c_double(value.im)
+        )?;
+    }
     for value in &data.slater_params {
         writeln!(
             f,
@@ -209,6 +226,18 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
         data.jastrow_terms.iter().map(|term| term.value),
         output_dir,
     )?;
+    let mut offset = 0;
+    for (section, width) in data.rbm_section_sizes().into_iter().enumerate() {
+        let (suffix, label) = RBM_OUTPUT_BLOCKS[section];
+        output_parameter_block(
+            &head,
+            suffix,
+            label,
+            data.rbm_params[offset..offset + width].iter().copied(),
+            output_dir,
+        )?;
+        offset += width;
+    }
     output_parameter_block(
         &head,
         "orbital",
@@ -218,6 +247,18 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
     )?;
     Ok(())
 }
+
+const RBM_OUTPUT_BLOCKS: [(&str, &str); 9] = [
+    ("chargeRBM_physlayer", "NChargeRBM_PhysLayerIdx"),
+    ("spinRBM_physlayer", "NSpinRBM_PhysLayerIdx"),
+    ("generalRBM_physlayer", "NGeneralRBM_PhysLayerIdx"),
+    ("chargeRBM_hiddenlayer", "NChargeRBM_HiddenLayerIdx"),
+    ("spinRBM_hiddenlayer", "NSpinRBM_HiddenLayerIdx"),
+    ("generalRBM_hiddenlayer", "NGeneralRBM_HiddenLayerIdx"),
+    ("chargeRBM_physhidden", "NChargeRBM_PhysHiddenIdx"),
+    ("spinRBM_physhidden", "NSpinRBM_PhysHiddenIdx"),
+    ("generalRBM_physhidden", "NGeneralRBM_PhysHiddenIdx"),
+];
 
 fn output_parameter_block(
     head: &str,
@@ -231,10 +272,11 @@ fn output_parameter_block(
     }
     let path = output_path(&format!("{head}_{suffix}_opt.dat"), output_dir)?;
     let mut file = File::create(path)?;
-    writeln!(file, "===============================")?;
+    writeln!(file, "======================")?;
     writeln!(file, "{label} {}", values.len())?;
-    writeln!(file, "===============================")?;
-    writeln!(file, "===============================")?;
+    writeln!(file, "======================")?;
+    writeln!(file, "======================")?;
+    writeln!(file, "======================")?;
     for (index, value) in values.enumerate() {
         writeln!(
             file,

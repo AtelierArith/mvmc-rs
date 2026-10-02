@@ -212,28 +212,52 @@ mod tests {
             parse_expert_mode_files, types::GeneralRBMHiddenLayerTerm, ExpertModeData,
         };
         use num_complex::Complex64;
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/rbm");
-        for name in [
-            "ChargeRBM_PhysLayer",
-            "SpinRBM_PhysLayer",
-            "GeneralRBM_PhysLayer",
-            "ChargeRBM_HiddenLayer",
-            "SpinRBM_HiddenLayer",
-            "GeneralRBM_HiddenLayer",
-            "ChargeRBM_PhysHidden",
-            "SpinRBM_PhysHidden",
-            "GeneralRBM_PhysHidden",
-        ] {
-            let mut data =
-                parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
-            // These parser-only namelists omit ModPara; supply a valid C sector count.
-            data.modpara.nmp_trans = 1;
+        let rows: Vec<_> = include_str!("../../../tests/fixtures/rbm/c_reader_contracts.txt")
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .collect();
+        let directory =
+            std::env::temp_dir().join(format!("mvmc-c-rbm-validation-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("modpara.def"),
+            "Nsite 3\nNElec 1\nNMPTrans 1\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",
+        )
+        .unwrap();
+        for (section, name) in mvmc_expert_parsers::parsers::rbm::SECTION_NAMES
+            .iter()
+            .enumerate()
+        {
+            let record = rows
+                .chunks_exact(4)
+                .find(|record| {
+                    let h: Vec<_> = record[0].split_whitespace().collect();
+                    h[1] == section.to_string()
+                        && h[2] == "3"
+                        && h[3] == "2"
+                        && h[6] == "0"
+                        && h[0].ends_with("_complete")
+                })
+                .unwrap();
+            std::fs::write(directory.join("rbm.def"), record[1].replace('|', "\n")).unwrap();
+            std::fs::write(
+                directory.join("namelist.def"),
+                format!("{name} rbm.def\nModPara modpara.def\n"),
+            )
+            .unwrap();
+            let mut data = parse_expert_mode_files(directory.join("namelist.def")).unwrap();
+            assert!(
+                data.input_errors.is_empty(),
+                "{name}: {:?}",
+                data.input_errors
+            );
             super::validate_para_opt(&data).unwrap();
             data.namelist.clear();
             super::validate_para_opt(&data).unwrap();
         }
-        // A nonempty mapping whose maximum index wraps to a zero width is still RBM.
+        std::fs::remove_dir_all(directory).unwrap();
+        // A programmatic mapping still signals term presence when no declared
+        // array is reserved; this check does not establish C index safety.
         let mut data = ExpertModeData::new();
         data.modpara.nmp_trans = 1;
         data.general_rbm_hidden_layer_terms

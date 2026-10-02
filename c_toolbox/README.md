@@ -128,3 +128,35 @@ are documented, and neither driver establishes native malloc initialization,
 full sampling, MPI, global complex-header or OptTrans behavior. The script
 also reproduces the complete three-site historical replacement without editing
 its three original input files. Details: `tests/fixtures/jastrow/README.md`.
+
+The RBM readers preserve the actual header, nine geometry readers, flag and
+site-check functions from `readdef.c`. `rbm_parameters.c` adds actual
+`InitParameter`/`ReadInitParameter` and the upstream SFMT translation unit.
+The reader and parameter checks cover 1,307 inputs and 84 real-initialization/
+full-record workloads respectively. Full declared storage includes unused
+slots; the 97-slot case is not shrunk to its maximum mapped index. Initialization
+uses raw signed neuron totals including zero and negative divisors. Following
+Slater values and 624 native SFMT words are serialized with every case.
+
+`rbm_counters.c` adds verbatim `MakeRBMCnt` and `UpdateRBMCnt` from `rbm.c`.
+Its 66 completely assigned tables cover 4,994 full-counter/legal-hop/no-op
+workloads and verify both separate-output and in-place C updates. Coefficients
+are supplied as binary64 bits, with binary and cancellation-sensitive values.
+The counters distinguish C's separate coupling sum from adding each coupling
+directly to the hidden bias. They also distinguish subtract-then-add hopping
+arithmetic from mapping-row traversal. Total neuron count equals the sum of
+family dimensions; extra base neurons and FSZ are outside this counter oracle.
+
+```sh
+uv run --no-project python scripts/check_rbm_contracts_c_parity.py
+uv run --no-project python scripts/check_rbm_parameters_c_parity.py
+uv run --no-project python scripts/check_rbm_counters_c_parity.py
+```
+
+Each command independently verifies its extracted reader dependency; add
+`--write` to regenerate. Counter and parameter commands use
+`-O0 -ffp-contract=off`; the initializer also uses `-DMEXP=19937` and native
+SFMT. The accompanying Rust tests use checked-in data only. These probes do
+not establish complex transcendental arithmetic, parameter normalization,
+full executable/MPI execution or production sampling trajectories. The older
+Julia RBM definitions and numerical fixture bytes remain historical evidence.

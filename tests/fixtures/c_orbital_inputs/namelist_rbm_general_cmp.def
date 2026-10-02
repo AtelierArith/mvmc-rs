@@ -1,4 +1,4 @@
-ModPara ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/modpara.def
+ModPara modpara_rbm_general_cmp.def
 LocSpin ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/locspn.def
 Trans ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/trans.def
 CoulombIntra ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/coulombintra.def
@@ -9,8 +9,8 @@ Jastrow ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/jastrowidx
 Orbital ../rbm/run_rbm_general_cmp/orbital.def
 TransSym ../../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real/qptransidx.def
 GeneralRBM_PhysLayer historical_binary_rbm/GeneralRBM_PhysLayer.def
-InGeneralRBM_PhysLayer ../rbm/run_rbm_general_cmp/rbm_input.def
+InGeneralRBM_PhysLayer historical_binary_rbm/rbm_input_rbm_general_cmp.def
 GeneralRBM_HiddenLayer historical_binary_rbm/GeneralRBM_HiddenLayer.def
-InGeneralRBM_HiddenLayer ../rbm/run_rbm_general_cmp/rbm_input.def
+InGeneralRBM_HiddenLayer historical_binary_rbm/rbm_input_rbm_general_cmp.def
 GeneralRBM_PhysHidden historical_binary_rbm/GeneralRBM_PhysHidden.def
-InGeneralRBM_PhysHidden ../rbm/run_rbm_general_cmp/rbm_input.def
+InGeneralRBM_PhysHidden historical_binary_rbm/rbm_input_rbm_general_cmp.def

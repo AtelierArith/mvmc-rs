@@ -159,6 +159,8 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     // DH and Slater flags need the final projection layout.
     set_dh_opt_flags(&mut data);
     let sizes = data.rbm_section_sizes();
+    data.rbm_params
+        .resize(sizes.iter().sum(), num_complex::Complex64::new(0.0, 0.0));
     let mut offset = data.projection_layout().n_proj;
     for (name, size) in rbm::SECTION_NAMES.iter().zip(sizes) {
         if size > 0 {
@@ -445,95 +447,138 @@ fn parse_file_by_type(
             data.i_flg_orbital_general = 1;
             orbital_flags.extend(section.opt_flags);
         }
-        "ChargeRBM_PhysLayer" => {
-            let section = rbm::parse_charge_rbm_phys_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.charge_rbm_phys_layer_terms = terms;
+        kind if rbm::SECTION_NAMES.contains(&kind) => {
+            let index = rbm::SECTION_NAMES
+                .iter()
+                .position(|&name| name == kind)
+                .unwrap();
+            let hidden = [
+                data.modpara.nneuron_charge,
+                data.modpara.nneuron_spin,
+                data.modpara.nneuron_general,
+            ][index % 3];
+            let section =
+                rbm::parse_rbm_content(&read_def_file(path)?, index, data.modpara.nsite, hidden)?;
+            data.rbm_section_widths[index] = section.width;
+            let complex = section.is_complex;
+            let zero = num_complex::Complex64::new(0.0, 0.0);
+            match index {
+                0 => {
+                    data.charge_rbm_phys_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::ChargeRBMPhysLayerTerm {
+                            site: v[0],
+                            idx: v[1],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                1 => {
+                    data.spin_rbm_phys_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::SpinRBMPhysLayerTerm {
+                            site: v[0],
+                            idx: v[1],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                2 => {
+                    data.general_rbm_phys_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::GeneralRBMPhysLayerTerm {
+                            site: v[0],
+                            spin: v[1],
+                            idx: v[2],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                3 => {
+                    data.charge_rbm_hidden_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::ChargeRBMHiddenLayerTerm {
+                            site: v[0],
+                            idx: v[1],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                4 => {
+                    data.spin_rbm_hidden_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::SpinRBMHiddenLayerTerm {
+                            site: v[0],
+                            idx: v[1],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                5 => {
+                    data.general_rbm_hidden_layer_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::GeneralRBMHiddenLayerTerm {
+                            site: v[0],
+                            idx: v[1],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                6 => {
+                    data.charge_rbm_phys_hidden_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::ChargeRBMPhysHiddenTerm {
+                            site1: v[0],
+                            site2: v[1],
+                            idx: v[2],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                7 => {
+                    data.spin_rbm_phys_hidden_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::SpinRBMPhysHiddenTerm {
+                            site1: v[0],
+                            site2: v[1],
+                            idx: v[2],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                8 => {
+                    data.general_rbm_phys_hidden_terms = section
+                        .mappings
+                        .iter()
+                        .map(|v| types::GeneralRBMPhysHiddenTerm {
+                            site1: v[0],
+                            spin: v[1],
+                            site2: v[2],
+                            idx: v[3],
+                            value: zero,
+                            is_complex: complex,
+                        })
+                        .collect()
+                }
+                _ => unreachable!(),
             }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "SpinRBM_PhysLayer" => {
-            let section = rbm::parse_spin_rbm_phys_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.spin_rbm_phys_layer_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "GeneralRBM_PhysLayer" => {
-            let section = rbm::parse_general_rbm_phys_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.general_rbm_phys_layer_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "ChargeRBM_HiddenLayer" => {
-            let section = rbm::parse_charge_rbm_hidden_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.charge_rbm_hidden_layer_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "SpinRBM_HiddenLayer" => {
-            let section = rbm::parse_spin_rbm_hidden_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.spin_rbm_hidden_layer_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "GeneralRBM_HiddenLayer" => {
-            let section = rbm::parse_general_rbm_hidden_layer_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.general_rbm_hidden_layer_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "ChargeRBM_PhysHidden" => {
-            let section = rbm::parse_charge_rbm_phys_hidden_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.charge_rbm_phys_hidden_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "SpinRBM_PhysHidden" => {
-            let section = rbm::parse_spin_rbm_phys_hidden_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.spin_rbm_phys_hidden_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
-        }
-        "GeneralRBM_PhysHidden" => {
-            let section = rbm::parse_general_rbm_phys_hidden_content(&read_def_file(path)?);
-            if let Some(terms) = section.terms {
-                data.general_rbm_phys_hidden_terms = terms;
-            }
-            rbm_flags.insert(
-                file_type.to_owned(),
-                (section.opt_flags, section.is_complex_flag),
-            );
+            rbm_flags.insert(file_type.to_owned(), (section.opt_flags, complex));
         }
         "OneBodyG" => {
             data.green_one_terms = green::parse_green_one_def(path)?;

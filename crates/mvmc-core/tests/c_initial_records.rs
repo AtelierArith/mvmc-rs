@@ -43,6 +43,8 @@ fn model(dims: &[usize]) -> ExpertModeData {
     }
     if dims[1] != 0 {
         assert_eq!(dims[1], 27);
+        data.rbm_section_widths = [3; 9];
+        data.rbm_params = vec![sentinel; 27];
         for idx in 0..3 {
             data.charge_rbm_phys_layer_terms
                 .push(ChargeRBMPhysLayerTerm {

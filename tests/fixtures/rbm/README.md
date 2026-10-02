@@ -1,4 +1,66 @@
-# Canonical RBM production parity fixtures
+# RBM C contracts and historical Julia fixtures
+
+The authoritative implementation is `extern/mVMC-1.3.0`. `c_reader_contracts.txt`
+contains 1,307 actual-reader cases (766 accepted / 541 rejected), covering all
+nine sections, positive declared widths, complete geometry and ordered signed
+flags. A declared width of 97 is retained even when only indices 0 and 2 are
+mapped. The historical width-97 definitions below have incomplete mappings and
+flags; C rejects them. Duplicate coordinates can leave cells untouched; index
+`-1` and imaginary flag `0` in the reader probe are explicit sentinels, not
+evidence of native malloc initialization. Rust bounds checks also cover unsafe
+indices that are deliberately excluded from native execution.
+
+`c_parameters.txt` contains 84 actual `InitParameter`/`ReadInitParameter` and
+native SFMT checks: all nine individual sections, combined sections, absent
+sections and the 97-slot block, seeds 1/11272, real initialization with total
+neuron divisors 0/-7/10, and initial records including distinct successive
+records and an empty file. Full declared projection/RBM/Slater coefficient
+bits and the following 624 RNG words are retained. The zero/negative divisor
+cases exercise actual C arithmetic; Julia's divisor-one repair is not used.
+This oracle does not establish complex `cexp` initialization or normalization.
+
+`c_counters.txt` contains 4,994 actual `MakeRBMCnt`/`UpdateRBMCnt` cases across
+66 completely assigned tables, at 1/3/6 sites and 1/2/4 neurons per family.
+Cases cover complete reordered mappings, shared and unused declared slots,
+all nine families, a 97-slot prefix, binary and cancellation-sensitive complex
+coefficients, no-op moves and legal hops in both directions/spins. The generator
+also verifies C's in-place update against its separate-output result. All
+counter components are recorded as exact binary64 bits; coefficients are
+supplied to C as bits. Total neuron count here equals the family-count sum.
+This scope excludes FSZ updates, transcendental weight/derivative functions,
+MPI and full Monte Carlo execution.
+
+```sh
+uv run --no-project python scripts/check_rbm_contracts_c_parity.py
+uv run --no-project python scripts/check_rbm_parameters_c_parity.py
+uv run --no-project python scripts/check_rbm_counters_c_parity.py
+cargo nextest run -p mvmc-expert-parsers --test c_rbm_contracts
+cargo nextest run -p mvmc-core --test c_rbm_parameters --test c_rbm_counters
+```
+
+Append `--write` only to regenerate both source excerpts and expectations.
+The optional native probes preserve actual function bodies and source SHA-256
+in `c_toolbox/`; they use Apple clang 17, `-O0 -ffp-contract=off`, with
+`-DMEXP=19937` for the SFMT initializer. Ordinary Rust tests consume only
+checked-in fixtures and do not compile, invoke or read the toolbox.
+
+## Historical Julia evidence
+
+The remaining files document the earlier Julia port and do not establish C
+input acceptance or complete C production parity. In particular, permissive
+width inference, Boolean flag conversion, indexed overlays and numerical
+operation order must not override the C contracts above. Original numerical
+fixture bytes are retained; sparse internal regression models are constructed
+explicitly in test helpers rather than admitted by the production C reader.
+
+Complete six-site control replacements live under
+`tests/fixtures/c_orbital_inputs/historical_binary_rbm/`. They reserve four
+coefficients per supplied section: original nonzero mappings retain indices
+0/2, every other coordinate uses fixed-zero index 3, and flags are 1/1/0/0.
+Explicit ModPara controls set each family to two hidden neurons. The overlay
+controls use ordered four-row records. All nine replacement definitions are
+included in the native reader oracle. They do not establish equivalence of
+the historical full SR-array layout or C sampling trajectory.
 
 These fixtures use the unmodified Julia-mVMC checkout at `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1` (numerical/parser sources at `c2ea432785bc14364a3cd5e9eef44db464289cc9`), Julia **1.13.1**, `extern/Julia-mVMC/Manifest-v1.13.toml`, and OpenBLAS **0.3.30 ILP64**, one thread. They cover parsing, initialization/loading, kernels, sampling, Green ratios, SR and public library/CLI execution against the original source.
 

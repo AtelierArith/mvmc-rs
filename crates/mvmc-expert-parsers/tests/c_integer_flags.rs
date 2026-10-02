@@ -40,6 +40,8 @@ fn projection_and_rbm_component_assembly_preserves_c_generic_raw_flags() {
                 })
                 .collect();
             if rbm {
+                data.rbm_section_widths[0] = 6;
+                data.rbm_params = vec![Complex64::new(0.0, 0.0); 6];
                 data.charge_rbm_phys_layer_terms = (0..6)
                     .map(|idx| ChargeRBMPhysLayerTerm {
                         site: idx % 3,

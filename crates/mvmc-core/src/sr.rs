@@ -604,19 +604,8 @@ pub(crate) fn update_parameter_value(
             *value += delta;
         }
     } else if para_idx < n_proj + data.count_rbm_parameters() {
-        let sizes = data.rbm_section_sizes();
-        let mut offsets = [n_proj; 9];
-        for i in 1..9 {
-            offsets[i] = offsets[i - 1] + sizes[i - 1];
-        }
-        data.visit_rbm_terms_mut(|section, term| {
-            if term.idx() >= 0
-                && (term.idx() as usize) < sizes[section]
-                && offsets[section] + term.idx() as usize == para_idx
-            {
-                term.set_value(term.value() + delta);
-            }
-        });
+        let index = para_idx - n_proj;
+        data.set_rbm_parameter(index, data.rbm_params[index] + delta);
     } else if para_idx < n_proj + data.count_rbm_parameters() + n_slater(data) {
         let orbital_idx = para_idx - n_proj - data.count_rbm_parameters();
         if let Some(value) = data.slater_params.get_mut(orbital_idx) {
@@ -688,6 +677,45 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
 mod tests {
     use super::*;
     use mvmc_expert_parsers::OrbitalTerm;
+
+    #[test]
+    fn rbm_sr_updates_preserve_unmapped_declared_slots_and_following_slater_offset() {
+        use mvmc_expert_parsers::ChargeRBMPhysLayerTerm;
+        let mut data = ExpertModeData::new();
+        data.n_gutzwiller_idx = 2;
+        data.rbm_section_widths = [97, 5, 0, 0, 0, 0, 0, 0, 0];
+        data.rbm_params = vec![Complex64::new(0.0, 0.0); 102];
+        data.modpara.n_orbital_idx = 4;
+        data.slater_params = vec![Complex64::new(0.0, 0.0); 4];
+        data.charge_rbm_phys_layer_terms = [0, 2, 0]
+            .into_iter()
+            .enumerate()
+            .map(|(site, idx)| ChargeRBMPhysLayerTerm {
+                site: site as i64,
+                idx,
+                value: Complex64::new(0.0, 0.0),
+                is_complex: true,
+            })
+            .collect();
+        for index in [1, 96, 97, 101] {
+            update_parameter_value(&mut data, 2 + index, 0.125, -0.25, 2);
+            assert_eq!(data.rbm_params[index], Complex64::new(0.125, -0.25));
+        }
+        assert!(data
+            .charge_rbm_phys_layer_terms
+            .iter()
+            .all(|term| term.value == Complex64::new(0.0, 0.0)));
+        update_parameter_value(&mut data, 2, 0.5, -0.125, 2);
+        assert_eq!(data.rbm_params[0], Complex64::new(0.5, -0.125));
+        assert!(data
+            .charge_rbm_phys_layer_terms
+            .iter()
+            .filter(|term| term.idx == 0)
+            .all(|term| term.value == data.rbm_params[0]));
+        update_parameter_value(&mut data, 104, 0.25, 0.5, 2);
+        assert_eq!(data.slater_params[0], Complex64::new(0.25, 0.5));
+        assert_eq!(data.rbm_params[101], Complex64::new(0.125, -0.25));
+    }
 
     #[test]
     fn sampled_direct_sr_matrix_gradient_factor_and_solution_match_julia() {
@@ -862,6 +890,21 @@ mod tests {
                 .map(|word| u64::from_str_radix(word, 16).unwrap())
                 .collect::<Vec<_>>()
         };
+        // The archived Julia packed view discarded every unmapped slot.
+        // Compare that mapped-only view here; the separate native parameter
+        // fixtures and SR storage test assert complete canonical storage.
+        let mapped_bits = |data: &mut ExpertModeData| {
+            let sizes = data.rbm_section_sizes();
+            let mut offsets = [0; 9];
+            for i in 1..9 {
+                offsets[i] = offsets[i - 1] + sizes[i - 1];
+            }
+            let mut values = vec![Complex64::new(0.0, 0.0); data.count_rbm_parameters()];
+            data.visit_rbm_terms_mut(|section, term| {
+                values[offsets[section] + term.idx() as usize] = term.value();
+            });
+            bits(&values)
+        };
         while let Some(case) = lines.next() {
             let file = root.join(format!("namelist_{case}.def"));
             let mut data = crate::historical_orbital_model::historical_kernel_model(&file).unwrap();
@@ -895,7 +938,7 @@ mod tests {
                 "{case} before"
             );
             assert_eq!(
-                bits(&data.rbm_parameters()),
+                mapped_bits(&mut data),
                 expected(lines.next().unwrap()),
                 "{case} packed before"
             );
@@ -914,7 +957,7 @@ mod tests {
                 "{case} after"
             );
             assert_eq!(
-                bits(&data.rbm_parameters()),
+                mapped_bits(&mut data),
                 expected(lines.next().unwrap()),
                 "{case} packed after"
             );

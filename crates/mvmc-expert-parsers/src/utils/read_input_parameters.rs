@@ -251,13 +251,13 @@ pub fn read_input_parameters(
                     .iter()
                     .position(|&name| kind.strip_prefix("In") == Some(name))
                 {
-                    data.visit_rbm_terms_mut(|index, term| {
-                        if index == section {
-                            if let Some(&value) = params.get(&term.idx()) {
-                                term.set_value(value);
-                            }
+                    let widths = data.rbm_section_sizes();
+                    let offset: usize = widths[..section].iter().sum();
+                    for (&index, &value) in &params {
+                        if index >= 0 && (index as usize) < widths[section] {
+                            data.set_rbm_parameter(offset + index as usize, value);
                         }
-                    });
+                    }
                 }
             }
             _ => {}

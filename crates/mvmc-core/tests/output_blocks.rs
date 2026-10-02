@@ -1,5 +1,8 @@
-//! Literal Julia data_io.jl output contracts, including its four-line headers.
-use mvmc_core::{io::output_opt_data, ExpertModeData};
+//! C `OutputOptData` output contracts, including declared RBM blocks.
+use mvmc_core::{
+    io::{format_c_double, output_opt_data},
+    ExpertModeData,
+};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
 use num_complex::Complex64;
 use std::fs;
@@ -41,7 +44,7 @@ fn block_files_keep_declared_slater_order_and_unmapped_slots_with_existing_heade
     let row = " 1.500000000000000000e+00 -2.000000000000000000e+00 \n";
     let reverse = "-2.000000000000000000e+00  1.500000000000000000e+00 \n";
     let header = |name, count| {
-        format!("===============================\n{name} {count}\n===============================\n===============================\n")
+        format!("======================\n{name} {count}\n======================\n======================\n======================\n")
     };
     assert_eq!(
         fs::read_to_string(dir.join("custom_opt.dat")).unwrap(),
@@ -76,5 +79,42 @@ fn empty_blocks_are_skipped_and_no_directory_uses_the_given_prefix() {
     assert!(!dir.join("prefix_gutzwiller_opt.dat").exists());
     assert!(!dir.join("prefix_jastrow_opt.dat").exists());
     assert!(!dir.join("prefix_orbital_opt.dat").exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn rbm_blocks_follow_c_declared_section_order() {
+    let dir = std::env::temp_dir().join(format!("mvmc-rbm-output-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let mut data = ExpertModeData::new();
+    data.modpara.c_para_file_head = "rbm".into();
+    data.rbm_section_widths = [1; 9];
+    data.rbm_params = (0..9)
+        .map(|value| Complex64::new(value as f64, -(value as f64)))
+        .collect();
+    output_opt_data(&data, Some(&dir)).unwrap();
+
+    let names = [
+        ("chargeRBM_physlayer", "NChargeRBM_PhysLayerIdx", 0),
+        ("spinRBM_physlayer", "NSpinRBM_PhysLayerIdx", 1),
+        ("generalRBM_physlayer", "NGeneralRBM_PhysLayerIdx", 2),
+        ("chargeRBM_hiddenlayer", "NChargeRBM_HiddenLayerIdx", 3),
+        ("spinRBM_hiddenlayer", "NSpinRBM_HiddenLayerIdx", 4),
+        ("generalRBM_hiddenlayer", "NGeneralRBM_HiddenLayerIdx", 5),
+        ("chargeRBM_physhidden", "NChargeRBM_PhysHiddenIdx", 6),
+        ("spinRBM_physhidden", "NSpinRBM_PhysHiddenIdx", 7),
+        ("generalRBM_physhidden", "NGeneralRBM_PhysHiddenIdx", 8),
+    ];
+    for (suffix, label, value) in names {
+        let content = fs::read_to_string(dir.join(format!("rbm_{suffix}_opt.dat"))).unwrap();
+        assert!(content.starts_with(&format!(
+            "======================\n{label} 1\n======================\n======================\n======================\n"
+        )));
+        assert!(content.ends_with(&format!(
+            "0 {} {} \n",
+            format_c_double(value as f64),
+            format_c_double(-(value as f64))
+        )));
+    }
     fs::remove_dir_all(dir).unwrap();
 }

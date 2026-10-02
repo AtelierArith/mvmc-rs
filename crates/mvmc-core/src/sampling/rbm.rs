@@ -25,6 +25,8 @@ use mvmc_expert_parsers::{
 /// Julia's `has_rbm_terms(data) == false` branch.
 #[derive(Debug, Clone, Copy)]
 pub struct RbmConfig<'a> {
+    /// Declared coefficient widths in C section order.
+    pub section_widths: [usize; 9],
     /// `data.modpara.nsite`.
     pub n_site: usize,
     /// Block size for the hidden-layer principal-log batching
@@ -62,6 +64,7 @@ pub struct RbmConfig<'a> {
 impl<'a> From<&'a ExpertModeData> for RbmConfig<'a> {
     fn from(data: &'a ExpertModeData) -> Self {
         Self {
+            section_widths: data.rbm_section_sizes(),
             n_site: data.modpara.nsite.max(0) as usize,
             nblock_size_rbm_ratio: data.modpara.nblock_size_rbm_ratio.max(1) as usize,
             nneuron_charge: data.modpara.nneuron_charge.max(0) as usize,
@@ -95,13 +98,13 @@ impl<'a> RbmConfig<'a> {
     }
 
     fn n_charge_phys(&self) -> usize {
-        max_idx_plus_one(self.charge_phys.iter().map(|t| t.idx))
+        self.section_widths[0]
     }
     fn n_spin_phys(&self) -> usize {
-        max_idx_plus_one(self.spin_phys.iter().map(|t| t.idx))
+        self.section_widths[1]
     }
     fn n_general_phys(&self) -> usize {
-        max_idx_plus_one(self.general_phys.iter().map(|t| t.idx))
+        self.section_widths[2]
     }
 
     fn n_charge_neuron(&self) -> usize {
@@ -242,7 +245,11 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
         rbm[general_hidden_offset + hi as usize] += term.value;
     }
 
-    // Physical <-> hidden couplings.
+    // C MakeRBMCnt sums each hidden neuron's couplings separately, then
+    // adds that sum to its bias. Adding each term directly to the bias
+    // changes rounding, even with the same spatial traversal order.
+    let mut coupling =
+        vec![Complex64::new(0.0, 0.0); n_charge_neuron + n_spin_neuron + n_general_neuron];
     for term in cfg.charge_phys_hidden {
         let ri = term.site1;
         let hi = term.site2;
@@ -251,7 +258,7 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
         }
         let ri = ri as usize;
         let xi = (ele_num[ri] + ele_num[ri + n_site] - 1) as f64;
-        rbm[hidden_offset + hi as usize] += term.value * Complex64::new(xi, 0.0);
+        coupling[hi as usize] += term.value * xi;
     }
     for term in cfg.spin_phys_hidden {
         let ri = term.site1;
@@ -261,7 +268,7 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
         }
         let ri = ri as usize;
         let xi = (ele_num[ri] - ele_num[ri + n_site]) as f64;
-        rbm[spin_hidden_offset + hi as usize] += term.value * Complex64::new(xi, 0.0);
+        coupling[n_charge_neuron + hi as usize] += term.value * xi;
     }
     for term in cfg.general_phys_hidden {
         let ri = term.site1;
@@ -276,9 +283,23 @@ pub fn make_rbm_cnt(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Vec<Complex64> {
         }
         let rsi = (ri as usize) + (term.spin as usize) * n_site;
         let xi = (2 * ele_num[rsi] - 1) as f64;
-        rbm[general_hidden_offset + hi as usize] += term.value * Complex64::new(xi, 0.0);
+        coupling[n_charge_neuron + n_spin_neuron + hi as usize] += term.value * xi;
     }
-
+    for (offset, count, present) in [
+        (0, n_charge_neuron, cfg.section_widths[6] != 0),
+        (n_charge_neuron, n_spin_neuron, cfg.section_widths[7] != 0),
+        (
+            n_charge_neuron + n_spin_neuron,
+            n_general_neuron,
+            cfg.section_widths[8] != 0,
+        ),
+    ] {
+        if present {
+            for hi in offset..offset + count {
+                rbm[hidden_offset + hi] += coupling[hi];
+            }
+        }
+    }
     rbm
 }
 
@@ -370,44 +391,59 @@ pub fn update_rbm_cnt_hopping(
         }
     }
 
-    // Physical <-> hidden coupling.
-    for term in cfg.charge_phys_hidden {
-        if term.site1 == ri || term.site1 == rj {
+    // C removes every source coupling before adding target couplings. The
+    // result must not depend on which site appears first in the mapping rows.
+    for (site, remove) in [(ri, true), (rj, false)] {
+        for term in cfg
+            .charge_phys_hidden
+            .iter()
+            .filter(|term| term.site1 == site)
+        {
             let pos = charge_cnt_offset + term.site2 as usize;
             if pos >= rbm_cnt_new.len() {
                 continue;
             }
-            if term.site1 == ri {
+            if remove {
                 rbm_cnt_new[pos] -= term.value;
             } else {
                 rbm_cnt_new[pos] += term.value;
             }
         }
     }
-    for term in cfg.spin_phys_hidden {
-        if term.site1 == ri || term.site1 == rj {
+    for (site, remove) in [(ri, true), (rj, false)] {
+        for term in cfg
+            .spin_phys_hidden
+            .iter()
+            .filter(|term| term.site1 == site)
+        {
             let pos = spin_cnt_offset + term.site2 as usize;
             if pos >= rbm_cnt_new.len() {
                 continue;
             }
-            let delta = Complex64::new(spin_delta, 0.0) * term.value;
-            if term.site1 == ri {
+            let delta = spin_delta * term.value;
+            if remove {
                 rbm_cnt_new[pos] -= delta;
             } else {
                 rbm_cnt_new[pos] += delta;
             }
         }
     }
-    for term in cfg.general_phys_hidden {
-        let pos = general_cnt_offset + term.site2 as usize;
-        if pos >= rbm_cnt_new.len() {
-            continue;
-        }
-        let r = term.site1 + term.spin * (n_site as i64);
-        if r == rsi {
-            rbm_cnt_new[pos] -= Complex64::new(2.0, 0.0) * term.value;
-        } else if r == rsj {
-            rbm_cnt_new[pos] += Complex64::new(2.0, 0.0) * term.value;
+    for (site, remove) in [(rsi, true), (rsj, false)] {
+        for term in cfg
+            .general_phys_hidden
+            .iter()
+            .filter(|term| term.site1 + term.spin * n_site as i64 == site)
+        {
+            let pos = general_cnt_offset + term.site2 as usize;
+            if pos >= rbm_cnt_new.len() {
+                continue;
+            }
+            let delta = 2.0 * term.value;
+            if remove {
+                rbm_cnt_new[pos] -= delta;
+            } else {
+                rbm_cnt_new[pos] += delta;
+            }
         }
     }
 }
@@ -623,17 +659,7 @@ pub fn set_rbm_diff(
     ele_num: &[i64],
     cfg: &RbmConfig<'_>,
 ) {
-    let widths = [
-        cfg.n_charge_phys(),
-        cfg.n_spin_phys(),
-        cfg.n_general_phys(),
-        max_idx_plus_one(cfg.charge_hidden.iter().map(|t| t.idx)),
-        max_idx_plus_one(cfg.spin_hidden.iter().map(|t| t.idx)),
-        max_idx_plus_one(cfg.general_hidden.iter().map(|t| t.idx)),
-        max_idx_plus_one(cfg.charge_phys_hidden.iter().map(|t| t.idx)),
-        max_idx_plus_one(cfg.spin_phys_hidden.iter().map(|t| t.idx)),
-        max_idx_plus_one(cfg.general_phys_hidden.iter().map(|t| t.idx)),
-    ];
+    let widths = cfg.section_widths;
     let total = widths.iter().sum::<usize>();
     if total == 0 || out.len() < 2 * total {
         return;
@@ -769,6 +795,7 @@ mod tests {
 
     fn empty_cfg<'a>() -> RbmConfig<'a> {
         RbmConfig {
+            section_widths: [0; 9],
             n_site: 4,
             nblock_size_rbm_ratio: 16,
             nneuron_charge: 0,
@@ -827,6 +854,7 @@ mod tests {
             },
         ];
         let cfg = RbmConfig {
+            section_widths: [1, 0, 0, 0, 0, 0, 0, 0, 0],
             n_site: 2,
             nblock_size_rbm_ratio: 16,
             nneuron_charge: 0,
@@ -873,6 +901,7 @@ mod tests {
             },
         ];
         let cfg = RbmConfig {
+            section_widths: [1, 0, 0, 0, 0, 0, 0, 0, 0],
             n_site: 2,
             nblock_size_rbm_ratio: 16,
             nneuron_charge: 0,
