@@ -1,6 +1,5 @@
 //! Julia test_orbital_qptrans_utils.jl: periodic signs and sparse defaults.
 use mvmc_expert_parsers::{ExpertModeData, OrbitalTerm};
-use num_complex::Complex64;
 
 #[test]
 fn normal_orbital_boundary_signs_and_unmapped_cells_match_julia() {
@@ -12,7 +11,7 @@ fn normal_orbital_boundary_signs_and_unmapped_cells_match_julia() {
             site1: 0,
             site2: 1,
             idx: 2,
-            value: Complex64::new(0.3, 0.0),
+
             is_complex: false,
             sign: -1,
         }];

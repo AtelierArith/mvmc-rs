@@ -97,12 +97,21 @@ fn fixed_slater_slots_skip_rng_draws_including_shared_and_reserved_slots() {
         (0.0, 0.0),
         (0.0, 0.0),
     ]) {
-        assert_eq!(term.value.re.to_bits(), re.to_bits());
-        assert_eq!(term.value.im.to_bits(), im.to_bits());
+        assert_eq!(
+            data.slater_params[term.idx as usize].re.to_bits(),
+            re.to_bits()
+        );
+        assert_eq!(
+            data.slater_params[term.idx as usize].im.to_bits(),
+            im.to_bits()
+        );
     }
     for term in &data.orbital_terms {
         if [0, 9, 10].contains(&term.idx) {
-            assert_eq!(term.value, Complex64::new(0.0, 0.0));
+            assert_eq!(
+                data.slater_params[term.idx as usize],
+                Complex64::new(0.0, 0.0)
+            );
         }
     }
     for _ in 0..16 {
@@ -126,8 +135,8 @@ fn fixed_correlation_blocks_disable_gauge_shift_but_not_slater_normalization() {
     for (i, term) in data.jastrow_terms.iter_mut().enumerate() {
         term.value = Complex64::new(3.0 + i as f64, 0.5);
     }
-    data.orbital_terms[0].value = Complex64::new(1.0, 0.0);
-    data.orbital_terms[1].value = Complex64::new(2.0, 0.0);
+    data.slater_params[data.orbital_terms[0].idx as usize] = Complex64::new(1.0, 0.0);
+    data.slater_params[data.orbital_terms[1].idx as usize] = Complex64::new(2.0, 0.0);
     let before_g = data.gutzwiller_terms.clone();
     let before_j = data.jastrow_terms.clone();
     for _ in 0..3 {
@@ -136,10 +145,13 @@ fn fixed_correlation_blocks_disable_gauge_shift_but_not_slater_normalization() {
         assert_eq!(data.jastrow_terms, before_j);
     }
     assert_eq!(
-        data.orbital_terms[0].value.re, 2.0,
+        data.slater_params[data.orbital_terms[0].idx as usize].re, 2.0,
         "fixed Slater participates in Julia rescaling"
     );
-    assert_eq!(data.orbital_terms[1].value.re, 4.0);
+    assert_eq!(
+        data.slater_params[data.orbital_terms[1].idx as usize].re,
+        4.0
+    );
 }
 
 #[test]
@@ -166,7 +178,7 @@ fn declared_projection_widths_determine_slater_flag_and_rng_offsets() {
         site2: 1,
         idx: 0,
         sign: 1,
-        value: Complex64::new(0.0, 0.0),
+
         is_complex: false,
     });
     set_orbital_opt_flags(&mut data, &[(0, 0)].into());
@@ -195,7 +207,10 @@ fn declared_projection_widths_determine_slater_flag_and_rng_offsets() {
     let mut rng = Sfmt19937Rng::new(1);
     let mut probe = Sfmt19937Rng::new(1);
     init_parameter(&mut data, &mut rng);
-    assert_eq!(data.orbital_terms[0].value, Complex64::new(0.0, 0.0));
+    assert_eq!(
+        data.slater_params[data.orbital_terms[0].idx as usize],
+        Complex64::new(0.0, 0.0)
+    );
     for _ in 0..624 {
         assert_eq!(rng.gen_rand32(), probe.gen_rand32());
     }

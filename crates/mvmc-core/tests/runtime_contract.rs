@@ -37,6 +37,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         assert_eq!(data.modpara, before.modpara);
         assert_eq!(data.optimization_flags, before.optimization_flags);
         assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.slater_params, before.slater_params);
         for _ in 0..624 {
             assert_eq!(rng.gen_rand32(), probe.gen_rand32());
         }
@@ -98,6 +99,7 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         );
         assert_eq!(data.modpara, before.modpara);
         assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.slater_params, before.slater_params);
         assert_eq!(data.optimization_flags, before.optimization_flags);
         assert_eq!(data.inter_all_terms, before.inter_all_terms);
         for _ in 0..624 {
@@ -135,6 +137,7 @@ fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist()
         );
         assert_eq!(data.modpara, before.modpara);
         assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.slater_params, before.slater_params);
         assert_eq!(data.optimization_flags, before.optimization_flags);
         assert_eq!(data.pair_hop_terms, before.pair_hop_terms);
         for _ in 0..624 {
@@ -175,6 +178,7 @@ fn interall_mode_and_invalid_spin_failures_precede_rng_consumption_and_output() 
         assert!(error.contains(expected), "{error}");
         assert_eq!(data.modpara, before.modpara);
         assert_eq!(data.orbital_terms, before.orbital_terms);
+        assert_eq!(data.slater_params, before.slater_params);
         assert_eq!(data.inter_all_terms, before.inter_all_terms);
         for _ in 0..624 {
             assert_eq!(rng.gen_rand32(), probe.gen_rand32());

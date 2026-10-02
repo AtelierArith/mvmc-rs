@@ -38,13 +38,9 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     }
 
     let mut slater = vec![Complex64::new(0.0, 0.0); n_orb];
-    for term in &data.orbital_terms {
-        let idx = term.idx;
-        if idx >= 0
-            && (idx as usize) < n_orb
-            && mvmc_expert_parsers::utils::julia_hypot::hypot(term.value.re, term.value.im) > 1e-14
-        {
-            slater[idx as usize] = term.value;
+    for (idx, &value) in data.slater_params.iter().take(n_orb).enumerate() {
+        if mvmc_expert_parsers::utils::julia_hypot::hypot(value.re, value.im) > 1e-14 {
+            slater[idx] = value;
         }
     }
 
@@ -201,22 +197,7 @@ pub(crate) fn build_orbital_idx_sgn_matrices_fsz(
             (Cow::Owned(idx), Cow::Owned(sgn))
         }
     };
-    // Julia's value table uses the largest mapped index; declared widths
-    // still determine the parameter and derivative layout.
-    let n_slater = data
-        .orbital_terms
-        .iter()
-        .map(|term| term.idx)
-        .max()
-        .unwrap_or(0)
-        .max(0) as usize
-        + 1;
-    let mut slater = vec![Complex64::new(0.0, 0.0); n_slater];
-    for term in &data.orbital_terms {
-        if term.idx >= 0 && (term.idx as usize) < slater.len() {
-            slater[term.idx as usize] = term.value;
-        }
-    }
+    let slater = data.slater_params.clone();
     (orbital_idx, orbital_sgn, slater)
 }
 
@@ -296,10 +277,9 @@ mod tests {
                 ints(lines.next().unwrap()),
                 "{header} signs"
             );
-            for term in &mut data.orbital_terms {
-                term.value =
-                    Complex64::new((term.idx + 1) as f64 / 7.0, (term.idx % 3 - 1) as f64 / 5.0);
-            }
+            data.slater_params = (0..data.modpara.n_orbital_idx)
+                .map(|idx| Complex64::new((idx + 1) as f64 / 7.0, (idx % 3 - 1) as f64 / 5.0))
+                .collect();
             data.n_qp_trans = 2;
             data.para_qp_trans = vec![Complex64::new(1.0, 0.0), Complex64::new(-0.375, 0.0)];
             data.qp_trans_entries = [[0, 1, 2], [1, 2, 0]]
@@ -353,6 +333,63 @@ mod tests {
     }
 
     #[test]
+    fn shared_coefficient_matrix_and_unmapped_normalization_maximum_match_c() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nmp_trans = -1;
+        data.modpara.nsp_gauss_leg = 1;
+        data.modpara.n_orbital_idx = 13;
+        data.slater_params = vec![Complex64::new(0.0, 0.0); 13];
+        data.slater_params[0] = Complex64::new(0.3, 0.2);
+        data.slater_params[12] = Complex64::new(8.0, 0.0);
+        data.orbital_terms = (0..2)
+            .flat_map(|i| {
+                (0..2).map(move |j| OrbitalTerm {
+                    site1: i,
+                    site2: j,
+                    idx: 0,
+                    sign: if i == j { 1 } else { -1 },
+                    is_complex: true,
+                })
+            })
+            .collect();
+        data.ensure_orbital_idx_matrix();
+        mvmc_expert_parsers::utils::qp_weight::init_qp_weight(&mut data);
+        let weights = data.qp_weights.as_mut().unwrap();
+        weights.spgl_cos_sin = vec![Complex64::new(0.25, 0.0)];
+        weights.spgl_cos_cos = vec![Complex64::new(0.75, 0.0)];
+        weights.spgl_sin_sin = vec![Complex64::new(0.5, 0.0)];
+        mvmc_expert_parsers::utils::parameter_init::sync_modified_parameter(&mut data, false);
+        let rows: Vec<_> =
+            include_str!("../../../tests/fixtures/orbital_general/c_shared_matrix.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .collect();
+        assert_eq!(rows.len(), 2);
+        let expected = |row: &str| {
+            row.split_whitespace()
+                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .collect::<Vec<_>>()
+        };
+        let bits = |values: &[Complex64]| {
+            values
+                .iter()
+                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(bits(&data.slater_params), expected(rows[0]));
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 13, 1, 1, true, false);
+        update_slater_elm(&mut data, &mut state);
+        let matrix = expected(rows[1])
+            .chunks_exact(2)
+            .map(|pair| Complex64::new(f64::from_bits(pair[0]), f64::from_bits(pair[1])))
+            .collect::<Vec<_>>();
+        // Exact numeric equality checks coefficient sharing. C multiplies
+        // real SPGL weights; Rust's complex-weight signed zeros remain #42.
+        assert_eq!(state.slater_matrix.slater_elm.as_slice(), matrix);
+    }
+
+    #[test]
     fn pure_general_spin_site_indices_and_sparse_signs_match_julia() {
         for nmp in [1, -1] {
             let mut data = ExpertModeData::new();
@@ -360,11 +397,11 @@ mod tests {
             data.modpara.nmp_trans = nmp;
             data.i_flg_orbital_general = 1;
             data.modpara.n_orbital_idx = 2;
+            data.slater_params = vec![Complex64::new(0.0, 0.0), Complex64::new(0.3, 0.2)];
             data.orbital_terms = vec![OrbitalTerm {
                 site1: 2,
                 site2: 3,
                 idx: 1,
-                value: Complex64::new(0.3, 0.2),
                 is_complex: true,
                 sign: -1,
             }];
@@ -415,13 +452,13 @@ mod tests {
             data.modpara.nmp_trans = nmp;
             data.modpara.nsp_gauss_leg = 1;
             data.modpara.n_orbital_idx = 1;
+            data.slater_params = vec![Complex64::new(2.0, 0.0)];
             for i in 0..2 {
                 for j in 0..2 {
                     data.orbital_terms.push(OrbitalTerm {
                         site1: i,
                         site2: j,
                         idx: 0,
-                        value: Complex64::new(2.0, 0.0),
                         is_complex: false,
                         sign: 1,
                     });
@@ -449,6 +486,7 @@ mod tests {
         data.modpara.nsite = 2;
         data.n_orbital_anti_parallel = 7;
         data.modpara.n_orbital_idx = 13;
+        data.slater_params = (0..13).map(|idx| Complex64::new(idx as f64, 0.0)).collect();
         data.i_flg_orbital_anti_parallel = 1;
         data.i_flg_orbital_parallel = 1;
         data.i_flg_orbital_general = 1;
@@ -458,7 +496,6 @@ mod tests {
                 site1: 0,
                 site2: 1,
                 idx,
-                value: Complex64::new(idx as f64, 0.0),
                 is_complex: true,
                 sign: 1,
             })

@@ -164,9 +164,9 @@ pub fn read_input_parameters(
             "InOrbital" | "InOrbitalAntiParallel" | "InOrbitalGeneral" => {
                 let params =
                     parse_input_parameter_file(&path).map_err(|error| error.to_string())?;
-                for term in &mut data.orbital_terms {
-                    if let Some(value) = params.get(&term.idx) {
-                        term.value = *value;
+                for (index, value) in params {
+                    if let Some(slot) = data.slater_params.get_mut(index as usize) {
+                        *slot = value;
                     }
                 }
             }
@@ -189,12 +189,7 @@ pub fn read_input_parameters(
                     expected as usize,
                     "InOrbitalParallel",
                 )?;
-                for term in &mut data.orbital_terms {
-                    let relative = term.idx - offset;
-                    if relative >= 0 && relative < expected {
-                        term.value = params[relative as usize];
-                    }
-                }
+                data.slater_params[offset as usize..count].copy_from_slice(&params);
             }
             "InDH2" => {
                 let layout = data.projection_layout();

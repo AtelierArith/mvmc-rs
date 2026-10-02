@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 from check_projection_count_c_parity import function
+from c_toolbox import materialize
 
 
 def main():
@@ -26,17 +27,7 @@ def main():
     header_start = reader.index("          case KWOrbital:")
     header_end = reader.index("          case KWOrbitalGeneral:", header_start)
     header_cases = reader[header_start:header_end]
-    code = '''
-#include <assert.h>
-#include <ctype.h>
-#include <complex.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-typedef int MPI_Comm;
-#define D_FileNameMax 256
-#include "readdef.h"
-'''
+    bodies = []
     for signature in ("int ReadDefFileError(", "int CheckWords(\n", "int CheckKW(\n",
                       "int GetFileName(\n", "int CheckSite(\n", "int CheckPairSite(\n",
                       "int GetInfoOpt(FILE", "int GetInfoOptOrbitalParalell(FILE",
@@ -45,64 +36,15 @@ typedef int MPI_Comm;
         # Skip forward declarations without altering the function body.
         definition = next(match.start() for match in re.finditer(re.escape(signature), reader)
                           if ";" not in reader[match.start():reader.index("{", match.start())])
-        code += function(reader[definition:], signature) + "\n"
-    code += '''
-int main(int argc, char **argv) {
-  if (argc == 2) {
-    FILE *fp=tmpfile(); assert(fp); fputs("0 0\\n",fp); rewind(fp);
-    int flags[4]={0}, count=0;
-    assert(GetInfoOptOrbitalParalell(fp,flags,1,&count,0)==1);
-    assert(count==2 && flags[0]==0 && flags[1]==1 && flags[2]==0 && flags[3]==1);
-    fclose(fp); puts("complex P inactive real flags: 0 1 0 1"); return 0;
-  }
-  assert(argc == 3);
-  char names[KWIdxInt_end][D_CharTmpReadDef], defname[D_CharTmpReadDef];
-  int iKWidx;
-  assert(GetFileName(argv[1], names) == 0);
-  cFileNameListFile = names;
-'''
-    code += iteration
-    code += '''
-      printf("%s ", cKWListOfFileNameList[iKWidx]);
-  }
-  puts("");
-  int bufInt[ParamIdxInt_End]={0}, iNOrbitalAntiParallel=0, iNOrbitalParallel=0;
-  int iFlgOrbitalAntiParallel=0, iFlgOrbitalParallel=0, iOrbitalComplex=0;
-  char *cerr; FILE *fp;
-'''
-    code += iteration
-    code += '''
-      if (iKWidx!=KWOrbital && iKWidx!=KWOrbitalAntiParallel && iKWidx!=KWOrbitalParallel) continue;
-      fp=fopen(defname,"r"); assert(fp);
-      switch(iKWidx) {
-'''
-    code += header_cases
-    code += '''
-      }
-      assert(cerr); fclose(fp);
-  }
-  int width=bufInt[IdxNOrbit], ap=iNOrbitalAntiParallel, p=iNOrbitalParallel;
-  printf("%d %d\\n",ap,width);
-  int idx_data[4][4]={{0}}, sign_data[4][4]={{0}}, *idx[4], *sign[4], flags[26]={0};
-  for(int i=0;i<4;i++) {idx[i]=idx_data[i];sign[i]=sign_data[i];}
-  int count=0, info=0, boundary=atoi(argv[2]); char buf[256];
-  fp=fopen(names[KWOrbital][0]?names[KWOrbital]:names[KWOrbitalAntiParallel], "r");
-  for(int i=0;i<5;i++) assert(fgets(buf,sizeof(buf),fp));
-  info=GetInfoOrbitalAntiParallel(fp,idx,flags,sign,&count,0,0,1,boundary,2,ap,"AP"); fclose(fp);
-  fp=fopen(names[KWOrbitalParallel],"r");
-  for(int i=0;i<5;i++) assert(fgets(buf,sizeof(buf),fp));
-  info+=GetInfoOrbitalParallel(fp,idx,flags,sign,&count,ap,0,1,boundary,2,p,ap,"P"); fclose(fp);
-  assert(info==0 && count==width);
-  for(int i=0;i<4;i++) for(int j=0;j<4;j++) printf("%d ",idx[i][j]); puts("");
-  for(int i=0;i<4;i++) for(int j=0;j<4;j++) printf("%d ",sign[i][j]); puts("");
-  for(int i=0;i<2*width;i++) printf("%d ",flags[i]); puts("");
-}
-'''
+        bodies.append(function(reader[definition:], signature))
+    materialize(root, "orbital_readdef_upstream.inc", "\n".join(bodies), [src / "readdef.c"], args.write)
+    materialize(root, "orbital_keyword_loop.inc", iteration, [src / "readdef.c"], args.write)
+    materialize(root, "orbital_ap_headers.inc", header_cases, [src / "readdef.c"], args.write)
+    probe_source = root / "c_toolbox/orbital_order.c"
     cases = {}
     with tempfile.TemporaryDirectory(prefix="mvmc-c-orbital-order-") as directory:
         tmp = Path(directory)
-        (tmp / "probe.c").write_text(code)
-        subprocess.run(["cc", "-O0", "-I", str(src / "include"), str(tmp / "probe.c"),
+        subprocess.run(["cc", "-O0", "-I", str(src / "include"), str(probe_source),
                         "-o", str(tmp / "probe")], check=True)
         subprocess.run([str(tmp / "probe"), "complex"], check=True)
         def definition(header, width, rows):
@@ -133,7 +75,8 @@ int main(int argc, char **argv) {
         actual += f"{alias} {boundary}\n{result}"
     target = root / "tests/fixtures/orbital_general/c_order.txt"
     if args.write:
-        target.write_text(actual)
+        if not target.exists() or target.read_text() != actual:
+            target.write_text(actual)
     else:
         assert actual == target.read_text(), "C orbital order contract changed"
     print("480 C namelist permutations/aliases/boundaries passed")

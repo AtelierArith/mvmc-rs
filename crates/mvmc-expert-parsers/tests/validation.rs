@@ -226,7 +226,7 @@ fn supported_factor_bounds_and_negative_value_warnings_match_julia() {
             site2: 4,
             idx: 0,
             sign: 1,
-            value: Complex64::new(0.0, 0.0),
+
             is_complex: false,
         }],
         4,

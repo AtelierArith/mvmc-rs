@@ -1,3 +1,4 @@
+mod common;
 use mvmc_expert_parsers::parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
@@ -163,10 +164,21 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
         state(&data, &mut lines, header);
         let mut values = data.projection_parameters();
         data.visit_rbm_terms_mut(|_, term| values.push(term.value()));
-        values.extend(data.orbital_terms.iter().map(|t| t.value));
+        values.extend(
+            data.orbital_terms
+                .iter()
+                .map(|t| data.slater_params[t.idx as usize]),
+        );
         bits(values, lines.next().unwrap(), header);
+        let historical_words = integers::<u32>(lines.next().unwrap());
+        let expected_words = if data.modpara.n_orbital_idx == 4 {
+            common::declared_slater_rng(&data)
+        } else {
+            historical_words
+        };
+        assert_eq!(expected_words.len(), 624);
         let next: Vec<_> = (0..624).map(|_| rng.gen_rand32()).collect();
-        assert_eq!(next, integers::<u32>(lines.next().unwrap()), "{header}");
+        assert_eq!(next, expected_words, "{header}");
         cases += 1;
     }
     assert_eq!(cases, 44);

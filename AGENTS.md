@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a Rust port of Julia-mVMC organized as a Cargo workspace. Core crates live under `crates/`: `sfmt19937`, `pfapack`, `mvmc-expert-parsers`, `mvmc-core`, and `mvmc-cli`. Workspace automation is in `xtask/`. Cross-crate fixtures and reference data live in `tests/fixtures/`, while crate-local integration tests live in each crate's `tests/` directory. Benchmark code is under `benchmark/pfapack_compare/`; generated benchmark output belongs in `benchmark/pfapack_compare/results/`. Upstream/reference implementations are kept in `extern/` and `reference/`; avoid editing vendored sources unless the task explicitly requires it.
+This repository is a Rust port of mVMC organized as a Cargo workspace. Core crates live under `crates/`: `sfmt19937`, `pfapack`, `mvmc-expert-parsers`, `mvmc-core`, and `mvmc-cli`. Workspace automation is in `xtask/`. Cross-crate fixtures and reference data live in `tests/fixtures/`, while crate-local integration tests live in each crate's `tests/` directory. Benchmark code is under `benchmark/pfapack_compare/`; generated benchmark output belongs in `benchmark/pfapack_compare/results/`. Upstream/reference implementations are kept in `extern/` and `reference/`; avoid editing vendored sources unless the task explicitly requires it.
 
 ## Build, Test, and Development Commands
 
@@ -25,15 +25,21 @@ This Rust crate and its workspace are under active development. Backward compati
 
 ## Testing Guidelines
 
-Use Rust's built-in test framework plus crate-local integration tests. Golden and parity tests compare against Julia/reference fixtures; keep tolerances explicit near assertions. Name tests by behavior, for example `pfaffian_matches_julia_fixture` or `rejects_invalid_header`. For performance-sensitive changes, run both correctness tests and the relevant benchmark variant.
+Use Rust's built-in test framework plus crate-local integration tests. Golden and parity tests compare against C/reference fixtures, using Julia fixtures where they agree with C; keep tolerances explicit near assertions. Name tests by behavior, for example `pfaffian_matches_julia_fixture` or `rejects_invalid_header`. For performance-sensitive changes, run both correctness tests and the relevant benchmark variant.
 
-### Deterministic Julia Parity
+### C Reference Toolbox
 
-Use Julia 1.13.1 and the reference workspace's `extern/Julia-mVMC/Manifest-v1.13.toml` for current parity work. Run reference scripts with `julia +1.13.1 --project=extern/Julia-mVMC`. Record the Julia and BLAS versions when generating numerical fixtures; historical Julia 1.11 fixtures must not be presented as newly verified Julia 1.13 results.
+Accumulate reusable C comparison programs and useful extracted C source in `c_toolbox/`. Keep their upstream origin, source SHA-256 hashes, extraction boundaries, compiler options and reproduction commands documented. Preserve the authoritative vendored source in `extern/`; use the toolbox for probes and supporting code. Distinguish standalone kernel checks from full C executable/MPI/sampling validation.
+
+Rust builds and tests must remain independent of `c_toolbox/`. Do not compile, invoke or read toolbox programs from Cargo build scripts or Rust tests. Generate C-derived expected values separately and check them into `tests/fixtures/` with provenance. Normal Rust tests must run using those fixtures without `c_toolbox/`, rebuilding the C reference, or invoking C/Julia oracle programs; preserve ordinary Rust compiler/linker and BLAS/LAPACK requirements. Toolbox checks and fixture regeneration are explicit, optional developer commands.
+
+### Deterministic Reference Parity
+
+When using Julia for parity comparisons, use Julia 1.13.1 and the reference workspace's `extern/Julia-mVMC/Manifest-v1.13.toml`. Run reference scripts with `julia +1.13.1 --project=extern/Julia-mVMC`. Record the Julia and BLAS versions when generating numerical fixtures; historical Julia 1.11 fixtures must not be presented as newly verified Julia 1.13 results.
 
 The Rust and Julia implementations already use matching random-number algorithms and seeds. Port the authoritative C behavior faithfully, using Julia comparisons where their behavior agrees: preserve RNG initialization, draw order and count, integer/float conversion, and RNG state throughout parameter initialization, burn-in, move proposals, acceptance/rejection, and sampling. This includes draws on rejected moves and conditional branches. Refactoring and optimization must preserve the same deterministic trajectory for the same inputs and seed.
 
-Do not accept discrepancies as Monte Carlo noise or statistical fluctuations. Compare RNG states, proposed moves, acceptance decisions, saved configurations, and intermediate numerical results to locate the first divergence. Preserve numerical operation order where required for parity. Do not loosen tolerances, reseed, or average repeated runs to conceal a mismatch; floating-point tolerances must never excuse RNG or sampling-trajectory drift. Statistical reference checks supplement deterministic Julia parity checks and do not replace them.
+Do not accept discrepancies as Monte Carlo noise or statistical fluctuations. Compare RNG states, proposed moves, acceptance decisions, saved configurations, and intermediate numerical results to locate the first divergence. Preserve numerical operation order where required for parity. Do not loosen tolerances, reseed, or average repeated runs to conceal a mismatch; floating-point tolerances must never excuse RNG or sampling-trajectory drift. Statistical reference checks supplement deterministic reference parity checks and do not replace them.
 
 ## Commit & Pull Request Guidelines
 

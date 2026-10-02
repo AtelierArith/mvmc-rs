@@ -84,6 +84,7 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
     init_parameter(&mut plain, &mut plain_rng);
     assert_eq!(data.pair_hop_terms, original);
     assert_eq!(data.orbital_terms, plain.orbital_terms);
+    assert_eq!(data.slater_params, plain.slater_params);
     let bits: Vec<u64> = lines
         .next()
         .unwrap()
@@ -93,7 +94,12 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
     let actual: Vec<_> = data
         .orbital_terms
         .iter()
-        .flat_map(|t| [t.value.re.to_bits(), t.value.im.to_bits()])
+        .flat_map(|t| {
+            [
+                data.slater_params[t.idx as usize].re.to_bits(),
+                data.slater_params[t.idx as usize].im.to_bits(),
+            ]
+        })
         .collect();
     assert_eq!(actual, bits);
     let words: Vec<u32> = lines

@@ -363,7 +363,11 @@ mod opttrans_tests {
     fn values(data: &mut ExpertModeData) -> Vec<Complex64> {
         let mut out = data.projection_parameters();
         data.visit_rbm_terms_mut(|_, t| out.push(t.value()));
-        out.extend(data.orbital_terms.iter().map(|t| t.value));
+        out.extend(
+            data.orbital_terms
+                .iter()
+                .map(|t| data.slater_params[t.idx as usize]),
+        );
         out.extend(data.opt_trans.iter().copied());
         out
     }
@@ -479,13 +483,25 @@ mod opttrans_tests {
     }
 
     #[test]
-    fn opttrans_optimizer_normalization_and_weight_refresh_match_julia() {
+    fn opttrans_sync_matches_julia_with_declared_slater_normalization_from_c() {
         let text = std::fs::read_to_string(root().join("sync.txt")).unwrap();
         let mut lines = text.lines().filter(|l| !l.starts_with('#'));
         let mut count = 0;
         while let Some(header) = lines.next() {
             let f: Vec<_> = header.split_whitespace().collect();
             let mut data = model(f[0]);
+            let c_rows: Vec<_> =
+                include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
+                    .lines()
+                    .filter(|line| !line.starts_with('#'))
+                    .collect();
+            let c_sync = c_rows
+                .chunks_exact(4)
+                .find(|row| row[0] == "layout_sync")
+                .unwrap();
+            if n_slater(&data) == 4 {
+                bits(data.slater_params.iter().copied(), c_sync[1], header);
+            }
             data.opt_trans = match f[1] {
                 "1" => vec![],
                 "2" => vec![Complex64::new(0.0, 0.0), Complex64::new(-0.0, -0.0)],
@@ -506,7 +522,25 @@ mod opttrans_tests {
             } else {
                 crate::sync::sync_modified_parameter_local(&mut data, f[2] == "1");
             }
-            bits(values(&mut data), lines.next().unwrap(), header);
+            let historical = lines.next().unwrap();
+            let actual = values(&mut data);
+            if n_slater(&data) == 4 {
+                // The C array includes slots 2/3, which model() also updates.
+                // Slot 3 is the normalization maximum. Keep all historical
+                // non-Slater bits and replace Slater expectations with C bits.
+                bits(data.slater_params.iter().copied(), c_sync[2], header);
+                let mut expected: Vec<_> = historical.split_whitespace().collect();
+                let c_bits: Vec<_> = c_sync[2].split_whitespace().collect();
+                let offset = 2 * (actual.len() - data.opt_trans.len() - data.orbital_terms.len());
+                for (row, term) in data.orbital_terms.iter().enumerate() {
+                    let idx = term.idx as usize;
+                    expected[offset + 2 * row] = c_bits[2 * idx];
+                    expected[offset + 2 * row + 1] = c_bits[2 * idx + 1];
+                }
+                bits(actual, &expected.join(" "), header);
+            } else {
+                bits(actual, historical, header);
+            }
             bits(
                 data.qp_weights
                     .as_ref()
@@ -587,11 +621,9 @@ pub(crate) fn update_parameter_value(
             }
         });
     } else if para_idx < n_proj + data.count_rbm_parameters() + n_slater(data) {
-        let orbital_idx = (para_idx - n_proj - data.count_rbm_parameters()) as i64;
-        for term in data.orbital_terms.iter_mut() {
-            if term.idx == orbital_idx {
-                term.value += delta;
-            }
+        let orbital_idx = para_idx - n_proj - data.count_rbm_parameters();
+        if let Some(value) = data.slater_params.get_mut(orbital_idx) {
+            *value += delta;
         }
     } else {
         let offset = n_proj + data.count_rbm_parameters() + n_slater(data);
@@ -853,7 +885,11 @@ mod tests {
             let snapshot = |d: &mut ExpertModeData| {
                 let mut values = d.projection_parameters();
                 d.visit_rbm_terms_mut(|_, t| values.push(t.value()));
-                values.extend(d.orbital_terms.iter().map(|t| t.value));
+                values.extend(
+                    d.orbital_terms
+                        .iter()
+                        .map(|t| d.slater_params[t.idx as usize]),
+                );
                 bits(&values)
             };
             assert_eq!(
@@ -905,16 +941,20 @@ mod tests {
             Complex64::new(0.5, -0.25)
         );
         assert!(data
-            .orbital_terms
+            .slater_params
             .iter()
-            .all(|t| t.value == Complex64::new(0.0, 0.0)));
+            .all(|&v| v == Complex64::new(0.0, 0.0)));
         update_parameter_value(&mut data, n_proj + n_rbm + 1, -0.25, 0.5, n_proj);
-        assert_eq!(data.orbital_terms[1].value, Complex64::new(-0.25, 0.5));
+        assert_eq!(
+            data.slater_params[data.orbital_terms[1].idx as usize],
+            Complex64::new(-0.25, 0.5)
+        );
     }
 
     fn two_parameter_problem(complex: bool) -> (ExpertModeData, VmcOptimizationState) {
         let mut data = ExpertModeData::new();
         data.modpara.n_orbital_idx = 2;
+        data.slater_params = vec![Complex64::new(2.0, 0.0), Complex64::new(3.0, 0.0)];
         data.modpara.dsr_opt_sta_del = 0.0;
         data.optimization_flags = vec![true, false, true, false];
         data.orbital_terms = (0..2)
@@ -922,7 +962,6 @@ mod tests {
                 site1: 0,
                 site2: 0,
                 idx,
-                value: Complex64::new(2.0 + idx as f64, 0.0),
                 is_complex: complex,
                 sign: 1,
             })
@@ -944,19 +983,46 @@ mod tests {
     }
 
     #[test]
+    fn sr_updates_declared_unmapped_slots_and_shared_mappings_only_once() {
+        for complex in [false, true] {
+            let (mut data, mut state) = two_parameter_problem(complex);
+            data.modpara.dsr_opt_step_dt = 0.125;
+            data.orbital_terms.truncate(1);
+            data.orbital_terms.push(data.orbital_terms[0]);
+            if complex {
+                state.sr_opt.sr_opt_ho[4] = Complex64::new(0.5, 0.0);
+            } else {
+                state.sr_opt.sr_opt_ho_real[2] = 0.5;
+            }
+            let mappings = data.orbital_terms.clone();
+            let result = if complex {
+                stochastic_opt_complex(&mut data, &mut state)
+            } else {
+                stochastic_opt_real(&mut data, &mut state)
+            };
+            assert_eq!(result, 0);
+            assert_eq!(
+                data.slater_params,
+                [Complex64::new(1.75, 0.0), Complex64::new(2.875, 0.0)]
+            );
+            assert_eq!(data.orbital_terms, mappings);
+        }
+    }
+
+    #[test]
     fn real_nonfinite_update_preserves_all_parameters() {
         let (mut data, mut state) = two_parameter_problem(false);
-        let before = data.orbital_terms.clone();
+        let before = data.slater_params.clone();
         assert_eq!(stochastic_opt_real(&mut data, &mut state), 1);
-        assert_eq!(data.orbital_terms, before);
+        assert_eq!(data.slater_params, before);
     }
 
     #[test]
     fn complex_nonfinite_update_preserves_all_parameters() {
         let (mut data, mut state) = two_parameter_problem(true);
-        let before = data.orbital_terms.clone();
+        let before = data.slater_params.clone();
         assert_eq!(stochastic_opt_complex(&mut data, &mut state), 1);
-        assert_eq!(data.orbital_terms, before);
+        assert_eq!(data.slater_params, before);
     }
 
     #[test]
@@ -970,14 +1036,14 @@ mod tests {
                 state.sr_opt.sr_opt_oo_real[4] = f64::NAN;
                 state.sr_opt.sr_opt_ho_real[2] = 1.0;
             }
-            let before = data.orbital_terms.clone();
+            let before = data.slater_params.clone();
             let solve = if complex {
                 stochastic_opt_complex
             } else {
                 stochastic_opt_real
             };
             assert_eq!(solve(&mut data, &mut state), 1);
-            assert_eq!(data.orbital_terms, before);
+            assert_eq!(data.slater_params, before);
         }
     }
 
@@ -986,14 +1052,17 @@ mod tests {
         for complex in [false, true] {
             let (mut data, mut state) = two_parameter_problem(complex);
             data.optimization_flags = vec![true, false];
-            let before = data.orbital_terms[1].value;
+            let before = data.slater_params[data.orbital_terms[1].idx as usize];
             let solve = if complex {
                 stochastic_opt_complex
             } else {
                 stochastic_opt_real
             };
             assert_eq!(solve(&mut data, &mut state), 0);
-            assert_eq!(data.orbital_terms[1].value, before);
+            assert_eq!(
+                data.slater_params[data.orbital_terms[1].idx as usize],
+                before
+            );
         }
     }
 
@@ -1031,9 +1100,9 @@ mod tests {
                 "{header}"
             );
             let actual: Vec<_> = data
-                .orbital_terms
+                .slater_params
                 .iter()
-                .flat_map(|t| [t.value.re.to_bits(), t.value.im.to_bits()])
+                .flat_map(|t| [t.re.to_bits(), t.im.to_bits()])
                 .collect();
             let expected: Vec<_> = lines
                 .next()

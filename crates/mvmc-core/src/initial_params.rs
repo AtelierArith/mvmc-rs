@@ -90,11 +90,9 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
             term.set_value(parameter(offsets[section] + index as usize));
         }
     });
-    for term in &mut data.orbital_terms {
-        if term.idx >= 0 && (term.idx as usize) < n_orbital {
-            term.value = parameter(layout.n_proj + n_rbm + term.idx as usize);
-        }
-    }
+    data.slater_params = (0..n_orbital)
+        .map(|index| parameter(layout.n_proj + n_rbm + index))
+        .collect();
     for (index, value) in data.opt_trans.iter_mut().enumerate() {
         *value = parameter(layout.n_proj + n_rbm + n_orbital + index);
     }

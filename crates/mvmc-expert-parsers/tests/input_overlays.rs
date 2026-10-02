@@ -17,6 +17,7 @@ fn definition(count: usize, rows: &str) -> String {
 fn data() -> ExpertModeData {
     let mut d = ExpertModeData::new();
     d.modpara.n_orbital_idx = 5;
+    d.slater_params = vec![Complex64::new(7.0, 0.0); 5];
     d.n_orbital_anti_parallel = 3;
     d.i_flg_orbital_anti_parallel = 1;
     d.i_flg_orbital_parallel = 1;
@@ -25,7 +26,6 @@ fn data() -> ExpertModeData {
             site1: 0,
             site2: 1,
             idx,
-            value: Complex64::new(7.0, 0.0),
             is_complex: true,
             sign: 1,
         });
@@ -65,7 +65,11 @@ fn overlays_follow_namelist_order_and_exact_declared_parallel_offset() {
     fs::write(dir.join("g.def"), definition(1, "3 30 0.3\n")).unwrap();
     let mut d = data();
     read_input_parameters(&mut d, dir.join("namelist.def")).unwrap();
-    let vals: Vec<_> = d.orbital_terms.iter().map(|t| t.value).collect();
+    let vals: Vec<_> = d
+        .orbital_terms
+        .iter()
+        .map(|t| d.slater_params[t.idx as usize])
+        .collect();
     assert_eq!(
         vals,
         [
@@ -94,9 +98,36 @@ fn malformed_parallel_overlay_is_atomic() {
         let mut d = data();
         assert!(read_input_parameters(&mut d, dir.join("namelist.def")).is_err());
         assert!(d
-            .orbital_terms
+            .slater_params
             .iter()
-            .all(|t| t.value == Complex64::new(7.0, 0.0)));
+            .all(|&v| v == Complex64::new(7.0, 0.0)));
     }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn orbital_overlay_preserves_unmapped_internal_and_trailing_declared_slots() {
+    let dir = directory("unmapped");
+    fs::write(dir.join("namelist.def"), "InOrbitalGeneral full.def\n").unwrap();
+    fs::write(
+        dir.join("full.def"),
+        definition(5, "0 1 0\n1 2 0\n2 8 -1\n3 4 0\n4 5 0\n"),
+    )
+    .unwrap();
+    let mut data = data();
+    data.orbital_terms.truncate(2);
+    let mappings = data.orbital_terms.clone();
+    read_input_parameters(&mut data, dir.join("namelist.def")).unwrap();
+    assert_eq!(
+        data.slater_params,
+        [
+            Complex64::new(1.0, 0.0),
+            Complex64::new(2.0, 0.0),
+            Complex64::new(8.0, -1.0),
+            Complex64::new(4.0, 0.0),
+            Complex64::new(5.0, 0.0),
+        ]
+    );
+    assert_eq!(data.orbital_terms, mappings);
     fs::remove_dir_all(dir).unwrap();
 }

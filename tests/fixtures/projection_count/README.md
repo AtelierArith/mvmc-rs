@@ -1,5 +1,10 @@
 # C projection count contract
 
+C comparison drivers and verbatim extracted source are stored in
+`c_toolbox/`; generator commands below are optional developer checks. Rust
+tests consume the checked-in fixtures and never compile, invoke or read the
+toolbox. See [the toolbox documentation](../../../c_toolbox/README.md).
+
 The authoritative reference is the local `extern/mVMC-1.3.0` C snapshot.
 The fixture header records SHA-256 hashes of `readdef.c` and `qp.c`; this
 directory is an extracted source tree, not a standalone Git checkout.

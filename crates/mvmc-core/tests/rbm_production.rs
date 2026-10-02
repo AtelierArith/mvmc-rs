@@ -1,8 +1,13 @@
+#[path = "../../../tests/support/c_orbital_rng.rs"]
+mod c_orbital_rng;
+#[path = "../../../tests/support/reference_slater.rs"]
+mod reference_slater;
 use mvmc_core::initial_params::{read_initial_def, read_opt_para_file};
 use mvmc_expert_parsers::{
     parse_expert_mode_files, utils::read_input_parameters::read_input_parameters,
 };
 use num_complex::Complex64;
+use reference_slater::declared_output;
 use std::path::{Path, PathBuf};
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/rbm")
@@ -30,7 +35,7 @@ fn full_initial_and_strict_optimized_records_scatter_rbm_before_slater() {
     for t in data.orbital_terms {
         let idx = 5 + 27 + t.idx as usize;
         assert_eq!(
-            t.value,
+            data.slater_params[t.idx as usize],
             Complex64::new((idx + 1) as f64 / 8.0, -((idx + 1) as f64) / 16.0)
         );
     }
@@ -139,7 +144,11 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
         let snapshot = |d: &mut mvmc_expert_parsers::ExpertModeData| {
             let mut v = d.projection_parameters();
             d.visit_rbm_terms_mut(|_, t| v.push(t.value()));
-            v.extend(d.orbital_terms.iter().map(|t| t.value));
+            v.extend(
+                d.orbital_terms
+                    .iter()
+                    .map(|t| d.slater_params[t.idx as usize]),
+            );
             v
         };
         init_parameter(&mut data, &mut rng);
@@ -166,22 +175,46 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             &complex_line(lines.next().unwrap()),
             case,
         );
-        let expected: Vec<u32> = lines
+        // The historical Julia record initializes only mapped Slater slots.
+        // C initializes the complete declared array. Check its native SFMT
+        // record with the same active RBM prefix and declared Slater flags.
+        let historical_rng: Vec<u32> = lines
             .next()
             .unwrap()
             .split_whitespace()
             .map(|s| s.parse().unwrap())
             .collect();
+        assert_eq!(historical_rng.len(), 624);
         assert_eq!(
             (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),
-            expected
+            c_orbital_rng::declared_slater_rng(&data),
+            "{case} C declared Slater initialization"
         );
+        let c_slater = if case == "all" {
+            include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .collect::<Vec<_>>()
+                .chunks_exact(4)
+                .find(|record| record[0] == "rbm_layout_loaded")
+                .unwrap()
+                .try_into()
+                .unwrap()
+        } else {
+            c_orbital_rng::declared_slater_record(&data)
+        };
+        exact(&data.slater_params, &complex_line(c_slater[1]), case);
         sync_modified_parameter(&mut data, false);
-        exact(
-            &snapshot(&mut data),
-            &complex_line(lines.next().unwrap()),
-            case,
+        let normalized_slater = complex_line(c_slater[2]);
+        exact(&data.slater_params, &normalized_slater, case);
+        let mut expected = complex_line(lines.next().unwrap());
+        expected.truncate(expected.len() - data.orbital_terms.len());
+        expected.extend(
+            data.orbital_terms
+                .iter()
+                .map(|term| normalized_slater[term.idx as usize]),
         );
+        exact(&snapshot(&mut data), &expected, case);
         let before = snapshot(&mut data);
         let invalid = std::env::temp_dir().join(format!(
             "mvmc-rbm-invalid-{case}-{}.def",
@@ -227,6 +260,7 @@ fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
             if !reference {
                 config.seed = Some(1);
             }
+            let data = parse_expert_mode_files(&path).unwrap();
             let summary = mvmc_core::run_para_opt_from_namelist(&path, config).unwrap();
             assert_eq!(summary.status, 0);
             assert_eq!(summary.effective_nsteps, steps as usize);
@@ -242,7 +276,12 @@ fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
             ] {
                 assert_eq!(
                     std::fs::read_to_string(summary.output_dir.join(name)).unwrap(),
-                    std::fs::read_to_string(fixture.join(format!("step-{steps}-{name}"))).unwrap(),
+                    declared_output(
+                        &data,
+                        name,
+                        std::fs::read_to_string(fixture.join(format!("step-{steps}-{name}")))
+                            .unwrap()
+                    ),
                     "{case} {steps} {name}"
                 );
             }

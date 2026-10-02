@@ -7,8 +7,6 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
-use num_complex::Complex64;
-
 use crate::parsers::gutzwiller::read_idx_header;
 use crate::types::OrbitalTerm;
 use crate::utils::file::{read_def_file, safe_parse_int, split_def_line};
@@ -79,7 +77,6 @@ pub fn parse_orbital_content(content: &str) -> OrbitalSection {
             site1,
             site2,
             idx,
-            value: Complex64::new(0.0, 0.0),
             is_complex,
             sign,
         });

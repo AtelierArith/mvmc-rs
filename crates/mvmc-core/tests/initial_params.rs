@@ -8,6 +8,8 @@ const RECORD: &str = "1 2 3 4 5 6 0.10 0 9.9 0.20 0 9.9 0.30 0 9.9 0.40 -0.10 9.
 
 fn data() -> ExpertModeData {
     let mut d = ExpertModeData::new();
+    d.modpara.n_orbital_idx = 2;
+    d.slater_params = vec![Complex64::new(7.0, 8.0); 2];
     for site in 0..2 {
         d.gutzwiller_terms.push(GutzwillerTerm {
             site,
@@ -27,7 +29,6 @@ fn data() -> ExpertModeData {
             site1: 0,
             site2: 1,
             idx,
-            value: Complex64::new(7.0, 8.0),
             is_complex: true,
             sign: 1,
         });
@@ -40,7 +41,11 @@ fn values(d: &ExpertModeData) -> Vec<Complex64> {
         .iter()
         .map(|t| t.value)
         .chain(d.jastrow_terms.iter().map(|t| t.value))
-        .chain(d.orbital_terms.iter().map(|t| t.value))
+        .chain(
+            d.orbital_terms
+                .iter()
+                .map(|t| d.slater_params[t.idx as usize]),
+        )
         .collect()
 }
 
@@ -242,8 +247,8 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
         for (i, t) in data.jastrow_terms.iter_mut().enumerate() {
             t.value = Complex64::new((i + 3) as f64, 0.5);
         }
-        data.orbital_terms[0].value = Complex64::new(1.0, 0.0);
-        data.orbital_terms[1].value = Complex64::new(2.0, 0.0);
+        data.slater_params[data.orbital_terms[0].idx as usize] = Complex64::new(1.0, 0.0);
+        data.slater_params[data.orbital_terms[1].idx as usize] = Complex64::new(2.0, 0.0);
         for _ in 0..3 {
             sync_modified_parameter_local(&mut data, true);
         }
@@ -304,4 +309,83 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
     }
     assert!(lines.next().is_none());
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn full_declared_slater_load_and_sync_match_c_without_consuming_rng() {
+    use mvmc_core::sync::sync_modified_parameter_local;
+    use sfmt19937::Sfmt19937Rng;
+    let rows: Vec<_> = include_str!("../../../tests/fixtures/orbital_general/c_loaded.txt")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .collect();
+    assert_eq!(rows.len(), 8);
+    for record in rows.chunks_exact(4) {
+        let complex = record[0] == "1";
+        let mut payload = "0 0 0 0 0 0".to_owned();
+        for index in 0..13 {
+            let real = if index == 12 {
+                8.0
+            } else {
+                (index + 1) as f64 / 16.0
+            };
+            let imag = if complex {
+                -(index as f64 + 1.0) / 32.0
+            } else {
+                0.0
+            };
+            payload.push_str(&format!(" {real} {imag} 99"));
+        }
+        let path = file(&format!("c-full-{}", record[0]), &payload);
+        for optional in [false, true] {
+            let mut data = ExpertModeData::new();
+            data.modpara.n_orbital_idx = 13;
+            data.slater_params = vec![Complex64::new(99.0, 99.0); 13];
+            data.orbital_terms = [0, 1, 1, 7, 8]
+                .into_iter()
+                .map(|idx| OrbitalTerm {
+                    site1: 0,
+                    site2: 1,
+                    idx,
+                    sign: 1,
+                    is_complex: complex,
+                })
+                .collect();
+            let mappings = data.orbital_terms.clone();
+            let mut rng = Sfmt19937Rng::new(1);
+            if optional {
+                assert!(read_initial_def(&mut data, &path).unwrap());
+            } else {
+                assert_eq!(read_opt_para_file(&mut data, &path).unwrap(), 13);
+            }
+            for expected_row in [record[1], record[2]] {
+                let expected: Vec<_> = expected_row
+                    .split_whitespace()
+                    .map(|s| u64::from_str_radix(s, 16).unwrap())
+                    .collect();
+                let actual: Vec<_> = data
+                    .slater_params
+                    .iter()
+                    .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "C mode={}, optional={optional}",
+                    record[0]
+                );
+                assert_eq!(data.orbital_terms, mappings);
+                sync_modified_parameter_local(&mut data, false);
+            }
+            let expected: Vec<_> = record[3]
+                .split_whitespace()
+                .map(|s| s.parse::<u32>().unwrap())
+                .collect();
+            assert_eq!(expected.len(), 624);
+            assert_eq!(
+                (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),
+                expected
+            );
+        }
+        fs::remove_file(path).unwrap();
+    }
 }

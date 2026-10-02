@@ -1,7 +1,10 @@
 //! DH2 production support and canonical complex-mode selection.
+#[path = "../../../tests/support/reference_slater.rs"]
+mod reference_slater;
 use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::all_complex_flag};
 use num_complex::Complex64;
+use reference_slater::declared_output;
 use std::path::Path;
 
 #[test]
@@ -52,8 +55,10 @@ fn dh2_runtime_mode_matches_original_flags_declarations_and_loaded_values() {
 fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_output() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for mode in ["real", "cmp", "fsz"] {
+        let namelist = root.join(format!("dh2/production_{mode}/namelist.def"));
+        let data = parse_expert_mode_files(&namelist).unwrap();
         let result = mvmc_core::run_para_opt_from_namelist(
-            root.join(format!("dh2/production_{mode}/namelist.def")),
+            &namelist,
             mvmc_core::RunConfig {
                 nsmp: Some(3),
                 ..mvmc_core::RunConfig::new(3, mode)
@@ -71,7 +76,11 @@ fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_outp
         ] {
             assert_eq!(
                 std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
-                std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap(),
+                declared_output(
+                    &data,
+                    name,
+                    std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap()
+                ),
                 "{mode} {name}"
             );
         }
