@@ -491,6 +491,21 @@ fn print_comparison(measurements: &[Measurement]) {
             julia_min / rust_min,
             energy_str,
         );
+        let rust_energy = final_energies_for(measurements, "rust", model.name);
+        let julia_energy = final_energies_for(measurements, "julia", model.name);
+        if !rust_energy.is_empty() && !julia_energy.is_empty() {
+            let delta = (mean(&rust_energy) - mean(&julia_energy)).abs();
+            let reference_std = stddev(&julia_energy);
+            let failure = ctest_failure(delta, reference_std);
+            println!(
+                "{:<24} ctest |Δmean|={:.3e} reference_std={:.3e} threshold={:.3e} status={}",
+                model.name,
+                delta,
+                reference_std,
+                3.0 * reference_std,
+                if failure { "FAIL" } else { "PASS" },
+            );
+        }
     }
 }
 
@@ -512,6 +527,23 @@ fn energy_delta(measurements: &[Measurement], model: &str) -> Option<f64> {
         .find(|m| m.implementation == "julia" && m.model == model)
         .and_then(|m| m.final_energy_per_site)?;
     Some((rust - julia).abs())
+}
+
+fn final_energies_for(measurements: &[Measurement], implementation: &str, model: &str) -> Vec<f64> {
+    measurements
+        .iter()
+        .filter(|m| m.implementation == implementation && m.model == model)
+        .filter_map(|m| m.final_energy_per_site)
+        .collect()
+}
+
+/// Upstream ctest-equivalent failure rule: both absolute thresholds must be
+/// met. The statistical reference is the Julia repetition distribution.
+fn ctest_failure(delta: f64, reference_std: f64) -> bool {
+    delta.is_finite()
+        && reference_std.is_finite()
+        && delta >= 3.0 * reference_std
+        && delta >= 1.0e-8
 }
 
 fn write_csv(path: &Path, measurements: &[Measurement]) -> Result<(), String> {
@@ -705,3 +737,16 @@ for iter in 1:(warmups + reps)
     flush(stdout)
 end
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::ctest_failure;
+
+    #[test]
+    fn ctest_requires_both_statistical_and_absolute_thresholds() {
+        assert!(!ctest_failure(9.0e-9, 0.0));
+        assert!(!ctest_failure(2.0e-8, 1.0e-8));
+        assert!(ctest_failure(3.1e-8, 1.0e-8));
+        assert!(!ctest_failure(f64::NAN, 0.0));
+    }
+}
