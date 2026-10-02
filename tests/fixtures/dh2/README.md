@@ -98,7 +98,7 @@ this omission, and tests explicitly check that no DH2 output file is invented.
 Initial/fixed loaders still accept the full projection/Slater triples format.
 
 Production DH2 optimization is enabled only with these deterministic gates.
-DH4, RBM, OptTrans, PhysCal, MPI and the source's broken real FSZ runner remain
+PhysCal, MPI and the source's broken real FSZ runner remain
 subject to their own issues and runtime restrictions.
 
 ```sh

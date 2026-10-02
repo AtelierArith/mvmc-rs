@@ -86,3 +86,55 @@ header lines, then a blank line, then one floating-point literal per
 payload row (`%.17e`; complex rows print `re im` separated by a single
 space). Re-run the dumper after touching either `PfaPack.jl/src/*.jl`
 or `crates/pfapack/src/*.rs` to refresh the goldens.
+
+
+## Input and parameter contracts
+
+Current parameter work uses unmodified Julia 1.13.1 with
+`extern/Julia-mVMC/Manifest-v1.13.toml`, canonical source HEAD `8bb1b9e8` and
+numerical/parser source `c2ea4327`. These checks do not regenerate or relabel
+the historical numerical fixtures described above.
+
+| Contract | Source checks | Rust coverage |
+| --- | --- | --- |
+| Component flags (#21) | `scripts/check_parser_contracts_parity.jl`; family parser scripts | `mvmc-expert-parsers/tests/optimization_flags.rs`; DH/RBM/OptTrans initialization fixtures |
+| Optional In*.def overlays (#20) | `scripts/check_input_overlays_parity.jl`; family parser/loading scripts | `mvmc-expert-parsers/tests/input_overlays.rs`; DH/RBM/OptTrans parser and loaded-boundary fixtures |
+| Atomic initial/fixed loading (#28) | `scripts/check_initial_params_parity.jl`; `scripts/check_opttrans_load_weights_parity.jl`; RBM production loading script | `mvmc-core/tests/initial_params.rs`, `opttrans.rs`, `runner_config.rs`; family full-record checks |
+
+Global flags and parameter offsets include projection, DH2/DH4, all nine RBM
+sections, declared Slater/AP/P slots and active OptTrans weights. Flags preserve
+source distinctions between real/imaginary components, absent flags, unmapped
+slots and shared indices. Fixed Slater slots skip initialization draws; Slater
+normalization still rescales fixed components as Julia does. Fixed correlation
+blocks disable gauge shifts, and repeated synchronization preserves them.
+The parsed AP/P initialization contract explicitly checks every coefficient bit
+and the complete following 624-word SFMT block hash against Rust's constants.
+
+The runner preserves initialization → optional initial.def → ordered In*.def
+updates → optimizer synchronization → QP initialization. Relative paths resolve
+from the namelist; later overlapping overlays win and tied mappings share the
+new coefficient. Gutzwiller/Jastrow/normal/AP/General/RBM files retain canonical
+permissive numeric fallbacks. Parallel/DH2/DH4/OptTrans overlays validate their
+whole indexed record before mutation. Missing optional files are skipped; an
+invalid later strict overlay does not revert earlier successful overlays.
+
+Initial and optimized loaders share validation of every diagnostic, coefficient
+and gradient token, finite values, and exact six-header-plus-triples length.
+The record uses declared/reserved widths rather than row counts and includes
+DH/RBM/OptTrans tails. Invalid files preserve all parameters. Optional initial
+loading returns false for missing/malformed files; strict fixed loading returns
+an error. The runner's Auto/Path/None policy handles optional files separately.
+
+Family details and reproduction commands are in [DH2](dh2/README.md),
+[DH4](dh4/README.md), [RBM](rbm/README.md) and [OptTrans](opttrans/README.md).
+Their deterministic production tests supplement the input-only contracts.
+Full-record fixed loading is available independently of the remaining PhysCal
+execution work (#29).
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_parser_contracts_parity.jl
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_input_overlays_parity.jl
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_initial_params_parity.jl
+cargo test -p mvmc-expert-parsers
+cargo test -p mvmc-core --test initial_params --test opttrans --test runner_config
+```

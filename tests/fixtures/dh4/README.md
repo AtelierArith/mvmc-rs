@@ -4,7 +4,8 @@ Issue #25: strict four-neighbor definitions, ten complex parameters per index,
 combined DH2/DH4 layout, initialization/loading, counters/ratios/derivatives,
 gauge compensation and serial direct/CG SR. The normal real/complex and complex
 FSZ production gates cover DH4 alone and together with DH2. Real FSZ, RBM,
-OptTrans, PhysCal and MPI remain subject to their own implementation issues.
+Serial OptTrans is verified under #27; PhysCal and MPI retain their own
+implementation scope.
 
 Reference: unchanged Julia-mVMC `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`,
 parser/numerical sources `c2ea432785bc14364a3cd5e9eef44db464289cc9`, Julia 1.13.1,
