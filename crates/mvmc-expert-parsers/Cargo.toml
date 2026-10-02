@@ -4,7 +4,6 @@ version = "0.0.0"
 description = "Parsers + ExpertModeData for mVMC Expert Mode .def files (port of MVMCExpertModeParsers.jl)"
 license = "GPL-3.0-or-later"
 edition.workspace = true
-rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false

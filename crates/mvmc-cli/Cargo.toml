@@ -4,7 +4,6 @@ version = "0.0.0"
 description = "Command-line driver for the Julia-mVMC Rust port (port of examples/*.jl)"
 license = "GPL-3.0-or-later"
 edition.workspace = true
-rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false

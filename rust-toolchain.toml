@@ -1,8 +1,6 @@
-# Toolchain selection. During the Phase-0 skeleton we ride `stable` to
-# avoid forcing a one-shot toolchain download for everyone; the actual
-# bit-parity work (Phase 2 onwards) will pin a specific patch version
-# alongside the BLAS / LAPACK backend selection. See
-# `workspace.package.rust-version` in Cargo.toml for the MSRV floor.
+# Toolchain selection. We always track the latest `stable` release rather
+# than pinning a patch version. There is no MSRV floor in Cargo.toml; this
+# file is the single source of truth for the toolchain.
 [toolchain]
 channel = "stable"
 components = ["rustfmt", "clippy"]

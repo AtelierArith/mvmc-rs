@@ -426,10 +426,11 @@ fn qp_weighted_orbital_sum_einsum(
     backend: &mut tenferro_cpu::CpuBackend,
     weights: &tenferro_tensor::TypedTensor<Complex64>,
     buffer: &tenferro_tensor::TypedTensor<Complex64>,
-) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
+) -> tenferro_einsum::Result<tenferro_tensor::TypedTensor<Complex64>> {
     use tenferro_einsum::TypedTensorEinsumExt;
+    use tenferro_tensor::BackendSessionHost;
 
-    [buffer, weights].einsum("oq,q->o", backend)
+    backend.with_backend_session(|session| [buffer, weights].einsum("oq,q->o", session))
 }
 
 /// Diagonal-only Hamiltonian terms (no off-diagonal Green-function calls).
