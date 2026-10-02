@@ -16,11 +16,8 @@ use sfmt19937::Sfmt19937Rng;
 use crate::c_const::D_AMP_MAX;
 use crate::types::ExpertModeData;
 
-/// Compute `AllComplexFlag` exactly as `parameter_init.jl` does.
+/// Compute C's `AllComplexFlag` from definition-level complex headers.
 pub fn all_complex_flag(data: &ExpertModeData) -> bool {
-    if data.modpara.complex_flag != 0 {
-        return true;
-    }
     let g = data.gutzwiller_terms.iter().any(|t| t.is_complex);
     let j = data.jastrow_terms.iter().any(|t| t.is_complex);
     let o = data.orbital_terms.iter().any(|t| t.is_complex);

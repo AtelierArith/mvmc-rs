@@ -2,6 +2,7 @@ mod common;
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
 use common::historical_kernel_model as parse_expert_mode_files;
+use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
 use std::path::PathBuf;
 
 #[test]
@@ -54,7 +55,13 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
         let mut data =
             parse_expert_mode_files(root().join(format!("namelist_{case}.def"))).unwrap();
         match mode {
-            "complex" => data.modpara.complex_flag = 1,
+            "complex" => {
+                // C ignores ModPara.ComplexType for AllComplexFlag; make the
+                // definition-level projection header complex instead.
+                data.gutzwiller_terms
+                    .iter_mut()
+                    .for_each(|term| term.is_complex = true);
+            }
             "missing_flags" => data.optimization_flags.clear(),
             "inactive" => data.optimization_flags.fill(0),
             "truncated" => data.optimization_flags.truncate(2),
@@ -66,6 +73,16 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
             }
             "parsed" => (),
             _ => unreachable!(),
+        }
+        if mode == "complex" && !all_complex_flag(&data) {
+            // This historical case used ModPara.ComplexType as a Julia-only
+            // mode switch; C leaves it real when all definition headers are
+            // real. Consume its archived rows without treating them as C
+            // numerical evidence.
+            for _ in 0..4 {
+                lines.next().unwrap();
+            }
+            continue;
         }
         let sizes: Vec<usize> = lines
             .next()
