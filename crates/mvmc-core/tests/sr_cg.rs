@@ -51,14 +51,14 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
         std::fs::read_to_string(dir.join("custom_SRinfo.dat")).unwrap(),
         format!("#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n{row}{row}")
     );
-    data.optimization_flags = vec![false, false];
+    data.optimization_flags = vec![0, 0];
     let before = data.slater_params.clone();
     assert_eq!(
         mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
         0
     );
     assert_eq!(data.slater_params, before);
-    data.optimization_flags = vec![true, false];
+    data.optimization_flags = vec![1, 0];
     state.sr_opt.sr_opt_ho_real[1] = f64::NAN;
     assert_eq!(
         mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
@@ -84,9 +84,9 @@ fn cg_complex_component_flags_and_variance_cut_preserve_fixed_components() {
     use mvmc_expert_parsers::OrbitalTerm;
     use num_complex::Complex64 as C;
     for (flags, cut, expected) in [
-        (vec![true, true], 0.0, C::new(9.5, 4.75)),
-        (vec![true, false], 0.0, C::new(9.5, 5.0)),
-        (vec![true, true], 0.5, C::new(10.0, 4.75)),
+        (vec![1, 1], 0.0, C::new(9.5, 4.75)),
+        (vec![1, 0], 0.0, C::new(9.5, 5.0)),
+        (vec![1, 1], 0.5, C::new(10.0, 4.75)),
     ] {
         let mut data = ExpertModeData::new();
         data.modpara.nvmc_sample = 2;

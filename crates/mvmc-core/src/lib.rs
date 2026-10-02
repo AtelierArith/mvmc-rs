@@ -56,3 +56,7 @@ mod c_general_fsz;
 #[cfg(test)]
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+
+#[cfg(test)]
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;

@@ -11,7 +11,8 @@ pub fn declared_slater_record(data: &ExpertModeData) -> [&'static str; 4] {
             data.optimization_flags
                 .get(2 * (n_proj + i))
                 .copied()
-                .unwrap_or(false)
+                .unwrap_or(0)
+                > 0
         })
         .count();
     let mask = (0..4).fold(0, |mask, i| {
@@ -19,7 +20,8 @@ pub fn declared_slater_record(data: &ExpertModeData) -> [&'static str; 4] {
             data.optimization_flags
                 .get(2 * (n_proj + n_rbm + i))
                 .copied()
-                .unwrap_or(true),
+                .unwrap_or(1)
+                > 0,
         ) << i)
     });
     let key = format!("{} {active_rbm} {mask}", u8::from(all_complex_flag(data)));

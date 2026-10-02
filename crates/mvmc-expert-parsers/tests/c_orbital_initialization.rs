@@ -43,7 +43,7 @@ fn data(header: &str) -> (ExpertModeData, Sfmt19937Rng) {
     data.optimization_flags = (0..13)
         .flat_map(|i| {
             let active = fields[2] == 0 || i < 9;
-            [active, active && fields[1] != 0]
+            [i64::from(active), i64::from(active && fields[1] != 0)]
         })
         .collect();
     (data, Sfmt19937Rng::new(fields[0]))

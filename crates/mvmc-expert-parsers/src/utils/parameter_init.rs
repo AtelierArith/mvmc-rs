@@ -66,7 +66,8 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
             .optimization_flags
             .get(2 * (n_proj + i))
             .copied()
-            .unwrap_or(false)
+            .unwrap_or(0)
+            > 0
         {
             if all_complex {
                 let radius = 1e-2 * rng.genrand_real2();
@@ -103,7 +104,8 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
                 .optimization_flags
                 .get(opt_flag_idx)
                 .copied()
-                .unwrap_or(true);
+                .unwrap_or(1)
+                > 0;
             if should_optimize {
                 let r = rng.genrand_real2();
                 *slot = Complex64::new(2.0 * (r - 0.5), 0.0);
@@ -118,7 +120,8 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
                 .optimization_flags
                 .get(opt_flag_idx)
                 .copied()
-                .unwrap_or(true);
+                .unwrap_or(1)
+                > 0;
             if should_optimize {
                 let r1 = rng.genrand_real2();
                 let r2 = rng.genrand_real2();
@@ -144,7 +147,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
 /// Slater to `D_AMP_MAX`. Correlation shifts can be disabled as in Julia.
 pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bool) {
     let layout = data.projection_layout();
-    let real_flag = |i: usize| data.optimization_flags.get(2 * i).copied().unwrap_or(false);
+    let real_flag = |i: usize| data.optimization_flags.get(2 * i).copied().unwrap_or(0) == 1;
     let all_gutz = layout.n_gutzwiller > 0 && (0..layout.n_gutzwiller).all(real_flag);
     let shift_dh2 = layout.n_dh2 > 0
         && all_gutz

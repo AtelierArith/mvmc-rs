@@ -9,7 +9,7 @@ fn orbital_headers_mapping_rows_and_flag_fields_match_c_acceptance() {
             .lines()
             .filter(|line| !line.starts_with('#'))
             .collect();
-    assert_eq!(rows.len(), 180);
+    assert_eq!(rows.len(), 92 * 2);
     let dir = std::env::temp_dir().join(format!("mvmc-c-orbital-contracts-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let mut failures = Vec::new();
@@ -67,7 +67,7 @@ fn orbital_headers_mapping_rows_and_flag_fields_match_c_acceptance() {
             let real_flags: Vec<_> = data.optimization_flags[start..]
                 .iter()
                 .step_by(2)
-                .map(|&flag| i64::from(flag))
+                .copied()
                 .collect();
             let expected_flags: Vec<i64> = fields[7..]
                 .iter()
@@ -81,6 +81,6 @@ fn orbital_headers_mapping_rows_and_flag_fields_match_c_acceptance() {
         }
     }
     fs::remove_dir_all(dir).unwrap();
-    assert_eq!(accepted, 45);
+    assert_eq!(accepted, 47);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

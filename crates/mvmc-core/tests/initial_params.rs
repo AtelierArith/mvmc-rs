@@ -1,4 +1,6 @@
 //! C complete records plus bounded, atomic diagnostics for malformed inputs.
+#[path = "../../../tests/support/historical_optimization_flags.rs"]
+mod historical_optimization_flags;
 use mvmc_core::{read_initial_def, read_opt_para_file, ExpertModeData};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
 use num_complex::Complex64;
@@ -196,16 +198,6 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
     )
     .unwrap();
     fs::write(
-        dir.join("o.def"),
-        definition(
-            "NOrbitalIdx",
-            2,
-            0,
-            "0 1 0\n1 0 1\n0 0 0\n0 2 0\n1 1 0\n1 2 0\n2 0 0\n2 1 0\n2 2 0\n0 0\n1 1\n",
-        ),
-    )
-    .unwrap();
-    fs::write(
         dir.join("namelist.def"),
         "ModPara modpara.def\nOrbitalAntiParallel o.def\nGutzwiller g.def\nJastrow j.def\n",
     )
@@ -213,6 +205,17 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
     let text = include_str!("../../../tests/fixtures/sr_failure/fixed_flag_steps.txt");
     let mut lines = text.lines().filter(|line| !line.starts_with('#'));
     for complex_jastrow in [0, 1] {
+        fs::write(
+            dir.join("o.def"),
+            definition(
+                "NOrbitalIdx",
+                2,
+                complex_jastrow,
+                "0 1 0\n1 0 1\n0 0 0\n0 2 0\n1 1 0\n1 2 0\n2 0 0\n2 1 0\n2 2 0\n0 0\n1 1\n",
+            ),
+        )
+        .unwrap();
+
         fs::write(
             dir.join("j.def"),
             definition(
@@ -239,8 +242,9 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
             .next()
             .unwrap()
             .split_whitespace()
-            .map(|s| s == "1")
+            .map(|s| s.parse::<i64>().unwrap())
             .collect::<Vec<_>>();
+        let flags = historical_optimization_flags::c_orbital_representation(&data, flags);
         assert_eq!(data.optimization_flags, flags);
         let mut rng = Sfmt19937Rng::new(1);
         init_parameter(&mut data, &mut rng);

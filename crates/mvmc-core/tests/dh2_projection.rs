@@ -49,7 +49,7 @@ fn model() -> ExpertModeData {
     d.doublon_holon_2site_params = (1..=12)
         .map(|i| Complex64::new(i as f64 / 8.0, -(i as f64) / 16.0))
         .collect();
-    d.optimization_flags = vec![true; 2 * d.projection_layout().n_proj];
+    d.optimization_flags = vec![1; 2 * d.projection_layout().n_proj];
     d
 }
 fn occupancy(mask: usize) -> Vec<i64> {
@@ -144,8 +144,8 @@ fn dh_gauge_matches_julia_declared_flags_compensation_and_shift_order() {
         let mut d = model();
         match name {
             "all" | "disabled" => {}
-            "fixed_gutz" => d.optimization_flags[4] = false,
-            "fixed_dh" => d.optimization_flags[36] = false,
+            "fixed_gutz" => d.optimization_flags[4] = 0,
+            "fixed_dh" => d.optimization_flags[36] = 0,
             "empty_flags" => d.optimization_flags.clear(),
             "short_flags" => d.optimization_flags.truncate(15),
             "partial_params" => d.doublon_holon_2site_params.truncate(10),
@@ -314,8 +314,8 @@ fn direct_sr_updates_each_dh_component_without_writing_other_projection_slots() 
                 d.modpara.dsr_opt_red_cut = 0.0;
                 d.modpara.dsr_opt_sta_del = 0.0;
                 d.modpara.dsr_opt_step_dt = 0.25;
-                d.optimization_flags = vec![false; 2 * layout.n_proj];
-                d.optimization_flags[2 * target + imaginary] = true;
+                d.optimization_flags = vec![0; 2 * layout.n_proj];
+                d.optimization_flags[2 * target + imaginary] = 1;
                 let before = d.projection_parameters();
                 let mut state = VmcOptimizationState::zeros(
                     4,

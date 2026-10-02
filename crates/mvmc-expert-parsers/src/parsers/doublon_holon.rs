@@ -1,4 +1,4 @@
-//! Atomic C-compatible DH2/DH4 neighbor definitions from `doublon_holon_parser.jl`.
+//! DH2/DH4 neighbor definitions, raw C integer flags and bounded Rust diagnostics.
 use std::{io, path::Path};
 
 use crate::types::{
@@ -13,7 +13,7 @@ use crate::utils::file::{clean_line, read_def_file};
 pub struct Dh2ParseResult {
     /// Complete definition, or None on any parsing error.
     pub data: Option<DoublonHolon2SiteDefinition>,
-    /// First error, matching the canonical parser text.
+    /// First error, preserving historical Julia diagnostics where applicable.
     pub error_message: String,
     /// Last neighbor/flag body line reached; header/count failures leave zero.
     pub line_number: usize,
@@ -43,7 +43,7 @@ pub fn parse_doublon_holon_2site_def(
 pub struct Dh4ParseResult {
     /// Complete definition, or None on any parsing error.
     pub data: Option<DoublonHolon4SiteDefinition>,
-    /// First error, matching the canonical parser text.
+    /// First error, preserving historical Julia diagnostics where applicable.
     pub error_message: String,
     /// Last neighbor/flag body line reached; header/count failures leave zero.
     pub line_number: usize,
@@ -185,12 +185,12 @@ pub fn parse_doublon_holon_2site_content(content: &str, nsite: i64) -> Dh2ParseR
             }
             integer(parts[0], *number, "ignored local parameter index")?;
             let flag = integer(parts[1], *number, "opt flag")?;
-            if flag != 0 && flag != 1 {
+            if i32::try_from(flag).is_err() {
                 return Err(format!(
-                    "line {number}: opt flag must be 0 or 1, got {flag}"
+                    "line {number}: opt flag is outside C integer range"
                 ));
             }
-            opt_flags.push(flag != 0);
+            opt_flags.push(flag);
         }
         Ok(DoublonHolon2SiteDefinition {
             indices,
@@ -306,12 +306,12 @@ pub fn parse_doublon_holon_4site_content(content: &str, nsite: i64) -> Dh4ParseR
             }
             integer(parts[0], *number, "ignored local parameter index")?;
             let flag = integer(parts[1], *number, "opt flag")?;
-            if flag != 0 && flag != 1 {
+            if i32::try_from(flag).is_err() {
                 return Err(format!(
-                    "line {number}: opt flag must be 0 or 1, got {flag}"
+                    "line {number}: opt flag is outside C integer range"
                 ));
             }
-            opt_flags.push(flag != 0);
+            opt_flags.push(flag);
         }
         Ok(DoublonHolon4SiteDefinition {
             indices,

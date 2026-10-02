@@ -24,7 +24,7 @@ pub fn stochastic_opt_cg(
         ));
     }
     if data.optimization_flags.is_empty() {
-        data.optimization_flags = vec![true; 2 * n_para];
+        data.optimization_flags = vec![1; 2 * n_para];
     }
     let size = offset * state.sr_opt.sr_opt_size;
     let oo: Vec<f64> = if complex {
@@ -57,7 +57,7 @@ pub fn stochastic_opt_cg(
     let mut diag_cut = 0;
     for (pi, &v) in variance.iter().enumerate() {
         let flag = if complex { pi } else { 2 * pi };
-        if !data.optimization_flags.get(flag).copied().unwrap_or(false) {
+        if data.optimization_flags.get(flag).copied().unwrap_or(0) != 1 {
             opt_cut += 1;
         } else if v < threshold {
             diag_cut += 1;

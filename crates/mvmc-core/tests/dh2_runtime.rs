@@ -58,7 +58,11 @@ fn dh2_runtime_mode_matches_original_flags_declarations_and_loaded_values() {
 fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_output() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for mode in ["real", "cmp", "fsz"] {
-        let namelist = root.join(format!("dh2/production_{mode}/namelist.def"));
+        let namelist = if mode == "cmp" {
+            root.join("c_orbital_inputs/namelist_dh2_cmp.def")
+        } else {
+            root.join(format!("dh2/production_{mode}/namelist.def"))
+        };
         let data = parse_expert_mode_files(&namelist).unwrap();
         let result = mvmc_core::run_para_opt_from_namelist(
             &namelist,

@@ -1247,6 +1247,36 @@ mod callback_tests {
         steps: i64,
         path: &Path,
     ) -> (ExpertModeData, VmcOptimizationState, Sfmt19937Rng) {
+        // These Julia mixed-DH models relied on global complex mode enabling
+        // real-orbital imaginary flags. C uses only orbital headers; explicit
+        // complex AP replacements preserve these historical SR/RNG workloads.
+        // RBM legacy workloads also use explicit binary flags: C flag 2 is
+        // fixed for SR, while Julia had converted it to true. These helpers
+        // never change flags on a parsed production model.
+        let input = path.to_string_lossy();
+        let replacement = [
+            ("dh2/production_cmp/namelist.def", "dh2_cmp"),
+            ("dh4/production_dh4_cmp/namelist.def", "dh4_cmp"),
+            ("dh4/production_dh24_cmp/namelist.def", "dh24_cmp"),
+            ("rbm/run_rbm_real/namelist.def", "rbm_real"),
+            ("rbm/run_rbm_cmp/namelist.def", "rbm_cmp"),
+            ("rbm/run_rbm_general_cmp/namelist.def", "rbm_general_cmp"),
+            ("rbm/run_rbm_dh24_cmp/namelist.def", "rbm_dh24_cmp"),
+            ("rbm/run_rbm_fsz/namelist.def", "rbm_fsz"),
+            (
+                "opttrans/run_opt_dh24_rbm_cmp/namelist.def",
+                "opt_dh24_rbm_cmp",
+            ),
+        ]
+        .into_iter()
+        .find(|(suffix, _)| input.ends_with(suffix))
+        .map(|(_, name)| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                "../../tests/fixtures/c_orbital_inputs/namelist_{name}.def"
+            ))
+        });
+        let path = replacement.as_deref().unwrap_or(path);
+
         let mut data = parse_expert_mode_files(path).unwrap();
         data.modpara.nsr_opt_itr_step = steps;
         data.modpara.nsr_opt_itr_smp = steps;
@@ -1630,12 +1660,15 @@ mod callback_tests {
             let mut lines = input.lines().skip(1);
             assert_eq!(
                 data.optimization_flags,
-                lines
-                    .next()
-                    .unwrap()
-                    .split_whitespace()
-                    .map(|s| s == "1")
-                    .collect::<Vec<_>>()
+                crate::historical_optimization_flags::c_orbital_representation(
+                    &data,
+                    lines
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .map(|s| s.parse::<i64>().unwrap())
+                        .collect()
+                )
             );
             let values = data
                 .projection_parameters()
@@ -1721,12 +1754,15 @@ mod callback_tests {
             let mut lines = input.lines().skip(1);
             assert_eq!(
                 data.optimization_flags,
-                lines
-                    .next()
-                    .unwrap()
-                    .split_whitespace()
-                    .map(|s| s == "1")
-                    .collect::<Vec<_>>()
+                crate::historical_optimization_flags::c_orbital_representation(
+                    &data,
+                    lines
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .map(|s| s.parse::<i64>().unwrap())
+                        .collect()
+                )
             );
             let values = data
                 .projection_parameters()
@@ -1883,11 +1919,12 @@ mod callback_tests {
         rng: &mut sfmt19937::Sfmt19937Rng,
         root: &Path,
     ) {
-        let flags: Vec<bool> = fs::read_to_string(root.join("initial-flags.txt"))
+        let flags: Vec<i64> = fs::read_to_string(root.join("initial-flags.txt"))
             .unwrap()
             .split_whitespace()
-            .map(|v| v == "1")
+            .map(|v| v.parse::<i64>().unwrap())
             .collect();
+        let flags = crate::historical_optimization_flags::c_orbital_representation(data, flags);
         assert_eq!(data.optimization_flags, flags);
         let bits: Vec<u64> = fs::read_to_string(root.join("initial-parameters.txt"))
             .unwrap()

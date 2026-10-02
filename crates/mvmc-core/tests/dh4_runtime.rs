@@ -72,7 +72,11 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
         "dh24_cmp",
         "dh24_fsz",
     ] {
-        let namelist = root.join(format!("dh4/production_{case}/namelist.def"));
+        let namelist = if matches!(case, "dh4_cmp" | "dh24_cmp") {
+            root.join(format!("c_orbital_inputs/namelist_{case}.def"))
+        } else {
+            root.join(format!("dh4/production_{case}/namelist.def"))
+        };
         let data = parse_expert_mode_files(&namelist).unwrap();
         let result = mvmc_core::run_para_opt_from_namelist(
             &namelist,
