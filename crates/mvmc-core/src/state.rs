@@ -1056,6 +1056,25 @@ pub struct PhysicalQuantities {
     pub phys_cis_ajs_ckt_alt_dc: Vec<Complex64>,
 }
 
+/// Cached immutable metadata for the real Transfer local-energy path.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TransferTermMetadata {
+    pub(crate) site1: usize,
+    pub(crate) site2: usize,
+    pub(crate) spin1: u8,
+    pub(crate) spin2: u8,
+    pub(crate) value: Complex64,
+}
+
+/// Transfer metadata and projection eligibility cache.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct TransferKernelCache {
+    pub(crate) signature: u64,
+    pub(crate) terms: Vec<TransferTermMetadata>,
+    pub(crate) direct_projection_eligible: bool,
+    pub(crate) all_real: bool,
+}
+
 impl PhysicalQuantities {
     /// Mirror of `PhysicalQuantities(n_cis_ajs, n_cis_ajs_ckt_alt, n_cis_ajs_ckt_alt_dc)`.
     pub fn zeros(n_cis_ajs: usize, n_cis_ajs_ckt_alt: usize, n_cis_ajs_ckt_alt_dc: usize) -> Self {
@@ -1094,6 +1113,7 @@ pub struct VmcOptimizationState {
     pub workspace: SamplingWorkspace,
     /// Physical quantities (`Some` in measurement mode).
     pub phys_quantities: Option<PhysicalQuantities>,
+    pub(crate) transfer_cache: TransferKernelCache,
 }
 
 impl VmcOptimizationState {
@@ -1125,6 +1145,7 @@ impl VmcOptimizationState {
             opt_data: Vec::new(),
             workspace: SamplingWorkspace::zeros(n_size, n_qp_full, n_proj, n_site),
             phys_quantities: None,
+            transfer_cache: TransferKernelCache::default(),
         }
     }
 }
