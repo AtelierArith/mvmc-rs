@@ -608,8 +608,8 @@ impl ElectronConfiguration {
         }
     }
 
-    /// Julia FSZ burn storage: indices, configuration, occupancy, projection, spins.
-    pub(crate) fn save_burn_fsz(&mut self) {
+    /// Julia burn storage: indices, configuration, occupancy, projection, optional FSZ spins.
+    pub(crate) fn save_burn(&mut self) {
         let size = self.tmp_ele_idx.len()
             + self.tmp_ele_cfg.len()
             + self.tmp_ele_num.len()
@@ -631,8 +631,8 @@ impl ElectronConfiguration {
         }
     }
 
-    /// Restore all FSZ scratch buffers from the canonical combined burn storage.
-    pub(crate) fn restore_burn_fsz(&mut self) {
+    /// Restore scratch buffers from canonical combined burn storage.
+    pub(crate) fn restore_burn(&mut self) {
         let mut offset = 0;
         for values in [
             &mut self.tmp_ele_idx,

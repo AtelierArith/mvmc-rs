@@ -188,6 +188,9 @@ fn check_normal_green(factor: &str) {
         if matches!(factor, "dh4" | "dh24") {
             add_dh4_green_model(&mut data);
         }
+        if factor == "rbm" {
+            add_rbm_green_model(&mut data);
+        }
         let mut state = VmcOptimizationState::zeros(
             4,
             2,
@@ -353,6 +356,9 @@ fn check_fsz_green(factor: &str) {
         if matches!(factor, "dh4" | "dh24") {
             add_dh4_green_model(&mut data);
         }
+        if factor == "rbm" {
+            add_rbm_green_model(&mut data);
+        }
         data.i_flg_orbital_general = 1;
         let mut state = VmcOptimizationState::zeros(
             4,
@@ -497,6 +503,7 @@ fn green_fixture(factor: &str, name: &str) -> String {
         "dh2" => "dh2",
         "dh4" => "dh4/kernels",
         "dh24" => "dh4/combined",
+        "rbm" => "rbm/production",
         _ => panic!("unknown factor {factor}"),
     };
     std::fs::read_to_string(
@@ -535,4 +542,32 @@ fn exhaustive_dh4_fsz_one_and_two_body_spin_changes_match_original_julia_bits() 
 #[test]
 fn exhaustive_dh24_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
     check_fsz_green("dh24");
+}
+
+fn add_rbm_green_model(data: &mut ExpertModeData) {
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/rbm/production/namelist_all.def");
+    let mut parsed = mvmc_expert_parsers::parse_expert_mode_files(&file).unwrap();
+    mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut parsed, &file)
+        .unwrap();
+    data.charge_rbm_phys_layer_terms = parsed.charge_rbm_phys_layer_terms;
+    data.spin_rbm_phys_layer_terms = parsed.spin_rbm_phys_layer_terms;
+    data.general_rbm_phys_layer_terms = parsed.general_rbm_phys_layer_terms;
+    data.charge_rbm_hidden_layer_terms = parsed.charge_rbm_hidden_layer_terms;
+    data.spin_rbm_hidden_layer_terms = parsed.spin_rbm_hidden_layer_terms;
+    data.general_rbm_hidden_layer_terms = parsed.general_rbm_hidden_layer_terms;
+    data.charge_rbm_phys_hidden_terms = parsed.charge_rbm_phys_hidden_terms;
+    data.spin_rbm_phys_hidden_terms = parsed.spin_rbm_phys_hidden_terms;
+    data.general_rbm_phys_hidden_terms = parsed.general_rbm_phys_hidden_terms;
+    data.modpara.nneuron_charge = 2;
+    data.modpara.nneuron_spin = 3;
+    data.modpara.nneuron_general = 4;
+}
+#[test]
+fn exhaustive_rbm_normal_two_body_ratios_match_original_julia_bits() {
+    check_normal_green("rbm");
+}
+#[test]
+fn exhaustive_rbm_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+    check_fsz_green("rbm");
 }

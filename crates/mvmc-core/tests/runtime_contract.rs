@@ -45,13 +45,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 
 #[test]
 fn unported_sections_cannot_silently_change_the_model() {
-    for kind in [
-        "InterAll",
-        "OptTrans",
-        "TwoBodyGEx",
-        "SpinJastrow",
-        "GeneralRBM_PhysHidden",
-    ] {
+    for kind in ["InterAll", "OptTrans", "TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
         data.namelist.push((kind.into(), "missing.def".into()));
         let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();

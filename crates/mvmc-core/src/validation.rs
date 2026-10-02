@@ -57,9 +57,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     if data.n_qp_opt_trans > 1 {
         return Err("OptTrans is not implemented yet (issue #27)".into());
     }
-    if data.has_rbm_terms() {
-        return Err("RBM is not implemented yet (issue #26)".into());
-    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
@@ -106,7 +103,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
                 || k.starts_with("SpinRBM_")
                 || k.starts_with("GeneralRBM_") =>
             {
-                Some(26)
+                None
             }
             "InGutzwiller"
             | "InJastrow"
@@ -114,6 +111,12 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             | "InOrbitalAntiParallel"
             | "InOrbitalParallel"
             | "InOrbitalGeneral" => None,
+            k if k.starts_with("InChargeRBM_")
+                || k.starts_with("InSpinRBM_")
+                || k.starts_with("InGeneralRBM_") =>
+            {
+                None
+            }
             k if k.starts_with("In") => Some(20),
             "ModPara"
             | "LocSpin"
@@ -192,7 +195,7 @@ mod tests {
     use super::mpi_requested;
 
     #[test]
-    fn parsed_and_programmatic_rbm_terms_remain_gated_until_production_parity() {
+    fn parsed_and_programmatic_rbm_terms_pass_runtime_validation() {
         use mvmc_expert_parsers::{
             parse_expert_mode_files, types::GeneralRBMHiddenLayerTerm, ExpertModeData,
         };
@@ -212,16 +215,9 @@ mod tests {
         ] {
             let mut data =
                 parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
-            assert!(super::validate_para_opt(&data)
-                .unwrap_err()
-                .contains("issue #26"));
+            super::validate_para_opt(&data).unwrap();
             data.namelist.clear();
-            assert!(
-                super::validate_para_opt(&data)
-                    .unwrap_err()
-                    .contains("issue #26"),
-                "{name}"
-            );
+            super::validate_para_opt(&data).unwrap();
         }
         // A nonempty mapping whose maximum index wraps to a zero width is still RBM.
         let mut data = ExpertModeData::new();
@@ -233,9 +229,7 @@ mod tests {
                 is_complex: false,
             });
         assert_eq!(data.count_rbm_parameters(), 0);
-        assert!(super::validate_para_opt(&data)
-            .unwrap_err()
-            .contains("issue #26"));
+        super::validate_para_opt(&data).unwrap();
     }
 
     #[test]

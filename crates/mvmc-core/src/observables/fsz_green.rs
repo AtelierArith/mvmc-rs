@@ -136,7 +136,12 @@ pub fn green_func2_fsz(
     num[xj] = 0;
     num[xi] = 1;
     update_proj_cnt(rj as i64, ri as i64, s, &mut final_cnt, &mid, &num, data);
-    let ratio = julia_exp(log_proj_ratio(&final_cnt, ele_proj_cnt, data));
+    let ratio = super::with_rbm_ratio(
+        julia_exp(log_proj_ratio(&final_cnt, ele_proj_cnt, data)),
+        &num,
+        ele_num,
+        data,
+    );
     let mut pf = vec![zero; nq];
     calculate_new_pf_m_two_fsz_complex_flat(
         ml,
@@ -155,6 +160,6 @@ pub fn green_func2_fsz(
         ns,
         ne,
     );
-    let numerator = Complex64::new(ratio, 0.0) * calculate_ip_complex(&pf, 0, nq, data);
+    let numerator = ratio * calculate_ip_complex(&pf, 0, nq, data);
     crate::julia_complex::divide(numerator, ip).conj()
 }

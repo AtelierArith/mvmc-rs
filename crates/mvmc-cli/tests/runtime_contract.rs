@@ -194,3 +194,39 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
         fs::read(baseline.join("zvo_out.dat")).unwrap()
     );
 }
+
+#[test]
+fn rbm_namelists_reach_production_and_match_source_output() {
+    let dir = TestDir::new("rbm");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    for case in [
+        "rbm_real",
+        "rbm_cmp",
+        "rbm_general_cmp",
+        "rbm_dh24_cmp",
+        "rbm_fsz",
+    ] {
+        let out = dir.0.join(case);
+        let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+            .arg(root.join(format!("rbm/run_{case}/namelist.def")))
+            .args(["--nsteps", "1", "--nsmp", "1", "--seed", "1", "--out-dir"])
+            .arg(&out)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{case}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for name in ["zvo_out.dat", "zqp_opt.dat"] {
+            assert_eq!(
+                fs::read_to_string(out.join(name)).unwrap(),
+                fs::read_to_string(
+                    root.join(format!("sr_direct/{case}_store_runner/step-1-{name}"))
+                )
+                .unwrap(),
+                "{case} {name}"
+            );
+        }
+    }
+}

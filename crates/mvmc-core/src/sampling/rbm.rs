@@ -7,6 +7,7 @@
 //! Kernels borrow the nine canonical parser term sections through [`RbmConfig`].
 //! Parameter indices and hidden-neuron counter widths are separate layouts.
 
+use super::rbm_math;
 use num_complex::Complex64;
 
 use mvmc_expert_parsers::{
@@ -411,16 +412,12 @@ pub fn update_rbm_cnt_hopping(
     }
 }
 
-/// Numerically stable `log(2 cosh(z))` with the upstream sign flip.
+/// Numerically stable `log(cosh(z))` with the upstream sign flip.
 #[inline]
 pub fn log_cosh_stable(z: Complex64) -> Complex64 {
     let zp = if z.re <= 0.0 { -z } else { z };
-    // log(2*cosh(z)) = z + log(1 + exp(-2z)) - log(2),
-    // but upstream calls `log1p`, so we do the same and drop a final `- log(2)`
-    // since the C reference subtracts `log(2.0)` too.
-    let two = Complex64::new(2.0, 0.0);
-    let log2 = Complex64::new(std::f64::consts::LN_2, 0.0);
-    zp + (Complex64::new(1.0, 0.0) + (-two * zp).exp()).ln() - log2
+    // Julia uses the corrected ComplexF64 log1p operation here.
+    zp + rbm_math::log1p(rbm_math::exp(-2.0 * zp)) - std::f64::consts::LN_2
 }
 
 /// `log_rbm_ratio(rbm_cnt_new, rbm_cnt_old, data)` -- principal-log
@@ -476,7 +473,6 @@ pub fn log_rbm_ratio(
     let block_size = cfg.nblock_size_rbm_ratio.max(1);
     let n_blk = (n_hidden - 1) / block_size + 1;
 
-    let two = Complex64::new(2.0, 0.0);
     for iblk in 0..n_blk {
         let hist = iblk * block_size;
         let hiend = (hist + block_size).min(n_hidden);
@@ -492,10 +488,12 @@ pub fn log_rbm_ratio(
                 rbm_old = -rbm_old;
             }
             z += rbm_new - rbm_old;
-            zz *= (Complex64::new(1.0, 0.0) + (-two * rbm_new).exp())
-                / (Complex64::new(1.0, 0.0) + (-two * rbm_old).exp());
+            zz *= crate::julia_complex::divide(
+                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_new),
+                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_old),
+            );
         }
-        z += zz.ln();
+        z += rbm_math::log(zz);
     }
     z
 }
@@ -616,31 +614,6 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
     z
 }
 
-// Julia Base uses this expression for ComplexF64 tanh.
-fn julia_tanh(z: Complex64) -> Complex64 {
-    let (x, y) = (z.re, z.im);
-    if x.is_nan() && y == 0.0 {
-        return Complex64::new(x, y);
-    }
-    if 4.0 * x.abs() > f64::MAX.asinh() {
-        let sign = y * if y.is_finite() {
-            (2.0 * y.abs()).sin()
-        } else {
-            1.0
-        };
-        return Complex64::new(1.0f64.copysign(x), 0.0f64.copysign(sign));
-    }
-    let tangent = y.tan();
-    let beta = 1.0 + tangent * tangent;
-    let s = x.sinh();
-    let rho = (1.0 + s * s).sqrt();
-    if tangent.is_infinite() {
-        Complex64::new(rho / s, 1.0 / tangent)
-    } else {
-        Complex64::new(beta * rho * s, tangent) / (1.0 + beta * s * s)
-    }
-}
-
 /// Write RBM derivatives into a view starting after the projection block.
 /// Physical slots are assigned; hidden/coupling contributions accumulate,
 /// including shared indices. Short views remain untouched as in Julia.
@@ -691,7 +664,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = julia_tanh(value);
+        let value = rbm_math::tanh(value);
         let parameter = physical + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -705,7 +678,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = julia_tanh(value);
+        let value = rbm_math::tanh(value);
         let parameter = physical + widths[3] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -719,7 +692,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = julia_tanh(value);
+        let value = rbm_math::tanh(value);
         let parameter = physical + widths[3] + widths[4] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -740,7 +713,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (ele_num[ri as usize] + ele_num[ri as usize + cfg.n_site] - 1) as f64;
-        let value = xi * julia_tanh(value);
+        let value = xi * rbm_math::tanh(value);
         let parameter = physical + hidden + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -761,7 +734,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (ele_num[ri as usize] - ele_num[ri as usize + cfg.n_site]) as f64;
-        let value = xi * julia_tanh(value);
+        let value = xi * rbm_math::tanh(value);
         let parameter = physical + hidden + widths[6] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -783,7 +756,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (2 * ele_num[ri as usize + term.spin as usize * cfg.n_site] - 1) as f64;
-        let value = xi * julia_tanh(value);
+        let value = xi * rbm_math::tanh(value);
         let parameter = physical + hidden + widths[6] + widths[7] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;

@@ -35,6 +35,25 @@ use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 mod fsz_green;
 pub use fsz_green::green_func2_fsz;
 
+/// Complete Julia's projection ratio with the RBM ratio for an operator move.
+/// Counters are rebuilt from occupations and current parameters, including saved walkers.
+pub(crate) fn with_rbm_ratio(
+    projection_ratio: f64,
+    new_num: &[i64],
+    old_num: &[i64],
+    data: &ExpertModeData,
+) -> Complex64 {
+    let mut ratio = Complex64::new(projection_ratio, 0.0);
+    if data.has_rbm_terms() {
+        let cfg = crate::sampling::rbm::RbmConfig::from(data);
+        let new = crate::sampling::rbm::make_rbm_cnt(new_num, &cfg);
+        let old = crate::sampling::rbm::make_rbm_cnt(old_num, &cfg);
+        ratio *=
+            crate::sampling::rbm_math::exp(crate::sampling::rbm::log_rbm_ratio(&new, &old, &cfg));
+    }
+    ratio
+}
+
 /// Reset the accumulators that `vmc_main_cal!` clears at the top of each
 /// SR step (`clear_phys_quantity!` in upstream).
 pub fn clear_phys_quantity(state: &mut VmcOptimizationState) {
@@ -602,7 +621,7 @@ pub fn green_func2(
 
     let log_proj_delta =
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
-    let proj_ratio = julia_exp(log_proj_delta);
+    let proj_ratio = with_rbm_ratio(julia_exp(log_proj_delta), &my_ele_num, ele_num, data);
 
     // Fast path: rank-2 Woodbury Pfaffian update for real mode.
     //
@@ -638,7 +657,7 @@ pub fn green_func2(
         let new_ip_real = calculate_ip_real(&pf_m_new_real, 0, n_qp_full, data);
         // In real mode all quantities are real, so conj is a no-op.
         // Return as Complex64 to match the function signature.
-        return crate::julia_complex::divide(Complex64::new(proj_ratio * new_ip_real, 0.0), ip)
+        return crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip_real, 0.0), ip)
             .conj();
     }
 
@@ -661,7 +680,7 @@ pub fn green_func2(
         n_elec,
     );
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    crate::julia_complex::divide(Complex64::new(proj_ratio, 0.0) * new_ip, ip).conj()
+    crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
 }
 
 /// Non-FSZ Slater-parameter derivative block (`SlaterElmDiff_fcmp!`).
@@ -912,6 +931,7 @@ pub fn green_func1_fsz(
         ))
     };
 
+    let proj_ratio = with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data);
     let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     calculate_new_pf_m2_fsz_complex_flat(
@@ -929,8 +949,7 @@ pub fn green_func1_fsz(
         n_site,
         n_elec,
     );
-    let numerator =
-        Complex64::new(proj_ratio, 0.0) * calculate_ip_complex(&new_pf, 0, n_qp_full, data);
+    let numerator = proj_ratio * calculate_ip_complex(&new_pf, 0, n_qp_full, data);
     crate::julia_complex::divide(numerator, ip).conj()
 }
 
@@ -1162,7 +1181,8 @@ fn calh1_direct_projection_ratio(
     let n = data.modpara.nsite as usize;
     let ng = data.n_gutzwiller_idx.max(0) as usize;
     let nj = data.n_jastrow_idx.max(0) as usize;
-    if !data.doublon_holon_2site_indices.is_empty()
+    if data.has_rbm_terms()
+        || !data.doublon_holon_2site_indices.is_empty()
         || !data.doublon_holon_2site_params.is_empty()
         || !data.doublon_holon_4site_indices.is_empty()
         || !data.doublon_holon_4site_params.is_empty()
@@ -1343,6 +1363,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         1.0
     };
 
+    let proj_ratio = with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data);
     timer.stop_diag(922, diag);
     // The main-calculation state keeps one pad slot per QP; Julia's
     // wrapper compacts the same inverse planes before its Green helper.
@@ -1368,10 +1389,10 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         timer.start_diag(924, diag);
         let new_ip = calculate_ip_real(&new_pf, 0, n_qp_full, data);
         timer.stop_diag(924, diag);
-        return if TRANSFER {
-            Complex64::new(proj_ratio * new_ip / ip.re, 0.0)
+        return if TRANSFER && !data.has_rbm_terms() {
+            Complex64::new(proj_ratio.re * new_ip / ip.re, 0.0)
         } else {
-            crate::julia_complex::divide(Complex64::new(proj_ratio * new_ip, 0.0), ip).conj()
+            crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip, 0.0), ip).conj()
         };
     }
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
@@ -1390,7 +1411,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         n_elec,
     );
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    crate::julia_complex::divide(new_ip * proj_ratio, ip).conj()
+    crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
 }
 
 /// Compute the local energy for a given sample. Non-FSZ path:
@@ -1439,7 +1460,8 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     // The convention in upstream Julia is `e_local += -T * G1` where G1 is
     // the 1-body Green function ratio. Same-spin hops only for non-FSZ.
     if !data.transfer_terms.is_empty() && ip.norm() > 0.0 {
-        let real_transfer = !crate::run::get_all_complex_flag(data)
+        let real_transfer = !data.has_rbm_terms()
+            && !crate::run::get_all_complex_flag(data)
             && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
         let mut transfer_energy = 0.0;
         for term in &data.transfer_terms {
@@ -1667,6 +1689,12 @@ mod tests {
             "dh24_real",
             "dh24_cmp",
             "dh24_fsz",
+            "rbm_real",
+            "rbm_cmp",
+            "rbm_general_cmp",
+            "rbm_dh24_cmp",
+            "rbm_fsz",
+            "rbm_reference_cmp",
         ] {
             let fixture =
                 std::fs::read_to_string(root.join(format!("{case}_store_runner/gram.txt")))
@@ -1696,6 +1724,11 @@ mod tests {
                     | "dh4_fsz"
                     | "dh24_cmp"
                     | "dh24_fsz"
+                    | "rbm_cmp"
+                    | "rbm_general_cmp"
+                    | "rbm_dh24_cmp"
+                    | "rbm_fsz"
+                    | "rbm_reference_cmp"
             ) {
                 let store: Vec<Complex64> = store
                     .chunks_exact(2)
