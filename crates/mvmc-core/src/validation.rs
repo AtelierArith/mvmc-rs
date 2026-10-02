@@ -173,16 +173,10 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     Ok(())
 }
 
-/// Validate the currently supported serial PhysCal combinations.
+/// Validate PhysCal input combinations that are independent of the reducer.
 pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
-    if mpi_requested(|key| std::env::var(key).ok()) {
-        return Err("MPI PhysCal is not implemented yet (issue #35)".into());
-    }
     let p = &data.modpara;
     validate_supported_modpara(p)?;
-    if p.nsplit_size > 1 {
-        return Err("NSplitSize > 1 PhysCal is not implemented yet (issue #36)".into());
-    }
     if p.lanczos_mode > 0 {
         if data.i_flg_orbital_general != 0 {
             return Err(
@@ -221,6 +215,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
     if get("JULIA_MVMC_MPI").is_some_and(|v| v == "1")
         || get("OMPI_COMM_WORLD_SIZE").is_some()
@@ -229,7 +224,6 @@ fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
         return true;
     }
     let pmi_size = get("PMI_SIZE").and_then(|v| v.parse::<i64>().ok());
-    // Match Julia's first parseable SLURM task-count key, not PMI_RANK alone.
     let slurm_tasks = ["SLURM_NTASKS", "SLURM_NPROCS"]
         .iter()
         .find_map(|key| get(key).and_then(|v| v.parse::<i64>().ok()));

@@ -57,8 +57,7 @@ fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
 
     data.i_flg_orbital_general = 0;
     data.modpara.nsplit_size = 2;
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(error.contains("NSplitSize") && error.contains("issue #36"));
+    assert!(mvmc_core::validation::validate_phys_cal(&data).is_ok());
 }
 
 #[test]

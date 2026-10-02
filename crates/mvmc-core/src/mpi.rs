@@ -324,6 +324,12 @@ impl Reducer for MpiGroupContext {
             .expect("MPI group size is positive")
     }
 
+    fn reduction_size(&self) -> usize {
+        self.world_size()
+            * usize::try_from(self.cross_communicator.size())
+                .expect("MPI cross-group size is positive")
+    }
+
     fn rank(&self) -> usize {
         self.communicator
             .rank()

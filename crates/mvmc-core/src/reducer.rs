@@ -37,6 +37,15 @@ pub trait Reducer {
         1
     }
 
+    /// Number of independent rank contributions represented by a reduction.
+    ///
+    /// Grouped reducers expose their local communicator as `world_size()` but
+    /// still combine all groups in the cross-group communicator. PhysCal uses
+    /// this count to average already-normalized per-rank Green accumulators.
+    fn reduction_size(&self) -> usize {
+        self.world_size()
+    }
+
     /// 0-based rank of this process. The single-process implementation
     /// always returns 0.
     fn rank(&self) -> usize {
