@@ -55,10 +55,10 @@ use crate::utils::file::{parse_namelist_content, read_def_file};
 /// Errors surfaced by [`parse_expert_mode_files`].
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
-    /// Orbital blocks cannot be interpreted in the supplied namelist order.
+    /// A referenced definition is invalid or missing.
     #[error("invalid Expert input: {message}")]
     InvalidInput {
-        /// Explanation of the invalid ordering.
+        /// Explanation of the invalid input.
         message: String,
     },
     /// Failed to read the top-level `namelist.def`.
@@ -72,13 +72,10 @@ pub enum ParseError {
     },
 }
 
-/// Parse all Expert Mode files referenced by `namelist_path`. Mirrors
-/// `parse_expert_mode_files(namelist_path)` in upstream Julia. Missing
-/// child files are logged via [`tracing::warn`] and skipped, matching
-/// the C / Julia "continue on error" policy. Unknown keywords in the
-/// namelist are silently ignored (the round-trip set covers everything
-/// the four `examples/inputs/*` cases use). DH2/DH4 definitions are required
-/// when listed: read/format failures return an error as in Julia.
+/// Parse all Expert Mode files referenced by `namelist_path` in C's fixed
+/// keyword order, retaining the original namelist as metadata. Missing child
+/// files currently populate `input_errors`, except optional parameter overlays.
+/// DH2/DH4 read/format failures return an error immediately.
 pub fn parse_expert_mode_files<P: AsRef<Path>>(
     namelist_path: P,
 ) -> Result<ExpertModeData, ParseError> {
@@ -93,24 +90,15 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
         source: e,
     })?;
     let file_list = parse_namelist_content(&namelist_content);
-    let parallel_pos = file_list
-        .iter()
-        .position(|(kind, _)| kind == "OrbitalParallel");
-    let anti_pos = file_list
-        .iter()
-        .position(|(kind, _)| kind == "Orbital" || kind == "OrbitalAntiParallel");
-    if matches!((parallel_pos, anti_pos), (Some(p), Some(a)) if p < a) {
-        return Err(ParseError::InvalidInput {
-            message: "OrbitalParallel must be listed after Orbital/OrbitalAntiParallel in namelist.def: the anti-parallel block defines the NArrayAP offset".into(),
-        });
-    }
 
     let mut data = ExpertModeData::new();
     data.namelist = file_list.clone();
     let mut orbital_flags = BTreeMap::new();
     let mut rbm_flags = BTreeMap::new();
 
-    for (file_type, file_name) in &file_list {
+    let mut definitions: Vec<_> = file_list.iter().collect();
+    definitions.sort_by_key(|(kind, _)| definition_order(kind));
+    for (file_type, file_name) in definitions {
         let full_path = base_dir.join(file_name);
         if !full_path.is_file() {
             if matches!(
@@ -209,6 +197,74 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     }
 
     Ok(data)
+}
+
+/// `readdef.h::KWIdxInt` / `cKWListOfFileNameList`. ModPara precedes all
+/// dimension-dependent readers; AP precedes P regardless of namelist order.
+fn definition_order(kind: &str) -> usize {
+    const KEYWORDS: &[&str] = &[
+        "ModPara",
+        "LocSpin",
+        "Trans",
+        "CoulombIntra",
+        "CoulombInter",
+        "Hund",
+        "PairHop",
+        "Exchange",
+        "Gutzwiller",
+        "Jastrow",
+        "DH2",
+        "DH4",
+        "ChargeRBM_HiddenLayer",
+        "ChargeRBM_PhysLayer",
+        "ChargeRBM_PhysHidden",
+        "SpinRBM_HiddenLayer",
+        "SpinRBM_PhysLayer",
+        "SpinRBM_PhysHidden",
+        "GeneralRBM_HiddenLayer",
+        "GeneralRBM_PhysLayer",
+        "GeneralRBM_PhysHidden",
+        "Orbital",
+        "OrbitalAntiParallel",
+        "OrbitalParallel",
+        "OrbitalGeneral",
+        "TransSym",
+        "InGutzwiller",
+        "InJastrow",
+        "InDH2",
+        "InDH4",
+        "InChargeRBM_HiddenLayer",
+        "InChargeRBM_PhysLayer",
+        "InChargeRBM_PhysHidden",
+        "InSpinRBM_HiddenLayer",
+        "InSpinRBM_PhysLayer",
+        "InSpinRBM_PhysHidden",
+        "InGeneralRBM_HiddenLayer",
+        "InGeneralRBM_PhysLayer",
+        "InGeneralRBM_PhysHidden",
+        "InOrbital",
+        "InOrbitalAntiParallel",
+        "InOrbitalParallel",
+        "InOrbitalGeneral",
+        "OneBodyG",
+        "TwoBodyG",
+        "TwoBodyGEx",
+        "InterAll",
+        "OptTrans",
+        "InOptTrans",
+        "BF",
+        "BFRange",
+    ];
+    let canonical = match kind {
+        "DoublonHolon2Site" => "DH2",
+        "DoublonHolon4Site" => "DH4",
+        "QPTrans" => "TransSym",
+        _ => kind,
+    };
+    KEYWORDS
+        .iter()
+        .position(|&keyword| keyword == canonical)
+        .unwrap_or(usize::MAX)
 }
 
 type RbmFlags = BTreeMap<String, (BTreeMap<i64, i64>, bool)>;
