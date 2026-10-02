@@ -199,4 +199,24 @@ mod tests {
         assert_eq!(actual[2], Complex64::new(4.0, -6.0));
         assert_eq!(actual[15], Complex64::new(148.0, 0.0));
     }
+
+    #[test]
+    fn c_calculate_ene_reference_is_preserved() {
+        // Values from the C mVMC physcal_lanczos.c reference fixture
+        // (hubbard_chain_lanczos/physcal_ref).  Keep all five moments as
+        // independent literals so a change in operation order cannot be
+        // hidden by deriving one moment from another.
+        let result = lanczos_energy(&moments(
+            -3.218953137198691916,
+            10.80845047645121149,
+            11.11256143424133391,
+            -34.35245926247226391,
+            138.1493179027195026,
+        ))
+        .unwrap();
+
+        assert!((result.energy - (-3.301741343987198540)).abs() <= 1.0e-12);
+        assert!((result.variance - 2.240411016743763806e-2).abs() <= 1.0e-12);
+        assert!((result.alpha - (-2.490954930208576223e-1)).abs() <= 1.0e-12);
+    }
 }
