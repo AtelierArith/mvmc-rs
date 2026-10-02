@@ -14,6 +14,7 @@
 //!   --nsmp <N>        Final averaging window [default: NSROptItrSmp]
 //!   --mode <MODE>     Sanity label: real/cmp/fsz [default: inferred]
 //!   --initial-def <auto|none|PATH> Starting parameter file [default: auto]
+//!   -o / --opt-trans  Enable C optimized-translation mode [default: disabled]
 //!   --help / -h       Print this help text
 //!
 //! Environment:
@@ -35,6 +36,7 @@ fn print_usage(program: &str) {
     eprintln!("  --nsmp <N>      Final averaging window [default: NSROptItrSmp]");
     eprintln!("  --mode <MODE>   Sanity label: real, cmp or fsz [default: inferred]");
     eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
+    eprintln!("  -o, --opt-trans Enable C OptTrans mode [default: disabled]");
     eprintln!("  --help, -h      Print this help");
     eprintln!();
     eprintln!("Environment:");
@@ -53,6 +55,7 @@ fn main() {
     let mut nsmp_arg: Option<i64> = None;
     let mut mode_arg: Option<String> = None;
     let mut initial_def = mvmc_core::InitialDef::Auto;
+    let mut opt_trans_arg = false;
 
     let mut idx = 1;
     while idx < args.len() {
@@ -118,6 +121,9 @@ fn main() {
                     }
                 };
             }
+            "-o" | "--opt-trans" => {
+                opt_trans_arg = true;
+            }
             flag if flag.starts_with('-') => {
                 eprintln!("error: unknown flag `{flag}`");
                 print_usage(program);
@@ -172,39 +178,41 @@ fn main() {
     println!();
 
     // ── peek at modpara to determine defaults and show model info ─────────────
-    let (nsteps, inferred_mode) = match mvmc_expert_parsers::parse_expert_mode_files(&namelist) {
-        Ok(data) => {
-            if let Err(e) = mvmc_core::validation::validate_para_opt(&data) {
-                eprintln!("error: {e}");
+    let (nsteps, inferred_mode) =
+        match mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, opt_trans_arg)
+        {
+            Ok(data) => {
+                if let Err(e) = mvmc_core::validation::validate_para_opt(&data) {
+                    eprintln!("error: {e}");
+                    process::exit(1);
+                }
+                let p = &data.modpara;
+                let nsteps_modpara = p.nsr_opt_itr_step;
+                let nsteps = nsteps_override.unwrap_or(nsteps_modpara);
+                println!(
+                    "model    : Nsite={} Nelec={} NSROptItrStep={}",
+                    p.nsite, p.nelec, nsteps,
+                );
+                println!("mode     : NVMCCalMode={}", p.vmc_calc_mode);
+                println!(
+                    "sample   : NVMCSample={} NVMCWarmUp={}",
+                    p.nvmc_sample, p.nvmc_warmup
+                );
+                println!();
+                let mode = if data.i_flg_orbital_general != 0 {
+                    "fsz"
+                } else if mvmc_core::get_all_complex_flag(&data) {
+                    "cmp"
+                } else {
+                    "real"
+                };
+                (nsteps, mode)
+            }
+            Err(e) => {
+                eprintln!("error: could not parse Expert input: {e}");
                 process::exit(1);
             }
-            let p = &data.modpara;
-            let nsteps_modpara = p.nsr_opt_itr_step;
-            let nsteps = nsteps_override.unwrap_or(nsteps_modpara);
-            println!(
-                "model    : Nsite={} Nelec={} NSROptItrStep={}",
-                p.nsite, p.nelec, nsteps,
-            );
-            println!("mode     : NVMCCalMode={}", p.vmc_calc_mode);
-            println!(
-                "sample   : NVMCSample={} NVMCWarmUp={}",
-                p.nvmc_sample, p.nvmc_warmup
-            );
-            println!();
-            let mode = if data.i_flg_orbital_general != 0 {
-                "fsz"
-            } else if mvmc_core::get_all_complex_flag(&data) {
-                "cmp"
-            } else {
-                "real"
-            };
-            (nsteps, mode)
-        }
-        Err(e) => {
-            eprintln!("error: could not parse Expert input: {e}");
-            process::exit(1);
-        }
-    };
+        };
 
     if nsteps <= 0 {
         eprintln!("error: NSROptItrStep is 0 — nothing to run. Use --nsteps <N>.");
@@ -218,6 +226,7 @@ fn main() {
         seed: seed_arg,
         output_dir: Some(out_dir),
         initial_def,
+        enable_opt_trans: Some(opt_trans_arg),
         ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
     };
     let result = mvmc_core::run_para_opt_from_namelist(&namelist, config);
