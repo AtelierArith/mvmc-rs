@@ -21,7 +21,7 @@ Rust uses edition 2021 with `rustfmt.toml` enforcing `max_width = 100`, field in
 
 ## Development and Backward Compatibility
 
-This Rust crate and its workspace are under active development. Backward compatibility may be completely ignored during development, including compatibility with existing Rust APIs. Treat the Julia implementation in `extern/` as the source of truth. Change or remove existing APIs and update their callers and tests whenever needed to match that implementation; do not retain compatibility wrappers solely to preserve the old Rust API.
+This Rust crate and its workspace are under active development. Backward compatibility may be completely ignored during development, including compatibility with existing Rust APIs. Treat the C implementation in `extern/mVMC-1.3.0/` as the authoritative source of truth. Use `extern/Julia-mVMC/` as a secondary port/reference and test aid; when their behavior differs, inspect C and make Rust follow its supported input contract and numerical behavior. Do not copy Julia-only repairs or extensions as C parity. Change or remove existing APIs and update their callers and tests whenever needed to match that implementation; do not retain compatibility wrappers solely to preserve the old Rust API.
 
 ## Testing Guidelines
 
@@ -31,7 +31,7 @@ Use Rust's built-in test framework plus crate-local integration tests. Golden an
 
 Use Julia 1.13.1 and the reference workspace's `extern/Julia-mVMC/Manifest-v1.13.toml` for current parity work. Run reference scripts with `julia +1.13.1 --project=extern/Julia-mVMC`. Record the Julia and BLAS versions when generating numerical fixtures; historical Julia 1.11 fixtures must not be presented as newly verified Julia 1.13 results.
 
-The Rust and Julia implementations already use matching random-number algorithms and seeds. Port Julia behavior faithfully: preserve RNG initialization, draw order and count, integer/float conversion, and RNG state throughout parameter initialization, burn-in, move proposals, acceptance/rejection, and sampling. This includes draws on rejected moves and conditional branches. Refactoring and optimization must preserve the same deterministic trajectory for the same inputs and seed.
+The Rust and Julia implementations already use matching random-number algorithms and seeds. Port the authoritative C behavior faithfully, using Julia comparisons where their behavior agrees: preserve RNG initialization, draw order and count, integer/float conversion, and RNG state throughout parameter initialization, burn-in, move proposals, acceptance/rejection, and sampling. This includes draws on rejected moves and conditional branches. Refactoring and optimization must preserve the same deterministic trajectory for the same inputs and seed.
 
 Do not accept discrepancies as Monte Carlo noise or statistical fluctuations. Compare RNG states, proposed moves, acceptance decisions, saved configurations, and intermediate numerical results to locate the first divergence. Preserve numerical operation order where required for parity. Do not loosen tolerances, reseed, or average repeated runs to conceal a mismatch; floating-point tolerances must never excuse RNG or sampling-trajectory drift. Statistical reference checks supplement deterministic Julia parity checks and do not replace them.
 

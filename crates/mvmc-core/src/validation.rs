@@ -176,6 +176,14 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             return Err(format!("{name} must be positive; got {value}"));
         }
     }
+    // C does not turn zero into an identity sector. Its Expert manual requires
+    // one for no projection; reject zero before initialization or output.
+    if p.nmp_trans == 0 {
+        return Err(
+            "NMPTrans must be nonzero; use 1 for no translation projection (mVMC C contract)"
+                .into(),
+        );
+    }
     Ok(())
 }
 
@@ -219,12 +227,15 @@ mod tests {
         ] {
             let mut data =
                 parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
+            // These parser-only namelists omit ModPara; supply a valid C sector count.
+            data.modpara.nmp_trans = 1;
             super::validate_para_opt(&data).unwrap();
             data.namelist.clear();
             super::validate_para_opt(&data).unwrap();
         }
         // A nonempty mapping whose maximum index wraps to a zero width is still RBM.
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
         data.general_rbm_hidden_layer_terms
             .push(GeneralRBMHiddenLayerTerm {
                 site: 0,

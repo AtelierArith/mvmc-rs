@@ -39,6 +39,7 @@ fn dh4_runtime_mode_matches_original_flags_declarations_and_loaded_values() {
             .map(|s| s.parse().unwrap())
             .collect();
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
         data.doublon_holon_4site_complex = row[0] != 0;
         data.doublon_holon_4site_params = vec![Complex64::new(0.125, row[1] as f64 / 4.0)];
         if row[2] != -1 {

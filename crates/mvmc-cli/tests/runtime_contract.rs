@@ -307,3 +307,31 @@ fn opttrans_source_sr_failure_reaches_cli_status_and_preserves_output_boundary()
     }
     assert!(!out.join("zqp_opt.dat").exists());
 }
+
+#[test]
+fn zero_translation_count_fails_before_creating_output_directory() {
+    let dir = TestDir::new("c-zero-count");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real");
+    for entry in fs::read_dir(&fixture).unwrap().flatten() {
+        if entry.path().is_file() {
+            fs::copy(entry.path(), dir.0.join(entry.file_name())).unwrap();
+        }
+    }
+    let modpara = dir.0.join("modpara.def");
+    let text = fs::read_to_string(&modpara)
+        .unwrap()
+        .replace("NMPTrans       -1", "NMPTrans       0");
+    fs::write(modpara, text).unwrap();
+    let out = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(dir.0.join("namelist.def"))
+        .args(["--nsteps", "1", "--nsmp", "1", "--out-dir"])
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let err = String::from_utf8_lossy(&output.stderr);
+    assert!(err.contains("NMPTrans"), "{err}");
+    assert!(!out.exists());
+}

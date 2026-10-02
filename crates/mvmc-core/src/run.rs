@@ -93,7 +93,6 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     if reducer.world_size() != 1 {
         return Err("MPI execution is not implemented yet (issue #35)".into());
     }
-    data.normalize_projection_count();
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
     let n_para = data.count_variational_parameters();
@@ -578,7 +577,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
     let n_sp = data.modpara.nsp_gauss_leg.max(1) as usize;
-    let n_mp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
+    let n_mp = data.modpara.nmp_trans.unsigned_abs() as usize;
     let n_opt = data.n_qp_opt_trans.max(1) as usize;
     let n_qp_full = n_sp * n_mp * n_opt;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
@@ -685,54 +684,34 @@ mod mode_tests {
     }
 
     #[test]
-    fn zero_translation_count_allocates_one_projection_sector() {
+    fn zero_translation_count_is_rejected_before_mutation_rng_or_output() {
         let mut data = data();
         data.modpara.nmp_trans = 0;
         data.modpara.nsp_gauss_leg = 3;
-        let state = state_from_data(&data);
-        assert_eq!(state.slater_matrix.slater_elm.n_qp_full(), 3);
-        assert_eq!(state.slater_matrix.slater_elm_real.n_qp_full(), 3);
-    }
-
-    #[test]
-    fn zero_and_one_translation_runs_have_identical_chain_and_rng_state() {
-        let namelist = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
-        let template = parse_expert_mode_files(namelist).unwrap();
-        let run = |nmp| {
-            let mut data = template.clone();
-            data.modpara.nmp_trans = nmp;
-            data.modpara.nsr_opt_itr_step = 1;
-            let mut rng = Sfmt19937Rng::new(1);
-            init_parameter(&mut data, &mut rng);
-            sync_modified_parameter(&mut data, true);
-            init_qp_weight(&mut data);
-            let mut state = state_from_data(&data);
-            let output = std::env::temp_dir()
-                .join(format!("mvmc-zero-trajectory-{}-{nmp}", std::process::id()));
-            vmc_para_opt(
-                &mut data,
-                &mut state,
-                &mut rng,
-                Some(&output),
-                &SingleProcessReducer,
-                OptimizationOptions::default(),
-            )
-            .unwrap();
-            fs::remove_dir_all(output).unwrap();
-            let words: Vec<_> = (0..624).map(|_| rng.gen_rand32()).collect();
-            (data, state, words)
-        };
-        let (zero_data, zero_state, zero_words) = run(0);
-        let (one_data, one_state, one_words) = run(1);
-        assert_eq!(zero_data.modpara.nmp_trans, 1);
-        assert_eq!(zero_data.orbital_terms, one_data.orbital_terms);
-        assert_eq!(
-            zero_state.electron_config.ele_idx,
-            one_state.electron_config.ele_idx
-        );
-        assert_eq!(zero_state.energy.etot, one_state.energy.etot);
-        assert_eq!(zero_words, one_words);
+        let mut state = state_from_data(&data);
+        assert_eq!(state.slater_matrix.slater_elm.n_qp_full(), 0);
+        assert_eq!(state.slater_matrix.slater_elm_real.n_qp_full(), 0);
+        let parameters = data.orbital_terms.clone();
+        let mut rng = Sfmt19937Rng::new(1);
+        let mut expected_rng = rng.clone();
+        let dir = std::env::temp_dir().join(format!("mvmc-c-zero-count-{}", std::process::id()));
+        assert!(!dir.exists());
+        let err = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            Some(&dir),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        assert!(err.contains("NMPTrans"), "{err}");
+        assert_eq!(data.modpara.nmp_trans, 0);
+        assert_eq!(data.orbital_terms, parameters);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), expected_rng.gen_rand32());
+        }
+        assert!(!dir.exists());
     }
 
     #[test]

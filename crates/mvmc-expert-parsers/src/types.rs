@@ -1172,15 +1172,6 @@ impl ExpertModeData {
         values
     }
 
-    /// Normalize a zero translation count to one before projection setup.
-    /// Keep negative counts as the original antiperiodic boundary marker;
-    /// allocation and kernels use their absolute value.
-    pub fn normalize_projection_count(&mut self) {
-        if self.modpara.nmp_trans == 0 {
-            self.modpara.nmp_trans = 1;
-        }
-    }
-
     /// Populate `optimization_flags` with `true` entries for every
     /// (real, imag) slot of the `n_para` variational parameters. Mirrors
     /// the `if isempty(data.optimization_flags) ... fill!(true, 2*n_para)`
