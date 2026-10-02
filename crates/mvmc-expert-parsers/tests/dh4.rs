@@ -1,7 +1,9 @@
 //! Canonical DH4 definition and combined DH2/DH4 layout boundaries.
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
 use std::path::{Path, PathBuf};
 
-use mvmc_expert_parsers::parse_expert_mode_files;
+use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::doublon_holon::{
     parse_doublon_holon_4site_content, parse_doublon_holon_4site_def,
 };

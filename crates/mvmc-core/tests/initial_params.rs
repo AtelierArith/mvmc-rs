@@ -197,7 +197,12 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
     .unwrap();
     fs::write(
         dir.join("o.def"),
-        definition("NOrbitalIdx", 2, 0, "0 1 0\n1 0 1\n0 0\n1 1\n"),
+        definition(
+            "NOrbitalIdx",
+            2,
+            0,
+            "0 1 0\n1 0 1\n0 0 0\n0 2 0\n1 1 0\n1 2 0\n2 0 0\n2 1 0\n2 2 0\n0 0\n1 1\n",
+        ),
     )
     .unwrap();
     fs::write(
@@ -219,6 +224,7 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
         )
         .unwrap();
         let mut data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+        assert!(data.input_errors.is_empty(), "{:?}", data.input_errors);
         let header = lines
             .next()
             .unwrap()
@@ -286,8 +292,10 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
                 .split_whitespace()
                 .map(|s| u64::from_str_radix(s, 16).unwrap())
                 .collect::<Vec<_>>();
-            let actual = values(&data)
+            let actual = data
+                .projection_parameters()
                 .into_iter()
+                .chain(data.slater_params.iter().copied())
                 .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected, "complex={complex}, step={step}");

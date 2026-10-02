@@ -330,7 +330,7 @@ mod opttrans_tests {
         } else {
             name
         };
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files(
+        let mut data = crate::historical_orbital_model::historical_kernel_model(
             root().join(format!("namelist_{base}.def")),
         )
         .unwrap();
@@ -817,7 +817,7 @@ mod tests {
                     .join(name)
                     .join("namelist.def")
             };
-            let data = mvmc_expert_parsers::parse_expert_mode_files(namelist).unwrap();
+            let data = crate::historical_orbital_model::historical_kernel_model(namelist).unwrap();
             let mut s = vec![0.0; n * n];
             let mut g = vec![0.0; n];
             let build = if complex {
@@ -867,7 +867,7 @@ mod tests {
         };
         while let Some(case) = lines.next() {
             let file = root.join(format!("namelist_{case}.def"));
-            let mut data = mvmc_expert_parsers::parse_expert_mode_files(&file).unwrap();
+            let mut data = crate::historical_orbital_model::historical_kernel_model(&file).unwrap();
             mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(
                 &mut data, &file,
             )
@@ -928,7 +928,7 @@ mod tests {
     fn rbm_parameter_updates_hit_all_shared_rows_and_leave_slater_at_final_offset() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/rbm/namelist_tied.def");
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files(path).unwrap();
+        let mut data = crate::historical_orbital_model::historical_kernel_model(path).unwrap();
         let n_proj = data.projection_layout().n_proj;
         let n_rbm = data.count_rbm_parameters();
         update_parameter_value(&mut data, n_proj, 0.5, -0.25, n_proj);

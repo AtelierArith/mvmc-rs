@@ -1,9 +1,12 @@
 //! Exact Julia parser contract; Hamiltonian support has a separate runtime gate.
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
 use std::path::{Path, PathBuf};
 
+use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::interall::{parse_interall_content, parse_interall_def};
 use mvmc_expert_parsers::utils::parameter_init::{all_complex_flag, init_parameter};
-use mvmc_expert_parsers::{parse_expert_mode_files, InterAllTerm};
+use mvmc_expert_parsers::InterAllTerm;
 use sfmt19937::Sfmt19937Rng;
 
 fn root() -> PathBuf {

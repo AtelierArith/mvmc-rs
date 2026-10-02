@@ -6,7 +6,13 @@ use mvmc_expert_parsers::parse_expert_mode_files;
 fn parsed_general_and_ap_parallel_cache_the_same_spin_site_matrices() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/orbital_general");
     let general = parse_expert_mode_files(root.join("namelist_general.def")).unwrap();
-    let parallel = parse_expert_mode_files(root.join("namelist_ap_parallel.def")).unwrap();
+    let parallel =
+        parse_expert_mode_files(root.join("../c_orbital_inputs/namelist_ap_parallel.def")).unwrap();
+    assert!(
+        parallel.input_errors.is_empty(),
+        "{:?}",
+        parallel.input_errors
+    );
     let indices = general
         .orbital_idx_matrix
         .as_ref()

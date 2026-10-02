@@ -1,7 +1,9 @@
 //! Julia's directed expansion, strict section errors, and initialization contract.
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
 use std::path::{Path, PathBuf};
 
-use mvmc_expert_parsers::parse_expert_mode_files;
+use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::pairhop::{parse_pairhop_content, parse_pairhop_def};
 use mvmc_expert_parsers::utils::parameter_init::{all_complex_flag, init_parameter};
 use sfmt19937::Sfmt19937Rng;

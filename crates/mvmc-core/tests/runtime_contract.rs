@@ -1,4 +1,6 @@
 //! Runtime rejection must precede initialization, RNG consumption, and output.
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
 use mvmc_core::{vmc_para_opt, ExpertModeData, SingleProcessReducer, VmcOptimizationState};
 use mvmc_expert_parsers::parsers::modpara::parse_modpara_content;
 use sfmt19937::Sfmt19937Rng;
@@ -75,7 +77,7 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/interall");
     for has_namelist in [true, false] {
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files(root.join("namelist.def")).unwrap();
+            historical_orbital_model::historical_kernel_model(root.join("namelist.def")).unwrap();
         if !has_namelist {
             data.namelist.clear();
         }
@@ -113,7 +115,7 @@ fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist()
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/pairhop/namelist.def");
     for has_namelist in [true, false] {
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files(&root).unwrap();
+        let mut data = historical_orbital_model::historical_kernel_model(&root).unwrap();
         data.i_flg_orbital_general = 1;
         if !has_namelist {
             data.namelist.clear();
@@ -151,7 +153,7 @@ fn interall_mode_and_invalid_spin_failures_precede_rng_consumption_and_output() 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/interall/spin_chain/namelist.def");
     for mode in ["real", "spin"] {
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files(&root).unwrap();
+        let mut data = historical_orbital_model::historical_kernel_model(&root).unwrap();
         if mode == "real" {
             data.complex_flags = vec![0];
         } else {
@@ -208,7 +210,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
         namelist.push_str(&format!("{kind} absent.def\n"));
     }
     std::fs::write(dir.join("namelist.def"), namelist).unwrap();
-    let data = mvmc_expert_parsers::parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    let data = historical_orbital_model::historical_kernel_model(dir.join("namelist.def")).unwrap();
     assert!(data.input_errors.is_empty());
     mvmc_core::validation::validate_para_opt(&data).unwrap();
     std::fs::remove_dir_all(dir).unwrap();

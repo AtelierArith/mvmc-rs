@@ -2,10 +2,9 @@
 mod c_orbital_rng;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
+use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use mvmc_core::initial_params::{read_initial_def, read_opt_para_file};
-use mvmc_expert_parsers::{
-    parse_expert_mode_files, utils::read_input_parameters::read_input_parameters,
-};
+use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use num_complex::Complex64;
 use reference_slater::declared_output;
 use std::path::{Path, PathBuf};
@@ -290,3 +289,5 @@ fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
         }
     }
 }
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;

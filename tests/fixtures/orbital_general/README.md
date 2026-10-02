@@ -38,9 +38,43 @@ The fixtures and scripts below retain historical Julia evidence. They do not
 establish C input compatibility: C's General reader expects six columns
 (`site spin site spin index sign`), while the Julia parser uses combined
 coordinates. C's positive-width orbital definitions require complete mapping
-and flag row counts; its header reader rejects zero widths. The remaining C
-General/input validation work is tracked by #40/#41, and must be verified
-before treating these Julia-only cases as supported C inputs.
+and flag row counts; its header reader rejects zero widths. AP/P header,
+mapping-count and flag-pair validation now follows C. General's remaining
+format/row contract is tracked by #41, and must be verified before treating
+the Julia-only General cases as supported C inputs.
+
+## C AP/P input validation
+
+`c_reader_contracts.txt` records 90 checks of the actual C
+`ReadBuffIntCmpFlg`, `GetInfoOrbitalAntiParallel`, `GetInfoOrbitalParallel`
+and optimization-flag readers, with SHA-256 source provenance. Forty-five
+sections are accepted and forty-five rejected. Cases cover two/three sites,
+real/complex headers, missing/extra mapping and flag sections, zero/illegal
+headers, label-independent declared counts, folded/split flag fields,
+three-column mappings, reordered rows, row-order flag assignment despite
+duplicate/reversed printed labels, invalid sites and lower/diagonal P pairs.
+Five complete fixture replacements are accepted and seven historical input
+files are rejected. Only binary real-component flags are compared; integer
+and imaginary-component state remains #21 work.
+
+AP requires `Nsite*Nsite` physical mapping rows. P requires
+`Nsite*(Nsite-1)/2` rows with `site1 < site2`; each creates two spin slots.
+Both require exactly the declared number of whitespace-separated flag pairs.
+Printed flag indices are ignored by C; assignment follows pair order. Headers
+use physical lines two/three and ignore labels. Rust also gives bounded errors
+for malformed tokens and parameter indices outside safe declared storage,
+without claiming to reproduce unchecked or unsafe C scans.
+
+```sh
+python3 scripts/check_orbital_contracts_c_parity.py
+cargo test -p mvmc-expert-parsers --locked --test c_orbital_contracts --test c_definition_order
+```
+
+The driver supplies dimensions and AP/P mode, including an AP prefix of seven
+slots for isolated P checks; full ModPara, JudgeOrbitalMode, MPI and sampling
+are not exercised. See [complete input replacements](../c_orbital_inputs/README.md)
+for how historical numerical regressions construct their sparse models
+programmatically while leaving the original files and golden values unchanged.
 
 ## Declared Slater storage and initialization
 

@@ -50,3 +50,6 @@ pub use state::{
     PhysicalQuantities, SROptData, SamplingWorkspace, SlaterElmFlat, SlaterMatrixData,
     ThreadedPfaPackWorkspace, VmcOptimizationState,
 };
+#[cfg(test)]
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
