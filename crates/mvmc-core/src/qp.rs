@@ -17,7 +17,7 @@ pub fn init_qp_weight(data: &mut ExpertModeData) {
 /// `QPFixWeight` (no-op for OptTrans-free models).
 pub fn update_qp_weight_for(data: &mut ExpertModeData) {
     if let Some(weights) = data.qp_weights.as_mut() {
-        update_qp_weight(weights, &[]);
+        update_qp_weight(weights, &data.opt_trans);
     }
 }
 

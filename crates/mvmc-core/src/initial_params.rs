@@ -1,15 +1,17 @@
 //! Atomic loaders for Julia's six-diagnostic-fields plus parameter-triples format.
 use std::{fs, io, path::Path};
 
-use mvmc_expert_parsers::{utils::parameter_init::n_slater, ExpertModeData};
+use mvmc_expert_parsers::{
+    utils::{file::julia_parse_float, parameter_init::n_slater},
+    ExpertModeData,
+};
 use num_complex::Complex64;
 
 fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, String> {
     let mut values = Vec::new();
     for (index, token) in text.split_whitespace().enumerate() {
-        let value = token
-            .parse::<f64>()
-            .map_err(|_| format!("non-numeric token '{token}' at field {}", index + 1))?;
+        let value = julia_parse_float(token)
+            .ok_or_else(|| format!("non-numeric token '{token}' at field {}", index + 1))?;
         if !value.is_finite() {
             return Err(format!("non-finite token '{token}' at field {}", index + 1));
         }
@@ -18,21 +20,24 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     let layout = data.projection_layout();
     let n_orbital = n_slater(data);
     let n_rbm = data.count_rbm_parameters();
-    let n_parameters = layout.n_proj + n_rbm + n_orbital;
+    let n_opt_trans = data.count_opt_trans_parameters();
+    let n_parameters = layout.n_proj + n_rbm + n_orbital + n_opt_trans;
     let expected = 6 + 3 * n_parameters;
     if values.len() < expected {
         return Err(format!(
-            "too short: got {} floats, expected {expected} (6 + 3*(NProj={} + NRBM={n_rbm} + NSlater={n_orbital} + NOptTrans=0))",
+            "too short: got {} floats, expected {expected} (6 + 3*(NProj={} + NRBM={n_rbm} + NSlater={n_orbital} + NOptTrans={n_opt_trans}))",
             values.len(), layout.n_proj
         ));
     }
     let extra = values.len() - expected;
     if extra > 0 {
-        return Err(if extra % 3 == 0 {
+        return Err(if n_opt_trans == 0 && extra % 3 == 0 {
             format!(
                 "OptTrans-style block of {} triples but OptTrans is not active",
                 extra / 3
             )
+        } else if extra % 3 == 0 {
+            format!("{extra} trailing floats (file likely malformed)")
         } else {
             format!(
                 "{extra} trailing floats (not a whole number of triples; file likely malformed)"
@@ -90,6 +95,9 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
             term.value = parameter(layout.n_proj + n_rbm + term.idx as usize);
         }
     }
+    for (index, value) in data.opt_trans.iter_mut().enumerate() {
+        *value = parameter(layout.n_proj + n_rbm + n_orbital + index);
+    }
     Ok(n_parameters)
 }
 
@@ -98,7 +106,7 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
 /// Missing files and invalid records emit a warning and return `Ok(false)`,
 /// matching Julia's recoverable contract. Other file-reading failures propagate
 /// as I/O errors, as Julia's `read` does. No RNG draws or normalization occur.
-/// DH2/DH4 follow Jastrow, then the nine RBM sections and Slater; OptTrans is pending.
+/// DH2/DH4 follow Jastrow, then the nine RBM sections, Slater and OptTrans.
 pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io::Result<bool> {
     let path = path.as_ref();
     if !path.is_file() {
@@ -121,7 +129,7 @@ pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io
 ///
 /// Rejects missing files, malformed tokens, non-finite values, incorrect record
 /// lengths and models with no parameters. Rejected records leave data unchanged.
-/// The supported layout is six diagnostics followed by projection/RBM/Slater triples.
+/// The layout is six diagnostics followed by projection/RBM/Slater/OptTrans triples.
 pub fn read_opt_para_file(
     data: &mut ExpertModeData,
     path: impl AsRef<Path>,

@@ -180,7 +180,7 @@ pub fn init_qp_weight(data: &mut ExpertModeData) {
         data.modpara.nsp_stot,
         data.modpara.nmp_trans,
         &data.para_qp_trans,
-        &[],
+        &data.opt_trans,
     );
     data.qp_weights = Some(weights);
 }
