@@ -8,6 +8,10 @@ authors.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+default = []
+mpi = ["dep:mpi"]
+
 [dependencies]
 sfmt19937 = { workspace = true }
 pfapack = { workspace = true, features = ["blas-backend"] }
@@ -22,6 +26,7 @@ lapack = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 rayon = { workspace = true }
+mpi = { workspace = true, optional = true }
 
 [dev-dependencies]
 approx = { workspace = true }
