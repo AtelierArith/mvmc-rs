@@ -36,6 +36,11 @@ pub trait Reducer {
     fn rank(&self) -> usize {
         0
     }
+
+    /// Whether this reducer represents one communicator in grouped MPI mode.
+    fn supports_grouped_sampling(&self) -> bool {
+        false
+    }
 }
 
 /// No-op reducer for the v0.1 single-process build.

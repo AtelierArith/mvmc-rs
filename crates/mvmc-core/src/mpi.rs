@@ -7,14 +7,37 @@
 
 use num_complex::Complex64;
 
+use ::mpi::topology::{Color, Key};
 use ::mpi::traits::*;
 
+use crate::parallel::{assign_group, GroupAssignment, LaunchContext};
 use crate::reducer::Reducer;
 
 /// An initialized MPI world and its root-owned lifecycle token.
 pub struct MpiContext {
     universe: ::mpi::environment::Universe,
     world: ::mpi::topology::SimpleCommunicator,
+}
+
+/// MPI communicator for one Julia-compatible `NSplitSize` group.
+///
+/// The parent [`MpiContext`] must outlive this value because MPI finalization
+/// is owned by the parent `Universe`. All reductions performed by this type
+/// are confined to the group communicator (`comm1` in the Julia runner).
+pub struct MpiGroupContext {
+    communicator: ::mpi::topology::SimpleCommunicator,
+    assignment: GroupAssignment,
+}
+
+impl std::fmt::Debug for MpiGroupContext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MpiGroupContext")
+            .field("group", &self.assignment.group)
+            .field("rank", &self.rank())
+            .field("world_size", &self.world_size())
+            .finish()
+    }
 }
 
 impl std::fmt::Debug for MpiContext {
@@ -81,6 +104,37 @@ impl MpiContext {
     pub fn universe(&self) -> &::mpi::environment::Universe {
         &self.universe
     }
+
+    /// Split `MPI_COMM_WORLD` into `nsplit` contiguous groups.
+    pub fn split_groups(&self, nsplit: usize) -> Result<MpiGroupContext, String> {
+        let assignment = assign_group(
+            LaunchContext {
+                rank: self.rank(),
+                world_size: self.world_size(),
+            },
+            nsplit,
+        )?;
+        let color = Color::with_value(i32::try_from(assignment.group).map_err(|_| {
+            format!(
+                "MPI group index {} does not fit in an MPI color",
+                assignment.group
+            )
+        })?);
+        let key = Key::with_value(i32::try_from(assignment.local_rank).map_err(|_| {
+            format!(
+                "MPI local rank {} does not fit in an MPI key",
+                assignment.local_rank
+            )
+        })?);
+        let communicator = self
+            .world
+            .split_by_color_with_key(color, key)
+            .ok_or_else(|| "MPI communicator split returned MPI_UNDEFINED".to_string())?;
+        Ok(MpiGroupContext {
+            communicator,
+            assignment,
+        })
+    }
 }
 
 impl Reducer for MpiContext {
@@ -124,5 +178,71 @@ impl Reducer for MpiContext {
 
     fn rank(&self) -> usize {
         Self::rank(self)
+    }
+}
+
+impl MpiGroupContext {
+    /// Group index in the world communicator.
+    pub fn group(&self) -> usize {
+        self.assignment.group
+    }
+
+    /// Borrow the group communicator for coordinated failure handling.
+    pub fn communicator(&self) -> &::mpi::topology::SimpleCommunicator {
+        &self.communicator
+    }
+}
+
+impl Reducer for MpiGroupContext {
+    fn allreduce_sum_f64(&self, values: &mut [f64]) {
+        use ::mpi::collective::SystemOperation;
+        let mut reduced = vec![0.0; values.len()];
+        self.communicator
+            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
+        values.copy_from_slice(&reduced);
+    }
+
+    fn allreduce_sum_c64(&self, values: &mut [Complex64]) {
+        use ::mpi::collective::SystemOperation;
+        let real: Vec<_> = values.iter().map(|value| value.re).collect();
+        let imag: Vec<_> = values.iter().map(|value| value.im).collect();
+        let mut reduced_real = vec![0.0; values.len()];
+        let mut reduced_imag = vec![0.0; values.len()];
+        self.communicator
+            .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
+        self.communicator
+            .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
+        for (value, (real, imag)) in values
+            .iter_mut()
+            .zip(reduced_real.into_iter().zip(reduced_imag))
+        {
+            *value = Complex64::new(real, imag);
+        }
+    }
+
+    fn allreduce_sum_i64(&self, values: &mut [i64]) {
+        use ::mpi::collective::SystemOperation;
+        let mut reduced = vec![0_i64; values.len()];
+        self.communicator
+            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
+        values.copy_from_slice(&reduced);
+    }
+
+    fn world_size(&self) -> usize {
+        self.communicator
+            .size()
+            .try_into()
+            .expect("MPI group size is positive")
+    }
+
+    fn rank(&self) -> usize {
+        self.communicator
+            .rank()
+            .try_into()
+            .expect("MPI group rank is nonnegative")
+    }
+
+    fn supports_grouped_sampling(&self) -> bool {
+        true
     }
 }

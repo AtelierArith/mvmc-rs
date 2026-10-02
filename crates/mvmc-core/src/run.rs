@@ -247,8 +247,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     crate::validation::validate_para_opt(data)?;
     let world_size = reducer.world_size();
     let rank = reducer.rank();
-    if world_size > 1 && data.modpara.nsplit_size != 1 {
-        return Err("MPI sample-parallel execution requires NSplitSize = 1 (issue #35)".into());
+    if data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
+        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
     }
     if rank >= world_size {
         return Err(format!(
