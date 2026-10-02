@@ -18,6 +18,7 @@ pub mod c_timer;
 pub mod counter;
 pub mod initial_params;
 pub mod io;
+pub mod lanczos;
 pub use pfapack::julia_complex;
 pub mod observables;
 pub mod pfaffian;
