@@ -13,9 +13,7 @@ pub fn stochastic_opt_cg(
     output_dir: Option<&Path>,
 ) -> io::Result<i32> {
     let n_proj = data.projection_layout().n_proj;
-    let n_para = n_proj
-        + data.count_rbm_parameters()
-        + mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    let n_para = data.count_variational_parameters();
     let complex = crate::run::get_all_complex_flag(data);
     let offset = if complex { 2 } else { 1 };
     let full = offset * n_para;

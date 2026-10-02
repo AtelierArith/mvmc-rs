@@ -16,9 +16,9 @@ use std::fs;
 use std::path::Path;
 
 use mvmc_expert_parsers::parse_expert_mode_files;
-use mvmc_expert_parsers::utils::parameter_init::{
-    init_parameter, n_slater, sync_modified_parameter,
-};
+use mvmc_expert_parsers::utils::parameter_init::init_parameter;
+#[cfg(test)]
+use mvmc_expert_parsers::utils::parameter_init::n_slater;
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use mvmc_expert_parsers::ExpertModeData;
@@ -35,6 +35,7 @@ use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::slater_update::{update_slater_elm, update_slater_elm_fsz};
 use crate::state::VmcOptimizationState;
 use crate::sync::sync_modified_parameter as sync_modified;
+use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
 
 /// C-compatible parser default when `RndSeed` is omitted. Zero is a
 /// valid seed, and negative ModPara seeds request the current Unix time.
@@ -97,9 +98,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     data.normalize_projection_count();
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
-    let n_proj = data.projection_layout().n_proj;
-    let n_orb = n_slater(data);
-    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
+    let n_para = data.count_variational_parameters();
     data.ensure_optimization_flags(n_para);
     let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
@@ -579,8 +578,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_proj = data.projection_layout().n_proj;
-    let n_orb = n_slater(data);
-    let n_para = n_proj + data.count_rbm_parameters() + n_orb;
+    let n_para = data.count_variational_parameters();
     let n_sp = data.modpara.nsp_gauss_leg.max(1) as usize;
     let n_mp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
     let n_opt = data.n_qp_opt_trans.max(1) as usize;
@@ -603,6 +601,25 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
 mod mode_tests {
     use super::*;
     use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
+
+    #[test]
+    fn opttrans_state_reserves_active_width_after_projection_rbm_and_slater() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/opttrans/namelist_layout.def");
+        let mut data = parse_expert_mode_files(path).unwrap();
+        let base = data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(&data);
+        for width in [0, 1, 2, 3] {
+            data.opt_trans.resize(width, Complex64::new(1.0, 0.0));
+            let state = state_from_data(&data);
+            assert_eq!(state.sr_opt.sr_opt_size, 1 + base + width);
+            assert_eq!(
+                state.slater_matrix.pf_m.len(),
+                data.modpara.nsp_gauss_leg.max(1) as usize
+                    * data.modpara.nmp_trans.unsigned_abs().max(1) as usize
+                    * data.n_qp_opt_trans.max(1) as usize
+            );
+        }
+    }
 
     #[test]
     fn rbm_state_places_all_nine_blocks_between_projection_and_slater() {

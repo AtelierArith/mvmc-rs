@@ -18,7 +18,7 @@ pub mod read_input_parameters;
 /// Quantum-projection weight init + `gauss_legendre` (port of `utils/qp_weight.jl`).
 pub mod qp_weight;
 
-mod julia_hypot;
+pub mod julia_hypot;
 /// Julia Float64 logarithmic operations for deterministic kernels.
 pub mod julia_log;
 /// Julia Float64 trigonometric and hyperbolic operations for deterministic kernels.

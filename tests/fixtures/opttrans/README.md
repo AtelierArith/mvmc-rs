@@ -96,7 +96,37 @@ both slots exist; skipped slots retain their original values. The projection
 script also runs the canonical Slater-update unit contracts.
 
 These milestones validate inputs, initialization, full-record loading,
-QP-weight refresh, nonidentity Slater tables and derivative kernels.
-Production OptTrans execution remains gated by issue #27 until runtime
-state dimensions, derivative placement, SR updates, normalization and
+QP-weight refresh, nonidentity Slater tables, derivative kernels and the
+SR/synchronization contracts below. Production OptTrans execution remains
+gated by issue #27 until main-calculation derivative placement and
 deterministic serial trajectories have passed Julia parity.
+
+`sr.txt` covers six active/inactive/all-factor layouts, real and complex
+SR buffers, direct and CG solvers, and real/imaginary/both/fixed component
+flags (96 cases). Deterministic orthogonal sample columns and covariance
+inputs isolate parameter enumeration from sampling. Every physical term,
+OptTrans component, definition weight and full QP weight is compared by
+Float64 bits. Two nonzero complex fixed translation weights ensure missing
+weight refreshes are detected. SR updates include OptTrans after projection, all nine RBM
+sections and the declared Slater width; each OptTrans increment immediately
+refreshes existing QP weights. State allocation uses the same active count.
+
+`sync.txt` covers three layouts, six complex vectors including zero and
+tiny/large amplitudes, both optimizer correlation-shift settings and the
+parser/optimizer synchronization paths (72 cases). Optimizer synchronization
+rescales OptTrans to maximum amplitude one after Slater rescaling. Parser
+synchronization only rescales Slater; the parser has no correlation-shift
+keyword. Both definition weights and fixed QP weights are preserved.
+Local normalization leaves cached full weights until the next refresh.
+
+Regenerate or verify these fixtures with Julia 1.13.1 using:
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_sr_parity.jl --write
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_sr_parity.jl
+```
+
+The script also runs unmodified canonical stochastic-optimization and
+parameter-synchronization unit tests. Main-calculation derivative placement
+and deterministic nonidentity serial trajectories remain before production
+can be enabled.
