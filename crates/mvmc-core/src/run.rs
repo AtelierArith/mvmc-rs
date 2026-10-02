@@ -469,7 +469,11 @@ fn run_para_opt_timed<const TIMED: bool>(
         Some(enabled) => {
             mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, enabled)
         }
-        None => mvmc_expert_parsers::parse_expert_mode_files(&namelist_path),
+        // The production runner follows C's FlagOptTrans contract: a
+        // definition file alone does not activate optimized translation.
+        None => {
+            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, false)
+        }
     }
     .map_err(|e| e.to_string())?;
     timer.stop(11);
