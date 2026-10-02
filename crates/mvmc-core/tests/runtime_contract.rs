@@ -57,7 +57,27 @@ fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
 
     data.i_flg_orbital_general = 0;
     data.modpara.nsplit_size = 2;
-    assert!(mvmc_core::validation::validate_phys_cal(&data).is_ok());
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(error.contains("NSplitSize") && error.contains("issue #31"));
+}
+
+#[test]
+fn rejects_spin_changing_lanczos_operators_before_sampling() {
+    let mut data = ExpertModeData::new();
+    data.modpara.lanczos_mode = 1;
+    data.modpara.nmp_trans = 1;
+    data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+        site1: 0,
+        spin1: mvmc_expert_parsers::Spin::Up,
+        site2: 1,
+        spin2: mvmc_expert_parsers::Spin::Down,
+        value: num_complex::Complex64::new(1.0, 0.0),
+    });
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(
+        error.contains("spin-changing") && error.contains("issue #31"),
+        "{error}"
+    );
 }
 
 #[test]

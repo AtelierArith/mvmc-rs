@@ -178,6 +178,12 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     let p = &data.modpara;
     validate_supported_modpara(p)?;
     if p.lanczos_mode > 0 {
+        if p.nsplit_size > 1 {
+            return Err(
+                "NSplitSize > 1 with NLanczosMode > 0 is unsupported for PhysCal (issue #31)"
+                    .into(),
+            );
+        }
         if data.i_flg_orbital_general != 0 {
             return Err(
                 "Lanczos PhysCal for FSZ/general orbitals is not implemented yet (issue #31)"
