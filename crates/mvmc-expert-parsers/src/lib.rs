@@ -39,8 +39,8 @@ pub use utils::validation::{
 
 pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
-    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_opt_flags,
-    set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags,
+    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_c_opt_flags,
+    set_opt_trans_opt_flags, set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags,
 };
 
 use std::collections::BTreeMap;
@@ -91,6 +91,22 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
 pub fn parse_expert_mode_files_with_opt_trans<P: AsRef<Path>>(
     namelist_path: P,
     enable_opt_trans: bool,
+) -> Result<ExpertModeData, ParseError> {
+    parse_expert_mode_files_mode(namelist_path, enable_opt_trans, false)
+}
+
+/// Parse Expert Mode files using C's OptTrans activation and flag layout.
+pub fn parse_expert_mode_files_with_c_opt_trans<P: AsRef<Path>>(
+    namelist_path: P,
+    enable_opt_trans: bool,
+) -> Result<ExpertModeData, ParseError> {
+    parse_expert_mode_files_mode(namelist_path, enable_opt_trans, true)
+}
+
+fn parse_expert_mode_files_mode<P: AsRef<Path>>(
+    namelist_path: P,
+    enable_opt_trans: bool,
+    c_opt_trans_flags: bool,
 ) -> Result<ExpertModeData, ParseError> {
     let namelist_path = namelist_path.as_ref();
     let base_dir = namelist_path
@@ -187,7 +203,11 @@ pub fn parse_expert_mode_files_with_opt_trans<P: AsRef<Path>>(
         offset += size;
     }
     set_orbital_opt_flags(&mut data, &orbital_flags);
-    set_opt_trans_opt_flags(&mut data);
+    if c_opt_trans_flags {
+        utils::opt_flag::set_opt_trans_c_opt_flags(&mut data);
+    } else {
+        set_opt_trans_opt_flags(&mut data);
+    }
     data.slater_params.resize(
         data.modpara.n_orbital_idx.max(0) as usize,
         num_complex::Complex64::new(0.0, 0.0),

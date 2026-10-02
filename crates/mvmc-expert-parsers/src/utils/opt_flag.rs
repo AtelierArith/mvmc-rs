@@ -185,3 +185,22 @@ pub fn set_opt_trans_opt_flags(data: &mut ExpertModeData) {
         data.optimization_flags[2 * idx + 1] = 0;
     }
 }
+
+/// Apply the native C `GetInfoOptTrans` writes.
+pub fn set_opt_trans_c_opt_flags(data: &mut ExpertModeData) {
+    let count = data.count_opt_trans_parameters();
+    if count == 0 {
+        return;
+    }
+    let fidx = data.projection_layout().n_proj + n_slater(data);
+    let required = 2
+        * (data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data) + count);
+    if data.optimization_flags.len() < required {
+        data.optimization_flags.resize(required, 0);
+    }
+    for index in fidx..fidx + count {
+        if let Some(flag) = data.optimization_flags.get_mut(index) {
+            *flag = 1;
+        }
+    }
+}
