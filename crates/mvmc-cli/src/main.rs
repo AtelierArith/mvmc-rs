@@ -229,7 +229,7 @@ fn main() {
         enable_opt_trans: Some(opt_trans_arg),
         ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
     };
-    let result = mvmc_core::run_para_opt_from_namelist(&namelist, config);
+    let result = run_with_selected_backend(&namelist, config);
     let elapsed = t0.elapsed();
 
     // ── result ────────────────────────────────────────────────────────────────
@@ -253,4 +253,26 @@ fn main() {
             process::exit(1);
         }
     }
+}
+
+fn run_with_selected_backend(
+    namelist: &Path,
+    config: mvmc_core::RunConfig,
+) -> Result<mvmc_core::RunSummary, String> {
+    let launched = mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok());
+    if launched.is_some_and(|context| context.world_size > 1) {
+        #[cfg(feature = "mpi")]
+        {
+            let context = mvmc_core::mpi::MpiContext::initialize()?;
+            return mvmc_core::run_para_opt_from_namelist_with_reducer(namelist, config, &context);
+        }
+        #[cfg(not(feature = "mpi"))]
+        {
+            return Err(
+                "MPI launcher detected; rebuild mvmc-cli with --features mpi to enable MPI execution"
+                    .into(),
+            );
+        }
+    }
+    mvmc_core::run_para_opt_from_namelist(namelist, config)
 }
