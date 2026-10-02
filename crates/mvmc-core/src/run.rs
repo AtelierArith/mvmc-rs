@@ -1353,11 +1353,11 @@ fn accumulate_observables<const TIMED: bool>(
         state.energy.sztot += Complex64::new(w * sz, 0.0);
         state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
 
-        // The transfer-only Lanczos path evaluates H on each moved
-        // configuration. PairHop, Exchange, InterAll, and FSZ remain gated
-        // until their corresponding operator moves are ported.
+        // The Lanczos path evaluates H on each moved configuration. Transfer
+        // and PairHop use the Julia operator order; Exchange, InterAll, and
+        // FSZ remain gated until their corresponding operator moves are
+        // ported.
         if data.modpara.lanczos_mode > 0
-            && data.pair_hop_terms.is_empty()
             && data.exchange_terms.is_empty()
             && data.inter_all_terms.is_empty()
             && !use_fsz

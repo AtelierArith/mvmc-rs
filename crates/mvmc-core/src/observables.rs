@@ -1512,7 +1512,86 @@ pub fn calculate_local_energy(
 /// Calculate the second Lanczos Hamiltonian moment for diagonal and transfer
 /// terms. The moved configuration is evaluated with the same local-energy
 /// kernel as the original sample, preserving the Julia operator order.
-/// PairHop, Exchange, InterAll, and FSZ callers remain outside this helper.
+/// PairHop is handled with the same sequential two-body move used by Julia;
+/// Exchange, InterAll, and FSZ callers remain outside this helper.
+type LanczosMovedConfig = (Vec<i64>, Vec<i64>, Vec<i64>, Vec<i64>);
+
+fn lanczos_apply_one_body(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    create_site: usize,
+    annihilate_site: usize,
+    spin: u8,
+    data: &ExpertModeData,
+) -> Option<LanczosMovedConfig> {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    if create_site >= n_site
+        || annihilate_site >= n_site
+        || spin > 1
+        || ele_num.len() < 2 * n_site
+        || ele_cfg.len() < 2 * n_site
+        || ele_idx.len() < 2 * n_elec
+    {
+        return None;
+    }
+    let dst = create_site + spin as usize * n_site;
+    let src = annihilate_site + spin as usize * n_site;
+    if create_site == annihilate_site {
+        return (ele_num[dst] == 1).then(|| {
+            (
+                ele_idx.to_vec(),
+                ele_cfg.to_vec(),
+                ele_num.to_vec(),
+                ele_proj_cnt.to_vec(),
+            )
+        });
+    }
+    if ele_num[dst] == 1 || ele_num[src] == 0 {
+        return None;
+    }
+    let electron = usize::try_from(ele_cfg[src]).ok()?;
+    if electron >= n_elec {
+        return None;
+    }
+    let mut moved_idx = ele_idx.to_vec();
+    let mut moved_cfg = ele_cfg.to_vec();
+    let mut moved_num = ele_num.to_vec();
+    let mut moved_proj = ele_proj_cnt.to_vec();
+    moved_idx[electron + spin as usize * n_elec] = create_site as i64;
+    moved_cfg[src] = -1;
+    moved_cfg[dst] = electron as i64;
+    moved_num[src] = 0;
+    moved_num[dst] = 1;
+    crate::sampling::projection::make_proj_cnt(&mut moved_proj, &moved_num, data);
+    Some((moved_idx, moved_cfg, moved_num, moved_proj))
+}
+
+fn lanczos_apply_pair_hop(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    destination: usize,
+    source: usize,
+    data: &ExpertModeData,
+) -> Option<LanczosMovedConfig> {
+    // Julia applies the t=down factor first, then the s=up factor.
+    let (idx, cfg, num, proj) = lanczos_apply_one_body(
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        destination,
+        source,
+        1,
+        data,
+    )?;
+    lanczos_apply_one_body(&idx, &cfg, &num, &proj, destination, source, 0, data)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn calculate_lanczos_h2_transfer(
     h1: Complex64,
@@ -1620,6 +1699,89 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 &moved_proj,
             );
             h2 += -term.value * moved_h * green.conj();
+        }
+        state.slater_matrix = original_slater.clone();
+    }
+
+    for term in &data.pair_hop_terms {
+        let destination = usize::try_from(term.site1).ok();
+        let source = usize::try_from(term.site2).ok();
+        let (Some(destination), Some(source)) = (destination, source) else {
+            continue;
+        };
+        let Some((moved_idx, moved_cfg, moved_num, moved_proj)) = lanczos_apply_pair_hop(
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            destination,
+            source,
+            data,
+        ) else {
+            continue;
+        };
+        let green = green_func2(
+            destination,
+            source,
+            destination,
+            source,
+            0,
+            1,
+            ip,
+            data,
+            state,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+        );
+        if green.norm() == 0.0 {
+            continue;
+        }
+        if all_complex {
+            let _ = crate::pfaffian::calc_m_all_complex(
+                &moved_idx,
+                &state.slater_matrix.slater_elm,
+                &mut state.slater_matrix.inv_m,
+                &mut state.slater_matrix.pf_m,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+        } else {
+            let _ = crate::pfaffian::calc_m_all_real(
+                &moved_idx,
+                &state.slater_matrix.slater_elm_real,
+                &mut state.slater_matrix.inv_m_real,
+                &mut state.slater_matrix.pf_m_real,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+        }
+        let moved_ip = if all_complex {
+            calculate_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data)
+        } else {
+            Complex64::new(
+                calculate_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data),
+                0.0,
+            )
+        };
+        if moved_ip.norm() > 0.0 {
+            let moved_h = calculate_local_energy(
+                moved_ip,
+                data,
+                state,
+                &moved_idx,
+                &moved_cfg,
+                &moved_num,
+                &moved_proj,
+            );
+            h2 += term.value * moved_h * green.conj();
         }
         state.slater_matrix = original_slater.clone();
     }
@@ -1919,6 +2081,24 @@ mod tests {
                 state.transfer_scratch.new_pf_real.capacity(),
             )
         );
+    }
+
+    #[test]
+    fn lanczos_pair_hop_applies_down_then_up_like_julia() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        let idx = [0_i64, 0];
+        let cfg = [0_i64, -1, 0, -1];
+        let num = [1_i64, 0, 1, 0];
+        let proj: [i64; 0] = [];
+        let (moved_idx, moved_cfg, moved_num, moved_proj) =
+            lanczos_apply_pair_hop(&idx, &cfg, &num, &proj, 1, 0, &data)
+                .expect("occupied source pair can hop to an empty destination");
+        assert_eq!(moved_idx, [1, 1]);
+        assert_eq!(moved_cfg, [-1, 0, -1, 0]);
+        assert_eq!(moved_num, [0, 1, 0, 1]);
+        assert!(moved_proj.is_empty());
     }
 
     #[test]
