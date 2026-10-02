@@ -4,3 +4,6 @@
 [submodule "extern/Julia-mVMC"]
 	path = extern/Julia-mVMC
 	url = https://github.com/AtelierArith/Julia-mVMC.git
+[submodule "extern/mVMC-1.3.0"]
+	path = extern/mVMC-1.3.0
+	url = https://github.com/issp-center-dev/mVMC.git
