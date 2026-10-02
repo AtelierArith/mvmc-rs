@@ -208,3 +208,27 @@ fn complete_c_records_and_scalar_conversions_preserve_final_values_and_rng() {
         std::fs::remove_file(path).unwrap();
     }
 }
+
+#[test]
+fn successive_complete_records_leave_the_last_c_record_applied() {
+    let mut data = model(&[0, 0, 2, 0]);
+    let record = |base: f64| {
+        let mut values = vec![0.0; 12];
+        values[6] = base;
+        values[9] = base + 1.0;
+        values
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let path = std::env::temp_dir().join(format!(
+        "mvmc-c-successive-records-{}.def",
+        std::process::id()
+    ));
+    std::fs::write(&path, format!("{}\n{}\n", record(1.0), record(7.0))).unwrap();
+    assert_eq!(read_opt_para_file(&mut data, &path).unwrap(), 2);
+    assert_eq!(data.slater_params[0], Complex64::new(7.0, 0.0));
+    assert_eq!(data.slater_params[1], Complex64::new(8.0, 0.0));
+    std::fs::remove_file(path).unwrap();
+}
