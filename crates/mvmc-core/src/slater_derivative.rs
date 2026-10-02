@@ -170,23 +170,18 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     timer.start_diag(932, diag);
     let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
 
-    let mut trans_orb_idx = vec![-1_i64; n_mp_trans * n_size * n_size];
-    let mut trans_orb_sgn = vec![1_i64; n_mp_trans * n_size * n_size];
-    for mpidx in 0..n_mp_trans {
-        let trans = data.qp_trans_entries.get(mpidx);
+    let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
+    let mut trans_orb_idx = vec![-1_i64; n_trans * n_size * n_size];
+    let mut trans_orb_sgn = vec![1_i64; n_trans * n_size * n_size];
+    for trans_idx in 0..n_trans {
+        let mpidx = trans_idx % n_mp_trans.max(1);
+        let optidx = trans_idx / n_mp_trans.max(1);
         for msi in 0..n_size {
             let ri = ele_idx.get(msi).copied().unwrap_or(-1);
             if ri < 0 || ri as usize >= n_site {
                 continue;
             }
-            let ori = ri as usize;
-            let tri = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
+            let (tri, sgni) = crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
             if tri >= n_site {
                 continue;
             }
@@ -195,18 +190,12 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
                 if rj < 0 || rj as usize >= n_site {
                     continue;
                 }
-                let orj = rj as usize;
-                let trj = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
+                let (trj, sgnj) =
+                    crate::qp::translated_site(data, rj as usize, optidx, mpidx, false);
                 if trj >= n_site {
                     continue;
                 }
-                let idx = mpidx * n_size * n_size + msi * n_size + msj;
+                let idx = trans_idx * n_size * n_size + msi * n_size + msj;
                 trans_orb_idx[idx] = orbital_idx[tri][trj];
                 trans_orb_sgn[idx] = sgni * sgnj * orbital_sgn[tri][trj];
             }
@@ -219,8 +208,40 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     scratch.zero_qp_orbital();
     timer.stop_diag(931, diag);
     timer.start_diag(933, diag);
+    let n_opt = data.n_qp_opt_trans.max(1) as usize;
+    let complete_maps = data.qp_opt_trans.len() >= n_opt
+        && data.qp_opt_trans_sgn.len() >= n_opt
+        && data
+            .qp_opt_trans
+            .iter()
+            .take(n_opt)
+            .all(|row| row.len() >= n_site)
+        && data
+            .qp_opt_trans_sgn
+            .iter()
+            .take(n_opt)
+            .all(|row| row.len() >= n_site)
+        && data.qp_trans_entries.len() >= n_mp_trans
+        && data
+            .qp_trans_entries
+            .iter()
+            .take(n_mp_trans)
+            .all(|t| t.site_map.len() >= n_site && t.site_sign.len() >= n_site)
+        && [&data.orbital_idx_matrix, &data.orbital_sgn_matrix]
+            .iter()
+            .all(|matrix| {
+                matrix.as_ref().is_some_and(|matrix| {
+                    matrix.len() >= n_site
+                        && matrix.iter().take(n_site).all(|row| row.len() >= n_site)
+                })
+            });
     for qpidx in 0..n_qp_full {
-        let mpidx = (qpidx / n_sp_gauss_leg).min(n_mp_trans.saturating_sub(1));
+        let trans_idx = qpidx / n_sp_gauss_leg;
+        // Julia's generic fallback drops later OptTrans sectors; its complete
+        // cached-map path handles every sector.
+        if !complete_maps && trans_idx >= n_mp_trans {
+            continue;
+        }
         let spidx = qpidx % n_sp_gauss_leg;
         if spidx >= weights.spgl_cos_sin.len()
             || spidx >= weights.spgl_cos_cos.len()
@@ -232,7 +253,7 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
         let cs = pf * weights.spgl_cos_sin[spidx];
         let cc = pf * weights.spgl_cos_cos[spidx];
         let ss = pf * weights.spgl_sin_sin[spidx];
-        let tbase = mpidx * n_size * n_size;
+        let tbase = trans_idx * n_size * n_size;
         let inv_plane = slater_matrix.inv_m.qp_matrix_slice(qpidx);
 
         for msi in 0..n_elec {
@@ -343,21 +364,15 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
 
     for trans_idx in 0..n_trans {
         let mpidx = trans_idx % n_mp_trans.max(1);
-        let trans = data.qp_trans_entries.get(mpidx);
+        let optidx = trans_idx / n_mp_trans.max(1);
         for msi in 0..n_size {
             let ri = ele_idx[msi];
             let si = ele_spn[msi];
             if ri < 0 || si < 0 || ri as usize >= n_site || si > 1 {
                 continue;
             }
-            let ori = ri as usize;
-            let tri_site = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
+            let (tri_site, sgni) =
+                crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
             if tri_site >= n_site {
                 continue;
             }
@@ -368,14 +383,8 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
                 if rj < 0 || sj < 0 || rj as usize >= n_site || sj > 1 {
                     continue;
                 }
-                let orj = rj as usize;
-                let trj_site = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
+                let (trj_site, sgnj) =
+                    crate::qp::translated_site(data, rj as usize, optidx, mpidx, false);
                 if trj_site >= n_site {
                     continue;
                 }
@@ -390,7 +399,12 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
     scratch.ensure_shape(n_slater, n_qp_full);
     scratch.zero_qp_orbital();
     for qpidx in 0..n_qp_full {
-        let mpidx = qpidx.min(n_mp_trans.saturating_sub(1));
+        // The canonical FSZ derivative only includes the first fixed sectors.
+        // OptTrans's separate derivative still uses all sector Pfaffians.
+        if qpidx >= n_mp_trans {
+            continue;
+        }
+        let mpidx = qpidx;
         let pf = slater_matrix.pf_m[qpidx];
         let inv_plane = slater_matrix.inv_m.qp_matrix_slice(qpidx);
         let tbase = mpidx * n_size * n_size;

@@ -696,175 +696,55 @@ pub fn slater_elm_diff(
     data: &ExpertModeData,
     state: &VmcOptimizationState,
 ) {
-    let n_site = data.modpara.nsite.max(0) as usize;
-    let n_elec = data.modpara.nelec.max(0) as usize;
-    let n_size = 2 * n_elec;
-    if n_site == 0 || n_elec == 0 || ip.norm() == 0.0 {
-        return;
-    }
-    let weights = match data.qp_weights.as_ref() {
-        Some(weights) => weights,
-        None => return,
-    };
-    let n_qp_full = weights
-        .qp_full_weight
-        .len()
-        .min(state.slater_matrix.pf_m.len());
-    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
-    let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
-    let n_slater = if data.modpara.n_orbital_idx > 0 {
-        data.modpara.n_orbital_idx as usize
-    } else if let Some(max_idx) = data.orbital_terms.iter().map(|t| t.idx).max() {
-        (max_idx + 1).max(0) as usize
-    } else {
-        0
-    };
-    if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
-        return;
-    }
-
-    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
-
-    let mut trans_orb_idx = vec![-1_i64; n_mp_trans * n_size * n_size];
-    let mut trans_orb_sgn = vec![1_i64; n_mp_trans * n_size * n_size];
-    for mpidx in 0..n_mp_trans {
-        let trans = data.qp_trans_entries.get(mpidx);
-        for msi in 0..n_size {
-            let ri = ele_idx.get(msi).copied().unwrap_or(-1);
-            if ri < 0 || ri as usize >= n_site {
-                continue;
-            }
-            let ri = ri as usize;
-            let ori = ri;
-            let tri = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
-            if tri >= n_site {
-                continue;
-            }
-            for msj in 0..n_size {
-                let rj = ele_idx.get(msj).copied().unwrap_or(-1);
-                if rj < 0 || rj as usize >= n_site {
-                    continue;
-                }
-                let rj = rj as usize;
-                let orj = rj;
-                let trj = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
-                if trj >= n_site {
-                    continue;
-                }
-                let idx = mpidx * n_size * n_size + msi * n_size + msj;
-                trans_orb_idx[idx] = orbital_idx[tri][trj];
-                trans_orb_sgn[idx] = sgni * sgnj * orbital_sgn[tri][trj];
-            }
-        }
-    }
-
-    let mut buffer = vec![Complex64::new(0.0, 0.0); n_qp_full * n_slater];
-    for qpidx in 0..n_qp_full {
-        let mpidx = (qpidx / n_sp_gauss_leg).min(n_mp_trans.saturating_sub(1));
-        let spidx = qpidx % n_sp_gauss_leg;
-        if spidx >= weights.spgl_cos_sin.len()
-            || spidx >= weights.spgl_cos_cos.len()
-            || spidx >= weights.spgl_sin_sin.len()
-        {
-            continue;
-        }
-        let pf = state.slater_matrix.pf_m[qpidx];
-        let cs = pf * weights.spgl_cos_sin[spidx];
-        let cc = pf * weights.spgl_cos_cos[spidx];
-        let ss = pf * weights.spgl_sin_sin[spidx];
-        let tbase = mpidx * n_size * n_size;
-        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
-        // Upstream `SlaterElmDiff` reads the inverse plane through the
-        // transposed flat convention `msi*n_size + msj`; keep that contract
-        // explicit while borrowing only the matrix portion of the QP plane.
-
-        for msi in 0..n_elec {
-            for msj in 0..n_elec {
-                accumulate_slater_diff(
-                    &mut buffer,
-                    qpidx,
-                    n_slater,
-                    trans_orb_idx[tbase + msi * n_size + msj],
-                    trans_orb_sgn[tbase + msi * n_size + msj],
-                    inv_plane[msj + msi * n_size] * cs,
-                );
-            }
-            for msj in n_elec..n_size {
-                accumulate_slater_diff(
-                    &mut buffer,
-                    qpidx,
-                    n_slater,
-                    trans_orb_idx[tbase + msi * n_size + msj],
-                    trans_orb_sgn[tbase + msi * n_size + msj],
-                    -inv_plane[msj + msi * n_size] * cc,
-                );
-            }
-        }
-        for msi in n_elec..n_size {
-            for msj in 0..n_elec {
-                accumulate_slater_diff(
-                    &mut buffer,
-                    qpidx,
-                    n_slater,
-                    trans_orb_idx[tbase + msi * n_size + msj],
-                    trans_orb_sgn[tbase + msi * n_size + msj],
-                    inv_plane[msj + msi * n_size] * ss,
-                );
-            }
-            for msj in n_elec..n_size {
-                accumulate_slater_diff(
-                    &mut buffer,
-                    qpidx,
-                    n_slater,
-                    trans_orb_idx[tbase + msi * n_size + msj],
-                    trans_orb_sgn[tbase + msi * n_size + msj],
-                    -inv_plane[msj + msi * n_size] * cs,
-                );
-            }
-        }
-    }
-
-    let inv_ip = Complex64::new(1.0, 0.0) / ip;
-    for orbidx in 0..n_slater {
-        let mut acc = Complex64::new(0.0, 0.0);
-        for qpidx in 0..n_qp_full {
-            acc += weights.qp_full_weight[qpidx] * buffer[qpidx * n_slater + orbidx];
-        }
-        acc *= inv_ip;
-        sr_opt_o[2 * orbidx] = acc;
-        sr_opt_o[2 * orbidx + 1] = acc * Complex64::new(0.0, 1.0);
-    }
-}
-
-fn accumulate_slater_diff(
-    buffer: &mut [Complex64],
-    qpidx: usize,
-    n_slater: usize,
-    orbidx: i64,
-    sign: i64,
-    value: Complex64,
-) {
-    if orbidx >= 0 && (orbidx as usize) < n_slater {
-        buffer[qpidx * n_slater + orbidx as usize] += value * Complex64::new(sign as f64, 0.0);
-    }
+    let mut scratch = crate::slater_derivative::SlaterDerivativeScratch::new();
+    let mut timer = crate::c_timer::CTimer::<false>::new();
+    crate::slater_derivative::slater_elm_diff_with_scratch_timed::<false>(
+        sr_opt_o,
+        ip,
+        ele_idx,
+        data,
+        &state.slater_matrix,
+        &mut scratch,
+        &mut timer,
+    );
 }
 
 fn spin_code(spin: Spin) -> u8 {
     match spin {
         Spin::Up => 0,
         Spin::Down => 1,
+    }
+}
+
+/// OptTrans derivative components in sector order, using fixed QP weights.
+/// Each pair is `sum(QPFixWeight * PfM) / ip` and its imaginary component.
+/// This follows Julia's separate OptTrans block, including bounded output views.
+pub fn opt_trans_diff(
+    sr_opt_o: &mut [Complex64],
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+) {
+    let Some(weights) = data.qp_weights.as_ref() else {
+        return;
+    };
+    let n_fix = weights.qp_fix_weight.len();
+    if n_fix == 0 {
+        return;
+    }
+    for sector in 0..data.count_opt_trans_parameters() {
+        let mut acc = Complex64::new(0.0, 0.0);
+        for (j, &weight) in weights.qp_fix_weight.iter().enumerate() {
+            if let Some(&pf) = state.slater_matrix.pf_m.get(sector * n_fix + j) {
+                acc += weight * pf;
+            }
+        }
+        let value = crate::julia_complex::divide(acc, ip);
+        let real = 2 * sector;
+        if real + 1 < sr_opt_o.len() {
+            sr_opt_o[real] = value;
+            sr_opt_o[real + 1] = Complex64::new(0.0, 1.0) * value;
+        }
     }
 }
 
@@ -1855,111 +1735,14 @@ pub fn slater_elm_diff_fsz(
     data: &ExpertModeData,
     state: &VmcOptimizationState,
 ) {
-    let n_site = data.modpara.nsite.max(0) as usize;
-    let n_elec = data.modpara.nelec.max(0) as usize;
-    let n_size = 2 * n_elec;
-    if n_site == 0 || n_elec == 0 || ip.norm() == 0.0 {
-        return;
-    }
-    let weights = match data.qp_weights.as_ref() {
-        Some(weights) => weights,
-        None => return,
-    };
-    let n_qp_full = weights
-        .qp_full_weight
-        .len()
-        .min(state.slater_matrix.pf_m.len());
-    let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
-    let n_slater = if data.modpara.n_orbital_idx > 0 {
-        data.modpara.n_orbital_idx as usize
-    } else if let Some(max_idx) = data.orbital_terms.iter().map(|t| t.idx).max() {
-        (max_idx + 1).max(0) as usize
-    } else {
-        0
-    };
-    if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
-        return;
-    }
-    let (orbital_idx, orbital_sgn, _) =
-        crate::slater_update::build_orbital_idx_sgn_matrices_fsz(data, n_site);
-    let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
-    let mut trans_orb_idx = vec![-1_i64; n_trans * n_size * n_size];
-    let mut trans_orb_sgn = vec![1_i64; n_trans * n_size * n_size];
-
-    for trans_idx in 0..n_trans {
-        let mpidx = trans_idx % n_mp_trans.max(1);
-        let trans = data.qp_trans_entries.get(mpidx);
-        for msi in 0..n_size {
-            let ri = ele_idx[msi];
-            let si = ele_spn[msi];
-            if ri < 0 || si < 0 || ri as usize >= n_site || si > 1 {
-                continue;
-            }
-            let ori = ri as usize;
-            let tri_site = trans
-                .and_then(|t| t.site_map.get(ori))
-                .copied()
-                .unwrap_or(ori as i64) as usize;
-            let sgni = trans
-                .map(|t| t.boundary_sign(ori, data.modpara.nmp_trans < 0))
-                .unwrap_or(1);
-            if tri_site >= n_site {
-                continue;
-            }
-            let tri = tri_site + si as usize * n_site;
-            for msj in 0..n_size {
-                let rj = ele_idx[msj];
-                let sj = ele_spn[msj];
-                if rj < 0 || sj < 0 || rj as usize >= n_site || sj > 1 {
-                    continue;
-                }
-                let orj = rj as usize;
-                let trj_site = trans
-                    .and_then(|t| t.site_map.get(orj))
-                    .copied()
-                    .unwrap_or(orj as i64) as usize;
-                let sgnj = trans
-                    .map(|t| t.boundary_sign(orj, data.modpara.nmp_trans < 0))
-                    .unwrap_or(1);
-                if trj_site >= n_site {
-                    continue;
-                }
-                let trj = trj_site + sj as usize * n_site;
-                let idx = trans_idx * n_size * n_size + msi * n_size + msj;
-                trans_orb_idx[idx] = orbital_idx[tri][trj];
-                trans_orb_sgn[idx] = sgni * sgnj * orbital_sgn[tri][trj];
-            }
-        }
-    }
-
-    let mut buffer = vec![Complex64::new(0.0, 0.0); n_qp_full * n_slater];
-    for qpidx in 0..n_qp_full {
-        let mpidx = qpidx.min(n_mp_trans.saturating_sub(1));
-        let pf = state.slater_matrix.pf_m[qpidx];
-        let inv_plane = state.slater_matrix.inv_m.qp_matrix_slice(qpidx);
-        // See `slater_elm_diff`: this upstream path uses the same transposed
-        // flat inverse convention.
-        let tbase = mpidx * n_size * n_size;
-        for msi in 0..n_size {
-            for msj in 0..n_size {
-                let orbidx = trans_orb_idx[tbase + msi * n_size + msj];
-                if orbidx >= 0 && (orbidx as usize) < n_slater {
-                    let sign = trans_orb_sgn[tbase + msi * n_size + msj];
-                    let value =
-                        -inv_plane[msj + msi * n_size] * pf * Complex64::new(sign as f64, 0.0);
-                    buffer[qpidx * n_slater + orbidx as usize] += value;
-                }
-            }
-        }
-    }
-    let inv_ip = Complex64::new(1.0, 0.0) / ip;
-    for orbidx in 0..n_slater {
-        let mut acc = Complex64::new(0.0, 0.0);
-        for qpidx in 0..n_qp_full {
-            acc += weights.qp_full_weight[qpidx] * buffer[qpidx * n_slater + orbidx];
-        }
-        acc *= inv_ip;
-        sr_opt_o[2 * orbidx] = acc;
-        sr_opt_o[2 * orbidx + 1] = acc * Complex64::new(0.0, 1.0);
-    }
+    let mut scratch = crate::slater_derivative::SlaterDerivativeScratch::new();
+    crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
+        sr_opt_o,
+        ip,
+        ele_idx,
+        ele_spn,
+        data,
+        &state.slater_matrix,
+        &mut scratch,
+    );
 }
