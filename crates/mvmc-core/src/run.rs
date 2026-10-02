@@ -339,7 +339,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
 
         // 5. Output.
         timer.start(22);
-        if rank == 0 {
+        if reducer.is_output_root() {
             output_data(data, state, step, output_dir).map_err(|e| e.to_string())?;
         }
         timer.stop(22);
@@ -382,7 +382,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         }
     }
 
-    if rank == 0 {
+    if reducer.is_output_root() {
         output_opt_data(data, output_dir).map_err(|e| e.to_string())?;
     }
     timer.stop(2);
@@ -534,10 +534,10 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     }
 
     // Preserve Julia's init -> initial.def -> In*.def -> sync -> QP phase order.
-    let group1 = i64::try_from(reducer.rank()).map_err(|_| {
+    let group1 = i64::try_from(reducer.seed_offset()).map_err(|_| {
         format!(
-            "MPI rank {} does not fit in the seed offset",
-            reducer.rank()
+            "MPI seed offset {} does not fit in the seed offset",
+            reducer.seed_offset()
         )
     })?;
     let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, config.seed, group1, || {
