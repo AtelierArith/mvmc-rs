@@ -208,9 +208,10 @@ mod tests {
 
     #[test]
     fn general_slater_and_derivatives_match_julia_with_sparse_and_cached_layouts() {
+        use crate::historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
         use crate::slater_derivative::{slater_elm_diff_fsz_with_scratch, SlaterDerivativeScratch};
         use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
-        use mvmc_expert_parsers::{parse_expert_mode_files, QPTransEntry};
+        use mvmc_expert_parsers::QPTransEntry;
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/orbital_general");
         let golden = std::fs::read_to_string(root.join("matrices.txt")).unwrap();

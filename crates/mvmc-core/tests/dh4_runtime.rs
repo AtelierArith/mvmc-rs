@@ -1,8 +1,11 @@
 //! DH4 production support and canonical runtime-mode selection.
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
+use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use mvmc_core::ExpertModeData;
-use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::all_complex_flag};
+use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
 use num_complex::Complex64;
 use reference_slater::declared_output;
 use std::path::Path;

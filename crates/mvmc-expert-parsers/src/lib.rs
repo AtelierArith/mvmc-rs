@@ -401,15 +401,23 @@ fn parse_file_by_type(
             }
         }
         "Orbital" | "OrbitalAntiParallel" => {
-            let section = orbital::parse_orbital_def(path)?;
+            let section = orbital::parse_orbital_def(
+                path,
+                data.modpara.nsite,
+                orbital::OrbitalKind::AntiParallel,
+            )?;
             data.orbital_terms = section.terms.clone();
             data.i_flg_orbital_anti_parallel = 1;
-            data.modpara.n_orbital_idx = orbital_count(&section);
+            data.modpara.n_orbital_idx = section.n_orbital_idx;
             data.n_orbital_anti_parallel = data.modpara.n_orbital_idx;
             orbital_flags.extend(section.opt_flags);
         }
         "OrbitalParallel" => {
-            let section = orbital::parse_orbital_def(path)?;
+            let section = orbital::parse_orbital_def(
+                path,
+                data.modpara.nsite,
+                orbital::OrbitalKind::Parallel,
+            )?;
             // Interleave with the existing (anti-parallel) orbital list.
             let n_orbital_ap = data.n_orbital_anti_parallel;
             for term in &section.terms {
@@ -425,15 +433,19 @@ fn parse_file_by_type(
                 data.orbital_terms.push(down);
             }
             data.i_flg_orbital_parallel = 1;
-            data.modpara.n_orbital_idx = n_orbital_ap + 2 * orbital_count(&section);
+            data.modpara.n_orbital_idx = n_orbital_ap + 2 * section.n_orbital_idx;
             for (idx, flag) in section.opt_flags {
                 orbital_flags.insert(n_orbital_ap + 2 * idx, flag);
                 orbital_flags.insert(n_orbital_ap + 2 * idx + 1, flag);
             }
         }
         "OrbitalGeneral" => {
-            let section = orbital::parse_orbital_def(path)?;
-            data.modpara.n_orbital_idx = orbital_count(&section);
+            let section = orbital::parse_orbital_def(
+                path,
+                data.modpara.nsite,
+                orbital::OrbitalKind::General,
+            )?;
+            data.modpara.n_orbital_idx = section.n_orbital_idx;
             data.orbital_terms = section.terms;
             data.i_flg_orbital_general = 1;
             orbital_flags.extend(section.opt_flags);
@@ -556,10 +568,6 @@ fn parse_file_by_type(
         }
     }
     Ok(())
-}
-
-fn orbital_count(section: &orbital::OrbitalSection) -> i64 {
-    section.n_orbital_idx
 }
 
 /// C-parity defaults that occur in more than one upstream Julia file.

@@ -32,19 +32,26 @@ fn parsed(
         ),
     )
     .unwrap();
+    let width = if parallel { 7 } else { 2 };
+    let mut mappings = "0 1 0\n1 0 1\n".to_owned();
+    for i in 0..3 {
+        for j in 0..3 {
+            if (i, j) != (0, 1) && (i, j) != (1, 0) {
+                mappings.push_str(&format!("{i} {j} 0\n"));
+            }
+        }
+    }
+    let flags: String = (0..width)
+        .map(|i| format!("{i} {}\n", usize::from(i != 0)))
+        .collect();
     fs::write(
         dir.join("o.def"),
-        definition(
-            "NOrbitalIdx",
-            if parallel { 7 } else { 2 },
-            0,
-            "0 1 0\n1 0 1\n0 0\n1 1\n",
-        ),
+        definition("NOrbitalIdx", width, 0, &format!("{mappings}{flags}")),
     )
     .unwrap();
     fs::write(
         dir.join("p.def"),
-        definition("NOrbitalParallel", 2, 0, "0 1 0\n1 2 1\n0 1\n1 0\n"),
+        definition("NOrbitalParallel", 2, 0, "0 1 0\n0 2 0\n1 2 1\n0 1\n1 0\n"),
     )
     .unwrap();
     let mut namelist =
@@ -55,6 +62,7 @@ fn parsed(
     }
     fs::write(dir.join("namelist.def"), namelist).unwrap();
     let data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
+    assert!(data.input_errors.is_empty(), "{:?}", data.input_errors);
     fs::remove_dir_all(dir).unwrap();
     data
 }
@@ -89,7 +97,7 @@ fn fixed_slater_slots_skip_rng_draws_including_shared_and_reserved_slots() {
     init_parameter(&mut data, &mut rng);
     // Live Julia v0.5.0, including division by sqrt(2) rather than
     // multiplication by its rounded reciprocal.
-    for (term, (re, im)) in data.orbital_terms.iter().zip([
+    for (idx, (re, im)) in [0, 1, 7, 8, 9, 10].into_iter().zip([
         (0.0_f64, 0.0_f64),
         (-0.22854561532191836, 0.14249578128268756),
         (-0.299485566106154, -0.1347245207905717),
@@ -97,14 +105,8 @@ fn fixed_slater_slots_skip_rng_draws_including_shared_and_reserved_slots() {
         (0.0, 0.0),
         (0.0, 0.0),
     ]) {
-        assert_eq!(
-            data.slater_params[term.idx as usize].re.to_bits(),
-            re.to_bits()
-        );
-        assert_eq!(
-            data.slater_params[term.idx as usize].im.to_bits(),
-            im.to_bits()
-        );
+        assert_eq!(data.slater_params[idx].re.to_bits(), re.to_bits());
+        assert_eq!(data.slater_params[idx].im.to_bits(), im.to_bits());
     }
     for term in &data.orbital_terms {
         if [0, 9, 10].contains(&term.idx) {

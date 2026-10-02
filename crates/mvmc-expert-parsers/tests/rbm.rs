@@ -1,5 +1,5 @@
 mod common;
-use mvmc_expert_parsers::parse_expert_mode_files;
+use common::historical_kernel_model as parse_expert_mode_files;
 use std::path::PathBuf;
 
 #[test]
@@ -152,10 +152,8 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
     while let Some(header) = lines.next() {
         let words: Vec<_> = header.split_whitespace().collect();
         let (case, mode) = (words[0], words[1]);
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files(
-            root().join(format!("namelist_{case}.def")),
-        )
-        .unwrap();
+        let mut data =
+            parse_expert_mode_files(root().join(format!("namelist_{case}.def"))).unwrap();
         match mode {
             "complex" => data.modpara.complex_flag = 1,
             "missing_flags" => data.optimization_flags.clear(),

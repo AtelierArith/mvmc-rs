@@ -44,9 +44,10 @@ fn model(name: &str) -> ExpertModeData {
     } else {
         name
     };
-    let mut data =
-        mvmc_expert_parsers::parse_expert_mode_files(root().join(format!("namelist_{base}.def")))
-            .unwrap();
+    let mut data = historical_orbital_model::historical_kernel_model(
+        root().join(format!("namelist_{base}.def")),
+    )
+    .unwrap();
     match name {
         "empty_opt" => data.opt_trans.clear(),
         "short_opt" => data.opt_trans.truncate(1),
@@ -497,3 +498,5 @@ fn historical_julia_slater_cutoff_matches_where_values_are_representable() {
     }
     assert_eq!(cases, 42);
 }
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;

@@ -624,7 +624,7 @@ mod mode_tests {
     fn rbm_state_places_all_nine_blocks_between_projection_and_slater() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/rbm/namelist_all.def");
-        let data = parse_expert_mode_files(path).unwrap();
+        let data = crate::historical_orbital_model::historical_kernel_model(path).unwrap();
         assert_eq!(state_from_data(&data).sr_opt.sr_opt_size, 37);
     }
 

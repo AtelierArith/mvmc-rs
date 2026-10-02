@@ -1,5 +1,5 @@
 mod common;
-use mvmc_expert_parsers::parse_expert_mode_files;
+use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use mvmc_expert_parsers::parse_expert_mode_files;
-use mvmc_expert_parsers::parsers::orbital::parse_orbital_content;
+use mvmc_expert_parsers::parsers::orbital::{parse_orbital_content, OrbitalKind};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
 use sfmt19937::Sfmt19937Rng;
 
@@ -14,7 +14,12 @@ fn definition(header: &str, width: usize, rows: &str) -> String {
 fn fixture(name: &str, namelist: &str, ap: &str, parallel: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("mvmc-orbital-{name}-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("namelist.def"), namelist).unwrap();
+    fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\n").unwrap();
+    fs::write(
+        dir.join("namelist.def"),
+        format!("ModPara modpara.def\n{namelist}"),
+    )
+    .unwrap();
     fs::write(dir.join("ap.def"), ap).unwrap();
     fs::write(dir.join("p.def"), parallel).unwrap();
     dir
@@ -25,32 +30,33 @@ fn sparse_ap_and_parallel_use_declared_widths_and_rng_consumption() {
     let dir = fixture(
         "sparse",
         "OrbitalAntiParallel ap.def\nOrbitalParallel p.def\n",
-        &definition("NOrbitalAntiParallel", 7, "0 1 0\n1 0 1\n"),
-        &definition("NOrbitalParallel", 3, "0 1 0\n"),
+        &definition(
+            "NOrbitalAntiParallel",
+            7,
+            "0 0 0\n0 1 1\n1 0 1\n1 1 0\n0 1\n1 1\n2 1\n3 1\n4 1\n5 1\n6 1\n",
+        ),
+        &definition("NOrbitalParallel", 3, "0 1 0\n0 1\n1 1\n2 1\n"),
     );
     let mut data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
     assert_eq!(data.n_orbital_anti_parallel, 7);
     assert_eq!(data.modpara.n_orbital_idx, 13);
     assert_eq!(
         data.orbital_terms.iter().map(|t| t.idx).collect::<Vec<_>>(),
-        [0, 1, 7, 8]
+        [0, 1, 1, 0, 7, 8]
     );
     let mut rng = Sfmt19937Rng::new(1);
     let mut probe = Sfmt19937Rng::new(1);
     init_parameter(&mut data, &mut rng);
     // Live Julia v0.5.0 / SFMT v0.1.0 reference, seed 1. Require exact
     // IEEE-754 values and the next RNG word, not a statistical tolerance.
-    for (term, expected) in data.orbital_terms.iter().zip([
+    for (idx, expected) in [0, 1, 7, 8].into_iter().zip([
         -0.3232123088091612_f64,
         0.201519466470927,
         -0.2580129294656217,
         -0.6150796245783567,
     ]) {
-        assert_eq!(
-            data.slater_params[term.idx as usize].re.to_bits(),
-            expected.to_bits()
-        );
-        assert_eq!(data.slater_params[term.idx as usize].im, 0.0);
+        assert_eq!(data.slater_params[idx].re.to_bits(), expected.to_bits());
+        assert_eq!(data.slater_params[idx].im, 0.0);
     }
     // C initializes all thirteen declared active slots.
     for _ in 0..13 {
@@ -65,28 +71,31 @@ fn sparse_ap_and_parallel_use_declared_widths_and_rng_consumption() {
 }
 
 #[test]
-fn empty_declared_ap_still_reserves_parallel_offset() {
+fn empty_positive_width_ap_is_rejected_instead_of_reserving_a_valid_definition() {
     let dir = fixture(
         "empty",
         "Orbital ap.def\nOrbitalParallel p.def\n",
         &definition("NOrbitalIdx", 7, ""),
-        &definition("NOrbitalParallel", 3, "0 1 0\n"),
+        &definition("NOrbitalParallel", 3, "0 1 0\n0 1\n1 1\n2 1\n"),
     );
     let data = parse_expert_mode_files(dir.join("namelist.def")).unwrap();
-    assert_eq!(data.n_orbital_anti_parallel, 7);
-    assert_eq!(data.modpara.n_orbital_idx, 13);
-    assert_eq!(
-        data.orbital_terms.iter().map(|t| t.idx).collect::<Vec<_>>(),
-        [7, 8]
-    );
+    assert!(data
+        .input_errors
+        .iter()
+        .any(|error| error.contains("incomplete orbital mapping")));
+    assert_eq!(data.i_flg_orbital_anti_parallel, 0);
     fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
-fn general_and_headerless_counts_follow_their_input_contracts() {
-    let general = parse_orbital_content(&definition("NOrbitalGeneral", 9, "0 3 1\n"));
+fn historical_general_rows_retain_declared_width_but_headerless_definitions_fail() {
+    let general = parse_orbital_content(
+        &definition("NOrbitalGeneral", 9, "0 3 1\n"),
+        2,
+        OrbitalKind::General,
+    )
+    .unwrap();
     assert_eq!(general.n_orbital_idx, 9);
     assert_eq!(general.terms.len(), 1);
-    let legacy = parse_orbital_content("0 1 2\n1 0 0\n");
-    assert_eq!(legacy.n_orbital_idx, 3);
+    assert!(parse_orbital_content("0 1 2\n1 0 0\n", 2, OrbitalKind::AntiParallel).is_err());
 }
