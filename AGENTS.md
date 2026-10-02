@@ -7,8 +7,9 @@ This repository is a Rust port of mVMC organized as a Cargo workspace. Core crat
 ## Build, Test, and Development Commands
 
 - `cargo check --workspace`: type-check the full workspace.
-- `cargo test --workspace`: run all normal Rust tests.
-- `cargo test -p pfapack --features 'simd-backend blas-backend'`: test optimized PfaPack backends.
+- `cargo nextest run --workspace`: run all normal Rust unit and integration tests.
+- `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`: test optimized PfaPack backends.
+- `cargo test --workspace --doc`: run documentation tests separately.
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint all workspace targets.
 - `cargo fmt --all --check`: verify formatting.
 - `cargo run -p mvmc-cli -- <namelist.def>`: run the CLI on an Expert-mode input.
@@ -26,6 +27,8 @@ This Rust crate and its workspace are under active development. Backward compati
 ## Testing Guidelines
 
 Use Rust's built-in test framework plus crate-local integration tests. Golden and parity tests compare against C/reference fixtures, using Julia fixtures where they agree with C; keep tolerances explicit near assertions. Name tests by behavior, for example `pfaffian_matches_julia_fixture` or `rejects_invalid_header`. For performance-sensitive changes, run both correctness tests and the relevant benchmark variant.
+
+Use `cargo nextest run` for development unit and integration test runs, including targeted TDD checks and full-workspace verification. Preserve requested features, profiles and lock-file constraints; use `--no-fail-fast --retries 0` when collecting all failures. Run documentation tests separately with `cargo test --workspace --doc`, because nextest does not run doctests. Compiler caching remains configured through kache.
 
 ### C Reference Toolbox
 
