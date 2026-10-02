@@ -84,13 +84,46 @@ pub fn prepare_phys_cal_from_namelist(
     mode: &str,
     seed: Option<i64>,
 ) -> Result<PhysCalPreparation, String> {
+    prepare_phys_cal_from_namelist_with_seed_offset(namelist_path, opt_para_path, mode, seed, 0)
+}
+
+/// Prepare PhysCal with an explicit MPI group seed offset.
+///
+/// Julia adds the group index before initializing each independent sampling
+/// chain. The ordinary serial entry point uses offset zero; MPI callers should
+/// pass [`Reducer::seed_offset`] so ranks do not replay the same SFMT stream.
+pub fn prepare_phys_cal_from_namelist_with_reducer<R: Reducer + ?Sized>(
+    namelist_path: impl AsRef<Path>,
+    opt_para_path: impl AsRef<Path>,
+    mode: &str,
+    seed: Option<i64>,
+    reducer: &R,
+) -> Result<PhysCalPreparation, String> {
+    prepare_phys_cal_from_namelist_with_seed_offset(
+        namelist_path,
+        opt_para_path,
+        mode,
+        seed,
+        reducer.seed_offset(),
+    )
+}
+
+fn prepare_phys_cal_from_namelist_with_seed_offset(
+    namelist_path: impl AsRef<Path>,
+    opt_para_path: impl AsRef<Path>,
+    mode: &str,
+    seed: Option<i64>,
+    seed_offset: usize,
+) -> Result<PhysCalPreparation, String> {
     if !matches!(mode, "real" | "cmp" | "fsz") {
         return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
     }
     let namelist_path = namelist_path.as_ref();
     let mut data = mvmc_expert_parsers::parse_expert_mode_files(namelist_path)
         .map_err(|error| error.to_string())?;
-    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, seed, 0, || {
+    let seed_offset = i64::try_from(seed_offset)
+        .map_err(|_| format!("MPI seed offset {seed_offset} does not fit in the seed offset"))?;
+    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, seed, seed_offset, || {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_secs() as i64)
@@ -114,7 +147,7 @@ pub fn prepare_phys_cal_from_namelist(
 /// cloned data consumes the one C-compatible initialization draw block, while
 /// the returned `data` remains the fixed loaded parameter set.
 pub fn vmc_phys_cal(preparation: PhysCalPreparation) -> Result<PhysCalResult, String> {
-    vmc_phys_cal_inner(preparation, None)
+    vmc_phys_cal_with_reducer(preparation, None, &SingleProcessReducer)
 }
 
 /// Run PhysCal and write indexed Green files under `output_dir`.
@@ -124,13 +157,37 @@ pub fn vmc_phys_cal_to_dir(
 ) -> Result<PhysCalResult, String> {
     let output_dir = output_dir.as_ref();
     std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
-    vmc_phys_cal_inner(preparation, Some(output_dir))
+    vmc_phys_cal_with_reducer(preparation, Some(output_dir), &SingleProcessReducer)
 }
 
-fn vmc_phys_cal_inner(
+/// Run PhysCal with a caller-provided reducer.
+///
+/// Each rank performs the same number of independent samples. Accumulators
+/// are reduced before Julia's weight-average boundary, and only the reducer's
+/// output root writes indexed Green files. This keeps the serial API unchanged
+/// while making MPI PhysCal use the same comm0/group reduction contract as
+/// parameter optimization.
+pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
     mut preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
+    reducer: &R,
 ) -> Result<PhysCalResult, String> {
+    if preparation.data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
+        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
+    }
+    if preparation.data.modpara.nsplit_size > 1 && preparation.data.modpara.lanczos_mode > 0 {
+        return Err("NSplitSize > 1 with Lanczos PhysCal is unsupported (issue #31)".into());
+    }
+    if preparation.data.modpara.nsplit_size > 1 && preparation.data.i_flg_orbital_general != 0 {
+        return Err("NSplitSize > 1 with FSZ PhysCal is unsupported (issue #36)".into());
+    }
+    if reducer.world_size() > 1 && reducer.rank() >= reducer.world_size() {
+        return Err(format!(
+            "MPI rank {} is outside world size {}",
+            reducer.rank(),
+            reducer.world_size()
+        ));
+    }
     let mut init_data = preparation.data.clone();
     init_parameter(&mut init_data, &mut preparation.rng);
     if preparation.data.modpara.nmp_trans == 0 {
@@ -187,9 +244,15 @@ fn vmc_phys_cal_inner(
             use_fsz,
             &mut CTimer::<false>::new(),
         );
-        if let Some(output_dir) = output_dir {
-            crate::io::output_phys_data(&preparation.data, &state, sample, Some(output_dir))
-                .map_err(|error| error.to_string())?;
+        reduce_accumulators(&mut state, reducer);
+        weight_average_we(&mut state);
+        average_physcal_rank_contributions(&mut state, reducer);
+        reduce_counter(&mut state, reducer);
+        if reducer.is_output_root() {
+            if let Some(output_dir) = output_dir {
+                crate::io::output_phys_data(&preparation.data, &state, sample, Some(output_dir))
+                    .map_err(|error| error.to_string())?;
+            }
         }
     }
     Ok(PhysCalResult {
@@ -197,6 +260,33 @@ fn vmc_phys_cal_inner(
         state,
         iterations,
     })
+}
+
+fn average_physcal_rank_contributions<R: Reducer + ?Sized>(
+    state: &mut VmcOptimizationState,
+    reducer: &R,
+) {
+    let Some(phys) = state.phys_quantities.as_mut() else {
+        return;
+    };
+    let count = reducer.reduction_size();
+    if count <= 1 {
+        return;
+    }
+    let inv = 1.0 / count as f64;
+    for values in [
+        &mut phys.phys_cis_ajs,
+        &mut phys.phys_cis_ajs_ckt_alt,
+        &mut phys.phys_cis_ajs_ckt_alt_dc,
+        &mut phys.phys_lanczos_qqqq,
+        &mut phys.phys_lanczos_qcisajsq,
+        &mut phys.phys_lanczos_qcisajscktaltq,
+        &mut phys.phys_lanczos_qcisajscktaltq_dc,
+    ] {
+        for value in values.iter_mut() {
+            *value *= inv;
+        }
+    }
 }
 
 /// Optional controls for the direct optimization loop.
@@ -244,12 +334,22 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     mut options: OptimizationOptions<'_>,
     timer: &mut CTimer<TIMED>,
 ) -> Result<(), String> {
-    crate::validation::validate_para_opt(data)?;
-    let world_size = reducer.world_size();
-    let rank = reducer.rank();
+    if data.modpara.nsplit_size > 1
+        && (data.n_qp_opt_trans.max(1) > 1
+            || data.opt_trans.len() > 1
+            || data.qp_opt_trans.len() > 1)
+    {
+        return Err(format!(
+            "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
+            data.modpara.nsplit_size, data.n_qp_opt_trans
+        ));
+    }
     if data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
         return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
     }
+    crate::validation::validate_para_opt(data)?;
+    let world_size = reducer.world_size();
+    let rank = reducer.rank();
     if rank >= world_size {
         return Err(format!(
             "MPI rank {rank} is outside world size {world_size}"
