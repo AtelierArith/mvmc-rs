@@ -29,7 +29,7 @@ use crate::sampling::updates::{
     calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_complex_flat,
     calculate_new_pf_m_two2_real_flat,
 };
-use crate::state::VmcOptimizationState;
+use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 
 mod fsz_green;
@@ -1082,15 +1082,6 @@ pub fn green_func1(
     )
 }
 
-#[derive(Default)]
-pub(crate) struct GreenScratch {
-    ele_idx: Vec<i64>,
-    ele_num: Vec<i64>,
-    proj_new: Vec<i64>,
-    new_pf_real: Vec<f64>,
-    new_pf_complex: Vec<Complex64>,
-}
-
 fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
     let mut hash = 0xcbf29ce484222325_u64;
     let mut mix = |value: u64| {
@@ -1660,7 +1651,11 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         refresh_transfer_cache(data, state);
         let real_transfer = state.transfer_cache.all_real;
         let mut transfer_energy = 0.0;
-        let mut green_scratch = GreenScratch::default();
+        // Keep the Julia-style reusable workspace in the optimization state.
+        // Taking it out temporarily avoids aliasing the mutable state passed
+        // to the Green kernel while preserving its capacities for the next
+        // local-energy call.
+        let mut green_scratch = std::mem::take(&mut state.transfer_scratch);
         for index in 0..state.transfer_cache.terms.len() {
             let term = state.transfer_cache.terms[index];
             let ri = term.site1;
@@ -1696,6 +1691,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         if real_transfer {
             e += Complex64::new(transfer_energy, 0.0);
         }
+        state.transfer_scratch = green_scratch;
     }
 
     // Julia accumulates PairHop before Exchange in the two-body section.
@@ -1867,6 +1863,62 @@ mod tests {
         data.complex_flags = vec![1];
         refresh_transfer_cache(&data, &mut state);
         assert!(!state.transfer_cache.all_real);
+    }
+
+    #[test]
+    fn transfer_local_energy_reuses_workspace_capacity() {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+            site1: 1,
+            spin1: Spin::Up,
+            site2: 0,
+            spin2: Spin::Up,
+            value: Complex64::new(1.0, 0.0),
+        });
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+        state.slater_matrix.pf_m_real[0] = 1.0;
+        let idx = [0_i64, 0];
+        let cfg = [0_i64, -1, -1, -1];
+        let num = [1_i64, 0, 0, 0];
+        let counts: [i64; 0] = [];
+
+        let _ = calculate_local_energy(
+            Complex64::new(1.0, 0.0),
+            &data,
+            &mut state,
+            &idx,
+            &cfg,
+            &num,
+            &counts,
+        );
+        let first_capacity = (
+            state.transfer_scratch.ele_idx.capacity(),
+            state.transfer_scratch.ele_num.capacity(),
+            state.transfer_scratch.new_pf_real.capacity(),
+        );
+        assert!(first_capacity.0 >= idx.len());
+        assert!(first_capacity.1 >= num.len());
+        assert!(first_capacity.2 >= 1);
+
+        let _ = calculate_local_energy(
+            Complex64::new(1.0, 0.0),
+            &data,
+            &mut state,
+            &idx,
+            &cfg,
+            &num,
+            &counts,
+        );
+        assert_eq!(
+            first_capacity,
+            (
+                state.transfer_scratch.ele_idx.capacity(),
+                state.transfer_scratch.ele_num.capacity(),
+                state.transfer_scratch.new_pf_real.capacity(),
+            )
+        );
     }
 
     #[test]

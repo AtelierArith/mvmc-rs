@@ -1077,6 +1077,20 @@ pub(crate) struct TransferKernelCache {
     pub(crate) all_real: bool,
 }
 
+/// Reusable scratch buffers for the real/complex Transfer Green kernel.
+///
+/// Julia keeps these arrays in the main-calculation workspace and resizes them
+/// only when the model requires more capacity. Keeping them in the Rust state
+/// avoids allocating four temporary vectors for every local-energy evaluation.
+#[derive(Debug, Default)]
+pub(crate) struct TransferGreenScratch {
+    pub(crate) ele_idx: Vec<i64>,
+    pub(crate) ele_num: Vec<i64>,
+    pub(crate) proj_new: Vec<i64>,
+    pub(crate) new_pf_real: Vec<f64>,
+    pub(crate) new_pf_complex: Vec<Complex64>,
+}
+
 impl PhysicalQuantities {
     /// Mirror of `PhysicalQuantities(n_cis_ajs, n_cis_ajs_ckt_alt, n_cis_ajs_ckt_alt_dc)`.
     pub fn zeros(n_cis_ajs: usize, n_cis_ajs_ckt_alt: usize, n_cis_ajs_ckt_alt_dc: usize) -> Self {
@@ -1117,6 +1131,7 @@ pub struct VmcOptimizationState {
     /// Physical quantities (`Some` in measurement mode).
     pub phys_quantities: Option<PhysicalQuantities>,
     pub(crate) transfer_cache: TransferKernelCache,
+    pub(crate) transfer_scratch: TransferGreenScratch,
 }
 
 impl VmcOptimizationState {
@@ -1149,6 +1164,7 @@ impl VmcOptimizationState {
             workspace: SamplingWorkspace::zeros(n_size, n_qp_full, n_proj, n_site),
             phys_quantities: None,
             transfer_cache: TransferKernelCache::default(),
+            transfer_scratch: TransferGreenScratch::default(),
         }
     }
 }
