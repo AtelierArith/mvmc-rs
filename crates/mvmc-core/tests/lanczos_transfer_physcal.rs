@@ -16,7 +16,11 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         return;
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC");
-    for model in ["hubbard_chain_real", "spin_chain_lanczos"] {
+    for model in [
+        "hubbard_chain_real",
+        "hubbard_chain_lanczos",
+        "spin_chain_lanczos",
+    ] {
         let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
