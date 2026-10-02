@@ -150,3 +150,19 @@ The sequential and two-worker runs both passed the full Julia fixture gate;
 wall time was 189.10 s and 185.92 s respectively on the recorded host. The
 small difference is workload and host dependent, so this control should be
 benchmarked with the target model before enabling it by default.
+
+## MPI build
+
+MPI support is an opt-in `mvmc-core/mpi` feature. It owns the `mpi::Universe`
+inside `MpiContext`, exposes rank/size and root checks, and implements the
+workspace `Reducer` allreduces without calling `MPI_Finalize` from library
+code. Build and run MPI tests on a host with `mpicc`/`mpirun` available:
+
+```sh
+cargo check -p mvmc-core --features mpi
+mpirun -n 2 cargo nextest run -p mvmc-core --features mpi
+```
+
+The ordinary build does not enable this feature. On hosts without an MPI
+installation, the feature check fails during `mpi-sys` discovery; the default
+single-process build and tests remain independent of that system dependency.

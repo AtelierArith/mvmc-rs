@@ -19,6 +19,8 @@ pub mod counter;
 pub mod initial_params;
 pub mod io;
 pub mod lanczos;
+#[cfg(feature = "mpi")]
+pub mod mpi;
 pub use pfapack::julia_complex;
 pub mod observables;
 pub mod parallel;
