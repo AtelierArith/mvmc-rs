@@ -297,3 +297,34 @@ fn combined_validation_preserves_family_order_and_does_not_mutate_data() {
     assert_eq!(data.modpara, before.modpara);
     assert_eq!(data.transfer_terms, before.transfer_terms);
 }
+
+#[test]
+fn rbm_validation_checks_declared_storage_and_c_mapping_coordinates() {
+    let mut data = ExpertModeData::new();
+    data.modpara = valid_params();
+    data.rbm_section_widths = [1; 9];
+    data.rbm_params = vec![Complex64::new(0.0, 0.0); 9];
+    data.rbm_params[3] = Complex64::new(f64::NAN, 0.0);
+    data.charge_rbm_phys_layer_terms
+        .push(ChargeRBMPhysLayerTerm {
+            site: 4,
+            idx: 1,
+            value: Complex64::new(0.0, 0.0),
+            is_complex: false,
+        });
+
+    let result = validate_rbm_parameters(&data);
+    assert!(!result.is_valid);
+    assert!(result
+        .errors
+        .iter()
+        .any(|error| error.contains("parameter 3 must be finite")));
+    assert!(result
+        .errors
+        .iter()
+        .any(|error| error.contains("site (4) out of range [0, 3]")));
+    assert!(result
+        .errors
+        .iter()
+        .any(|error| error.contains("idx (1) out of range [0, 0]")));
+}

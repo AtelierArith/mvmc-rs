@@ -7,7 +7,6 @@
 //! rejected by these upstream validators. Strict parameter loading is a
 //! separate operation. Rust's `Spin` type guarantees valid 0/1 spin codes.
 //!
-//! RBM validators remain pending production integration.
 
 use crate::types::{
     CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, DoublonHolon4SiteIndex,
@@ -251,6 +250,155 @@ pub fn validate_doublon_holon_4site_indices(
     ValidationResult::new(errors, Vec::new())
 }
 
+/// Validate the complete C-declared RBM storage and all mapped slots.
+pub fn validate_rbm_parameters(data: &ExpertModeData) -> ValidationResult {
+    let mut errors = Vec::new();
+    let expected = data.rbm_section_sizes().iter().sum::<usize>();
+    if data.rbm_params.len() != expected {
+        errors.push(format!(
+            "RBM parameter storage has {} values; declared sections require {expected}",
+            data.rbm_params.len()
+        ));
+    }
+    for (index, value) in data.rbm_params.iter().enumerate() {
+        if !value.re.is_finite() || !value.im.is_finite() {
+            errors.push(format!("RBM parameter {index} must be finite"));
+        }
+    }
+    let check_idx = |errors: &mut Vec<String>, family: &str, row: usize, idx: i64, width: usize| {
+        if idx < 0 || idx as usize >= width {
+            errors.push(format!(
+                "{family} term {}: idx ({idx}) out of range [0, {}]",
+                row + 1,
+                width.saturating_sub(1)
+            ));
+        }
+    };
+    let check_site =
+        |errors: &mut Vec<String>, family: &str, row: usize, field: &str, site: i64| {
+            if site < 0 || site >= data.modpara.nsite {
+                errors.push(format!(
+                    "{family} term {}: {field} ({site}) out of range [0, {}]",
+                    row + 1,
+                    data.modpara.nsite.saturating_sub(1)
+                ));
+            }
+        };
+    let widths = data.rbm_section_sizes();
+    for (row, term) in data.charge_rbm_phys_layer_terms.iter().enumerate() {
+        check_idx(&mut errors, "ChargeRBM_PhysLayer", row, term.idx, widths[0]);
+        check_site(&mut errors, "ChargeRBM_PhysLayer", row, "site", term.site);
+    }
+    for (row, term) in data.spin_rbm_phys_layer_terms.iter().enumerate() {
+        check_idx(&mut errors, "SpinRBM_PhysLayer", row, term.idx, widths[1]);
+        check_site(&mut errors, "SpinRBM_PhysLayer", row, "site", term.site);
+    }
+    for (row, term) in data.general_rbm_phys_layer_terms.iter().enumerate() {
+        check_idx(
+            &mut errors,
+            "GeneralRBM_PhysLayer",
+            row,
+            term.idx,
+            widths[2],
+        );
+        check_site(&mut errors, "GeneralRBM_PhysLayer", row, "site", term.site);
+        if !(0..=1).contains(&term.spin) {
+            errors.push(format!(
+                "GeneralRBM_PhysLayer term {}: spin must be 0 or 1",
+                row + 1
+            ));
+        }
+    }
+    for (row, term) in data.charge_rbm_hidden_layer_terms.iter().enumerate() {
+        check_idx(
+            &mut errors,
+            "ChargeRBM_HiddenLayer",
+            row,
+            term.idx,
+            widths[3],
+        );
+        check_site(&mut errors, "ChargeRBM_HiddenLayer", row, "site", term.site);
+    }
+    for (row, term) in data.spin_rbm_hidden_layer_terms.iter().enumerate() {
+        check_idx(&mut errors, "SpinRBM_HiddenLayer", row, term.idx, widths[4]);
+        check_site(&mut errors, "SpinRBM_HiddenLayer", row, "site", term.site);
+    }
+    for (row, term) in data.general_rbm_hidden_layer_terms.iter().enumerate() {
+        check_idx(
+            &mut errors,
+            "GeneralRBM_HiddenLayer",
+            row,
+            term.idx,
+            widths[5],
+        );
+        check_site(
+            &mut errors,
+            "GeneralRBM_HiddenLayer",
+            row,
+            "site",
+            term.site,
+        );
+    }
+    for (row, term) in data.charge_rbm_phys_hidden_terms.iter().enumerate() {
+        check_idx(
+            &mut errors,
+            "ChargeRBM_PhysHidden",
+            row,
+            term.idx,
+            widths[6],
+        );
+        check_site(
+            &mut errors,
+            "ChargeRBM_PhysHidden",
+            row,
+            "site1",
+            term.site1,
+        );
+        check_site(
+            &mut errors,
+            "ChargeRBM_PhysHidden",
+            row,
+            "site2",
+            term.site2,
+        );
+    }
+    for (row, term) in data.spin_rbm_phys_hidden_terms.iter().enumerate() {
+        check_idx(&mut errors, "SpinRBM_PhysHidden", row, term.idx, widths[7]);
+        check_site(&mut errors, "SpinRBM_PhysHidden", row, "site1", term.site1);
+        check_site(&mut errors, "SpinRBM_PhysHidden", row, "site2", term.site2);
+    }
+    for (row, term) in data.general_rbm_phys_hidden_terms.iter().enumerate() {
+        check_idx(
+            &mut errors,
+            "GeneralRBM_PhysHidden",
+            row,
+            term.idx,
+            widths[8],
+        );
+        check_site(
+            &mut errors,
+            "GeneralRBM_PhysHidden",
+            row,
+            "site1",
+            term.site1,
+        );
+        check_site(
+            &mut errors,
+            "GeneralRBM_PhysHidden",
+            row,
+            "site2",
+            term.site2,
+        );
+        if !(0..=1).contains(&term.spin) {
+            errors.push(format!(
+                "GeneralRBM_PhysHidden term {}: spin must be 0 or 1",
+                row + 1
+            ));
+        }
+    }
+    ValidationResult::new(errors, Vec::new())
+}
+
 /// Combine ModPara and currently supported term-family validators in Julia order.
 pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
     let mut result = validate_modpara_params(&data.modpara);
@@ -264,6 +412,7 @@ pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
         validate_orbital_terms(&data.orbital_terms, nsite),
         validate_doublon_holon_2site_indices(&data.doublon_holon_2site_indices, nsite),
         validate_doublon_holon_4site_indices(&data.doublon_holon_4site_indices, nsite),
+        validate_rbm_parameters(data),
     ] {
         result.errors.extend(family.errors);
         result.warnings.extend(family.warnings);
