@@ -221,7 +221,7 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             std::process::id()
         ));
         let original = std::fs::read_to_string(root().join("production/initial.def")).unwrap();
-        std::fs::write(&invalid, original.replace("77", "NaN")).unwrap();
+        std::fs::write(&invalid, original.replace("77", "broken")).unwrap();
         assert!(!read_initial_def(&mut data, &invalid).unwrap());
         assert!(read_opt_para_file(&mut data, &invalid).is_err());
         exact(&snapshot(&mut data), &before, case);

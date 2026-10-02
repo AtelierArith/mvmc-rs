@@ -61,6 +61,12 @@ fields are validated before mutation. Exact results and errors are compared,
 including hexadecimal values, range errors, extra whole triples when active
 versus inactive, and preservation of all preceding factors on rejection.
 The full record places OptTrans after Slater and preserves definition weights.
+These are historical Julia expectations. The current Rust test replaces the
+48 optional/fixed NaN, overflow and underflow rejection expectations with
+actual C conversion results from [the C initial-record fixtures](../initial_records/README.md).
+The other 84 compatible cases retain their historical assertions. C accepts
+successive complete records and leaves the final values; broader C OptTrans
+activation/flag and RBM declared-width contracts remain #27/#26 work.
 
 `weights.txt` covers four quadrature sizes, three total-spin projections,
 both translation boundary signs, four initial parameter vectors and six

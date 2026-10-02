@@ -283,7 +283,7 @@ fn check_initial_and_fixed_loaders_apply_dh_triples_between_reserved_jastrow_and
     let before = d.projection_parameters();
     for bad in [
         format!("{text} 1 2 3"),
-        text.replacen("99", "NaN", 1),
+        text.replacen("99", "broken", 1),
         "0 0 0 0 0 0".into(),
     ] {
         fs::write(&path, bad).unwrap();

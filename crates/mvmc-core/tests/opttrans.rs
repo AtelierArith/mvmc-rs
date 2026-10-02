@@ -83,8 +83,37 @@ fn values(data: &mut ExpertModeData) -> Vec<Complex64> {
     values
 }
 
+fn c_loader_values(data: &mut ExpertModeData, raw: &str) -> String {
+    let raw: Vec<_> = raw.split_whitespace().collect();
+    let n_proj = data.projection_layout().n_proj;
+    let n_rbm = data.count_rbm_parameters();
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    let sizes = data.rbm_section_sizes();
+    let mut offsets = [n_proj; 9];
+    for section in 1..9 {
+        offsets[section] = offsets[section - 1] + sizes[section - 1];
+    }
+    let mut result = raw[..2 * n_proj].to_vec();
+    data.visit_rbm_terms_mut(|section, term| {
+        let start = 2 * (offsets[section] + term.idx() as usize);
+        result.extend_from_slice(&raw[start..start + 2]);
+    });
+    let slater_start = 2 * (n_proj + n_rbm);
+    bits(
+        data.slater_params.iter().copied(),
+        &raw[slater_start..slater_start + 2 * n_slater].join(" "),
+        "full C Slater load",
+    );
+    for term in &data.orbital_terms {
+        let start = slater_start + 2 * term.idx as usize;
+        result.extend_from_slice(&raw[start..start + 2]);
+    }
+    result.extend_from_slice(&raw[slater_start + 2 * n_slater..]);
+    result.join(" ")
+}
+
 #[test]
-fn full_record_loader_counts_errors_values_and_atomicity_match_julia() {
+fn loader_contracts_use_c_numeric_conversion_and_compatible_julia_regressions() {
     let text = std::fs::read_to_string(root().join("loaders.txt")).unwrap();
     let mut lines = text.lines().filter(|line| !line.starts_with('#'));
     let mut cases = 0;
@@ -104,9 +133,51 @@ fn full_record_loader_counts_errors_values_and_atomicity_match_julia() {
             },
             _ => panic!("unknown loader: {header}"),
         };
-        assert_eq!(result, fields[3].parse::<i64>().unwrap(), "{header}");
-        assert_eq!(error, lines.next().unwrap(), "{header}");
-        bits(values(&mut data), lines.next().unwrap(), header);
+        let historical_error = lines.next().unwrap();
+        let historical_values = lines.next().unwrap();
+        if matches!(
+            fields[1],
+            "nan_gradient" | "nan_parameter" | "overflow" | "underflow"
+        ) {
+            // These Julia rejection cases are valid numeric records in C.
+            // The explicit C kernel dimensions do not establish acceptance of
+            // the legacy mapping/flag files, whose remaining gaps are #21/#26.
+            let c_rows: Vec<_> =
+                include_str!("../../../tests/fixtures/initial_records/c_records.txt")
+                    .lines()
+                    .filter(|line| !line.starts_with('#'))
+                    .collect();
+            let key = format!("legacy_opt_{}_{}", fields[0], fields[1]);
+            let record = c_rows
+                .chunks_exact(4)
+                .find(|record| record[0].starts_with(&format!("{key} ")))
+                .unwrap();
+            let dims: Vec<usize> = record[0]
+                .split_whitespace()
+                .skip(1)
+                .map(|s| s.parse().unwrap())
+                .collect();
+            assert_eq!(data.projection_layout().n_proj, dims[0]);
+            assert_eq!(data.count_rbm_parameters(), dims[1]);
+            assert_eq!(data.slater_params.len(), dims[2]);
+            assert_eq!(data.opt_trans.len(), dims[3]);
+            assert_eq!(
+                result,
+                if fields[2] == "initial" {
+                    1
+                } else {
+                    dims.iter().sum::<usize>() as i64
+                },
+                "{header}"
+            );
+            assert!(error.is_empty(), "{error}");
+            let expected = c_loader_values(&mut data, record[2]);
+            bits(values(&mut data), &expected, header);
+        } else {
+            assert_eq!(result, fields[3].parse::<i64>().unwrap(), "{header}");
+            assert_eq!(error, historical_error, "{header}");
+            bits(values(&mut data), historical_values, header);
+        }
         bits(data.para_qp_opt_trans, lines.next().unwrap(), header);
         cases += 1;
     }

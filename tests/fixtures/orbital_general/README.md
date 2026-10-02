@@ -70,9 +70,11 @@ normalization maximum. Rust therefore stores coefficients in a separate
 The two loading records contain six diagnostics and 13 parameter triples,
 including unmapped internal and trailing slots. Slot 12 is the normalization
 maximum. Both Rust loaders preserve all raw and normalized coefficient bits
-and leave the RNG unchanged. Invalid/multiple-record loading policy is outside
-this comparison; C's reader can consume successive records, while Rust's
-current strict loader accepts one record (#28).
+and leave the RNG unchanged. Multiple-record and scalar-conversion behavior
+is checked separately in [the C initial-record fixtures](../initial_records/README.md):
+Rust now consumes successive complete records and preserves the final one,
+including C numeric range and nonfinite conversion. The broader #28 contracts
+remain open for other factors' declared storage and keyword-overlay precedence.
 
 The declared-flag/sync cases cover widths 4/15, a combined projection/RBM prefix,
 four post-SR coefficients whose unmapped final slot controls normalization,

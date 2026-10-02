@@ -1,21 +1,26 @@
-//! Atomic loaders for Julia's six-diagnostic-fields plus parameter-triples format.
+//! Complete C initial-parameter records, with the final record taking precedence.
 use std::{fs, io, path::Path};
 
 use mvmc_expert_parsers::{
-    utils::{file::julia_parse_float, parameter_init::n_slater},
+    utils::{file::c_parse_float, parameter_init::n_slater},
     ExpertModeData,
 };
 use num_complex::Complex64;
 
 fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, String> {
     let mut values = Vec::new();
-    for (index, token) in text.split_whitespace().enumerate() {
-        let value = julia_parse_float(token)
+    for (index, token) in text
+        .split([' ', '\t', '\n', '\r', '\x0b', '\x0c'])
+        .filter(|token| !token.is_empty())
+        .enumerate()
+    {
+        let value = c_parse_float(token)
             .ok_or_else(|| format!("non-numeric token '{token}' at field {}", index + 1))?;
-        if !value.is_finite() {
-            return Err(format!("non-finite token '{token}' at field {}", index + 1));
-        }
         values.push(value);
+    }
+    // C's EOF loop applies no values for an empty file.
+    if values.is_empty() {
+        return Ok(0);
     }
     let layout = data.projection_layout();
     let n_orbital = n_slater(data);
@@ -29,7 +34,7 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
             values.len(), layout.n_proj
         ));
     }
-    let extra = values.len() - expected;
+    let extra = values.len() % expected;
     if extra > 0 {
         return Err(if n_opt_trans == 0 && extra % 3 == 0 {
             format!(
@@ -45,8 +50,16 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
         });
     }
 
-    // All tokens, including diagnostics and gradients, are valid before mutation.
-    let parameter = |index: usize| Complex64::new(values[6 + 3 * index], values[7 + 3 * index]);
+    // C applies each complete record; only the last one remains. Parse the
+    // complete file before mutation so malformed inputs have bounded errors.
+    let values = &values[values.len() - expected..];
+    let parameter = |index: usize| {
+        let real = values[6 + 3 * index];
+        let imag = values[7 + 3 * index];
+        // C constructs tmp_real + tmp_comp*I, rather than assigning its two
+        // components directly. Preserve signed zeros and 0*infinity's NaN.
+        Complex64::new(real + 0.0 * imag, imag)
+    };
     for (index, term) in data
         .gutzwiller_terms
         .iter_mut()
@@ -102,8 +115,10 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
 /// Load an optional initial.def overlay without changing parameters on rejection.
 ///
 /// Missing files and invalid records emit a warning and return `Ok(false)`,
-/// matching Julia's recoverable contract. Other file-reading failures propagate
-/// as I/O errors, as Julia's `read` does. No RNG draws or normalization occur.
+/// Complete records follow C: the final record wins, empty files leave data
+/// unchanged, and numeric range/nonfinite values are loaded as C does. Rust
+/// rejects malformed records before mutation; C's unchecked scans do not define
+/// a useful malformed-input contract. No RNG draws or normalization occur.
 /// DH2/DH4 follow Jastrow, then the nine RBM sections, Slater and OptTrans.
 pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io::Result<bool> {
     let path = path.as_ref();
@@ -125,8 +140,9 @@ pub fn read_initial_def(data: &mut ExpertModeData, path: impl AsRef<Path>) -> io
 
 /// Strictly load optimized parameters, returning the number of consumed slots.
 ///
-/// Rejects missing files, malformed tokens, non-finite values, incorrect record
-/// lengths and models with no parameters. Rejected records leave data unchanged.
+/// Rejects missing files, malformed tokens and incomplete records. Complete
+/// records follow C conversion and last-record precedence. Empty files and
+/// parameterless records return zero; rejected records leave data unchanged.
 /// The layout is six diagnostics followed by projection/RBM/Slater/OptTrans triples.
 pub fn read_opt_para_file(
     data: &mut ExpertModeData,
@@ -142,8 +158,5 @@ pub fn read_opt_para_file(
     let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
     let consumed = load_para_triples(data, &text)
         .map_err(|reason| format!("read_opt_para_file!: {reason} (path: {})", path.display()))?;
-    if consumed == 0 {
-        return Err(format!("read_opt_para_file!: no parameters consumed (no Gutzwiller/Jastrow/Slater terms) from {}", path.display()));
-    }
     Ok(consumed)
 }
