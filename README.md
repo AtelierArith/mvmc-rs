@@ -34,8 +34,14 @@ open / answered clarifications.
 ```bash
 cd rust          # workspace root
 cargo check --workspace
-cargo test  --workspace
+cargo nextest run --workspace --cargo-profile test-fast
+cargo test --workspace --doc
 ```
+
+For long numerical regressions, use
+`cargo nextest run --workspace --cargo-profile test-fast`. See
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for build profiles, compiler
+caching, debugging overrides and measurements.
 
 ## CLI binary
 
