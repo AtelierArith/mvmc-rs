@@ -13,6 +13,11 @@ use ::mpi::traits::*;
 use crate::parallel::{assign_group, GroupAssignment, LaunchContext};
 use crate::reducer::Reducer;
 
+/// Keep every MPI collective below implementation-specific message-count
+/// limits.  Julia reduces its large observable buffers in bounded chunks; the
+/// same boundary is required for QQQQ/Green buffers on larger systems.
+const MPI_REDUCTION_CHUNK_LEN: usize = 1 << 20;
+
 /// An initialized MPI world and its root-owned lifecycle token.
 pub struct MpiContext {
     universe: ::mpi::environment::Universe,
@@ -140,36 +145,42 @@ impl MpiContext {
 impl Reducer for MpiContext {
     fn allreduce_sum_f64(&self, values: &mut [f64]) {
         use ::mpi::collective::SystemOperation;
-        let mut reduced = vec![0.0; values.len()];
-        self.world
-            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
-        values.copy_from_slice(&reduced);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let mut reduced = vec![0.0; chunk.len()];
+            self.world
+                .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
+        }
     }
 
     fn allreduce_sum_c64(&self, values: &mut [Complex64]) {
         use ::mpi::collective::SystemOperation;
-        let real: Vec<_> = values.iter().map(|value| value.re).collect();
-        let imag: Vec<_> = values.iter().map(|value| value.im).collect();
-        let mut reduced_real = vec![0.0; values.len()];
-        let mut reduced_imag = vec![0.0; values.len()];
-        self.world
-            .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
-        self.world
-            .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
-        for (value, (real, imag)) in values
-            .iter_mut()
-            .zip(reduced_real.into_iter().zip(reduced_imag))
-        {
-            *value = Complex64::new(real, imag);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let real: Vec<_> = chunk.iter().map(|value| value.re).collect();
+            let imag: Vec<_> = chunk.iter().map(|value| value.im).collect();
+            let mut reduced_real = vec![0.0; chunk.len()];
+            let mut reduced_imag = vec![0.0; chunk.len()];
+            self.world
+                .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
+            self.world
+                .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
+            for (value, (real, imag)) in chunk
+                .iter_mut()
+                .zip(reduced_real.into_iter().zip(reduced_imag))
+            {
+                *value = Complex64::new(real, imag);
+            }
         }
     }
 
     fn allreduce_sum_i64(&self, values: &mut [i64]) {
         use ::mpi::collective::SystemOperation;
-        let mut reduced = vec![0_i64; values.len()];
-        self.world
-            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
-        values.copy_from_slice(&reduced);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let mut reduced = vec![0_i64; chunk.len()];
+            self.world
+                .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
+        }
     }
 
     fn world_size(&self) -> usize {
@@ -196,36 +207,42 @@ impl MpiGroupContext {
 impl Reducer for MpiGroupContext {
     fn allreduce_sum_f64(&self, values: &mut [f64]) {
         use ::mpi::collective::SystemOperation;
-        let mut reduced = vec![0.0; values.len()];
-        self.communicator
-            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
-        values.copy_from_slice(&reduced);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let mut reduced = vec![0.0; chunk.len()];
+            self.communicator
+                .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
+        }
     }
 
     fn allreduce_sum_c64(&self, values: &mut [Complex64]) {
         use ::mpi::collective::SystemOperation;
-        let real: Vec<_> = values.iter().map(|value| value.re).collect();
-        let imag: Vec<_> = values.iter().map(|value| value.im).collect();
-        let mut reduced_real = vec![0.0; values.len()];
-        let mut reduced_imag = vec![0.0; values.len()];
-        self.communicator
-            .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
-        self.communicator
-            .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
-        for (value, (real, imag)) in values
-            .iter_mut()
-            .zip(reduced_real.into_iter().zip(reduced_imag))
-        {
-            *value = Complex64::new(real, imag);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let real: Vec<_> = chunk.iter().map(|value| value.re).collect();
+            let imag: Vec<_> = chunk.iter().map(|value| value.im).collect();
+            let mut reduced_real = vec![0.0; chunk.len()];
+            let mut reduced_imag = vec![0.0; chunk.len()];
+            self.communicator
+                .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
+            self.communicator
+                .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
+            for (value, (real, imag)) in chunk
+                .iter_mut()
+                .zip(reduced_real.into_iter().zip(reduced_imag))
+            {
+                *value = Complex64::new(real, imag);
+            }
         }
     }
 
     fn allreduce_sum_i64(&self, values: &mut [i64]) {
         use ::mpi::collective::SystemOperation;
-        let mut reduced = vec![0_i64; values.len()];
-        self.communicator
-            .all_reduce_into(values, &mut reduced, SystemOperation::sum());
-        values.copy_from_slice(&reduced);
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let mut reduced = vec![0_i64; chunk.len()];
+            self.communicator
+                .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
+        }
     }
 
     fn world_size(&self) -> usize {
