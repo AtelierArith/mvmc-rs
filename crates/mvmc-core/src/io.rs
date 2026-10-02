@@ -197,7 +197,7 @@ pub fn output_phys_data(
     let one_rows = data
         .green_one_terms
         .iter()
-        .zip(&phys.local_cis_ajs)
+        .zip(&phys.phys_cis_ajs)
         .map(|(term, value)| {
             format!(
                 "{} {} {} {} {} {}",
@@ -227,7 +227,7 @@ pub fn output_phys_data(
     let direct_rows = data
         .green_two_terms
         .iter()
-        .zip(&phys.local_cis_ajs_ckt_alt_dc)
+        .zip(&phys.phys_cis_ajs_ckt_alt_dc)
         .map(|(term, value)| {
             format!(
                 "{} {} {} {} {} {} {} {} {} {}",
@@ -419,9 +419,9 @@ mod tests {
         });
         let mut state = VmcOptimizationState::zeros(4, 1, 0, 0, 1, 1, true, false);
         let mut phys = crate::state::PhysicalQuantities::zeros(1, 1, 1);
-        phys.local_cis_ajs[0] = Complex64::new(1.5, -2.0);
+        phys.phys_cis_ajs[0] = Complex64::new(1.5, -2.0);
         phys.phys_cis_ajs_ckt_alt[0] = Complex64::new(3.0, 4.0);
-        phys.local_cis_ajs_ckt_alt_dc[0] = Complex64::new(-5.0, 6.0);
+        phys.phys_cis_ajs_ckt_alt_dc[0] = Complex64::new(-5.0, 6.0);
         state.phys_quantities = Some(phys);
         let output_dir =
             std::env::temp_dir().join(format!("mvmc-phys-output-{}", std::process::id()));
