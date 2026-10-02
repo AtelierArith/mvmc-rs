@@ -17,6 +17,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `orbital_initialization.c` | Declared Slater initialization, loading, normalization, native SFMT and shared coefficient matrix, 49 cases | `python3 scripts/check_orbital_initialization_c_parity.py` |
 | `integer_flags.c` | Production AP/P header normalization, raw integer flags, coefficient bits, native SFMT and SR selection, 70 cases | `python3 scripts/check_integer_flags_c_parity.py` |
 | `projection_flags.c` | Native DH2/DH4 raw-flag readers, 24 cases; real gauge eligibility, 86 cases | `python3 scripts/check_projection_flags_c_parity.py` |
+| `gutzwiller_contracts.c` | Physical headers, complete site mappings and raw ordered flags, 144 cases | `python3 scripts/check_gutzwiller_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
@@ -93,3 +94,21 @@ Rust direct/CG solvers use separate controlled identity-covariance workloads to
 check exactly the component selection supplied by C. Remaining strict family
 readers, RBM widths/storage and OptTrans activation/offsets stay in #21/#26/#27;
 this milestone does not close those issues or prove full C sampling parity.
+
+The Gutzwiller probe extracts `ReadBuffIntCmpFlg`, `GetInfoGutzwiller`,
+`GetInfoOpt`, `CheckSite` and `ReadDefFileError` from `readdef.c`. It verifies
+144 cases (72 accepted / 72 rejected) at one, two, three and six sites with
+real and positive complex headers, unused declared slots, shared/reordered/
+duplicate site mappings, ignored/reversed printed flag labels, raw flags
+-2/-1/0/1/2/3, folded/split C whitespace, nonstandard header labels and missing/
+extra mapping or flag pairs. The original reader treats whitespace uniformly;
+it does not infer the flag boundary from repeated sites or line widths.
+
+All probe storage is zeroed. Duplicate mappings can leave sites untouched in C;
+those cells and real-mode imaginary flags are sentinels, not native malloc
+initialization claims. Rust deliberately keeps such unused storage deterministic.
+Bad site indices are excluded from native execution because C writes the site
+array before checking bounds. Malformed integer scans and out-of-range parameter
+indices also have separate bounded Rust diagnostics. These checks establish this
+reader's supported contract, not full C validation, initialization, MPI or
+sampling parity. Jastrow and RBM complete readers remain separate work in #21.
