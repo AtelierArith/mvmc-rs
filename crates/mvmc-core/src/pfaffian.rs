@@ -3,12 +3,10 @@
 //! Port target: `MVMCOptimizers.jl/src/calculate_m_all.jl` (~930 LOC,
 //! `fcmp` / `real` / `fsz` variants). Re-uses `pfapack::{ltl, utu2}`.
 //!
-//! Phase 4.2 ships the scalar real + complex paths. The Julia code
-//! ships both a sequential and an `@threads`-parallel wrapper over the
-//! `qpidx` loop; we mirror the API but execute serially through a
-//! single workspace taken from [`ThreadedPfaPackWorkspace`]. Phase 6
-//! swaps the inner loop for a `rayon::par_iter` once the 10-step
-//! bit-parity diff is green.
+//! The QP loop defaults to the sequential path and can use the explicit
+//! `MVMC_RS_INNER_THREADS`/`MVMC_RS_INNER_THRESHOLD` controls for independent
+//! chunks. Each parallel chunk owns its temporary inverse and Pfaffian output;
+//! chunks are copied back in QP order so the sampling/RNG contract is unchanged.
 //!
 //! The kernels are direct ports of `calculate_m_all_child_{fcmp,real}!`
 //! and reproduce the upstream pipeline exactly:
@@ -36,6 +34,7 @@ use pfapack::{
     dsktf2, utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real,
     zsktf2, zsktf2_turbo, SqMat,
 };
+use rayon::prelude::*;
 
 use crate::state::{
     InvMColMajor, PfaPackMode, PfaPackWorkspace, SlaterElmFlat, SlaterMatrixData,
@@ -144,21 +143,66 @@ pub fn calc_m_all_real(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
-    let mut ws = pool.take();
-    let result = (qp_start..qp_end).try_for_each(|qp| {
-        calc_m_all_child_real(
-            qp,
-            ele_idx,
-            slater_elm,
-            inv_m,
-            &mut pf_m[qp],
-            n_site,
-            n_elec,
-            &mut ws,
-        )
-    });
-    pool.release(ws);
-    result
+    if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+        let mut ws = pool.take();
+        let result = (qp_start..qp_end).try_for_each(|qp| {
+            calc_m_all_child_real(
+                qp,
+                ele_idx,
+                slater_elm,
+                inv_m,
+                &mut pf_m[qp],
+                n_site,
+                n_elec,
+                &mut ws,
+            )
+        });
+        pool.release(ws);
+        return result;
+    }
+
+    let workers = crate::threading::inner_worker_count(qp_end - qp_start);
+    pool.ensure_capacity(workers);
+    let chunk = (qp_end - qp_start).div_ceil(workers);
+    let ranges: Vec<_> = (qp_start..qp_end)
+        .step_by(chunk)
+        .map(|start| (start, (start + chunk).min(qp_end)))
+        .collect();
+    crate::threading::install(|| {
+        let chunks: Result<Vec<_>, CalcMAllError> = ranges
+            .into_par_iter()
+            .map(|(start, end)| {
+                let mut ws = pool.take();
+                let mut local_inv = InvMColMajor::zeros(end, n_elec);
+                let mut local_pf = vec![0.0_f64; end];
+                let result = (start..end).try_for_each(|qp| {
+                    calc_m_all_child_real(
+                        qp,
+                        ele_idx,
+                        slater_elm,
+                        &mut local_inv,
+                        &mut local_pf[qp],
+                        n_site,
+                        n_elec,
+                        &mut ws,
+                    )
+                });
+                pool.release(ws);
+                result.map(|()| (start, end, local_inv, local_pf))
+            })
+            .collect();
+        let chunks = chunks?;
+        for (start, end, local_inv, local_pf) in chunks {
+            for qp in start..end {
+                pf_m[qp] = local_pf[qp];
+            }
+            for qp in start..end {
+                let source = local_inv.qp_matrix_slice(qp);
+                inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Complex `calculate_m_all` over the half-open QP range `[qp_start, qp_end)`.
@@ -185,21 +229,66 @@ pub fn calc_m_all_complex(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
-    let mut ws = pool.take();
-    let result = (qp_start..qp_end).try_for_each(|qp| {
-        calc_m_all_child_complex(
-            qp,
-            ele_idx,
-            slater_elm,
-            inv_m,
-            &mut pf_m[qp],
-            n_site,
-            n_elec,
-            &mut ws,
-        )
-    });
-    pool.release(ws);
-    result
+    if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+        let mut ws = pool.take();
+        let result = (qp_start..qp_end).try_for_each(|qp| {
+            calc_m_all_child_complex(
+                qp,
+                ele_idx,
+                slater_elm,
+                inv_m,
+                &mut pf_m[qp],
+                n_site,
+                n_elec,
+                &mut ws,
+            )
+        });
+        pool.release(ws);
+        return result;
+    }
+
+    let workers = crate::threading::inner_worker_count(qp_end - qp_start);
+    pool.ensure_capacity(workers);
+    let chunk = (qp_end - qp_start).div_ceil(workers);
+    let ranges: Vec<_> = (qp_start..qp_end)
+        .step_by(chunk)
+        .map(|start| (start, (start + chunk).min(qp_end)))
+        .collect();
+    crate::threading::install(|| {
+        let chunks: Result<Vec<_>, CalcMAllError> = ranges
+            .into_par_iter()
+            .map(|(start, end)| {
+                let mut ws = pool.take();
+                let mut local_inv = InvMColMajor::zeros(end, n_elec);
+                let mut local_pf = vec![Complex64::default(); end];
+                let result = (start..end).try_for_each(|qp| {
+                    calc_m_all_child_complex(
+                        qp,
+                        ele_idx,
+                        slater_elm,
+                        &mut local_inv,
+                        &mut local_pf[qp],
+                        n_site,
+                        n_elec,
+                        &mut ws,
+                    )
+                });
+                pool.release(ws);
+                result.map(|()| (start, end, local_inv, local_pf))
+            })
+            .collect();
+        let chunks = chunks?;
+        for (start, end, local_inv, local_pf) in chunks {
+            for qp in start..end {
+                pf_m[qp] = local_pf[qp];
+            }
+            for qp in start..end {
+                let source = local_inv.qp_matrix_slice(qp);
+                inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Complex FSZ `calculate_m_all_fsz!` over `[qp_start, qp_end)`.

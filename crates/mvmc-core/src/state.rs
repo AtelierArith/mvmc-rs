@@ -892,8 +892,7 @@ impl PfaPackWorkspace {
 /// Phase 4.1 ships a single-process implementation: one workspace per
 /// rayon worker (or just one for the main thread when rayon is not
 /// active). The lock guards the lazy push-back when more workers show
-/// up than were originally allocated. Phase 6 swaps the `Mutex` for an
-/// atomic free-list once we benchmark the contention.
+/// up than were originally allocated.
 pub struct ThreadedPfaPackWorkspace {
     workspaces: Mutex<Vec<PfaPackWorkspace>>,
     n_size: usize,

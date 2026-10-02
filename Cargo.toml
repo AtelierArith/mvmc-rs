@@ -49,6 +49,7 @@ blas = "0.22"
 # --- ergonomics ---
 thiserror = "1"
 tracing = "0.1"
+rayon = "1.10"
 
 # --- dev / test ---
 approx = "0.5"
