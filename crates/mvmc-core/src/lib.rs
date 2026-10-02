@@ -42,8 +42,8 @@ pub use pfaffian::{
 pub use reducer::{Reducer, SingleProcessReducer};
 pub use run::{
     get_all_complex_flag, prepare_phys_cal_from_namelist, run_para_opt_from_namelist, vmc_para_opt,
-    vmc_para_opt_timed, vmc_phys_cal, InitialDef, OptimizationOptions, PhysCalPreparation,
-    PhysCalResult, RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
+    vmc_para_opt_timed, vmc_phys_cal, vmc_phys_cal_to_dir, InitialDef, OptimizationOptions,
+    PhysCalPreparation, PhysCalResult, RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
 };
 pub use sampling::driver::{vmc_make_sample, vmc_make_sample_real, SampleStats};
 pub use state::{

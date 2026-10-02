@@ -170,6 +170,83 @@ pub fn output_data(
     Ok(())
 }
 
+/// Write one PhysCal Green-function sample using C's indexed file names.
+pub fn output_phys_data(
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+    sample: usize,
+    output_dir: Option<&Path>,
+) -> io::Result<()> {
+    let Some(phys) = state.phys_quantities.as_ref() else {
+        return Ok(());
+    };
+    let head = if data.modpara.c_data_file_head.is_empty() {
+        "zvo"
+    } else {
+        data.modpara.c_data_file_head.as_str()
+    };
+    let index = data.modpara.n_data_idx_start.max(0) as usize + sample;
+    let write_rows = |suffix: &str, rows: Vec<String>| -> io::Result<()> {
+        let path = output_path(&format!("{head}_{suffix}_{index:03}.dat"), output_dir)?;
+        let mut file = File::create(path)?;
+        for row in rows {
+            writeln!(file, "{row}")?;
+        }
+        Ok(())
+    };
+    let one_rows = data
+        .green_one_terms
+        .iter()
+        .zip(&phys.local_cis_ajs)
+        .map(|(term, value)| {
+            format!(
+                "{} {} {} {} {} {}",
+                term.site1,
+                crate::observables::spin_code(term.spin1),
+                term.site2,
+                crate::observables::spin_code(term.spin2),
+                format_c_double(value.re),
+                format_c_double(value.im)
+            )
+        })
+        .collect();
+    write_rows("cisajs", one_rows)?;
+    let ex_rows = data
+        .green_two_ex_terms
+        .iter()
+        .zip(&phys.phys_cis_ajs_ckt_alt)
+        .map(|(_term, value)| {
+            format!(
+                "{} {}",
+                format_c_double(value.re),
+                format_c_double(value.im)
+            )
+        })
+        .collect();
+    write_rows("cisajscktaltex", ex_rows)?;
+    let direct_rows = data
+        .green_two_terms
+        .iter()
+        .zip(&phys.local_cis_ajs_ckt_alt_dc)
+        .map(|(term, value)| {
+            format!(
+                "{} {} {} {} {} {} {} {} {} {}",
+                term.site1,
+                crate::observables::spin_code(term.spin1),
+                term.site2,
+                crate::observables::spin_code(term.spin2),
+                term.site3,
+                crate::observables::spin_code(term.spin3),
+                term.site4,
+                crate::observables::spin_code(term.spin4),
+                format_c_double(value.re),
+                format_c_double(value.im)
+            )
+        })
+        .collect();
+    write_rows("cisajscktalt", direct_rows)
+}
+
 /// Write the final `zqp_opt.dat` snapshot.
 pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::Result<()> {
     let head = if data.modpara.c_para_file_head.is_empty() {
@@ -299,12 +376,63 @@ fn open_step_file(path: &Path, overwrite: bool) -> io::Result<File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mvmc_expert_parsers::{GreenOneTerm, GreenTwoExTerm, GreenTwoTerm, Spin};
+    use num_complex::Complex64;
 
     #[test]
     fn format_c_double_matches_c_pattern() {
         assert_eq!(format_c_double(1.5), " 1.500000000000000000e+00");
         assert_eq!(format_c_double(-2.0), "-2.000000000000000000e+00");
         assert_eq!(format_c_double(0.0), " 0.000000000000000000e+00");
+    }
+
+    #[test]
+    fn phys_data_uses_c_indexed_green_file_names_and_rows() {
+        let mut data = ExpertModeData::new();
+        data.modpara.c_data_file_head = "zvo".to_string();
+        data.modpara.n_data_idx_start = 7;
+        data.green_one_terms.push(GreenOneTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Down,
+        });
+        data.green_two_ex_terms.push(GreenTwoExTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Down,
+            site3: 2,
+            spin3: Spin::Up,
+            site4: 3,
+            spin4: Spin::Down,
+        });
+        data.green_two_terms.push(GreenTwoTerm {
+            site1: 0,
+            spin1: Spin::Up,
+            site2: 1,
+            spin2: Spin::Down,
+            site3: 2,
+            spin3: Spin::Up,
+            site4: 3,
+            spin4: Spin::Down,
+        });
+        let mut state = VmcOptimizationState::zeros(4, 1, 0, 0, 1, 1, true, false);
+        let mut phys = crate::state::PhysicalQuantities::zeros(1, 1, 1);
+        phys.local_cis_ajs[0] = Complex64::new(1.5, -2.0);
+        phys.phys_cis_ajs_ckt_alt[0] = Complex64::new(3.0, 4.0);
+        phys.local_cis_ajs_ckt_alt_dc[0] = Complex64::new(-5.0, 6.0);
+        state.phys_quantities = Some(phys);
+        let output_dir =
+            std::env::temp_dir().join(format!("mvmc-phys-output-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&output_dir);
+        output_phys_data(&data, &state, 2, Some(&output_dir)).unwrap();
+        let one = fs::read_to_string(output_dir.join("zvo_cisajs_009.dat")).unwrap();
+        assert!(one.contains("0 0 1 1  1.500000000000000000e+00 -2.000000000000000000e+00"));
+        let ex = fs::read_to_string(output_dir.join("zvo_cisajscktaltex_009.dat")).unwrap();
+        assert!(ex.contains(" 3.000000000000000000e+00  4.000000000000000000e+00"));
+        assert!(output_dir.join("zvo_cisajscktalt_009.dat").exists());
+        let _ = fs::remove_dir_all(output_dir);
     }
 }
 
