@@ -1042,6 +1042,8 @@ impl SamplingWorkspace {
 /// Physical-observable accumulators for `NVMCCalMode=1` (`PhysicalQuantities`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PhysicalQuantities {
+    /// Weighted-average flattened QQQQ moments for two-step Lanczos PhysCal.
+    pub phys_lanczos_qqqq: Vec<Complex64>,
     /// Per-sample 1-body Green function (length `n_cis_ajs`).
     pub local_cis_ajs: Vec<Complex64>,
     /// Weighted-average 1-body Green function (length `n_cis_ajs`).
@@ -1079,6 +1081,7 @@ impl PhysicalQuantities {
     /// Mirror of `PhysicalQuantities(n_cis_ajs, n_cis_ajs_ckt_alt, n_cis_ajs_ckt_alt_dc)`.
     pub fn zeros(n_cis_ajs: usize, n_cis_ajs_ckt_alt: usize, n_cis_ajs_ckt_alt_dc: usize) -> Self {
         Self {
+            phys_lanczos_qqqq: vec![Complex64::new(0.0, 0.0); 16],
             local_cis_ajs: vec![Complex64::new(0.0, 0.0); n_cis_ajs],
             phys_cis_ajs: vec![Complex64::new(0.0, 0.0); n_cis_ajs],
             phys_cis_ajs_ckt_alt: vec![Complex64::new(0.0, 0.0); n_cis_ajs_ckt_alt],

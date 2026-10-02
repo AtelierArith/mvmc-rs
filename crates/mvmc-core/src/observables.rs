@@ -81,6 +81,7 @@ pub fn clear_phys_quantity(state: &mut VmcOptimizationState) {
         *x = 0.0;
     }
     if let Some(phys) = state.phys_quantities.as_mut() {
+        phys.phys_lanczos_qqqq.fill(Complex64::new(0.0, 0.0));
         phys.local_cis_ajs.fill(Complex64::new(0.0, 0.0));
         phys.phys_cis_ajs.fill(Complex64::new(0.0, 0.0));
         phys.phys_cis_ajs_ckt_alt.fill(Complex64::new(0.0, 0.0));
