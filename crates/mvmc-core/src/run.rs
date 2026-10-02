@@ -61,6 +61,17 @@ pub struct PhysCalPreparation {
     pub n_para_consumed: usize,
 }
 
+/// Result of a serial PhysCal core run.
+#[derive(Debug)]
+pub struct PhysCalResult {
+    /// Fixed parameters after the measurement loop; unchanged from loading.
+    pub data: ExpertModeData,
+    /// Sampling and observable state.
+    pub state: VmcOptimizationState,
+    /// Number of measurement iterations completed.
+    pub iterations: usize,
+}
+
 /// Prepare a fixed-parameter PhysCal run using Julia's phase order.
 ///
 /// The function deliberately does not call `init_parameter` or
@@ -93,6 +104,76 @@ pub fn prepare_phys_cal_from_namelist(
         data,
         rng,
         n_para_consumed,
+    })
+}
+
+/// Run the serial PhysCal sampling and main-calculation loop.
+///
+/// Parameter optimization and SR are intentionally absent. The preparation's
+/// cloned data consumes the one C-compatible initialization draw block, while
+/// the returned `data` remains the fixed loaded parameter set.
+pub fn vmc_phys_cal(mut preparation: PhysCalPreparation) -> Result<PhysCalResult, String> {
+    let mut init_data = preparation.data.clone();
+    init_parameter(&mut init_data, &mut preparation.rng);
+    if preparation.data.modpara.nmp_trans == 0 {
+        preparation.data.modpara.nmp_trans = 1;
+    } else if preparation.data.modpara.nmp_trans < 0 {
+        preparation.data.modpara.nmp_trans = preparation.data.modpara.nmp_trans.abs();
+    }
+    preparation.data.modpara.vmc_calc_mode = 1;
+    init_qp_weight(&mut preparation.data);
+    let all_complex = get_all_complex_flag(&preparation.data);
+    let use_fsz = preparation.data.i_flg_orbital_general != 0;
+    let mut state = state_from_data(&preparation.data);
+    if use_fsz {
+        update_slater_elm_fsz(&mut preparation.data, &mut state);
+    } else {
+        update_slater_elm(&mut preparation.data, &mut state);
+    }
+    let iterations = preparation.data.modpara.n_data_qty_smp.max(0) as usize;
+    for _ in 0..iterations {
+        if use_fsz {
+            if all_complex {
+                crate::sampling::driver::vmc_make_sample_fsz(
+                    &preparation.data,
+                    &mut state,
+                    &mut preparation.rng,
+                );
+            } else {
+                crate::sampling::vmc_make_sample_fsz_real(
+                    &preparation.data,
+                    &mut state,
+                    &mut preparation.rng,
+                )
+                .map_err(|error| error.to_string())?;
+                sync_real_fsz_shadow(&mut state);
+            }
+        } else if all_complex {
+            crate::sampling::driver::vmc_make_sample(
+                &preparation.data,
+                &mut state,
+                &mut preparation.rng,
+            );
+        } else {
+            crate::sampling::driver::vmc_make_sample_real(
+                &preparation.data,
+                &mut state,
+                &mut preparation.rng,
+            );
+        }
+        clear_phys_quantity(&mut state);
+        accumulate_observables(
+            &preparation.data,
+            &mut state,
+            all_complex,
+            use_fsz,
+            &mut CTimer::<false>::new(),
+        );
+    }
+    Ok(PhysCalResult {
+        data: preparation.data,
+        state,
+        iterations,
     })
 }
 
@@ -843,6 +924,34 @@ mod mode_tests {
         );
         let mut rng = prepared.rng;
         assert_ne!(rng.gen_rand32(), 0);
+    }
+
+    #[test]
+    fn physcal_iteration_keeps_fixed_parameters_unchanged() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/opttrans");
+        let parsed = parse_expert_mode_files(root.join("namelist_layout.def")).unwrap();
+        let n_fields = 6 + 3 * parsed.count_variational_parameters();
+        let opt_path =
+            std::env::temp_dir().join(format!("mvmc-physcal-iteration-{}", std::process::id()));
+        fs::write(
+            &opt_path,
+            (0..n_fields).map(|_| "0").collect::<Vec<_>>().join(" "),
+        )
+        .unwrap();
+        let mut preparation = prepare_phys_cal_from_namelist(
+            root.join("namelist_layout.def"),
+            &opt_path,
+            "real",
+            Some(11272),
+        )
+        .unwrap();
+        fs::remove_file(opt_path).unwrap();
+        preparation.data.modpara.n_data_qty_smp = 1;
+        let before = preparation.data.slater_params.clone();
+        let result = vmc_phys_cal(preparation).unwrap();
+        assert_eq!(result.iterations, 1);
+        assert_eq!(result.data.slater_params, before);
     }
 
     #[test]
