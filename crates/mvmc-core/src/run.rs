@@ -280,7 +280,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.stop(20);
         timer.start(3);
         // 2. Sampler.
-        let _sample_stats: Result<crate::sampling::SampleStats, String> = if use_fsz {
+        let sample_result: Result<crate::sampling::SampleStats, String> = if use_fsz {
             if all_complex {
                 Ok(crate::sampling::driver::vmc_make_sample_fsz_timed(
                     data, state, rng, timer,
@@ -303,6 +303,12 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 data, state, rng, timer,
             ))
         };
+        let sample_error = sample_result.as_ref().err().cloned();
+        if reducer.any_failure(sample_error.is_some()) {
+            return Err(sample_error
+                .unwrap_or_else(|| format!("sample step {step} failed on another MPI rank")));
+        }
+        let _sample_stats = sample_result?;
         timer.stop(3);
 
         // Julia proceeds after a void sampler early return, retaining the saved
@@ -362,10 +368,12 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             crate::sr::stochastic_opt_real_timed(data, state, timer)
         };
         timer.stop(5);
-        if info != 0 {
+        let mut sr_failure = [i64::from(info != 0)];
+        reducer.allreduce_sum_i64(&mut sr_failure);
+        if sr_failure[0] != 0 {
             timer.stop(2);
             return Err(format!(
-                "vmc_para_opt: {} SR failed at step {step} (status {info}); parameters were not updated",
+                "vmc_para_opt: {} SR failed at step {step} (local status {info}); parameters were not updated",
                 if data.modpara.nsrcg != 0 { "CG" } else { "direct" }
             ));
         }

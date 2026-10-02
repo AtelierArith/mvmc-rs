@@ -51,6 +51,13 @@ pub trait Reducer {
     fn is_output_root(&self) -> bool {
         self.rank() == 0
     }
+
+    /// Return true when any rank reports a failure.
+    fn any_failure(&self, failed: bool) -> bool {
+        let mut flags = [i64::from(failed)];
+        self.allreduce_sum_i64(&mut flags);
+        flags[0] != 0
+    }
 }
 
 /// No-op reducer for the v0.1 single-process build.
