@@ -178,4 +178,120 @@ fn run_benchmark() {
 fn main() {
     println!("impl,kind,n,op,median_ms");
     run_benchmark();
+    bench_transfer_green();
+}
+
+fn transfer_state() -> (
+    mvmc_expert_parsers::ExpertModeData,
+    mvmc_core::VmcOptimizationState,
+    [i64; 2],
+    [i64; 4],
+    [i64; 4],
+    [i64; 2],
+) {
+    let mut data = mvmc_expert_parsers::ExpertModeData::new();
+    data.modpara.nsite = 2;
+    data.modpara.nelec = 1;
+    data.n_gutzwiller_idx = 2;
+    data.gutzwiller_idx = vec![0, 1];
+    data.gutzwiller_terms = vec![
+        mvmc_expert_parsers::GutzwillerTerm {
+            site: 0,
+            value: Complex64::new(0.25, 0.0),
+            is_complex: false,
+        },
+        mvmc_expert_parsers::GutzwillerTerm {
+            site: 1,
+            value: Complex64::new(-0.15, 0.0),
+            is_complex: false,
+        },
+    ];
+    data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
+        site1: 1,
+        spin1: mvmc_expert_parsers::Spin::Up,
+        site2: 0,
+        spin2: mvmc_expert_parsers::Spin::Up,
+        value: Complex64::new(0.75, 0.0),
+    });
+    let mut state = mvmc_core::VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+    state.slater_matrix.pf_m_real[0] = 1.0;
+    state.slater_matrix.inv_m_real.as_mut_slice()[0] = 1.0;
+    state.slater_matrix.slater_elm_real.set(0, 1, 0, 1.0);
+    (data, state, [0, 0], [0, -1, -1, -1], [1, 0, 0, 0], [1, 0])
+}
+
+fn bench_transfer_green() {
+    use mvmc_core::c_timer::CTimer;
+
+    let iters = std::env::var("MVMC_RS_TRANSFER_BENCH_ITERS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(10_000usize);
+    let (data_fast, mut fast_state, idx, cfg, num, counts) = transfer_state();
+    let ip = Complex64::new(1.0, 0.0);
+    let _ = mvmc_core::observables::calculate_local_energy(
+        ip,
+        &data_fast,
+        &mut fast_state,
+        &idx,
+        &cfg,
+        &num,
+        &counts,
+    );
+    let (data_generic, mut generic_state, _, _, _, _) = transfer_state();
+
+    let mut generic_samples = Vec::with_capacity(7);
+    let mut fast_samples = Vec::with_capacity(7);
+    for _ in 0..7 {
+        let t0 = Instant::now();
+        let mut checksum = Complex64::new(0.0, 0.0);
+        for _ in 0..iters {
+            checksum += mvmc_core::observables::green_func1(
+                1,
+                0,
+                0,
+                0,
+                ip,
+                &data_generic,
+                &mut generic_state,
+                &idx,
+                &cfg,
+                &num,
+                &counts,
+            );
+        }
+        std::hint::black_box(checksum);
+        generic_samples.push(t0.elapsed().as_nanos());
+
+        let t0 = Instant::now();
+        let mut checksum = Complex64::new(0.0, 0.0);
+        let mut timer = CTimer::<false>::new();
+        for _ in 0..iters {
+            checksum += mvmc_core::observables::green_func1_timed(
+                1,
+                0,
+                0,
+                0,
+                ip,
+                &data_fast,
+                &mut fast_state,
+                &idx,
+                &cfg,
+                &num,
+                &counts,
+                &mut timer,
+            );
+        }
+        std::hint::black_box(checksum);
+        fast_samples.push(t0.elapsed().as_nanos());
+    }
+    generic_samples.sort_unstable();
+    fast_samples.sort_unstable();
+    println!(
+        "transfer_green,iterations={},generic_median_ms={:.6},fast_median_ms={:.6},speedup={:.3}",
+        iters,
+        generic_samples[3] as f64 / 1e6,
+        fast_samples[3] as f64 / 1e6,
+        generic_samples[3] as f64 / fast_samples[3] as f64
+    );
 }

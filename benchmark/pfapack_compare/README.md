@@ -43,3 +43,19 @@ Run all benchmark variants and generate a Markdown report:
 ```sh
 scripts/run_all.sh
 ```
+
+## Real Transfer fast-path benchmark
+
+The same binary also measures the generic and cached real Transfer Green
+kernels on a two-site, one-electron model with two declared Gutzwiller
+parameters. It warms the cache before timing, runs seven samples, and reports
+the median over `MVMC_RS_TRANSFER_BENCH_ITERS` calls (default `10000`):
+
+```sh
+MVMC_RS_TRANSFER_BENCH_ITERS=10000 \
+  cargo run --release --manifest-path benchmark/pfapack_compare/Cargo.toml --offline
+```
+
+The measurement records the generic and fast medians separately; it does not
+assume the fast path wins for models that do not use a nontrivial projection.
+See `results/transfer_green_2026-10-03.md` for the captured run.
