@@ -15,15 +15,15 @@ use mvmc_expert_parsers::ExpertModeData;
 use crate::state::{OptDataPoint, VmcOptimizationState};
 
 /// Store a synchronized parameter snapshot with the just-measured energy.
-/// Preserves Julia's Gutzwiller/Jastrow/orbital term order, including repeated
-/// orbital mappings. Gaps in the zero-based sample index are empty snapshots.
+/// Slater coefficients follow C's declared index order, including unmapped
+/// slots. Gaps in the zero-based sample index are empty snapshots.
 pub fn store_opt_data(data: &ExpertModeData, state: &mut VmcOptimizationState, sample_idx: usize) {
     let parameters = data
         .gutzwiller_terms
         .iter()
         .map(|term| term.value)
         .chain(data.jastrow_terms.iter().map(|term| term.value))
-        .chain(data.orbital_terms.iter().map(|term| term.value))
+        .chain(data.slater_params.iter().copied())
         .collect();
     if state.opt_data.len() <= sample_idx {
         state.opt_data.resize_with(sample_idx + 1, || OptDataPoint {
@@ -148,12 +148,12 @@ pub fn output_data(
             format_c_double(term.value.im),
         )?;
     }
-    for term in &data.orbital_terms {
+    for value in &data.slater_params {
         write!(
             var_file,
             "{} {} 0.0 ",
-            format_c_double(term.value.re),
-            format_c_double(term.value.im),
+            format_c_double(value.re),
+            format_c_double(value.im),
         )?;
     }
     writeln!(var_file)?;
@@ -186,12 +186,12 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
             format_c_double(term.value.im)
         )?;
     }
-    for term in &data.orbital_terms {
+    for value in &data.slater_params {
         writeln!(
             f,
             "{} {} ",
-            format_c_double(term.value.re),
-            format_c_double(term.value.im)
+            format_c_double(value.re),
+            format_c_double(value.im)
         )?;
     }
     drop(f);
@@ -213,7 +213,7 @@ pub fn output_opt_data(data: &ExpertModeData, output_dir: Option<&Path>) -> io::
         &head,
         "orbital",
         "NOrbitalIdx",
-        data.orbital_terms.iter().map(|term| term.value),
+        data.slater_params.iter().copied(),
         output_dir,
     )?;
     Ok(())
@@ -273,7 +273,7 @@ mod history_tests {
     use num_complex::Complex64;
 
     #[test]
-    fn history_keeps_mapping_order_shared_entries_and_owned_snapshots() {
+    fn history_keeps_declared_index_order_unmapped_slots_and_owned_snapshots() {
         let mut data = ExpertModeData::new();
         data.gutzwiller_terms.push(GutzwillerTerm {
             site: 0,
@@ -286,12 +286,17 @@ mod history_tests {
             value: Complex64::new(3.0, 4.0),
             is_complex: true,
         });
+        data.modpara.n_orbital_idx = 3;
+        data.slater_params = vec![
+            Complex64::new(5.0, 0.0),
+            Complex64::new(6.0, 0.0),
+            Complex64::new(7.0, 0.0),
+        ];
         for idx in [1, 0, 1] {
             data.orbital_terms.push(OrbitalTerm {
                 site1: 0,
                 site2: 1,
                 idx,
-                value: Complex64::new(idx as f64 + 5.0, 0.0),
                 is_complex: true,
                 sign: 1,
             });
@@ -306,15 +311,15 @@ mod history_tests {
         let expected = vec![
             Complex64::new(1.0, 2.0),
             Complex64::new(3.0, 4.0),
-            Complex64::new(6.0, 0.0),
             Complex64::new(5.0, 0.0),
             Complex64::new(6.0, 0.0),
+            Complex64::new(7.0, 0.0),
         ];
         assert_eq!(state.opt_data[2].parameters, expected);
-        data.orbital_terms[0].value = Complex64::new(9.0, 0.0);
+        data.slater_params[data.orbital_terms[0].idx as usize] = Complex64::new(9.0, 0.0);
         store_opt_data(&data, &mut state, 3);
         assert_eq!(state.opt_data[2].parameters, expected);
-        assert_eq!(state.opt_data[3].parameters[2], Complex64::new(9.0, 0.0));
+        assert_eq!(state.opt_data[3].parameters[3], Complex64::new(9.0, 0.0));
         store_opt_data(&data, &mut state, 0);
         assert_eq!(state.opt_data.len(), 4);
     }

@@ -4,7 +4,7 @@
 //!              + `mVMC/src/mVMC/parameter.c :: InitParameter()`.
 //!
 //! BIT-PARITY CRITICAL: preserves the upstream RNG draw order so the
-//! Slater values that seed the optimiser match Julia + C exactly. The
+//! declared Slater values and subsequent RNG state match the C kernel. The
 //! caller MUST seed the SFMT RNG before calling [`init_parameter`].
 //!
 //! Real/complex Slater initialization includes Gutzwiller/Jastrow/DH2/DH4 declarations.
@@ -30,13 +30,7 @@ pub fn all_complex_flag(data: &ExpertModeData) -> bool {
 /// Number of unique Slater (orbital) parameters. Mirrors
 /// `n_orbital_idx` / `NSlater` derivation in upstream.
 pub fn n_slater(data: &ExpertModeData) -> usize {
-    if data.modpara.n_orbital_idx > 0 {
-        data.modpara.n_orbital_idx as usize
-    } else if let Some(max_idx) = data.orbital_terms.iter().map(|t| t.idx).max() {
-        (max_idx + 1).max(0) as usize
-    } else {
-        0
-    }
+    data.modpara.n_orbital_idx.max(0) as usize
 }
 
 /// `init_parameter!(data; rng)` mirror.
@@ -98,19 +92,8 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
         };
         term.set_value(value);
     });
-    // Julia initializes only mapped slots, even when the header reserves
-    // unused trailing parameters for loading and SR. Drawing for those
-    // unused slots would shift the entire subsequent sampling trajectory.
-    let n_s = if data.orbital_terms.is_empty() {
-        n_slater(data)
-    } else {
-        data.orbital_terms
-            .iter()
-            .map(|t| t.idx + 1)
-            .max()
-            .unwrap_or(0)
-            .max(0) as usize
-    };
+    // C initializes every declared active slot, including unmapped slots.
+    let n_s = n_slater(data);
     let mut slater_values = vec![Complex64::new(0.0, 0.0); n_s];
 
     if !all_complex {
@@ -151,11 +134,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
         }
     }
 
-    for term in data.orbital_terms.iter_mut() {
-        if term.idx >= 0 && (term.idx as usize) < n_s {
-            term.value = slater_values[term.idx as usize];
-        }
-    }
+    data.slater_params = slater_values;
     if !data.para_qp_opt_trans.is_empty() {
         data.opt_trans.clone_from(&data.para_qp_opt_trans);
     }
@@ -247,16 +226,16 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bo
     }
 
     let mut xmax = 0.0;
-    for term in &data.orbital_terms {
-        let abs_val = super::julia_hypot::hypot(term.value.re, term.value.im);
+    for value in &data.slater_params {
+        let abs_val = super::julia_hypot::hypot(value.re, value.im);
         if abs_val > xmax {
             xmax = abs_val;
         }
     }
     if xmax > 0.0 {
         let ratio = D_AMP_MAX / xmax;
-        for term in data.orbital_terms.iter_mut() {
-            term.value *= ratio;
+        for value in &mut data.slater_params {
+            *value *= ratio;
         }
     }
 }
@@ -275,12 +254,12 @@ mod tests {
     fn data_with_orbitals(n: i64) -> ExpertModeData {
         let mut d = ExpertModeData::new();
         d.modpara.n_orbital_idx = n;
+        d.slater_params = vec![Complex64::new(0.0, 0.0); n as usize];
         d.orbital_terms = (0..n)
             .map(|idx| OrbitalTerm {
                 site1: idx,
                 site2: idx,
                 idx,
-                value: Complex64::new(0.0, 0.0),
                 is_complex: false,
                 sign: 1,
             })
@@ -298,17 +277,17 @@ mod tests {
         let mut probe = Sfmt19937Rng::new(1);
         for i in 0..4 {
             let expected = 2.0 * (probe.genrand_real2() - 0.5);
-            assert!((d.orbital_terms[i].value.re - expected).abs() < 1e-15);
+            assert!((d.slater_params[d.orbital_terms[i].idx as usize].re - expected).abs() < 1e-15);
         }
     }
 
     #[test]
     fn sync_modified_parameter_rescales_slater_block() {
         let mut d = data_with_orbitals(2);
-        d.orbital_terms[0].value = Complex64::new(8.0, 0.0);
-        d.orbital_terms[1].value = Complex64::new(-4.0, 0.0);
+        d.slater_params[d.orbital_terms[0].idx as usize] = Complex64::new(8.0, 0.0);
+        d.slater_params[d.orbital_terms[1].idx as usize] = Complex64::new(-4.0, 0.0);
         sync_modified_parameter(&mut d, true);
-        assert!((d.orbital_terms[0].value.re - 4.0).abs() < 1e-15);
-        assert!((d.orbital_terms[1].value.re - (-2.0)).abs() < 1e-15);
+        assert!((d.slater_params[d.orbital_terms[0].idx as usize].re - 4.0).abs() < 1e-15);
+        assert!((d.slater_params[d.orbital_terms[1].idx as usize].re - (-2.0)).abs() < 1e-15);
     }
 }

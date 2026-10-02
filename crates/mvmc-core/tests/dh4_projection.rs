@@ -192,12 +192,13 @@ fn check_dh_gauge_matches_julia_declared_flags_compensation_and_shift_order(comb
             }
             _ => panic!("unknown {name}"),
         }
+        d.modpara.n_orbital_idx = 2;
+        d.slater_params = vec![Complex64::new(2.0, 0.0), Complex64::new(0.0, 8.0)];
         d.orbital_terms = vec![
             OrbitalTerm {
                 site1: 0,
                 site2: 0,
                 idx: 0,
-                value: Complex64::new(2.0, 0.0),
                 is_complex: true,
                 sign: 1,
             },
@@ -205,7 +206,6 @@ fn check_dh_gauge_matches_julia_declared_flags_compensation_and_shift_order(comb
                 site1: 0,
                 site2: 1,
                 idx: 1,
-                value: Complex64::new(0.0, 8.0),
                 is_complex: true,
                 sign: 1,
             },
@@ -218,7 +218,11 @@ fn check_dh_gauge_matches_julia_declared_flags_compensation_and_shift_order(comb
             .chain(d.jastrow_terms.iter().map(|t| t.value))
             .chain(d.doublon_holon_2site_params.iter().copied())
             .chain(d.doublon_holon_4site_params.iter().copied())
-            .chain(d.orbital_terms.iter().map(|t| t.value));
+            .chain(
+                d.orbital_terms
+                    .iter()
+                    .map(|t| d.slater_params[t.idx as usize]),
+            );
         assert_eq!(
             values
                 .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
@@ -239,11 +243,12 @@ fn check_initial_and_fixed_loaders_apply_dh_triples_between_reserved_jastrow_and
 ) {
     let mut d = model_with_dh2(combined);
     d.modpara.n_orbital_idx = 3;
+    d.slater_params = vec![Complex64::new(99.0, 99.0); 3];
     d.orbital_terms = vec![OrbitalTerm {
         site1: 0,
         site2: 1,
         idx: 2,
-        value: Complex64::new(99.0, 99.0),
+
         is_complex: true,
         sign: 1,
     }];
@@ -271,7 +276,7 @@ fn check_initial_and_fixed_loaders_apply_dh_triples_between_reserved_jastrow_and
         );
     }
     assert_eq!(
-        d.orbital_terms[0].value,
+        d.slater_params[d.orbital_terms[0].idx as usize],
         Complex64::new((n - 1) as f64 / 8.0, -((n - 1) as f64) / 16.0)
     );
     assert!(read_initial_def(&mut d, &path).unwrap());

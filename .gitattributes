@@ -1,0 +1,2 @@
+# Preserve authoritative C excerpts byte for byte, including upstream trailing spaces.
+c_toolbox/*.inc whitespace=-blank-at-eol

@@ -12,6 +12,10 @@
 //!         -> ReadInputParameters -> SyncModifiedParameter -> InitQPWeight.
 
 #[cfg(test)]
+#[path = "../../../tests/support/reference_slater.rs"]
+mod reference_slater;
+
+#[cfg(test)]
 use std::fs;
 use std::path::Path;
 
@@ -465,10 +469,8 @@ pub fn get_all_complex_flag(data: &ExpertModeData) -> bool {
             .doublon_holon_2site_params
             .iter()
             .any(|value| value.im != 0.0)
-        || data
-            .orbital_terms
-            .iter()
-            .any(|term| term.is_complex || term.value.im != 0.0)
+        || data.orbital_terms.iter().any(|term| term.is_complex)
+        || data.slater_params.iter().any(|value| value.im != 0.0)
         || data
             .gutzwiller_terms
             .iter()
@@ -633,11 +635,11 @@ mod mode_tests {
         data.modpara.nmp_trans = 1;
         data.modpara.nvmc_sample = 1;
         data.modpara.n_orbital_idx = 1;
+        data.slater_params = vec![Complex64::new(1.0, 0.0)];
         data.orbital_terms.push(OrbitalTerm {
             site1: 0,
             site2: 1,
             idx: 0,
-            value: Complex64::new(1.0, 0.0),
             is_complex: false,
             sign: 1,
         });
@@ -674,7 +676,7 @@ mod mode_tests {
     #[test]
     fn imaginary_loaded_parameter_selects_complex_execution() {
         let mut data = data();
-        data.orbital_terms[0].value.im = 0.5;
+        data.slater_params[data.orbital_terms[0].idx as usize].im = 0.5;
         assert!(state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
     }
 
@@ -691,7 +693,7 @@ mod mode_tests {
         let mut state = state_from_data(&data);
         assert_eq!(state.slater_matrix.slater_elm.n_qp_full(), 0);
         assert_eq!(state.slater_matrix.slater_elm_real.n_qp_full(), 0);
-        let parameters = data.orbital_terms.clone();
+        let parameters = data.slater_params.clone();
         let mut rng = Sfmt19937Rng::new(1);
         let mut expected_rng = rng.clone();
         let dir = std::env::temp_dir().join(format!("mvmc-c-zero-count-{}", std::process::id()));
@@ -707,7 +709,7 @@ mod mode_tests {
         .unwrap_err();
         assert!(err.contains("NMPTrans"), "{err}");
         assert_eq!(data.modpara.nmp_trans, 0);
-        assert_eq!(data.orbital_terms, parameters);
+        assert_eq!(data.slater_params, parameters);
         for _ in 0..624 {
             assert_eq!(rng.gen_rand32(), expected_rng.gen_rand32());
         }
@@ -758,7 +760,11 @@ mod mode_tests {
             .unwrap();
             fs::remove_dir_all(output).unwrap();
             let words: Vec<_> = (0..624).map(|_| rng.gen_rand32()).collect();
-            let values: Vec<_> = data.orbital_terms.iter().map(|term| term.value).collect();
+            let values: Vec<_> = data
+                .orbital_terms
+                .iter()
+                .map(|term| data.slater_params[term.idx as usize])
+                .collect();
             (state, words, values)
         };
         let (general_state, general_words, general_values) = run(true);
@@ -779,7 +785,7 @@ mod mode_tests {
     #[test]
     fn explicit_zero_complex_flags_override_imaginary_values() {
         let mut data = data();
-        data.orbital_terms[0].value.im = 0.5;
+        data.slater_params[data.orbital_terms[0].idx as usize].im = 0.5;
         data.complex_flags = vec![0, 0];
         assert!(!state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
     }
@@ -1207,6 +1213,21 @@ fn accumulate_observables<const TIMED: bool>(
 mod callback_tests {
     use super::*;
 
+    use super::reference_slater::{declared_output, declared_slater_rows};
+
+    fn declared_history_bits(data: &ExpertModeData, historical: Vec<u64>) -> Vec<u64> {
+        let prefix = 2 * (data.gutzwiller_terms.len() + data.jastrow_terms.len());
+        let mapped: Vec<[u64; 2]> = historical[prefix..]
+            .chunks_exact(2)
+            .map(|row| [row[0], row[1]])
+            .collect();
+        historical[..prefix]
+            .iter()
+            .copied()
+            .chain(declared_slater_rows(data, &mapped).into_iter().flatten())
+            .collect()
+    }
+
     fn prepared(steps: i64) -> (ExpertModeData, VmcOptimizationState, Sfmt19937Rng) {
         prepared_case(steps, "heisenberg_chain_real")
     }
@@ -1260,7 +1281,7 @@ mod callback_tests {
         let dir = fresh_output_directory().unwrap();
         let mut records = Vec::new();
         let mut callback = |step, data: &mut ExpertModeData, energy, info| {
-            records.push((step, data.orbital_terms.clone(), energy, info));
+            records.push((step, data.slater_params.clone(), energy, info));
             Ok(())
         };
         vmc_para_opt(
@@ -1280,9 +1301,10 @@ mod callback_tests {
             [0, 1, 2]
         );
         assert!(records.iter().all(|record| record.3 == 0));
-        assert_eq!(records[2].1, data.orbital_terms);
+        assert_eq!(records[2].1, data.slater_params);
         assert_eq!(records[2].2, state.energy.etot);
         assert_eq!(data.orbital_terms, baseline.orbital_terms);
+        assert_eq!(data.slater_params, baseline.slater_params);
         assert_eq!(
             state.electron_config.ele_idx,
             base_state.electron_config.ele_idx
@@ -1306,7 +1328,7 @@ mod callback_tests {
     fn sampling_only_stops_after_one_output_and_before_sr_or_final_parameters() {
         let (mut data, mut state, mut rng) = prepared(3);
         data.modpara.dsr_opt_step_dt = f64::NAN; // Prove the solver is skipped.
-        let before = data.orbital_terms.clone();
+        let before = data.slater_params.clone();
         let dir = fresh_output_directory().unwrap();
         let mut calls = Vec::new();
         let mut callback = |step, _: &mut ExpertModeData, energy, info| {
@@ -1326,7 +1348,7 @@ mod callback_tests {
         )
         .unwrap();
         assert_eq!(calls, [(0, state.energy.etot, 0)]);
-        assert_eq!(before, data.orbital_terms);
+        assert_eq!(before, data.slater_params);
         assert_eq!(
             fs::read_to_string(dir.join("zvo_out.dat"))
                 .unwrap()
@@ -1417,12 +1439,12 @@ mod callback_tests {
                         .iter()
                         .map(|t| t.value)
                         .chain(data.jastrow_terms.iter().map(|t| t.value))
-                        .chain(data.orbital_terms.iter().map(|t| t.value))
+                        .chain(data.slater_params.iter().copied())
                         .collect::<Vec<_>>(),
                     energy,
                 ));
                 data.modpara.nsr_opt_itr_smp = 100; // Julia captures n_smp before the loop.
-                data.orbital_terms[0].value.re += 0.001;
+                data.slater_params[data.orbital_terms[0].idx as usize].re += 0.001;
                 Ok(())
             };
             vmc_para_opt(
@@ -1449,7 +1471,7 @@ mod callback_tests {
             }
             assert_ne!(state.opt_data.last().unwrap().parameters.last(), None);
             let snapshot = state.opt_data.last().unwrap().parameters.clone();
-            data.orbital_terms[0].value.re = 999.0;
+            data.slater_params[data.orbital_terms[0].idx as usize].re = 999.0;
             assert_eq!(state.opt_data.last().unwrap().parameters, snapshot);
             fs::remove_dir_all(dir).unwrap();
         }
@@ -1547,6 +1569,7 @@ mod callback_tests {
             assert_eq!(timer.elapsed_ns[12], 0);
             assert_eq!(timer.elapsed_ns[55], 0);
             assert_eq!(baseline.orbital_terms, data.orbital_terms);
+            assert_eq!(baseline.slater_params, data.slater_params);
             assert_eq!(base_state.electron_config, state.electron_config);
             assert_eq!(base_state.energy, state.energy);
             assert_eq!(base_state.opt_data, state.opt_data);
@@ -1587,7 +1610,7 @@ mod callback_tests {
     }
 
     #[test]
-    fn dh2_loaded_flags_parameters_rng_and_post_sync_history_match_original_source() {
+    fn dh2_loaded_values_and_rng_match_julia_with_history_in_c_declared_order() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh2");
         let bits = |text: &str| -> Vec<u64> {
             text.split_whitespace()
@@ -1617,7 +1640,11 @@ mod callback_tests {
             let values = data
                 .projection_parameters()
                 .into_iter()
-                .chain(data.orbital_terms.iter().map(|t| t.value))
+                .chain(
+                    data.orbital_terms
+                        .iter()
+                        .map(|t| data.slater_params[t.idx as usize]),
+                )
                 .collect();
             assert_eq!(
                 serialize(values),
@@ -1657,7 +1684,7 @@ mod callback_tests {
                 );
                 assert_eq!(
                     serialize(point.parameters.clone()),
-                    bits(lines.next().unwrap()),
+                    declared_history_bits(&data, bits(lines.next().unwrap())),
                     "{mode} history values"
                 );
             }
@@ -1667,7 +1694,7 @@ mod callback_tests {
     }
 
     #[test]
-    fn dh4_and_dh24_loaded_flags_parameters_rng_and_post_sync_history_match_original_source() {
+    fn dh4_loaded_values_and_rng_match_julia_with_history_in_c_declared_order() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh4");
         let bits = |text: &str| -> Vec<u64> {
             text.split_whitespace()
@@ -1704,7 +1731,11 @@ mod callback_tests {
             let values = data
                 .projection_parameters()
                 .into_iter()
-                .chain(data.orbital_terms.iter().map(|t| t.value))
+                .chain(
+                    data.orbital_terms
+                        .iter()
+                        .map(|t| data.slater_params[t.idx as usize]),
+                )
                 .collect();
             assert_eq!(
                 serialize(values),
@@ -1744,7 +1775,7 @@ mod callback_tests {
                 );
                 assert_eq!(
                     serialize(point.parameters.clone()),
-                    bits(lines.next().unwrap()),
+                    declared_history_bits(&data, bits(lines.next().unwrap())),
                     "{mode} history values"
                 );
             }
@@ -1874,7 +1905,11 @@ mod callback_tests {
             .chain(data.doublon_holon_2site_params.iter().copied())
             .chain(data.doublon_holon_4site_params.iter().copied())
             .chain(rbm_values)
-            .chain(data.orbital_terms.iter().map(|t| t.value))
+            .chain(
+                data.orbital_terms
+                    .iter()
+                    .map(|t| data.slater_params[t.idx as usize]),
+            )
             .chain(data.opt_trans.iter().copied());
         let actual: Vec<_> = values
             .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
@@ -2193,7 +2228,11 @@ mod callback_tests {
                 .chain(data.doublon_holon_2site_params.iter().copied())
                 .chain(data.doublon_holon_4site_params.iter().copied())
                 .chain(rbm_values)
-                .chain(data.orbital_terms.iter().map(|t| t.value))
+                .chain(
+                    data.orbital_terms
+                        .iter()
+                        .map(|t| data.slater_params[t.idx as usize]),
+                )
                 .chain(data.opt_trans.iter().copied());
             let actual: Vec<u64> = values
                 .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
@@ -2352,7 +2391,12 @@ mod callback_tests {
                     } else {
                         assert_eq!(
                             fs::read_to_string(dir.join(name)).unwrap(),
-                            fs::read_to_string(root.join(format!("step-{steps}-{name}"))).unwrap(),
+                            declared_output(
+                                &data,
+                                name,
+                                fs::read_to_string(root.join(format!("step-{steps}-{name}")))
+                                    .unwrap()
+                            ),
                             "{case} {steps} {name}"
                         );
                     }
@@ -2388,9 +2432,9 @@ mod callback_tests {
             assert_eq!(info.lines().count(), 4, "{case}");
             assert_eq!(state.opt_data.len(), 3);
             assert!(data
-                .orbital_terms
+                .slater_params
                 .iter()
-                .all(|t| t.value.re.is_finite() && t.value.im.is_finite()));
+                .all(|t| t.re.is_finite() && t.im.is_finite()));
             let mut hash = 0xcbf29ce484222325_u64;
             for _ in 0..624 {
                 hash = (hash ^ u64::from(rng.gen_rand32())).wrapping_mul(0x100000001b3);

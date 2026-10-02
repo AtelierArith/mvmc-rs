@@ -155,13 +155,7 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     let n_qp_full = weights.qp_full_weight.len().min(slater_matrix.pf_m.len());
     let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
     let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
-    let n_slater = if data.modpara.n_orbital_idx > 0 {
-        data.modpara.n_orbital_idx as usize
-    } else if let Some(max_idx) = data.orbital_terms.iter().map(|t| t.idx).max() {
-        (max_idx + 1).max(0) as usize
-    } else {
-        0
-    };
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
     if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
         return;
     }
@@ -346,13 +340,7 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
     };
     let n_qp_full = weights.qp_full_weight.len().min(slater_matrix.pf_m.len());
     let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
-    let n_slater = if data.modpara.n_orbital_idx > 0 {
-        data.modpara.n_orbital_idx as usize
-    } else if let Some(max_idx) = data.orbital_terms.iter().map(|t| t.idx).max() {
-        (max_idx + 1).max(0) as usize
-    } else {
-        0
-    };
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
     if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
         return;
     }

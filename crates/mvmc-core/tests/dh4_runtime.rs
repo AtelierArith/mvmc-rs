@@ -1,7 +1,10 @@
 //! DH4 production support and canonical runtime-mode selection.
+#[path = "../../../tests/support/reference_slater.rs"]
+mod reference_slater;
 use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::all_complex_flag};
 use num_complex::Complex64;
+use reference_slater::declared_output;
 use std::path::Path;
 
 #[test]
@@ -66,8 +69,10 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
         "dh24_cmp",
         "dh24_fsz",
     ] {
+        let namelist = root.join(format!("dh4/production_{case}/namelist.def"));
+        let data = parse_expert_mode_files(&namelist).unwrap();
         let result = mvmc_core::run_para_opt_from_namelist(
-            root.join(format!("dh4/production_{case}/namelist.def")),
+            &namelist,
             mvmc_core::RunConfig {
                 nsmp: Some(3),
                 ..mvmc_core::RunConfig::new(3, case.rsplit_once('_').unwrap().1)
@@ -85,7 +90,11 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
         ] {
             assert_eq!(
                 std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
-                std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap(),
+                declared_output(
+                    &data,
+                    name,
+                    std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap()
+                ),
                 "{case} {name}"
             );
         }

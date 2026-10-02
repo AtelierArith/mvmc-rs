@@ -387,8 +387,6 @@ pub struct OrbitalTerm {
     pub site2: i64,
     /// Orbital parameter index (0-based; capped at `n_orbital_idx - 1`).
     pub idx: i64,
-    /// Initial parameter value (typically 0 + 0i in `.def`).
-    pub value: Complex64,
     /// Complex-parameter flag.
     pub is_complex: bool,
     /// Optional sign (+1 / -1) from the optional fourth column.
@@ -835,6 +833,9 @@ pub struct ExpertModeData {
 
     /// Orbital (site1, site2, idx, sign) entries.
     pub orbital_terms: Vec<OrbitalTerm>,
+    /// C Slater parameter array in declared index order, including slots
+    /// without any spatial mapping. Orbital terms contain only mappings.
+    pub slater_params: Vec<Complex64>,
     /// Set to 1 once an `Orbital` or `OrbitalAntiParallel` file is parsed.
     pub i_flg_orbital_anti_parallel: i64,
     /// Set to 1 once an `OrbitalParallel` file is parsed.
@@ -931,6 +932,7 @@ impl Default for ExpertModeData {
             spin_rbm_phys_hidden_terms: Default::default(),
             general_rbm_phys_hidden_terms: Default::default(),
             orbital_terms: Default::default(),
+            slater_params: Default::default(),
             i_flg_orbital_anti_parallel: Default::default(),
             i_flg_orbital_parallel: Default::default(),
             i_flg_orbital_general: Default::default(),

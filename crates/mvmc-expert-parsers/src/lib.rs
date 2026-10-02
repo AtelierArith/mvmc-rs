@@ -170,6 +170,10 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
     }
     set_orbital_opt_flags(&mut data, &orbital_flags);
     set_opt_trans_opt_flags(&mut data);
+    data.slater_params.resize(
+        data.modpara.n_orbital_idx.max(0) as usize,
+        num_complex::Complex64::new(0.0, 0.0),
+    );
 
     // Mirror the post-parse pass from upstream:
     //   - If only `OrbitalAntiParallel` is parsed, the orbital mode stays

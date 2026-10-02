@@ -1,3 +1,4 @@
+mod common;
 use mvmc_expert_parsers::parse_expert_mode_files;
 use std::path::PathBuf;
 
@@ -145,7 +146,7 @@ fn nine_parsers_match_original_maps_headers_flags_errors_and_line_numbers() {
 }
 
 #[test]
-fn canonical_rbm_layout_initial_bits_and_rng_stream_include_empty_inactive_and_sparse_sections() {
+fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
     let fixture = std::fs::read_to_string(root().join("initial.txt")).unwrap();
     let mut lines = fixture.lines().filter(|l| !l.starts_with('#'));
     while let Some(header) = lines.next() {
@@ -193,7 +194,11 @@ fn canonical_rbm_layout_initial_bits_and_rng_stream_include_empty_inactive_and_s
         init_parameter(&mut data, &mut rng);
         let mut values = data.projection_parameters();
         data.visit_rbm_terms_mut(|_, t| values.push(t.value()));
-        values.extend(data.orbital_terms.iter().map(|t| t.value));
+        values.extend(
+            data.orbital_terms
+                .iter()
+                .map(|t| data.slater_params[t.idx as usize]),
+        );
         let bits: Vec<u64> = lines
             .next()
             .unwrap()
@@ -211,9 +216,14 @@ fn canonical_rbm_layout_initial_bits_and_rng_stream_include_empty_inactive_and_s
             .split_whitespace()
             .map(|s| s.parse().unwrap())
             .collect();
+        let expected_rng = if data.modpara.n_orbital_idx == 4 {
+            common::declared_slater_rng(&data)
+        } else {
+            state
+        };
         assert_eq!(
             (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),
-            state,
+            expected_rng,
             "{header}"
         );
     }

@@ -11,6 +11,7 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
     data.modpara.nelec = 1;
     data.modpara.nvmc_sample = 2;
     data.modpara.n_orbital_idx = 1;
+    data.slater_params = vec![C::new(10.0, 0.0)];
     data.modpara.nsrcg = 1;
     data.modpara.dsr_opt_red_cut = 0.0;
     data.modpara.dsr_opt_sta_del = 0.0;
@@ -19,7 +20,6 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
         site1: 0,
         site2: 0,
         idx: 0,
-        value: C::new(10.0, 0.0),
         is_complex: false,
         sign: 1,
     });
@@ -33,7 +33,10 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
         mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
         0
     );
-    assert_eq!(data.orbital_terms[0].value, C::new(9.5, 0.0));
+    assert_eq!(
+        data.slater_params[data.orbital_terms[0].idx as usize],
+        C::new(9.5, 0.0)
+    );
     let dir = std::env::temp_dir().join(format!("mvmc-cg-srinfo-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     data.modpara.c_data_file_head = "custom".into();
@@ -49,19 +52,19 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
         format!("#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n{row}{row}")
     );
     data.optimization_flags = vec![false, false];
-    let before = data.orbital_terms.clone();
+    let before = data.slater_params.clone();
     assert_eq!(
         mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
         0
     );
-    assert_eq!(data.orbital_terms, before);
+    assert_eq!(data.slater_params, before);
     data.optimization_flags = vec![true, false];
     state.sr_opt.sr_opt_ho_real[1] = f64::NAN;
     assert_eq!(
         mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
         1
     );
-    assert_eq!(data.orbital_terms, before);
+    assert_eq!(data.slater_params, before);
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -88,6 +91,7 @@ fn cg_complex_component_flags_and_variance_cut_preserve_fixed_components() {
         let mut data = ExpertModeData::new();
         data.modpara.nvmc_sample = 2;
         data.modpara.n_orbital_idx = 1;
+        data.slater_params = vec![C::new(10.0, 5.0)];
         data.modpara.dsr_opt_step_dt = 0.5;
         data.modpara.dsr_opt_sta_del = 0.0;
         data.modpara.dsr_opt_red_cut = cut;
@@ -96,7 +100,6 @@ fn cg_complex_component_flags_and_variance_cut_preserve_fixed_components() {
             site1: 0,
             site2: 0,
             idx: 0,
-            value: C::new(10.0, 5.0),
             is_complex: true,
             sign: 1,
         });
@@ -114,7 +117,7 @@ fn cg_complex_component_flags_and_variance_cut_preserve_fixed_components() {
             mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
             0
         );
-        assert!((data.orbital_terms[0].value - expected).norm() < 1e-14);
+        assert!((data.slater_params[data.orbital_terms[0].idx as usize] - expected).norm() < 1e-14);
     }
 }
 

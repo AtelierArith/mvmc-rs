@@ -108,7 +108,7 @@ fn strict_tables_neighbors_flags_errors_and_last_line_match_original_julia() {
 }
 
 #[test]
-fn final_layout_component_flags_projection_packing_initial_values_and_rng_match_julia() {
+fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
     let fixture = std::fs::read_to_string(root().join("initial.txt")).unwrap();
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     for name in [
@@ -168,12 +168,33 @@ fn final_layout_component_flags_projection_packing_initial_values_and_rng_match_
             .all(|v| *v == Complex64::new(0.0, 0.0)));
         assert_eq!(data.doublon_holon_2site_indices, definition);
         assert_eq!(data.optimization_flags, flags);
-        let values = data
-            .projection_parameters()
-            .into_iter()
-            .chain(data.orbital_terms.iter().map(|t| t.value));
+        let values = data.projection_parameters().into_iter().chain(
+            data.orbital_terms
+                .iter()
+                .map(|t| data.slater_params[t.idx as usize]),
+        );
         check_bits(values, lines.next().unwrap(), name);
-        let words = integers(lines.next().unwrap());
+        let historical_words = integers(lines.next().unwrap());
+        assert_eq!(historical_words.len(), 624);
+        // Historical sparse Julia records omit declared slot 3. Compare RNG
+        // with C at the full declared width, including the complete AP/P cases.
+        let c_rows: Vec<_> =
+            include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .collect();
+        let c_record = c_rows
+            .chunks_exact(4)
+            .find(|record| {
+                record[0]
+                    == format!(
+                        "{} {} 11272",
+                        data.modpara.n_orbital_idx,
+                        i64::from(all_complex_flag(&data))
+                    )
+            })
+            .unwrap();
+        let words = integers(c_record[3]);
         assert_eq!(words.len(), 624);
         assert_eq!(
             (0..624)

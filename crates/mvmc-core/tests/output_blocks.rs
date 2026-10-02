@@ -5,10 +5,17 @@ use num_complex::Complex64;
 use std::fs;
 
 #[test]
-fn block_files_preserve_julia_headers_enumeration_and_flat_snapshot() {
+fn block_files_keep_declared_slater_order_and_unmapped_slots_with_existing_headers() {
     let dir = std::env::temp_dir().join(format!("mvmc-block-output-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let mut data = ExpertModeData::new();
+    data.modpara.n_orbital_idx = 4;
+    data.slater_params = vec![
+        Complex64::new(-2.0, 1.5),
+        Complex64::new(1.5, -2.0),
+        Complex64::new(-2.0, 1.5),
+        Complex64::new(1.5, -2.0),
+    ];
     data.modpara.c_para_file_head = "custom".into();
     data.gutzwiller_terms.push(GutzwillerTerm {
         site: 9,
@@ -26,7 +33,6 @@ fn block_files_preserve_julia_headers_enumeration_and_flat_snapshot() {
             site1: 0,
             site2: 1,
             idx,
-            value: Complex64::new(1.5, -2.0),
             is_complex: true,
             sign: 1,
         });
@@ -39,7 +45,7 @@ fn block_files_preserve_julia_headers_enumeration_and_flat_snapshot() {
     };
     assert_eq!(
         fs::read_to_string(dir.join("custom_opt.dat")).unwrap(),
-        format!("{row}{reverse}{row}{row}")
+        format!("{row}{reverse}{reverse}{row}{reverse}{row}")
     );
     assert_eq!(
         fs::read_to_string(dir.join("custom_gutzwiller_opt.dat")).unwrap(),
@@ -51,7 +57,10 @@ fn block_files_preserve_julia_headers_enumeration_and_flat_snapshot() {
     );
     assert_eq!(
         fs::read_to_string(dir.join("custom_orbital_opt.dat")).unwrap(),
-        format!("{}0 {row}1 {row}", header("NOrbitalIdx", 2))
+        format!(
+            "{}0 {reverse}1 {row}2 {reverse}3 {row}",
+            header("NOrbitalIdx", 4)
+        )
     );
     fs::remove_dir_all(dir).unwrap();
 }

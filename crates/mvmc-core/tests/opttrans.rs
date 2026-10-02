@@ -74,7 +74,11 @@ fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str
 fn values(data: &mut ExpertModeData) -> Vec<Complex64> {
     let mut values = data.projection_parameters();
     data.visit_rbm_terms_mut(|_, term| values.push(term.value()));
-    values.extend(data.orbital_terms.iter().map(|t| t.value));
+    values.extend(
+        data.orbital_terms
+            .iter()
+            .map(|t| data.slater_params[t.idx as usize]),
+    );
     values.extend(data.opt_trans.iter().copied());
     values
 }
@@ -174,6 +178,18 @@ fn projection_model(mode: &str, leg: i64, boundary: i64, mapping: &str) -> Exper
     data.n_qp_opt_trans = 3;
     let dim = if mode == "fsz" { 8 } else { 4 };
     data.modpara.n_orbital_idx = dim * dim;
+    data.slater_params = (0..dim * dim)
+        .map(|idx| {
+            Complex64::new(
+                (idx + 1) as f64 / 16.0,
+                if mode == "real" {
+                    0.0
+                } else {
+                    (-idx) as f64 / 32.0
+                },
+            )
+        })
+        .collect();
     for i in 0..dim {
         for j in 0..dim {
             let idx = i * dim + j;
@@ -181,14 +197,6 @@ fn projection_model(mode: &str, leg: i64, boundary: i64, mapping: &str) -> Exper
                 site1: i,
                 site2: j,
                 idx,
-                value: Complex64::new(
-                    (idx + 1) as f64 / 16.0,
-                    if mode == "real" {
-                        0.0
-                    } else {
-                        (-idx) as f64 / 32.0
-                    },
-                ),
                 is_complex: mode != "real",
                 sign: if (i + j) % 2 == 1 { -1 } else { 1 },
             });
@@ -277,8 +285,8 @@ fn nonidentity_slater_matrices_and_derivatives_match_canonical_julia() {
                 fields[0] == "fsz",
             );
         } else {
-            for term in &mut data.orbital_terms {
-                term.value *= 0.5;
+            for value in &mut data.slater_params {
+                *value *= 0.5;
             }
             data.opt_trans = vec![
                 Complex64::new(0.5, 0.25),
@@ -367,7 +375,7 @@ fn opttrans_derivative_bounds_empty_inputs_and_partial_pfaffians_match_julia() {
 }
 
 #[test]
-fn slater_amplitude_cutoff_and_duplicate_values_match_canonical_julia() {
+fn historical_julia_slater_cutoff_matches_where_values_are_representable() {
     let text = std::fs::read_to_string(root().join("slater_threshold.txt")).unwrap();
     let mut lines = text.lines().filter(|l| !l.starts_with('#'));
     let mut cases = 0;
@@ -386,17 +394,13 @@ fn slater_amplitude_cutoff_and_duplicate_values_match_canonical_julia() {
             "zero" => Complex64::new(0.0, 0.0),
             _ => panic!("{header}"),
         };
-        for t in &mut data.orbital_terms {
-            t.value = value;
-        }
+        data.slater_params.fill(value);
+        // These historical Julia cases assign conflicting per-mapping values
+        // to one index. C has one coefficient per index and cannot represent
+        // that input; the dense-array lifecycle tests cover shared slots.
         if f[2].starts_with("duplicate") {
-            let mut term = data.orbital_terms[1];
-            term.value = if f[2] == "duplicate_zero" {
-                Complex64::new(0.0, 0.0)
-            } else {
-                Complex64::new(1e-15, 0.0)
-            };
-            data.orbital_terms.push(term);
+            lines.next().unwrap();
+            continue;
         }
         let mut state = mvmc_core::VmcOptimizationState::zeros(
             4,
@@ -420,5 +424,5 @@ fn slater_amplitude_cutoff_and_duplicate_values_match_canonical_julia() {
         );
         cases += 1;
     }
-    assert_eq!(cases, 54);
+    assert_eq!(cases, 42);
 }

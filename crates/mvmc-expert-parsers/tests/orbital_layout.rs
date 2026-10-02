@@ -46,15 +46,18 @@ fn sparse_ap_and_parallel_use_declared_widths_and_rng_consumption() {
         -0.2580129294656217,
         -0.6150796245783567,
     ]) {
-        assert_eq!(term.value.re.to_bits(), expected.to_bits());
-        assert_eq!(term.value.im, 0.0);
+        assert_eq!(
+            data.slater_params[term.idx as usize].re.to_bits(),
+            expected.to_bits()
+        );
+        assert_eq!(data.slater_params[term.idx as usize].im, 0.0);
     }
-    // Julia initializes max(mapped_idx)+1 slots, not all declared slots.
-    for _ in 0..9 {
+    // C initializes all thirteen declared active slots.
+    for _ in 0..13 {
         probe.genrand_real2();
     }
-    assert_eq!(rng.gen_rand32(), 3_397_707_788);
-    assert_eq!(probe.gen_rand32(), 3_397_707_788);
+    assert_eq!(rng.gen_rand32(), 1_738_325_211);
+    assert_eq!(probe.gen_rand32(), 1_738_325_211);
     for _ in 0..624 {
         assert_eq!(rng.gen_rand32(), probe.gen_rand32());
     }

@@ -89,6 +89,7 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
     init_parameter(&mut plain, &mut plain_rng);
     assert_eq!(data.inter_all_terms, original);
     assert_eq!(data.orbital_terms, plain.orbital_terms);
+    assert_eq!(data.slater_params, plain.slater_params);
     let bits: Vec<u64> = lines
         .next()
         .unwrap()
@@ -98,7 +99,12 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
     let actual: Vec<u64> = data
         .orbital_terms
         .iter()
-        .flat_map(|t| [t.value.re.to_bits(), t.value.im.to_bits()])
+        .flat_map(|t| {
+            [
+                data.slater_params[t.idx as usize].re.to_bits(),
+                data.slater_params[t.idx as usize].im.to_bits(),
+            ]
+        })
         .collect();
     assert_eq!(actual, bits);
     let words: Vec<u32> = lines
