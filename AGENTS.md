@@ -7,7 +7,8 @@ This repository is a Rust port of mVMC organized as a Cargo workspace. Core crat
 ## Build, Test, and Development Commands
 
 - `cargo check --workspace`: type-check the full workspace.
-- `cargo nextest run --workspace`: run all normal Rust unit and integration tests.
+- `cargo nextest run -p <crate> -E 'test(<name>)'`: run short targeted development tests.
+- `cargo nextest run --workspace --cargo-profile test-fast`: run all Rust unit and integration tests with optimized kernels and development checks.
 - `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`: test optimized PfaPack backends.
 - `cargo test --workspace --doc`: run documentation tests separately.
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint all workspace targets.
@@ -28,7 +29,9 @@ This Rust crate and its workspace are under active development. Backward compati
 
 Use Rust's built-in test framework plus crate-local integration tests. Golden and parity tests compare against C/reference fixtures, using Julia fixtures where they agree with C; keep tolerances explicit near assertions. Name tests by behavior, for example `pfaffian_matches_julia_fixture` or `rejects_invalid_header`. For performance-sensitive changes, run both correctness tests and the relevant benchmark variant.
 
-Use `cargo nextest run` for development unit and integration test runs, including targeted TDD checks and full-workspace verification. Preserve requested features, profiles and lock-file constraints; use `--no-fail-fast --retries 0` when collecting all failures. Run documentation tests separately with `cargo test --workspace --doc`, because nextest does not run doctests. Compiler caching remains configured through kache.
+Use `cargo nextest run` for development unit and integration test runs. Use `--cargo-profile test-fast` for full-workspace verification and long numerical regressions; reserve the normal profile for short targeted TDD checks instead of running the full suite unoptimized. Preserve requested features, profiles and lock-file constraints; use `--no-fail-fast --retries 0` when collecting all failures. Run documentation tests separately with `cargo test --workspace --doc`, because nextest does not run doctests. Compiler caching remains configured through kache.
+
+The normal development/test profiles omit debug information and strip symbols. Use `test-fast` for long numerical regressions; it retains debug assertions and overflow checks while avoiding release LTO. Keep each checkout's target directory separate and use kache for cross-checkout cache reuse. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for measurements and environment overrides when debugger symbols are needed.
 
 ### C Reference Toolbox
 
