@@ -427,6 +427,28 @@ pub struct GreenTwoTerm {
     pub spin4: Spin,
 }
 
+/// Factored two-body Green-function term (`greentwoex.def`). The second
+/// one-body factor is stored in C's canonical order `(x6, x7, x4, x5)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GreenTwoExTerm {
+    /// First factor creation site.
+    pub site1: i64,
+    /// First factor creation spin.
+    pub spin1: Spin,
+    /// First factor annihilation site.
+    pub site2: i64,
+    /// First factor annihilation spin.
+    pub spin2: Spin,
+    /// Second factor creation site.
+    pub site3: i64,
+    /// Second factor creation spin.
+    pub spin3: Spin,
+    /// Second factor annihilation site.
+    pub site4: i64,
+    /// Second factor annihilation spin.
+    pub spin4: Spin,
+}
+
 /// One `qptransidx.def` entry: the per-translation `ParaQPTrans` weight
 /// plus its (`origin -> translated_site`, `sign`) lookup table.
 #[derive(Debug, Clone, PartialEq)]
@@ -854,6 +876,8 @@ pub struct ExpertModeData {
     pub green_one_terms: Vec<GreenOneTerm>,
     /// Green-function measurements (two body).
     pub green_two_terms: Vec<GreenTwoTerm>,
+    /// Factored two-body Green measurements, in canonical C pair order.
+    pub green_two_ex_terms: Vec<GreenTwoExTerm>,
 
     /// `qptransidx.def` payload.
     pub qp_trans_entries: Vec<QPTransEntry>,
@@ -949,6 +973,7 @@ impl Default for ExpertModeData {
             n_orbital_anti_parallel: Default::default(),
             green_one_terms: Default::default(),
             green_two_terms: Default::default(),
+            green_two_ex_terms: Default::default(),
             qp_trans_entries: Default::default(),
             n_qp_trans: Default::default(),
             para_qp_trans: Default::default(),

@@ -5,7 +5,7 @@
 use std::io;
 use std::path::Path;
 
-use crate::types::{GreenOneTerm, GreenTwoTerm, Spin};
+use crate::types::{GreenOneTerm, GreenTwoExTerm, GreenTwoTerm, Spin};
 use crate::utils::file::{clean_line, read_def_file, safe_parse_int, split_def_line};
 
 const IGNORE_LINES_IN_DEF: usize = 5;
@@ -118,4 +118,101 @@ pub fn parse_green_two_content(content: &str) -> Vec<GreenTwoTerm> {
         });
     }
     out
+}
+
+/// Parse a strict `greentwoex.def` file, including its declared row count.
+pub fn parse_green_two_ex_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<GreenTwoExTerm>> {
+    let content = read_def_file(path)?;
+    parse_green_two_ex_content(&content)
+        .map_err(|message| io::Error::new(io::ErrorKind::InvalidData, message))
+}
+
+/// Parse `greentwoex.def` content using C's exact eight-column and count rules.
+pub fn parse_green_two_ex_content(content: &str) -> Result<Vec<GreenTwoExTerm>, String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let header = lines
+        .get(1)
+        .map(|line| split_def_line(clean_line(line)))
+        .unwrap_or_default();
+    let count = header
+        .get(1)
+        .and_then(|value| value.parse::<usize>().ok())
+        .ok_or_else(|| {
+            "greentwoex.def: missing or invalid header count on line 2 (expected `<keyword> <count>`)".to_owned()
+        })?;
+    let mut terms = Vec::with_capacity(count);
+    let mut errors = Vec::new();
+    for (line_index, line) in lines.iter().enumerate().skip(5) {
+        let cleaned = clean_line(line);
+        if cleaned.is_empty() {
+            continue;
+        }
+        let tokens = split_def_line(cleaned);
+        if tokens.len() != 8 {
+            errors.push(format!(
+                "Line {}: expected exactly 8 integer fields, got {}",
+                line_index + 1,
+                tokens.len()
+            ));
+            continue;
+        }
+        let mut values = [0_i64; 8];
+        let mut valid = true;
+        for (index, token) in tokens.iter().enumerate() {
+            match token.parse::<i64>() {
+                Ok(value) => values[index] = value,
+                Err(_) => {
+                    errors.push(format!(
+                        "Line {}: field {} is not an integer: '{token}'",
+                        line_index + 1,
+                        index + 1
+                    ));
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if !valid {
+            continue;
+        }
+        let sites = [values[0], values[2], values[6], values[4]];
+        let spins = [values[1], values[3], values[7], values[5]];
+        if sites.iter().any(|site| *site < 0) {
+            errors.push(format!(
+                "Line {}: negative site index in {:?}",
+                line_index + 1,
+                values
+            ));
+            continue;
+        }
+        if spins.iter().any(|spin| !matches!(*spin, 0 | 1)) {
+            errors.push(format!(
+                "Line {}: spin must be 0 or 1 in {:?}",
+                line_index + 1,
+                values
+            ));
+            continue;
+        }
+        terms.push(GreenTwoExTerm {
+            site1: values[0],
+            spin1: Spin::from_code(values[1]).expect("validated spin"),
+            site2: values[2],
+            spin2: Spin::from_code(values[3]).expect("validated spin"),
+            site3: values[6],
+            spin3: Spin::from_code(values[7]).expect("validated spin"),
+            site4: values[4],
+            spin4: Spin::from_code(values[5]).expect("validated spin"),
+        });
+    }
+    if errors.is_empty() && terms.len() != count {
+        errors.push(format!(
+            "greentwoex.def: header count {count} does not match parsed rows {}",
+            terms.len()
+        ));
+    }
+    if errors.is_empty() {
+        Ok(terms)
+    } else {
+        Err(errors.join("; "))
+    }
 }
