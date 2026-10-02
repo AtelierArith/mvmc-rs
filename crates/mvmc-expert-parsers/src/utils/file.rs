@@ -39,7 +39,7 @@ pub(crate) fn julia_parse_int(token: &str) -> Option<i64> {
 /// Julia Float64 tryparse uses the C decimal/hexadecimal conversion. It rejects
 /// overflow and nonzero literals rounded to zero, but accepts finite subnormals
 /// and explicit nonfinite tokens (which strict callers reject separately).
-pub(crate) fn julia_parse_float(token: &str) -> Option<f64> {
+pub fn julia_parse_float(token: &str) -> Option<f64> {
     extern "C" {
         fn strtod(input: *const c_char, end: *mut *mut c_char) -> f64;
     }

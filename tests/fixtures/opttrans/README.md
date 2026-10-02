@@ -10,6 +10,9 @@ ILP64 and one BLAS thread.
 julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_parser_parity.jl --write
 julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_parser_parity.jl
 cargo test -p mvmc-expert-parsers --test opttrans
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_load_weights_parity.jl --write
+julia +1.13.1 --project=extern/Julia-mVMC scripts/check_opttrans_load_weights_parity.jl
+cargo test -p mvmc-core --test opttrans --test initial_params
 ```
 
 The source script also runs the canonical `test_read_input_parameters.jl`
@@ -48,7 +51,24 @@ The declared header keyword and `ComplexType` line do not alter this parser.
 Real optimization components are always enabled and imaginary components
 always disabled by the final OptTrans flag pass.
 
-This milestone validates the input and initialization contracts. Production
-OptTrans execution remains gated by issue #27 until full-record loading,
-nonidentity Slater projections, QP-weight refresh, derivatives, SR and
-normalization have passed deterministic serial Julia parity.
+`loaders.txt` covers six models and eleven records through both recoverable
+initial loading and strict optimized loading (132 cases). Models include
+OptTrans-only and all-factor layouts, no active OptTrans, and runtime widths
+that differ from the declared sector count. All diagnostics and gradient
+fields are validated before mutation. Exact results and errors are compared,
+including hexadecimal values, range errors, extra whole triples when active
+versus inactive, and preservation of all preceding factors on rejection.
+The full record places OptTrans after Slater and preserves definition weights.
+
+`weights.txt` covers four quadrature sizes, three total-spin projections,
+both translation boundary signs, four initial parameter vectors and six
+initialization/update phases (576 cases). Every complex component bit in the
+seven weight/trigonometric arrays is compared. Data-level initialization and
+refresh include active OptTrans sectors; updates replace, grow, shrink and
+clear the runtime vector and rebuild full weights from fixed weights.
+The source script also runs canonical loader and QP-weight unit tests.
+
+These milestones validate inputs, initialization, full-record loading and
+QP-weight refresh. Production OptTrans execution remains gated by issue #27
+until nonidentity Slater projections, derivatives, SR, normalization and
+deterministic serial trajectories have passed Julia parity.

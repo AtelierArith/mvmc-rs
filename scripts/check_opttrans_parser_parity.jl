@@ -28,7 +28,7 @@ end
     include(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCExpertModeParsers.jl", "test", "test_read_input_parameters.jl"))
     io = IOBuffer()
     println(io, "# Julia $VERSION; $(BLAS.get_config()); threads=1; Julia-mVMC 8bb1b9e; parser c2ea432")
-    cases = sort(filter(n -> endswith(n, ".def") && !(startswith(n, "namelist_") || startswith(n, "overlay") || n in ("layout.def", "modpara.def", "qptrans.def")), readdir(root)))
+    cases = sort(filter(n -> endswith(n, ".def") && !(startswith(n, "namelist_") || startswith(n, "overlay") || startswith(n, "load_") || n in ("layout.def", "modpara.def", "qptrans.def")), readdir(root)))
     for name in cases, nsite in (0, 2), nmp in (-1, 0, 1)
         d = ExpertModeData()
         d.modpara = ModParaParameters(nsite=2, nmp_trans=-1)
