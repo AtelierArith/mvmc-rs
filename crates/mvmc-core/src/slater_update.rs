@@ -33,6 +33,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
         .as_ref()
         .expect("orbital_sgn_matrix populated alongside orbital_idx_matrix");
     let n_orb = data.modpara.n_orbital_idx.max(0) as usize;
+    let all_complex = crate::run::get_all_complex_flag(data);
     if n_orb == 0 {
         return;
     }
@@ -79,22 +80,44 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
                 let rsi1 = ri + n_site;
                 let rsj0 = rj;
                 let rsj1 = rj + n_site;
-                state
-                    .slater_matrix
-                    .slater_elm
-                    .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
-                state
-                    .slater_matrix
-                    .slater_elm
-                    .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
-                state
-                    .slater_matrix
-                    .slater_elm
-                    .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
-                state
-                    .slater_matrix
-                    .slater_elm
-                    .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
+                if all_complex {
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
+                } else {
+                    let cs = cs.re;
+                    let cc = cc.re;
+                    let ss = ss.re;
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
+                    state
+                        .slater_matrix
+                        .slater_elm
+                        .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
+                }
             }
         }
     }
@@ -205,6 +228,41 @@ pub(crate) fn build_orbital_idx_sgn_matrices_fsz(
 mod tests {
     use super::*;
     use mvmc_expert_parsers::OrbitalTerm;
+
+    #[test]
+    fn real_normal_slater_uses_c_real_spgl_weights() {
+        use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
+
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.modpara.complex_flag = 0;
+        data.modpara.nmp_trans = 1;
+        data.modpara.nsp_gauss_leg = 1;
+        data.modpara.n_orbital_idx = 1;
+        data.slater_params = vec![Complex64::new(0.25, 0.0)];
+        data.orbital_terms = vec![OrbitalTerm {
+            site1: 0,
+            site2: 1,
+            idx: 0,
+            is_complex: false,
+            sign: 1,
+        }];
+        data.ensure_orbital_idx_matrix();
+        init_qp_weight(&mut data);
+        let weights = data.qp_weights.as_mut().unwrap();
+        weights.spgl_cos_sin = vec![Complex64::new(0.25, 9.0)];
+        weights.spgl_cos_cos = vec![Complex64::new(0.75, -7.0)];
+        weights.spgl_sin_sin = vec![Complex64::new(0.5, 5.0)];
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
+        update_slater_elm(&mut data, &mut state);
+        assert!(state
+            .slater_matrix
+            .slater_elm
+            .as_slice()
+            .iter()
+            .all(|value| value.im == 0.0));
+    }
 
     #[test]
     fn general_slater_and_derivatives_match_julia_with_sparse_and_cached_layouts() {
