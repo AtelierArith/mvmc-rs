@@ -238,6 +238,8 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         }
     }
 
+    data.canonicalize_green_two_ex();
+
     Ok(data)
 }
 

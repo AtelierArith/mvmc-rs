@@ -82,6 +82,27 @@ pub fn clear_phys_quantity(state: &mut VmcOptimizationState) {
     }
 }
 
+/// Accumulate one sampled TwoBodyGEx product in canonical term order.
+///
+/// Julia forms the product from the same sample and conjugates the second
+/// one-body factor before adding it to the weighted accumulator.
+pub fn accumulate_two_body_gex_sample(
+    accumulator: &mut [Complex64],
+    one_body_values: &[Complex64],
+    canonical_indices: &[(usize, usize)],
+    weight: Complex64,
+) {
+    for (slot, &(first, second)) in canonical_indices.iter().enumerate() {
+        if slot >= accumulator.len()
+            || first >= one_body_values.len()
+            || second >= one_body_values.len()
+        {
+            continue;
+        }
+        accumulator[slot] += weight * one_body_values[first] * one_body_values[second].conj();
+    }
+}
+
 /// `calculate_ip_real(pf_m_real, qp_start, qp_end, data)` mirror.
 pub fn calculate_ip_real(
     pf_m_real: &[f64],
@@ -1724,6 +1745,26 @@ mod tests {
         }
 
         assert_eq!(weighted_data, expected.as_slice());
+    }
+
+    #[test]
+    fn two_body_gex_accumulates_same_sample_conjugated_products() {
+        let values = [
+            Complex64::new(1.0, 2.0),
+            Complex64::new(-0.5, 0.25),
+            Complex64::new(2.0, -1.0),
+        ];
+        let mut accumulator = vec![Complex64::new(0.0, 0.0); 2];
+        accumulate_two_body_gex_sample(
+            &mut accumulator,
+            &values,
+            &[(0, 1), (2, 0)],
+            Complex64::new(0.5, -0.25),
+        );
+        assert_eq!(
+            accumulator,
+            vec![Complex64::new(-0.3125, -0.625), Complex64::new(-1.25, -2.5),]
+        );
     }
 }
 

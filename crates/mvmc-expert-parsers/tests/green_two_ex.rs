@@ -47,3 +47,28 @@ fn rejects_negative_sites_and_invalid_spins() {
         .unwrap_err()
         .contains("spin must be 0 or 1"));
 }
+
+#[test]
+fn canonicalization_preserves_existing_duplicates_and_appends_missing_terms() {
+    let first = mvmc_expert_parsers::GreenOneTerm {
+        site1: 1,
+        spin1: Spin::Up,
+        site2: 2,
+        spin2: Spin::Down,
+    };
+    let mut data = mvmc_expert_parsers::ExpertModeData::new();
+    data.green_one_terms = vec![first, first];
+    data.green_two_ex_terms = vec![GreenTwoExTerm {
+        site1: 1,
+        spin1: Spin::Up,
+        site2: 2,
+        spin2: Spin::Down,
+        site3: 4,
+        spin3: Spin::Down,
+        site4: 3,
+        spin4: Spin::Up,
+    }];
+    data.canonicalize_green_two_ex();
+    assert_eq!(data.green_one_terms.len(), 3);
+    assert_eq!(data.green_two_ex_indices, vec![(0, 2)]);
+}
