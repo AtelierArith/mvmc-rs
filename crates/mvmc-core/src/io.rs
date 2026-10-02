@@ -244,7 +244,32 @@ pub fn output_phys_data(
             )
         })
         .collect();
-    write_rows("cisajscktalt", direct_rows)
+    write_rows("cisajscktalt", direct_rows)?;
+
+    if data.modpara.lanczos_mode > 0 {
+        let qqqq_path = output_path(&format!("{head}_ls_qqqq_{index:03}.dat"), output_dir)?;
+        let mut qqqq_file = File::create(qqqq_path)?;
+        for value in &phys.phys_lanczos_qqqq {
+            write!(qqqq_file, "{}  ", format_c_double(value.re))?;
+        }
+        writeln!(qqqq_file)?;
+
+        let (energy, variance, alpha) =
+            match crate::lanczos::lanczos_energy(&phys.phys_lanczos_qqqq) {
+                Ok(result) => (result.energy, result.variance, result.alpha),
+                Err(_) => (f64::NAN, f64::NAN, f64::NAN),
+            };
+        let ls_path = output_path(&format!("{head}_ls_out_{index:03}.dat"), output_dir)?;
+        let mut ls_file = File::create(ls_path)?;
+        writeln!(
+            ls_file,
+            "{}  {}  {}",
+            format_c_double(energy),
+            format_c_double(variance),
+            format_c_double(alpha)
+        )?;
+    }
+    Ok(())
 }
 
 /// Write the final `zqp_opt.dat` snapshot.
@@ -391,6 +416,7 @@ mod tests {
         let mut data = ExpertModeData::new();
         data.modpara.c_data_file_head = "zvo".to_string();
         data.modpara.n_data_idx_start = 7;
+        data.modpara.lanczos_mode = 1;
         data.green_one_terms.push(GreenOneTerm {
             site1: 0,
             spin1: Spin::Up,
@@ -422,6 +448,11 @@ mod tests {
         phys.phys_cis_ajs[0] = Complex64::new(1.5, -2.0);
         phys.phys_cis_ajs_ckt_alt[0] = Complex64::new(3.0, 4.0);
         phys.phys_cis_ajs_ckt_alt_dc[0] = Complex64::new(-5.0, 6.0);
+        phys.phys_lanczos_qqqq[2] = Complex64::new(1.0, 0.0);
+        phys.phys_lanczos_qqqq[3] = Complex64::new(2.0, 0.0);
+        phys.phys_lanczos_qqqq[10] = Complex64::new(3.0, 0.0);
+        phys.phys_lanczos_qqqq[11] = Complex64::new(4.0, 0.0);
+        phys.phys_lanczos_qqqq[15] = Complex64::new(5.0, 0.0);
         state.phys_quantities = Some(phys);
         let output_dir =
             std::env::temp_dir().join(format!("mvmc-phys-output-{}", std::process::id()));
@@ -432,6 +463,10 @@ mod tests {
         let ex = fs::read_to_string(output_dir.join("zvo_cisajscktaltex_009.dat")).unwrap();
         assert!(ex.contains(" 3.000000000000000000e+00  4.000000000000000000e+00"));
         assert!(output_dir.join("zvo_cisajscktalt_009.dat").exists());
+        let qqqq = fs::read_to_string(output_dir.join("zvo_ls_qqqq_009.dat")).unwrap();
+        assert!(qqqq.split_whitespace().count() == 16);
+        let ls = fs::read_to_string(output_dir.join("zvo_ls_out_009.dat")).unwrap();
+        assert_eq!(ls.split_whitespace().count(), 3);
         let _ = fs::remove_dir_all(output_dir);
     }
 }
