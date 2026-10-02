@@ -469,11 +469,14 @@ fn output_parameter_block(
     }
     let path = output_path(&format!("{head}_{suffix}_opt.dat"), output_dir)?;
     let mut file = File::create(path)?;
-    writeln!(file, "======================")?;
+    // C/Julia emit a 31-character separator for every indexed parameter
+    // block. Keep this width explicit so byte-level output parity does not
+    // depend on the label length.
+    const PARAMETER_BLOCK_SEPARATOR: &str = "===============================";
+    writeln!(file, "{PARAMETER_BLOCK_SEPARATOR}")?;
     writeln!(file, "{label} {}", values.len())?;
-    writeln!(file, "======================")?;
-    writeln!(file, "======================")?;
-    writeln!(file, "======================")?;
+    writeln!(file, "{PARAMETER_BLOCK_SEPARATOR}")?;
+    writeln!(file, "{PARAMETER_BLOCK_SEPARATOR}")?;
     for (index, value) in values.enumerate() {
         writeln!(
             file,
