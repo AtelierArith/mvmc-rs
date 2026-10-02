@@ -7,7 +7,7 @@
 
 use num_complex::Complex64;
 
-use ::mpi::topology::{Color, Key};
+use ::mpi::topology::Color;
 use ::mpi::traits::*;
 
 use crate::parallel::{assign_group, GroupAssignment, LaunchContext};
@@ -128,12 +128,12 @@ impl MpiContext {
                 assignment.group
             )
         })?);
-        let key = Key::with_value(i32::try_from(assignment.local_rank).map_err(|_| {
+        let key = i32::try_from(assignment.local_rank).map_err(|_| {
             format!(
                 "MPI local rank {} does not fit in an MPI key",
                 assignment.local_rank
             )
-        })?);
+        })?;
         let communicator = self
             .world
             .split_by_color_with_key(color, key)
@@ -149,12 +149,12 @@ impl MpiContext {
                     assignment.local_rank
                 )
             })?);
-        let cross_key = Key::with_value(i32::try_from(assignment.group).map_err(|_| {
+        let cross_key = i32::try_from(assignment.group).map_err(|_| {
             format!(
                 "MPI group index {} does not fit in an MPI key",
                 assignment.group
             )
-        })?);
+        })?;
         let cross_communicator = self
             .world
             .split_by_color_with_key(cross_color, cross_key)
