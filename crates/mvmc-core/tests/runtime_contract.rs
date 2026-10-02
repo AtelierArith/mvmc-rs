@@ -62,6 +62,25 @@ fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
 }
 
 #[test]
+fn rejects_duplicate_mode2_one_body_entries_without_factored_green() {
+    let mut data = ExpertModeData::new();
+    data.modpara.lanczos_mode = 2;
+    data.modpara.nmp_trans = 1;
+    let term = mvmc_expert_parsers::GreenOneTerm {
+        site1: 0,
+        spin1: mvmc_expert_parsers::Spin::Up,
+        site2: 1,
+        spin2: mvmc_expert_parsers::Spin::Up,
+    };
+    data.green_one_terms = vec![term, term];
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(
+        error.contains("duplicate") && error.contains("issue #32"),
+        "{error}"
+    );
+}
+
+#[test]
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in ["InterAll", "TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
