@@ -105,10 +105,6 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
     let use_fsz = i_flg_general != 0;
-    if use_fsz && !all_complex {
-        return Err("real FSZ is not implemented yet (issue #43)".into());
-    }
-
     timer.start(2);
     for step in 0..n_steps {
         timer.start(20);
@@ -122,12 +118,28 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.stop(20);
         timer.start(3);
         // 2. Sampler.
-        if use_fsz {
-            crate::sampling::driver::vmc_make_sample_fsz_timed(data, state, rng, timer)
+        let _sample_stats: Result<crate::sampling::SampleStats, String> = if use_fsz {
+            if all_complex {
+                Ok(crate::sampling::driver::vmc_make_sample_fsz_timed(
+                    data, state, rng, timer,
+                ))
+            } else {
+                crate::sampling::vmc_make_sample_fsz_real(data, state, rng)
+                    .map_err(|error| error.to_string())?;
+                sync_real_fsz_shadow(state);
+                Ok(crate::sampling::SampleStats {
+                    accepted: state.electron_config.counter[1] as usize,
+                    saved: data.modpara.nvmc_sample.max(0) as usize,
+                })
+            }
         } else if !all_complex {
-            crate::sampling::driver::vmc_make_sample_real_timed(data, state, rng, timer)
+            Ok(crate::sampling::driver::vmc_make_sample_real_timed(
+                data, state, rng, timer,
+            ))
         } else {
-            crate::sampling::driver::vmc_make_sample_timed(data, state, rng, timer)
+            Ok(crate::sampling::driver::vmc_make_sample_timed(
+                data, state, rng, timer,
+            ))
         };
         timer.stop(3);
 
@@ -586,6 +598,36 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
         all_complex,
         data.i_flg_orbital_general != 0,
     )
+}
+
+/// Make real-FSZ sampling results visible to the shared observable kernels.
+fn sync_real_fsz_shadow(state: &mut VmcOptimizationState) {
+    for (dst, src) in state
+        .slater_matrix
+        .slater_elm
+        .as_mut_slice()
+        .iter_mut()
+        .zip(state.slater_matrix.slater_elm_real.as_slice())
+    {
+        *dst = Complex64::new(*src, 0.0);
+    }
+    for (dst, src) in state
+        .slater_matrix
+        .inv_m
+        .as_mut_slice()
+        .iter_mut()
+        .zip(state.slater_matrix.inv_m_real.as_slice())
+    {
+        *dst = Complex64::new(*src, 0.0);
+    }
+    for (dst, src) in state
+        .slater_matrix
+        .pf_m
+        .iter_mut()
+        .zip(state.slater_matrix.pf_m_real.iter())
+    {
+        *dst = Complex64::new(*src, 0.0);
+    }
 }
 
 #[cfg(test)]

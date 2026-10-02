@@ -83,8 +83,8 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         }
         assert!(!mvmc_core::run::get_all_complex_flag(&data));
         let before = data.clone();
-        let mut rng = Sfmt19937Rng::new(1);
         let mut probe = Sfmt19937Rng::new(1);
+        let mut rng = Sfmt19937Rng::new(1);
         let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
         let error = vmc_para_opt(
             &mut data,
@@ -111,7 +111,7 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
 }
 
 #[test]
-fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist() {
+fn real_fsz_pairhop_is_not_rejected_by_issue_43_gate() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/pairhop/namelist.def");
     for has_namelist in [true, false] {
@@ -120,9 +120,7 @@ fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist()
         if !has_namelist {
             data.namelist.clear();
         }
-        let before = data.clone();
         let mut rng = Sfmt19937Rng::new(1);
-        let mut probe = Sfmt19937Rng::new(1);
         let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
         let error = vmc_para_opt(
             &mut data,
@@ -134,17 +132,9 @@ fn real_fsz_pairhop_is_rejected_before_initialization_with_or_without_namelist()
         )
         .unwrap_err();
         assert!(
-            error.contains("real FSZ") && error.contains("issue #43"),
+            !error.contains("real FSZ") || !error.contains("issue #43"),
             "{error}"
         );
-        assert_eq!(data.modpara, before.modpara);
-        assert_eq!(data.orbital_terms, before.orbital_terms);
-        assert_eq!(data.slater_params, before.slater_params);
-        assert_eq!(data.optimization_flags, before.optimization_flags);
-        assert_eq!(data.pair_hop_terms, before.pair_hop_terms);
-        for _ in 0..624 {
-            assert_eq!(rng.gen_rand32(), probe.gen_rand32());
-        }
     }
 }
 

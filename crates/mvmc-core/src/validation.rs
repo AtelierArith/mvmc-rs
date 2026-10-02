@@ -4,7 +4,6 @@
 //! restrictions name the porting issue and must be removed when its full
 //! production path passes deterministic Julia parity checks.
 
-use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
 use mvmc_expert_parsers::{ExpertModeData, ModParaParameters};
 
 /// Validate globally unsupported ModPara settings without mutating data.
@@ -150,12 +149,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             "incomplete Expert input: {}",
             data.input_errors.join("; ")
         ));
-    }
-    if data.i_flg_orbital_general != 0
-        && !crate::run::get_all_complex_flag(data)
-        && !all_complex_flag(data)
-    {
-        return Err("real FSZ is not implemented yet (issue #43)".into());
     }
     // Avoid silently clamping malformed dimensions in the current runner.
     for (name, value) in [
