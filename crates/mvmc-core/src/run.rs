@@ -1352,6 +1352,26 @@ fn accumulate_observables<const TIMED: bool>(
         state.energy.sztot += Complex64::new(w * sz, 0.0);
         state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
 
+        // For a purely diagonal Hamiltonian, H|x⟩ is proportional to |x⟩,
+        // so the second Lanczos moment is exactly e². The off-diagonal H²
+        // path is added when the dedicated Lanczos operator kernel is wired.
+        if data.modpara.lanczos_mode > 0
+            && data.transfer_terms.is_empty()
+            && data.pair_hop_terms.is_empty()
+            && data.exchange_terms.is_empty()
+            && data.inter_all_terms.is_empty()
+        {
+            if let Some(phys) = state.phys_quantities.as_mut() {
+                let _ = crate::lanczos::accumulate_lanczos_qqqq(
+                    &mut phys.phys_lanczos_qqqq,
+                    w,
+                    e,
+                    e * e,
+                    all_complex,
+                );
+            }
+        }
+
         if state.phys_quantities.is_some() {
             let mut one_body = vec![Complex64::new(0.0, 0.0); data.green_one_terms.len()];
             for (index, term) in data.green_one_terms.iter().enumerate() {
@@ -1563,6 +1583,9 @@ fn accumulate_observables<const TIMED: bool>(
         let count = state.energy.wc.re;
         if count != 0.0 {
             let denominator = Complex64::new(count, 0.0);
+            for value in &mut phys.phys_lanczos_qqqq {
+                *value /= denominator;
+            }
             for value in &mut phys.phys_cis_ajs {
                 *value /= denominator;
             }
