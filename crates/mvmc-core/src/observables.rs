@@ -1123,10 +1123,35 @@ fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
     }
     mix(u64::from(data.has_rbm_terms()));
     mix(data.gutzwiller_idx.len() as u64);
+    for &index in &data.gutzwiller_idx {
+        mix(index as u64);
+    }
     mix(data.jastrow_idx.len() as u64);
+    for row in &data.jastrow_idx {
+        mix(row.len() as u64);
+        for &index in row {
+            mix(index as u64);
+        }
+    }
     mix(data.doublon_holon_2site_indices.len() as u64);
+    for table in &data.doublon_holon_2site_indices {
+        mix(table.neighbors.len() as u64);
+        for row in &table.neighbors {
+            for &site in row {
+                mix(site as u64);
+            }
+        }
+    }
     mix(data.doublon_holon_2site_params.len() as u64);
     mix(data.doublon_holon_4site_indices.len() as u64);
+    for table in &data.doublon_holon_4site_indices {
+        mix(table.neighbors.len() as u64);
+        for row in &table.neighbors {
+            for &site in row {
+                mix(site as u64);
+            }
+        }
+    }
     mix(data.doublon_holon_4site_params.len() as u64);
     hash
 }
@@ -1819,6 +1844,11 @@ mod tests {
         refresh_transfer_cache(&data, &mut state);
         assert!(!state.transfer_cache.direct_projection_eligible);
         data.charge_rbm_phys_layer_terms.clear();
+
+        let before_mapping = state.transfer_cache.signature;
+        data.gutzwiller_idx = vec![0, 1];
+        refresh_transfer_cache(&data, &mut state);
+        assert_ne!(state.transfer_cache.signature, before_mapping);
 
         data.doublon_holon_2site_indices
             .push(mvmc_expert_parsers::DoublonHolon2SiteIndex {
