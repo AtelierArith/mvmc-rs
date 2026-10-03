@@ -19,6 +19,7 @@
 //!
 //! Environment:
 //!   MVMC_NSTEPS       Same as --nsteps (CLI flag takes precedence)
+//!   MVMC_TIMING_FILE  Write the full-precision internal run seconds to this path
 //!
 //! Mirror of `extern/Julia-mVMC/examples/heisenberg_chain_real.jl` et al.
 
@@ -41,6 +42,7 @@ fn print_usage(program: &str) {
     eprintln!();
     eprintln!("Environment:");
     eprintln!("  MVMC_NSTEPS     Same as --nsteps (CLI flag takes precedence)");
+    eprintln!("  MVMC_TIMING_FILE  Write the full-precision internal run seconds to this path");
 }
 
 fn main() {
@@ -235,6 +237,11 @@ fn main() {
     // ── result ────────────────────────────────────────────────────────────────
     match result {
         Ok(summary) => {
+            // Machine-readable full-precision duration for benchmark harnesses;
+            // the human summary below is rounded to 10 ms.
+            if let Ok(path) = std::env::var("MVMC_TIMING_FILE") {
+                let _ = std::fs::write(path, format!("{}\n", elapsed.as_secs_f64()));
+            }
             println!();
             println!(
                 "=== Completed {} SR steps in {:.2}s ===",

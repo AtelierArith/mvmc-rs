@@ -123,7 +123,7 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
     println!("csv        : {}", config.csv.display());
     println!();
 
-    build_rust_examples(&workspace)?;
+    let target_dir = build_rust_examples(&workspace)?;
 
     let run_root = workspace
         .join("target")
@@ -137,7 +137,7 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
 
     for model in &config.models {
         println!("--- {} ---", model.name);
-        let rust = run_rust_model(&workspace, &config.julia_root, &run_root, *model, &config)?;
+        let rust = run_rust_model(&target_dir, &config.julia_root, &run_root, *model, &config)?;
         print_summary("rust", &rust);
         measurements.extend(rust);
 
@@ -283,7 +283,33 @@ where
         .map_err(|_| format!("invalid value for {flag}"))
 }
 
-fn build_rust_examples(workspace: &Path) -> Result<(), String> {
+/// Resolve Cargo's effective target directory (honors `CARGO_TARGET_DIR` and
+/// `.cargo/config.toml` `build.target-dir`), so binaries are found even when the
+/// Dev Container redirects `target/` to a cache volume.
+fn cargo_target_dir(workspace: &Path) -> Result<PathBuf, String> {
+    let output = Command::new("cargo")
+        .arg("metadata")
+        .arg("--no-deps")
+        .arg("--format-version")
+        .arg("1")
+        .current_dir(workspace)
+        .output()
+        .map_err(|e| format!("failed to spawn cargo metadata: {e}"))?;
+    ensure_success("cargo metadata --no-deps --format-version 1", &output)?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let marker = "\"target_directory\":\"";
+    let start = stdout
+        .find(marker)
+        .map(|idx| idx + marker.len())
+        .ok_or_else(|| "cargo metadata output has no target_directory".to_string())?;
+    let rest = &stdout[start..];
+    let end = rest
+        .find('"')
+        .ok_or_else(|| "cargo metadata target_directory is unterminated".to_string())?;
+    Ok(PathBuf::from(&rest[..end]))
+}
+
+fn build_rust_examples(workspace: &Path) -> Result<PathBuf, String> {
     println!("building Rust release examples...");
     let mut command = Command::new("cargo");
     command
@@ -297,18 +323,17 @@ fn build_rust_examples(workspace: &Path) -> Result<(), String> {
         .output()
         .map_err(|e| format!("failed to spawn cargo build: {e}"))?;
     ensure_success("cargo build --release -p mvmc-cli --examples", &output)?;
-    Ok(())
+    cargo_target_dir(workspace)
 }
 
 fn run_rust_model(
-    workspace: &Path,
+    target_dir: &Path,
     julia_root: &Path,
     run_root: &Path,
     model: Model,
     config: &BenchConfig,
 ) -> Result<Vec<Measurement>, String> {
-    let binary = workspace
-        .join("target")
+    let binary = target_dir
         .join("release")
         .join("examples")
         .join(executable_name(model.name));
@@ -631,7 +656,8 @@ fn bench_hubbard(args: &[String]) -> Result<(), String> {
     println!("report     : {}", config.report.display());
     println!();
 
-    build_rust_cli(&workspace)?;
+    let target_dir = build_rust_cli(&workspace)?;
+    let rust_binary = target_dir.join("release").join(executable_name("mvmc"));
 
     let run_root = workspace
         .join("target")
@@ -645,7 +671,7 @@ fn bench_hubbard(args: &[String]) -> Result<(), String> {
 
     for model in &config.models {
         println!("--- {} ---", model.name);
-        let rust = run_rust_hubbard(&workspace, &run_root, *model, &config)?;
+        let rust = run_rust_hubbard(&rust_binary, &run_root, *model, &config)?;
         print_summary("rust", &rust);
         measurements.extend(rust);
 
@@ -665,7 +691,7 @@ fn bench_hubbard(args: &[String]) -> Result<(), String> {
     print_hubbard_comparison(&measurements, &config.models);
     write_report(
         &config.report,
-        &build_hubbard_report(&config, &measurements),
+        &build_hubbard_report(&config, &measurements, &rust_binary),
     )?;
     println!("csv    : {}", config.csv.display());
     println!("report : {}", config.report.display());
@@ -805,7 +831,7 @@ fn parse_hubbard_args(args: &[String], workspace: &Path) -> Result<HubbardBenchC
     })
 }
 
-fn build_rust_cli(workspace: &Path) -> Result<(), String> {
+fn build_rust_cli(workspace: &Path) -> Result<PathBuf, String> {
     println!("building mvmc-cli release binary...");
     let mut command = Command::new("cargo");
     command
@@ -818,7 +844,7 @@ fn build_rust_cli(workspace: &Path) -> Result<(), String> {
         .output()
         .map_err(|e| format!("failed to spawn cargo build: {e}"))?;
     ensure_success("cargo build --release -p mvmc-cli", &output)?;
-    Ok(())
+    cargo_target_dir(workspace)
 }
 
 fn hubbard_namelist(workspace: &Path, model: HubbardModel) -> PathBuf {
@@ -831,25 +857,22 @@ fn hubbard_namelist(workspace: &Path, model: HubbardModel) -> PathBuf {
 }
 
 fn run_rust_hubbard(
-    workspace: &Path,
+    binary: &Path,
     run_root: &Path,
     model: HubbardModel,
     config: &HubbardBenchConfig,
 ) -> Result<Vec<Measurement>, String> {
-    let binary = workspace
-        .join("target")
-        .join("release")
-        .join(executable_name("mvmc"));
     if !binary.is_file() {
         return Err(format!("Rust CLI binary not found: {}", binary.display()));
     }
+    let workspace = workspace_root();
 
     for warmup in 0..config.warmups {
         let out = run_root
             .join("rust")
             .join(model.name)
             .join(format!("warmup-{}", warmup + 1));
-        run_rust_hubbard_once(workspace, &binary, model, &out, config)?;
+        run_rust_hubbard_once(&workspace, binary, model, &out, config)?;
     }
 
     let mut measurements = Vec::with_capacity(config.reps);
@@ -859,7 +882,7 @@ fn run_rust_hubbard(
             .join(model.name)
             .join(format!("rep-{}", rep + 1));
         let (seconds, energy, _output) =
-            run_rust_hubbard_once(workspace, &binary, model, &out, config)?;
+            run_rust_hubbard_once(&workspace, binary, model, &out, config)?;
         measurements.push(Measurement {
             implementation: "rust",
             model: model.name.to_string(),
@@ -880,6 +903,9 @@ fn run_rust_hubbard_once(
     config: &HubbardBenchConfig,
 ) -> Result<(f64, Option<f64>, Output), String> {
     let namelist = hubbard_namelist(workspace, model);
+    fs::create_dir_all(out_root)
+        .map_err(|e| format!("cannot create {}: {e}", out_root.display()))?;
+    let timing_path = out_root.join("timing.txt");
     let mut command = Command::new(binary);
     command
         .arg(&namelist)
@@ -890,19 +916,27 @@ fn run_rust_hubbard_once(
         .arg("--nsmp")
         .arg(config.steps.to_string())
         .arg("--out-dir")
-        .arg(out_root);
+        .arg(out_root)
+        .env("MVMC_TIMING_FILE", &timing_path);
     apply_thread_env(&mut command, config.threads);
     let output = command
         .output()
         .map_err(|e| format!("failed to spawn {}: {e}", binary.display()))?;
     ensure_success(&binary.to_string_lossy(), &output)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let seconds = parse_rust_seconds(&stdout).ok_or_else(|| {
-        format!(
-            "cannot parse Rust internal timing for {} from:\n{stdout}",
-            model.name
-        )
-    })?;
+    // Prefer the full-precision timing file over the human summary, which is
+    // rounded to 10 ms and can distort short runs.
+    let seconds = fs::read_to_string(&timing_path)
+        .ok()
+        .and_then(|text| text.trim().parse::<f64>().ok())
+        .or_else(|| parse_rust_seconds(&stdout))
+        .ok_or_else(|| {
+            format!(
+                "cannot read Rust internal timing for {} from {} or stdout:\n{stdout}",
+                model.name,
+                timing_path.display()
+            )
+        })?;
     // Prefer the full-precision zvo_out.dat value; the CLI prints only 10 decimals.
     let energy =
         read_rust_energy_per_site(out_root, &namelist).or_else(|| parse_rust_final_energy(&stdout));
@@ -1063,7 +1097,11 @@ fn print_hubbard_comparison(measurements: &[Measurement], models: &[HubbardModel
     }
 }
 
-fn build_hubbard_report(config: &HubbardBenchConfig, measurements: &[Measurement]) -> String {
+fn build_hubbard_report(
+    config: &HubbardBenchConfig,
+    measurements: &[Measurement],
+    rust_binary: &Path,
+) -> String {
     let julia_version = if config.julia_bin == Path::new("julia") {
         command_output("julia", &["+1.13.1", "--version"])
     } else {
@@ -1085,10 +1123,16 @@ fn build_hubbard_report(config: &HubbardBenchConfig, measurements: &[Measurement
     ));
     report.push_str(&format!("- julia: {julia_version}\n"));
     report.push_str(&format!(
+        "- rust BLAS: {}\n",
+        linked_blas_libraries(rust_binary)
+    ));
+    report.push_str(&format!("- julia BLAS: {}\n", julia_blas_vendor(config)));
+    report.push_str(&format!(
         "- steps/reps/warmups/threads: {}/{}/{}/{}\n",
         config.steps, config.reps, config.warmups, config.threads
     ));
     report.push_str("- inputs: benchmark/hubbard_chain/inputs\n");
+    report.push_str("- scope: serial `R=1`; this is not the report's `R=4` MPI condition\n");
     report.push_str(
         "- timing: internal `run_para_opt_from_namelist` wall clock; Julia JIT and\n  process startup are excluded, and both sides are thread-pinned\n\n",
     );
@@ -1117,6 +1161,59 @@ fn build_hubbard_report(config: &HubbardBenchConfig, measurements: &[Measurement
     }
     report.push_str("\n`speedup = julia / rust`; values above `1.0x` mean Rust was faster.\n");
     report
+}
+
+fn linked_blas_libraries(binary: &Path) -> String {
+    let mut command = if cfg!(target_os = "macos") {
+        let mut command = Command::new("otool");
+        command.arg("-L");
+        command
+    } else {
+        Command::new("ldd")
+    };
+    command.arg(binary);
+    let Ok(output) = command.output() else {
+        return "unknown".to_string();
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let libraries: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            lower.contains("blas") || lower.contains("lapack") || lower.contains("accelerate")
+        })
+        .map(|line| line.split(" (").next().unwrap_or(line).trim().to_string())
+        .collect();
+    if libraries.is_empty() {
+        "none detected".to_string()
+    } else {
+        libraries.join(", ")
+    }
+}
+
+fn julia_blas_vendor(config: &HubbardBenchConfig) -> String {
+    let mut command = Command::new(&config.julia_bin);
+    if config.julia_bin == Path::new("julia") {
+        command.arg("+1.13.1");
+    }
+    command
+        .arg(format!("--project={}", config.julia_root.display()))
+        .arg("--startup-file=no")
+        .arg("--history-file=no")
+        .arg("-e")
+        .arg("using LinearAlgebra; print(BLAS.vendor(), \" (\", BLAS.get_config(), \")\")");
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            let vendor = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if vendor.is_empty() {
+                "unknown".to_string()
+            } else {
+                vendor
+            }
+        }
+        _ => "unknown".to_string(),
+    }
 }
 
 fn write_report(path: &Path, body: &str) -> Result<(), String> {

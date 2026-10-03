@@ -166,7 +166,8 @@ for the larger Hubbard-chain workloads used by the C-vs-Julia performance
 reports (see
 `docs/reference/c-to-julia/performance/2026-06-17-julia-mvmc-hubbard-locenergy-slater-calham1-optimization-record.md`).
 It runs `L=16/24/32`, half filling, `U=4.0`, `t=1.0`, `NSPGaussLeg=8`,
-`NSPStot=0`, `NSplitSize=1`, `NStore=1`, `NSRCG=0` at `R=1` and one thread:
+`NSPStot=0`, `NSplitSize=1`, `NStore=1`, `NSRCG=0`. This is a **serial (`R=1`),
+one-thread** benchmark; it does not reproduce the report's `R=4` MPI timing:
 
 ```bash
 cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1

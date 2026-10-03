@@ -13,10 +13,13 @@ and the roadmap `docs/reference/c-to-julia/roadmaps/2026-06-14-julia-mvmc-v0.4-s
 - `NSplitSize=1`, `NStore=1`, `NSRCG=0`, `RndSeed=1`
 - `NSROptItrStep=300`, `NVMCSample=300`
 
-The reports run `R=4` MPI ranks; the Rust port has no MPI support, so this
-benchmark uses `R=1` (serial) and one thread, which corresponds to the report's
-per-rank, one-thread condition. `NVMCSample` is not stated in the report, so it
-is set equal to the 300 SR steps.
+The reports run `R=4` MPI ranks, which partitions sampling and performs
+collective reductions, so their timing is not reproducible by a single-rank run.
+This benchmark is a **separate serial (`R=1`), one-thread** measurement: it does
+not reproduce the report's `R=4` timing and is not its per-rank condition. The
+Rust `mvmc-cli` has an `mpi` feature, but this task does not build or launch an
+MPI reducer; expanding to `R=4` is future work. `NVMCSample` is not stated in
+the report, so it is set equal to the 300 SR steps.
 
 ## Layout
 
@@ -65,14 +68,14 @@ cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1
 
 Warmup-excluded medians over 3 repetitions, internal
 `run_para_opt_from_namelist` wall clock, one thread (`Darwin arm64`, Julia
-1.13.1). `speedup = julia / rust`; the Rust port does not yet have an MPI path,
-so this compares the report's single-rank, one-thread condition.
+1.13.1, Rust OpenBLAS, Julia `lbt` -> `libopenblas64_`). `speedup = julia / rust`;
+this is the serial `R=1`, one-thread condition, not the report's `R=4`.
 
 | model | Rust median (s) | Julia median (s) | speedup (julia/rust) | \|ΔE\| |
 |---|---:|---:|---:|---:|
-| hubbard_chain_L16 | 4.210 | 3.102 | 0.74x | 0.00e0 |
-| hubbard_chain_L24 | 9.040 | 6.539 | 0.72x | 0.00e0 |
-| hubbard_chain_L32 | 16.190 | 11.966 | 0.74x | 0.00e0 |
+| hubbard_chain_L16 | 4.183 | 3.069 | 0.73x | 0.00e0 |
+| hubbard_chain_L24 | 8.881 | 6.488 | 0.73x | 0.00e0 |
+| hubbard_chain_L32 | 16.254 | 12.228 | 0.75x | 0.00e0 |
 
 Initial baselines are archived under `results/`; the task writes new CSV and
 Markdown reports to `target/bench/` for comparison. The section-timer
