@@ -1,10 +1,11 @@
 //! Opt-in, observational per-thread sampling events for reference verification.
 //! No RNG draws, numerical operations, or configuration mutations are added.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 thread_local! {
     static EVENTS: RefCell<Option<Vec<Vec<i64>>>> = const { RefCell::new(None) };
+    static RAW_CHECKPOINTS: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Enable capture on the sampler's calling thread. Nested captures are errors.
@@ -16,9 +17,18 @@ pub fn start() {
     });
 }
 
+/// Enable the separately versioned raw-checkpoint extension for this capture.
+/// Legacy start() remains event0..9 only. Nested requests leave it unchanged.
+pub fn start_with_raw_checkpoints() {
+    start();
+    RAW_CHECKPOINTS.with(|enabled| enabled.set(true));
+}
+
 /// End capture and return actual events, in execution order.
 pub fn finish() -> Vec<Vec<i64>> {
-    EVENTS.with(|slot| slot.borrow_mut().take().expect("sampling trace not active"))
+    let events = EVENTS.with(|slot| slot.borrow_mut().take().expect("sampling trace not active"));
+    RAW_CHECKPOINTS.with(|enabled| enabled.set(false));
+    events
 }
 
 /// Event schema: first integer is kind (0 update, 1 normal hop, 2 normal
@@ -79,11 +89,80 @@ pub(crate) fn checkpoint(
             fields.extend_from_slice(values);
         }
         record(8, &fields);
+        if RAW_CHECKPOINTS.with(Cell::get) {
+            let (raw, cursor) = rng.state_snapshot();
+            let mut observation = Vec::with_capacity(626);
+            observation.push(i64::try_from(cursor).expect("SFMT cursor fits i64"));
+            observation.push(i64::try_from(rng.words_consumed()).expect("draw count fits i64"));
+            observation.extend(raw.map(i64::from));
+            record(10, &observation);
+        }
     });
 }
 
 #[cfg(test)]
 mod tests {
+    fn frame() -> crate::state::VmcOptimizationState {
+        crate::state::VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false)
+    }
+
+    #[test]
+    fn raw_checkpoint_disabled_legacy_and_enabled_are_nonmutating() {
+        let state = frame();
+        let mut rng = sfmt19937::Sfmt19937Rng::new(17);
+        rng.gen_rand32();
+        let original = rng.state_snapshot();
+        let count = rng.words_consumed();
+        super::checkpoint(&state, &rng);
+        assert!(super::EVENTS.with(|events| events.borrow().is_none()));
+        super::start();
+        super::checkpoint(&state, &rng);
+        let legacy = super::finish();
+        assert_eq!(legacy.len(), 1);
+        assert_eq!(legacy[0][0], 8);
+        super::start_with_raw_checkpoints();
+        super::checkpoint(&state, &rng);
+        let observed = super::finish();
+        assert_eq!(observed[0], legacy[0]);
+        assert_eq!(observed.len(), 2);
+        assert_eq!(observed[1].len(), 627);
+        assert_eq!(observed[1][0], 10);
+        assert_eq!(observed[1][1], original.1 as i64);
+        assert_eq!(observed[1][2], count as i64);
+        assert_eq!(observed[1][3..], original.0.map(i64::from));
+        assert_eq!(rng.state_snapshot(), original);
+        assert_eq!(rng.words_consumed(), count);
+        // checkpoint accepts state immutably; compare all saved planes explicitly.
+        let fresh = frame();
+        assert_eq!(state.electron_config.ele_idx, fresh.electron_config.ele_idx);
+        assert_eq!(state.electron_config.ele_cfg, fresh.electron_config.ele_cfg);
+        assert_eq!(state.electron_config.ele_num, fresh.electron_config.ele_num);
+        assert_eq!(
+            state.electron_config.ele_proj_cnt,
+            fresh.electron_config.ele_proj_cnt
+        );
+        assert_eq!(state.electron_config.ele_spn, fresh.electron_config.ele_spn);
+        assert_eq!(state.electron_config.counter, fresh.electron_config.counter);
+    }
+
+    #[test]
+    fn nested_raw_request_cannot_change_legacy_contract_and_panic_can_be_harvested() {
+        super::start();
+        assert!(std::panic::catch_unwind(super::start_with_raw_checkpoints).is_err());
+        assert!(!super::RAW_CHECKPOINTS.with(std::cell::Cell::get));
+        assert!(super::finish().is_empty());
+        super::start_with_raw_checkpoints();
+        let panic = std::panic::catch_unwind(|| {
+            super::checkpoint(&frame(), &sfmt19937::Sfmt19937Rng::new(1));
+            panic!("test diagnostic panic");
+        });
+        assert!(panic.is_err());
+        assert_eq!(super::finish().len(), 2);
+        assert!(!super::RAW_CHECKPOINTS.with(std::cell::Cell::get));
+        // Existing trace is NOT RAII. Explicit finish after caught panic is required.
+        super::start();
+        assert!(super::finish().is_empty());
+    }
     #[test]
     fn observation_preserves_actual_candidate_decision_and_next624() {
         use crate::sampling::{get_update_type, make_candidate_hopping, metropolis_decision};
