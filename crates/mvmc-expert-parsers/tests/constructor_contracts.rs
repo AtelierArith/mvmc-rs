@@ -1,10 +1,14 @@
 //! Original Julia constructor field assertions M0206–0208, M0225–0227,
-//! M0236–0237 and M0242–0244, with explicit Transfer spin API adaptation.
-//! `test_parsers.jl:14–17,56–59,83–84,101–103`, SHA256
+//! M0236–0237, M0242–0244, M0254–0256 and M0261–0264,
+//! with explicit Transfer spin API adaptation.
+//! `test_parsers.jl:14–17,56–59,83–84,101–103,149–151,169–172`, SHA256
 //! 8336b21bca7627749e27c588e537e30c20ea4a6383733bae3e93a44461980185.
 //! Rust public struct/default construction replaces Julia keyword construction.
 //! This is not file parsing, supported-model validation, or C runtime evidence.
-use mvmc_expert_parsers::{CoulombIntraTerm, ModParaParameters, PairHopTerm, Spin, TransferTerm};
+use mvmc_expert_parsers::{
+    CoulombIntraTerm, GutzwillerTerm, JastrowTerm, ModParaParameters, PairHopTerm, Spin,
+    TransferTerm,
+};
 use num_complex::Complex64;
 
 #[test]
@@ -59,4 +63,30 @@ fn original_pairhop_constructor_preserves_one_directed_term() {
     assert_eq!(term.site1, 0);
     assert_eq!(term.site2, 1);
     assert_eq!(term.value, 0.25);
+}
+
+#[test]
+fn original_gutzwiller_constructor_preserves_literal_coefficient_fields() {
+    let term = GutzwillerTerm {
+        site: 0,
+        value: Complex64::new(0.5, 0.0),
+        is_complex: false,
+    };
+    assert_eq!(term.site, 0);
+    assert_eq!(term.value, Complex64::new(0.5, 0.0));
+    assert!(!term.is_complex);
+}
+
+#[test]
+fn original_jastrow_constructor_preserves_literal_coefficient_fields() {
+    let term = JastrowTerm {
+        site1: 0,
+        site2: 1,
+        value: Complex64::new(0.1, 0.0),
+        is_complex: false,
+    };
+    assert_eq!(term.site1, 0);
+    assert_eq!(term.site2, 1);
+    assert_eq!(term.value, Complex64::new(0.1, 0.0));
+    assert!(!term.is_complex);
 }
