@@ -171,3 +171,11 @@ recorded reference hashes reproduced exactly, with zero overlay mismatches and
 zero staged fixture changes. The 15 additional unconsumed loaded/history files
 are recorded in the external staging manifest. Historical macOS archives were
 restored in staging as well as preserved in the source checkout.
+
+
+Native macOS verification of the same main-plus-#187 source passed all 496
+all-feature tests with ignored tests enabled (zero skipped), using Apple Clang
+17, Rust 1.99.0 and local MPICH 4.2.3. The archived macOS numerical checks and
+callback arithmetic therefore remain verified separately from Linux.
+The previous Julia editor project setting `JULIA_PROJECT=@.` is preserved;
+Julia threads default to one for deterministic reference work.

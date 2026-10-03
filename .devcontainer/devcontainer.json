@@ -44,5 +44,9 @@
     8000,
     8080,
     8888
-  ]
+  ],
+  "remoteEnv": {
+    "JULIA_PROJECT": "@.",
+    "JULIA_NUM_THREADS": "1"
+  }
 }
