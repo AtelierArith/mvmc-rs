@@ -1,0 +1,126 @@
+[package]
+name = "tenferro-cpu"
+autotests = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "CPU backend, kernels, provider selection, and CPU resource pools for tenferro."
+rust-version.workspace = true
+keywords = ["tensor", "cpu", "linear-algebra", "numerical"]
+categories = ["science", "mathematics", "hardware-support"]
+documentation = "https://docs.rs/tenferro-cpu"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+features = ["cpu-faer"]
+
+[lib]
+name = "tenferro_cpu"
+
+[features]
+default = ["cpu-faer"]
+cpu-faer = ["dep:faer"]
+cpu-blas = ["dep:cblas-sys", "dep:lapack"]
+# Each supported provider exports CBLAS; no separate Netlib CBLAS build is needed.
+provider-src = ["cpu-blas", "dep:blas-src", "dep:lapack-src"]
+provider-inject = ["cpu-blas", "dep:cblas-inject", "dep:lapack-inject"]
+blas-openblas = [
+    "provider-src",
+    "blas-src/openblas",
+    "lapack-src/openblas",
+]
+blas-accelerate = [
+    "provider-src",
+    "blas-src/accelerate",
+    "lapack-src/accelerate",
+]
+blas-mkl = [
+    "provider-src",
+    "blas-src/intel-mkl-dynamic-parallel",
+    "lapack-src/intel-mkl-dynamic-parallel",
+]
+
+[dependencies]
+tenferro-core-ops = { path = "../tenferro-core-ops", version = "0.7.1" }
+tenferro-internal-cpu-kernels = { path = "../tenferro-internal-cpu-kernels", version = "0.7.1" }
+tenferro-cpu-basic = { path = "../tenferro-cpu-basic", version = "0.7.1" }
+tenferro-cpu-fused = { path = "../tenferro-cpu-fused", version = "0.7.1" }
+tenferro-runtime = { path = "../tenferro-runtime", version = "0.7.1", default-features = false }
+tenferro-tensor = { path = "../tenferro-tensor", version = "0.7.1" }
+num-complex.workspace = true
+num-traits.workspace = true
+rayon.workspace = true
+smallvec.workspace = true
+strided-kernel.workspace = true
+thiserror.workspace = true
+faer = { workspace = true, optional = true }
+cblas-sys = { workspace = true, optional = true }
+cblas-inject = { workspace = true, optional = true }
+lapack-inject = { workspace = true, optional = true }
+blas-src = { workspace = true, optional = true }
+lapack = { workspace = true, optional = true }
+lapack-src = { workspace = true, optional = true }
+lru.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "blas1"
+harness = false
+
+[[bench]]
+name = "dot_general_overhead"
+harness = false
+
+[[bench]]
+name = "pairwise_contraction"
+harness = false
+
+[[bench]]
+name = "cpu_install_overhead"
+harness = false
+
+[[bench]]
+name = "view_materialization"
+harness = false
+
+[[bench]]
+name = "openblas_direct_overhead"
+harness = false
+required-features = ["cpu-blas"]
+
+[[bench]]
+name = "grouped_gemm"
+harness = false
+
+[[bench]]
+name = "numa_execution"
+harness = false
+required-features = ["cpu-faer"]
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "blas1_thread_counts"
+path = "tests/blas1_thread_counts.rs"
+
+[[test]]
+name = "blas1_pool_aliasing"
+path = "tests/blas1_pool_aliasing.rs"
+
+[[test]]
+name = "install_allocation_tests"
+path = "tests/install_allocation_tests/main.rs"
+required-features = ["cpu-faer"]
+
+[[test]]
+name = "provider_boundary_allocation_tests"
+path = "tests/provider_boundary_allocation_tests/main.rs"

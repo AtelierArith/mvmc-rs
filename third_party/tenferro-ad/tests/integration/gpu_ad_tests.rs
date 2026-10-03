@@ -1,0 +1,218 @@
+#![cfg(feature = "cuda")]
+
+use crate::support;
+use support::{cpu_runtime, RunTraced};
+use tenferro_ad::{EagerRuntime, EagerTensor, TracedTensorAdExt};
+use tenferro_gpu::{
+    cuda::gpu_available, cuda::upload_tensor, cuda::CudaBackend, cuda::CudaDeviceId,
+};
+use tenferro_runtime::{DotGeneralConfig, Tensor, TensorRead, TracedTensor, TypedTensor};
+use tenferro_tensor::StorageBuffer;
+
+fn f64_tensor(shape: Vec<usize>, data: Vec<f64>) -> Tensor {
+    Tensor::from_typed::<f64>(TypedTensor::from_vec_col_major(shape, data).unwrap())
+}
+
+fn assert_f64_tensor_close(actual: &Tensor, expected: &Tensor, rtol: f64, atol: f64) {
+    match (actual.as_typed::<f64>(), expected.as_typed::<f64>()) {
+        (Some(actual), Some(expected)) => {
+            assert_eq!(actual.shape(), expected.shape());
+            for (idx, (&actual, &expected)) in actual
+                .host_data()
+                .unwrap()
+                .iter()
+                .zip(expected.host_data().unwrap().iter())
+                .enumerate()
+            {
+                let tol = atol + rtol * expected.abs();
+                assert!(
+                    (actual - expected).abs() <= tol,
+                    "index {idx}: actual={actual}, expected={expected}, tol={tol}"
+                );
+            }
+        }
+        _ => panic!("expected f64 tensors, got actual={actual:?} expected={expected:?}"),
+    }
+}
+
+fn assert_device_backed(tensor: &Tensor) {
+    fn is_cubecl<T: 'static>(buffer: &StorageBuffer<T>) -> bool {
+        matches!(buffer, StorageBuffer::Backend(buffer) if buffer.backend_family() == "cubecl")
+    }
+
+    fn assert_typed<T: tenferro_tensor::TensorScalar>(tensor: &Tensor) {
+        assert!(is_cubecl(
+            tensor
+                .as_typed::<T>()
+                .expect("the dtype guard selects this arm")
+                .buffer()
+        ));
+    }
+
+    match tensor.dtype() {
+        tenferro_tensor::DType::F32 => assert_typed::<f32>(tensor),
+        tenferro_tensor::DType::F64 => assert_typed::<f64>(tensor),
+        tenferro_tensor::DType::I64 => assert_typed::<i64>(tensor),
+        tenferro_tensor::DType::C32 => assert_typed::<num_complex::Complex32>(tensor),
+        tenferro_tensor::DType::C64 => assert_typed::<num_complex::Complex64>(tensor),
+        tenferro_tensor::DType::I32 => assert_typed::<i32>(tensor),
+        tenferro_tensor::DType::Bool => assert_typed::<bool>(tensor),
+        // A caller-owned payload has no device buffer to inspect.
+        _ => panic!("a caller-owned payload is not a device tensor"),
+    }
+}
+
+fn eval_cpu_tensor(runtime: &tenferro_runtime::Runtime, tensor: &TracedTensor) -> Tensor {
+    tensor.run_with(runtime).unwrap()
+}
+
+fn matmul(lhs: &TracedTensor, rhs: &TracedTensor) -> TracedTensor {
+    lhs.dot_general(
+        rhs,
+        DotGeneralConfig {
+            lhs_contracting_dims: vec![1],
+            rhs_contracting_dims: vec![0],
+            lhs_batch_dims: vec![],
+            rhs_batch_dims: vec![],
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+#[ignore = "requires CUDA"]
+fn test_gpu_eager_backward_smoke() {
+    assert!(gpu_available(), "CUDA test requires an available device");
+
+    let upload_backend = CudaBackend::new(CudaDeviceId::from_ordinal(0)).unwrap();
+    let x_gpu = upload_tensor(
+        upload_backend.runtime(),
+        &f64_tensor(vec![2], vec![2.0_f64, 3.0]),
+    )
+    .unwrap();
+    let seed_gpu = upload_tensor(
+        upload_backend.runtime(),
+        &f64_tensor(vec![2], vec![1.0_f64, 1.0]),
+    )
+    .unwrap();
+    let ctx = EagerRuntime::with_cuda_backend(upload_backend).unwrap();
+    let x = EagerTensor::requires_grad_in(x_gpu, ctx.clone()).unwrap();
+    let seed = EagerTensor::from_tensor_in(seed_gpu, ctx.clone()).unwrap();
+    let y = x.mul(&x).unwrap();
+
+    y.backward_with(&seed).unwrap();
+    let grad = x.grad().unwrap().unwrap();
+    let grad_tensor = grad.to_tensor().unwrap();
+    let grad_host = ctx
+        .with_execution_session(|session| {
+            session.download_to_host(TensorRead::from_tensor(&grad_tensor))
+        })
+        .unwrap()
+        .unwrap();
+
+    assert_f64_tensor_close(
+        &grad_host,
+        &f64_tensor(vec![2], vec![4.0_f64, 6.0]),
+        1.0e-10,
+        1.0e-10,
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA"]
+fn test_gpu_matmul_vjp() {
+    assert!(gpu_available(), "CUDA test requires an available device");
+
+    let a_host = f64_tensor(
+        vec![3, 4],
+        vec![
+            1.0, -2.0, 0.5, //
+            3.0, 1.5, -0.25, //
+            -1.0, 0.75, 2.5, //
+            4.0, -3.0, 1.25,
+        ],
+    );
+    let b_host = f64_tensor(
+        vec![4, 5],
+        vec![
+            0.5, -1.5, 2.0, 0.25, //
+            1.25, 0.75, -0.5, 3.0, //
+            -2.0, 1.0, 0.5, -1.25, //
+            0.75, -0.25, 1.5, 2.25, //
+            -1.0, 0.5, 2.75, -0.75,
+        ],
+    );
+    let cotangent_host = f64_tensor(
+        vec![3, 5],
+        vec![
+            1.0, -0.5, 0.25, //
+            2.0, 1.5, -1.0, //
+            -0.75, 0.125, 0.5, //
+            0.25, -1.5, 2.5, //
+            -0.5, 1.0, 0.75,
+        ],
+    );
+
+    let a_cpu = TracedTensor::from_tensor_concrete_shape(a_host.duplicate().unwrap()).unwrap();
+    let b_cpu = TracedTensor::from_tensor_concrete_shape(b_host.duplicate().unwrap()).unwrap();
+    let cotangent_cpu =
+        TracedTensor::from_tensor_concrete_shape(cotangent_host.duplicate().unwrap()).unwrap();
+    let cpu_engine = cpu_runtime();
+    let y_cpu = matmul(&a_cpu, &b_cpu);
+    let grad_a_cpu = y_cpu.vjp(&a_cpu, &cotangent_cpu).unwrap();
+    let grad_b_cpu = y_cpu.vjp(&b_cpu, &cotangent_cpu).unwrap();
+    let cpu_grad_a = eval_cpu_tensor(&cpu_engine, &grad_a_cpu);
+    let cpu_grad_b = eval_cpu_tensor(&cpu_engine, &grad_b_cpu);
+
+    let upload_backend = CudaBackend::new(CudaDeviceId::from_ordinal(0)).unwrap();
+    let a_device = upload_tensor(upload_backend.runtime(), &a_host).unwrap();
+    let b_device = upload_tensor(upload_backend.runtime(), &b_host).unwrap();
+    let cotangent_device = upload_tensor(upload_backend.runtime(), &cotangent_host).unwrap();
+    let ctx = EagerRuntime::with_cuda_backend(upload_backend).unwrap();
+    let a_gpu = EagerTensor::from_tensor_in(a_device, ctx.clone()).unwrap();
+    let b_gpu = EagerTensor::from_tensor_in(b_device, ctx.clone()).unwrap();
+    let cotangent_gpu = EagerTensor::from_tensor_in(cotangent_device, ctx.clone()).unwrap();
+    let y_gpu = {
+        // Def 1 (active-edge): functional VJP over untracked leaves requires
+        // explicit capture so the forward records the semantic trace.
+        let _capture = ctx.capture_trace();
+        a_gpu
+            .dot_general(
+                &b_gpu,
+                DotGeneralConfig {
+                    lhs_contracting_dims: vec![1],
+                    rhs_contracting_dims: vec![0],
+                    lhs_batch_dims: vec![],
+                    rhs_batch_dims: vec![],
+                },
+            )
+            .unwrap()
+    };
+    let gpu_grad_a = ctx
+        .vjp(&y_gpu, &a_gpu, &cotangent_gpu)
+        .unwrap()
+        .to_tensor()
+        .unwrap();
+    let gpu_grad_b = ctx
+        .vjp(&y_gpu, &b_gpu, &cotangent_gpu)
+        .unwrap()
+        .to_tensor()
+        .unwrap();
+    assert_device_backed(&gpu_grad_a);
+    assert_device_backed(&gpu_grad_b);
+    let gpu_grad_a = ctx
+        .with_execution_session(|session| {
+            session.download_to_host(TensorRead::from_tensor(&gpu_grad_a))
+        })
+        .unwrap()
+        .unwrap();
+    let gpu_grad_b = ctx
+        .with_execution_session(|session| {
+            session.download_to_host(TensorRead::from_tensor(&gpu_grad_b))
+        })
+        .unwrap()
+        .unwrap();
+
+    assert_f64_tensor_close(&gpu_grad_a, &cpu_grad_a, 1.0e-10, 1.0e-10);
+    assert_f64_tensor_close(&gpu_grad_b, &cpu_grad_b, 1.0e-10, 1.0e-10);
+}
