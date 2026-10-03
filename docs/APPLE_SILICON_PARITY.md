@@ -104,6 +104,25 @@ Provenance and logical SHA-256 records accompany the generated results.
 hashes and packages checked-in references as deterministic lossless gzip,
 recording reused artifacts and omitted duplicate solver dumps.
 
+### Reviewed-CG overlays (BLAS bridge + archived AVX2)
+
+The PR54/`reviewed_cg_62b` CG runner lineage needs the same platform-overlay
+treatment. A plain native Julia aarch64 run is not portable enough: the
+ill-conditioned SR-CG solve amplifies Julia-vs-Rust GEMV/reduction rounding to
+`~1e-6`. The ARM overlay must be generated with the ABI-only system LP64
+OpenBLAS bridge (`scripts/reference_lp64_blas.jl`,
+`c_toolbox/blas_lp64_reference.c`) and the archived Julia AVX2 two-hop bilinear
+replay (`scripts/reference_archived_avx2.jl`), which is what the Rust sampling
+kernels retain. `c_toolbox/runner_opt_windows_reviewed_arm.jl` wraps the
+reviewed generator with both; `c_toolbox/reviewed_cg_arm.md` documents the exact
+build, manifest, generation, import and verification commands. Rust resolves
+the reviewed reads through `julia_fixture::fixture_path`, so
+`tests/fixtures/macos_arm_julia/<openblas-core>/reviewed_cg_62b/<case>/` overrides
+the archived Linux lineage per file. The same core-specific overlays cover the
+fixed-input CG reference (`.../sr_cg/c_refresh/`, from `ctest_cg_refresh.c` on
+the host) and the PhysCal two-sample references (`.../physcal_181/two-samples/`
+and `.../native-c-weighted-green/`).
+
 ## CI
 
 The workflow checks Linux x86_64 and macOS ARM64 with the `ci` profile,

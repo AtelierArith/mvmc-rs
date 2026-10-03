@@ -8,6 +8,9 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[allow(dead_code)]
+#[path = "../../../tests/support/julia_fixture.rs"]
+mod julia_fixture;
 mod support;
 use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
@@ -1709,10 +1712,18 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
             self.0.borrow_mut().push(values.to_vec());
         }
     }
-    let root = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("two-samples");
+    // Platform-specific independent two-sample references override the archived
+    // Linux PhysCal lineage when present, matching the CG runner overlays.
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let root = julia_fixture::arm_directory(&fixtures)
+        .map(|dir| dir.join("physcal_181/two-samples"))
+        .filter(|dir| dir.is_dir())
+        .unwrap_or_else(|| {
+            trajectory_fixture(PHYSCAL_MODELS[0])
+                .parent()
+                .unwrap()
+                .join("two-samples")
+        });
     for model in PHYSCAL_MODELS.iter().copied().chain([
         Model {
             name: "hubbard_chain_dh_overlays",

@@ -30,6 +30,17 @@ Compiler environment: native Linux x86_64, Ubuntu GCC
 produces compiler size warnings; the adapter bounds the output head with
 64 bytes reserved for all suffixes. No warnings are fixed in extracted C.
 
+The adapter accepts an optional `iFlgOrbitalGeneral iNOrbitalAntiParallel
+iNOrbitalParallel` triple after `INPUT OUTPUT_HEAD`; omitting it leaves the
+upstream globals zero (plain Slater `_orbital_opt.dat`). The window-compared
+DH2/DH4/DH24/RBM/OptTrans FSZ cases record `1 36 15` so the verbatim
+`OutputOptData` emits `_orbitalAntiParallel_opt.dat` plus
+`_orbitalParallel_opt.dat`; `interall` would use `1 0 0`
+(`_orbital_general_opt.dat`). Basic/FSZ/InterAll prefixes and the non-FSZ
+models are not part of the declared-window comparison and use the zero
+default. The main contiguous `zqp_opt.dat` row is the same in every branch;
+only the auxiliary Slater block filenames and contents depend on the triple.
+
 The history header carries sample count, declared NPara, then widths in C
 order: Gutzwiller, Jastrow, DH2 groups, DH4 groups, nine RBM sections, Slater,
 OptTrans. Rows contain paired real/imaginary components of
