@@ -47,6 +47,7 @@
   ],
   "remoteEnv": {
     "JULIA_PROJECT": "@.",
+    "OPENBLAS_CORETYPE": "HASWELL",
     "JULIA_NUM_THREADS": "1"
   }
 }

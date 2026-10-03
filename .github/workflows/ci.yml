@@ -28,6 +28,8 @@ jobs:
     name: Workspace (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      OPENBLAS_CORETYPE: ${{ matrix.blas_core }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,9 +37,11 @@ jobs:
           - os: ubuntu-24.04
             platform: linux-x86_64
             arch: X64
+            blas_core: HASWELL
           - os: macos-15
             platform: macos-arm64
             arch: ARM64
+            blas_core: NEOVERSEN1
     steps:
       - uses: actions/checkout@v5
         with:
@@ -72,6 +76,21 @@ jobs:
           rustc -Vv
           cargo nextest --version
           pkg-config --modversion openblas
+          echo "OpenBLAS reference core: $OPENBLAS_CORETYPE"
+          cat > "$RUNNER_TEMP/blas-info.c" <<'C'
+          #include <stdio.h>
+          #include <strings.h>
+          extern char *openblas_get_config(void);
+          extern char *openblas_get_corename(void);
+          int main(int argc, char **argv) {
+              const char *core = openblas_get_corename();
+              printf("%s\ncore=%s\n", openblas_get_config(), core);
+              return argc == 2 && strcasecmp(core, argv[1]) == 0 ? 0 : 1;
+          }
+          C
+          read -r -a blas_flags <<< "$(pkg-config --cflags --libs openblas)"
+          cc "$RUNNER_TEMP/blas-info.c" "${blas_flags[@]}" -o "$RUNNER_TEMP/blas-info"
+          "$RUNNER_TEMP/blas-info" "$OPENBLAS_CORETYPE"
           mpicc -show
       - name: Check formatting
         run: cargo fmt --all --check

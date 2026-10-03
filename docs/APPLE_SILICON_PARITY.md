@@ -148,3 +148,30 @@ run the packager. It requires complete manifests, verifies logical hashes,
 reuses unchanged archives and omits artifacts not consumed by Rust tests,
 including historical long-run outputs. A single-job scratch directory is for
 focused investigation, not a complete replacement for the fixture tree.
+
+### Linux reference BLAS dispatch
+
+The Linux reference fixtures use single-thread Haswell OpenBLAS. On the
+Apple Silicon x86_64 emulator, automatic dispatch instead selected Nehalem
+(OpenBLAS 0.3.26). Eighteen forward comparisons failed, including fixed-input
+SR solves, despite unchanged sampling checkpoints before the solve. The real
+fixed solution differed by `1.60e-12`; CG residual component 13 at forced
+limit 7 differed by `1.86e-12`. Ill-conditioned runner solves amplified this
+backend rounding to parameter differences up to about `7.4e-6` at the first
+update. No numerical tolerance was widened to hide these differences.
+
+Using the documented Haswell reference backend restored the fixed direct
+solve and complex CG runner checks on the same binaries. The Dev Container
+and hosted CI explicitly select `HASWELL`; macOS CI selects `NEOVERSEN1`.
+Native M4 verification additionally covers automatic `vortexm4`. These are
+labelled regression baselines, not a claim that every BLAS kernel has identical
+forward results. Independent kernel and solver backward-residual tests remain.
+
+For an already-running container (remoteEnv changes apply on reopen), use:
+
+```sh
+npx @devcontainers/cli exec --workspace-folder . env \
+  OPENBLAS_CORETYPE=HASWELL OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  cargo nextest run --workspace --locked --cargo-profile ci \
+  --no-fail-fast --retries 0
+```
