@@ -299,7 +299,10 @@ fn grouped_normal_physcal_cli_succeeds_on_two_and_four_ranks() {
 fn unsupported_projection_fails_before_creating_output_directory() {
     let dir = TestDir::new("spin-jastrow");
     let namelist = dir.0.join("namelist.def");
-    fs::write(&namelist, "SpinJastrow missing.def\n").unwrap();
+    // Do not let the unrelated zero-valued Rust ModPara default mask the
+    // unsupported-section boundary. C's no-projection setting is explicitly 1.
+    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(&namelist, "ModPara modpara.def\nSpinJastrow missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
         .arg(namelist)
@@ -308,7 +311,11 @@ fn unsupported_projection_fails_before_creating_output_directory() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("SpinJastrow"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("SpinJastrow"),
+        "actual stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!out_dir.exists());
 }
 
@@ -476,7 +483,10 @@ fn mismatched_valid_cli_controls_fail_collectively_before_output() {
 fn missing_hamiltonian_input_cannot_run_a_different_model() {
     let dir = TestDir::new("missing-transfer");
     let namelist = dir.0.join("namelist.def");
-    fs::write(&namelist, "Trans missing.def\n").unwrap();
+    // Explicit accepted projection setting, leaving only the intended missing
+    // Hamiltonian record as this negative fixture's diagnostic target.
+    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(&namelist, "ModPara modpara.def\nTrans missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
         .arg(namelist)
@@ -485,7 +495,11 @@ fn missing_hamiltonian_input_cannot_run_a_different_model() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Trans file not found"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Trans file not found"),
+        "actual stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!out_dir.exists());
 }
 
