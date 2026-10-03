@@ -261,7 +261,6 @@ cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1
 ## Out of scope for v0.1 (mirrors Julia-mVMC v0.1)
 
 - BackFlow correlation factor.
-- MPI parallelisation.
 - Full Lanczos (only step-0 comparison verified upstream).
 - The `cimpl_utu2inv!` ccall path and `fimpl_zsktf2_/_dsktf2_` Fortran
   wrappers from `PfaPack.jl` — the optimizer's hot path uses the
