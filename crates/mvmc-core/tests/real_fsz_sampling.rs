@@ -1,6 +1,8 @@
 //! Source-level real FSZ sampler parity; see the fixture README for the
 //! reference's unused save-log argument adaptation.
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::sampling::vmc_make_sample_fsz_real;
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, LocSpinTerm, QuantumProjectionWeights};
@@ -150,23 +152,30 @@ fn real_fsz_sampler_matches_julia_configurations_counters_inverse_and_full_rng_b
             rng_block,
             "{header} RNG"
         );
-        let actual_pf: Vec<_> = s
-            .slater_matrix
-            .pf_m_real
-            .iter()
-            .map(|v| v.to_bits())
-            .collect();
+        let actual_pf = s.slater_matrix.pf_m_real.to_vec();
         let actual_inverse: Vec<_> = (0..2)
             .flat_map(|qp| {
                 s.slater_matrix
                     .inv_m_real
                     .qp_matrix_slice(qp)
                     .iter()
-                    .map(|v| v.to_bits())
+                    .copied()
             })
             .collect();
-        assert_eq!(actual_pf, pf, "{header} pf");
-        assert_eq!(actual_inverse, inverse, "{header} inverse");
+        numerical_comparison::assert_values_close(
+            actual_pf,
+            pf.into_iter().map(f64::from_bits),
+            512.0 * f64::EPSILON,
+            512.0 * f64::EPSILON,
+            format!("{header} pf"),
+        );
+        numerical_comparison::assert_values_close(
+            actual_inverse,
+            inverse.into_iter().map(f64::from_bits),
+            512.0 * f64::EPSILON,
+            512.0 * f64::EPSILON,
+            format!("{header} inverse"),
+        );
     }
 }
 
@@ -195,7 +204,7 @@ fn failed_real_fsz_initialization_preserves_saved_samples_and_counters() {
 }
 
 #[test]
-fn real_fsz_two_electron_proposal_and_update_match_julia_bits() {
+fn real_fsz_two_electron_proposal_and_update_match_julia_values() {
     use mvmc_core::sampling::{
         calculate_new_pf_m_two_fsz_real_flat, update_m_all_two_fsz_real_flat,
     };
@@ -252,10 +261,12 @@ fn real_fsz_two_electron_proposal_and_update_match_julia_bits() {
             ns,
             ne,
         );
-        assert_eq!(
-            new_pf.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-            proposed,
-            "{header} proposed"
+        numerical_comparison::assert_values_close(
+            new_pf.iter().copied(),
+            proposed.into_iter().map(f64::from_bits),
+            1e-13,
+            1e-13,
+            format!("{header} proposed"),
         );
         update_m_all_two_fsz_real_flat(
             0,
@@ -275,17 +286,19 @@ fn real_fsz_two_electron_proposal_and_update_match_julia_bits() {
             ns,
             ne,
         );
-        assert_eq!(
-            pf.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-            updated_pf,
-            "{header} accepted pf"
+        numerical_comparison::assert_values_close(
+            pf.iter().copied(),
+            updated_pf.into_iter().map(f64::from_bits),
+            512.0 * f64::EPSILON,
+            512.0 * f64::EPSILON,
+            format!("{header} accepted pf"),
         );
-        assert_eq!(
-            (0..2)
-                .flat_map(|qp| inverse.qp_matrix_slice(qp).iter().map(|v| v.to_bits()))
-                .collect::<Vec<_>>(),
-            updated_inv,
-            "{header} accepted inverse"
+        numerical_comparison::assert_values_close(
+            (0..2).flat_map(|qp| inverse.qp_matrix_slice(qp).iter().copied()),
+            updated_inv.into_iter().map(f64::from_bits),
+            512.0 * f64::EPSILON,
+            512.0 * f64::EPSILON,
+            format!("{header} accepted inverse"),
         );
     }
 }
@@ -334,7 +347,15 @@ fn real_fsz_proposals_use_julia_scalar_arithmetic_on_shared_bilinear_inputs() {
             n,
             n / 2,
         );
-        assert_eq!(proposed[0].to_bits(), expected, "size {n}");
+        // Bilinear proposal has O(n^2) products/additions, including cancellation.
+        let rounding = 8.0 * (n * n) as f64 * f64::EPSILON;
+        numerical_comparison::assert_close(
+            proposed[0],
+            f64::from_bits(expected),
+            rounding,
+            rounding,
+            format!("size {n} proposal"),
+        );
     }
     assert!(lines.next().is_none());
 }

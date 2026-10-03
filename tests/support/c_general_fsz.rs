@@ -1,4 +1,5 @@
 //! Independently generated native-C FSZ expectations; no C execution here.
+use crate::numerical_comparison;
 use crate::slater_derivative::{slater_elm_diff_fsz_with_scratch, SlaterDerivativeScratch};
 use crate::slater_update::update_slater_elm_fsz;
 use crate::VmcOptimizationState;
@@ -82,13 +83,18 @@ fn six_column_general_slater_and_derivatives_match_actual_c_fsz_kernels() {
         }
         update_slater_elm_fsz(&mut data, &mut state);
         let expected_slater = complexes(record[6]);
-        // Exact numeric equality includes every entry of both QP planes.
-        // Signed zeros reflect C complex construction, not differing values.
-        assert_eq!(
-            state.slater_matrix.slater_elm.as_slice(),
-            expected_slater,
-            "{} Slater",
-            header[0]
+        // QP Slater construction is a short signed, weighted sum.
+        numerical_comparison::assert_values_close(
+            state
+                .slater_matrix
+                .slater_elm
+                .as_slice()
+                .iter()
+                .flat_map(|z| [z.re, z.im]),
+            expected_slater.iter().flat_map(|z| [z.re, z.im]),
+            16.0 * f64::EPSILON,
+            16.0 * f64::EPSILON,
+            format!("{} Slater", header[0]),
         );
         let mut actual = vec![Complex64::new(0.0, 0.0); 2 * width];
         slater_elm_diff_fsz_with_scratch(
@@ -101,15 +107,25 @@ fn six_column_general_slater_and_derivatives_match_actual_c_fsz_kernels() {
             &mut SlaterDerivativeScratch::new(),
         );
         let expected = complexes(record[7]);
-        for (idx, (a, b)) in actual.iter().zip(&expected).enumerate() {
-            if *b == Complex64::new(0.0, 0.0) {
-                assert_eq!(*a, *b, "{} zero derivative {idx}", header[0]);
+        // Existing 1e-14 derivative budget, now componentwise and scale aware.
+        numerical_comparison::assert_values_close(
+            actual.iter().flat_map(|z| [z.re, z.im]),
+            expected.iter().flat_map(|z| [z.re, z.im]),
+            1e-14,
+            1e-14,
+            format!("{} derivatives", header[0]),
+        );
+        // Unmapped derivative slots are initialized/copied zeros, not a
+        // cancellation result: retain their exact storage contract.
+        for slot in 0..width {
+            if !data
+                .orbital_terms
+                .iter()
+                .any(|term| term.idx as usize == slot)
+            {
+                assert_eq!(actual[2 * slot], Complex64::new(0.0, 0.0));
+                assert_eq!(actual[2 * slot + 1], Complex64::new(0.0, 0.0));
             }
-            assert!(
-                (*a - *b).norm() <= 1e-14,
-                "{} derivative {idx}: Rust={a}, C={b}",
-                header[0]
-            );
         }
         // The generated geometry only references slots 0..3 in synthetic
         // cases; C and Rust return zero derivatives for every unmapped slot.

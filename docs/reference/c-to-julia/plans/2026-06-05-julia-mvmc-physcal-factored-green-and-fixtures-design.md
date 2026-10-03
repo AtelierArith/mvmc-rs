@@ -1,5 +1,10 @@
 # Julia-mVMC PhysCal: Factored Two-Body Green + Reference Fixtures Design
 
+This historical Julia design records the original comparison requirements.
+For current Rust and optional reference checks after #186, use the numerical
+bounds and exact deterministic controls in
+[NUMERICAL_COMPARISONS.md](../../../NUMERICAL_COMPARISONS.md).
+
 ## Scope
 
 This design covers the next v0.3 PhysCal step: porting the **factored /

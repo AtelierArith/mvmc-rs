@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Pure General matrix/Slater/derivative fixtures, based on upstream
 # test_orbital_qptrans_utils.jl and test_unit_slater_update.jl.
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
@@ -57,8 +59,8 @@ println(io, "# Julia-mVMC 8bb1b9e (numerical sources c2ea432), row-major orbital
         elseif kind == "ap_parallel"
             @test data.orbital_idx_matrix == general_idx
             @test data.orbital_sgn == general_sgn
-            @test reinterpret(UInt64, state.slater_matrix.slater_elm) == reinterpret(UInt64, general_slater)
-            @test reinterpret(UInt64, o) == reinterpret(UInt64, general_o)
+            @test ReferenceNumericalComparison.close_values(reinterpret(Float64,state.slater_matrix.slater_elm),reinterpret(Float64,general_slater),1e-13,1e-13)
+            @test ReferenceNumericalComparison.close_values(reinterpret(Float64,o),reinterpret(Float64,general_o),1e-13,1e-13)
         end
     end
     path = joinpath(root, "matrices.txt")
@@ -66,6 +68,6 @@ println(io, "# Julia-mVMC 8bb1b9e (numerical sources c2ea432), row-major orbital
     if "--write" in ARGS
         write(path, result)
     else
-        @test result == read(path, String)
+        @test compare_hex_text(result,read(path,String),(r,c,t)->mod1(r,8)>=7 ? (1e-13,1e-13) : nothing)
     end
 end

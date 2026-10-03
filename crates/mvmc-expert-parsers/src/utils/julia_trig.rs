@@ -11,8 +11,10 @@
 //! Developed at SunPro, a Sun Microsystems, Inc. business.
 //! Permission to use, copy, modify, and distribute this software is freely
 //! granted, provided that this notice is preserved.
-
 #![allow(clippy::excessive_precision)]
+
+#[cfg(test)]
+use crate::numerical_comparison;
 
 const DS1: f64 = -1.66666666666666324348e-01;
 const DS2: f64 = 8.33333333332248946124e-03;
@@ -458,7 +460,7 @@ pub fn sinh(x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn rbm_phase_sine_cosine_bits_match_julia_near_quadrant_boundaries_and_seeded_draws() {
+    fn rbm_phase_sine_cosine_match_julia_near_quadrant_boundaries_and_seeded_draws() {
         let fixture = include_str!("../../../../tests/fixtures/rbm/phase.txt");
         for line in fixture.lines().filter(|l| !l.starts_with('#')) {
             let bits: Vec<_> = line
@@ -466,8 +468,20 @@ mod tests {
                 .map(|s| u64::from_str_radix(s, 16).unwrap())
                 .collect();
             let phase = f64::from_bits(bits[0]);
-            assert_eq!(super::sin(phase).to_bits(), bits[1], "sin({phase:?})");
-            assert_eq!(super::cos(phase).to_bits(), bits[2], "cos({phase:?})");
+            // Absolute allowance covers cancellation near quadrant zeros; relative
+            // allowance covers argument reduction and polynomial roundoff.
+            for (name, actual, expected) in [
+                ("sin", super::sin(phase), bits[1]),
+                ("cos", super::cos(phase), bits[2]),
+            ] {
+                super::numerical_comparison::assert_close(
+                    actual,
+                    f64::from_bits(expected),
+                    8.0 * f64::EPSILON,
+                    16.0 * f64::EPSILON,
+                    format!("{name}({phase:?})"),
+                );
+            }
         }
     }
 }

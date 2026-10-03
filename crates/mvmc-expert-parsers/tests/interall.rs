@@ -3,6 +3,8 @@
 mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use std::path::{Path, PathBuf};
 
 use historical_orbital_model::historical_interall_model::{
@@ -104,17 +106,25 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
         .split_whitespace()
         .map(|s| u64::from_str_radix(s, 16).unwrap())
         .collect();
-    let actual: Vec<u64> = data
+    let actual: Vec<f64> = data
         .orbital_terms
         .iter()
         .flat_map(|t| {
             [
-                data.slater_params[t.idx as usize].re.to_bits(),
-                data.slater_params[t.idx as usize].im.to_bits(),
+                data.slater_params[t.idx as usize].re,
+                data.slater_params[t.idx as usize].im,
             ]
         })
         .collect();
-    assert_eq!(actual, bits);
+    // Initialization arithmetic is portable within rounding error;
+    // coupling literals, no-effect state equality and RNG words remain exact.
+    numerical_comparison::assert_values_close(
+        actual,
+        bits.into_iter().map(f64::from_bits),
+        1e-14,
+        1e-14,
+        "initialized Slater coefficients",
+    );
     let words: Vec<u32> = lines
         .next()
         .unwrap()

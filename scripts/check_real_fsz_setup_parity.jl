@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # FSZ setup parity: explicit spin indexing, QP slices and initial-sample retries.
 # Range/sentinel checks follow test_unit_vmc_sampling_qp_split.jl; matrix
 # construction follows test_unit_slater_update.jl. Runtime kernels are unmodified.
@@ -111,5 +113,5 @@ actual = String(take!(io)); path = joinpath(root, "setup.txt")
 if "--write" in ARGS
     mkpath(root); write(path, actual)
 else
-    @test actual == read(path, String)
+    @test compare_hex_text(actual,read(path,String),(r,c,t)->r<=128 && mod1(r,8)>=5 ? (1e-13,1e-13) : nothing)
 end

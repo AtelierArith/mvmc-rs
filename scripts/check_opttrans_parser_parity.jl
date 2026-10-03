@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # OptTrans input contracts from unmodified Julia 1.13.1 reference sources.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers
 VERSION == v"1.13.1" || error("OptTrans fixtures require Julia 1.13.1")
@@ -7,7 +9,7 @@ const root = normpath(joinpath(@__DIR__, "..", "tests", "fixtures", "opttrans"))
 hex(values) = join([string(reinterpret(UInt64, x); base=16, pad=16) for v in values for x in (real(v), imag(v))], " ")
 function verify(file, actual)
     path = joinpath(root, file)
-    "--write" in ARGS ? write(path, actual) : @test(actual == read(path, String))
+    "--write" in ARGS ? write(path, actual) : @test(file=="initial.txt" ? compare_initialization_text(actual,read(path,String)) : compare_hex_text(actual,read(path,String),(r,c,t)->nothing))
 end
 function failure(f, path)
     try

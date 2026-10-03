@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 using Test, MVMCExpertModeParsers, MVMCOptimizers, LinearAlgebra
 using MVMCExpertModeParsers: ExpertModeData, OrbitalTerm
 VERSION == v"1.13.1" || error("SR failure checks require Julia 1.13.1")
@@ -45,7 +47,7 @@ end
     if "--write" in ARGS
         mkpath(dirname(path)); write(path,actual)
     else
-        @test actual == read(path,String)
+        @test compare_record_blocks(actual,read(path,String),2,(2,))
     end
 end
 @testset "Direct SR finite check and missing component flags" begin

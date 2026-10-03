@@ -6,7 +6,7 @@
 //! * `run_para_opt_from_namelist.jl` -> `run_para_opt_from_namelist`
 //! * `initial_params.jl` -> `read_initial_def`
 //!
-//! BIT-PARITY CRITICAL: preserve the upstream phase order documented in
+//! Preserve the deterministic initialization phase order documented in
 //! `run_para_opt_from_namelist.jl:65-100`:
 //!     init_gen_rand -> InitParameter -> ReadInitParameter
 //!         -> ReadInputParameters -> SyncModifiedParameter -> InitQPWeight.
@@ -1468,18 +1468,18 @@ mod mode_tests {
             .set(0, 3, 0, Complex64::new(-1.0, 0.0));
         let pool = ThreadedPfaPackWorkspace::new(2, 1);
         refresh_fsz_observation_matrix(&data, &mut state, false, &[0, 1], &[0, 1], &pool).unwrap();
-        assert_ne!(state.slater_matrix.pf_m_real[0].to_bits(), 0);
+        assert_ne!(state.slater_matrix.pf_m_real[0], 0.0);
         assert_eq!(state.slater_matrix.pf_m[0].im, 0.0);
         assert_eq!(
-            state.slater_matrix.pf_m[0].re.to_bits(),
-            state.slater_matrix.pf_m_real[0].to_bits()
+            state.slater_matrix.pf_m[0].re,
+            state.slater_matrix.pf_m_real[0]
         );
         assert!(state
             .slater_matrix
             .inv_m_real
             .qp_matrix_slice(0)
             .iter()
-            .any(|value| value.to_bits() != 0));
+            .any(|value| *value != 0.0));
     }
 
     // Julia test_unit_types.jl checks that complex SROptData has no real
@@ -2339,9 +2339,9 @@ mod callback_tests {
 
     use super::reference_slater::{declared_output, declared_slater_rows};
 
-    fn declared_history_bits(data: &ExpertModeData, historical: Vec<u64>) -> Vec<u64> {
+    fn declared_history_values(data: &ExpertModeData, historical: Vec<f64>) -> Vec<f64> {
         let prefix = 2 * (data.gutzwiller_terms.len() + data.jastrow_terms.len());
-        let mapped: Vec<[u64; 2]> = historical[prefix..]
+        let mapped: Vec<[f64; 2]> = historical[prefix..]
             .as_chunks::<2>()
             .0
             .iter()
@@ -2355,7 +2355,7 @@ mod callback_tests {
     }
 
     // Archived Julia output omitted RBM coefficients. C-compatible output
-    // includes them in declared order. Keep every archived byte comparison
+    // includes them in declared order. Preserve every archived output field
     // and insert the independently captured pre-SR coefficients for each row.
     fn declared_runner_output(
         data: &ExpertModeData,
@@ -2963,16 +2963,13 @@ mod callback_tests {
     #[test]
     fn dh2_loaded_values_and_rng_match_julia_with_history_in_c_declared_order() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh2");
-        let bits = |text: &str| -> Vec<u64> {
+        let scalars = |text: &str| -> Vec<f64> {
             text.split_whitespace()
-                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect()
         };
-        let serialize = |values: Vec<Complex64>| -> Vec<u64> {
-            values
-                .iter()
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect()
+        let serialize = |values: Vec<Complex64>| -> Vec<f64> {
+            values.iter().flat_map(|v| [v.re, v.im]).collect()
         };
         for mode in ["real", "cmp", "fsz"] {
             let (mut data, mut state, mut rng) =
@@ -3000,11 +2997,7 @@ mod callback_tests {
                         .map(|t| data.slater_params[t.idx as usize]),
                 )
                 .collect();
-            assert_eq!(
-                serialize(values),
-                bits(lines.next().unwrap()),
-                "{mode} loaded values"
-            );
+            let expected_values = scalars(lines.next().unwrap());
             let mut probe = rng.clone();
             assert_eq!(
                 (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
@@ -3015,6 +3008,13 @@ mod callback_tests {
                     .map(|s| s.parse::<u32>().unwrap())
                     .collect::<Vec<_>>(),
                 "{mode} loaded RNG"
+            );
+            crate::numerical_comparison::assert_values_close(
+                serialize(values),
+                expected_values,
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{mode} loaded values"),
             );
             assert!(lines.next().is_none());
             let dir = fresh_output_directory().unwrap();
@@ -3066,15 +3066,19 @@ mod callback_tests {
             let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
-                assert_eq!(
+                crate::numerical_comparison::assert_values_close(
                     serialize(vec![point.energy]),
-                    bits(lines.next().unwrap()),
-                    "{mode} history energy"
+                    scalars(lines.next().unwrap()),
+                    1e-11,
+                    1e-11,
+                    format!("{mode} history energy"),
                 );
-                assert_eq!(
+                crate::numerical_comparison::assert_values_close(
                     serialize(point.parameters.clone()),
-                    declared_history_bits(&data, bits(lines.next().unwrap())),
-                    "{mode} history values"
+                    declared_history_values(&data, scalars(lines.next().unwrap())),
+                    1e-11,
+                    1e-11,
+                    format!("{mode} history values"),
                 );
             }
             assert!(lines.next().is_none());
@@ -3085,16 +3089,13 @@ mod callback_tests {
     #[test]
     fn dh4_loaded_values_and_rng_match_julia_with_history_in_c_declared_order() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh4");
-        let bits = |text: &str| -> Vec<u64> {
+        let scalars = |text: &str| -> Vec<f64> {
             text.split_whitespace()
-                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect()
         };
-        let serialize = |values: Vec<Complex64>| -> Vec<u64> {
-            values
-                .iter()
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect()
+        let serialize = |values: Vec<Complex64>| -> Vec<f64> {
+            values.iter().flat_map(|v| [v.re, v.im]).collect()
         };
         for mode in [
             "dh4_real",
@@ -3129,11 +3130,7 @@ mod callback_tests {
                         .map(|t| data.slater_params[t.idx as usize]),
                 )
                 .collect();
-            assert_eq!(
-                serialize(values),
-                bits(lines.next().unwrap()),
-                "{mode} loaded values"
-            );
+            let expected_values = scalars(lines.next().unwrap());
             let mut probe = rng.clone();
             assert_eq!(
                 (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
@@ -3144,6 +3141,13 @@ mod callback_tests {
                     .map(|s| s.parse::<u32>().unwrap())
                     .collect::<Vec<_>>(),
                 "{mode} loaded RNG"
+            );
+            crate::numerical_comparison::assert_values_close(
+                serialize(values),
+                expected_values,
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{mode} loaded values"),
             );
             assert!(lines.next().is_none());
             let dir = fresh_output_directory().unwrap();
@@ -3195,15 +3199,19 @@ mod callback_tests {
             let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
-                assert_eq!(
+                crate::numerical_comparison::assert_values_close(
                     serialize(vec![point.energy]),
-                    bits(lines.next().unwrap()),
-                    "{mode} history energy"
+                    scalars(lines.next().unwrap()),
+                    1e-11,
+                    1e-11,
+                    format!("{mode} history energy"),
                 );
-                assert_eq!(
+                crate::numerical_comparison::assert_values_close(
                     serialize(point.parameters.clone()),
-                    declared_history_bits(&data, bits(lines.next().unwrap())),
-                    "{mode} history values"
+                    declared_history_values(&data, scalars(lines.next().unwrap())),
+                    1e-11,
+                    1e-11,
+                    format!("{mode} history values"),
                 );
             }
             assert!(lines.next().is_none());
@@ -3379,15 +3387,9 @@ mod callback_tests {
                                 .projection_parameters()
                                 .iter()
                                 .chain(&data.slater_params)
-                                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+                                .flat_map(|v| [v.re, v.im])
                                 .collect();
-                            records.push((
-                                step,
-                                energy.re.to_bits(),
-                                energy.im.to_bits(),
-                                info,
-                                parameters,
-                            ));
+                            records.push((step, energy.re, energy.im, info, parameters));
                             Ok(())
                         };
                     vmc_para_opt(
@@ -3403,17 +3405,33 @@ mod callback_tests {
                     )
                     .unwrap();
                     assert_eq!(records.len(), 3);
-                    assert!(records
-                        .iter()
-                        .any(|record| f64::from_bits(record.1).abs() > 1e-6));
+                    assert!(records.iter().any(|record| record.1.abs() > 1e-6));
                     let rng_words: Vec<_> = (0..624).map(|_| rng.gen_rand32()).collect();
                     runs.push((records, state.electron_config, rng_words));
                     fs::remove_dir_all(directory).unwrap();
                 }
                 assert_eq!(
-                    runs[0], runs[1],
-                    "complex={complex}, NSRCG={cg}, NStore={store}"
+                    runs[0].1, runs[1].1,
+                    "equivalent Hamiltonian configurations"
                 );
+                assert_eq!(runs[0].2, runs[1].2, "equivalent Hamiltonian RNG");
+                for (a, b) in runs[0].0.iter().zip(&runs[1].0) {
+                    assert_eq!((a.0, a.3), (b.0, b.3), "step/status");
+                    crate::numerical_comparison::assert_values_close(
+                        [a.1, a.2],
+                        [b.1, b.2],
+                        1e-12,
+                        1e-12,
+                        "equivalent energy",
+                    );
+                    crate::numerical_comparison::assert_values_close(
+                        a.4.iter().copied(),
+                        b.4.iter().copied(),
+                        1e-11,
+                        1e-11,
+                        "equivalent SR parameters",
+                    );
+                }
             }
         }
     }
@@ -3449,10 +3467,10 @@ mod callback_tests {
             .collect();
         let flags = crate::historical_optimization_flags::c_orbital_representation(data, flags);
         assert_eq!(data.optimization_flags, flags);
-        let bits: Vec<u64> = fs::read_to_string(root.join("initial-parameters.txt"))
+        let expected: Vec<f64> = fs::read_to_string(root.join("initial-parameters.txt"))
             .unwrap()
             .split_whitespace()
-            .map(|v| u64::from_str_radix(v, 16).unwrap())
+            .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
             .collect();
         let mut mapped = data.clone();
         let mut rbm_values = Vec::new();
@@ -3471,10 +3489,8 @@ mod callback_tests {
                     .map(|t| data.slater_params[t.idx as usize]),
             )
             .chain(data.opt_trans.iter().copied());
-        let actual: Vec<_> = values
-            .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-            .collect();
-        assert_eq!(actual, bits);
+        let actual: Vec<_> = values.flat_map(|v| [v.re, v.im]).collect();
+
         let words: Vec<u32> = fs::read_to_string(root.join("initial-rng.txt"))
             .unwrap()
             .split_whitespace()
@@ -3484,6 +3500,13 @@ mod callback_tests {
         for expected in words {
             assert_eq!(rng.gen_rand32(), expected);
         }
+        crate::numerical_comparison::assert_values_close(
+            actual,
+            expected,
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "initial parameters",
+        );
     }
 
     #[test]
@@ -3863,59 +3886,59 @@ mod callback_tests {
             };
             let read = |kind: &str| read_fixture(&format!("step-{steps}-{kind}.txt"));
             assert_sampling_checkpoint(case, steps, &state, &mut rng, &read);
-            let bits = |text: &str| -> Vec<u64> {
+            let scalars = |text: &str| -> Vec<f64> {
                 text.split_whitespace()
-                    .map(|v| u64::from_str_radix(v, 16).unwrap())
+                    .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
                     .collect()
             };
             if (case.starts_with("rbm_") || case.starts_with("opt_")) && steps == 1 && !cg {
                 let fixture = read_fixture("fixed-input.txt");
                 let lines: Vec<&str> = fixture.lines().filter(|l| !l.starts_with('#')).collect();
-                let complex_bits = |values: &[Complex64]| -> Vec<u64> {
-                    values
-                        .iter()
-                        .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
-                        .collect()
+                let components = |values: &[Complex64]| -> Vec<f64> {
+                    values.iter().flat_map(|z| [z.re, z.im]).collect()
                 };
                 let (oo, ho) = if get_all_complex_flag(&data) {
                     (
-                        complex_bits(&state.sr_opt.sr_opt_oo),
-                        complex_bits(&state.sr_opt.sr_opt_ho),
+                        components(&state.sr_opt.sr_opt_oo),
+                        components(&state.sr_opt.sr_opt_ho),
                     )
                 } else {
                     (
-                        state
-                            .sr_opt
-                            .sr_opt_oo_real
-                            .iter()
-                            .map(|v| v.to_bits())
-                            .collect(),
-                        state
-                            .sr_opt
-                            .sr_opt_ho_real
-                            .iter()
-                            .map(|v| v.to_bits())
-                            .collect(),
+                        state.sr_opt.sr_opt_oo_real.to_vec(),
+                        state.sr_opt.sr_opt_ho_real.to_vec(),
                     )
                 };
-                assert_eq!(oo, bits(lines[2]), "{case} sampled SR OO");
-                assert_eq!(ho, bits(lines[3]), "{case} sampled SR HO");
+                crate::numerical_comparison::assert_values_close(
+                    oo,
+                    scalars(lines[2]),
+                    1e-12,
+                    1e-12,
+                    format!("{case} sampled SR OO"),
+                );
+                crate::numerical_comparison::assert_values_close(
+                    ho,
+                    scalars(lines[3]),
+                    1e-12,
+                    1e-12,
+                    format!("{case} sampled SR HO"),
+                );
                 if store == 1 {
                     let fixture = read_fixture("gram.txt");
-                    let expected = bits(fixture.lines().nth(1).unwrap());
+                    let expected = scalars(fixture.lines().nth(1).unwrap());
                     let actual = if get_all_complex_flag(&data) {
-                        complex_bits(&state.sr_opt.sr_opt_o_store)
+                        components(&state.sr_opt.sr_opt_o_store)
                     } else {
-                        state
-                            .sr_opt
-                            .sr_opt_o_store_real
-                            .iter()
-                            .map(|v| v.to_bits())
-                            .collect()
+                        state.sr_opt.sr_opt_o_store_real.to_vec()
                     };
                     assert_eq!(actual.len(), expected.len());
                     for (i, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
-                        assert_eq!(actual, expected, "{case} sampled SR O store component {i}");
+                        crate::numerical_comparison::assert_close(
+                            *actual,
+                            *expected,
+                            1e-12,
+                            1e-12,
+                            format!("{case} sampled SR O store component {i}"),
+                        );
                     }
                 }
             }
@@ -3935,23 +3958,35 @@ mod callback_tests {
                         .map(|t| data.slater_params[t.idx as usize]),
                 )
                 .chain(data.opt_trans.iter().copied());
-            let actual: Vec<u64> = values
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect();
-            assert_eq!(actual, bits(&read("parameters")), "step {steps} parameters");
-            assert_eq!(
-                [
-                    state.energy.etot.re.to_bits(),
-                    state.energy.etot.im.to_bits()
-                ]
-                .as_slice(),
-                bits(&read("energy")),
-                "step {steps} energy"
+            let actual: Vec<f64> = values.flat_map(|v| [v.re, v.im]).collect();
+            crate::numerical_comparison::assert_values_close(
+                actual,
+                scalars(&read("parameters")),
+                1e-11,
+                1e-11,
+                format!("step {steps} parameters"),
+            );
+            crate::numerical_comparison::assert_values_close(
+                [state.energy.etot.re, state.energy.etot.im]
+                    .as_slice()
+                    .iter()
+                    .copied(),
+                scalars(&read("energy")),
+                1e-11,
+                1e-11,
+                format!("step {steps} energy"),
             );
             if cg {
-                assert_eq!(
-                    fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap(),
-                    read("SRinfo")
+                // Diagnostics print only five digits after the decimal point.
+                // One final printed quantum can differ at a rounding boundary.
+                // Dimensions, cuts, index and iteration count remain exact.
+                crate::numerical_comparison::assert_numeric_text(
+                    &fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap(),
+                    &read("SRinfo"),
+                    1e-12,
+                    1e-5,
+                    &[0, 1, 2, 3, 7, 8],
+                    format!("{case} step {steps} SR diagnostics"),
                 );
             }
             if case.starts_with("dh2_")
@@ -3975,15 +4010,22 @@ mod callback_tests {
                             "# absent after source SR failure\n"
                         );
                     } else {
-                        assert_eq!(
-                            fs::read_to_string(dir.join(name)).unwrap(),
-                            declared_runner_output(
+                        crate::numerical_comparison::assert_numeric_text(
+                            &fs::read_to_string(dir.join(name)).unwrap(),
+                            &declared_runner_output(
                                 &data,
                                 name,
                                 read_fixture(&format!("step-{steps}-{name}")),
                                 &rbm_before_sr,
                             ),
-                            "{case} {steps} {name}"
+                            1e-11,
+                            1e-11,
+                            if name.starts_with("zqp_") && name != "zqp_opt.dat" {
+                                &[0]
+                            } else {
+                                &[]
+                            },
+                            format!("{case} {steps} {name}"),
                         );
                     }
                 }

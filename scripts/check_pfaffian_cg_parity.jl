@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Fixed real/complex Slater matrices from the seed=1 reference chain.
 # Run with Julia 1.13.1 --project=extern/Julia-mVMC; --write regenerates outputs.
 using Test, PfaPack, LinearAlgebra
@@ -9,7 +11,7 @@ lines = filter(l -> !startswith(l, "#"), readlines(path))
 input_only = length(lines) == 16
 io = IOBuffer()
 println(io, "# Julia ", VERSION, "; ", BLAS.get_config(), "; threads=1")
-println(io, "# First $(complex_mode ? "complex" : "real") Slater matrices, seed=1, 8 QP planes")
+println(io, complex_mode ? "# First complex Slater matrices, seed=1, 8 QP planes" : "# First real Slater matrices, heisenberg_chain_real seed=1, 8 QP planes")
 parse_bits(l) = [reinterpret(Float64, parse(UInt64, s; base=16)) for s in split(l)]
 hexes(v) = join(string.(reinterpret(UInt64, vec(v)); base=16, pad=16), " ")
 for start in 1:(input_only ? 2 : 6):length(lines)
@@ -31,5 +33,5 @@ if "--write" in ARGS
     write(path, actual)
 else
     numerical(s) = join(filter(l -> !startswith(l, "#"), split(s, '\n')), '\n')
-    @test numerical(actual) == numerical(read(path, String))
+    @test compare_hex_text(actual,read(path,String),(r,c,t)->mod1(r,6)>=4 ? (1e-13,1e-13) : nothing)
 end

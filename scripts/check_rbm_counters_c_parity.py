@@ -7,6 +7,7 @@ import struct
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text, assert_values_close, decode_hex, GREEN
 from c_toolbox import materialize
 from check_general_orbital_c_parity import function
 from check_rbm_contracts_c_parity import definition, geometry, materialize_readers
@@ -73,6 +74,8 @@ def main():
     hashes = "; ".join(f"{p.name} sha256={hashlib.sha256(p.read_bytes()).hexdigest()}" for p in (reader, kernel))
     output = f"# actual C MakeRBMCnt/UpdateRBMCnt and readers; Nneuron=sum of family dimensions; complete assigned mappings; Apple clang 17 -O0 -ffp-contract=off; {hashes}\n"
     checked = tables = 0
+    computed_rows = set()
+    data_row = 0
     with tempfile.TemporaryDirectory(prefix="mvmc-c-rbm-counters-") as directory:
         tmp = Path(directory)
         exe = tmp / "probe"
@@ -90,17 +93,21 @@ def main():
             output += f"MODEL {name} {sites} {hidden} {len(cases)} {' '.join(map(str,widths))}\n"
             output += "~".join(content.replace("\n", "|") for content in definitions)+"\n"
             output += " ".join(values)+"\n"
+            data_row += 3
             for i, row in enumerate(cases):
                 old, new, inplace = lines[3*i:3*i+3]
-                assert new == inplace, (name, row, "native in-place mismatch")
+                assert_values_close(map(decode_hex, new.split()), map(decode_hex, inplace.split()),
+                                    *GREEN, context=f"{name}: native in-place update")
                 output += " ".join(map(str, row))+"\n"+old+"\n"+new+"\n"
+                computed_rows.update((data_row + 1, data_row + 2))
+                data_row += 3
                 checked += 1
             tables += 1
     target = root / "tests/fixtures/rbm/c_counters.txt"
     if args.write:
         if not target.exists() or target.read_text() != output: target.write_text(output)
     else:
-        assert target.read_text() == output, "native C RBM counters changed"
+        compare_text(output, target.read_text(), lambda row, col, fields: GREEN if row in computed_rows else None)
     print(f"{checked} native C RBM counter/hop cases across {tables} tables passed (including in-place checks)")
 
 

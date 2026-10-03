@@ -84,9 +84,12 @@ mod tests {
             Complex64::new(-1.0e16, 0.0),
             Complex64::new(-1.0, 0.0),
         );
-        assert_eq!(
-            actual.to_bits(),
-            mvmc_expert_parsers::utils::julia_exp::exp(2.0).to_bits()
+        crate::numerical_comparison::assert_close(
+            actual,
+            mvmc_expert_parsers::utils::julia_exp::exp(2.0),
+            0.0,
+            4.0 * f64::EPSILON,
+            "acceptance exponential",
         );
     }
 

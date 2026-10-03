@@ -1,5 +1,7 @@
 //! Phase 4.3.5b parity for one normal hopping move scaffold.
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -574,7 +576,13 @@ fn one_hopping_move_matches_julia_accept_and_reject_cases() {
         assert!(close(outcome.log_proj_delta, case.log_proj_delta));
         let decision = outcome.decision.expect("metropolis decision");
         assert!(close(decision.weight, case.weight), "{} weight", case.label);
-        assert!(close(decision.draw, case.draw), "{} draw", case.label);
+        // SFMT integer-to-float conversion is part of the exact RNG contract.
+        assert_eq!(
+            decision.draw.to_bits(),
+            case.draw.to_bits(),
+            "{} draw",
+            case.label
+        );
         assert_eq!(decision.accepted, case.accepted, "{} accepted", case.label);
         assert_eq!(ele_idx, case.ele_idx, "{} ele_idx", case.label);
         assert_eq!(ele_cfg, case.ele_cfg, "{} ele_cfg", case.label);
@@ -617,7 +625,14 @@ fn hopping_mini_loop_matches_julia_snapshots() {
     );
 
     assert_eq!(outcome.accepted_count, mini.accepted_count);
-    assert_eq!(outcome.log_ip_final, mini.log_ip_final);
+    // The final overlap log uses a short QP sum and complex logarithm.
+    numerical_comparison::assert_values_close(
+        [outcome.log_ip_final.re, outcome.log_ip_final.im],
+        [mini.log_ip_final.re, mini.log_ip_final.im],
+        64.0 * f64::EPSILON,
+        64.0 * f64::EPSILON,
+        "mini final overlap log",
+    );
     assert_eq!(outcome.steps.len(), mini.steps.len());
 
     for (idx, (got, want)) in outcome.steps.iter().zip(mini.steps.iter()).enumerate() {
@@ -638,7 +653,11 @@ fn hopping_mini_loop_matches_julia_snapshots() {
                     close(decision.weight, want.weight),
                     "mini step {idx} weight"
                 );
-                assert!(close(decision.draw, want.draw), "mini step {idx} draw");
+                assert_eq!(
+                    decision.draw.to_bits(),
+                    want.draw.to_bits(),
+                    "mini step {idx} draw"
+                );
                 assert_eq!(decision.accepted, want.accepted, "mini step {idx} accepted");
             }
             None => {
@@ -691,7 +710,14 @@ fn generated_hopping_mini_loop_matches_julia_snapshots() {
     );
 
     assert_eq!(outcome.accepted_count, mini.accepted_count);
-    assert_eq!(outcome.log_ip_final, mini.log_ip_final);
+    // The final overlap log uses a short QP sum and complex logarithm.
+    numerical_comparison::assert_values_close(
+        [outcome.log_ip_final.re, outcome.log_ip_final.im],
+        [mini.log_ip_final.re, mini.log_ip_final.im],
+        64.0 * f64::EPSILON,
+        64.0 * f64::EPSILON,
+        "mini final overlap log",
+    );
     assert_eq!(outcome.steps.len(), mini.steps.len());
 
     for (idx, (got, want)) in outcome.steps.iter().zip(mini.steps.iter()).enumerate() {
@@ -719,7 +745,11 @@ fn generated_hopping_mini_loop_matches_julia_snapshots() {
                     close(decision.weight, want.weight),
                     "generated step {idx} weight"
                 );
-                assert!(close(decision.draw, want.draw), "generated step {idx} draw");
+                assert_eq!(
+                    decision.draw.to_bits(),
+                    want.draw.to_bits(),
+                    "generated step {idx} draw"
+                );
                 assert_eq!(
                     decision.accepted, want.accepted,
                     "generated step {idx} accepted"
@@ -800,7 +830,14 @@ fn generated_normal_dispatch_loop_matches_julia_snapshots() {
     );
 
     assert_eq!(outcome.accepted_count, mini.accepted_count);
-    assert_eq!(outcome.log_ip_final, mini.log_ip_final);
+    // The final overlap log uses a short QP sum and complex logarithm.
+    numerical_comparison::assert_values_close(
+        [outcome.log_ip_final.re, outcome.log_ip_final.im],
+        [mini.log_ip_final.re, mini.log_ip_final.im],
+        64.0 * f64::EPSILON,
+        64.0 * f64::EPSILON,
+        "mini final overlap log",
+    );
     assert_eq!(outcome.steps.len(), mini.steps.len());
 
     for (idx, (got, want)) in outcome.steps.iter().zip(mini.steps.iter()).enumerate() {
@@ -847,7 +884,11 @@ fn generated_normal_dispatch_loop_matches_julia_snapshots() {
                     close(decision.weight, want.weight),
                     "dispatch step {idx} weight"
                 );
-                assert!(close(decision.draw, want.draw), "dispatch step {idx} draw");
+                assert_eq!(
+                    decision.draw.to_bits(),
+                    want.draw.to_bits(),
+                    "dispatch step {idx} draw"
+                );
                 assert_eq!(
                     decision.accepted, want.accepted,
                     "dispatch step {idx} accepted bool"

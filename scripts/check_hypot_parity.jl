@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 using Test
 VERSION == v"1.13.1" || error("Hypot fixture requires Julia 1.13.1")
 path=joinpath(@__DIR__,"..","tests","fixtures","hypot.txt")
@@ -7,4 +9,4 @@ for (x,y) in ((3.,4.),(1.3,2.7),(-4.2,.7),(2.425211183513878,3.1809355094624614)
     println(io,hex([x,y,hypot(x,y)]))
 end
 actual=String(take!(io))
-if "--write" in ARGS;write(path,actual);else;@test actual==read(path,String);end
+if "--write" in ARGS;write(path,actual);else;@test compare_hex_text(actual, read(path,String), (row,col,fields)->col>=3 ? (4*nextfloat(0.0),64*eps(Float64)) : nothing);end

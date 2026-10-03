@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Real FSZ sampler oracle. Kernels and RNG code are the checked-out sources.
 # The reference has one nonnumerical API mismatch: it passes a Float64 log
 # to save_ele_config_fsz!, which accepts only ComplexF64 and never reads it.
@@ -74,5 +76,5 @@ actual = String(take!(io)); path = joinpath(ROOT, "sampling.txt")
 if "--write" in ARGS
     write(path, actual)
 else
-    @test actual == read(path, String)
+    @test compare_sampling_text(actual,read(path,String))
 end

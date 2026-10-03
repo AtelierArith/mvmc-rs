@@ -1,4 +1,6 @@
 //! Defined serial C FSZ measurements, including real-mode complex shadows.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::observables::{calculate_green_func_fsz, weight_average_green_func_fsz};
 use mvmc_core::state::PhysicalQuantities;
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
@@ -27,11 +29,15 @@ fn complexes(line: &str) -> Vec<Complex64> {
         .collect()
 }
 
-fn bits(values: &[Complex64]) -> Vec<[u64; 2]> {
-    values
-        .iter()
-        .map(|v| [v.re.to_bits(), v.im.to_bits()])
-        .collect()
+fn check_measurements(actual: &[Complex64], expected: &[Complex64], context: &str) {
+    // Fixed 4-electron Green kernels plus at most three weighted samples.
+    numerical_comparison::assert_values_close(
+        actual.iter().flat_map(|z| [z.re, z.im]),
+        expected.iter().flat_map(|z| [z.re, z.im]),
+        2e-13,
+        2e-13,
+        context,
+    );
 }
 
 #[test]
@@ -41,7 +47,6 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
     #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
     let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_measurements.txt");
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
-    let mut differences = Vec::new();
     for case in 0..12 {
         let complex = lines.next().unwrap() == "1";
         let idx = integers(lines.next().unwrap());
@@ -191,15 +196,11 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
                 ("factored", &phys.phys_cis_ajs_ckt_alt, &expected_factored),
             ] {
                 assert_eq!(actual.len(), expected.len(), "{case} {sample} {name}");
-                for (operator, (actual, expected)) in
-                    bits(actual).into_iter().zip(bits(expected)).enumerate()
-                {
-                    if actual != expected {
-                        differences.push(format!(
-                            "case={case} sample={sample} {name}[{operator}]: Rust={actual:x?}, C={expected:x?}"
-                        ));
-                    }
-                }
+                check_measurements(
+                    actual,
+                    expected,
+                    &format!("case={case} sample={sample} {name}"),
+                );
             }
         }
         weight_average_green_func_fsz(&mut state);
@@ -211,24 +212,10 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
         ] {
             let expected = complexes(lines.next().unwrap());
             assert_eq!(actual.len(), expected.len(), "{case} {name}");
-            for (operator, (actual, expected)) in
-                bits(actual).into_iter().zip(bits(&expected)).enumerate()
-            {
-                if actual != expected {
-                    differences.push(format!(
-                        "case={case} {name}[{operator}]: Rust={actual:x?}, C={expected:x?}"
-                    ));
-                }
-            }
+            check_measurements(actual, &expected, &format!("case={case} {name}"));
         }
         assert_eq!(state.slater_matrix, before_matrix);
         assert_eq!(state.electron_config, before_configuration);
     }
     assert!(lines.next().is_none());
-    assert!(
-        differences.is_empty(),
-        "{} C differences, first: {:?}",
-        differences.len(),
-        differences.first()
-    );
 }

@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Unmodified canonical RBM loaders, counters, ratios and SR derivatives.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("RBM fixtures require Julia 1.13.1")
@@ -10,7 +12,11 @@ hex(v)=join([string(reinterpret(UInt64,x);base=16,pad=16) for z in v for x in (r
 values(d)=vcat(P.projection_parameters(d),[t.value for f in fields for t in getfield(d,f)],[t.value for t in d.orbital_terms])
 function verify(name,actual)
     path=joinpath(root,name)
-    "--write" in ARGS ? write(path,actual) : @test(actual==read(path,String))
+    "--write" in ARGS ? write(path,actual) : @test(compare_hex_text(actual,read(path,String),(r,c,t)->begin
+        ishex=occursin(r"^[0-9a-fA-F]{16}$",t[c])
+        computed=name=="kernels.txt" || (name=="loading.txt" && mod1(r,6) in (2,6)) || (name=="updates.txt" && mod1(r,6)>=5)
+        ishex && computed ? (1e-13,1e-13) : nothing
+    end))
 end
 @testset "Original RBM production kernels" begin
     include(joinpath(@__DIR__,"..","extern","Julia-mVMC","MVMCOptimizers.jl","test_unit","test_unit_vmc_sampling_rbm.jl"))

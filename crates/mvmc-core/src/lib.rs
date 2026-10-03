@@ -70,6 +70,9 @@ mod c_general_fsz;
 #[cfg(test)]
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+#[cfg(test)]
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 
 #[cfg(test)]
 #[path = "../../../tests/support/historical_optimization_flags.rs"]

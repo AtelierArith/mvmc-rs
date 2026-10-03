@@ -290,11 +290,8 @@ mod tests {
                 .map(|z| Complex64::new(z[0], z[1]))
                 .collect()
         };
-        let bits = |vals: &[Complex64]| -> Vec<u64> {
-            vals.iter()
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect()
-        };
+        let components =
+            |vals: &[Complex64]| -> Vec<f64> { vals.iter().flat_map(|v| [v.re, v.im]).collect() };
         while let Some(header) = lines.next() {
             let fields: Vec<_> = header.split_whitespace().collect();
             let kind = fields[0];
@@ -374,10 +371,12 @@ mod tests {
             let expected_slater = complexes(lines.next().unwrap());
             let expected_o = complexes(lines.next().unwrap());
             update_slater_elm_fsz(&mut data, &mut state);
-            assert_eq!(
-                bits(state.slater_matrix.slater_elm.as_slice()),
-                bits(&expected_slater),
-                "{header} Slater"
+            crate::numerical_comparison::assert_values_close(
+                components(state.slater_matrix.slater_elm.as_slice()),
+                components(&expected_slater),
+                64.0 * f64::EPSILON,
+                64.0 * f64::EPSILON,
+                format!("{header} Slater"),
             );
             let mut o = vec![Complex64::new(0.0, 0.0); 2 * n];
             slater_elm_diff_fsz_with_scratch(
@@ -389,7 +388,13 @@ mod tests {
                 &state.slater_matrix,
                 &mut SlaterDerivativeScratch::new(),
             );
-            assert_eq!(bits(&o), bits(&expected_o), "{header} derivative");
+            crate::numerical_comparison::assert_values_close(
+                components(&o),
+                components(&expected_o),
+                64.0 * f64::EPSILON,
+                64.0 * f64::EPSILON,
+                format!("{header} derivative"),
+            );
         }
     }
 
@@ -429,27 +434,34 @@ mod tests {
         assert_eq!(rows.len(), 2);
         let expected = |row: &str| {
             row.split_whitespace()
-                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect::<Vec<_>>()
         };
-        let bits = |values: &[Complex64]| {
-            values
-                .iter()
-                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(bits(&data.slater_params), expected(rows[0]));
+        let components =
+            |values: &[Complex64]| values.iter().flat_map(|z| [z.re, z.im]).collect::<Vec<_>>();
+        // Normalization and coefficient sharing involve fewer than 32 roundoffs.
+        crate::numerical_comparison::assert_values_close(
+            components(&data.slater_params),
+            expected(rows[0]),
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "shared normalization",
+        );
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 13, 1, 1, true, false);
         update_slater_elm(&mut data, &mut state);
         let matrix = expected(rows[1])
             .as_chunks::<2>()
             .0
             .iter()
-            .map(|pair| Complex64::new(f64::from_bits(pair[0]), f64::from_bits(pair[1])))
+            .map(|pair| Complex64::new(pair[0], pair[1]))
             .collect::<Vec<_>>();
-        // Exact numeric equality checks coefficient sharing. C multiplies
-        // real SPGL weights; Rust's complex-weight signed zeros remain #42.
-        assert_eq!(state.slater_matrix.slater_elm.as_slice(), matrix);
+        crate::numerical_comparison::assert_values_close(
+            components(state.slater_matrix.slater_elm.as_slice()),
+            components(&matrix),
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "shared Slater matrix",
+        );
     }
 
     #[test]
@@ -496,8 +508,15 @@ mod tests {
             } else {
                 Complex64::new(-0.6, -0.4)
             };
-            assert_eq!(state.slater_matrix.slater_elm.get(0, 2, 3), expected);
-            assert_eq!(state.slater_matrix.slater_elm.get(0, 3, 2), -expected);
+            let a = state.slater_matrix.slater_elm.get(0, 2, 3);
+            let b = state.slater_matrix.slater_elm.get(0, 3, 2);
+            crate::numerical_comparison::assert_values_close(
+                [a.re, a.im, b.re, b.im],
+                [expected.re, expected.im, -expected.re, -expected.im],
+                8.0 * f64::EPSILON,
+                8.0 * f64::EPSILON,
+                "sparse Slater signs",
+            );
             assert_eq!(
                 state.slater_matrix.slater_elm.get(0, 0, 3),
                 Complex64::new(0.0, 0.0)

@@ -1,5 +1,10 @@
 # Plan 3 — PhysCal factored Green: runner, comparison helpers, C reference fixtures, e2e gate
 
+This historical Julia plan records the original comparison requirements.
+For current Rust and optional reference checks after #186, use the numerical
+bounds and exact deterministic controls in
+[NUMERICAL_COMPARISONS.md](../../../NUMERICAL_COMPARISONS.md).
+
 Spec: [`../specs/2026-06-05-julia-mvmc-physcal-factored-green-and-fixtures-design.md`](../specs/2026-06-05-julia-mvmc-physcal-factored-green-and-fixtures-design.md)
 Predecessors: Plan 1 (parser, merged PR #8), Plan 2 (factored compute, PR #9 open against `develop`).
 

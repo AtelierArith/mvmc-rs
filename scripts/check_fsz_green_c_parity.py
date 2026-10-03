@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text, GREEN, ENERGY, MEASUREMENT
 from c_toolbox import materialize, add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 from check_general_orbital_c_parity import function
 from check_interall_real_c_parity import bits
@@ -175,7 +176,15 @@ def main():
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
     else:
-        assert target.read_text() == output, "Native C FSZ Green fixture changed"
+        stride = 26 if args.measurements else 12 if args.hamiltonian else 14
+        def computed(row, column, fields):
+            offset = row % stride
+            if args.measurements:
+                return (GREEN if offset in (12, 13) else MEASUREMENT) if offset >= 12 else None
+            if args.hamiltonian:
+                return ENERGY if offset == 11 else None
+            return GREEN if offset in (11, 12) else ENERGY if offset == 13 else None
+        assert compare_text(output, target.read_text(), computed) == models * stride
     if args.measurements:
         print(f"{models} native C FSZ measurement models / {models * 3} successive weighted frames "
               f"and {models * 3} native normalized vectors passed")

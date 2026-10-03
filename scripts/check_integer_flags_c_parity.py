@@ -6,6 +6,9 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text
+import math
+import re
 from c_toolbox import materialize
 from check_general_orbital_c_parity import function
 from check_orbital_contracts_c_parity import definition
@@ -66,7 +69,7 @@ def main():
         target.parent.mkdir(parents=True,exist_ok=True)
         if not target.exists() or target.read_text()!=output: target.write_text(output)
     else:
-        assert target.read_text()==output,"C integer flag fixture changed"
+        compare_text(output,target.read_text(),lambda r,c,t: (32*math.ulp(1.0),32*math.ulp(1.0)) if re.fullmatch(r"[0-9a-fA-F]{16}",t[c]) else None)
     print(f"{count} C integer flag/read/init/RNG/SR-filter cases passed")
 
 

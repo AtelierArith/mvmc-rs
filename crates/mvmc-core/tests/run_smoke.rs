@@ -2,9 +2,9 @@
 //! chain fixture and verifies the run pipeline (Slater rebuild,
 //! sampling driver, observables, weighted averages, SR, IO writer).
 //!
-//! Bit-parity with C-mVMC is the eventual Phase-4 gate; for the Phase-4
-//! `作業完了` boundary it is enough that the driver produces a
-//! `zvo_out.dat` row with a finite energy.
+//! This smoke test checks a `zvo_out.dat` row with finite energy.
+//! Separate numerical kernel and runner regressions compare against independent
+//! references with explicit bounds and exact RNG/sampling controls.
 
 use std::fs;
 use std::path::PathBuf;

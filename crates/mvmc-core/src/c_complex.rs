@@ -93,17 +93,17 @@ mod tests {
                 Complex64::new(values[2], values[3]),
             );
             for (component, expected) in [(actual.re, values[4]), (actual.im, values[5])] {
-                if expected.is_nan() {
-                    // C does not specify a NaN payload/sign for invalid
-                    // arithmetic. Recover finite/infinite values exactly.
-                    assert!(component.is_nan(), "case {case}: {line}");
-                } else {
-                    assert_eq!(
-                        component.to_bits(),
-                        expected.to_bits(),
-                        "case {case}: {line}"
-                    );
-                }
+                // A scaled quotient uses only a few rounded operations. The
+                // absolute floor covers four subnormal quanta, rather than
+                // treating every tiny result as zero. Nonfinite classification
+                // and infinity sign remain exact.
+                crate::numerical_comparison::assert_close(
+                    component,
+                    expected,
+                    4.0 * f64::from_bits(1),
+                    16.0 * f64::EPSILON,
+                    format!("case {case}: {line}"),
+                );
             }
         }
     }

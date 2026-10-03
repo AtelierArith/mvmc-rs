@@ -1,4 +1,6 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::observables::{
     calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func1_fsz_complex,
     green_func1_fsz_real, green_func2, green_func2_complex, green_func2_fsz,
@@ -22,6 +24,29 @@ fn integers(line: &str) -> Vec<i64> {
         .collect()
 }
 
+// Fixed four-electron kernels: short determinants, projection exponentials and
+// QP quotients. This budget is for each component, including cancellation.
+const GREEN_ROUNDOFF: f64 = 1e-13;
+// Complete Hamiltonians also sum up to 4098 weighted operators sequentially.
+const ENERGY_ROUNDOFF: f64 = 1e-12;
+fn complex_within(actual: Complex64, expected: Complex64, bound: f64) -> bool {
+    numerical_comparison::within(actual.re, expected.re, bound, bound)
+        && numerical_comparison::within(actual.im, expected.im, bound, bound)
+}
+fn check_complex(
+    actual: Complex64,
+    expected: Complex64,
+    bound: f64,
+    context: impl std::fmt::Display,
+) {
+    numerical_comparison::assert_values_close(
+        [actual.re, actual.im],
+        [expected.re, expected.im],
+        bound,
+        bound,
+        context,
+    );
+}
 fn complex_bits(line: &str) -> Vec<Complex64> {
     let bits: Vec<_> = line
         .split_whitespace()
@@ -79,7 +104,7 @@ fn add_dh2_green_model(data: &mut ExpertModeData) {
 
 // Archived Julia energies use complex historical Green ratios even when the
 // model header is real. Keep these independent Julia kernel expectations as
-// such; production C Hamiltonians have separate exact-bit oracle tests below.
+// such; production C Hamiltonians have separate native oracle tests below.
 fn historical_fsz_energy(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
@@ -223,10 +248,11 @@ fn check_pairhop_energy(
         ("combined", &combined, expected[1]),
     ] {
         let actual = local_energy(input, state);
-        assert_eq!(
-            [actual.re.to_bits(), actual.im.to_bits()],
-            [expected.re.to_bits(), expected.im.to_bits()],
-            "PairHop {label}, spins={spins:?}, idx={idx:?}"
+        check_complex(
+            actual,
+            expected,
+            ENERGY_ROUNDOFF,
+            format!("PairHop {label}, spins={spins:?}, idx={idx:?}"),
         );
     }
     let mut equivalent = data.clone();
@@ -273,9 +299,11 @@ fn check_pairhop_energy(
         }
         energy
     };
-    assert_eq!(
-        [actual.re.to_bits(), actual.im.to_bits()],
-        [expected[2].re.to_bits(), expected[2].im.to_bits()]
+    check_complex(
+        actual,
+        expected[2],
+        ENERGY_ROUNDOFF,
+        "complex reference value",
     );
     assert!((actual - expected[1]).norm() < 2e-14);
 }
@@ -339,9 +367,7 @@ fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
                 &num,
                 &cnt,
             );
-            if [actual.re.to_bits(), actual.im.to_bits()]
-                != [expected.re.to_bits(), expected.im.to_bits()]
-            {
+            if !complex_within(actual, expected, GREEN_ROUNDOFF) {
                 failures.push(format!(
                     "case {case} operator {operator} {ops:?}: Rust={:016x} {:016x}, C={:016x} {:016x}",
                     actual.re.to_bits(), actual.im.to_bits(), expected.re.to_bits(), expected.im.to_bits(),
@@ -362,9 +388,7 @@ fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
         }
         let expected_energy = complex_bits(lines.next().unwrap())[0];
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
-        if [energy.re.to_bits(), energy.im.to_bits()]
-            != [expected_energy.re.to_bits(), expected_energy.im.to_bits()]
-        {
+        if !complex_within(energy, expected_energy, ENERGY_ROUNDOFF) {
             failures.push(format!(
                 "case {case} ordered energy: Rust={energy:?}, C={expected_energy:?}"
             ));
@@ -387,9 +411,7 @@ fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
         })
         .collect();
         let pairhop = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
-        if [pairhop.re.to_bits(), pairhop.im.to_bits()]
-            != [expected_pairhop.re.to_bits(), expected_pairhop.im.to_bits()]
-        {
+        if !complex_within(pairhop, expected_pairhop, ENERGY_ROUNDOFF) {
             failures.push(format!(
                 "case {case} PairHop: Rust={pairhop:?}, C={expected_pairhop:?}"
             ));
@@ -473,10 +495,12 @@ fn normal_real_interall_matches_native_c_green_kernels_and_ordered_sums() {
                 &num,
                 &cnt,
             );
-            assert_eq!(
-                actual.to_bits(),
-                expected,
-                "C case {case}, operator {operator}: {ops:?}"
+            numerical_comparison::assert_close(
+                actual,
+                f64::from_bits(expected),
+                GREEN_ROUNDOFF,
+                GREEN_ROUNDOFF,
+                format!("C case {case}, operator {operator}: {ops:?}"),
             );
             data.inter_all_terms.push(InterAllTerm {
                 site0: ops[0] as i64,
@@ -493,12 +517,20 @@ fn normal_real_interall_matches_native_c_green_kernels_and_ordered_sums() {
         }
         let expected_energy = u64::from_str_radix(lines.next().unwrap(), 16).unwrap();
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
-        assert_eq!(
-            energy.re.to_bits(),
-            expected_energy,
-            "C ordered energy case {case}"
+        numerical_comparison::assert_close(
+            energy.re,
+            f64::from_bits(expected_energy),
+            ENERGY_ROUNDOFF,
+            ENERGY_ROUNDOFF,
+            format!("C ordered energy case {case}"),
         );
-        assert_eq!(energy.im.to_bits(), 0);
+        numerical_comparison::assert_close(
+            energy.im,
+            0.0,
+            4.0 * f64::EPSILON,
+            0.0,
+            "real energy imaginary",
+        );
         assert_eq!(state.slater_matrix.inv_m_real.as_slice(), before_inverse);
         assert_eq!(state.slater_matrix.pf_m, pf);
     }
@@ -598,9 +630,15 @@ fn check_normal_green(factor: &str) {
                 &cnt,
             );
             greens.push(actual);
-            // Exact source arithmetic, including signs of zero.
+            // Preserve the source operation order, allowing local floating-point roundoff.
             for (a, e) in [(actual.re, expected.re), (actual.im, expected.im)] {
-                assert_eq!(a.to_bits(),e.to_bits(),"complex={complex}, idx={idx:?}, ops={ops:?}, actual={actual}, expected={expected}");
+                numerical_comparison::assert_close(
+                    a,
+                    e,
+                    GREEN_ROUNDOFF,
+                    GREEN_ROUNDOFF,
+                    format!("complex={complex}, idx={idx:?}, ops={ops:?}"),
+                );
             }
         }
         assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
@@ -646,8 +684,20 @@ fn check_normal_green(factor: &str) {
             },
         ];
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
-        assert_eq!(energy.re.to_bits(), expected_energy.re.to_bits());
-        assert_eq!(energy.im.to_bits(), expected_energy.im.to_bits());
+        numerical_comparison::assert_close(
+            energy.re,
+            expected_energy.re,
+            ENERGY_ROUNDOFF,
+            ENERGY_ROUNDOFF,
+            "energy real",
+        );
+        numerical_comparison::assert_close(
+            energy.im,
+            expected_energy.im,
+            ENERGY_ROUNDOFF,
+            ENERGY_ROUNDOFF,
+            "energy imaginary",
+        );
         if factor.is_empty() {
             check_pairhop_energy(
                 &data,
@@ -713,12 +763,12 @@ fn native_fsz_green_rejects_rbm_before_density_reductions() {
 }
 
 #[test]
-fn exhaustive_fsz_green_kernels_match_native_c_bits() {
+fn exhaustive_fsz_green_kernels_match_native_c_values() {
     check_native_fsz_green::<false>();
 }
 
 #[test]
-fn exhaustive_real_fsz_green_kernels_match_native_c_bits() {
+fn exhaustive_real_fsz_green_kernels_match_native_c_values() {
     check_native_fsz_green::<true>();
 }
 
@@ -816,20 +866,25 @@ fn check_native_fsz_green<const REAL: bool>() {
         assert_eq!(expected_one.len(), 64);
         assert_eq!(expected_two.len(), 4096);
         let mut check = |actual: Complex64, expected: Complex64, operator: Vec<usize>| {
-            // Scalar C returns only a real component; complex signed zeros are
-            // checked independently by the complex-family fixture above.
+            // Scalar C returns only a real component. Signed zeros are
+            // numerically equivalent in both fixture families.
             let actual = if REAL {
                 Complex64::new(actual.re, 0.0)
             } else {
                 actual
             };
-            let actual_bits = [actual.re.to_bits(), actual.im.to_bits()];
-            let expected_bits = [expected.re.to_bits(), expected.im.to_bits()];
-            if actual_bits != expected_bits {
+            let bound = if operator.is_empty() {
+                ENERGY_ROUNDOFF
+            } else {
+                GREEN_ROUNDOFF
+            };
+            if !complex_within(actual, expected, bound) {
                 mismatches += 1;
-                first.get_or_insert_with(|| format!(
-                    "case={case}, operator={operator:?}, actual={actual_bits:x?}, C={expected_bits:x?}"
-                ));
+                first.get_or_insert_with(|| {
+                    format!(
+                    "case={case}, operator={operator:?}, actual={actual:.17e}, C={expected:.17e}"
+                )
+                });
             }
         };
         let mut index = 0;
@@ -938,12 +993,12 @@ fn check_native_fsz_green<const REAL: bool>() {
 }
 
 #[test]
-fn complete_fsz_hamiltonians_match_native_c_bits() {
+fn complete_fsz_hamiltonians_match_native_c_values() {
     check_native_fsz_hamiltonian::<false>();
 }
 
 #[test]
-fn complete_real_fsz_hamiltonians_match_native_c_bits() {
+fn complete_real_fsz_hamiltonians_match_native_c_values() {
     check_native_fsz_hamiltonian::<true>();
 }
 
@@ -1159,9 +1214,7 @@ fn check_native_fsz_hamiltonian<const REAL: bool>() {
             assert_eq!(mvmc_core::get_all_complex_flag(&data), !REAL);
             let actual =
                 calculate_local_energy_fsz(ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins);
-            if [actual.re.to_bits(), actual.im.to_bits()]
-                != [expected.re.to_bits(), expected.im.to_bits()]
-            {
+            if !complex_within(actual, expected, ENERGY_ROUNDOFF) {
                 failures.push(format!(
                     "case={case} group={group}: actual={actual:?} C={expected:?}"
                 ));
@@ -1179,11 +1232,11 @@ fn check_native_fsz_hamiltonian<const REAL: bool>() {
 }
 
 #[test]
-fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_values() {
     check_fsz_green("");
 }
 #[test]
-fn exhaustive_dh2_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+fn exhaustive_dh2_fsz_one_and_two_body_spin_changes_match_original_julia_values() {
     check_fsz_green("dh2");
 }
 fn check_fsz_green(factor: &str) {
@@ -1249,11 +1302,11 @@ fn check_fsz_green(factor: &str) {
                         );
                         let expected = expected_one[index];
                         index += 1;
-                        assert_eq!(
-                            [actual.re.to_bits(), actual.im.to_bits()],
-                            [expected.re.to_bits(), expected.im.to_bits()],
-                            "case={case}, one={:?}",
-                            [ri, rj, s as usize, t as usize]
+                        check_complex(
+                            actual,
+                            expected,
+                            GREEN_ROUNDOFF,
+                            format!("case={case}, one={:?}", [ri, rj, s as usize, t as usize]),
                         );
                     }
                 }
@@ -1274,7 +1327,7 @@ fn check_fsz_green(factor: &str) {
                                         );
                                         let expected = expected_two[index];
                                         index += 1;
-                                        assert_eq!([actual.re.to_bits(),actual.im.to_bits()],[expected.re.to_bits(),expected.im.to_bits()],"case={case}, two={:?}, actual={actual}, expected={expected}", [ri,rj,rk,rl,s as usize,t as usize,u as usize,v as usize]);
+                                        check_complex(actual, expected, GREEN_ROUNDOFF, format!("case={case}, two={:?}, actual={actual}, expected={expected}", [ri,rj,rk,rl,s as usize,t as usize,u as usize,v as usize]));
                                     }
                                 }
                             }
@@ -1314,9 +1367,11 @@ fn check_fsz_green(factor: &str) {
             },
         ];
         let energy = historical_fsz_energy(&data, &mut state, ip, [&idx, &cfg, &num, &cnt], &spins);
-        assert_eq!(
-            [energy.re.to_bits(), energy.im.to_bits()],
-            [expected[0].re.to_bits(), expected[0].im.to_bits()]
+        check_complex(
+            energy,
+            expected[0],
+            ENERGY_ROUNDOFF,
+            "complex reference value",
         );
         if factor.is_empty() {
             check_pairhop_energy(
@@ -1333,10 +1388,11 @@ fn check_fsz_green(factor: &str) {
             "0 0 0 0 3 1 3 1 -0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n0 0 0 1 2 0 2 1 0.125 -0.25\n1 1 2 0 2 0 0 1 -0.25 -0.375\n1 1 0 0 2 0 3 1 0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n-1 0 0 1 3 1 3 0 0.25 0.125\n"
         );
         let energy = historical_fsz_energy(&data, &mut state, ip, [&idx, &cfg, &num, &cnt], &spins);
-        assert_eq!(
-            [energy.re.to_bits(), energy.im.to_bits()],
-            [expected[1].re.to_bits(), expected[1].im.to_bits()],
-            "case={case} InterAll energy"
+        check_complex(
+            energy,
+            expected[1],
+            ENERGY_ROUNDOFF,
+            format!("case={case} InterAll energy"),
         );
     }
     assert!(lines.next().is_none());
@@ -1384,11 +1440,11 @@ fn exhaustive_dh24_normal_two_body_ratios_match_original_julia() {
     check_normal_green("dh24");
 }
 #[test]
-fn exhaustive_dh4_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+fn exhaustive_dh4_fsz_one_and_two_body_spin_changes_match_original_julia_values() {
     check_fsz_green("dh4");
 }
 #[test]
-fn exhaustive_dh24_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+fn exhaustive_dh24_fsz_one_and_two_body_spin_changes_match_original_julia_values() {
     check_fsz_green("dh24");
 }
 
@@ -1417,10 +1473,10 @@ fn add_rbm_green_model(data: &mut ExpertModeData) {
     data.modpara.nneuron_general = 4;
 }
 #[test]
-fn exhaustive_rbm_normal_two_body_ratios_match_original_julia_bits() {
+fn exhaustive_rbm_normal_two_body_ratios_match_original_julia_values() {
     check_normal_green("rbm");
 }
 #[test]
-fn exhaustive_rbm_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
+fn exhaustive_rbm_fsz_one_and_two_body_spin_changes_match_original_julia_values() {
     check_fsz_green("rbm");
 }

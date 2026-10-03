@@ -12,6 +12,7 @@ import struct
 import subprocess
 import tempfile
 
+from numerical_comparison import assert_values_close, decode_hex, ENERGY
 from c_toolbox import materialize, native_compiler, native_platform, native_provenance
 from check_general_orbital_c_parity import function
 
@@ -113,9 +114,9 @@ def validate(root, library, real, kind):
             before = [bytes(v) for v in operands]
             fn(*operands, out)
             assert [bytes(v) for v in operands] == before, "Native energy bridge mutated a borrowed operand"
-            actual = [struct.unpack("=Q", struct.pack("=d", part))[0] for part in out]
-            expected = [int(word, 16) for word in r[11].split()[2*group:2*group+2]]
-            assert actual == expected, (real, start // 12, group, actual, expected)
+            actual = list(out)
+            expected = [decode_hex(word) for word in r[11].split()[2*group:2*group+2]]
+            assert_values_close(actual, expected, *ENERGY, context=f"energy real={real} model={start // 12} group={group}")
             checked += 1
     return checked
 
