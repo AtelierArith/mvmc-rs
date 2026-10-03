@@ -1,5 +1,5 @@
 name: Set up Rust numerical CI
-description: Verify architecture, install numerical dependencies, and restore Cargo artifacts.
+description: Verify architecture, install numerical dependencies, and restore the Cargo registry and compiler caches.
 inputs:
   arch:
     description: Expected GitHub runner architecture.
@@ -8,7 +8,7 @@ inputs:
     description: Platform identifier for the shared Cargo cache.
     required: true
   cache-key:
-    description: Check configuration to keep parallel cache writes separate.
+    description: Check configuration that keeps the parallel registry and kache cache writes separate.
     required: true
   tools:
     description: Optional tools to install with taiki-e/install-action.
@@ -37,10 +37,32 @@ runs:
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
+    # Only the cargo registry/git/bin homes are cached here. Compilation
+    # artifacts belong to the content-addressed kache store below, so
+    # `cache-targets` stays off to avoid persisting `target/` twice.
+    # rust-cache ignores its `key` input whenever `shared-key` is set, so the
+    # configuration discriminator must live in `shared-key` to keep the
+    # parallel jobs' cache writes separate.
     - uses: Swatinem/rust-cache@v2
       with:
-        shared-key: workspace-${{ inputs.platform }}
-        key: ${{ inputs.cache-key }}
+        shared-key: registry-${{ inputs.platform }}-${{ inputs.cache-key }}
+        cache-targets: false
+        cache-on-failure: true
+    # kache caches per-crate compilation (including workspace crates) by
+    # content hash and restores hits by clone/hardlink, and its post step saves
+    # even when the job fails. `cache-key-prefix` gives every configuration its
+    # own GitHub cache entry instead of racing on one shared key.
+    - name: Configure kache content-addressed compiler cache
+      uses: kunobi-ninja/kache-action@v1
+      with:
+        github-cache: 'true'
+        cache-key-prefix: kache-${{ inputs.platform }}-${{ inputs.cache-key }}
+        # GitHub Actions cache is capped at 10 GB per repository. Keep each
+        # configuration's store bounded and only repopulate caches from main, so
+        # pull-request and branch jobs restore without consuming the budget.
+        max-size: '2GiB'
+        save-cache: ${{ github.ref == 'refs/heads/main' }}
+        pr-comment: 'false'
     - uses: taiki-e/install-action@v2
       if: inputs.tools != ''
       with:
