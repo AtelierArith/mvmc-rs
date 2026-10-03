@@ -3,6 +3,8 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+#[path = "support/fixture_status.rs"]
+mod fixture_status;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 #[path = "support/ctest_general_provenance.rs"]
@@ -46,12 +48,21 @@ fn complex(case: &Path, file: &str, actual: &[num_complex::Complex64], bound: f6
     );
 }
 
+/// Offline bundle compatibility only: no sampler, solver, or reference runtime.
+#[test]
+fn corrected_general_classifier_accepts_checked_in_independent_bundle() {
+    let root = provenance::root();
+    fixture_status::verify_selected(&root, "archive.sha256", || provenance::verify(&root))
+        .unwrap_or_else(|error| panic!("{error}"));
+}
+
 #[test]
 #[ignore = "corrected General1/2/3/20 gate: MVMC_RS_CTEST_GENERAL=1 required"]
 fn corrected_general_all_four_prefixes_match_independent_reference() {
     support::require_gate("ctest-general", "MVMC_RS_CTEST_GENERAL");
     let root = provenance::root();
-    provenance::verify(&root);
+    fixture_status::verify_selected(&root, "archive.sha256", || provenance::verify(&root))
+        .unwrap_or_else(|error| panic!("{error}"));
     let input = root.join("inputs/general_rbm_cmp/namelist.def");
     for steps in [1, 2, 3, 20] {
         let case = root.join(format!("general_rbm_cmp/step-{steps}"));
@@ -184,7 +195,8 @@ fn corrected_general_all_four_prefixes_match_independent_reference() {
 fn corrected_general_twenty_step_public_runner_is_repeatable() {
     support::require_gate("ctest-general", "MVMC_RS_CTEST_GENERAL");
     let root = provenance::root();
-    provenance::verify(&root);
+    fixture_status::verify_selected(&root, "archive.sha256", || provenance::verify(&root))
+        .unwrap_or_else(|error| panic!("{error}"));
     let input = root.join("inputs/general_rbm_cmp/namelist.def");
     let case = root.join("general_rbm_cmp/step-20");
     let output = Output::new();
