@@ -25,13 +25,13 @@ use crate::PivotIndex1Based;
 ///
 /// Mirrors `julia_dsktf2!(A, iPiv)` from `ltl_decomposition.jl`.
 pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
-    sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false)
+    sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, false)
 }
 
 /// LTL decomposition for complex skew-symmetric matrices (`zsktf2`).
 pub fn zsktf2(a: &mut SqMat<'_, Complex64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
     // IZAMAX uses |Re| + |Im|, the BLAS 1-norm. We mirror it exactly.
-    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), false)
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), false, false)
 }
 
 /// Complex LTL decomposition matching Julia's StructArray/@turbo production path.
@@ -39,7 +39,16 @@ pub fn zsktf2_turbo(
     a: &mut SqMat<'_, Complex64>,
     pivots: &mut [PivotIndex1Based],
 ) -> Result<(), usize> {
-    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), true)
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), true, false)
+}
+
+/// Complex LTL decomposition with C's standard complex division and ZSKR2
+/// column update order.
+pub fn zsktf2_c_compat(
+    a: &mut SqMat<'_, Complex64>,
+    pivots: &mut [PivotIndex1Based],
+) -> Result<(), usize> {
+    sktf2_generic::<Complex64, _>(a, pivots, |z| z.re.abs() + z.im.abs(), true, true)
 }
 
 fn sktf2_generic<T, Mag>(
@@ -47,6 +56,7 @@ fn sktf2_generic<T, Mag>(
     pivots: &mut [PivotIndex1Based],
     mag: Mag,
     turbo: bool,
+    c_order: bool,
 ) -> Result<(), usize>
 where
     T: BlasScalar + UpperRank2Kernel,
@@ -157,7 +167,7 @@ where
             // diff does, so the scalar form is the bit-parity-correct
             // backend even when `--features blas-backend` is on.
             let lda = a.lda();
-            T::update_rank2_mode(a.as_mut_slice(), lda, kk0, k0, alpha, turbo);
+            T::update_rank2_mode(a.as_mut_slice(), lda, kk0, k0, alpha, turbo, c_order);
 
             // Julia: BLAS.scal!(k-2, alpha, A[1:k-2, k], 1) — backend
             // route: dscal / zscal when BLAS is on, plain loop otherwise.
@@ -196,6 +206,7 @@ trait UpperRank2Kernel: BlasScalar {
         k0: usize,
         alpha: Self,
         _turbo: bool,
+        _c_order: bool,
     ) {
         update_upper_rank2(data, lda, kk0, k0, alpha);
     }
@@ -228,7 +239,12 @@ impl UpperRank2Kernel for Complex64 {
         k0: usize,
         alpha: Self,
         turbo: bool,
+        c_order: bool,
     ) {
+        if c_order {
+            update_upper_rank2_c64_c_order(data, lda, kk0, k0, alpha);
+            return;
+        }
         if !turbo {
             Self::update_upper_rank2(data, lda, kk0, k0, alpha);
             return;
@@ -611,6 +627,28 @@ fn update_upper_rank2_c64_scalar(
             col_j[i].im += x_temp1_im - y_temp2_im;
         }
         col_j[j] = Complex64::new(0.0, 0.0);
+    }
+}
+
+#[inline]
+fn update_upper_rank2_c64_c_order(
+    data: &mut [Complex64],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+    alpha: Complex64,
+) {
+    check_update_upper_rank2_args(data, lda, kk0, k0);
+    let col_k = k0 * lda;
+    let col_kk = kk0 * lda;
+    for j in 0..kk0 {
+        let temp1 = alpha * data[j + col_kk];
+        let temp2 = alpha * data[j + col_k];
+        for i in 0..j {
+            let idx = i + j * lda;
+            data[idx] += data[i + col_k] * temp1 - data[i + col_kk] * temp2;
+        }
+        data[j + j * lda] = Complex64::new(0.0, 0.0);
     }
 }
 

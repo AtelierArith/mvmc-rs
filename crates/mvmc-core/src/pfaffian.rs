@@ -32,7 +32,7 @@
 use num_complex::Complex64;
 use pfapack::{
     dsktf2, utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real,
-    zsktf2, zsktf2_turbo, SqMat,
+    zsktf2, zsktf2_c_compat, SqMat,
 };
 use rayon::prelude::*;
 
@@ -473,7 +473,7 @@ fn calc_m_all_child_complex(
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
-        zsktf2_turbo(&mut a, &mut ws.pivots[..n_size])
+        zsktf2_c_compat(&mut a, &mut ws.pivots[..n_size])
             .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_complex(&a, &ws.pivots[..n_size])
     };
