@@ -4,6 +4,7 @@
 //! flags use declared projection/orbital widths and Julia's component rules.
 //! The In*.def overlay integration remains pending.
 
+pub(crate) mod c_numeric;
 pub mod file;
 
 /// Post-parse cross-field validation (port of `utils/validation.jl`).

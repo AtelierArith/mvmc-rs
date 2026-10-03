@@ -318,8 +318,8 @@ pub struct PairHopTerm {
 /// General interaction `value * c†(site0,spin0) c(site1,spin1)
 /// c†(site2,spin2) c(site3,spin3)`, in the input operator order.
 ///
-/// Indices are raw integers as in Julia's parser; parsing does not enforce
-/// lattice or spin bounds. Coefficients do not select the wavefunction mode.
+/// Production C parsing validates site/spin bounds and fixed-TwoSz pairs.
+/// Coefficients do not select the wavefunction mode.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InterAllTerm {
     /// First creation operator's site (0-based).

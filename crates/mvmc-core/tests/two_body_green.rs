@@ -11,6 +11,7 @@ use mvmc_expert_parsers::{
 };
 use num_complex::Complex64;
 
+use historical_orbital_model::historical_interall_model;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 
@@ -579,7 +580,7 @@ fn check_fsz_green(factor: &str) {
             );
         }
         assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
-        data.inter_all_terms = mvmc_expert_parsers::parsers::interall::parse_interall_content(
+        data.inter_all_terms = historical_interall_model::parse_interall_content(
             "0 0 0 0 3 1 3 1 -0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n0 0 0 1 2 0 2 1 0.125 -0.25\n1 1 2 0 2 0 0 1 -0.25 -0.375\n1 1 0 0 2 0 3 1 0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n-1 0 0 1 3 1 3 0 0.25 0.125\n"
         );
         let energy =

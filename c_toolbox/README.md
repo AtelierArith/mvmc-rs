@@ -21,6 +21,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
+| `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
 | `orbital_flags.c` | Function-level row-order flags with supplied complex argument 2 (production normalizes orbital headers to 1) | `python3 scripts/check_c_reader_audits.py` |
@@ -34,6 +35,14 @@ ends before the upstream status print, and the AP header switch block ends at
 `KWOrbitalGeneral`. Driver files hold only the comparison environment and cases.
 The canonical C files are not modified. `.gitattributes` preserves trailing
 whitespace in these verbatim `.inc` excerpts; driver files follow normal checks.
+
+The InterAll reader driver overallocates bounded comparison storage to observe
+extra-row count errors without overrunning the declared production allocation.
+Unsafe integer overflow and invalid spin ranges are excluded from native
+execution and tested separately as Rust diagnostics. It establishes reader
+values and acceptance for the documented inputs, not full executable or
+sampling parity. See `tests/fixtures/interall/README.md` for the preserved
+historical Julia models and the C-valid spin-chain control.
 
 The scripts build into temporary directories with Apple clang 17 (`cc`) on
 Intel macOS. All use `-O0`; General, projection, initialization and initial-record checks use

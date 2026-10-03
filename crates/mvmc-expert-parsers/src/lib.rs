@@ -358,7 +358,8 @@ fn parse_file_by_type(
             data.pair_hop_terms = section.terms;
         }
         "InterAll" => {
-            data.inter_all_terms = interall::parse_interall_def(path)?;
+            data.inter_all_terms =
+                interall::parse_interall_def(path, data.modpara.nsite, data.modpara.two_sz)?;
         }
         "DH2" | "DoublonHolon2Site" => {
             let section = doublon_holon::parse_doublon_holon_2site_def(path, data.modpara.nsite)?;

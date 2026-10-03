@@ -300,6 +300,78 @@ fn rbm_namelists_match_library_with_complete_c_declarations() {
 }
 
 #[test]
+fn normal_interall_scientific_coefficients_and_c_counts_agree_in_cli_and_library() {
+    let dir = TestDir::new("c-interall");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../extern/Julia-mVMC/examples/inputs/hubbard_chain_real");
+    let mut namelist = String::new();
+    for line in fs::read_to_string(source.join("namelist.def"))
+        .unwrap()
+        .lines()
+    {
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if matches!(fields[0], "Trans" | "CoulombIntra") {
+            continue;
+        }
+        let path = if fields[0] == "Orbital" {
+            dir.0.join("orbital.def")
+        } else {
+            source.join(fields[1])
+        };
+        namelist.push_str(&format!("{} {}\n", fields[0], path.display()));
+    }
+    namelist.push_str("InterAll interall.def\n");
+    fs::write(dir.0.join("namelist.def"), namelist).unwrap();
+    let valid = "===\nNInterAll 1\nIgnored 99\n===\n===\n0 0 0 0 0 1 0 1 1e-3 -2e-3\n";
+    fs::write(dir.0.join("interall.def"), valid).unwrap();
+    let orbital =
+        fs::read_to_string(root.join("c_orbital_inputs/ap_hubbard_six_flag2.def")).unwrap();
+    for complex in [false, true] {
+        let mut orbital_lines: Vec<_> = orbital.lines().map(str::to_owned).collect();
+        orbital_lines[2] = format!("ComplexType {}", i64::from(complex));
+        fs::write(dir.0.join("orbital.def"), orbital_lines.join("\n") + "\n").unwrap();
+        let parsed =
+            mvmc_expert_parsers::parse_expert_mode_files(dir.0.join("namelist.def")).unwrap();
+        assert!(parsed.input_errors.is_empty(), "{:?}", parsed.input_errors);
+        assert_eq!(parsed.inter_all_terms.len(), 1);
+        assert_eq!(
+            [
+                parsed.inter_all_terms[0].value.re,
+                parsed.inter_all_terms[0].value.im
+            ],
+            [1e-3, -2e-3]
+        );
+        assert_eq!(mvmc_core::get_all_complex_flag(&parsed), complex);
+        check_cli_and_library_model(
+            &dir,
+            if complex {
+                "interall-cmp"
+            } else {
+                "interall-real"
+            },
+            &dir.0.join("namelist.def"),
+            false,
+        );
+    }
+    fs::write(
+        dir.0.join("interall.def"),
+        valid.replace("NInterAll 1", "NInterAll 2"),
+    )
+    .unwrap();
+    let output_dir = dir.0.join("invalid-count-output");
+    let failed = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(dir.0.join("namelist.def"))
+        .args(["--nsteps", "1", "--out-dir"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("InterAll"));
+    assert!(!output_dir.exists());
+}
+
+#[test]
 fn positive_nonunit_flags_initialize_but_stay_fixed_through_cli_sr_steps() {
     let dir = TestDir::new("c-integer-flags");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
