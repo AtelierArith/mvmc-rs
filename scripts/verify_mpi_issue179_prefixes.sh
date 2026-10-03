@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Review before launching. Direct/store0, workers1, prefixes1/2/3 only.
+# Review before launching. Direct/store0 default; --stage direct-store1 opt-in.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 binary=$(realpath "${1:?frozen state binary required}")
@@ -10,6 +10,16 @@ manifest=$(realpath "${4:?frozen source manifest required; paths relative to sna
 [[ ${MPI179_SOURCE_COMMIT:?committed snapshot SHA required} =~ ^[0-9a-f]{40}$ ]]
 [[ ${MPI179_TIMEOUT:-60} =~ ^[1-9][0-9]*$ ]]
 proof=$(realpath "${5:?frozen build association JSON required}")
+stage=direct-store0
+if (( $# > 5 )); then
+    [[ $# == 7 && $6 == --stage ]]
+    stage=$7
+fi
+case "$stage" in
+    direct-store0) expected_store=0 ;;
+    direct-store1) expected_store=1 ;;
+    *) echo 'unsupported bounded stage' >&2; exit 2 ;;
+esac
 mkdir -p "$output"
 output=$(realpath "$output")
 phase=preflight
@@ -38,7 +48,7 @@ while IFS=$'\t' read -r id ranks mode width cg store projection expected status 
     [[ $id == cell || $id == id ]] && continue
     [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ && ! ${cells[$id]+present} && -z $extra ]]
     cells[$id]=1
-    [[ $expected == success && $cg == 0 && $store == 0 && $projection == identity &&
+    [[ $expected == success && $cg == 0 && $store == "$expected_store" && $projection == identity &&
        ( $ranks == 2 || $ranks == 4 ) && ( $width == 1 || $width == 2 ) &&
        ( $mode == real || $mode == cmp || $mode == fsz ) && -n $status && -n $exitcode ]]
     axis="$ranks-$mode-$width"
@@ -60,6 +70,7 @@ awk '/=> \/|^[[:space:]]*\// { for (i=1;i<=NF;i++) if ($i ~ /^\//) print $i }' "
 [[ -s $output/libraries-before.sha256 ]]
 uv run --no-project python scripts/mpi_issue179_prefix_evidence.py "$output" --backend-binary "$binary" > "$output/runtime-backend-check.log" 2>&1
 printf '%s\n' "binary=$binary" "inventory=$inventory" "source_manifest=$manifest" "source_commit=$MPI179_SOURCE_COMMIT" "prefixes=1 2 3" "workers=1" "repeats=2" "MVMC_RS_INNER_THRESHOLD=UNSET (production default)" "MPI179_TIMEOUT=${MPI179_TIMEOUT:-60}" "CARGO_TARGET_DIR=$CARGO_TARGET_DIR" "OPENBLAS_NUM_THREADS=$OPENBLAS_NUM_THREADS" "OMP_NUM_THREADS=$OMP_NUM_THREADS" "MKL_NUM_THREADS=$MKL_NUM_THREADS" "BLIS_NUM_THREADS=$BLIS_NUM_THREADS" > "$output/environment.txt"
+printf 'stage=%s expected_solver=0 expected_store=%s\n' "$stage" "$expected_store" > "$output/stage.txt"
 rustc -Vv > "$output/rust-version.txt"
 uv --version > "$output/uv-version.txt"
 printf 'cell\tprefix\tfirst_exit\tsecond_exit\n' > "$output/results.tsv"
@@ -91,7 +102,7 @@ while IFS=$'\t' read -r id ranks mode width cg store projection expected status 
         printf '%s\t%s\t%s\t%s\n' "$id" "$steps" "${exits[0]}" "${exits[1]}" >> "$output/results.tsv"
     done
     vrc=0
-    uv run --no-project python scripts/mpi_issue179_prefix_evidence.py "$output/$id" --ranks "$ranks" --width "$width" > "$output/$id/validation.log" 2>&1 || vrc=$?
+    uv run --no-project python scripts/mpi_issue179_prefix_evidence.py "$output/$id" --ranks "$ranks" --width "$width" --stage "$stage" > "$output/$id/validation.log" 2>&1 || vrc=$?
     printf '%s\t%s\n' "$id" "$vrc" >> "$output/checker-results.tsv"
     (( vrc == 0 )) || bad=1
 done < "$inventory/matrix.tsv"
