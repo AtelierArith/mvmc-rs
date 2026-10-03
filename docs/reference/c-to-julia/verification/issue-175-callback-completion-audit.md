@@ -1,9 +1,14 @@
 # Issue 175 callback completion audit
 
-Issue: <https://github.com/AtelierArith/mvmc-rs/issues/175> (OPEN).
+Issue: <https://github.com/AtelierArith/mvmc-rs/issues/175> (**CLOSED**, reason
+`COMPLETED`, GitHub-confirmed at `2026-10-03T13:18:03Z`). Parent reviewed the full
+current source/evidence and the original five acceptance criteria, verified
+callback production/tests identical to `origin/main`, and committed this audit
+in `859d13e2` before closing the issue. Closure is limited to #175.
 Historical audit baseline: `bff283dab667d7720291ba190546629dd68f44fb`.
 Current focused verification is recorded below, separately from the historical
-runs. Issue closure remains subject to parent review. These are the original five
+runs. Historical no-closure statements below describe those earlier checkpoints;
+they are not current issue status. These are the original five
 #175 criteria, not whole-issue-185 or whole-issue-179 acceptance.
 
 ## Current focused verification

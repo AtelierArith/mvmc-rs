@@ -10,6 +10,10 @@ GitHub confirms PR212 MERGED at12:55:17Z, squash main
 recorded shared HEAD6f0a8872 adds the reviewed bounded #181 documentation.
 PR211 native-Mac CG overlay is included in this integrated main lineage.
 GitHub confirms #177 CLOSED at **2026-10-03T12:56:11Z**; #185 remains OPEN.
+GitHub confirms #175 CLOSED (`COMPLETED`) at **2026-10-03T13:18:03Z**, after
+parent verification of its original five criteria and audit commit `859d13e2`.
+See [the focused callback audit](issue-175-callback-completion-audit.md) for
+serial22 and MPI2/4 evidence. These two scoped closures do not complete #185.
 No completion claim for the remaining original API/example/scenario matrix.
 
 Latest user Linux merge policy remains: actual latest-head Linux default,
@@ -35,9 +39,9 @@ Priority remaining acceptance: #184 every original assertion/API/example and
 declared scenario has concrete scope/settings/evidence; #183 actual workflows;
 #176 native-C real-FSZ algorithm mismatch investigation; #179 full MPI matrix;
 #178 accepted controls and failure boundaries; #180 numerical/diagnostic
-capture acceptance, #181/#174/#175 output/callback coverage and #182 worker
+capture acceptance, #181/#174 output coverage and #182 worker
 branches. These remain implementation/verification work, not documentation
-completion. #177 closure is a verified exception, not closure of #185.
+completion. #177 and #175 are verified scoped closures, not closure of #185.
 
 All tables/counts and pending plans below are **historical checkpoint records**,
 including old774/781/754 test totals and52-reference acquisition. Their source
