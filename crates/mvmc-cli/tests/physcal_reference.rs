@@ -227,3 +227,113 @@ fn exchange_spin_cli_lanczos_modes_match_native_c_reference() {
         check_lanczos("spin_chain_lanczos", mode);
     }
 }
+
+#[test]
+fn all_hamiltonian_terms_cli_lanczos_matches_independent_base_and_corrected_outputs() {
+    for mode in [1, 2] {
+        // Existing Julia 1.13.1 values with C indexed layout; provenance.txt
+        // records the source, seed and BLAS. Not a full native-C trajectory.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/physcal_181")
+            .join(format!("hubbard_all_terms_lanczos{mode}"));
+        let parsed =
+            mvmc_expert_parsers::parse_expert_mode_files(root.join("inputs/namelist.def")).unwrap();
+        assert_eq!(parsed.modpara.lanczos_mode, mode);
+        assert!(parsed.inter_all_terms.is_empty());
+        assert!(!parsed.transfer_terms.is_empty());
+        assert!(!parsed.coulomb_intra_terms.is_empty());
+        assert!(!parsed.coulomb_inter_terms.is_empty());
+        assert!(!parsed.hund_terms.is_empty());
+        assert!(!parsed.exchange_terms.is_empty());
+        assert!(!parsed.pair_hop_terms.is_empty());
+        let out = OutputDir::new();
+        let result = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+            .arg(root.join("inputs/namelist.def"))
+            .arg("--physcal")
+            .arg(root.join("zqp_opt.dat"))
+            .args(["--seed", "1", "--mode", "real", "--out-dir"])
+            .arg(&out.0)
+            .env("OMP_NUM_THREADS", "1")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(String::from_utf8_lossy(&result.stdout).contains("Completed 1 PhysCal samples"));
+        let mut expected_names = Vec::new();
+        for entry in fs::read_dir(root.join("expected")).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().unwrap();
+            let indices: &[usize] = if name.contains("cisajscktaltex") {
+                &[]
+            } else if name.contains("cisajscktalt") {
+                &[0, 1, 2, 3, 4, 5, 6, 7]
+            } else if name.contains("cisajs") {
+                &[0, 1, 2, 3]
+            } else {
+                &[]
+            };
+            // Same per-output budgets as physcal_issue181::assert_reference.
+            let (atol, rtol) = if name.starts_with("zvo_ls_qqqq_") {
+                (1e-10, 0.0)
+            } else if name.starts_with("zvo_ls_") {
+                (1e-8, 0.0)
+            } else if name.contains("cisajscktalt") {
+                (1e-12, 1e-9)
+            } else {
+                (1e-12, 1e-10)
+            };
+            let actual = fs::read_to_string(out.0.join(&name)).unwrap();
+            let expected = fs::read_to_string(entry.path()).unwrap();
+            numerical_comparison::assert_numeric_text(
+                actual.trim_end(),
+                expected.trim_end(),
+                atol,
+                rtol,
+                indices,
+                &name,
+            );
+            // The shared text helper checks ordered shape and exact discrete
+            // columns. Also retain #181's stricter max, not sum, float budget.
+            for (row, (a, e)) in actual
+                .lines()
+                .filter(|s| !s.trim().is_empty())
+                .zip(expected.lines().filter(|s| !s.trim().is_empty()))
+                .enumerate()
+            {
+                for (column, (a, e)) in a.split_whitespace().zip(e.split_whitespace()).enumerate() {
+                    if indices.contains(&column) || e.parse::<i64>().is_ok() {
+                        continue;
+                    }
+                    let a: f64 = a.parse().unwrap();
+                    let e: f64 = e.parse().unwrap();
+                    let matches = if a.is_nan() || e.is_nan() {
+                        a.is_nan() && e.is_nan()
+                    } else if !a.is_finite() || !e.is_finite() {
+                        a == e
+                    } else {
+                        (a - e).abs() <= atol.max(rtol * a.abs().max(e.abs()))
+                    };
+                    assert!(
+                        matches,
+                        "{name} row {row} column {column}: {a:.17e} vs {e:.17e}"
+                    );
+                }
+            }
+            expected_names.push(name);
+        }
+        let mut actual_names = fs::read_dir(&out.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect::<Vec<_>>();
+        expected_names.sort();
+        actual_names.sort();
+        assert_eq!(
+            actual_names, expected_names,
+            "mode {mode}: complete indexed inventory"
+        );
+    }
+}
