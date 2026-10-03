@@ -199,11 +199,7 @@ pub fn raise(error: GateError) -> ! {
 pub fn caught_error(payload: &(dyn std::any::Any + Send)) -> GateError {
     if let Some(error) = payload.downcast_ref::<GateError>() {
         GateError {
-            status: match error.status {
-                Status::MissingFixture => Status::MissingFixture,
-                Status::Failure => Status::Failure,
-                Status::Unsupported => Status::Unsupported,
-            },
+            status: error.status,
             detail: error.detail.clone(),
         }
     } else {
