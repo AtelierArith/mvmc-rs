@@ -2,6 +2,37 @@
 
 ## CURRENT snapshot
 
+Authoritative baseline main60ce456f; recorded branch snapshot78d62007 includes committede7f1aa11fmt,8fd6d034serialbenchmarkMPItruthfulREADME and finiteDHtests. PR204 merged200b29df; whole185 remains OPEN. Latest user milestone merge policy uses actual latest-head Linux default/allfeatures/lint/docs success; disclose/fix Mac failures without hiding/skipping/arbitrary bounds.
+
+| Scope | Actual current evidence | Remaining limitation |
+| --- | --- | --- |
+| Local full workspace |65826/05376af9 terminal0,781/781PASS,33 outside,264.555s; frozenHEAD9117+dirtyfresh180+unchangedModPara bytes |Not newHEAD/main60ce full proof or52 detailed numericalPASS. |
+| Current CI |MainCI111191738869 FAIL,exactformat-only diff confirmed; localfmt64910 terminal0 |No retrospective/newremote fullsuccess. |
+| Mac0347 |default744/760PASS16FAIL;allfeatures745/761PASS16FAIL; artifacts retrieved |FirstPhysCal RAWdirectGreenframe0col13 delta2.9105e-11,not firstenergy; fixedCGdelta1.94333e-12 under diagnosis. |
+| Fresh180 |52reference integrity checked;13public entry summariesPASS; detailed oldfcea6b6f49complete thenfailure |NewerGeneral2/3/20 detailed FAIL,not UNRUN current; no52numericalPASS. |
+| Runhook |parent599697c5 twoPASS/defaultclippy;owner0c93eb25 twoPASS/allfeatures;46595exactCIclippy0 |Identity scope three real/complex/FSZ models × four (CG,store) pairs[(0,0),(0,1),(1,0),(1,1)]. SerialLinux,notMPI/Mac/independentparity. |
+| Optional overlaysM331–340 |parentdcb301bf4PASS/clippy0,commit2ae79f6c |LeafC-complete adaptations/Juliaoptionalpolicy distinct; notfullinit or Cundefinedmissingfileparity. |
+| Gen40 firstcause |Parent90806 terminal0,patchedJulia80 components Cexact vsold48 differences; retained actualCprobe replay matches |Rustcounter recomputed/not actuallocal; physical2excluded; PR54published3d0fd263/rawproductionAPI terminal0 SHAe8274c5d7bce99003ed205d9ea7a854832e2e498a9b85a3d0172759e484155a1. No model/sampling/golden/HOtol completion. |
+| #182 failure boundary |parentfcbc7e58 onePASS2.777s/22outside; toolbox2pathsdf47a603; retainedCINFO2 verified |Valid failedboundary,not45success/fullsampler/all182. |
+| QP/copy |parentd1ab45ce QP8+copyparent1PASS; internalchildexplicitworkers1/2/4 |M1154–62 exceptM1161runtime; copyM838–842 only. |
+| OverlaysM320–330 |parentdbf62c77fourPASS,adaptedcompleteCinputs |Literalleaf/indexscatter,notfullinit/Cruntime. |
+| FiniteDH M341–342 |parent683853b5 twoPASS/clippy0,originalpayloadreview,snapshot78d62007 |SixDH2/tenDH4 finitevalid leafs only; negativeM343–346 notcovered/no fullinit/Cruntime. |
+| Semantic ledger |1444 rows,412syntax/778pending/215focused/23source/6loops/7intentionalAPI/3excluded;21columns valid |Full API/example/scenario mappings incomplete; auditcategory≠executablePASS. |
+
+Intentional inverse/typed-reducer API differences are audited scope, not unverified ordinary assertions or executionPASS. Historical commands/revisions are not reassigned. See [current185status](issue-185-draft-status.md) for complete remaining per-issue scope. Manifest is allowlist only,no stage/commit authorization.
+
+Parent recount1444/bad0 agrees;412syntax=parser167(50+72+30+15)+thread84+parallel74+MPI87. Correct earlier173 arithmetic without semantic promotion. README serialR1 versusR4 MPI performance scope corrected at8fd6d034; supportedRustMPI is not absent.
+
+Ledger TSV remains modified/uncommitted and excluded from this four-doc handoff. Integrity/count verification does not authorize bulk row commits. MainCI import-order fmt failure corrected in e7f1aa11,cargo fmtall64910 terminal0; no retrospective remote success.
+
+## Historical checkpoint records (not current status)
+
+### Superseded snapshot (historical only)
+
+Current authoritative baseline is `60ce456f` (parent PR206 fast-forward integration;43 nonoverlapping paths,dirty work preserved). PR204200b29df is historical milestone lineage. Whole#185 remains OPEN. Historical CG consumer failures are not current Linux status after scoped repairs/full781; unresolved platform/reference diagnostics must retain their actual revision and scope. The current manifest remains a packaging allowlist, not proof of full coverage or permission to stage/commit.
+
+PR204 milestone merged: parent verified squash main `200b29df5894a2c969cb6fd18e1e2a776d184e6c`; committed63e32905 tree matches newmain byte-for-byte. Fresh `feat/issue-185-post204` preserves dirty/untracked work. Whole#185/API/scenario acceptance remains incomplete; proof revision labels are not reassigned. Latest user permitted milestone merge after actual latest-head Linux default/all-features/lint/docs success, superseding earlier all-platform prerequisite for this merge only. macOS failures remain disclosed for repair, not hidden/skipped or declared PASS. No further commit/push/merge by this editor; run.rs observer freeze remains until owner all-features proof.
+
 This table supersedes stale live/pending statements in the historical records below. A narrow PASS is not whole-source/API coverage.
 
 | Scope | Current evidence | Remaining limitation |
@@ -10,7 +41,7 @@ This table supersedes stale live/pending statements in the historical records be
 | New DH2 sampling contract | Parent `0a6d8024-2c9a-4906-8078-579720d4ba24`:exit0,1 PASS,20filtered,0.006s; full new test and C projection.c32–47/94–117 reviewed: counts[0,0,1,1,0,0], creal logs7/16, difference9 | Independent analytic C-equation contract, not native C executable/full sampler or whole21-test run |
 | Slater contracts | Parent `02aef843`:5 PASS,0skip,0.009s; originalS104 sixteen-site seed123456789 plus FULLhelper130–201/README review and13filecmp2295ee0; owner `bcd7ef44...` separate5PASS | S104 lifecycle input gap resolved, not300 optimization steps/fullsampling/Ctableoracle; private tuple/inverse-map/exception identity API differences |
 | #179 repeatability | Owner83487 terminal0:387 direct pairs; parent independently checked388-line TSV,nonzero0; see issue-179-repeat-command.md | Configuration-specific repeatability; historical108 plus387 scopes do not establish numeric accuracy |
-| CG/runner20 | Parent `ab1ad301-bdb6-4c22-a2b3-1689343b9e43`:3 PASS,exit0,205filtered,3.430s complex/Hubbard/canonical; realCG `cfd623cf...`/DH2 `9843afda` PASS; fresh20 acquisition26unique complete | Selectedmodel proof, not all26 consumers/workspace;15consumer imports pending. Phase5 runtime50 assignedBanach conversion, offline50archive separate |
+| #180 fresh52 / runner20 | Publicnamelist13long20 ab7d14f8 PASS entry-summary; detailedfcea6b6f terminal100:12models×4prefixes+Generalprefix1=49complete; independentarchiveSHA0; closurehelper9bc10fa3 sevenPASS | Generalprefix2 partialFAIL HO36abs3.53362e-12 afterconfigs/RNG/params/energy/OO pass; General3/20UNRUN aftercatch. No52numericPASS/tolchange. Pauli C+J firstoperation/conditioning/residual diagnosis pending; helper/summary not detailednumeric proof |
 | Threaded long20 | Parent `1ba4d50b-7013-468f-9a97-ac97ddfadcb4`:1 PASS,exit0,16filtered,9.234s; workers/repeat,dense+mapped/window20,strictcfg/next624,existing1e-11 | Mutable/unfrozen source with no attributable compileSHA; do notretroassigncurrentSHA or ownerfce98252/7dd provenance; not allmodels/sites |
 | Pairhop CG consumer repair | Parent `8e547c35-b32e-4546-a94a-ae67aa1bdfe2`:exit0,2PASS,206filtered,2.970s real/FSZpairhop plusInterAllFSZ historical consumer | InterAll is oldworkspace repair ONLY, excluded fromnew#185 acceptance; selectedmodel proof notworkspacegreen |
 | #182 prefixes | `821f94c3...`:1 PASS,1.404s; five one-step models/fullOOHO/finalworkers1/2/4 after serialization repair | Not long20 or every14site/96assertion proof |
@@ -22,14 +53,15 @@ This table supersedes stale live/pending statements in the historical records be
 | REAL-FSZ | Latest `722de57e...`:1 PASS; defined/written flags strict, inactive-zero policy explicit | Standalone C direct-SR retained-input check not fullC sampler/MPI |
 | IO134 | Parent `990e6bf3...`:12 filtered tests PASS; owner mixed15 is separate | Exact/private versus representative mappings; not all134 literal conditions |
 | Parser suite | Parent `f311227c-9305-4aeb-be0b-cfd4967adb6c`:115/115 PASS,0 skip,0.361s; requiredErr/validGEx and coordinate/combined validation source reviewed | Supersedes old113/114 failure for parser only; not workspace or allJulia-source coverage |
-| Workspace | Latest fullworkspace688 PASS/14FAIL/30skip; corelib193PASS/14FAIL/0skip | Historical CG consumers partly repaired by newer focused results; no newer full-green suite supplied |
-| Semantic ledger | 632 unreviewed;596 source/settings-proof-pending;184 focusedcontracts withdeclared differences;23 focusedsource;6 loops;3excluded | Slater47 source/handoffreviewed; only exactS104 length row promoted, private/representative differences retained; no fullcoverage claim |
+| Workspace / platforms | FrozenLinux-native02c83 run21639161-6a11-4446-a20b-063be144eb0e:754/754PASS; LinuxCIjob111184639831 at02:default754/754PASS246.153s/allfeatures755/755PASS251.739s. macOSCIjob111184639828 at02:736PASS20FAIL221.571s | LinuxCI overallFAIL Clippy mpi_issue179_mapping.rs55 fieldDefaultreassignment,Wegenerfix; docsstepcheckpending. NativeportabilityNOTPASS macnumeric+missingrefs. No02 evidence assignedf16/fresh180; f16CI absent investigatingbase/scheduling |
+| Semantic ledger | 412 unreviewed;778 source/settings-proof-pending;215 focusedcontracts withdeclared differences;23 focusedsource;6 loops;3excluded | Transfer15,input56,SFMTparameter15,integration26,utils28,parserIntegration/RBM24,GreenCompare19 reviewed; parameterinit/sync/range assertions are NOT primitiveSFMT proof; exact nonmath payload execution pending; math10 alone promoted with exact analytical settings/compileSHA4d970d82; no fullcoverage claim |
 
 Current acceptance: long-runner baseline20 with fresh reference windows/NSmp; preserve targeted1/2/3 andfailure27/28/29, independent CG kernel1..41/20/40. Same-input/fixed-seed/SAMEconfiguration repeatability is required, recording MPI/group/worker settings. Primitive RNG initialization/conversions/output/state remain strict cross-language for SAME draworder/count. Mathematical-function differences may use justified scoped bounds; branch/acceptance differences require first cause/threshold explanation. Approved initial three-phase abs8.7e-19/rel0 does not authorize arbitrary CG/MPI tolerances. Do not invent Rust public APIs for Julia-private architecture, hide public defects, delete protections or convert unexecuted checks to PASS.
 
 Latest scoped commands: provenance `cargo nextest run -p mvmc-core --test ctest_equivalent --cargo-profile test-fast --locked -E 'test(ctest_provenance)' --no-fail-fast --retries 0` (55f833af); DH2 `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_sampling_dh2_literal_counts_and_real_parameter_log_contract)' --no-fail-fast --retries 0` (0a6d8024); public boundaries `cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_public_rejection_boundaries --no-fail-fast --retries 0` (2b7a304c). Parent supplied terminal results and source reviews; these mutable-tree runs have no attributable compilation snapshot SHA supplied here. Do not retrospectively assign current source hashes to their binaries.
 
-## Historical checkpoint records (not current status)
+
+
 
 Latest owned DH2 test: `issue184_assertion_contracts::original_sampling_dh2_literal_counts_and_real_parameter_log_contract`; sourceSHA256 `9aa7b1fe2e40226347534cfcb9e21442b88eb15badeaf680bd215407589c3bfc`; command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_sampling_dh2_literal)' --no-fail-fast --retries 0`. Original nsite4 neighbors and occupations give independent counts[0,0,1,1,0,0]; realparameters1..6 with imaginary10..60 give oldlog7/new-minus-old9. C creal projection authority, analytic literals not Rustgolden; no RNG or production modification.
 
