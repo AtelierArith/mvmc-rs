@@ -60,7 +60,7 @@ test -n "$mpi_gate_binary" && test -x "$mpi_gate_binary" && \
   --ignored --exact mpi_physcal_reduces_fixed_parameter_samples --nocapture
 ```
 
-The MPI gate checks the serial PhysCal reduction and rejection of unsupported
+The MPI gate checks completion of serial PhysCal reduction and rejection of unsupported
 grouped PhysCal. It does not establish numerical parity for grouped PhysCal.
 Explicitly selecting the MPI gate without the feature fails as `Unsupported`:
 
@@ -95,3 +95,34 @@ file hashes, command, exit status and artifact paths. New Julia comparisons use
 `julia +1.13.1 --project=extern/Julia-mVMC` and `Manifest-v1.13.toml`.
 Reference generation is a separate optional developer action. Thread matrices
 must be requested and reported explicitly; these gates do not imply they ran.
+
+## Reporting validation checkpoint (2026-10-03)
+
+The following captured processes were started before integration of #190.
+Treat their results as gate selection/reporting evidence; they do not
+establish numerical parity or validate the integrated numerical implementation:
+
+| Process handle | Selection | Result |
+| --- | --- | --- |
+| 15826 | Default phase4/5, Lanczos and MPI declarations, `test-fast` | Exit 0: 24 helper tests passed, 6 parity gates skipped |
+| 34718 | Default `physcal_issue181`, `--locked`, `test-fast` | Exit 0: 4 helper tests passed, 3 scenarios skipped |
+| 28608 | All nine ignored gates explicitly requested with selectors unset, `--locked`, `test-fast` | Expected exit 100: 0 passed, 9 failed at `require_gate`, 28 helper tests skipped |
+
+The missing-selector run used `--run-ignored only --no-fail-fast --retries 0`
+and explicitly unset `MVMC_RS_PHASE4_REAL_ZVO`, `MVMC_RS_PHASE4_CMP_ZVO`,
+`MVMC_RS_PHASE4_FSZ_ZVO`, `MVMC_RS_PHASE5_HUBBARD_ZVO`,
+`MVMC_RS_LANCZOS_PHYSICAL`, `MVMC_RS_MPI_PHYSICAL`, and
+`MVMC_RS_PHYSCAL_181`. Every executed gate reported `NotRun` and failed before
+entering its scenario body. No C/Julia program, reference generation, MPI
+launcher, or numerical parity workload was run by these checks.
+
+After resuming on the integrated tree, focused support-helper verification
+(handle 54822) exited 0: 4 helper tests passed, 1 parity gate skipped:
+
+```sh
+cargo nextest run -p mvmc-core --locked --cargo-profile test-fast --test phase4_zvo_gate -E 'test(support::tests::)' --no-fail-fast --retries 0
+```
+
+Targeted `rustfmt --edition 2021 --check` on the owned Rust files and
+`git diff --check` on the owned paths also passed. These checks cover gate
+infrastructure and formatting, not numerical comparisons.

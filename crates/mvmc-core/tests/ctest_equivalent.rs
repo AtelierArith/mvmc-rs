@@ -18,6 +18,7 @@ const ABSOLUTE_FLOOR: f64 = 1.0e-8;
 struct Model {
     fixture: &'static str,
     mode: &'static str,
+    // Fixture availability is not a claim that its numerical gate passed.
     prefix_reference_available: bool,
     reason: &'static str,
 }
@@ -33,7 +34,7 @@ const MODELS: &[Model] = &[
         fixture: "hubbard_chain_real",
         mode: "real",
         prefix_reference_available: true,
-        reason: "",
+        reason: "new canonical initial.def fixtures; archived no-overlay prefixes are distinct",
     },
     Model {
         fixture: "heisenberg_chain_cmp",
@@ -45,37 +46,37 @@ const MODELS: &[Model] = &[
         fixture: "heisenberg_chain_fsz",
         mode: "fsz",
         prefix_reference_available: true,
-        reason: "",
+        reason: "new canonical initial.def fixtures; archived no-overlay prefixes are distinct",
     },
     Model {
         fixture: "hubbard_chain_cmp",
         mode: "cmp",
-        prefix_reference_available: false,
-        reason: "no committed deterministic 50-step gate for this model",
+        prefix_reference_available: true,
+        reason: "canonical 1/2/3/50 fixtures; numerical gate is separate",
     },
     Model {
         fixture: "hubbard_chain_fsz",
         mode: "fsz",
-        prefix_reference_available: false,
-        reason: "no committed deterministic 50-step gate for this model",
+        prefix_reference_available: true,
+        reason: "canonical native-C-energy/Julia FSZ 1/2/3/50 fixtures",
     },
     Model {
         fixture: "kondo_chain_real",
         mode: "real",
-        prefix_reference_available: false,
-        reason: "canonical Kondo optimization configs/RNG/SR prefix oracle is missing",
+        prefix_reference_available: true,
+        reason: "canonical local-spin optimization 1/2/3/50 fixtures",
     },
     Model {
         fixture: "kondo_chain_cmp",
         mode: "cmp",
-        prefix_reference_available: false,
-        reason: "canonical complex Kondo optimization configs/RNG/SR prefix oracle is missing",
+        prefix_reference_available: true,
+        reason: "canonical complex local-spin optimization 1/2/3/50 fixtures",
     },
     Model {
         fixture: "kondo_chain_stot1_cmp",
         mode: "cmp",
-        prefix_reference_available: false,
-        reason: "canonical Stot=1 Kondo optimization configs/RNG/SR prefix oracle is missing",
+        prefix_reference_available: true,
+        reason: "canonical Stot=1 optimization 1/2/3/50 fixtures",
     },
     Model {
         fixture: "general_rbm_cmp",
@@ -86,20 +87,20 @@ const MODELS: &[Model] = &[
     Model {
         fixture: "hubbard_tetragonal_real",
         mode: "real",
-        prefix_reference_available: false,
-        reason: "tetragonal fixture has no deterministic Rust gate",
+        prefix_reference_available: true,
+        reason: "canonical tetragonal optimization 1/2/3/50 fixtures",
     },
     Model {
         fixture: "hubbard_tetragonal_momentum_projection_real",
         mode: "real",
-        prefix_reference_available: false,
-        reason: "momentum-projection fixture has no deterministic Rust gate",
+        prefix_reference_available: true,
+        reason: "canonical momentum-projection optimization 1/2/3/50 fixtures",
     },
     Model {
         fixture: "kondo_chain_fsz",
         mode: "fsz",
-        prefix_reference_available: false,
-        reason: "canonical FSZ Kondo optimization configs/spins/RNG/SR prefix oracle is missing",
+        prefix_reference_available: true,
+        reason: "canonical native-C-energy/Julia FSZ Kondo 1/2/3/50 fixtures",
     },
 ];
 
@@ -171,13 +172,9 @@ fn rust_ctest_equivalent_selected_models() {
                 );
                 panic!("unknown ctest model {name:?}");
             });
-        if !model.prefix_reference_available {
-            report_gate(
-                name,
-                GateStatus::NotRun,
-                &format!("deterministic prefix unverified: {}", model.reason),
-            );
-        }
+        report_gate(name, GateStatus::NotRun,
+            &format!("independent prefix gate is separate, not executed by long summary: {}; fixture_available={}",
+                model.reason, model.prefix_reference_available));
         let outcome = std::panic::catch_unwind(|| {
             let fixture = root.join("test/integration/reference").join(model.fixture);
             let namelist = fixture.join("inputs/namelist.def");
