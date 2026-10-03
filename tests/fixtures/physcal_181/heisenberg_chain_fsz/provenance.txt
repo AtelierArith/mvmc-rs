@@ -1,10 +1,15 @@
 generator=scripts/generate_physcal_181.jl
+generated_utc=2026-10-03T05:58:35.587
+generator_sha256=cc6415df4dc70d3b0c5febb4abf325c14bbc48bae9496679a7586983b99f94a9
 julia=1.13.1
 reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
 architecture=x86_64-linux-gnu
 blas=LBTConfig([ILP64] libopenblas64_.so)
 blas_threads=1
 julia_threads=1
+blas_version=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+julia_commit=96ca370cf0e339faf45a7ba863793f6c7c6980fb
+cpu=haswell
 seed=1
 mode=fsz
 manifest_sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
@@ -14,8 +19,11 @@ rng=next 624 UInt32 outputs, non-consuming C SFMT peek; draw-count=primitive UIn
 input_contract=explicit zqp; no automatic initial.def; unchanged sampling counts; serial; correlation shifts disabled
 trajectory_authority=Julia independently generated; C compatibility of trajectory requires a separate C trace
 C_output_check=zvo_cisajs_001.dat: ok=true, max_abs=1.0824674490095276e-15, within tolerance (rtol=1.0e-10, atol=1.0e-12; max_abs=1.0824674490095276e-15)
+C_output_check=zvo_cisajs_001.dat first_numerical_difference=row=3 column=5 actual=-0.07249789893661593 expected=-0.07249789893661701 delta=1.0824674490095276e-15
 C_output_check=zvo_cisajscktalt_001.dat: ok=true, max_abs=7.276557828506114e-13, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=7.276557828506114e-13)
+C_output_check=zvo_cisajscktalt_001.dat first_numerical_difference=row=14 column=9 actual=0.036499382697775494 expected=0.03649938269790172 delta=-1.262254190059764e-13
 C_output_check=zvo_cisajscktaltex_001.dat: ok=true, max_abs=2.248201624865942e-15, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=2.248201624865942e-15)
+C_output_check=zvo_cisajscktaltex_001.dat first_numerical_difference=row=1 column=5 actual=0.22333939795421662 expected=0.22333939795421887 delta=-2.248201624865942e-15
 input_sha256=df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814 inputs/coulombinter.def
 input_sha256=29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e inputs/exchange.def
 input_sha256=79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6 inputs/greenone.def

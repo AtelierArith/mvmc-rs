@@ -18,6 +18,7 @@
 )]
 
 use num_complex::Complex64;
+use rayon::prelude::*;
 
 use mvmc_expert_parsers::{ExpertModeData, Spin};
 
@@ -223,16 +224,35 @@ pub fn calculate_oo_real(
 ) {
     let we = w * e;
     let lda = sr_opt_size;
-    for j in 0..sr_opt_size {
-        let oj = sr_opt_o[j];
-        for i in 0..sr_opt_size {
-            let idx = i + lda * j;
-            sr_opt_oo[idx] += w * sr_opt_o[i] * oj;
+    if lda > 0 {
+        let observed = crate::threading::observe_kernel(
+            crate::threading::ObservedWork::Entry,
+            crate::threading::inner_parallel_enabled(lda),
+        );
+        let update = |j: usize, column: &mut [f64]| {
+            let _entry = observed.enter_item();
+            let oj = sr_opt_o[j];
+            for i in 0..lda {
+                column[i] += w * sr_opt_o[i] * oj;
+            }
+        };
+        if crate::threading::inner_parallel_enabled(lda) {
+            crate::threading::install(|| {
+                sr_opt_oo[..lda * lda]
+                    .par_chunks_mut(lda)
+                    .enumerate()
+                    .for_each(|(j, column)| update(j, column))
+            });
+        } else {
+            sr_opt_oo[..lda * lda]
+                .chunks_mut(lda)
+                .enumerate()
+                .for_each(|(j, column)| update(j, column));
         }
     }
-    for i in 0..sr_opt_size {
-        sr_opt_ho[i] += we * sr_opt_o[i];
-    }
+    crate::threading::for_each_mut(&mut sr_opt_ho[..sr_opt_size], |i, ho| {
+        *ho += we * sr_opt_o[i]
+    });
 }
 
 /// Complex `calculate_oo!` (single-sample, no store).
@@ -245,17 +265,40 @@ pub fn calculate_oo(
     sr_opt_size: usize,
 ) {
     let size_2 = 2 * sr_opt_size;
-    for j in 0..size_2 {
-        let tmp = sr_opt_o[j] * w;
-        sr_opt_oo[j] += tmp;
-        sr_opt_ho[j] += e * tmp;
-    }
-    for i in 2..size_2 {
-        for j in 0..size_2 {
-            // C vmccal.c:788 and Julia scale O[j] before the complex product.
-            // Reassociating the weight changes rounding for non-unit weights
-            // and can amplify into a different SR optimization trajectory.
-            sr_opt_oo[i * size_2 + j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
+    crate::threading::for_each_pair_mut(
+        &mut sr_opt_oo[..size_2],
+        &mut sr_opt_ho[..size_2],
+        |j, oo, ho| {
+            let tmp = sr_opt_o[j] * w;
+            *oo += tmp;
+            *ho += e * tmp;
+        },
+    );
+    if size_2 > 2 {
+        let observed = crate::threading::observe_kernel(
+            crate::threading::ObservedWork::Entry,
+            crate::threading::inner_parallel_enabled(size_2 - 2),
+        );
+        let update = |offset: usize, row: &mut [Complex64]| {
+            let _entry = observed.enter_item();
+            let i = offset + 2;
+            for j in 0..size_2 {
+                // C vmccal.c:788 scales O[j] before the complex product.
+                // Keep that order independently within each observed row.
+                row[j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
+            }
+        };
+        let rows = &mut sr_opt_oo[2 * size_2..size_2 * size_2];
+        if crate::threading::inner_parallel_enabled(size_2 - 2) {
+            crate::threading::install(|| {
+                rows.par_chunks_mut(size_2)
+                    .enumerate()
+                    .for_each(|(i, row)| update(i, row))
+            });
+        } else {
+            rows.chunks_mut(size_2)
+                .enumerate()
+                .for_each(|(i, row)| update(i, row));
         }
     }
 }
@@ -282,10 +325,10 @@ pub fn calculate_oo_store_real(
     let we = w * e;
     let sqrtw = w.sqrt();
     let store = &mut sr_opt_o_store[sample * sr_opt_size..(sample + 1) * sr_opt_size];
-    for i in 0..sr_opt_size {
-        store[i] = sqrtw * sr_opt_o[i];
-        sr_opt_ho[i] += we * sr_opt_o[i];
-    }
+    crate::threading::for_each_pair_mut(store, &mut sr_opt_ho[..sr_opt_size], |i, stored, ho| {
+        *stored = sqrtw * sr_opt_o[i];
+        *ho += we * sr_opt_o[i];
+    });
 }
 
 /// Finalize real O*O^T with Julia's BLAS GEMM path, preserving extra buffer slots.
@@ -299,17 +342,22 @@ pub fn finalize_oo_store_real(
 ) {
     let n = sr_opt_size;
     if options.diagonal_only {
-        for i in 0..n {
-            let mut mean = 0.0;
-            let mut diagonal = 0.0;
-            for sample in options.sample_start..options.sample_start + sample_size {
-                let o = sr_opt_o_store[i + sample * n];
-                mean += o;
-                diagonal += o * o;
-            }
-            sr_opt_oo[i] = mean;
-            sr_opt_oo[i + n] = diagonal;
-        }
+        let (mean_block, rest) = sr_opt_oo.split_at_mut(n);
+        crate::threading::for_each_pair_mut(
+            mean_block,
+            &mut rest[..n],
+            |i, mean_out, diagonal_out| {
+                let mut mean = 0.0;
+                let mut diagonal = 0.0;
+                for sample in options.sample_start..options.sample_start + sample_size {
+                    let o = sr_opt_o_store[i + sample * n];
+                    mean += o;
+                    diagonal += o * o;
+                }
+                *mean_out = mean;
+                *diagonal_out = diagonal;
+            },
+        );
         return;
     }
     if n == 0 {
@@ -376,10 +424,10 @@ pub fn calculate_oo_store(
     let sqrtw = w.sqrt();
     let size_2 = 2 * sr_opt_size;
     let store = &mut sr_opt_o_store[sample * size_2..(sample + 1) * size_2];
-    for i in 0..size_2 {
-        store[i] = sqrtw * sr_opt_o[i];
-        sr_opt_ho[i] += we * sr_opt_o[i];
-    }
+    crate::threading::for_each_pair_mut(store, &mut sr_opt_ho[..size_2], |i, stored, ho| {
+        *stored = sqrtw * sr_opt_o[i];
+        *ho += we * sr_opt_o[i];
+    });
 }
 
 /// Complex `finalize_oo_store!` mirror — sums `O * O^H` from the sample
@@ -393,17 +441,22 @@ pub fn finalize_oo_store(
 ) {
     let size_2 = 2 * sr_opt_size;
     if options.diagonal_only {
-        for i in 0..size_2 {
-            let mut mean = Complex64::new(0.0, 0.0);
-            let mut diagonal = 0.0;
-            for sample in options.sample_start..options.sample_start + sample_size {
-                let o = sr_opt_o_store[i + sample * size_2];
-                mean += o;
-                diagonal += o.norm_sqr();
-            }
-            sr_opt_oo[i] = mean;
-            sr_opt_oo[i + size_2] = Complex64::new(diagonal, 0.0);
-        }
+        let (mean_block, rest) = sr_opt_oo.split_at_mut(size_2);
+        crate::threading::for_each_pair_mut(
+            mean_block,
+            &mut rest[..size_2],
+            |i, mean_out, diagonal_out| {
+                let mut mean = Complex64::new(0.0, 0.0);
+                let mut diagonal = 0.0;
+                for sample in options.sample_start..options.sample_start + sample_size {
+                    let o = sr_opt_o_store[i + sample * size_2];
+                    mean += o;
+                    diagonal += o.norm_sqr();
+                }
+                *mean_out = mean;
+                *diagonal_out = Complex64::new(diagonal, 0.0);
+            },
+        );
         return;
     }
     if size_2 == 0 {
@@ -447,14 +500,30 @@ fn sr_store_gram_julia(
     let (n, samples) = (shape[0], shape[1]);
     let raw = store.host_data()?;
     let mut gram = vec![Complex64::new(0.0, 0.0); n * n];
-    for i in 0..n {
-        for j in 0..n {
+    let observed = crate::threading::observe_kernel(
+        crate::threading::ObservedWork::Entry,
+        crate::threading::inner_parallel_enabled(n),
+    );
+    let update = |j: usize, column: &mut [Complex64]| {
+        let _entry = observed.enter_item();
+        for i in 0..n {
             let mut sum = Complex64::new(0.0, 0.0);
             for sample in 0..samples {
                 sum += raw[i + sample * n] * raw[j + sample * n].conj();
             }
-            gram[i + j * n] = sum;
+            column[i] = sum;
         }
+    };
+    if crate::threading::inner_parallel_enabled(n) {
+        crate::threading::install(|| {
+            gram.par_chunks_mut(n)
+                .enumerate()
+                .for_each(|(j, column)| update(j, column))
+        });
+    } else if n > 0 {
+        gram.chunks_mut(n)
+            .enumerate()
+            .for_each(|(j, column)| update(j, column));
     }
     tenferro_tensor::TypedTensor::from_vec_col_major(vec![n, n], gram)
 }
@@ -1645,7 +1714,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
     spin_annihilate: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -2736,6 +2805,44 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         // to the Green kernel while preserving its capacities for the next
         // local-energy call.
         let mut green_scratch = std::mem::take(&mut state.transfer_scratch);
+        let parallel_transfer = real_transfer
+            && !crate::run::get_all_complex_flag(data)
+            && !timer.diagnostics.calham1
+            && crate::threading::inner_parallel_enabled(state.transfer_cache.terms.len());
+        let observed = crate::threading::observe_kernel(
+            crate::threading::ObservedWork::Term,
+            parallel_transfer,
+        );
+        let parallel_green = if parallel_transfer {
+            let shared_state = &*state;
+            Some(crate::threading::install(|| {
+                state
+                    .transfer_cache
+                    .terms
+                    .par_iter()
+                    .map_init(GreenScratch::default, |scratch, term| {
+                        let _entry = observed.enter_item();
+                        green_func1_impl::<false, true, false>(
+                            term.site1,
+                            term.site2,
+                            term.spin1,
+                            term.spin2,
+                            ip,
+                            data,
+                            shared_state,
+                            ele_idx,
+                            ele_cfg,
+                            ele_num,
+                            ele_proj_cnt,
+                            scratch,
+                            &mut CTimer::<false>::new(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }))
+        } else {
+            None
+        };
         for index in 0..state.transfer_cache.terms.len() {
             let term = state.transfer_cache.terms[index];
             let ri = term.site1;
@@ -2744,21 +2851,26 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             let spin_annihilate = term.spin2;
             let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
             timer.start_diag(920, diag);
-            let g1 = green_func1_timed_with_scratch(
-                ri,
-                rj,
-                spin_create,
-                spin_annihilate,
-                ip,
-                data,
-                state,
-                ele_idx,
-                ele_cfg,
-                ele_num,
-                ele_proj_cnt,
-                &mut green_scratch,
-                timer,
-            );
+            let g1 = if let Some(values) = &parallel_green {
+                values[index]
+            } else {
+                let _entry = observed.enter_item();
+                green_func1_timed_with_scratch(
+                    ri,
+                    rj,
+                    spin_create,
+                    spin_annihilate,
+                    ip,
+                    data,
+                    state,
+                    ele_idx,
+                    ele_cfg,
+                    ele_num,
+                    ele_proj_cnt,
+                    &mut green_scratch,
+                    timer,
+                )
+            };
             timer.stop_diag(920, diag);
             if real_transfer {
                 transfer_energy -= term.value.re * g1.re;

@@ -1,7 +1,7 @@
 //! Rust counterpart of Julia-mVMC's `test/integration/ctest_equivalent.jl`.
 //!
-//! The test is opt-in because the pinned C ctest workloads run hundreds or
-//! thousands of SR steps. Select fixtures with
+//! Current long acceptance uses 20 steps and a matched 20-sample window.
+//! Independent reference generation is opt-in. Select fixtures with
 //! `MVMC_RS_CTEST_MODELS=heisenberg_chain_real,hubbard_chain_real`.
 
 use std::fs;
@@ -9,6 +9,10 @@ use std::path::Path;
 
 use mvmc_core::{run_para_opt_from_namelist, RunConfig};
 
+#[path = "support/ctest_provenance.rs"]
+mod ctest_provenance;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 mod support;
 use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
@@ -125,7 +129,7 @@ fn passes(calculated: f64, expected: f64, sigma: f64) -> bool {
 }
 
 #[test]
-#[ignore = "long reference gate: select MVMC_RS_CTEST_MODELS and use --run-ignored only"]
+#[ignore = "20-step reference gate: select MVMC_RS_CTEST_MODELS and use --run-ignored only"]
 fn rust_ctest_equivalent_selected_models() {
     require_gate("ctest-equivalent", "MVMC_RS_CTEST_MODELS");
     let filter = std::env::var("MVMC_RS_CTEST_MODELS").expect("selection was present");
@@ -173,47 +177,103 @@ fn rust_ctest_equivalent_selected_models() {
         let outcome = std::panic::catch_unwind(|| {
             let fixture = root.join("test/integration/reference").join(model.fixture);
             let namelist = fixture.join("inputs/namelist.def");
-            let mean_path = fixture.join("ctest_ref/ref_mean.dat");
-            let std_path = fixture.join("ctest_ref/ref_std.dat");
-            if !namelist.is_file() || !mean_path.is_file() || !std_path.is_file() {
+            let references = std::env::var("MVMC_RS_CTEST_ORACLE_ROOT")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| {
+                    Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../tests/fixtures/ctest_model_prefixes")
+                });
+            let expected = references.join(name).join("step-20");
+            let expected_output = expected.join("zvo_out.dat");
+            if !namelist.is_file() || !expected_output.is_file() {
                 support::missing_fixture(
                     "ctest-equivalent",
-                    format!("{name}: namelist or ctest reference is missing"),
+                    format!("{name}: fresh independent 20-step reference missing; historical long/50-step output cannot substitute"),
                 );
             }
-            let ref_mean = read_values(&mean_path);
-            let ref_std = read_values(&std_path);
             assert!(
-                ref_mean.len() >= 2 && ref_std.len() >= 2,
-                "{name}: C refs need two values"
+                references.join("provenance.txt").is_file(),
+                "independent provenance required"
             );
-            let output =
-                std::env::temp_dir().join(format!("mvmc-rs-ctest-{name}-{}", std::process::id()));
+            let provenance = fs::read_to_string(references.join("provenance.txt")).unwrap();
+            assert!(provenance.split_whitespace().any(|v| v == "Julia=1.13.1"));
+            assert!(
+                provenance.contains("62b0f97f076fb55c71c3ab0caa041a9adff94e04"),
+                "reviewed reference source identity required for fresh20"
+            );
+            assert!(provenance.contains("Manifest-v1.13.toml") && provenance.contains("sha256="));
+            ctest_provenance::verify_inputs(
+                &expected.join("inputs.sha256"),
+                namelist.parent().unwrap(),
+            );
+            assert_eq!(
+                fs::read_to_string(expected.join("status.txt"))
+                    .unwrap()
+                    .trim(),
+                "0"
+            );
+            let settings = fs::read_to_string(expected.join("model-settings.txt")).unwrap();
+            assert!(settings
+                .split_whitespace()
+                .any(|v| v == "effective_NSROptItrStep=20"));
+            assert!(settings
+                .split_whitespace()
+                .any(|v| v == "effective_NSROptItrSmp=20"));
+            assert!(settings
+                .split_whitespace()
+                .any(|v| v == "override=both_no_clamp"));
+            let expected_text = fs::read_to_string(&expected_output).unwrap();
+            let rows: Vec<Vec<f64>> = expected_text
+                .lines()
+                .map(|line| {
+                    line.split_whitespace()
+                        .map(|v| v.parse().unwrap())
+                        .collect()
+                })
+                .collect();
+            assert_eq!(rows.len(), 20, "independent 20-step output rows");
+            assert!(rows
+                .iter()
+                .all(|row| row.len() >= 2 && row.iter().all(|v| v.is_finite())));
+            let ref_mean: Vec<f64> = (0..2)
+                .map(|column| rows.iter().map(|row| row[column]).sum::<f64>() / 20.0)
+                .collect();
+            let id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let output = std::env::temp_dir()
+                .join(format!("mvmc-rs-ctest-{name}-{}-{id}", std::process::id()));
             let parsed = mvmc_expert_parsers::parse_expert_mode_files(&namelist)
                 .unwrap_or_else(|error| panic!("{name}: parse failed: {error}"));
+            assert!(settings
+                .split_whitespace()
+                .any(|v| v == format!("RndSeed={}", parsed.modpara.rnd_seed)));
             let config = RunConfig {
-                nsmp: Some(parsed.modpara.nsr_opt_itr_smp),
+                nsmp: Some(20),
                 seed: None,
                 output_dir: Some(output.clone()),
-                ..RunConfig::new(parsed.modpara.nsr_opt_itr_step, model.mode)
+                ..RunConfig::new(20, model.mode)
             };
+            fs::create_dir(&output).expect("exclusive owned output directory creation");
             let result = run_para_opt_from_namelist(&namelist, config)
                 .unwrap_or_else(|error| panic!("{name}: Rust run failed: {error}"));
             assert_eq!(result.status, 0, "{name}: status");
-            for index in 0..2 {
-                assert!(
-                    passes(result.ctest_values[index], ref_mean[index], ref_std[index]),
-                    "{name}: ctest column {index}: calculated={} expected={} std={}",
+            for (index, &expected_mean) in ref_mean.iter().enumerate() {
+                numerical_comparison::assert_close(
                     result.ctest_values[index],
-                    ref_mean[index],
-                    ref_std[index]
+                    expected_mean,
+                    1e-11,
+                    1e-11,
+                    format!("{name}: independent 20-step summary column {index}"),
                 );
             }
-            let _ = fs::remove_dir_all(output);
+            fs::remove_dir_all(&output)
+                .expect("remove only this gate's exclusively created directory");
             report_gate(
                 "ctest-equivalent",
                 GateStatus::Pass,
-                &format!("{name}: native long statistical summary only"),
+                &format!("{name}: native 20-step/window20 independent summary only"),
             );
         });
         if outcome.is_err() {

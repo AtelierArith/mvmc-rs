@@ -113,13 +113,13 @@ fn rng_mod(rng: &mut Sfmt19937Rng, n: usize) -> usize {
     if n == 0 {
         0
     } else {
-        rng.gen_rand_mod(n as u32) as usize
+        crate::sampling::driver::trace::draw_mod(rng, n as u32) as usize
     }
 }
 
 #[inline]
 fn rng_spin(rng: &mut Sfmt19937Rng) -> u8 {
-    if rng.genrand_real2() < 0.5 {
+    if crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
         0
     } else {
         1
@@ -134,6 +134,28 @@ fn rng_spin(rng: &mut Sfmt19937Rng) -> u8 {
 /// * `loc_spn[ri] = 1` marks local-spin sites disallowed for itinerant
 ///   hopping.
 pub fn make_candidate_hopping(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    n_site: usize,
+    n_elec: usize,
+    loc_spn: &[i64],
+    rng: &mut Sfmt19937Rng,
+) -> HoppingCandidate {
+    let c = make_candidate_hopping_inner(ele_idx, ele_cfg, n_site, n_elec, loc_spn, rng);
+    crate::sampling::driver::trace::record(
+        1,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+fn make_candidate_hopping_inner(
     ele_idx: &[i64],
     ele_cfg: &[i64],
     n_site: usize,
@@ -192,6 +214,30 @@ pub fn make_candidate_hopping(
 
 /// Port of `make_candidate_exchange` for Sz-conserved normal mode.
 pub fn make_candidate_exchange(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    n_site: usize,
+    n_elec: usize,
+    ele_num: &[i64],
+    rng: &mut Sfmt19937Rng,
+) -> ExchangeCandidate {
+    let c = make_candidate_exchange_inner(ele_idx, ele_cfg, n_site, n_elec, ele_num, rng);
+    crate::sampling::driver::trace::record(
+        2,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            c.mj as i64,
+            c.spin_other as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+fn make_candidate_exchange_inner(
     ele_idx: &[i64],
     ele_cfg: &[i64],
     n_site: usize,
@@ -263,10 +309,27 @@ pub fn get_update_type(
     two_sz: i64,
     rng: &mut Sfmt19937Rng,
 ) -> UpdateType {
+    let update = get_update_type_inner(n_ex_update_path, i_flg_orbital_general, two_sz, rng);
+    let code = match update {
+        UpdateType::Hopping => 0,
+        UpdateType::Exchange => 1,
+        UpdateType::LocalSpinFlip => 2,
+        UpdateType::None => 3,
+    };
+    crate::sampling::driver::trace::record(0, &[code]);
+    update
+}
+
+fn get_update_type_inner(
+    n_ex_update_path: i64,
+    i_flg_orbital_general: i64,
+    two_sz: i64,
+    rng: &mut Sfmt19937Rng,
+) -> UpdateType {
     match n_ex_update_path {
         0 => UpdateType::Hopping,
         1 => {
-            if rng.genrand_real2() < 0.5 {
+            if crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
                 UpdateType::Exchange
             } else {
                 UpdateType::Hopping
@@ -276,7 +339,7 @@ pub fn get_update_type(
             if i_flg_orbital_general == 0 {
                 UpdateType::Exchange
             } else if two_sz == -1 {
-                if rng.genrand_real2() < 0.5 {
+                if crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
                     UpdateType::Exchange
                 } else {
                     UpdateType::LocalSpinFlip
@@ -286,9 +349,9 @@ pub fn get_update_type(
             }
         }
         3 => {
-            if rng.genrand_real2() < 0.5 {
+            if crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
                 UpdateType::Hopping
-            } else if rng.genrand_real2() < 0.5 {
+            } else if crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
                 UpdateType::Exchange
             } else {
                 UpdateType::LocalSpinFlip
@@ -317,6 +380,55 @@ pub fn make_candidate_hopping_fsz(
     two_sz: i64,
     rng: &mut Sfmt19937Rng,
 ) -> FszHoppingCandidate {
+    let c = make_candidate_hopping_fsz_inner(
+        FszHoppingInput {
+            ele_idx,
+            ele_cfg,
+            ele_spn,
+            loc_spn,
+            n_site,
+            n_size,
+            two_sz,
+        },
+        rng,
+    );
+    crate::sampling::driver::trace::record(
+        3,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            c.spin_to as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+struct FszHoppingInput<'a> {
+    ele_idx: &'a [i64],
+    ele_cfg: &'a [i64],
+    ele_spn: &'a [i64],
+    loc_spn: &'a [i64],
+    n_site: usize,
+    n_size: usize,
+    two_sz: i64,
+}
+
+fn make_candidate_hopping_fsz_inner(
+    input: FszHoppingInput<'_>,
+    rng: &mut Sfmt19937Rng,
+) -> FszHoppingCandidate {
+    let FszHoppingInput {
+        ele_idx,
+        ele_cfg,
+        ele_spn,
+        loc_spn,
+        n_site,
+        n_size,
+        two_sz,
+    } = input;
     let icnt_max = n_site * n_site;
 
     let mut mi;
@@ -374,6 +486,32 @@ pub fn make_candidate_local_spin_flip_conduction(
     n_size: usize,
     rng: &mut Sfmt19937Rng,
 ) -> LocalSpinFlipCandidate {
+    let c = make_candidate_local_spin_flip_conduction_inner(
+        ele_idx, ele_cfg, ele_spn, loc_spn, n_site, n_size, rng,
+    );
+    crate::sampling::driver::trace::record(
+        4,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            c.spin_to as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+fn make_candidate_local_spin_flip_conduction_inner(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_spn: &[i64],
+    loc_spn: &[i64],
+    n_site: usize,
+    n_size: usize,
+    rng: &mut Sfmt19937Rng,
+) -> LocalSpinFlipCandidate {
     let icnt_max = n_site * n_site;
     let mut icnt = 0usize;
     let mut reject = false;
@@ -421,6 +559,28 @@ pub fn make_candidate_local_spin_flip_localspin(
     n_size: usize,
     rng: &mut Sfmt19937Rng,
 ) -> LocalSpinFlipCandidate {
+    let c = make_candidate_local_spin_flip_localspin_inner(ele_idx, ele_spn, loc_spn, n_size, rng);
+    crate::sampling::driver::trace::record(
+        5,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            c.spin_to as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+fn make_candidate_local_spin_flip_localspin_inner(
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    loc_spn: &[i64],
+    n_size: usize,
+    rng: &mut Sfmt19937Rng,
+) -> LocalSpinFlipCandidate {
     let mut mi;
     let mut spin;
     let mut ri;
@@ -444,6 +604,30 @@ pub fn make_candidate_local_spin_flip_localspin(
 
 /// Port of `make_candidate_exchange_fsz`.
 pub fn make_candidate_exchange_fsz(
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_spn: &[i64],
+    n_site: usize,
+    n_size: usize,
+    rng: &mut Sfmt19937Rng,
+) -> FszExchangeCandidate {
+    let c =
+        make_candidate_exchange_fsz_inner(ele_idx, ele_cfg, ele_num, ele_spn, n_site, n_size, rng);
+    crate::sampling::driver::trace::record(
+        6,
+        &[
+            c.mi as i64,
+            c.ri as i64,
+            c.rj as i64,
+            c.spin as i64,
+            i64::from(c.reject),
+        ],
+    );
+    c
+}
+
+fn make_candidate_exchange_fsz_inner(
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],

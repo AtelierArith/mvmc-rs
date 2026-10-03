@@ -399,7 +399,41 @@ pub fn validate_rbm_parameters(data: &ExpertModeData) -> ValidationResult {
     ValidationResult::new(errors, Vec::new())
 }
 
-/// Combine ModPara and currently supported term-family validators in Julia order.
+/// Check C-defined Green-function site bounds, including constructed typed data.
+/// Spin codes are guaranteed by Rust's type; no C spin-validation claim follows.
+pub fn validate_green_terms(data: &ExpertModeData) -> ValidationResult {
+    let mut errors = Vec::new();
+    let nsite = data.modpara.nsite;
+    for (index, term) in data.green_one_terms.iter().enumerate() {
+        for (field, site) in [("site1", term.site1), ("site2", term.site2)] {
+            check_site(&mut errors, "OneBodyG", index + 1, field, site, nsite);
+        }
+    }
+    for (index, term) in data.green_two_terms.iter().enumerate() {
+        for (field, site) in [
+            ("site1", term.site1),
+            ("site2", term.site2),
+            ("site3", term.site3),
+            ("site4", term.site4),
+        ] {
+            check_site(&mut errors, "TwoBodyG", index + 1, field, site, nsite);
+        }
+    }
+    for (index, term) in data.green_two_ex_terms.iter().enumerate() {
+        for (field, site) in [
+            ("site1", term.site1),
+            ("site2", term.site2),
+            ("site3", term.site3),
+            ("site4", term.site4),
+        ] {
+            check_site(&mut errors, "TwoBodyGEx", index + 1, field, site, nsite);
+        }
+    }
+    ValidationResult::new(errors, Vec::new())
+}
+
+/// Combine ModPara and supported term-family validators, preserving Julia order
+/// for existing families and adding C Green-function site bounds afterward.
 pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
     let mut result = validate_modpara_params(&data.modpara);
     let nsite = data.modpara.nsite;
@@ -413,6 +447,7 @@ pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
         validate_doublon_holon_2site_indices(&data.doublon_holon_2site_indices, nsite),
         validate_doublon_holon_4site_indices(&data.doublon_holon_4site_indices, nsite),
         validate_rbm_parameters(data),
+        validate_green_terms(data),
     ] {
         result.errors.extend(family.errors);
         result.warnings.extend(family.warnings);

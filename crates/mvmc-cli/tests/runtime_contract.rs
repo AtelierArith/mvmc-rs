@@ -68,9 +68,13 @@ impl Drop for TestDir {
 }
 
 fn copy_physcal_fixture(dir: &TestDir) -> (PathBuf, PathBuf) {
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-        "../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/physcal_ref",
-    );
+    copy_physcal_model_fixture(dir, "heisenberg_chain_real")
+}
+
+fn copy_physcal_model_fixture(dir: &TestDir, model: &str) -> (PathBuf, PathBuf) {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../extern/Julia-mVMC/test/integration/reference/{model}/physcal_ref"
+    ));
     let inputs = dir.0.join("inputs");
     fs::create_dir_all(&inputs).unwrap();
     for entry in fs::read_dir(source.join("inputs")).unwrap().flatten() {
@@ -102,12 +106,16 @@ fn physcal_cli_runs_fixed_parameters_and_writes_green_outputs() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("Completed 1 PhysCal samples"));
     for file in [
+        "zvo_out_001.dat",
+        "zvo_var_001.dat",
         "zvo_cisajs_001.dat",
         "zvo_cisajscktalt_001.dat",
         "zvo_cisajscktaltex_001.dat",
     ] {
         assert!(out_dir.join(file).is_file(), "missing {file}");
     }
+    assert!(!out_dir.join("zvo_out.dat").exists());
+    assert!(!out_dir.join("zvo_var.dat").exists());
 }
 
 #[test]
@@ -127,7 +135,7 @@ fn physcal_cli_rejects_missing_fixed_parameter_file_before_output() {
 }
 
 #[test]
-fn physcal_cli_rejects_grouped_execution_before_output() {
+fn physcal_cli_requires_group_communicator_before_output() {
     let dir = TestDir::new("physcal-grouped");
     let (namelist, fixed) = copy_physcal_fixture(&dir);
     let modpara = dir.0.join("inputs/modpara.def");
@@ -143,8 +151,122 @@ fn physcal_cli_rejects_grouped_execution_before_output() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("NSplitSize > 1"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("requires an MPI group communicator"));
     assert!(!out_dir.exists());
+}
+
+#[test]
+fn physcal_cli_rejects_grouped_lanczos_before_output() {
+    let dir = TestDir::new("physcal-grouped-lanczos");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let modpara = dir.0.join("inputs/modpara.def");
+    let text = fs::read_to_string(&modpara)
+        .unwrap()
+        .replace("NSplitSize     1", "NSplitSize     2")
+        .replace("NLanczosMode   0", "NLanczosMode   1");
+    fs::write(modpara, text).unwrap();
+    let out_dir = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(namelist)
+        .args(["--physcal", fixed.to_str().unwrap(), "--out-dir"])
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("NSplitSize > 1 with NLanczosMode"));
+    assert!(!out_dir.exists());
+}
+
+#[test]
+fn physcal_cli_rejects_grouped_fsz_before_output() {
+    let dir = TestDir::new("physcal-grouped-fsz");
+    let (namelist, fixed) = copy_physcal_model_fixture(&dir, "heisenberg_chain_fsz");
+    let modpara = dir.0.join("inputs/modpara.def");
+    let text = fs::read_to_string(&modpara)
+        .unwrap()
+        .replace("NSplitSize     1", "NSplitSize     2");
+    fs::write(modpara, text).unwrap();
+    let out_dir = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(namelist)
+        .arg("--physcal")
+        .arg(fixed)
+        .arg("--out-dir")
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("FSZ / general-orbital PhysCal"));
+    assert!(!out_dir.exists());
+}
+
+#[cfg(feature = "mpi")]
+#[test]
+#[ignore = "requires a live MPI launcher; run explicitly in the MPI verification environment"]
+fn grouped_normal_physcal_cli_succeeds_on_two_and_four_ranks() {
+    let dir = TestDir::new("physcal-grouped-mpi-positive");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let modpara = dir.0.join("inputs/modpara.def");
+    let text = fs::read_to_string(&modpara)
+        .unwrap()
+        .replace("NSplitSize     1", "NSplitSize     2");
+    fs::write(modpara, text).unwrap();
+    for ranks in [2, 4] {
+        let out_dir = dir.0.join(format!("out-{ranks}"));
+        let output = Command::new("timeout")
+            .args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe", "-n"])
+            .arg(ranks.to_string())
+            .arg(env!("CARGO_BIN_EXE_mvmc"))
+            .arg(&namelist)
+            .arg("--physcal")
+            .arg(&fixed)
+            .args(["--seed", "1", "--mode", "real", "--out-dir"])
+            .arg(&out_dir)
+            .env("OMPI_ALLOW_RUN_AS_ROOT", "1")
+            .env("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM", "1")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .env("OMP_NUM_THREADS", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{ranks} ranks: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for marker in [
+            "model    :",
+            "mode     :",
+            "sample   :",
+            "=== mvmc",
+            "namelist :",
+            "out-dir  :",
+            "physcal  :",
+            "seed     :",
+            "=== Completed",
+            "Output files written to:",
+        ] {
+            assert_eq!(
+                stdout.matches(marker).count(),
+                1,
+                "{ranks} ranks duplicated {marker}: {stdout}"
+            );
+        }
+        for file in [
+            "zvo_out_001.dat",
+            "zvo_var_001.dat",
+            "zvo_cisajs_001.dat",
+            "zvo_cisajscktalt_001.dat",
+            "zvo_cisajscktaltex_001.dat",
+        ] {
+            assert!(
+                out_dir.join(file).is_file(),
+                "{ranks} ranks: missing {file}"
+            );
+        }
+        assert!(!out_dir.join("zvo_out.dat").exists());
+        assert!(!out_dir.join("zvo_var.dat").exists());
+    }
 }
 
 #[test]
@@ -162,6 +284,158 @@ fn unsupported_projection_fails_before_creating_output_directory() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("SpinJastrow"));
     assert!(!out_dir.exists());
+}
+
+#[cfg(feature = "mpi")]
+#[test]
+#[ignore = "requires a live MPI launcher; run explicitly in the MPI verification environment"]
+fn asymmetric_physcal_cli_errors_are_collective_before_output() {
+    let dir = TestDir::new("physcal-asymmetric-mpi");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    for fault in ["parse", "fixed", "setup"] {
+        let output_dir = dir.0.join(format!("out-{fault}"));
+        let missing = dir.0.join("missing");
+        let blocked = dir.0.join("blocked");
+        if fault == "setup" {
+            fs::write(&blocked, "not a directory").unwrap();
+        }
+        let mut command = Command::new("timeout");
+        command.args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe"]);
+        for rank in 0..2 {
+            if rank != 0 {
+                command.arg(":");
+            }
+            command.args(["-n", "1"]).arg(env!("CARGO_BIN_EXE_mvmc"));
+            command.arg(if fault == "parse" && rank == 1 {
+                &missing
+            } else {
+                &namelist
+            });
+            command
+                .arg("--physcal")
+                .arg(if fault == "fixed" && rank == 1 {
+                    &missing
+                } else {
+                    &fixed
+                });
+            command
+                .args(["--seed", "1", "--out-dir"])
+                .arg(if fault == "setup" && rank == 0 {
+                    &blocked
+                } else {
+                    &output_dir
+                });
+        }
+        let output = command
+            .env("OMPI_ALLOW_RUN_AS_ROOT", "1")
+            .env("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM", "1")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .env("OMP_NUM_THREADS", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{fault} unexpectedly succeeded");
+        assert_ne!(
+            output.status.code(),
+            Some(124),
+            "{fault} deadlocked: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_ne!(
+            output.status.code(),
+            Some(137),
+            "{fault} required forced termination"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("another MPI rank"),
+            "{fault}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !output_dir.exists(),
+            "{fault} mutated peer output directory"
+        );
+    }
+}
+
+#[cfg(feature = "mpi")]
+#[test]
+#[ignore = "requires a live MPI launcher; run explicitly in the MPI verification environment"]
+fn mismatched_valid_cli_controls_fail_collectively_before_output() {
+    let dir = TestDir::new("mismatched-cli-controls-mpi");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let peer_dir = TestDir::new("mismatched-cli-controls-peer-mpi");
+    let (peer_namelist, _) = copy_physcal_fixture(&peer_dir);
+    let peer_modpara = peer_dir.0.join("inputs/modpara.def");
+    let text = fs::read_to_string(&peer_modpara).unwrap();
+    fs::write(
+        &peer_modpara,
+        text.replace("NDataQtySmp    1", "NDataQtySmp    2"),
+    )
+    .unwrap();
+    let optimization_namelist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
+    for fault in ["nsteps", "run-kind", "mode", "sample-count"] {
+        let output_dir = dir.0.join(format!("out-{fault}"));
+        let mut command = Command::new("timeout");
+        command.args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe"]);
+        for rank in 0..2 {
+            if rank != 0 {
+                command.arg(":");
+            }
+            command.args(["-n", "1"]).arg(env!("CARGO_BIN_EXE_mvmc"));
+            command.arg(if fault == "nsteps" {
+                &optimization_namelist
+            } else if fault == "sample-count" && rank == 1 {
+                &peer_namelist
+            } else {
+                &namelist
+            });
+            if fault != "nsteps" && !(fault == "run-kind" && rank == 1) {
+                command.arg("--physcal").arg(&fixed);
+            }
+            command.args([
+                "--nsteps",
+                if fault == "nsteps" && rank == 1 {
+                    "2"
+                } else {
+                    "1"
+                },
+            ]);
+            command.args([
+                "--mode",
+                if fault == "mode" && rank == 1 {
+                    "cmp"
+                } else {
+                    "real"
+                },
+            ]);
+            command.args(["--seed", "1", "--out-dir"]).arg(&output_dir);
+        }
+        let output = command
+            .env("OMPI_ALLOW_RUN_AS_ROOT", "1")
+            .env("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM", "1")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .env("OMP_NUM_THREADS", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{fault} unexpectedly succeeded");
+        assert_ne!(output.status.code(), Some(124), "{fault} deadlocked");
+        assert_ne!(
+            output.status.code(),
+            Some(137),
+            "{fault} required forced termination"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("CLI run controls differ"),
+            "{fault}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "{fault} printed before control agreement"
+        );
+        assert!(!output_dir.exists(), "{fault} mutated output directory");
+    }
 }
 
 #[test]
@@ -566,7 +840,18 @@ fn positive_nonunit_flags_initialize_but_stay_fixed_through_cli_sr_steps() {
             "{}",
             String::from_utf8_lossy(&result.stderr)
         );
-        fs::read_to_string(out.join("zqp_opt.dat")).unwrap()
+        let text = fs::read_to_string(out.join("zqp_opt.dat")).unwrap();
+        let fields: Vec<_> = text.split_whitespace().collect();
+        // C's one-record window begins with measured Etot/Etot2 pairs;
+        // these change with the sampled frame even when every Para is fixed.
+        // Compare only the declared post-SR parameter pairs for this flag test.
+        let parsed =
+            mvmc_expert_parsers::parse_expert_mode_files(dir.0.join("namelist.def")).unwrap();
+        assert_eq!(
+            fields.len(),
+            2 * (2 + parsed.count_variational_parameters())
+        );
+        fields[4..].join(" ") + "\n"
     };
     // Actual C InitParameter accepts >0; its SR filter requires exactly 1.
     // The complete AP flag-2 input is separately accepted by the native reader.

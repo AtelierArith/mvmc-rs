@@ -1,0 +1,45 @@
+generator=scripts/generate_physcal_181.jl
+generated_utc=2026-10-03T06:14:53.031
+generator_sha256=cbd149ee340d1d0c165effd457e77f83c7315a40ed0c68e3cf8e7b214d0c047a
+julia=1.13.1
+reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
+architecture=x86_64-linux-gnu
+blas=LBTConfig([ILP64] libopenblas64_.so)
+blas_threads=1
+julia_threads=1
+blas_version=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+julia_commit=96ca370cf0e339faf45a7ba863793f6c7c6980fb
+cpu=haswell
+seed=1
+mode=real
+manifest_sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+physcal_source_sha256=6dd6136057f1ed93a9e7d0b33518cd1b1d434b1595e3fb324b307a9bbebe03bf
+stages=seeded; initialized (single InitParameter, before fixed restoration); sample-0 (after all saved samples, before measurement)
+rng=next 624 UInt32 outputs, non-consuming C SFMT peek; draw-count=primitive UInt32 words since seed
+input_contract=explicit zqp; no automatic initial.def; unchanged sampling counts; serial; correlation shifts disabled
+trajectory_authority=Julia independently generated; C compatibility of trajectory requires a separate C trace
+measurement_stages=accumulated-i before weighted averages; averaged-i after averages, all energy and ordered Green arrays; same RNG position at both stages
+output_contract=C indexed out/var per sample; Julia values emitted with C parameter layout and formatting, not Julia shared-file append extension
+sample_quantity=2; sample_index_start=7
+harness=C phase order: initialize once then reload fixed zqp, In overlays, synchronization; unmodified Julia sampling/measurement kernels; NOT original Julia PhysCal runner parity
+combination=DH2+DH4+OptTrans+In overlays
+C_output_check=unavailable for combination; full C trajectory/input acceptance not established by Julia generation
+input_sha256=2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae inputs/coulombintra.def
+input_sha256=2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273 inputs/dh2.def
+input_sha256=4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255 inputs/dh4.def
+input_sha256=b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a inputs/greenone.def
+input_sha256=691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b inputs/greentwo.def
+input_sha256=1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7 inputs/greentwoex.def
+input_sha256=ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528 inputs/gutzwilleridx.def
+input_sha256=a3a827426ef69c7ed50927084c8115aa5cba2f96eb9e27af20f5117312d969a4 inputs/indh2.def
+input_sha256=0b24777d1ae1581863dd0dee3556cbffa537d9fcb75601a866407f73d119ff97 inputs/indh4.def
+input_sha256=1328411cfa2a313837f698c7ce4f2a1e591890cd6901bedc01e46f05d97ccf10 inputs/inopttrans.def
+input_sha256=2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956 inputs/jastrowidx.def
+input_sha256=d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2 inputs/locspn.def
+input_sha256=37016beb138338b1c107b58e8b9ff303c04916a86b2cd302ea0d15a87effd17d inputs/modpara.def
+input_sha256=d430e2ed630f2fe855dab87353cada0d91a9fa41baa886ccd2031dc0fed2d865 inputs/namelist.def
+input_sha256=22aa05e116cc28bba957ed994373de2e952422b282e6811ad668a7cd7052b77f inputs/opttrans.def
+input_sha256=c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6 inputs/orbitalidx.def
+input_sha256=c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d inputs/qptransidx.def
+input_sha256=0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6 inputs/trans.def
+input_sha256=ceed84417be012feef9f8a395f291ae1e4f9447105047d2a6025e069df48b900 zqp_opt.dat

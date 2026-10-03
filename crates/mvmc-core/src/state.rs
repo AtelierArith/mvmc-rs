@@ -516,11 +516,13 @@ impl SROptData {
 // Optimisation history
 // ---------------------------------------------------------------------------
 
-/// One `(energy, parameters)` snapshot from the SR loop (`OptDataPoint`).
+/// C StoreOptData's measured `(energy, energy_squared)` and post-SR parameters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptDataPoint {
     /// Energy at this iteration.
     pub energy: Complex64,
+    /// Measured second energy moment before this iteration's SR update.
+    pub energy_squared: Complex64,
     /// Synchronized parameters after the SR update for this measured energy.
     pub parameters: Vec<Complex64>,
 }

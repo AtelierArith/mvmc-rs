@@ -7,15 +7,19 @@ use super::candidate::{
     make_candidate_local_spin_flip_conduction, make_candidate_local_spin_flip_localspin,
     UpdateType,
 };
+use super::driver::sampling_log_ip_real;
 use super::driver::{revert_ele_config_fsz, update_ele_config_fsz, SampleStats};
-use super::initial::make_initial_sample_fsz_real;
+use super::initial::{
+    coordinate_initialization_result, make_initial_sample_fsz_real_with_reducer,
+    SamplingInitializationError,
+};
 use super::projection::{init_loc_spn, log_proj_ratio, update_proj_cnt};
 use super::updates::{
     calculate_new_pf_m2_fsz_real_flat, calculate_new_pf_m_two_fsz_real_flat,
     update_m_all_fsz_real_flat, update_m_all_two_fsz_real_flat,
 };
-use crate::observables::calculate_log_ip_real;
 use crate::pfaffian::{calc_m_all_fsz_real, CalcMAllError};
+use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 
 /// Run one real FSZ sampling sweep, including burn restoration, real move
@@ -26,10 +30,28 @@ pub fn vmc_make_sample_fsz_real(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
 ) -> Result<SampleStats, CalcMAllError> {
+    vmc_make_sample_fsz_real_with_reducer(data, state, rng, &SingleProcessReducer).map_err(
+        |error| match error {
+            SamplingInitializationError::Local(error) => error,
+            SamplingInitializationError::PeerFailure => unreachable!("serial reducer has no peers"),
+        },
+    )
+}
+
+/// Real FSZ chain with comm1-only projected-overlap reductions.
+pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    reducer: &R,
+) -> Result<SampleStats, SamplingInitializationError> {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     let n_size = 2 * n_elec;
     let n_qp_full = state.slater_matrix.pf_m_real.len();
+    let qp_range = reducer.sampling_qp_range(n_qp_full);
+    let qp_start = qp_range.start;
+    let qp_end = qp_range.end;
     let n_proj = data.projection_layout().n_proj;
     let n_sample = data.modpara.nvmc_sample as usize;
     let pool = ThreadedPfaPackWorkspace::new(n_size, 1);
@@ -48,37 +70,47 @@ pub fn vmc_make_sample_fsz_real(
     // Julia counter[11] burn marker, shared with the existing Rust drivers.
     let mut burn_flag = state.electron_config.counter[9] != 0;
     if !burn_flag {
-        make_initial_sample_fsz_real(data, state, rng, 0, n_qp_full, &pool)?;
+        make_initial_sample_fsz_real_with_reducer(
+            data, state, rng, qp_start, qp_end, &pool, reducer,
+        )?;
     }
     let config = &mut state.electron_config;
     if burn_flag {
         config.restore_burn();
     }
-    calc_m_all_fsz_real(
-        &config.tmp_ele_idx,
-        &config.tmp_ele_spn,
-        &mut state.slater_matrix,
-        0,
-        n_qp_full,
-        n_site,
-        n_elec,
-        &pool,
-    )?;
-    let mut log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
-    if !log_ip_old.is_finite() {
-        make_initial_sample_fsz_real(data, state, rng, 0, n_qp_full, &pool)?;
-        let config = &state.electron_config;
+    coordinate_initialization_result(
         calc_m_all_fsz_real(
             &config.tmp_ele_idx,
             &config.tmp_ele_spn,
             &mut state.slater_matrix,
-            0,
-            n_qp_full,
+            qp_start,
+            qp_end,
             n_site,
             n_elec,
             &pool,
+        ),
+        reducer,
+    )?;
+    let mut log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
+    if !log_ip_old.is_finite() {
+        make_initial_sample_fsz_real_with_reducer(
+            data, state, rng, qp_start, qp_end, &pool, reducer,
         )?;
-        log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+        let config = &state.electron_config;
+        coordinate_initialization_result(
+            calc_m_all_fsz_real(
+                &config.tmp_ele_idx,
+                &config.tmp_ele_spn,
+                &mut state.slater_matrix,
+                qp_start,
+                qp_end,
+                n_site,
+                n_elec,
+                &pool,
+            ),
+            reducer,
+        )?;
+        log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
         burn_flag = false;
     }
     let config = &mut state.electron_config;
@@ -175,12 +207,12 @@ pub fn vmc_make_sample_fsz_real(
                     matrix.inv_m_real.as_slice(),
                     stride,
                     &matrix.pf_m_real,
-                    0,
-                    n_qp_full,
+                    qp_start,
+                    qp_end,
                     n_site,
                     n_elec,
                 );
-                let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
                 if accept(
                     log_proj_ratio(&proj_cnt_new, &ele_proj_cnt, data),
                     log_ip_new,
@@ -200,8 +232,8 @@ pub fn vmc_make_sample_fsz_real(
                         matrix.inv_m_real.as_mut_slice(),
                         stride,
                         &mut matrix.pf_m_real,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
@@ -251,7 +283,9 @@ pub fn vmc_make_sample_fsz_real(
                         cand.reject,
                         false,
                     )
-                } else if data.modpara.two_sz != -1 || rng.genrand_real2() < 0.5 {
+                } else if data.modpara.two_sz != -1
+                    || crate::sampling::driver::trace::draw_real2(rng) < 0.5
+                {
                     config.counter[0] += 1;
                     let cand = make_candidate_hopping_fsz(
                         &ele_idx,
@@ -325,12 +359,12 @@ pub fn vmc_make_sample_fsz_real(
                     matrix.inv_m_real.as_slice(),
                     stride,
                     &matrix.pf_m_real,
-                    0,
-                    n_qp_full,
+                    qp_start,
+                    qp_end,
                     n_site,
                     n_elec,
                 );
-                let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
                 if accept(
                     log_proj_ratio(&proj_cnt_new, &ele_proj_cnt, data),
                     log_ip_new,
@@ -346,8 +380,8 @@ pub fn vmc_make_sample_fsz_real(
                         matrix.inv_m_real.as_mut_slice(),
                         stride,
                         &mut matrix.pf_m_real,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
@@ -372,20 +406,21 @@ pub fn vmc_make_sample_fsz_real(
                 }
             }
             if window_accepted > n_site {
-                if calc_m_all_fsz_real(
-                    &ele_idx,
-                    &ele_spn,
-                    &mut state.slater_matrix,
-                    0,
-                    n_qp_full,
-                    n_site,
-                    n_elec,
-                    &pool,
-                )
-                .is_ok()
-                {
+                if !reducer.sampling_any_failure(
+                    calc_m_all_fsz_real(
+                        &ele_idx,
+                        &ele_spn,
+                        &mut state.slater_matrix,
+                        qp_start,
+                        qp_end,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .is_err(),
+                ) {
                     log_ip_old =
-                        calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+                        sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
                 }
                 window_accepted = 0;
             }
@@ -409,11 +444,14 @@ pub fn vmc_make_sample_fsz_real(
     config.tmp_ele_spn = ele_spn;
     config.save_burn();
     config.counter[9] = 1;
+    super::driver::trace::checkpoint(state, rng);
     Ok(SampleStats { accepted, saved })
 }
 
 fn accept(delta: f64, log_ip_new: f64, log_ip_old: f64, rng: &mut Sfmt19937Rng) -> bool {
     let w = mvmc_expert_parsers::utils::julia_exp::exp(2.0 * (delta + (log_ip_new - log_ip_old)));
     let w = if w.is_finite() { w } else { -1.0 };
-    w > rng.genrand_real2()
+    let draw = crate::sampling::driver::trace::draw_real2(rng);
+    super::driver::trace::record(7, &[i64::from(w > draw), (draw * 4294967296.0) as i64]);
+    w > draw
 }

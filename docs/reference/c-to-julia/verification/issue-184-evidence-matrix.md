@@ -1,11 +1,128 @@
 # Julia-mVMC → Rust evidence matrix (issue #184)
 
+## CURRENT snapshot
+
+This table supersedes stale live/pending statements in the historical records below. A narrow PASS is not whole-source/API coverage.
+
+| Scope | Current evidence | Remaining limitation |
+| --- | --- | --- |
+| Assertion contracts | Parent `bff4789e-010c-498e-a61f-8be1d6e6a551`:19 PASS,0.010s; newQP/types source reviewed; separate hop `da5c6f76-d117-42ae-8bc3-d84f859217a7`:1 PASS,exit0,0.006s,19 filtered | Hop is not part of parent19 run and supplies no samplingtrajectory/RNG proof |
+| New DH2 sampling contract | Parent `0a6d8024-2c9a-4906-8078-579720d4ba24`:exit0,1 PASS,20filtered,0.006s; full new test and C projection.c32–47/94–117 reviewed: counts[0,0,1,1,0,0], creal logs7/16, difference9 | Independent analytic C-equation contract, not native C executable/full sampler or whole21-test run |
+| Slater contracts | Parent `02aef843`:5 PASS,0skip,0.009s; originalS104 sixteen-site seed123456789 plus FULLhelper130–201/README review and13filecmp2295ee0; owner `bcd7ef44...` separate5PASS | S104 lifecycle input gap resolved, not300 optimization steps/fullsampling/Ctableoracle; private tuple/inverse-map/exception identity API differences |
+| #179 repeatability | Owner83487 terminal0:387 direct pairs; parent independently checked388-line TSV,nonzero0; see issue-179-repeat-command.md | Configuration-specific repeatability; historical108 plus387 scopes do not establish numeric accuracy |
+| CG/runner20 | Parent `ab1ad301-bdb6-4c22-a2b3-1689343b9e43`:3 PASS,exit0,205filtered,3.430s complex/Hubbard/canonical; realCG `cfd623cf...`/DH2 `9843afda` PASS; fresh20 acquisition26unique complete | Selectedmodel proof, not all26 consumers/workspace;15consumer imports pending. Phase5 runtime50 assignedBanach conversion, offline50archive separate |
+| Threaded long20 | Parent `1ba4d50b-7013-468f-9a97-ac97ddfadcb4`:1 PASS,exit0,16filtered,9.234s; workers/repeat,dense+mapped/window20,strictcfg/next624,existing1e-11 | Mutable/unfrozen source with no attributable compileSHA; do notretroassigncurrentSHA or ownerfce98252/7dd provenance; not allmodels/sites |
+| Pairhop CG consumer repair | Parent `8e547c35-b32e-4546-a94a-ae67aa1bdfe2`:exit0,2PASS,206filtered,2.970s real/FSZpairhop plusInterAllFSZ historical consumer | InterAll is oldworkspace repair ONLY, excluded fromnew#185 acceptance; selectedmodel proof notworkspacegreen |
+| #182 prefixes | `821f94c3...`:1 PASS,1.404s; five one-step models/fullOOHO/finalworkers1/2/4 after serialization repair | Not long20 or every14site/96assertion proof |
+| MPI literal contract | Parent fulltest/doc review and actualexactlist1; independent mpiexec2 chunk39cd1b exit0,~0.08s eachrank,1 PASS perrank covering2 models/rootbroadcast/local-global/correctedproducts | Narrow literal product/reducer proof; not allMPI87/whole495 numerical acceptance; Wegener owns fullparentproof record |
+| Provenance closure helper | Parent `55f833af-eff6-4487-a4cd-fbbb9c979de8`:3 PASS,10filtered,0.017s, including implicitAuto initial-file unlisted-hash negative; prior803a306e source1–216/closure review retained | Supersedes803a pre-Auto and68211 missingclosure scopes for helper only; all referenced definitions/overlays required, sharedoverlay allowed, flatbundle explicit; not13numericalmodels |
+| MPI public CLI | Parent positive e960ec and negative5b1143 verifiers exit0, worlds2/4, separate frozen root parent-cli185.EiTQL0; enabled launch0/banneronce/output1row; disabled launch1/erroronce perrank/nooutput | Process/output scope only, no CLI RNG observation or wholeMPI87/numericalaccuracy; Wegener owns fullproof |
+| Public rejection boundaries | Parent `2b7a304c-20a5-4c21-8875-9f59a1e03126`:10 PASS,0.026s; current offline input/handoff reviewed | Exact matched rejection settings, retained data/state/RNG/output boundary; meaningful Rust diagnostic-family mapping, not Julia exception-literal equivalence; accepted S196/M0998 awaits actual reducer proof |
+| Phase5 runtime20 migration | Parent `1d9a521c`:8 PASS,4 explicit SKIP,0.223s; normal reporting/source reviewed | Not model20 numerical proof; nonfinite false-pass rejection/negative tests and input/settings provenance strengthening assigned Banach before adoption |
+| REAL-FSZ | Latest `722de57e...`:1 PASS; defined/written flags strict, inactive-zero policy explicit | Standalone C direct-SR retained-input check not fullC sampler/MPI |
+| IO134 | Parent `990e6bf3...`:12 filtered tests PASS; owner mixed15 is separate | Exact/private versus representative mappings; not all134 literal conditions |
+| Parser suite | Parent `f311227c-9305-4aeb-be0b-cfd4967adb6c`:115/115 PASS,0 skip,0.361s; requiredErr/validGEx and coordinate/combined validation source reviewed | Supersedes old113/114 failure for parser only; not workspace or allJulia-source coverage |
+| Workspace | Latest fullworkspace688 PASS/14FAIL/30skip; corelib193PASS/14FAIL/0skip | Historical CG consumers partly repaired by newer focused results; no newer full-green suite supplied |
+| Semantic ledger | 632 unreviewed;596 source/settings-proof-pending;184 focusedcontracts withdeclared differences;23 focusedsource;6 loops;3excluded | Slater47 source/handoffreviewed; only exactS104 length row promoted, private/representative differences retained; no fullcoverage claim |
+
+Current acceptance: long-runner baseline20 with fresh reference windows/NSmp; preserve targeted1/2/3 andfailure27/28/29, independent CG kernel1..41/20/40. Same-input/fixed-seed/SAMEconfiguration repeatability is required, recording MPI/group/worker settings. Primitive RNG initialization/conversions/output/state remain strict cross-language for SAME draworder/count. Mathematical-function differences may use justified scoped bounds; branch/acceptance differences require first cause/threshold explanation. Approved initial three-phase abs8.7e-19/rel0 does not authorize arbitrary CG/MPI tolerances. Do not invent Rust public APIs for Julia-private architecture, hide public defects, delete protections or convert unexecuted checks to PASS.
+
+Latest scoped commands: provenance `cargo nextest run -p mvmc-core --test ctest_equivalent --cargo-profile test-fast --locked -E 'test(ctest_provenance)' --no-fail-fast --retries 0` (55f833af); DH2 `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_sampling_dh2_literal_counts_and_real_parameter_log_contract)' --no-fail-fast --retries 0` (0a6d8024); public boundaries `cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_public_rejection_boundaries --no-fail-fast --retries 0` (2b7a304c). Parent supplied terminal results and source reviews; these mutable-tree runs have no attributable compilation snapshot SHA supplied here. Do not retrospectively assign current source hashes to their binaries.
+
+## Historical checkpoint records (not current status)
+
+Latest owned DH2 test: `issue184_assertion_contracts::original_sampling_dh2_literal_counts_and_real_parameter_log_contract`; sourceSHA256 `9aa7b1fe2e40226347534cfcb9e21442b88eb15badeaf680bd215407589c3bfc`; command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_sampling_dh2_literal)' --no-fail-fast --retries 0`. Original nsite4 neighbors and occupations give independent counts[0,0,1,1,0,0]; realparameters1..6 with imaginary10..60 give oldlog7/new-minus-old9. C creal projection authority, analytic literals not Rustgolden; no RNG or production modification.
+
+All records below are retained provenance/history. Their live, pending, old50, parent-review-pending or numerical-acceptance statements apply to their recorded checkpoint only; the CURRENT snapshot and latest explicit results supersede them. Historical FAIL remains history, not erased by later repairs. Earlier overly broad RNG exemption was withdrawn and is not current policy.
+
+Exact parent commands for latest selected-model checkpoints: `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked -E 'test(complex_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks) | test(hubbard_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks) | test(canonical_general_rbm_complex_reference_uses_native_c_counter_order)' --no-fail-fast --retries 0` (ab1ad301); `MVMC_RS_THREADED_182=1 OPENBLAS_NUM_THREADS=1 cargo nextest run -p mvmc-core --test threaded_issue182 --cargo-profile test-fast --locked --run-ignored only -E 'test(reviewed_cg_twenty_step_workers_match_and_repeat)' --no-fail-fast --retries 0` (1ba4d50b). Parent fully reviewed long20 source1911–2057. No numerical tolerance change or all26/workspace claim; no parent attributable compile hash supplied. Independent owner provenance is separate.
+
+New exact sampling contract: `issue184_assertion_contracts::original_sampling_hop_and_revert_preserve_exact_electron_buffers` uses original site4/elec2 idx[0,2,1,3], up0→1 move and explicit independent postmove idx/config/occupancy arrays, then exact full-buffer reversion. Command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_sampling_hop)' --no-fail-fast --retries 0`; run `0ebc4952-ec98-4ec5-baf5-034ecd2f2eac`,exit0,1 PASS,19 selection-skipped,0.006s. Current fileSHA256 `7e7b458b1ebf5efef307ae95dbf41f53863556d8e050b37d8113a5627db7b052`. This is public move-helper behavior, not sampler/RNG trajectory or all54 sampling assertions; parent review/row linkage pending. Exact types symbols for review are `original_type_sr_buffers_use_size_three_and_seven_samples` and `original_type_electron_buffers_distinguish_normal_and_fsz`. Next genuine contracts: DH2/DH4 literal counts/strides/real-part logarithms and native-valid RBM counter/ratio expectations, distinguishing synthetic malformed mock settings and Rust borrowing architecture from missing public scenarios.
+
+Owned types-batch implementation: exact original SR size3/sample7 allocation and electron sample5/site4/elec3/proj11 normal/FSZ buffer tests now execute via existing public constructors, with independent literal lengths and no production changes. Command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_type_)' --no-fail-fast --retries 0`; run `1696a32b-0b15-4bae-88bb-cd8c92a43ef0`, exit0, 2 PASS,17 selection-skipped,0.006s; test SHA256 `2379daeba708971f0779de6dc80723deb0e0faec1a9e01eb7ef0a1e5f183af23`. Parent review/exact row promotion pending; no wholetypes58 or sampling54 PASS. Goodall separately reports slater-contract run `f180b0fc-51d4-4fd2-8a94-69e881a5e275`, exit0,2 PASS,0 skipped,0.006s, command `cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_slater_contracts --no-fail-fast --retries 0`; representative M0748–M0757 and M0510 boundary only, source review/linkage pending. Pauli M0625 owner run `fa8f7b0f-f6cf-4f13-8271-819c1947fcf3` reports4 PASS,exit0,0.018s; broader parser/Clippy verification still pending, not blanket parser closure.
+
+Types58/sampling54 independent review completed: all112 original assertions plus inherited mock_data/mock_state sources were read. Ledger now679 syntax-only unreviewed /619 settings-reviewed proof-pending /114 focused contracts /23 focused-source /6 loop /3 excluded. No new PASS promotion from reading. Concrete differences: Slater zeroQP Julia clamps to1 while Rust preserves0 (requires C allocation/input authority classification); RBM mock hidden/coupling terms reuse idx0 with different values and omit native declared mappings, so their consistency test is synthetic, not native-C model support. Alias/private routing must map to existing Rust owned-buffer/public production paths, not invented Julia-only public APIs. Next focused targets are exact size3/sample7 SR allocation, sample5/site4/elec3/proj11 normal/FSZ storage, DH2/DH4 stride/log literals and electron hop/revert exact state.
+
+IO134 current parent filter run `990e6bf3-4b4a-46af-baf0-208fe021ebae`: exit0,12 PASS,30 filtered,0.220s; command `cargo nextest run -p mvmc-core --test physcal_issue181 --cargo-profile test-fast --locked -E 'test(original_io134)' --no-fail-fast --retries 0`. Goodall's fully read105-line `tests/fixtures/physcal_181/io134-semantic-handoff.md` separately records owner mixed15 run `9a33ef59-3de7-43d9-8f6c-ea792263854f`, sourceSHA `5f0960d3bdd368dc8564fcadc713b249d39dd3c6d7dbf00e3427e1c30eb5dc42`; extra three tests are not parent12-filter evidence. M0625 is a genuine public parser invalid-site gap assigned Pauli, not omitted as private architecture. Private two-site normal/QCAQ and private initialize wiring have representative public/constructor composition evidence rather than mandatory invented Rust APIs. Important terminology correction: original ls_out third field -.75 is ALPHA, not variance; earlier variance wording is erroneous historical commentary. EOF last-record-wins/empty0/nonfinite acceptance are C-authority differences from Julia strict rejection. Exact row/condition linkage is being reconciled against the handoff, without blanket134 PASS.
+
+Real CG fresh prefixes1/2/3/20 parent `cfd623cf-579b-41b3-a714-8843b9f34f76`: exit0,1 PASS,207 filtered,0.334s; command `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked -E 'test(real_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks)' --no-fail-fast --retries 0`. Prior7835 used old references before the complete marker; updated independently acquired expectations repair this selected test WITHOUT tolerance relaxation. #179 legacy495 checker scope separates108 valid from387 direct false failures; corrected live handle83487 has no passing final result yet.
+
+New owned bounded QP contract implementation: `original_qp_legendre_midpoint_and_opttrans_major_products` directly tests original n1 quadrature midpoint/weight, analytic P0..P3 at1/2 and OptTrans-major fixed[1,2,3] times[.5,1.5] =>[.5,1,1.5,1.5,3,4.5], plus emptyOptTrans identity. Command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked -E 'test(original_qp_legendre_midpoint_and_opttrans_major_products)' --no-fail-fast --retries 0`; run `44a612f7-60c5-43ef-b449-189084ba36f6`, exit0, 1 PASS, 16 selection-skipped, 0.006s. Test-source SHA256 `91e3b498fa1cd56cb27ba57e9b99b4238c1a37a47d15383647700452b9ba67ab`. Existing Julia helper bound1e-10 retained for computed polynomials/quadrature; expected analytic literals are independent, no RNG claim or production modification. Parent review and exact ledger promotion remain pending; n4/n8 quadrature, init wiring and trig4 branches still need focused proof.
+
+Parent provenance-helper verification: full source lines5–153 reviewed for SHA256 constants/padding/blocks and independent standard vectors plus tamper/malformed rows. Run `68211b6a-bf35-4fa8-a688-33fd2a28b151`, terminal exit0, 2 PASS, 10 filtered, 0.015s; command `cargo nextest run -p mvmc-core --test ctest_equivalent --cargo-profile test-fast --locked -E 'test(ctest_provenance)' --no-fail-fast --retries 0`. Historical `982d5f8b` eight-PASS checkpoint predates tamper additions and has different scope. `verify_inputs` checks listed input hashes, uniqueness/path policy and mandatory namelist/modpara; it does NOT establish complete namelist dependency closure. This is helper proof, not model numerical acceptance.
+
+Canonical reviewed CG prefixes1/2/3/20: parent run `4b11b04b-899e-4ed7-8a9f-5793ffce6f27`, terminal exit0, 1 PASS, 207 filtered, 6.082s. Exact command `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked -E 'test(canonical_general_rbm_complex_reference_uses_native_c_counter_order)' --no-fail-fast --retries 0`. Independent new Julia20-generation actual log reports five PASS, 48.7s. Existing exact sampling/RNG checks and1e-11 numerical checks are retained; fresh20 references are not truncated old50 final parameters. This is the selected canonical-CG prefix proof only. Direct long `run.rs` branches still use50 and Ramanujan has been asked to convert them with fresh20 references; no all-model/all-branch20 completion or current full-workspace PASS is established.
+
+Latest #182 five-model prefix rerun after final dense102/mapped966 serialization repair: parent `821f94c3-e735-4e7e-a054-1325f0761b3e`, terminal exit0, 1 PASS, 14 excluded, 1.404s, same exact command as `c1985cde...`. All five normalized OO/HO and final workers1/2/4 checks are covered for ONE-step prefixes. This supersedes the pre-final-visitor checkpoint for this selected test, not long20 runner acceptance or all fourteen threading sites. Parent inspected fresh20 C-window source (row20/window20, independent mean bound1e-11) and requires exclusive output plus strong provenance before adoption; no completed20 proof is claimed. Parent observed three live20-generation handles/PIDs299338/299474/299594 in snapshot `/tmp/mvmc-review62b-runner20.Ctp8Dh`, production63 identity, prefixes1/2/3/20; old50 coordination ended at owner-managed graceful boundaries, not destructive artifact replacement.
+
+Semantic batch progression: an additional42 `test_qp_weight.jl` assertions were fully source-reviewed with literal quadrature/Legendre inputs, NSPGaussLeg1/4, OptTrans-major products and four-node trig loop expansion; no new executable PASS was assigned. Current ledger totals:791 syntax-only unreviewed,507 semantic-settings/proof-pending,23 focused-source-reviewed,6 focused loop-expansion-verified,114 focused contracts with declared differences,3 excluded =1444. Highest immediate bounded helper gaps are original n1 midpoint/weight, degree0..3 polynomials, OptTrans-major `[.5,1,1.5,1.5,3,4.5]`, and four-node trigonometric identities; exact Rust condition mapping/tests remain required. Remaining unreviewed domains: parser311; optimizer unit307; optimizer integration41; integration26; integration tools19; MPI87. Source-review does not close #184 or prove public-model acceptance.
+
+**Updated independent five-model #182 prefix gate PASS:** parent run `c1985cde-d3c8-4293-8493-05bb3f4a812b`, terminal exit0, 1 PASS, 14 filtered, 1.258s. Exact command `MVMC_RS_THREADED_182=1 cargo nextest run -p mvmc-core --test threaded_issue182 --cargo-profile test-fast --locked --run-ignored only -E 'test(independent_runner_prefixes_match_full_normalized_pre_sr_arrays)' --no-fail-fast --retries 0`. All five complete normalized OO/HO buffers were checked, including RBM OO42,848 / HO206, with new reviewed62b CG final dense102 versus mapped966 schema and strict configurations/RNG at workers1/2/4. Prior old-golden parameter error `1.60882e-6` in `6b0c6f94` is superseded for this selected prefix gate by the new independent reference, WITHOUT tolerance relaxation. Old ParseFloat `6b8b` failure is retained as a formatting defect subsequently fixed with hexadecimal parsing. Parent fmt/diff checks exit0. This proves the selected five-model prefix contract, NOT whole#182 fourteen callsites, full20-step runner acceptance, complete workspace green or all fourteen historical consumer repairs.
+
+Native C direct-SR retained-input reproduction supersedes the pending binary-rerun note: parent reran unknown0/1 with `OPENBLAS_NUM_THREADS=1` in `/tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d`, executing `real-sr input.txt 0` and `real-sr input.txt 1`. Both exited0; `cmp` against archived handle15087 `unknown-{0,1}.stdout` found identical output. This reproduces the SAME binary/SAME retained input, not a new generation or full C sampling run. Ramanujan confirms acquisition schema mapped966 versus dense102 is a legitimate representation distinction: mapped count966 must NOT be called NPara966. The dense C averaging window has208 floats =four energy fields +204 dense real/imaginary parameter components. Consumers must preserve that schema distinction rather than compare mapped-row length to dense C-window width.
+
+Parent REAL-FSZ direct-SR audit review: fully read `c_toolbox/real_fsz_direct_sr_audit.md` and actual handle15087 stdout; verified artifact SHA256 `8f83eafa852fe41aceaae337f260f293bf69003241dfff71247641cefaee35ba` and provenance SHA256 `97d5ea8692ab4f679c86fd27237f692fcca3e1c169dc99b1dfb2550af7d9e286`. Source identifier `a3808d47...` and generator `2036c72e...` are abbreviated, not complete hashes. Reported INFO0, active20, unknown0/1 give the same operator, increment and post-sync values; matched post-sync maximum difference0. Metadata counts26/2 versus12/16 are intentional representation differences, not silently equal counts. Earlier `.004751` compared raw versus normalized buffers and is incomparable, not a matched numerical divergence. Backward eta `1.245e-17`; condition estimate873.704 is not certified. This is a standalone authoritative C operator/solve check using retained Julia buffers, NOT full C sampler or MPI proof. Parent independent rerun of the native C binary remains pending; do not imply that rerun or broader scenario acceptance has passed.
+
+## Current long-run acceptance: twenty steps
+
+User explicitly changes the long runner-prefix baseline from50 to20 steps for prospective tests, reference generators and acceptance across CLI/nativeMPI/threaded scenarios. Keep the purposeful1/2/3 prefixes and targeted27/28/29 failure-boundary regressions unchanged. CG kernel checks1..41 and independent refresh20/40 are not long-runner baselines and remain unchanged. This changes workload length, not numerical bounds or algorithm/input contracts. Generate fresh20-step reference artifacts from reviewed published62b lineage with actual final parameters, parameter averaging window and effective NSmp consistent with20 steps; never truncate50-step final parameters and call them20. Preserve completed50 artifacts and historical results below; those remain historical evidence, not the new baseline. Ramanujan's live batch285309/dh2_cmp291865 must be managed by its owner without observation-timeout-driven restarts. Runner/thread/MPI owners have been notified; fresh20 implementation/generation/verification are pending, not asserted complete. Our owned callback/CLI reference tests, assertion contracts and callback generator contain no long-baseline50 literals to replace.
+
+Parent separately executed same-worker kernel repeatability: run `ecbca3b5-f45d-4589-beda-0e0564491521`, terminal exit0, 1 PASS, 14 filtered, 0.741s. Exact command `cargo nextest run -p mvmc-core --test threaded_issue182 --cargo-profile test-fast --locked -E 'test(same_worker_configuration_repeats_kernel_records)' --no-fail-fast --retries 0`; parent reviewed source lines157–165. Numerical records repeat within the existing BOUND, not bitwise floating-point equality; discrete D records are exact. This is same-worker kernel-record repeatability, not blanket sampler/model repeatability. Separately ignored REAL `g` run `bebcd12f-c544-410d-b8fa-dfbd73635a8c` exited0, 1 PASS, 14 filtered, 0.806s, using the earlier ROOTg command. The ignored selection did NOT execute the normal repeatability test; only the explicit separate normal run provides that evidence. Prior REAL bounded authority and policy limitations remain.
+
+Parent independently verified parameter-state negative comparator: handle52246 terminal exit0, 11/11 PASS, 34.7s. Exact command `docker exec 73c57e563c61 /home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia --startup-file=no /workspaces/mvmc-rs/c_toolbox/test_reviewed_parameter_state.jl /tmp/mvmc-review62b-state.nvDReR-stage /workspaces/mvmc-rs/tests/fixtures/reviewed_parameter_c_audit/canonical_general_rbm`. Parent fully reviewed source and actual mutated artifacts: incorrect row/phase, raw word, RNG index, draw count, short623-word state and C-written flag are rejected; undefined component17 is allowed without interpreting it as native zero. The scoped `8.7e-19` boundary is accepted and `8.8e-19` rejected. This validates optional developer-comparator strictness and the approved initial-parameter bound only; it is NOT normal Cargo test execution, full-model/sampler proof or downstream CG/MPI tolerance authorization. Existing strict primitive RNG invariants are preserved.
+
+Latest REAL `g` rerun supersedes its earlier timing/checkpoint only for this selected test: parent `722de57e-aa89-41ae-a5b5-fe6653ebbde0`, terminal exit0, 1 PASS, 13 filtered, 0.404s, same externalROOTg command as `f5e58971...`, with updated mathematical bounds. Parent reviewed current `check_flags` around line1896: active C-written/raw-defined flags remain strict, while inactive Rust-zero behavior is an explicit policy, not equality to undefined/native raw values. Numerical bound changes do not relax those discrete invariants. Separate parent command `cargo test --workspace --doc --locked`, handle27996 exit0, ALL zero doctests: compilation PASS, NOT behavioral proof. Both handles are terminal, no live process remains for these checks. Existing direct-SR authority/whole#182/CG consumer/workspace failure limitations remain unless independently superseded.
+
+## Current user override: reproducibility acceptance
+
+The user's final clarification CORRECTS the earlier broad relaxation: the random algorithm is fixed across languages and primitive stream identity remains strict. For the SAME initialization and SAME draw order/count, RNG initialization, integer/float conversions, outputs and raw state must agree across Rust/Julia/C; there is no blanket cross-language RNG exemption. Same-implementation/configuration/input/fixed-seed repeatability is required alongside that primitive invariant. Record MPI rank/group/split layout and worker/thread configuration explicitly. Existing strict tests and evidence remain protections, not disposable optional checks.
+
+Priority remains repairing the fourteen historical CG reference consumers using reviewed published PR54 head `62b0f97f076fb55c71c3ab0caa041a9adff94e04`, scoped meaningful numerical validation/residuals and fixed-seed repeatability. Mathematical-function implementation differences and approved initial three-phase abs8.7e-19/rel0 remain acceptable. Distinguish stream identity from numerically dependent trajectory: if rounding changes a branch or acceptance decision, locate the first mathematical cause, compare the decision threshold explicitly, and explain consequent draw-order/count differences rather than assume an RNG defect or dismiss Monte Carlo noise. This is not blanket trajectory drift permission and does not excuse algorithm/order/sign/input-contract defects or arbitrary downstream CG tolerances. The prior broad RNG exemption and wholesale downgrade of exact gates are withdrawn. Architecture/model/scenario coverage under #185 and actual workspace/consumer acceptance remain unchanged; proceed implementation rather than indefinite bitwise computed-float auditing.
+
+User clarification: attributable mathematical-function implementation differences are acceptable with operation/scale-appropriate explicit absolute/relative bounds and first-divergence provenance. Initial cexp/sincos1ULP is not a bitwise blocker to the already approved three-phase `abs=8.7e-19, rel=0` candidate adoption; proceed with implementation and bounded verification rather than indefinite bitwise audits. This does not authorize algorithm/order/sign/input-contract changes, arbitrary downstream CG forward tolerances, or any RNG/state/draw-count/proposal/acceptance/configuration drift. Separate direct mathematical-function differences from solver-conditioning and MPI-reduction effects; verify independent residuals where relevant. Approved implementation remains Ramanujan-owned and actual adoption/bound-negative test results are still required; no unexecuted acceptance is inferred.
+
+Fresh REAL-FSZ `g` gate: parent run `f5e58971-81c0-4e9b-92b1-e7a15585f2e7`, terminal exit0, 1 PASS, 13 filtered, 0.355s. Exact command `MVMC_RS_THREADED_182=1 MVMC_RS_THREADED_REAL_FSZ_ROOT=/tmp/mvmc-threaded182-real-public-20261003-g cargo nextest run -p mvmc-core --test threaded_issue182 --cargo-profile test-fast --locked --run-ignored only -E 'test(independent_real_fsz_workers_match_public_pre_sr_and_rng)' --no-fail-fast --retries 0`. Scope is the fresh-g three-way flags/defined-mask policy and workers1/2/4 for the selected bounded public pre-SR/RNG contract. Prior `f` raw-J flags FAIL `61931e36-a103-437e-873d-8da364ef3c3c` is preserved as historical raw-reference mismatch, not erased or relabelled PASS. Direct-SR numerical authority remains under Pauli review; this does not prove whole#182, full C sampler, CG consumer repair, fixture adoption or full-workspace green. QP1 serial activation limitation remains distinct from worker comparisons in other kernels.
+
+**User-approved numerical budget, narrowly scoped:** absolute tolerance `8.7e-19`, relative tolerance0, ONLY the three initial C/Julia parameter phases from the reviewed diagnostic whose observed maximum is `8.673617379884035e-19`. This supersedes the earlier no-approved-budget note solely for those three initial phases, not all nine stages or any solver/runtime result. Raw624 state, RNG index, actual draw count, defined-component mask, mappings and C-written flags remain exact; undefined components remain excluded rather than treated as native zeros. This is NOT CG/MPI numerical tolerance authorization. Ramanujan owns candidate adoption and a bound-negative regression; implementation/result and acceptance are pending, not implied by approval. The actual cexp/sincos first1ULP explanation and source/platform provenance remain required documentation but do not negate the user's scoped approval. Preserve the measured first divergence and do not extend this budget to hide trajectory or algorithm defects.
+
+**Final core-lib result supersedes handle64887 live status:** run `728e3ae5-3020-4cbb-bf23-c593bc48fad9`, terminal exit100, 92.891s, all207 ordinary library tests executed: 193 PASS / 14 FAIL / 0 skipped. Command `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked --no-fail-fast --retries 0`. Parent reports all fourteen failures are the same historical CG reference-consumer failures; no additional library failure occurred in this run. Final long DH2/DH4/DH24 cases PASS at64.507/76.335/92.855s respectively. This is full ordinary core-lib execution, not a passing core-lib suite, ignored-gate execution or full-workspace green. Existing CG consumer migration and independent reference adoption gates remain unresolved.
+
+Parent independent parameter-state diagnostic: handle23898 terminal exit0; exact command `docker exec 73c57e563c61 /home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia --startup-file=no /workspaces/mvmc-rs/c_toolbox/diagnose_reviewed_parameter_state.jl /tmp/mvmc-review62b-state.nvDReR-stage /workspaces/mvmc-rs/tests/fixtures/reviewed_parameter_c_audit/canonical_general_rbm 102 3`. Parent fully reviewed the source and performed archive-hash checks. All nine phases have exact raw624 RNG words, index192 and draw count192; all918 mappings and1,782 C-written flags are exact. Six undefined components per phase are explicitly not native zeros and supply no native-C defined-value expectation. Computed parameter diagnostic max absolute difference `8.673617379884035e-19`, first initialization index6 imaginary difference `1.0842021724855044e-19`. This is DIAGNOSTIC ONLY: no accepted numerical budget, native undefined-value equivalence, acquisition adoption or full-runtime PASS follows. Parent core-lib207 handle64887, run identifier `728e3ae5`, remains live with long DH24/DH2/DH4 cases pending and old fourteen CG failures observed; do not report a terminal result or duplicate/restart it.
+
+Parent public sparse-RBM rejection regression: run `ed290e43-5126-4965-815c-8add7eff9c71`, exit0, 1 PASS, 206 filtered, 0.014s. Command `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked -E 'test(public_runner_rejects_archived_sparse_rbm_definitions_before_output)' --no-fail-fast --retries 0`. Current `run.rs:1546–1578` covers archived `rbm/run_rbm_general_cmp` and `opttrans/run_opt_dh24_rbm_cmp` through the actual public namelist runner: strict missing mappings/declared flags are rejected before output creation. This is an input-rejection boundary, not successful native-C model execution, solver/RNG parity, or a fix of historical synthetic reference-consumer failures. Programmatically constructed historical sparse models remain synthetic; do not promote their passing coefficient checks to public-model or native-C evidence.
+
+**Current REAL-FSZ flags gate FAIL supersedes prior full-contract inference:** parent run `61931e36-a103-437e-873d-8da364ef3c3c`, terminal exit100, 0.027s, after adding the actual flags assertion. Rust inactive imaginary flags are0 versus Julia reference1 for real Slater. This is a discrete flag mismatch, not a computed-floating-point tolerance issue and must not be ignored as bitwise numerical policy. Banach owns the C-authority investigation. Earlier `a175bf4c-5cc4-4af7-9cec-b94538970332` 1 PASS preceded flags comparison and remains partial historical evidence only; it does not prove the current complete REAL-FSZ contract. Current authority resolution, updated independent reference if warranted, and rerun are pending; no fixture adoption follows.
+
+Parent independent SFMT observation noninterference check: handle54077 terminal exit0, PASS for three seeds and6,144 mixed primitive draws, comparing all raw624 state words and index at every boundary, nonconsuming peek/state observation and exact actual draw counts. Baseline library SHA256 `a98385983cd7bea794ea4461cd46e1b763cf32b4a94260de84bee848edba1bb7`; observed library SHA256 `7e77954acae2073591edf17b5c9825f0c020a2525026ae450ac31b780d7a7c86`. Parent invocation: docker exec container `73c57e563c61`, Julia1.13.1 `--startup-file=no`, `/workspaces/mvmc-rs/c_toolbox/check_reviewed_sfmt_state.jl`, baseline `.../libsfmt-baseline-final.so` and observed `.../libsfmt-observed-final.so`; full executable/library paths were not supplied, so the abbreviated invocation is not a copy-paste reproduction command. This proves diagnostic observation noninterference for the stated primitive sequence only. It is not full acquisition parity, sampler/C numerical proof, or adoption approval; acquisition-stage actual state/count matching remains a separate gate.
+
+Parent direct BQxPjU artifact verification (correct filenames): `rust-results.tsv` has six rows with launch/sampler/actual-worker columns ALL0 and numerical-diagnostic columns ALL1; `julia-results.tsv` has two rows ALL0; `residual-results.tsv` real/complex results0; `cg-diagnostic-exits.tsv` has twenty-four records with final column0. Four binary/checker checks OK. Parent's `rg` mismatch searches over Rust/published-reference/snapshot produced no matches, expected exit1; this is not a failed acquisition. Initial searches for obsolete results/source filenames returned exit2 because files were absent and explicitly supply NO evidence. These discrete, residual, and diagnostic artifacts are separate from the unresolved direct numerical differences: current published-Julia fixed operands still await authoritative C Main width1 replay, not full C sampler validation. Generator SHA two-space metadata failure occurred before acquisition; Ramanujan fixed strip parsing in the owned wrapper. No accepted numerical tolerance or fixture adoption is inferred.
+
+Current published-Julia/Rust MPI checkpoint: owners71559/91232 terminated exit0 using PR54 `62b...` and Rust kernel `7df...`; BQxPjU six-case launch/sampler/worker columns are zero. This is bounded discrete/worker proof, not numerical parity. Separate zero-bound numerical diagnostics: all six exit1, first global-real difference `1.0842e-19`, complex difference `5.421e-20`; no numerical tolerance is accepted. Wegener is tasked with authoritative C fixed-operand MPI-width1 Main replay using independent published-Julia inputs and actual residuals to explain the first difference. That replay is kernel diagnostic, not full C sampler evidence. Separately Ramanujan generator handle44508 failed metadata acquisition on standard SHA output's two-space separator; strip parsing is already fixed, but no acquisition output was produced by that failed run. This is not a numerical defect and must not alter expected references or erase raw failures. Exact source hashes/commands and new acquisition/replay results remain pending.
+
+Latest REAL-FSZ bounded parent checkpoint: run `a175bf4c-5cc4-4af7-9cec-b94538970332`, exit0, 1 PASS, 13 filtered, 0.381s. Exact selected test `independent_real_fsz_workers_match_public_pre_sr_and_rng`, with `MVMC_RS_THREADED_182=1`, external `MVMC_RS_THREADED_REAL_FSZ_ROOT=/tmp/mvmc-threaded182-real-public-20261003-f`, `--run-ignored only`, `--locked`, and test-fast; complete invocation not supplied. Parent reviewed the 343-line generator and 214-line test/provenance material. Scope is prefix1 real PUBLIC-derived direct/no-store: C matrix/IP/energy/difference/even-O/OO-kernel adaptation and original Julia real-SR plus RNG reference. It is neither full C executable validation nor unmodified Julia numerical parity. Actual QP count1 is SERIAL; other kernel worker-activation evidence is separate. A flags fixture exists but this test does not compare it; Banach has been asked to fix that missing oracle, and current PASS is not flags proof. No fixture has been copied/adopted; source/compiler/version provenance remains pending. This does not supersede the general-RBM CG SR-prefix FAIL or fourteen workspace CG-consumer failures.
+
+Parent comparator-script validation: after reading the uv-python instructions, parent used uv0.12.21 and ran `uv run --no-project python -m unittest discover -s scripts -p 'test_*mpi_issue179*.py'`: terminal exit0, 40 PASS, 0.206s. No Python project metadata or dependency changes were made. `bash -n scripts/verify_mpi_issue179_states.sh scripts/verify_mpi_issue179_workers.sh` also terminated exit0. These are pure adversarial comparator tests and shell syntax validation, NOT MPI execution, runtime/numerical parity, complete RNG-state proof, or an upgrade of the old108 matrix to the new kernel. Published Julia final handle69226 remains eight tiny plus14,673 refreshed assertions =14,681 PASS; pre-shape-test14,397 is historical and the differing counts are explicitly scoped.
+
+**Published final CG focused validation:** parent handle69226 terminated exit0 under Julia+1.13.1, ILP64 BLAS, one BLAS thread: eight tiny assertions plus 14,673 refreshed assertions = 14,681 PASS. This includes the extra shape guards and supersedes the pending final-test status for source SHA256 `b11d75d9b2baaef31abc59c110c09fedc86a7705b1a3c2ce2bb6c75b8b8a17b3` and test SHA256 `d184be38c0a004332bb99d3f4bbcd5ceb418781b2bf693313512dbdad6f58968`; both source hashes were unchanged before/after. Parent reports no first computed C divergence for all three fixed cases. Invocation supplied as `julia +1.13.1 --startup-file=no --project=/tmp/mvmc-julia181-io.ZF13vG/worktree -e ...`, using Test/LinearAlgebra/SHA, direct inclusion of `test_unit_cg_c_recurrence.jl`, and before/after source hashing; the complete inline expression was not supplied, so this is not advertised as an exact copy-paste reproduction command. This is the final focused CG run, NOT the older 14,576-assertion five-test-file run or full Julia/workspace/MPI coverage. Public head remains `62b0f97f076fb55c71c3ab0caa041a9adff94e04`, thirteen files reviewed, C provenance bundle included and no Manifest committed. Ramanujan/Wegener fresh-lineage generation remains bounded and authorized; adoption is still pending C state/slot audits and Rust consumer reruns.
+
+**Public Julia CG publication supersedes earlier PR54-pending notes:** parent authoritatively verified PR54 OPEN at head `62b0f97f076fb55c71c3ab0caa041a9adff94e04`. Parent inspected all thirteen public changed files: production changes remove the CCG cutoff and restore delta multiplication, retaining earlier `973184` changes; no Manifest was committed. Published CG source SHA256 `b11d75d9b2baaef31abc59c110c09fedc86a7705b1a3c2ce2bb6c75b8b8a17b3`; final test SHA256 `d184be38c0a004332bb99d3f4bbcd5ceb418781b2bf693313512dbdad6f58968`. Parent reviewed final shape checks and public provenance bundle. The earlier 14,576 focused Julia PASS belongs to pre-extra-guards test identifier `2cf459`, NOT final `d184...`; final independent run is pending. Ramanujan/Wegener are authorized to generate fresh frozen lineage, but adoption remains gated on the C slots audit. Publication alone neither repairs Rust consumer fixtures nor supersedes the fourteen full-workspace failures or separate #182 SR-prefix failure.
+
+**Latest full-workspace terminal result supersedes earlier nonterminal status and historical 613 PASS / 20 FAIL checkpoint:** parent handle23085, run `e7575445-1ef4-4677-b46d-2bdfa0da483c`, exit100, 702 executed: 688 PASS / 14 FAIL, 30 SKIP, 237.365s. Command: `cargo nextest run --workspace --cargo-profile test-fast --locked --no-fail-fast --retries 0`. Long exchange-spin Lanczos PASS, 235.179s. Parent attributes all fourteen failures to CG reference consumers / historical Julia-kernel first-parameter mismatches, including mixed RBM-DH24 direct/CG and canonical RBM; Ramanujan owns migration. Exact failure-name list was not supplied in this relay, so this summary must not substitute for per-consumer linkage. This is explicitly NOT all-workspace PASS or milestone merge readiness. Separate opt-in #182 run `6b0c6f94` remains 1 PASS / 1 FAIL and is not executed coverage from the thirty workspace skips. Focused Julia CG 14,576 PASS remains bounded draft evidence, production identifier `b11d75`; public PR54 publication is still pending. Prior full-workspace results remain historical only.
+
+Current parent status (nonterminal): full-workspace handle23085 remains live, 701/702 tests executed; exchange-spin Lanczos process1869272 was observed at 3:25 CPU and 99.9% CPU. This is not a terminal result or evidence of a hang; do not cancel/restart or duplicate this run. Reference-generator defects are under Ramanujan repair: multiple cases overwrite stage files, and missing phases permit vacuous comparison. Current comparator checks next624 words only, not complete RNG state or draw count; Pauli owns the optional C 15-slot stage audit for exact state/count. Consumer acceptance requires non-overwritten per-case artifacts and explicit required-phase checks; next624 alone is not complete RNG evidence. Real-FSZ C NMP uses absolute ModPara value, whereas the extra mapping used an NQP header; Banach handle10790 failed this mapping guard, not a demonstrated C input defect, and raw evidence is preserved. Public Julia PR54 head remains `973184`; Goodall prioritizes final CG patch publication. No new published-patch or full-workspace PASS is implied.
+
+Latest bounded parser addition: `green_two_ex_valid_c_row_preserves_first_pair_and_reverses_second_pair` reproduces Julia's valid header and literal row `(0,0,1,0,2,1,3,1)` against C `readdef.c:GetInfoTwoBodyGEx` lines2305–2353 (SHA256 `6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`). Command: `cargo nextest run -p mvmc-core --test issue184_assertion_contracts -E 'test(green_two_ex_valid_c_row)' --cargo-profile test-fast --locked --no-fail-fast --retries 0`. Run `75fc458f-5708-44bc-bff4-675a7d38c6c5`, exit0, 1 PASS, 15 selection-skipped, 0.006s. Final test-source SHA256 `7a455e033f9fad0e4e9f86139dafa483eaef4e860a351bf4f98b88192c154f6b` includes a subsequent comment-only correction; executable assertions are unchanged. This closes the literal valid-row gap underlying M0061–M0064, not malformed-input, public-dispatch, or full16-test proof. Detailed ledger linkage is pending parent review.
+
+Current consumer repair map: `threaded_issue182::independent_runner_prefixes_match_full_normalized_pre_sr_arrays` calls `independent_runner_prefixes`, reads `tests/fixtures/ctest_model_prefixes/<model>/step-1`, and maps `general_rbm_cmp_cg` to input `general_rbm_cmp` with NSRCG1/NStore0. The stale post-SR parameter oracle is distinct from the five observed successful normalized pre-SR arrays; the owner must regenerate a C-compatible independently produced reference, preserve seed/settings/provenance, and rerun the explicit ignored gate. Do not replace expectations with Rust output or loosen tolerances. Full-workspace test-fast collection has been launched by parent but results are not yet supplied here; no full freeze or acceptance follows.
+
+Parent metadata correction supersedes missing-command/exit notes below: CG run `120b7b72-b569-4d8a-9582-0cdcd9b26f1b` exited0, 16 PASS, 199 filtered, 0.038s; command `cargo nextest run -p mvmc-core --test sr_cg --lib --cargo-profile test-fast --locked -E 'binary(sr_cg) | test(sr_cg::collective_tests)' --no-fail-fast --retries 0`. Strong-observer run `8eaaae4c-9207-4189-9f43-3b7b84ab8009` exited0, 1 PASS, 0.139s; command `cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked -E 'test(actual_cg_sampling_observer_preserves_configs_rng_count_and_next624)' --no-fail-fast --retries 0`. Parent owns ongoing handle23085, full-workspace run `e7575445-1ef4-4677-b46d-2bdfa0da483c`, 702 selected / 30 skipped, command `cargo nextest run --workspace --cargo-profile test-fast --locked --no-fail-fast --retries 0`. Final exit/result pending; selected/skipped counts are not PASS counts. Do not duplicate or interrupt this parent-owned run.
+
 Foundation inventory reviewed 2026-10-03 against [#184](https://github.com/AtelierArith/mvmc-rs/issues/184), [#185](https://github.com/AtelierArith/mvmc-rs/issues/185) and its re-audit comments. This is an inventory and evidence ledger, not a completion claim.
 
 ## Baselines, scope and status
 
 Issue audit baseline: Rust `f1167c16f23d5929ccf312e56d48a9787e5c6bbd`.
-Re-audit/current checkout HEAD: `30d8d69ffc6d2700c56fda81841827a49e72e57c`, with uncommitted runner, CLI, callback, MPI, validation and test changes inspected in this shared tree. These changes are not evidence of a successful execution.
+Foundation re-audit HEAD: `30d8d69ffc6d2700c56fda81841827a49e72e57c`. The subsequent local implementation checkpoint is `9e58590`; integration checkpoint `d05cde3` includes main `515a89b` and the numerical policy from #190/#193. Further runner and test changes remain uncommitted. Neither checkpoint nor integration is a validated implementation milestone.
 Julia reference J: `extern/Julia-mVMC` at `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`.
 C reference C: vendored `extern/mVMC-1.3.0`; individual fixture generator revision/hash/build provenance must be recovered from its metadata before verification.
 
@@ -22,13 +139,123 @@ C is authoritative for input and numerical contracts; Julia supplies API archite
 
 Implementation state and evidence state are separate. No row below is promoted to verified during this documentation repair.
 
+### Focused assertion audit after ownership handoff
+
+The new [assertion ledger](issue-184-assertion-audit.tsv) records individual
+literal assertions, pinned Julia source hashes/lines, declared synthetic settings,
+exact Rust tests, executable selections and proof gaps. It is a partial audit,
+not proof that the inventories below cover every assertion or dynamic expansion.
+InterAll implementation, Lanczos and validation have no acceptance obligation in
+this audit; mixed sources must be classified at assertion/block granularity.
+
+Read-only Julia 1.13.1 `Meta.parseall` inspected all 125 source-table files without
+executing reference code. All 51 syntactic export occurrences found name+source
+file matches in the API table; all 313 syntactic testset positions found scenario
+source-position matches. These are coarse inventory links, not namespace,
+overload, dynamic parameter-expansion or equivalent-assertion closure. The
+assertion ledger enumerates macro occurrences, including repeated locations,
+with the literal first source line, macro kind and nearest testset context.
+Unreviewed entries retain no fabricated Rust test or executable command. Source
+rows now link their syntax assertion counts to that ledger. Those counts include
+pending scope classification and cannot be used as acceptance coverage totals.
+The original source-table `assertions` column counts the historical `@assert`
+inventory; the new syntax column also includes Test assertion macros. Neither
+column establishes that an assertion was run or mapped to a Rust equivalent.
+
+A conservative parser-source syntax audit also found two omitted typed
+short-form helpers: `n_projection_parameters` and `count_opt_trans_parameters`.
+A299/A300 now record the Rust layout-field/method replacements with executed
+analytical synthetic boundary tests (latest scoped result below). This repairs concrete omissions; it does
+not establish namespace/overload/constructor/alias completeness.
+
+`crates/mvmc-core/tests/issue184_assertion_contracts.rs` adds six independent
+analytical/synthetic contracts without production changes. C `parameter.c`
+SHA-256 `46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0`,
+`SetFlagShift` and `SyncModifiedParameter` establish fixed-real-flag suppression
+and DH2/DH4 → Gutzwiller compensation → Gutzwiller/Jastrow shift order. Constants
+−1.5/+1.5 follow these equations and agree with pinned Julia; they are not
+Rust-generated expectations. Empty explicit flags are a Julia/Rust synthetic API
+boundary, not a valid C empty-OptFlag model. Rust has no exported `flag_shift_dh`
+predicate, and a required Rust fixed-path argument is a compile-time difference
+from Julia's missing-keyword exception. These differences remain explicit.
+
+Executed command:
+`cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked --no-fail-fast --retries 0`.
+Owner run `8687fb98-2035-4ff4-a43d-10b397562073`: exit 0, six passed, zero skipped,
+0.006s. Parent separately reported reviewed run `b7e65ca3`: exit 0, six passed,
+zero skipped, 0.006s. Linux x86_64; no C/Julia numerical runtime or BLAS computation
+is invoked. Test SHA-256
+`ef828d7b76c1778dade2d528701fa4055a05c0b66362c37a99b294965e9c27cd`.
+Targeted `cargo clippy -p mvmc-core --test issue184_assertion_contracts --locked -- -D warnings`
+also exited 0; a vendored dependency deprecation warning was emitted separately.
+These are dirty shared-tree focused results, not a frozen whole-workspace pass.
+Post-run HEAD was `b521e4ae2093b587d1697fac1d53597c1fe14018`; this does not assign
+a later production-source fingerprint retroactively to an earlier compilation.
+
+Subsequent scoped results, not retroactive replacements of those six-test hashes:
+eight-test owner run `4866ce91-8bab-4195-91fa-76cad55a1b9c` and parent run
+`14baa9ee-db6c-44f9-92a2-b49627d102b5` both exited 0, eight passed, zero skipped,
+0.007s. Eight-test source SHA-256
+`0125d7c95712eb16db01a9de77252e7bfce910c084ca4862184a03e5bde73f6a`.
+Parent independently reviewed the added C real-slot/imaginary-flag assertions:
+all six/ten real components are checked by C `OptFlag[2*i]`; alternating means
+3/4 and 5/6 give Gutzwiller compensation 17/31 exactly. This is analytical C
+flag/order proof, not sampling or RNG/runtime verification.
+
+Latest ten-test owner run `f7b358aa-df65-40ec-8981-194741c18b66` exited 0,
+ten passed, zero skipped, 0.008s, using the same unfiltered command. Source hash
+`05cc9ea14abe0f29d43f3ef7371cf11d25eb9432bc77e1361fc27252e7df4269` adds
+typed-helper projection-count and OptTrans stored-length cases. Its targeted
+clippy command also exited 0. These are current dirty-tree scoped checks; the
+parent's eight-test proof does not automatically validate the two later helper
+tests or a frozen whole-workspace milestone.
+
+The multiline source-span gap is now repaired structurally: all inventoried
+macro occurrences match exact byte ranges in pinned source; escaped full text
+includes all 56 multiline assertions. All 103 assertions nested under `for` or
+`while` nodes carry ancestor loop expressions. A separate read-only Julia
+1.13.1 check decoded every full-text cell and compared it with the source byte
+range and SHA-256, exit 0. The eight original SplitLoop cases and every rank
+have executed analytical Rust assertions. Other loop values, generators,
+comprehensions, inherited settings and InterAll block classification still
+require per-cell semantic review; full text/loop syntax is not that proof.
+
+S133–S136 and S162 now link only their proven state/diagnostic assertions; A197/A198
+link every rank of the original eight SplitLoop cases. S445 now identifies actual
+timer environment variables and the five exact timer tests, still not rerun by
+this audit. A209/S447 link the separate frozen twelve-test actual callback/RNG
+ledger and retain real-MPI/dependent-production gaps. Other cells retain their
+unverified status until their own exact assertions/settings/results are mapped.
+
+A190–A201 collective/scalar rows no longer present serial runner smoke as their
+API gate. Exact communicator/type/root/rank assertion and launcher mapping is
+pending. In particular, reduce-to-root is not established by allreduce plus
+root-only file writing, recoverable collective errors are not MPI abort
+equivalence, and summed failure status is not numeric maximum semantics.
+Explicit InterAll API rows carry no #184/#185 execution or gap ownership.
+
+Parent-reported additional focused evidence: handle `39855`, run `9fe35ab9`,
+exit 0, two passed and 193 filtered (not counted as passes), after explicit
+`nsmp=1` correction. The exact tests are
+`run::tests::pure_general_and_ap_parallel_runs_have_identical_chain_and_updates`
+and `run::tests::fsz_measurements_preserve_real_and_complex_optimization_sampling_and_rng`.
+They prove bounded Rust representation/measurement non-interference, not every
+Julia FSZ assertion or independent C/Julia parity. Candidate reproduction is
+`cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked --no-fail-fast --retries 0 -E 'test(pure_general_and_ap_parallel_runs_have_identical_chain_and_updates) | test(fsz_measurements_preserve_real_and_complex_optimization_sampling_and_rng)'`;
+the full original command, binary hash and feature settings were not supplied
+with this report, so this candidate command is not asserted to be the executed
+command. Parent also reports PR199 runtime-five-file merge `a8fc4c7`, branch
+integration `66e496f` and isolated workspace handle `56c` with 549 passed and
+19 skipped. That integration result is not assigned to the separate #179 draft
+or used to declare full numerical/MPI/API coverage.
+
 Owners: #174 CLI PhysCal; #175 PhysCal callback; #176 real-FSZ inverse divergence; #177 root-resolved negative MPI seed; #178 rejection/collective failures; #179 MPI scenario comparisons; #180 native ctest models; #181 serial PhysCal/Green/non-InterAll Lanczos; #182 inner threading. #183 owns optional-gate reporting only. #184 owns inventory/provenance holes; #185 is the umbrella, not the default execution or implementation owner.
 
 Scoped exclusions: InterAll implementation, its Lanczos and validation belong elsewhere (including Kitaev sample material); Julia FFI exports are reference adapters, not Rust runtime requirements. Standard-mode input generation/StdFace, plotting assets, fixture generators and mock helpers are inventoried as aids, not production port promises. Julia-deferred ctest Lanczos wrappers do not exclude Rust non-InterAll PhysCal Lanczos. Julia-only extensions/corrected C semantics require a labelled authority decision, not automatic adoption.
 
 ## Evidence record convention
 
-Every row below references J/C and an evidence record E0–E9. These records supply command, settings, result and provenance fields; inheritance applies to every named member of a row, not just the first. Split rows when results differ.
+E0–E9 below preserve the historical foundation audit and candidate gates, not current blanket statuses. The companion matrices carry per-cell commands/settings/results; executed runner records follow them. Split rows when results differ.
 
 | ID / gate type | Reference / fixture provenance | Command | Settings | Result / missing evidence |
 | --- | --- | --- | --- | --- |
@@ -45,165 +272,309 @@ Every row below references J/C and an evidence record E0–E9. These records sup
 
 For an executed record add date, exact Rust/J/C revisions (including dirty patch identity), architecture/OS, compiler/Rust/Julia versions, actual BLAS/MPI providers, workers/ranks, all settings/seed overrides, gate selection, comparison/residual metrics, first divergence, tolerance justification, discrete-contract outcome and saved log/artifact. Unknown fields stay explicitly unknown. Normal Rust tests must ultimately use committed independent fixtures without invoking Julia/C or reading toolbox programs.
 
-## Explicit top-level export inventory
+## Complete symbol, source and scenario inventory
 
-Paths in this table are relative to `extern/Julia-mVMC/`; Rust modules are under `crates/`. Grouped symbols share a caller/evidence scope but each symbol is explicitly named. Parser types and qualified helpers are not top-level exports at J.
+The companions are the per-cell matrix, not filename-only placeholders. Every row supplies a Rust entry (or an explicit missing API/intentional replacement), CLI scope, authority distinction, failure boundary, candidate or executed gate, settings, provenance, result and owner.
 
-| Julia source / exported symbols | Rust library / CLI caller | Implementation; evidence | Owner |
-| --- | --- | --- | --- |
-| `SFMT.jl/src/SFMT.jl: SFMT19937RNG, init_gen_rand` | `sfmt19937::Sfmt19937Rng::{new,seed}; runner seed initialization` | `executable; E2 unverified` | `#184; MPI seed #177` |
-| `SFMT.jl/src/SFMT.jl: genrand_real2, gen_rand32, sfmt_dump_rand32` | `Sfmt19937Rng::gen_rand32 and float conversions; draw vectors` | `executable conversion path; dump helper mapping partial; E2` | `#184` |
-| `PfaPack.jl/src/PfaPack.jl: pfaffian_ltl!` | `pfapack::pfaffian_ltl_real / pfaffian_ltl_complex` | `executable kernel only; E2` | `#184` |
-| `PfaPack.jl/src/PfaPack.jl: julia_zsktf2!, julia_dsktf2!, julia_zsktf2_turbo!` | `pfapack::{zsktf2,dsktf2,zsktf2_turbo}` | `executable kernel only; E2; inverse failure E1` | `#176; thread scope #182` |
-| `PfaPack.jl/src/PfaPack.jl: utu2pfa, utu2inv!` | `pfapack UTU2 real/complex functions` | `executable kernel only; E2` | `#176 / #184` |
-| `PfaPack.jl/src/PfaPack.jl: fimpl_zsktf2!, fimpl_dsktf2!, cimpl_utu2inv!` | `pure Rust kernels; no FFI-equivalent runtime obligation` | `excluded adapters; E0` | `#184 scope` |
-| `MVMCExpertModeParsers.jl/src/MVMCExpertModeParsers.jl: parse_expert_mode_files` | `mvmc_expert_parsers::parse_expert_mode_files* → run/CLI` | `executable; family/error/ordering matrix partial; E2` | `#184; runtime rejection #178` |
-| `MVMCExpertModeParsers.jl/src/MVMCExpertModeParsers.jl: init_qp_weight!, update_qp_weight!` | `mvmc-core qp initialization/update → runner` | `executable; QP/sign/default combinations unverified; E2/E3` | `#180 / #181; inventory #184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: ParallelContext, serial_context, build_parallel_context, is_output_rank` | `parallel/mpi contexts; Reducer::is_output_root; run wrappers/CLI` | `partial serial/grouped scope; E8` | `#178 / #179` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: bcast!, bcast_scalar, allreduce_sum!, reduce_sum_to_root!, barrier` | `Reducer/mpi collective operations via runner (not one-to-one exports)` | `partial helper mapping; E8` | `#179` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: reduce_counter!, allreduce_sum_scalar, allreduce_max_scalar` | `reducer accumulator/counter operations; scalar helper equivalence to audit` | `partial; E8` | `#179; mapping #184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: abort_parallel, split_loop, split_range, qp_split_range` | `validation/collective failure agreement, parallel partition and QP ranges` | `partial; grouped failure/partition boundaries unverified; E8` | `#178 / #179` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: resolve_rnd_seed` | `runner prepare wrappers + Reducer root seed broadcast` | `new dirty-tree path partial; negative/0/positive actual MPI unrun; E8` | `#177` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: count_total_parameters, pack_parameters, unpack_parameters!` | `parser layout + core sync/state parameter conversion` | `partial architectural mapping; all families/offsets/records E2/E3` | `#180 / #181; inventory #184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: set_parameter_value!, get_parameter_value` | `core sync/parameter storage access; no claimed one-to-one wrapper` | `partial helper mapping; sparse/shared/unmapped/signed flags E2/E3` | `#184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: read_initial_def!, read_opt_para_file!` | `mvmc_core::{read_initial_def,read_opt_para_file}; prepare/run/CLI` | `executable; record selection/overlays/fixed values partial; E3/E6` | `#181; inventory #184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: vmc_para_opt!` | `mvmc_core::vmc_para_opt; optimization callback/sampling-only` | `executable; callback/history/skip-SR combinations unverified; E3/E7/E8` | `#180 / #179; inventory #184` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: run_para_opt_from_namelist` | `run_para_opt_from_namelist[_with_reducer] → CLI optimization` | `executable; full model/mode/store/output scope partial; E3/E7` | `#180 / #179` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: vmc_phys_cal!` | `vmc_phys_cal[_to_dir/_with_reducer]; new *_with_callback and PhysCalCallback` | `partial new callback/error agreement; E5/E6/E8 unrun` | `#175 / #181 / #178 / #179` |
-| `MVMCOptimizers.jl/src/MVMCOptimizers.jl: run_phys_cal_from_namelist` | `prepare_phys_cal_from_namelist[_with_reducer_and_opt_trans] → vmc_phys_cal; CLI --physcal PATH` | `partial dirty runner/CLI dispatch; E4/E6/E8 unrun` | `#174 / #181 / #179` |
+| Artifact | Count and enumeration rule |
+| --- | --- |
+| [Public APIs](issue-184-public-apis.tsv) | 300 qualified inventory entries after adding two omitted typed short-form parser helpers. The foundation enumeration recorded 45 top-level export occurrences, six nested PfaPack occurrences and 250 parser symbols with three re-export duplicates combined. These inventory counts are not a namespace/overload/alias completeness claim. |
+| [Scenarios](issue-184-scenarios.tsv) | 456 rows: all 313 textual `@testset` occurrences (including nested/dynamic titles), 36 `@assert` worker/helper occurrences, 26 script/reference-aid entries, 62 explicit model/example/MPI expansions and 19 threading/runtime/failure/executed-protocol cells. Dynamic parameter expansion is additional to, not a substitute for, its source testset. |
+| [Source closure](issue-184-sources.tsv) | All 125 Julia source files under J, excluding only Git metadata; SHA-256, definitions, exports and testset/assertion counts per file. Internal functions, generators, mocks, benchmarks and reference adapters are explicitly inventoried without promoting them to production API obligations. |
 
-## Explicit Julia test inventory
+Julia source line numbers identify the inspected revision; Rust entries use file and function names because the shared dirty tree changes line numbers. All source SHA-256 values are inspection provenance, not a hash of any earlier executed dirty Rust snapshot. Settings extracted from source accompany source pointers; loops and actual model/launcher settings have separate expanded rows. InterAll-containing source cases remain visible as excluded cells; they have not silently disappeared from the source inventory.
 
-All paths below are relative to extern/Julia-mVMC at J. Each script is an individual unverified/not-run cell inheriting E0 and its listed evidence record. This is a file inventory; assertion-by-assertion mapping remains #184 work. Helpers and generators are scoped reference aids.
- 
-| Julia script | Rust caller scope | Record / owner |
+The API matrix distinguishes missing standalone helpers (for example max-scalar reduction and indexed parameter getter) from equivalent architecture through fields/reducer methods. C file completeness/layout is authoritative: historically incomplete optimization-layout fixtures do not become supported PhysCal inputs. C accepts the relevant orbital file combinations by its first-pass layout; Julia's file-order rejection is not a Rust support requirement. Julia FFI adapters map to pure-Rust kernels, not a new C runtime dependency.
+
+## Current implementation and independent-evidence scope
+
+| Scope | Current caller/support | Evidence and remaining gate |
 | --- | --- | --- |
-| `MVMCExpertModeParsers.jl/test/runtests.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_doublon_holon_parser.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_green_two_ex_parser.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_integration.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_orbital_qptrans_utils.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_parameter_init_complexflag_rbm.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_parameter_initialization.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_parse_expert_mode_files.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_parsers.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_qp_weight.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_read_input_parameters.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_read_input_parameters_rbm_layout.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_sfmt_compatibility.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_trans_parser_spin_indices.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_utils.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCExpertModeParsers.jl/test/test_validation.jl` | parse_expert_mode_files* → validation/init/QP | E2; #184; not-run |
-| `MVMCOptimizers.jl/test/runtests.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test/test_slater_update.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/helpers/mock_data.jl` | mock/reference aid; excluded production obligation | E0; #184 scope; not-run |
-| `MVMCOptimizers.jl/test_unit/helpers/mock_state.jl` | mock/reference aid; excluded production obligation | E0; #184 scope; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_parallel.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_parameter_sync.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_physcal_factored_green.jl` | prepare → vmc_phys_cal → Green/output | E6; #181; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_read_opt_para.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_run_phys_cal_runner.jl` | prepare → vmc_phys_cal → Green/output | E6; #181; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_slater_update.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_stochastic_opt.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_threading.jl` | Pfaffian/QP; complete call-site mapping pending | E9; #182; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_types.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_unsupported_inputs.jl` | validation → runner/CLI runtime_contract | E4/E8; #178; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_vmc_main_cal_sr.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_vmc_sampling_misc.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_vmc_sampling_proj.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_vmc_sampling_qp_split.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_vmc_sampling_rbm.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `MVMCOptimizers.jl/test_unit/test_unit_weight_average.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `PfaPack.jl/test/runtests.jl` | pfapack golden_vs_julia | E2; #176 / #184; not-run |
-| `SFMT.jl/test/runtests.jl` | sfmt19937 golden_vs_c | E2; #184; not-run |
-| `test/integration/ctest_equivalent.jl` | runner → ctest_equivalent | E7; #180; not-run |
-| `test/integration/ctest_models.jl` | runner → ctest_equivalent | E7; #180; not-run |
-| `test/integration/lanczos_equivalent.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `test/integration/pairhop_equivalent.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `test/integration/phys_cal_equivalent.jl` | prepare → vmc_phys_cal → Green/output | E6; #181; not-run |
-| `test/integration/runtests.jl` | runner/sampling/sync; detailed assertion mapping pending | E3; #180 / #184; not-run |
-| `test/integration/test_run_phys_cal_contract.jl` | prepare → vmc_phys_cal → Green/output | E6; #181; not-run |
-| `test/integration/tools/generate_ctest_fixtures.jl` | mock/reference aid; excluded production obligation | E0; #184 scope; not-run |
-| `test/integration/tools/green_compare.jl` | mock/reference aid; excluded production obligation | E0; #184 scope; not-run |
-| `test/integration/tools/test_green_compare.jl` | prepare → vmc_phys_cal → Green/output | E6; #181; not-run |
-| `test/mpi/mpi_failure_modes.jl` | validation → runner/CLI runtime_contract | E4/E8; #178; not-run |
-| `test/mpi/mpi_hubbard_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_nsplit_nstore_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_nsplit_standard_projection_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_physcal_nsplit_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_physcal_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_srcg_e2e_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_srcg_operate_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/mpi_weight_average_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
-| `test/mpi/run_mpi_smoke.jl` | parallel/mpi/reducer → runner | E8; #177 / #178 / #179; not-run |
+| Serial optimization, 13 native ctest models | `run.rs::vmc_para_opt`, `run_para_opt_from_namelist_with_reducer`; CLI optimization supports valid parsed real/complex/FSZ inputs | #180 reports all-model one-step and long statistical execution. Independent C optimization-window fixtures are now available; runner/writer drafts capture measured Etot/Etot2 and post-SR declared coefficients with a bounded completed-iteration window. Integrated comparisons are pending. Statistical results do not replace exact trajectories. See [model ledger](issue-180-model-coverage.md). |
+| Serial normal and real-FSZ PhysCal | `prepare_phys_cal_from_namelist_with_reducer_and_opt_trans` → `vmc_phys_cal_with_callback`; CLI `--physcal PATH`, inferred/explicit compatible mode, fixed/initial records and OptTrans within validated contract | #181 six-model Green and nine trajectory fixture families are individually mapped. C factored-Green is one ordered row; indexed out/var lifecycle is now a writer draft with focused CLI execution below, not blanket independent output parity. See fixture README and historical 70178 failure below. |
+| Callback and actual final RNG | `PhysCalCallback` after completed averaged/output sample; `PhysCalResult::final_rng` moves the actual consumed local SFMT state. Root-exported `vmc_phys_cal_in_place` borrows data/state/RNG, retains actual state/RNG on Err, and is the single production core delegated to by owned wrappers | Local callback/no-callback next-624 and borrowed-core error-boundary checks pass (R5/R45). No sampler replay or fake hook. Independent actual-run final-state comparison remains separate. The borrowed API follows Julia mutating runner architecture; returned RNG is an explicit Rust diagnostic extension. |
+| Grouped normal PhysCal | CLI `main.rs::run_physcal` chooses grouped reducer; core permits supported normal Green descriptors with agreed controls/split | Actual 2/4-rank stdout/indexed-file checks pass. Blanket grouped rejection is removed. Grouped FSZ and Lanczos remain explicitly unsupported; optimization-only unsupported descriptors must not be indiscriminately removed from valid PhysCal fixtures. |
+| MPI root seed, loading and failures | Root clock broadcast precedes group offset; collective parse/load/validation/output/callback/timer handling; root-only CLI banner/summary after parse/config agreement | Local runner 2/4-rank protocol checks and CLI MPMD checks pass. CLI agrees run-kind, nsteps, explicit mode and parsed ModPara/dimensions before dispatch. Invalid argument parsing/help still precedes context initialization and is an explicitly open asymmetric-argument gap. |
+| MPI values and discrete trajectories | Production group/reducer callers exist; execution is not independent parity | #179 records communication/execution successes alongside independent chain-count/burn/group discrepancies and source-changed gates. Runner draft now retains full NVMCSample on every chain and partitions only measurements using comm_child1 dimensions (C vmcmain.c and vmccal.c:103–114); Wegener owns sampler/reducer integration and burn-marker repair. NSplitSize is width; nondivisible groups are valid C warning cases. No current independent MPI completion claim. See [live ledger](issue-179-live-mpi.md). |
+| Non-InterAll Lanczos | PhysCal serial modes 1/2 and validated normal inputs; Julia-deferred ParaOpt wrappers separately labelled | Independent modes/model results must be read individually; file existence/self-consistency is insufficient. InterAll and its Lanczos are excluded, not a numerical tolerance decision. |
+| Threaded kernels/runner copies | All 14 Julia sites mapped; thresholded common-prefix real↔complex copy helpers wired into runner preserving inverse padding/PF tails; one exact RNG stream remains serial | #182 worker 1/2/4 kernel tests are bounded local/fixture evidence. No fresh whole-run Julia threaded/performance claim. See [thread ledger](issue-182-threaded-coverage.md). |
 
-J integration/runtests.jl includes lanczos_equivalent.jl, but that file was absent from the on-disk file inventory. This is an #184 inventory hole, not executed Lanczos evidence.
+## Executed runner/CLI records after integration
 
-## Individual model and example cells
+All following commands ran in container `60e8b0ba99a4`, Linux x86_64, repo `/workspaces/mvmc-rs`, `CARGO_TARGET_DIR=/tmp/mvmc-issue178-target`, `LIBCLANG_PATH=/usr/lib/x86_64-linux-gnu`. MPI is Open MPI 4.1.6, not the documentation's MPICH. MPI launches set both Open-MPI root permissions; BLAS/OpenMP threads were one. No C/Julia runtime was invoked by these local contract tests. Exact per-run compiler/loaded BLAS provider and dirty Rust source hash were **not captured**; no local raw log files were saved. Handles below refer to tool outputs, not reproducible on-disk log paths. Do not assign later source hashes to these runs.
 
-| Julia inventory / fixture | Rust caller / implementation scope | Evidence / owner |
+Common command prefix: `cargo nextest run --locked --cargo-profile test-fast`; each selection also used `--no-fail-fast --retries 0`.
+
+| Record / owner | Package/features, selection and settings | Actual result / handle |
 | --- | --- | --- |
-| test/integration/ctest_models.jl: `heisenberg_chain_real` | run_para_opt_from_namelist; ctest_equivalent supported flag | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `heisenberg_chain_cmp` | run_para_opt_from_namelist; ctest_equivalent supported flag | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `heisenberg_chain_fsz` | run_para_opt_from_namelist; ctest_equivalent supported flag | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `hubbard_chain_real` | run_para_opt_from_namelist; ctest_equivalent supported flag | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `hubbard_chain_cmp` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `hubbard_chain_fsz` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `kondo_chain_real` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `kondo_chain_cmp` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `kondo_chain_stot1_cmp` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `kondo_chain_fsz` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `general_rbm_cmp` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `hubbard_tetragonal_real` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| test/integration/ctest_models.jl: `hubbard_tetragonal_momentum_projection_real` | run_para_opt_from_namelist; ctest_equivalent unsupported harness flag; actual input rejection vs implementation gap vs unverified execution still to distinguish | E7 not-run; #180 |
-| ctest_models.jl: `spin_chain_lanczos` | Julia-deferred para-opt ctest wrapper; Rust non-InterAll measurement scope assessed separately | E6 not-run; #181 |
-| ctest_models.jl: `hubbard_chain_lanczos` | Julia-deferred para-opt ctest wrapper; Rust non-InterAll measurement scope assessed separately | E6 not-run; #181 |
-| phys_cal_equivalent.jl: `heisenberg_chain_real/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| phys_cal_equivalent.jl: `heisenberg_chain_cmp/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| phys_cal_equivalent.jl: `heisenberg_chain_fsz/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| phys_cal_equivalent.jl: `hubbard_chain_real/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| phys_cal_equivalent.jl: `hubbard_chain_dh_real/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| phys_cal_equivalent.jl: `kondo_chain_real/physcal_ref` | prepare → measurement → indexed Green/output; fixed-record decode, strict indices/rows and independent trajectory pending | E6 partial/not-run; #181 |
-| examples/heisenberg_chain_real.jl | run_para_opt_from_namelist; CLI examples/inputs/heisenberg_chain_real/namelist.def | E3 not-run; #180 |
-| examples/heisenberg_chain_cmp.jl | run_para_opt_from_namelist; CLI examples/inputs/heisenberg_chain_cmp/namelist.def | E3 not-run; #180 |
-| examples/heisenberg_chain_fsz.jl | run_para_opt_from_namelist; CLI examples/inputs/heisenberg_chain_fsz/namelist.def | E3 not-run; #180 / #176 |
-| examples/hubbard_chain.jl | run_para_opt_from_namelist; CLI examples/inputs/hubbard_chain_real/namelist.def | E3 not-run; #180 |
+| R76 / #174/#175/#178/#182 | `-p mvmc-core -p mvmc-cli --features mpi --lib --test runtime_contract --test physcal_callback --test numerical_comparison --test real_fsz_setup -E 'test(seed_tests) \| test(remote_sr_failure) \| test(mode_tests) \| test(grouped_matrix_allows) \| binary(runtime_contract) \| binary(physcal_callback) \| binary(numerical_comparison) \| binary(real_fsz_setup)'`; inner workers 2, threshold 1 | 76 passed, 156 skipped; handle 28393, run `6c449195-f7e5-4d37-8ef1-d5f8157f4cfe`. Preceding two invalid historical PhysCal-positive failures retained below, then replaced with complete native fixture and independently decoded values. |
+| R43 / #174/#175/#178 | Core+CLI, no MPI feature, lib/runtime_contract/physcal_callback selection of two corrected PhysCal positives, shadow-copy and both contract binaries | 43 passed, 178 skipped; handle 74091. This selection is recorded descriptively because the complete historical filter/run UUID was not retained; not an independent comparison. |
+| R4 / #174/#178 | Two corrected PhysCal unit positives plus CLI grouped-FSZ/Lanczos rejection; no MPI feature | Four passed, 210 skipped; handle 12981, run `4740d696-8433-4f36-873b-22470a631b6b`. Exact prior filter not retained; do not infer all four as MPI execution. |
+| LR / #177/#178 | MPI core unit binary: `timeout 45s mpirun -n 2` then `-n 4`, `--exact run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures --ignored --nocapture`; workers 2, threshold 1 | All ranks passed; handle 81618. Root skewed/negative clock, next-624 exact seed checks, missing parse/fixed/initial files, validation, root output setup/write fault, asymmetric callback and synthetic peer SR rollback. Before final_rng/indexed writer drafts; synthetic SR/zero paths are not physical MPI trajectories. No saved logs or source hash. |
+| LC / #174/#178 | `-p mvmc-cli --features mpi --test runtime_contract --run-ignored ignored-only`; actual process stdout/indexed files at 2/4 ranks plus MPMD asymmetric parse/fixed/output and valid nsteps/run-kind/mode/NDataQtySmp mismatches; timeout 45s per launch | Latest rerun: three passed, 16 skipped; handle 19526, run `c564a06a-5896-4993-8d42-b5796ccccfa1`. Includes indexed out/var assertions and root-only stdout. Earlier pre-indexed run handle 66772 also passed; neither is independent numerical/discrete MPI parity. |
+| RF / #174/#175 | Core callback and CLI serial indexed output: `-p mvmc-core -p mvmc-cli --test physcal_callback --test runtime_contract -E 'test(callback_is_called) \| test(physcal_cli_runs_fixed)'`; no MPI feature | Two passed, 39 skipped; handle 66170, run `3541c7e6-bcee-44ab-b360-b4f76bb6a728`. Actual-result next-624 local comparison and no shared PhysCal out/var artifacts. |
+| RC / #174/#175/#178 | Core callback + core/CLI runtime_contract, no MPI feature | 41 passed; handle 85298, run `5b82bf5c-6419-4744-b616-6bd7eb3c57eb`. Compilation preceded the latest callback assertion edit; RF supplies its specific evidence. |
 
-## Combination and failure-boundary coverage
+These records establish focused local contracts, not milestone readiness. Independent MPI gates, invalid-argument collective startup, independent CLI config trajectory observation, all remaining model/output combinations, actual per-proposal/draw-count coverage and a final stable full-workspace rerun remain required. Other owners' artifact paths (including `/tmp/mvmc-issue179-evidence.wSR1WK`, `/tmp/mvmc-issue179-states.KqWpM4`, `/tmp/mvmc-issue179-physcal.GBpLp2`) are recorded in their ledgers; those are not this runner's saved logs.
 
-All cells inherit J/C, command/settings/result details from the cited records.
+### Subsequent collector/core and sampler-interface checks
 
-| Julia scope / source | Rust library/CLI caller | Implementation / missing evidence | Owner |
-| --- | --- | --- | --- |
-| Parser src/parsers: ModPara, LocSpin, Trans, CoulombIntra/Inter, Hund, Exchange, PairHop, Gutzwiller, Jastrow, orbital AP/parallel/general, QPTrans, OneBodyG/TwoBodyG/TwoBodyGEx, DH2/DH4, RBM | parse_expert_mode_files* → runner/CLI | E2 partial; C headers/widths/signed flags/errors and full family inventory unverified; InterAll excluded | #184; rejection #178 |
-| Declared widths, sparse/shared/unmapped slots, signed flags; parser utils/read_input_parameters.jl/parameter_init.jl | parser layout → init/sync | E2/E3 partial; all family offsets, initialization and exact draws unverified | #184 / #180 / #181 |
-| initial.def Auto/None/Path, fixed records, multiple records, In overlays; initial_params.jl | read_initial_def/read_opt_para_file → prepare/run/CLI | E3/E6 partial; ordering, independent record decode and fixed-value combinations missing | #181 / #184 |
-| Seed 0/positive/negative, normalization, QP, signs | init → prepare/run/reducer | E2/E3/E8 partial; root seed broadcast and full discrete trajectories unrun | #177 / #180 / #181 |
-| Direct SR / SR-CG × NStore 0/1 × real/cmp/FSZ/general | vmc_para_opt → solver/storage | E3/E7/E8 partial; full native model/mode/storage/residual matrix missing | #180 / #179 |
-| DH2/DH4, charge/spin/general RBM combinations | sampling/derivatives/measurement runner | E3/E6/E8 partial; combined layouts, measurement and MPI missing | #180 / #181 / #179 |
-| OptTrans defaults/enabled × optimization/PhysCal/grouped | parser C OptTrans → runner/CLI validation | E3/E4/E6/E8 partial; supported/rejected contract and independent parity missing | #178 / #180 / #181 / #179 |
-| Sampling-only, optimization callbacks, history, summaries, block/final-window output; vmc_para_opt.jl/data_io.jl | vmc_para_opt / run summaries / io | E3/E7/E8 partial; family/flags/nsmp/root and unchanged RNG/files checks missing | #180 / #179; inventory #184 |
-| PhysCal sample callback | *_with_callback / PhysCalCallback | E5 partial dirty implementation; independent Julia callback comparison and actual MPI failure agreement unrun | #175 / #178 / #179 |
-| Green weights, canonical indices, deduplication, multi-sample output | observables → vmc_phys_cal → io | E6 partial; strict row/discrete index proof missing | #181 |
-| Non-InterAll Lanczos 1/2, model/Hamiltonian/output scope | lanczos → PhysCal → io | E6 partial; full supported Hamiltonian matrix and independent values missing | #181 |
-| MPI grouped/ungrouped optimization/PhysCal, output roots and rank-local failures | reducer/mpi/runner/CLI backend | E8 partial; current Rust CLI rejects PhysCal NSplitSize > 1; distinguish Rust limitation from Julia's restricted grouped normal-Green support | #178 / #179; CLI #174 |
-| Timers, diagnostics, transfer fast path; c_timer.jl/vmc_main_cal.jl | core timer/diagnostic/observable paths | E3/E9 unverified; execution trajectory/performance evidence missing | #182; inventory #184 |
-| Inner workers vs BLAS workers; threading.jl | selected Pfaffian/QP helpers | E9 partial; all Julia threaded call sites and 1/2/4 worker matrix missing | #182 |
-| Invalid modes/flags/files/ranks, callback/output errors | validation → prepare/run/CLI | E4/E5/E8 partial; exact rejection boundary, caller state/RNG and file/directory snapshots required; callback error follows completed sample/output, so rollback is not presumed | #178 / #175 |
+Same container/target/threads and unknown dirty-snapshot/log limitations apply. These records supersede only their stated focused selections, not the historical full-workspace result.
 
-## Current #181 evidence limitations
+| Record / owner | Complete command suffix after the common prefix | Result |
+| --- | --- | --- |
+| R5 / #175/#178/#180 | `-p mvmc-core --lib --test physcal_callback -E 'test(in_place_callback_error) \| test(mpi_measurement_partition) \| test(final_window_history) \| test(physcal_iteration) \| test(physcal_preparation)' --no-fail-fast --retries 0` | After reducer-aware sampler wiring: five passed, 191 skipped; handle57440, run `9c58a65e-4b2a-4747-9ce2-7f24beea2e1b`. Exact retained error RNG/config check and local full-chain/measurement separation; not independent MPI trajectory evidence. Earlier identical selection handle79138 also passed before sampler-interface wiring. |
+| R45 / #174/#175/#178/#180 | `-p mvmc-core -p mvmc-cli --test physcal_callback --test runtime_contract --test output_blocks --no-fail-fast --retries 0` | 45 passed, zero skipped; handle23867, run `05eef9a9-16c6-4fe4-9086-348f88b308fa`, before final sampler-interface wiring. Preceding handle29255 failed two stale expectations: negative-zero averaging and flag test comparing changing energy fields rather than fixed Para; both repaired without changing bounds. Output-block ownership subsequently returned to Goodall. |
+| CW1 / #180 | `MVMC_RS_CTEST_PREFIX_MODELS=heisenberg_chain_real` and `-p mvmc-core --test ctest_model_prefixes --run-ignored ignored-only -E 'test(canonical_models_match_independent_prefix_oracles)' --no-fail-fast --retries 0` | Passed actual 1/2/3/50-step selected model against checked independent prefix/C-window fixtures; handle21107, run `13b03d1c-a53f-4330-82e5-ecb2d492ee19`. See `c_toolbox/ctest_opt_window.md` for mixed Julia history + verbatim C aggregator provenance; not full C sampling/SR execution or all-model coverage. |
+| LC4 / #174/#178 | `-p mvmc-cli --features mpi --test runtime_contract --run-ignored ignored-only --no-fail-fast --retries 0` | Three passed, 16 skipped; handle18114, run `54d24b93-5327-41d5-a9c0-354d57856235`, after borrowed PhysCal core/collector, before reducer-aware sampler wiring. Still process contracts, not independent MPI parity. |
+| LC5 / #174/#178 | `-p mvmc-cli --features mpi --test runtime_contract --run-ignored ignored-only --no-fail-fast --retries 0` | After reducer-aware sampler wiring: three passed, 16 skipped; handle39129, run `c25b2d3c-8881-410c-9873-da28e3c6da52`. Actual 2/4-rank grouped normal stdout/indexed output and MPMD error/control contracts; no independent MPI trajectory claim. |
+| R76-current / #180/#184 | `-p mvmc-core --lib -E 'test(mode_tests) \| test(seed_tests) \| test(callback_tests)' --no-fail-fast --retries 0` | **FAIL:** 76 run, 57 passed, 19 failed, 111 skipped; handle80630, run `03fcbdcb-60ee-43dc-bd20-9dfe870c1c68`, 55.632s. DH/RBM/OptTrans legacy final-parameter-only output fixtures disagree structurally with C-window output; two loaded-DH history cases omit now-stored declared DH slots. Failures retained. Need independent migrated window/history oracles for those exact historical workloads; no skipped assertions, regenerated Rust expectations or tolerance increase. Mode/seed and native PhysCal positives pass, but this is not a merge-safe full-suite state. |
 
-Working-tree physcal_issue181.rs is candidate coverage, not full #181 verification:
+Current runner sampling calls use Wegener's `vmc_make_sample_{real,fsz}_with_reducer_timed` and `vmc_make_sample_with_reducer_timed`, with comm1-only QP overlap operations. Ungrouped measurement is full local chain; grouped measurement uses local communicator dimensions. Independent #179 states must be rerun after these combined drafts; old CLI/protocol passes cannot prove their trajectory correctness.
+
+Captured-snapshot protocol rerun after main/#197 integration: isolated container copy `/tmp/mvmc-runner-snapshot.fzUpss`, copied from shared HEAD `6cd03743ea2c3ca7ef189415ff5ade4e0ca3598c` plus dirty drafts. Snapshot identity is **`f16bcdf321e3893e130d7c271f973e6e5e0b9bba09980513fb6044c2e9593f9f`**, identical before and after the run, computed inside that copy with `find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum` (pipefail enabled; excludes symlink contents). An initial attempted rg pipeline failed because container rg is absent; its empty-input digest is discarded and is not snapshot evidence. Copy excluded Git metadata, CodeGraph, target/target-* and Python bytecode caches. Cargo targets remained `/tmp/mvmc-issue178-target`, outside the snapshot. `cargo nextest list --locked --cargo-profile test-fast -p mvmc-core --features mpi --lib --message-format json` compiled the copied core (handle67202). Actual command, separately for ranks2 and4: `timeout 45s mpirun -n RANKS /tmp/mvmc-issue178-target/test-fast/deps/mvmc_core-7526f09b8a6840be --exact run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures --ignored --nocapture`. Open MPI4.1.6, root permissions enabled, BLAS/OpenMP1, inner workers2/threshold1. Handle44185 exited0: all two then four ranks passed, including the fault-reducer forwarding of current comm1/counter interfaces. Tool output only, no raw on-disk log; snapshot remains available. This confirms clock/error/SR-rollback protocol boundaries, **not independent MPI trajectory/value parity**, and does not supersede the remaining 17 historical output tests or the parent's mutable-tree workspace diagnostic.
+
+Subsequent DH-history repair: handle80650, run `f6497d88-6cc0-49b0-8e64-f91ae1099807`, passed both loaded-DH tests (186 skipped), selecting `-p mvmc-core --lib -E 'test(dh2_loaded_values) \| test(dh4_loaded_values)'` with the common flags/settings. Each step now reads independent complete prefix parameters, verifies the archived DH-omitting history still agrees, checks every declared coefficient/width and compares Etot2 with the independently captured measurement row. No tolerance changed. The remaining 17 output-family tests need independent legacy-workload C windows, not canonical-model substitutions. Separately, source audit found optimization `io.rs::output_data` omits DH/OptTrans from var rows, unlike C `vmcmain.c:655–657`'s all-NPara loop; Goodall owns its repair. The old test helper's Rust-captured RBM insertion is not an independent oracle and must be replaced, not used to establish parity.
+
+Duplicate-OneBodyG authority is bounded explicitly by `tests/fixtures/physcal_181/duplicate-reader/{README.md,result.txt,provenance.txt}`: actual C mode-2 counting collapses two requested duplicates to one canonical row. Without GEx, the normal reader then returns status1 for declared-count mismatch; keep the bounded rejection. With the probe's GEx constituent operators, the indirect reader returns status0 and canonical count1; Rust currently retains extra OneBodyG rows, an unresolved parser-owner shape gap. The probe uses actual extracted counter/reader functions and padded storage, not full parsing/MPI/LS execution. Do not add a Julia-only blanket duplicate rejection or present reader support as full Lanczos parity. Parser/regression ownership must be coordinated separately from main/#197 integration.
+
+Latest broad runner selection completed before the shared main/#197 conflict resolution: handle10344, run `7c7bd2bd-ea87-4025-b25e-58e759901c35`, same R76-current command/container settings, exit100, **76 run: 59 passed, 17 failed, 113 skipped**, 46.279s. Both complete-DH-history repairs passed. Remaining failures are the DH2/DH4/DH24 direct/CG output families (five tests), OptTrans real/complex/FSZ/stored/CG output families (four), and RBM real/complex/general/stored/DH24/FSZ/canonical output families (eight). Their first failing output assertions use obsolete final-snapshot schemas; downstream var/block assertions have not all been reached and must not be presumed correct. Independent complete pre-SR var and post-SR C-window oracles remain required. No shared-tree Cargo invocation is authorized during the parent's live integration; this result is not a post-merge validation. The final MPI fault-reducer forwarding edit is not covered by this serial selection.
+
+## Foundation #181 evidence limitations and subsequent checks
+
+The following deficiencies describe the foundation review, not the current source after the #181 worker's subsequent edits:
 
 - assert_reference flattens rows and applies tolerance to indices and floats alike. It does not establish exact row count/width/order, discrete integer/index columns, duplicates or file structure. Future repair must validate row structure and discrete columns strictly, using justified tolerances only for numerical columns.
 - fixed_values compares Rust-before and Rust-after snapshots. It can detect mutation but does not prove independently expected C record/layout decoding. An independent decoded parameter vector and flags are missing.
 - Rerun compares Rust with Rust, without an independent RNG-state/draw-count/proposal/acceptance/saved-configuration oracle. It is local repeatability evidence only.
 - Mode 1/2 file existence/self-consistency is not independent Lanczos numerical parity.
-- User reports test-fast process **9173** live and compiling during this repair. Exit/result/log remains pending and was not collected here. Compilation is not a passing comparison; a later pass still leaves these oracle/structure gaps open.
+- Process **9173** subsequently exited 0: four helper tests passed and three optional scenarios were skipped. This proves default gate reporting, not PhysCal parity.
 
-Future worker repairs remain under #181 after the slot opens. This repair changes no test source. New runner/CLI/callback/reducer/validation implementations are partial until execution and independent evidence are recorded. #183 gate-reporting changes do not complete #174–#182.
+The #181 worker has since added independent fixed-record decoding and strict row/index assertions, plus candidate Julia 1.13.1 trajectory fixtures. Explicit execution on the pre-integration snapshot used:
+
+```sh
+MVMC_RS_PHYSCAL_181=1 cargo nextest run -p mvmc-core --locked \
+  --cargo-profile test-fast --test physcal_issue181 --run-ignored only \
+  --no-fail-fast --retries 0 --success-output immediate
+```
+
+Process **70178** exited 100: one rerun scenario passed and two scenarios failed. Both failures were row-count assertions in factored-Green output (`zvo_cisajscktaltex_001.dat` and `zvo_ls_cisajscktaltex_001.dat`: actual 3, expected 1). These are structural discrepancies, not acceptable computed-floating-point differences. C output-contract investigation and an integrated-tree rerun remain required. Generated trajectory fixture presence alone is not comparison evidence; their provenance, exact discrete assertions and executed results must be reviewed separately.
+
+Gate-reporting validation separately completed: process **34718** exited 0 with four helpers passing and three scenarios skipped; process **28608** exited 100 as expected because all nine explicitly requested optional gates lacked selectors and failed before scenario execution. Integrated-tree helper process **54822** passed four tests. None establishes numerical or sampling parity.
+
+Integrated workspace process **13122**, nextest run `ad1500f3-1c19-47c7-8c14-60aa69892b6c`, ran `cargo nextest run --workspace --cargo-profile test-fast --locked --no-fail-fast --retries 0`: exit 100, 565 tests, 563 passed, two failed, 22 skipped. Both failures were `run::mode_tests` PhysCal positive tests using the historically incomplete `opttrans/namelist_layout.def` / RBM input. Focused process **64255**, run `a8386bd5-de82-4981-a4d0-cdde6714b2d6`, reproduced both parse/validation failures: incomplete Jastrow/RBM/orbital mappings. This is not floating-point divergence. Preserve those historical input rejections; repair positive tests using independent, complete C-compatible inputs. Process **20050** ran `cargo test --workspace --doc --locked` and exited 0; all four library crates reported zero documentation tests. These commands used native Linux x86_64 / Rust 1.99.0 and the dirty integrated tree; no exact dirty-source hash was captured, and subsequent edits require a final stable-snapshot rerun.
+
+The two invalid positive tests were subsequently replaced with a complete native PhysCal fixture, independently decoded known fixed values and an exact seeded next-624 check before initialization; focused R76/R43/R4 pass. Strict historical input rejection was preserved, not weakened. The indexed writer and ordered factored-row repairs are subsequent #181 drafts; LC/RF establish only their stated local CLI contracts. The historical workspace failure is not a current failure claim, but no final stable full-workspace pass supersedes it here. #183 gate-reporting changes do not complete #174–#182.
 
 ## Maintenance
 
+Parent-reported current-dirty-tree tooling diagnostics: strict all-target
+workspace clippy **23353** exited 0 in 4.67 seconds with `--locked`, profile
+`test-fast`, and `-D warnings`; formatting **44297** exited 0. The existing
+third-party dependency warning was unchanged. Neither is frozen-snapshot
+numerical or trajectory validation.
+
+Parent-reported corrected MPI snapshot `394e`: world=2, NSplitSize width=3,
+prefixes 1/2/3 crossed with inner workers 1/2/4 produced nine exact-discrete
+Julia comparisons passing. Computed numerical comparisons remain pending;
+this bounded matrix does not complete #179 or the full MPI matrix.
+
+Latest parent-reported mutable-tree diagnostic: process **55201**, run
+`d09bfd4d-fdd4-49b2-9149-14445d1002ad`, exited 100 after 392.725 seconds:
+633 executed tests, 613 passed, 20 failed, 24 skipped.
+The source HEAD was `077231b` with dirty, unfrozen production drafts; the
+test binary was built before the counter/global-initial-sync/parser fixes.
+This is explicitly **not final current-code proof**. Structural output and
+window-domain failures are not numerical noise.
+Failures comprise the 17 runner callback/history-output cases recorded above plus
+`dh2_runtime::public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_output`,
+`dh4_runtime::public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store_outputs`,
+and `runner_config::final_window_must_fit_effective_steps`. Pauli owns the
+last three test-file repairs; the runner reviewer owns the 17 callback cases.
+The actual CLI/callback Lanczos gates passed, including the 390.3-second
+exchange case. This is not a stable-snapshot acceptance run; a dirty-source
+digest and retained raw log path were not supplied to this reviewer.
+
+Parser process **55962**, run `50853e1a-0b16-408b-942c-019a7e23a962`, exited 0:
+all eight `green_two_ex` integration tests passed in the original container
+using isolated `/tmp/mvmc-issue178-target`, `--locked --cargo-profile test-fast`.
+This covers the independent extracted C-reader fixture's canonical one-row
+GEx indices and no-GEx duplicate preservation, not full C sampling or MPI.
+Parent's independent rerun **45500**, run
+`84cfe107-78a5-4119-9b81-3995ecde8459`, also exited 0 with eight passed and
+zero skipped; parent inspected the reader-only C count=1 / pair=(0,0)
+fixture. This bounded parser proof does not complete #181 runner/output parity.
+
+Independent historical-window generation is in progress through the optional
+`c_toolbox/runner_opt_windows.jl` observer, with external staging only. No
+generated window is yet accepted as an expectation. Existing RBM output
+reconstruction using Rust-observed coefficients is a consistency check, not
+independent evidence. DH history Etot2 checks instead read checked-in reference
+prefix `zvo_var.dat` files; their source is now explicit in assertion labels.
+
+Window-domain audit (complete allocation/clear-path proof confirmed by parent): C `readdef.c:684` assigns the window without clamping;
+`setmemory.c:424` allocates uninitialized storage; `vmcmain.c:511–512` stores
+at `step-(steps-window)`; `avevar.c` averages all window rows. A window larger
+than completed steps leaves leading rows unwritten. Do not describe Rust's
+previous clamp as proven C parity. Julia's high-level wrapper rejects this
+domain explicitly. All C/header references to SROptData are allocation/free,
+StoreOptData writes, full-window reads and the declaration; there is no clear
+or zero initialization. The runner restores oversized-window rejection before
+mutation/RNG/output. Supported short prefixes explicitly override the window;
+no zero padding or silent clamp is ported from undefined C storage.
+
+Independent DH24-real window generation **6833** exited 0 (12 original script
+status assertions), captured source digest
+`943601528b575c63cab6d66938f659a74398b1ec6fa315829a88a93dba2c90a5`.
+Verbatim C aggregation completed for explicitly selected windows 1/2/3/50;
+all corresponding RNG and saved-configuration checkpoint files matched the
+archived records exactly. Fixtures are in
+`tests/fixtures/runner_opt_windows/dh24_real/direct-store0`, with per-prefix
+source/input/history provenance and an aggregation README. New focused Rust
+test **20545**, run `528eec9b-b201-4170-b449-66a44fe24066`, exited 100:
+prefix-1 `zvo_var.dat` has 63 columns rather than the independent expected
+111, exposing omission of 16 DH slots (48 columns). This is a production
+schema defect at that historical checkpoint, not numerical noise. **Superseded
+for this exact DH24 case by parent run `012d3531` below**; do not list this
+63-versus-111 failure as a current unresolved failure. Parent `209651a8`
+separately supplies the latest twelve public DH/runner test passes.
+
+Active-SR collective selection tests **50459**, run
+`1ab6e3e4-9ff9-4be5-b07b-16d3d7b4bed3`, passed two tests, 188 skipped.
+They assert selected real/complex OO-then-HO call order and unchanged inactive
+buffers; this focused mock-reducer evidence is not an independent MPI rerun.
+Low-level boundary/lifecycle process **20863**, run
+`d22dbc0c-56bc-4b78-954e-f669bff5e479`, passed three tests, 189 skipped:
+active SR branch selection, supported frozen-window capture, and oversized
+window rejection before parameter/configuration mutation, output files or RNG
+consumption (exact next 624 words retained).
+Parent process **76716** exited 0 in 8.685 seconds with 12 runner_config/DH2/DH4
+tests passed and zero skipped; supplied run-ID prefix `11b426f9` (full ID not
+supplied here). This verifies the restored public guard and Pauli's three
+scoped test-file repairs, not a whole-workspace rerun. The 17 runner callback
+failures remain outstanding until independently derived expectations and
+production schema defects are resolved and rerun.
+
+### Subsequent results superseding the historical schema/public-test failures
+
+Chronological update from the parent: focused run `012d3531` exited 0 for
+`run::tests::dh24_real_direct_output_matches_independent_complete_c_windows`.
+This supersedes the **20545** first-prefix 63-versus-111-column failure for that
+exact DH24-real/direct-store0 complete-C-window case. The earlier failure stays
+as history, not a current unresolved schema failure for this passing case.
+The checked-in expectations cover prefixes/windows 1/2/3/50 and complete
+C-declared pre-SR var plus post-SR/sync C aggregation; they are not Rust-derived
+output reconstructions. The original full command, binary hash, duration and
+full run UUID were not supplied with this parent report. Candidate reproduction
+(not asserted to be the historical executed command):
+`cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked --no-fail-fast --retries 0 -E 'test(dh24_real_direct_output_matches_independent_complete_c_windows)'`.
+
+Later parent run `209651a8` exited 0: all twelve public tests across
+`runner_config`, `dh2_runtime` and `dh4_runtime` passed in 8.759 seconds after
+the complete-var/subsequence offset repair. This supersedes **76716** as the
+latest reported twelve-test public-target result; **76716** remains an earlier
+guard/test repair result, not final writer verification. Candidate reproduction:
+`cargo nextest run -p mvmc-core --test runner_config --test dh2_runtime --test dh4_runtime --cargo-profile test-fast --locked --no-fail-fast --retries 0`.
+Independent owner run `026ef308-763e-4adf-ae65-1765f0d8174f` separately passed
+16 tests including four observer invariance tests. Exact provenance and the
+distinction from thirteen-model coverage are in [#180 model ledger](issue-180-model-coverage.md#subsequent-direct-sr-and-dh-evidence).
+
+Current remaining-output status: the other seventeen runner-family ledger
+generation/comparison cells remain pending individually; the one focused DH24
+case and twelve public tests do not promote those cells or establish a final
+full-workspace numerical/MPI pass. Parent PR199/runtime integration evidence is
+recorded above with its own scope. Subsequent frozen-source dependency/writer
+validation is still required before milestone acceptance.
+
 Split results by API/model/mode/settings; retain failures, explicit skips, missing fixtures, ignored and feature-disabled paths separately. Use #174–#182 for scoped implementation/scenario work, #183 for gate reporting, #184 for inventory/provenance and #185 for umbrella coordination. Record C input-contract differences (including Julia's orbital file ordering restriction), Julia-deferred features and scoped exclusions explicitly. Never substitute self-comparison for independent expected results or tolerate RNG/trajectory drift.
+# Latest bounded timer and assertion checks
+
+### Semantic batch 1: public validation and runner guards
+
+### Semantic batch 2 and remaining-owner plan
+
+### Parser batch 1 and SFMT executable closure
+
+New parent-confirmed CG authority finding: C denominator computation has no Julia breakdown guard and updates `delta = beta * delta`; Julia-only breakdown behavior is not the authoritative numerical contract. Ramanujan owns Rust kernel/test migration; Goodall coordinates the independent C small-SPD check and potential Julia PR54 update. Earlier Julia-only CG breakdown test passes remain historical contract-difference evidence, not C numerical PASS. Exact CG original-scenario rows M0802-M0804 retain pending solver proof with this distinction. Parent latest clippy process7618 exited0 and docs process21863 exited0 with ZERO doctests after average patch; these are mutable-tree lint/build records, not numeric/CG/whole-workspace parity or a frozen revision proof.
+
+New owned `crates/pfapack/tests/julia_assertion_contracts.rs` exactly reproduces the original literal real2/Pf1, complex2/Pf1+i, nonzero odd3/Pf0, full upper1..6 real4/Pf8, explicit caller-clone overwrite behavior, and zero4/Pf0. TestSHA `c75353e1de3843e8777079a1de04b9e112a8d27e0c997abc094bb29932f78285`. Independent full4 formula is `1*6-2*5+3*4`; absolute1e-14/relative0 bounds its one small pivot-division update, while odd/zero returns are exact. No oracle or new FFI wrapper. Focused6/6 PASS,0skip,exit0 in four separately executed feature configurations: normal `f806a1cd-9006-4ba4-b3f3-5c4486d814d7`0.007s; SIMD `d00370b8-7785-4fb8-9b87-0f25dd2c9016`0.009s; BLAS `0777514a-09ef-4a1b-80cb-65b22ba11493`0.016s; combined `c2f8edd0-d37a-4cdd-93da-62cd9ed1d276`0.016s. Command `cargo nextest run -p pfapack --test julia_assertion_contracts --cargo-profile test-fast --locked --no-fail-fast --retries 0`, separately adding `--features simd-backend`, `--features blas-backend`, or both. Only M1182-1188/M1208-1209 are linked; feature-enabled execution is not proof that these tiny inputs activate a turbo SIMD job, nor random/utu2/Fortran parity. Parent review pending. Latest categories:997 syntax-only,356 semantic-settings/proof-pending,23 focused-source-reviewed,6 loops,59 focused contracts with differences,3excluded.
+
+Parent PfaPack semantic49 incorporated with exact per-group settings: literal Pfaffians, overwrite behavior, shape-only inverse/scratch, all A/M/vT C++ comparisons, fixed Fortran U/N comparisons including diagonal, singular info/pivots, and unseeded normal/turbo comparisons. Rust normal `zsktf2`, turbo `zsktf2_turbo` (`simd-backend` rank2 feature), and `blas-backend` inverse work are separate proof scopes. Existing seeded golden matrices are not the original unseeded random inputs; output inverse alone does not prove intermediate A/M/vT; Fortran wrappers are intentionally absent from the pure-Rust API. No current/historical nineteen-test pass is assigned to these rows. Current totals:997 syntax-only pending,365 semantic-settings/proof-pending,23 focused-source-reviewed,6 loop-expansion-verified,50 focused contracts with differences,3 excluded. Parser remaining383 unchanged by parent-owned domain reviews.
+
+Weight-average update supersedes the earlier helper mismatch: current `average.rs` now takes `nsrcg`, scales only OO active prefix (`size²` direct / `2*size` CG) and all HO, preserving tails. Current source and both focused tests were read via CodeGraph. Parent `b050cb83`: five matched helper/guard/energy/CG-observer tests PASS,exit0,0.136s; six weight assertion rows map to the two active-prefix tests only. No MPI call is made by this helper, so Julia size1 collective-skip behavior is not observed. CG test HO starts101 rather than original201; map division/tail contract, not literal original payload replay. Small-Wc guard remains an explicit non-C zero/small-weight difference under investigation. Parent `998a9b7d` five-model independent normalized pre-SR OO/HO test PASS,exit0,1.288s is separate model evidence, not full sampler parity. Current categories:1,046 syntax-only pending,316 semantic-settings/proof-pending,23 focused-source-reviewed,6 loop-expansion-verified,50 focused contracts with differences,3 excluded.
+
+Parent current15-contract full source review and run `6b97973e-bdb1-4393-a3d4-026675f8816b` (15PASS,0skip,exit0,0.010s) are appended only to twelve matched synthetic DH counts/offsets/packing/flag assertions and the six matched global-Lanczos/unsupported-option assertions. Parser acceptance/table shapes remain separate. Pauli's SR handoff was read completely and all four Julia hashes checked:143 newly concrete semantic rows integrated, six previously recorded weight rows not double counted. Current totals:1,046 syntax-only pending,322 semantic-settings-reviewed/proof-pending,23 focused-source-reviewed,6 loop-expansion-verified,44 focused contracts with differences,3 excluded. Specialist source review does not promote candidate test names to PASS. Parser remaining383 continues separately.
+
+New independently expected combined DH packing/flags test passed inside15/15,0skip,exit0,0.009s, run `7430c4ef-f58b-47c4-b81c-dace8e350d81`, focused `issue184_assertion_contracts` command. Test-file SHA `50c475b4dfddf3c65355d54ec72e973c245162f0d97d24b6b4166f342a305146`. It asserts synthetic NProj18 offsets2/8, complete literal parameter order, complex DH2 and real DH4 component flag slices, and unchanged other-factor flags/parameters. Neighbor row shapes are not validated by this packing test; no runnable Hamiltonian, initialization, RNG or public file-dispatch proof. Parent review/per-assertion executable linkage remains pending.
+
+Parser DH2/DH4 batch:50 additional source assertions now have concrete payload/layout/flag/API distinctions. Parser syntax-only remaining383; global syntax-only remaining1,189 after six pending real weight-average contracts were separately classified. New concrete parser gaps: the original combined NProj18 coefficient/flag packing was not covered by count-only helpers; original namelist NProj6/orbital16-component case differs from existing NProj17/42-component fixture tests; exact direct dispatch versus public loader missing/malformed cases must be matched individually. Julia's DH4 nonbinary-flag rejection is an intentional C-authority difference (C accepts raw integer2); deprecated Julia value-term shims are not the canonical C index-table API and are not to be reimplemented as C parity. SpinJastrow parse-time hard failure versus runtime rejection remains a separate boundary decision. No new source-review row receives PASS from these classifications.
+
+Parent SFMT focused run `35559b26-5f6a-4f4d-828e-3a9437e85a4a`:4/4 PASS,0skip,exit0,0.007s, same testSHA `aad1b51a3dc21751554afc6cb107ceb7f1dc3d48a98715c9d0e8e17db629104f`, full source/independent literals reviewed and accepted. It is appended to all27 exact mapped rows. Parent MPI strict108 result remains discrete TSV evidence only, not numerical proof. Pauli now owns C active-prefix confirmation and potential average implementation with Ramanujan caller coordination; six weight assertions stay pending until matched tests/reference scope exist.
+
+Parser validation36 and sparse-RBM layout7 rows have explicit original payload/settings, reviewed Rust candidate tests, and differences. None was promoted to PASS merely because the existing parser `validation` binary passed 9/9, 0 skipped, exit0, 0.008s, run `07e233bc-3579-4a5c-99cf-4d679c5b2e28`: most existing Rust bounds tests use different tuples/negative values, and Julia sparse-index fallback versus C declared widths must remain distinct. Parser syntax-only remaining:433 of476; `test_sfmt_compatibility.jl`15 awaits coordination with the parent's RNG review, while this agent continues non-RNG parser batches.
+
+Parent reviewed all27 SFMT assertions against submodule revision `1526553009f318ae78338151460fda78beadddc2`, sourceSHA `179890c4bb99c8f099960cd27189625d65af4cdcf43b9fc7ee37b039e763eaba`. New `crates/sfmt19937/tests/julia_sfmt_assertion_contracts.rs` provides four independent literal tests: five C words/real2 conversions including fifth real2, two actual reseeds with count reset, compiled u32/f64 types, and nonconsuming dump3 plus next3/count. TestSHA `aad1b51a3dc21751554afc6cb107ceb7f1dc3d48a98715c9d0e8e17db629104f`. Focused command `cargo nextest run -p sfmt19937 --test julia_sfmt_assertion_contracts --cargo-profile test-fast --locked --no-fail-fast --retries 0`: 4/4 PASS,0skip,exit0,0.006s,run `36a3518e-b80c-4349-aac0-76b3644f451f`. Full crate with the same profile/flags:28/28 PASS,0skip,exit0,0.030s,run `a82b27d7-42bf-4638-8c6f-dc309199276b`. Targeted clippy with `-D warnings` exited0. Rust's owned-state public methods intentionally replace Julia's global wrapper; no fresh reference-runtime execution or global-wrapper API implementation is claimed.
+
+Current total:1,245 syntax-only pending,135 semantic-settings-reviewed/proof-pending,23 focused-source-reviewed,6 loop-expansion-verified,32 focused contracts with declared differences,3 InterAll-excluded. This supersedes the earlier counts, not historical run results. Banach ACKed read-only threading96; Wegener received parallel74+QPsplit9 and MPI87 source-review scope. All ledger writes remain with this owner.
+
+Thirty-two additional public PhysCal loader/positive/Lanczos assertion rows now have explicit semantic settings and proof gaps, without new PASS promotion. Syntax-only pending decreased from 1,347 to 1,315; semantic-settings-reviewed/proof-pending increased from 60 to 92. Loader assertions require actual missing/malformed fixed-file failure and absence of output directories, not a later invalid-mode guard. Original positive six-model fixtures and the three-model Lanczos suite are not interchangeable with newer two-sample CLI fixtures. Library status/parameter count, helper lengths, exact filenames, and per-file tolerances must match individually. The original third Hubbard factored-Lanczos case remains unmatched by the two named CLI Lanczos family tests.
+
+Remaining 1,315 syntax-only rows are partitioned below by source family. These are proposed review assignments requiring parent acknowledgement, not delegated ownership or execution proof. This agent retains all #184 TSV writes; specialists should return source assertion/settings/expected contract/exact Rust test/revision/command/result/gap evidence without editing the ledger.
+
+| Next batch / proposed reviewer | Remaining rows |
+| --- | ---: |
+| Parser/layout/input initialization — parent assign specialist | 476 |
+| Threading/collectives — Banach + Wegener | 179 |
+| Runner/sampling/types — Ramanujan + #184 owner | 169 |
+| SR/sync/weight averages — Pauli | 149 |
+| IO/Green/fixed-parameter reader — Goodall | 134 |
+| Native MPI scenarios — Wegener | 87 |
+| Reference integrations — Goodall + numerical model owners | 45 |
+| PfaPack — parent assign specialist | 49 |
+| SFMT — parent assign specialist | 27 |
+
+Priority remains public entrypoint/argument/callback/output assertions before numerical-kernel breadth. S200/S205/S214 need Ramanujan's actual runner linkage, Goodall's output-stage ownership and Pauli's SR boundary review before proof assignment. S191's exact Julia serial-context input validator assertions were relayed to Wegener: input support and missing serial MPI communicator are distinct contracts. S192's historical Julia grouped-CG guard is not labelled C-invalid; the owner's C BASE/store dependency probe requires independent review. Parent #182 runs `a1df4260` (two tests) and `bf71c505` (one kernel test) remain owner-reported evidence only until their tested conditions match individual rows.
+
+Threading specialist handoff received from Banach (agent `01a10047-8121-7d62-9117-52802ae9ec00`): the fourteen Julia callsites are classified in [#182 per-callsite table](issue-182-threaded-coverage.md#per-callsite-classification). Use this as implementation classification only until each assertion/setting has matching executed sidecar evidence. Prefix copies preserve tails; normal real/complex QP jobs preserve per-entry arithmetic; normal-real Transfer jobs have serial ordered final sums and serial diagnostic timing; complex/FSZ Transfer is intentionally serial. Stored-SR paths distinguish `NStoreO != 0 OR NSRCG != 0`, CG means/diagonals, and complex full Gram; real full Gram BLAS SYRK is not Julia `@threads` parity. Worker thresholds concern actual entries, not capacity. C-real FSZ SR adaptation is not unmodified Julia numerical parity; a 36-entry ABI alone is not numerical proof. InterAll remains excluded, while non-InterAll Hubbard mode 2 remains in scope. No threading assertion receives PASS from this handoff alone.
+
+This supersedes the earlier 1,407-pending count below. All 74 assertion occurrences in `test_unit_unsupported_inputs.jl` now have semantic classification: 60 newly reviewed settings/support/gap rows, six existing verified loop-expansion rows, five existing focused contracts with declared differences, and three excluded InterAll-block rows. Repository-wide categories are now 1,347 syntax-only unreviewed, 60 semantic-settings-reviewed but executable-proof pending, 23 earlier focused-source-reviewed, six loop-expansion-verified, five focused contracts with differences, and three excluded. Total remains 1,444; source review is not execution proof.
+
+The new batch resolves inherited settings and branch selection for all 60 rows, including 13 loop-bearing rows: the three FSZ standard-projection pairs `(2,1)/(1,2)/(1,-2)`, invalid splits `0/-1`, PhysCal modes `1/2`, and ParaOpt modes `1/2`. Those are expanded settings, not newly passing loop tests. Together with the nine previously verified loop-bearing rows, 22 of 103 have semantic loop review and 81 remain unreviewed. Thirty assertion rows retain passing evidence; no new source-review row was promoted to PASS.
+
+Priority actions after source review:
+
+- #184 owned independent tests: separate global versus PhysCal acceptance for Lanczos modes 1/2; ParaOpt mode-1/2 rejection; NSplitSize 0/-1 negative-diagnostic contract; direct/CG global acceptance. These are validator contracts, not runner execution.
+- Parent-coordinated runner specialist: actual entrypoint cases S200/S205/S214 must observe the appropriate ParaOpt/PhysCal public core, not substitute a validation helper. Existing `runtime_contract::rejects_modpara_solver_controls_instead_of_discarding_them` covers only indicated branches/settings.
+- Parent-coordinated grouped/MPI specialist (Wegener): S191 Julia `serial_context()` input validation versus Rust reducer communicator requirement; distinguish supported input shape from executable collective support. No request to modify MPI production or existing owner tests is implied here.
+- Parent production decision required, not silently repaired: S192 lacks `NSRCG = 1` text; S196 and grouped-Lanczos S197 lack required `PhysCal` text; S198 omits interpolated `NSPGaussLeg`/`NMPTrans` values; S203 uses a different standard-SR-CG diagnostic. Decide explicit architecture/diagnostic difference versus new owned regression and production-owner change.
+- Next source batches: PhysCal runner callback/error/output assertions, ParaOpt runner argument/lifecycle assertions, then parser declared-layout/input overlays and collective APIs. Use #175/#181/#180 owner proofs only after checking each source assertion's actual settings and observations; numeric and MPI scenarios require their specialists' independent proof, not generic crate commands.
+
+Current semantic assertion-ledger status (not a completeness claim): 34 non-excluded rows have explicit settings and focused source/contract review; 30 have linked passing Rust evidence (some are declared API/diagnostic differences, not literal Julia assertion equivalence), and 4 remain source-reviewed without an executed equivalent. Three assertions in the mixed-source InterAll block are explicitly excluded. The other 1,407 assertions remain semantically unreviewed, not supported/verified by syntax inventory. Of 103 assertions with ancestor-loop syntax, 9 now have explicit reviewed expansions: one split-loop assertion over all eight length/size cases and ranks, two FSZ assertions over modes 1/2, three CG-option assertions over the two independent settings, and three global Lanczos assertions over valid 0/1/2 or invalid -1/3. The other 94 loop-bearing assertions remain pending. This is assertion-row accounting, not the number of expanded runtime cases or completed public APIs.
+
+Named next gaps: `test_unit_parallel.jl:51/52` scalar real/complex sum contracts need exact serial reducer-buffer replacement tests; line 53 integer max has no matching standalone public API and cannot be proved by summed failure status. `test_unit_unsupported_inputs.jl:294-297` supported sz-conserved Lanczos mode 1/2 assertions need separate global-versus-PhysCal validation mappings. Lines 301-307 require mode-1/2 ParaOpt rejection tests (validator-only evidence must not substitute for entry-point assertions at lines 349-358). S212 also omits the original GreenTwoEx payload: preserve that explicit gap until the payload is reproduced. These are bounded actions, not generic runtime candidate commands.
+
+Parent independently passed the reviewed 12-test checkpoint: run `85586b19-d788-417c-9021-dcaf20d29435`, exit 0, 12/12 passed, 0 skipped, 0.008s. A299/A300 retain historical 10-test proof and append this reviewed checkpoint. New bounded expansions subsequently passed 14/14, 0 skipped, exit 0, 0.007s, run `1b3c346f-ace5-4ec9-b7ba-416021f5d4d7`, using the focused assertion-contract command below. Test-source SHA256: `34cbdf521b1017369ed47f2761dc99175a687860f67f39a8918c4491b4a989a1`. Additions cover global Lanczos valid modes 0/1/2, invalid modes -1/3, and each original CG option-loop branch independently. These are synthetic validator contracts, not solver execution or RNG proof; parent review of the newest two tests and detailed assertion-row linkage remain pending.
+
+Core timer checks passed 5/5, 0 skipped, exit 0, 0.012s: run `ceaa4e36-480f-40cb-ac3d-d7840ccd76ba5`, command `cargo nextest run -p mvmc-core --test c_timer --cargo-profile test-fast --locked --no-fail-fast --retries 0`. S445 maps only those five deterministic contracts and the parent's named CLI timer environment/numerical-output branch. Parent CLI runtime suite passed 16/16, 0 skipped, exit 0, 3.849s, run `b8f10525-8faf-4cc6-baac-0a2ba4d2dbf4`; the exact parent suite command was not supplied. This does not verify every runtime source cell, physical elapsed times, MPI root reporting or CLI RNG state.
+
+The independent assertion-contract binary now passed 12/12, 0 skipped, exit 0, 0.009s: run `f76e7df8-6863-4106-8d39-daae0856ee74`, command `cargo nextest run -p mvmc-core --test issue184_assertion_contracts --cargo-profile test-fast --locked --no-fail-fast --retries 0`. Dirty test-source SHA256: `e8a6aec2b0a5d3883cf4338df801e3d2cf40e16f7b2b02b02b3b02dec13a856d`. The two newest tests expand FSZ/general Lanczos validation over modes 1 and 2 and check spin-changing Transfer rejection wording independently of mode. These are synthetic validator contracts, not numerical C runs or RNG evidence; Rust and Julia diagnostic spelling differs intentionally. Detailed assertion-row linkage remains pending and this does not establish full #184 coverage.
+
+Latest parent review: `crates/pfapack/tests/julia_assertion_contracts.rs` (SHA256 `c75353e1de3843e8777079a1de04b9e112a8d27e0c997abc094bb29932f78285`) has six independently reviewed analytic tests. All four configurations terminated with exit 0, 6 passed and 0 skipped: normal `2fd0ad19` (0.007s), simd-only `23452b3d` (0.007s), blas-only `c46eb6ab` (0.015s), combined `c4071bf4-8c74-4787-8e53-cd966153a89d` (0.016s). Parent supplied abbreviated identifiers for the first three runs. These supplement the owner runs, not replace their captured commands. Evidence applies only to M1182–M1188 and M1208–M1209: literal Pfaffians 1, 1+i, 8, nonzero odd input, zero input, and explicit caller-clone overwrite architecture. The 1e-14 absolute tolerance addresses analytic pivot arithmetic involving 1/3; it changes no RNG contract. Tiny cases compile under each feature combination but do not prove optimized-kernel activation or all 49 Julia assertions.
+
+Parent reports Goodall's public-rejection binary run `000db7d0-a92d-48a7-94d0-7c79dc8e73d0`: exit 0, 6 passed, 0.024s. Five cases cover actual core S200/S205/S214 entry-point rejection before output creation, retaining state, draw count and next 624 RNG words. The preparation control covers a valid seed and zero initializer calls on invalid input; it is not a CLI argument test. Exact source/condition linkage remains required before ledger promotion. Actual malformed CLI output-absence evidence is pending Goodall; this run must not blanket-verify the nine loader cases.
+
+Numerical authority update: the confirmed CG difference is C's unguarded denominator and `delta = beta * delta` recurrence. Prior Julia-only breakdown tests are historical contract differences, not C numerical PASS. Ramanujan owns the Rust kernel/test migration; independent C numerical fixtures remain pending the responsible owner. Goodall coordinates a demonstrated Julia defect with upstream PR54. Parent also reports Clippy handle 7618 exit 0 and documentation-test handle 21863 exit 0 with zero doctests after the average patch. Those mutable-tree checks establish lint/build results only, not frozen numerical or CG fixture validation.
+
+Superseding bounded CG checkpoint: parent reports corrected CCG three fixed cases and 41 iteration limits, 16 PASS (`22259da1`); owner handle39879 reports the same arithmetic after lint fixes, 16 PASS plus Clippy PASS. Exact complete commands/revision identifiers remain to be supplied before broad linkage. The old Julia serial34 run ended 20 PASS / 14 CG numerical FAIL, historical algorithm mismatch with no accepted tolerance adjustment. New bounded MPI six exact-sampler cases PASS do not establish CG numerical parity or whole495 coverage. Goodall's requested PR54 C-kernel patch is not yet published proof. Independent C fixture matching remains a distinct obligation.
+
+Latest parent direct checkpoint supersedes the abbreviated CG result above for the dimension-checked fixture tests: run `120b7b72-b569-4d8a-9582-0cdcd9b26f1b`, 16 PASS, 199 filtered, 0.038s, current-tree kernel identifier `7df70d`. This is the focused CG fixture suite, not the filtered tests or full workspace; parent did not supply the exact command or terminal exit code in this relay. Parent inspected all six actual MPI TBh6 TSV cases: launch and sampler columns are zero, 11,277 source checks all OK, and three binary/checker checks OK. These establish the stated discrete/source/binary checks only, not numerical CG agreement. Strong-observer run `8eaaae4c`: 1 PASS, 0.139s; full command/revision and complete run identifier were not supplied, so no unrelated assertion is promoted. Parent fmt/diff checks exited 0. Julia PR54 CG draft is under parent review and remains unpublished; none of these bounded results establishes full-workspace acceptance.
+
+Fresh parent current-source checkpoint `7f7ea205`: 22 PASS, 0.695s, using the current `7df70d` kernel. Selected coverage is exactly the 15 assertion-contract tests, six public-rejection tests and one `threaded` QP `qp_threshold_workers_scratch...` case (full test name and exact command not supplied). Independent runtime #182 cases are opt-in `#[ignore]` tests, not a filter bug. This result therefore provides no new full OO/HO, runner/PhysCal numerical, runtime-suite or full-workspace proof. Parent provenance/fork review and Goodall's actual status remain pending; unpublished Julia draft evidence is unchanged.
+
+Explicit ignored-gate correction: parent run `c2171df0` selected explicit names but executed zero tests and exited 4; it is not PASS. Parent subsequently ran exactly two independent #182 cases with `MVMC_RS_THREADED_182=1` and `--run-ignored only`; the terminal result is recorded below. These optional ignored cases must be explicitly executed as milestone gates and are not silently included in mandatory workspace-test coverage. Pauli's C tiny-Wc audit confirms the current reset/increment-only production path gives valid positive weights >=1, with no implemented reweighting. Thus the retained small-weight guard is not a current valid-input bug; synthetic zero/fractional inputs still do not establish C numerical parity.
+
+Current gated #182 result supersedes earlier full-#182 PASS claims for kernel `7df70d`: parent run `6b0c6f94`, terminal exit100, two tests, 1 PASS / 1 FAIL, 1.150s. PhysCal workers saved RNG and ordered outputs PASS. The independent SR-prefix test FAILS at general-RBM CG parameter0 with error `1.60882e-6`; all five model normalized full OO/HO pre-SR checks were observed before this failure. Those successful internal assertions are partial evidence only, not a passing SR-prefix test or completed #182 gate. Banach/Ramanujan have been notified; a C-compatible Julia reference consumer is needed. No tolerance increase, full-workspace acceptance, or current-kernel full-#182 numerical PASS follows from this result.
+
+Parent Julia CG draft evidence: handle9116 reports 8 + 14,397 PASS. Stronger handle3422 terminated with exit0 under Julia1.13.1, ILP64 BLAS, one BLAS thread: 171 existing focused assertions plus 14,405 new assertions = 14,576 PASS across five focused Julia test files. Parent checked six source files (including production identifier `b11d75` and test identifier `2cf459`); before/after SHA values were unchanged. Full SHA values and exact reproduction command were not supplied in this relay, so abbreviated identifiers are retained as such. Parent separately reviewed C small-SPD Main extraction: source lines258–351 BYTEEXACT, diff0, and three C fixture SHA checks against actual files. This is bounded Julia/C draft validation, not full Julia, Rust workspace, MPI, or a successful rerun of the failed #182 SR-prefix gate. Goodall is finalizing guards/provenance before PR54 publication; current public revision `973184` does not yet contain the CG patch.
+
+Next parser batch: all 30 assertions in `test_green_two_ex_parser.jl` now have reviewed settings and explicit gaps, without executable promotion. Valid row reordering is a defined-input contract; current Rust candidate uses different literal row/header values. Direct constructor/default fields, token2 malformed headers, and public dispatch/missing-file boundaries remain unmatched. Malformed rejection guards are API safety behavior, not C unchecked-fscanf numerical parity. Public Julia throws versus Rust loader `input_errors` remains an explicit architectural difference. Current ledger: 967 syntax-only unreviewed, 383 semantic-settings/proof-pending, 23 focused-source-reviewed, 6 loop-expansion-verified, 62 focused contracts with declared differences, 3 excluded (total1444). Counts are not completed coverage.

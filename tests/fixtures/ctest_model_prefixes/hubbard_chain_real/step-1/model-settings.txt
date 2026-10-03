@@ -1,0 +1,16 @@
+model=hubbard_chain_real
+mode=real
+steps=1 window=1
+metadata_added_after_generation_from_hashed_canonical_inputs=true
+Nsite=6
+Ncond=6
+2Sz=0
+RndSeed=1
+NStore=1
+NSRCG=0
+initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
+initial_source_sha256=7701f066f459b1b0c26ffc9f7437f10e9fa72637efa38789815bd710cbfeaf7e  extern/Julia-mVMC/test/integration/reference/hubbard_chain_real/inputs/initial.def
+In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256
+canonical_NSROptItrStep=500
+canonical_NSROptItrSmp=50
+effective_NSROptItrStep=1 effective_NSROptItrSmp=1 override=both_no_clamp

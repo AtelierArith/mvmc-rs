@@ -73,6 +73,7 @@ pub const FALLBACK_SEED: u32 = 11_272;
 #[derive(Debug, Clone)]
 pub struct Sfmt19937Rng {
     inner: state::SfmtState,
+    words_consumed: u128,
 }
 
 impl Sfmt19937Rng {
@@ -84,7 +85,10 @@ impl Sfmt19937Rng {
     pub fn new(seed: u32) -> Self {
         let mut s = state::SfmtState::default();
         init::init_gen_rand(&mut s, seed);
-        Self { inner: s }
+        Self {
+            inner: s,
+            words_consumed: 0,
+        }
     }
 
     /// Construct + seed from a `u32` key array (`init_by_array`).
@@ -96,12 +100,23 @@ impl Sfmt19937Rng {
     pub fn from_init_key(key: &[u32]) -> Self {
         let mut s = state::SfmtState::default();
         init::init_by_array(&mut s, key);
-        Self { inner: s }
+        Self {
+            inner: s,
+            words_consumed: 0,
+        }
     }
 
     /// Re-seed in place (`init_gen_rand`).
     pub fn seed(&mut self, seed: u32) {
         init::init_gen_rand(&mut self.inner, seed);
+        self.words_consumed = 0;
+    }
+
+    /// Number of 32-bit words consumed since initialization or reseeding.
+    /// Cloned generators have independent counts; non-consuming dumps do not
+    /// advance this generator's count or numerical state.
+    pub fn words_consumed(&self) -> u128 {
+        self.words_consumed
     }
 
     /// `gen_rand32` from `SFMT.c`.
@@ -116,6 +131,7 @@ impl Sfmt19937Rng {
         }
         let r = self.inner.word(self.inner.idx);
         self.inner.idx += 1;
+        self.words_consumed += 1;
         r
     }
 
@@ -142,6 +158,7 @@ impl Sfmt19937Rng {
         let lo = self.inner.word(self.inner.idx) as u64;
         let hi = self.inner.word(self.inner.idx + 1) as u64;
         self.inner.idx += 2;
+        self.words_consumed += 2;
         lo | (hi << 32)
     }
 
@@ -257,6 +274,7 @@ impl Sfmt19937Rng {
         let mut blocks = vec![state::W128::default(); size / 4];
         state::gen_rand_array(&mut self.inner, &mut blocks);
         self.inner.idx = N32;
+        self.words_consumed += size as u128;
 
         for (i, blk) in blocks.iter().enumerate() {
             out[4 * i] = blk.0[0];
@@ -286,6 +304,7 @@ impl Sfmt19937Rng {
         let mut blocks = vec![state::W128::default(); size / 2];
         state::gen_rand_array(&mut self.inner, &mut blocks);
         self.inner.idx = N32;
+        self.words_consumed += 2 * size as u128;
 
         for (i, blk) in blocks.iter().enumerate() {
             let lo0 = blk.0[0] as u64;

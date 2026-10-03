@@ -420,23 +420,38 @@ fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use()
 }
 
 #[test]
-fn grouped_runtime_matrix_rejects_physcal_cg_and_lanczos_before_rng_use() {
+fn grouped_runtime_matrix_accepts_normal_physcal_and_rejects_unsupported_scopes() {
     let mut data = ExpertModeData::new();
     data.modpara.nsplit_size = 2;
     data.modpara.nmp_trans = 1;
 
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(
-        error.contains("NSplitSize") && error.contains("PhysCal"),
-        "{error}"
-    );
+    // Julia scopes grouped PhysCal to sz-conserved normal Green paths.
+    // SR-CG is an optimization-only restriction, unused by PhysCal.
+    let before = data.clone();
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
 
     data.modpara.nsrcg = 1;
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
     let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
     assert!(error.contains("SR-CG"), "{error}");
 
     data.modpara.nsrcg = 0;
+    data.i_flg_orbital_general = 1;
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(error.contains("FSZ / general-orbital PhysCal"), "{error}");
+    data.i_flg_orbital_general = 0;
+    data.n_qp_opt_trans = 2;
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(error.contains("NQPOptTrans > 1"), "{error}");
+    data.n_qp_opt_trans = before.n_qp_opt_trans;
+
+    data.modpara.nsrcg = 0;
     data.modpara.lanczos_mode = 1;
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(
+        error.contains("NSplitSize > 1 with NLanczosMode > 0"),
+        "{error}"
+    );
     let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
     assert!(
         error.contains("Lanczos") || error.contains("NLanczosMode"),

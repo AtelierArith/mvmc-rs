@@ -27,9 +27,10 @@ pub struct MpiContext {
 /// MPI communicator for one Julia-compatible `NSplitSize` group.
 ///
 /// The parent [`MpiContext`] must outlive this value because MPI finalization
-/// is owned by the parent `Universe`. Reductions combine the group communicator
-/// (`comm1`) and the cross-group communicator (`comm2`).
+/// is owned by the parent `Universe`. Accumulators use `comm0`, sampling QP
+/// work uses `comm1`, and statistical counters use `comm2`.
 pub struct MpiGroupContext {
+    global_communicator: ::mpi::topology::SimpleCommunicator,
     communicator: ::mpi::topology::SimpleCommunicator,
     /// Cross-group communicator (`comm2` in Julia/C), connecting equal local
     /// ranks from every QP/sample group.
@@ -61,8 +62,15 @@ impl std::fmt::Debug for MpiContext {
 impl MpiContext {
     /// Initialize MPI and retain ownership of its finalization token.
     pub fn initialize() -> Result<Self, String> {
-        let universe = ::mpi::initialize()
-            .ok_or_else(|| "MPI was already initialized or could not be initialized".to_string())?;
+        // Inner Rayon workers perform kernels only. Collective call sites
+        // stay on the initializing/main thread, requiring MPI_THREAD_FUNNELED.
+        let (universe, provided) = ::mpi::initialize_with_threading(
+            ::mpi::environment::Threading::Funneled,
+        )
+        .ok_or_else(|| "MPI was already initialized or could not be initialized".to_string())?;
+        if provided == ::mpi::environment::Threading::Single {
+            return Err("MPI runtime did not provide MPI_THREAD_FUNNELED".into());
+        }
         let world = universe.world();
         Ok(Self { universe, world })
     }
@@ -113,7 +121,7 @@ impl MpiContext {
         &self.universe
     }
 
-    /// Split `MPI_COMM_WORLD` into `nsplit` contiguous groups.
+    /// Split `MPI_COMM_WORLD` into contiguous groups of width `nsplit`.
     pub fn split_groups(&self, nsplit: usize) -> Result<MpiGroupContext, String> {
         let assignment = assign_group(
             LaunchContext {
@@ -138,10 +146,8 @@ impl MpiContext {
             .world
             .split_by_color_with_key(color, key)
             .ok_or_else(|| "MPI communicator split returned MPI_UNDEFINED".to_string())?;
-        // Julia's comm2 groups ranks by their local comm1 rank.  The first
-        // reduction over comm1 combines sample partitions within each group;
-        // the second reduction over comm2 combines the resulting group totals
-        // exactly once across groups.
+        // C/Julia comm2 connects equal comm1-local ranks across chains. It is
+        // for six statistical counters, not a second accumulator reduction.
         let cross_color =
             Color::with_value(i32::try_from(assignment.local_rank).map_err(|_| {
                 format!(
@@ -162,6 +168,7 @@ impl MpiContext {
                 "MPI cross-group communicator split returned MPI_UNDEFINED".to_string()
             })?;
         Ok(MpiGroupContext {
+            global_communicator: self.world.duplicate(),
             communicator,
             cross_communicator,
             assignment,
@@ -170,6 +177,14 @@ impl MpiContext {
 }
 
 impl Reducer for MpiContext {
+    fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
+        Self::broadcast_f64(self, root, values)
+    }
+
+    fn barrier(&self) {
+        self.world.barrier();
+    }
+
     fn broadcast_i64(&self, root: usize, values: &mut [i64]) -> Result<(), String> {
         Self::broadcast_i64(self, root, values)
     }
@@ -252,28 +267,88 @@ impl MpiGroupContext {
 }
 
 impl Reducer for MpiGroupContext {
+    fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
+        if root >= self.global_communicator.size() as usize {
+            return Err("MPI broadcast root is outside the global world".into());
+        }
+        self.global_communicator
+            .process_at_rank(i32::try_from(root).map_err(|_| "MPI root rank is too large")?)
+            .broadcast_into(values);
+        Ok(())
+    }
+
+    fn barrier(&self) {
+        self.global_communicator.barrier();
+    }
+
+    fn sampling_any_failure(&self, failed: bool) -> bool {
+        use ::mpi::collective::SystemOperation;
+        let flag = i32::from(failed);
+        let mut result = 0_i32;
+        self.communicator
+            .all_reduce_into(&flag, &mut result, SystemOperation::max());
+        result != 0
+    }
+
+    fn sampling_qp_range(&self, length: usize) -> std::ops::Range<usize> {
+        self.assignment.local_range(length)
+    }
+
+    fn sampling_sum_f64(&self, values: &mut [f64]) {
+        use ::mpi::collective::SystemOperation;
+        for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
+            let mut reduced = vec![0.0; chunk.len()];
+            self.communicator
+                .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
+        }
+    }
+
+    fn sampling_sum_c64(&self, values: &mut [Complex64]) {
+        let mut real: Vec<_> = values.iter().map(|x| x.re).collect();
+        let mut imag: Vec<_> = values.iter().map(|x| x.im).collect();
+        self.sampling_sum_f64(&mut real);
+        self.sampling_sum_f64(&mut imag);
+        for (value, (re, im)) in values.iter_mut().zip(real.into_iter().zip(imag)) {
+            *value = Complex64::new(re, im);
+        }
+    }
+
+    fn reduce_counters(&self, counters: &mut [i64]) {
+        use ::mpi::collective::SystemOperation;
+        let n = counters.len().min(6);
+        if n == 0 {
+            return;
+        }
+        let mut reduced = vec![0_i64; n];
+        self.cross_communicator.all_reduce_into(
+            &counters[..n],
+            &mut reduced,
+            SystemOperation::sum(),
+        );
+        if self.cross_communicator.rank() == 0 {
+            counters[..n].copy_from_slice(&reduced);
+        }
+    }
+
     fn broadcast_i64(&self, root: usize, values: &mut [i64]) -> Result<(), String> {
         let root =
             i32::try_from(root).map_err(|_| "MPI seed root rank is too large".to_string())?;
-        // Seed payload originates at global rank zero. First share it with
-        // group zero's local ranks, then with the matching ranks of all groups.
-        self.communicator
-            .process_at_rank(root)
-            .broadcast_into(values);
-        self.cross_communicator
+        // A direct comm0 broadcast also reaches shorter final comm1 groups.
+        self.global_communicator
             .process_at_rank(root)
             .broadcast_into(values);
         Ok(())
     }
 
     fn broadcast_c64(&self, root: usize, values: &mut [Complex64]) {
-        let root = i32::try_from(root).expect("MPI group root rank is too large");
+        let root = i32::try_from(root).expect("MPI global root rank is too large");
         let mut real: Vec<_> = values.iter().map(|value| value.re).collect();
         let mut imag: Vec<_> = values.iter().map(|value| value.im).collect();
-        self.communicator
+        self.global_communicator
             .process_at_rank(root)
             .broadcast_into(&mut real);
-        self.communicator
+        self.global_communicator
             .process_at_rank(root)
             .broadcast_into(&mut imag);
         for (value, (real, imag)) in values.iter_mut().zip(real.into_iter().zip(imag)) {
@@ -285,10 +360,9 @@ impl Reducer for MpiGroupContext {
         use ::mpi::collective::SystemOperation;
         for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
             let mut reduced = vec![0.0; chunk.len()];
-            self.communicator
+            self.global_communicator
                 .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
-            self.cross_communicator
-                .all_reduce_into(&reduced, chunk, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
         }
     }
 
@@ -299,25 +373,19 @@ impl Reducer for MpiGroupContext {
             let imag: Vec<_> = chunk.iter().map(|value| value.im).collect();
             let mut reduced_real = vec![0.0; chunk.len()];
             let mut reduced_imag = vec![0.0; chunk.len()];
-            self.communicator
-                .all_reduce_into(&real, &mut reduced_real, SystemOperation::sum());
-            self.communicator
-                .all_reduce_into(&imag, &mut reduced_imag, SystemOperation::sum());
-            let mut global_real = vec![0.0; chunk.len()];
-            let mut global_imag = vec![0.0; chunk.len()];
-            self.cross_communicator.all_reduce_into(
-                &reduced_real,
-                &mut global_real,
+            self.global_communicator.all_reduce_into(
+                &real,
+                &mut reduced_real,
                 SystemOperation::sum(),
             );
-            self.cross_communicator.all_reduce_into(
-                &reduced_imag,
-                &mut global_imag,
+            self.global_communicator.all_reduce_into(
+                &imag,
+                &mut reduced_imag,
                 SystemOperation::sum(),
             );
             for (value, (real, imag)) in chunk
                 .iter_mut()
-                .zip(global_real.into_iter().zip(global_imag))
+                .zip(reduced_real.into_iter().zip(reduced_imag))
             {
                 *value = Complex64::new(real, imag);
             }
@@ -328,10 +396,9 @@ impl Reducer for MpiGroupContext {
         use ::mpi::collective::SystemOperation;
         for chunk in values.chunks_mut(MPI_REDUCTION_CHUNK_LEN) {
             let mut reduced = vec![0_i64; chunk.len()];
-            self.communicator
+            self.global_communicator
                 .all_reduce_into(&*chunk, &mut reduced, SystemOperation::sum());
-            self.cross_communicator
-                .all_reduce_into(&reduced, chunk, SystemOperation::sum());
+            chunk.copy_from_slice(&reduced);
         }
     }
 
@@ -343,9 +410,7 @@ impl Reducer for MpiGroupContext {
     }
 
     fn reduction_size(&self) -> usize {
-        self.world_size()
-            * usize::try_from(self.cross_communicator.size())
-                .expect("MPI cross-group size is positive")
+        usize::try_from(self.global_communicator.size()).expect("MPI world size is positive")
     }
 
     fn rank(&self) -> usize {

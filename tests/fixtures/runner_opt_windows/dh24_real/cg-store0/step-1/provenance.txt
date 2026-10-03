@@ -1,0 +1,17 @@
+Independent Julia observer; C declared slots and pre-SR Etot/Etot2, post-SR synchronized Para; not full C execution
+Julia=1.13.1 BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
+options=--case=dh24_real --steps=1,2,3,50 --write prefix=1 SR_failed=false
+modpara=MVMCExpertModeParsers.ModParaParameters(6, 3, 0, 6, 0, 0, 1, 1, 0, 10, 1, 100, 1.0e-8, 0.01, 0.003, 1.0e-10, 0, 1, 0, 0, 0, 1, 1, 8, 0, 1, 0, 1, 1, "zvo", "zqp", 1, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 12)
+/tmp/mvmc-history-source.TUyDyl/scripts/check_sr_cg_runner_parity.jl sha256=41564f23b5f2f2d18b2ba85d069c66118e0ea7f705ccbe253bb3aa0944c41eef
+/tmp/mvmc-history-source.TUyDyl/c_toolbox/runner_opt_windows.jl sha256=8031b6f80695b66d14f431807a9f1b60af46bf261e0c9ccda801e40792b843ea
+/tmp/mvmc-history-source.TUyDyl/extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_para_opt.jl sha256=a17e7cab2e3ce7e1e1046d621aead2743acc0a84a080df772c9a396b6260a316
+/tmp/mvmc-runner-independent-dh24_real-cg/step-1/c-window-input.txt sha256=f45790711a8052f391ac9d69bc3831d010490865dfc5dec6a17cfa4fa639b740
+namelist=/tmp/mvmc-history-source.TUyDyl/tests/fixtures/dh4/production_dh24_real/namelist.def
+/tmp/mvmc-history-source.TUyDyl/scripts/../tests/fixtures/dh4/production_dh24_real/dh2.def sha256=2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273
+/tmp/mvmc-history-source.TUyDyl/scripts/../tests/fixtures/dh4/production_dh24_real/dh4.def sha256=4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255
+/tmp/mvmc-history-source.TUyDyl/scripts/../tests/fixtures/dh4/production_dh24_real/indh2.def sha256=a3a827426ef69c7ed50927084c8115aa5cba2f96eb9e27af20f5117312d969a4
+/tmp/mvmc-history-source.TUyDyl/scripts/../tests/fixtures/dh4/production_dh24_real/indh4.def sha256=0b24777d1ae1581863dd0dee3556cbffa537d9fcb75601a866407f73d119ff97
+/tmp/mvmc-history-source.TUyDyl/scripts/../tests/fixtures/dh4/production_dh24_real/namelist.def sha256=37b99d65824f5fedcda5f0532e308e763eb359b895f9a2492d67a23536fa4577
+JuliaProject sha256=7b71e96b08818d5b949a2f750186b86cf27d7ecb47f65580779fedd18874a8e4
+JuliaManifest sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+C kernel shim sha256=44521dbe2243ebd2b2f1f23a0d98bb74e397e1cdb07fd5d69ec3ddabde13438a

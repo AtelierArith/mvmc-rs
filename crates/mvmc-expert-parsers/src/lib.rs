@@ -76,7 +76,7 @@ pub enum ParseError {
 /// Parse all Expert Mode files referenced by `namelist_path` in C's fixed
 /// keyword order, retaining the original namelist as metadata. Missing child
 /// files currently populate `input_errors`, except optional parameter overlays.
-/// DH2/DH4 read/format failures return an error immediately.
+/// DH2/DH4 and Green-function read/format/bounds failures return an error immediately.
 pub fn parse_expert_mode_files<P: AsRef<Path>>(
     namelist_path: P,
 ) -> Result<ExpertModeData, ParseError> {
@@ -135,7 +135,13 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         if !full_path.is_file() {
             if matches!(
                 file_type.as_str(),
-                "DH2" | "DoublonHolon2Site" | "DH4" | "DoublonHolon4Site"
+                "DH2"
+                    | "DoublonHolon2Site"
+                    | "DH4"
+                    | "DoublonHolon4Site"
+                    | "OneBodyG"
+                    | "TwoBodyG"
+                    | "TwoBodyGEx"
             ) {
                 return Err(ParseError::InvalidInput {
                     message: format!(
@@ -166,7 +172,13 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         ) {
             if matches!(
                 file_type.as_str(),
-                "DH2" | "DoublonHolon2Site" | "DH4" | "DoublonHolon4Site"
+                "DH2"
+                    | "DoublonHolon2Site"
+                    | "DH4"
+                    | "DoublonHolon4Site"
+                    | "OneBodyG"
+                    | "TwoBodyG"
+                    | "TwoBodyGEx"
             ) {
                 return Err(ParseError::InvalidInput {
                     message: format!(
@@ -309,6 +321,75 @@ fn definition_order(kind: &str) -> usize {
         .iter()
         .position(|&keyword| keyword == canonical)
         .unwrap_or(usize::MAX)
+}
+
+// C readdef.c GetInfoOneBodyG/GetInfoTwoBodyG/GetInfoTwoBodyGEx check every
+// site against Nsite and require the declared number of records. Perform the
+// supported-input checks before publishing any parsed Green section. Typed
+// spins and malformed-integer rejection are Rust safety rules, not claims
+// about C's unchecked sscanf or out-of-bounds indirect lookup behavior.
+fn validate_green_definition(
+    path: &Path,
+    family: &str,
+    nsite: i64,
+    fields: usize,
+) -> io::Result<usize> {
+    let content = read_def_file(path)?;
+    let lines: Vec<_> = content.lines().collect();
+    let invalid = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
+    let count = lines
+        .get(1)
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|value| value.parse::<usize>().ok())
+        .ok_or_else(|| invalid(format!("{family}: missing or invalid declared row count")))?;
+    // Original C readers return immediately for NArray==0, ignoring body rows.
+    if count == 0 {
+        return Ok(0);
+    }
+    let mut actual = 0;
+    for (index, line) in lines.iter().enumerate().skip(5) {
+        let cleaned = utils::file::clean_line(line);
+        if cleaned.is_empty() {
+            continue;
+        }
+        let tokens = utils::file::split_def_line(cleaned);
+        if tokens.len() < fields {
+            return Err(invalid(format!(
+                "{family} line {}: expected at least {fields} integer fields",
+                index + 1
+            )));
+        }
+        for (column, token) in tokens.iter().take(fields).enumerate() {
+            let value = token.parse::<i64>().map_err(|_| {
+                invalid(format!(
+                    "{family} line {}: invalid integer field {}",
+                    index + 1,
+                    column + 1
+                ))
+            })?;
+            if column % 2 == 0 && (value < 0 || value >= nsite) {
+                return Err(invalid(format!(
+                    "{family} line {}: site{} ({value}) out of range [0, {})",
+                    index + 1,
+                    column / 2 + 1,
+                    nsite
+                )));
+            }
+            if column % 2 == 1 && !(0..=1).contains(&value) {
+                return Err(invalid(format!(
+                    "{family} line {}: Rust typed spin must be 0 or 1",
+                    index + 1
+                )));
+            }
+        }
+        actual += 1;
+    }
+    if actual != count {
+        return Err(invalid(format!(
+            "{family}: declared row count {count}, got {actual}"
+        )));
+    }
+    Ok(count)
 }
 
 type RbmFlags = BTreeMap<String, (BTreeMap<i64, i64>, bool)>;
@@ -620,13 +701,28 @@ fn parse_file_by_type(
             rbm_flags.insert(file_type.to_owned(), (section.opt_flags, complex));
         }
         "OneBodyG" => {
-            data.green_one_terms = green::parse_green_one_def(path)?;
+            let count = validate_green_definition(path, file_type, data.modpara.nsite, 4)?;
+            data.green_one_terms = if count == 0 {
+                Vec::new()
+            } else {
+                green::parse_green_one_def(path)?
+            };
         }
         "TwoBodyG" => {
-            data.green_two_terms = green::parse_green_two_def(path)?;
+            let count = validate_green_definition(path, file_type, data.modpara.nsite, 8)?;
+            data.green_two_terms = if count == 0 {
+                Vec::new()
+            } else {
+                green::parse_green_two_def(path)?
+            };
         }
         "TwoBodyGEx" => {
-            data.green_two_ex_terms = green::parse_green_two_ex_def(path)?;
+            let count = validate_green_definition(path, file_type, data.modpara.nsite, 8)?;
+            data.green_two_ex_terms = if count == 0 {
+                Vec::new()
+            } else {
+                green::parse_green_two_ex_def(path)?
+            };
         }
         "TransSym" | "QPTrans" => {
             let section = qptrans::parse_qptrans_def(path, data.modpara.nsite)?;

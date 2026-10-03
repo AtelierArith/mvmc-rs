@@ -1,0 +1,10 @@
+Mixed oracle: independent Julia C-contract history aggregated/formatted by actual C avevar.c bodies; no Rust results
+c-window-input.txt sha256=80f0eb0ba47066467da93e9fa7f0fdea239b11ce06f3e15a66b9becd82e6b6f5
+c-window-declared-input.txt sha256=80f0eb0ba47066467da93e9fa7f0fdea239b11ce06f3e15a66b9becd82e6b6f5
+probe sha256=7a0434c1c7a377e8a84d31fa2a02499cd5cbb1007a83ff388b7e8ef932678d75
+ctest_aggregate_windows.jl sha256=d03a5a200cd0032922799751998ae7f1e706b1c2f0db7bf9a48ae141259f2267
+ctest_opt_window.c sha256=4069961fb468957de87760db9e1a25a1587351f4c92b17c3d3e925698904e652
+ctest_opt_window_upstream.inc sha256=47c801ea68d9bf40af967a3a0db6189125fd54ad146820b6470d63f9317a69da
+avevar.c sha256=509a573944a5eabde93864346902674faaff6c23d0c88f89867263f8372dd51a
+Compiler: GCC Ubuntu 13.3.0-6ubuntu2~24.04.1; -O0 -ffp-contract=off -lm; native Linux x86_64; no BLAS in aggregator
+StoreOptData after SR/sync: Etot,Etot2,declared Para; chronological window; CalcAveVar sequential complex mean/sample deviation

@@ -1,10 +1,15 @@
 generator=scripts/generate_physcal_181.jl
+generated_utc=2026-10-03T05:58:35.811
+generator_sha256=cc6415df4dc70d3b0c5febb4abf325c14bbc48bae9496679a7586983b99f94a9
 julia=1.13.1
 reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
 architecture=x86_64-linux-gnu
 blas=LBTConfig([ILP64] libopenblas64_.so)
 blas_threads=1
 julia_threads=1
+blas_version=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+julia_commit=96ca370cf0e339faf45a7ba863793f6c7c6980fb
+cpu=haswell
 seed=1
 mode=real
 manifest_sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
@@ -14,8 +19,11 @@ rng=next 624 UInt32 outputs, non-consuming C SFMT peek; draw-count=primitive UIn
 input_contract=explicit zqp; no automatic initial.def; unchanged sampling counts; serial; correlation shifts disabled
 trajectory_authority=Julia independently generated; C compatibility of trajectory requires a separate C trace
 C_output_check=zvo_cisajs_001.dat: ok=true, max_abs=6.938893903907228e-18, within tolerance (rtol=1.0e-10, atol=1.0e-12; max_abs=6.938893903907228e-18)
+C_output_check=zvo_cisajs_001.dat first_numerical_difference=row=5 column=5 actual=0.045460338134013414 expected=0.04546033813401341 delta=6.938893903907228e-18
 C_output_check=zvo_cisajscktalt_001.dat: ok=true, max_abs=5.551115123125783e-17, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=5.551115123125783e-17)
+C_output_check=zvo_cisajscktalt_001.dat first_numerical_difference=row=14 column=9 actual=0.14834478014903582 expected=0.14834478014903585 delta=-2.7755575615628914e-17
 C_output_check=zvo_cisajscktaltex_001.dat: ok=true, max_abs=1.1102230246251565e-16, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=1.1102230246251565e-16)
+C_output_check=zvo_cisajscktaltex_001.dat first_numerical_difference=row=1 column=3 actual=0.5244623052531953 expected=0.5244623052531954 delta=-1.1102230246251565e-16
 input_sha256=2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae inputs/coulombintra.def
 input_sha256=2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273 inputs/dh2.def
 input_sha256=4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255 inputs/dh4.def

@@ -1,14 +1,13 @@
 //! Per-step counters (acceptance ratios, RNG-draw counts).
 //!
-//! Port target: `MVMCOptimizers.jl/src/counter.jl`. The upstream
-//! `reduce_counter` is a no-op single-process today, but takes
-//! `&dyn Reducer` so MPI can hook in without API churn (Phase 7).
+//! C authority: `vmcmake.c::ReduceCounter` reduces only the first six
+//! statistical slots across equal-local-rank chains, writing back on that
+//! communicator's root. Burn/status slots are local logical state.
 
 use crate::reducer::Reducer;
 use crate::state::VmcOptimizationState;
 
-/// `reduce_counter!(state)` mirror. Single-process implementation is a
-/// no-op; the `Reducer` argument is plumbed in for the MPI build.
+/// Reduce statistical counters without changing logical burn/status slots.
 pub fn reduce_counter<R: Reducer + ?Sized>(state: &mut VmcOptimizationState, reducer: &R) {
-    reducer.allreduce_sum_i64(&mut state.electron_config.counter);
+    reducer.reduce_counters(&mut state.electron_config.counter);
 }

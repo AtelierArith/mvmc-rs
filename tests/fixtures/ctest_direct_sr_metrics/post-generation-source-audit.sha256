@@ -1,0 +1,12 @@
+09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc  extern/Julia-mVMC/Manifest-v1.13.toml
+a17e7cab2e3ce7e1e1046d621aead2743acc0a84a080df772c9a396b6260a316  extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_para_opt.jl
+138b43064e2f6b04077fa85652ca10d2e32cfa75342dd84c7e30ac56481b15bb  extern/Julia-mVMC/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl
+d43895a547efb1d8444358b62dc762b481faee58c69afea34fcf28b3f5c9eab7  extern/Julia-mVMC/MVMCOptimizers.jl/src/stochastic_opt.jl
+93886834c217f0054b956837a25ee533eb227ad27b8dbd98eb28ec0628ebe7d1  extern/Julia-mVMC/MVMCOptimizers.jl/src/parameter_sync.jl
+d9d47beccbe947721ee45a41c04f5cd59937ac0ff62cc6d761ac0397863e2c38  extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_sampling.jl
+6beb7443cb698efeeb8d02b41207f159c7ec8f646e68e751e4099823ad9aafc5  extern/Julia-mVMC/MVMCOptimizers.jl/src/slater_update.jl
+a9650915b37d67dad3a6d78b0575ff9a43649fbe71a3812342523ccb5184c990  extern/Julia-mVMC/MVMCExpertModeParsers.jl/src/utils/parameter_init.jl
+509a573944a5eabde93864346902674faaff6c23d0c88f89867263f8372dd51a  extern/mVMC-1.3.0/src/mVMC/avevar.c
+6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9  extern/mVMC-1.3.0/src/mVMC/readdef.c
+e35af053ce06e127309b1636dd2776650b4f1b2abd1ea0eaca10cd5257c3d742  extern/mVMC-1.3.0/src/mVMC/rbm.c
+cba5ddb9b8f42894dfa808aa867b05b358caab17175fb39931caf4625037db70  extern/mVMC-1.3.0/src/mVMC/slater.c

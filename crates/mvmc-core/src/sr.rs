@@ -9,6 +9,9 @@
 
 #![allow(clippy::needless_range_loop)]
 
+#[path = "sr_observer.rs"]
+pub mod observer;
+
 use mvmc_expert_parsers::utils::parameter_init::n_slater;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
@@ -79,6 +82,11 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
     if n_para == 0 {
+        observer::not_solved(
+            data,
+            observer::DirectMode::Real,
+            observer::NotSolvedReason::NoParameters,
+        );
         return 0;
     }
     data.ensure_optimization_flags(n_para);
@@ -90,6 +98,11 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
         let (s_diag, smat_to_para_idx) = collect_active_real(data, state, n_para, sr_opt_size);
         timer.stop(50);
         if smat_to_para_idx.is_empty() {
+            observer::not_solved(
+                data,
+                observer::DirectMode::Real,
+                observer::NotSolvedReason::NoActiveComponents,
+            );
             return 0;
         }
         let n_smat = smat_to_para_idx.len();
@@ -109,7 +122,10 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
         let _ = s_diag;
         timer.stop(56);
         timer.start(57);
+        let observation =
+            observer::before_solve(data, &s, &g, &smat_to_para_idx, observer::DirectMode::Real);
         let result = cholesky_solve(&mut s, &mut g, n_smat);
+        observer::after_solve(observation, &g, &result);
         timer.stop(57);
         timer.stop(51);
         if result.is_err() {
@@ -141,6 +157,11 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
     if n_para == 0 {
+        observer::not_solved(
+            data,
+            observer::DirectMode::Complex,
+            observer::NotSolvedReason::NoParameters,
+        );
         return 0;
     }
     data.ensure_optimization_flags(n_para);
@@ -178,6 +199,11 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
     let n_smat = smat_to_para_idx.len();
     timer.stop(50);
     if n_smat == 0 {
+        observer::not_solved(
+            data,
+            observer::DirectMode::Complex,
+            observer::NotSolvedReason::NoActiveComponents,
+        );
         return 0;
     }
 
@@ -197,7 +223,15 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
 
     timer.stop(56);
     timer.start(57);
+    let observation = observer::before_solve(
+        data,
+        &s,
+        &g,
+        &smat_to_para_idx,
+        observer::DirectMode::Complex,
+    );
     let result = cholesky_solve(&mut s, &mut g, n_smat);
+    observer::after_solve(observation, &g, &result);
     timer.stop(57);
     timer.stop(51);
     if result.is_err() {
@@ -689,6 +723,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     unsafe {
         dpotrf_(b"U".as_ptr(), &n_i32, s.as_mut_ptr(), &lda, &mut info);
     }
+    observer::lapack_status(true, info);
     if info < 0 {
         return Err(());
     }
@@ -707,6 +742,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
             &mut info,
         );
     }
+    observer::lapack_status(false, info);
     if info != 0 {
         return Err(());
     }

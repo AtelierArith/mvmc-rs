@@ -44,6 +44,10 @@ use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use crate::sync::sync_modified_parameter as sync_modified;
 use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
 
+#[cfg(all(test, feature = "mpi"))]
+#[path = "run_mpi_tests.rs"]
+mod mpi_runtime_tests;
+
 // Every rank must reach this boundary even when its local operation failed.
 fn collective_result<T, R: Reducer + ?Sized>(
     result: Result<T, String>,
@@ -96,6 +100,9 @@ pub struct PhysCalResult {
     pub data: ExpertModeData,
     /// Sampling and observable state.
     pub state: VmcOptimizationState,
+    /// Actual rank-local RNG after initialization and every completed sample.
+    /// Observing this owned state does not advance the runner's sampling stream.
+    pub final_rng: Sfmt19937Rng,
     /// Number of measurement iterations completed.
     pub iterations: usize,
 }
@@ -279,11 +286,46 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
     mut preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
-    mut callback: Option<&mut PhysCalCallback<'_>>,
+    callback: Option<&mut PhysCalCallback<'_>>,
 ) -> Result<PhysCalResult, String> {
+    // The in-place core allocates the correctly sized state after validation
+    // and QP setup. Avoid allocating a second full saved chain here.
+    let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+    let iterations = vmc_phys_cal_in_place(
+        &mut preparation.data,
+        &mut state,
+        &mut preparation.rng,
+        output_dir,
+        reducer,
+        callback,
+    )?;
+    Ok(PhysCalResult {
+        data: preparation.data,
+        state,
+        final_rng: preparation.rng,
+        iterations,
+    })
+}
+
+/// Run fixed-parameter PhysCal using caller-owned data, state and RNG.
+///
+/// Like Julia's vmc_phys_cal!, this consumes the initialization draw block
+/// without replacing fixed coefficients, initializes state, then measures.
+/// State is initialized only after validation/output setup; on any later error
+/// the caller retains the actual sampled state and RNG at that error boundary.
+/// Callback errors return before any subsequent sampling or RNG draw.
+/// Existing state contents are replaced at initialization, not continued.
+pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    output_dir: Option<&Path>,
+    reducer: &R,
+    mut callback: Option<&mut PhysCalCallback<'_>>,
+) -> Result<usize, String> {
     collective_result(
-        crate::validation::validate_phys_cal(&preparation.data)
-            .and_then(|()| crate::validation::validate_reducer_rank(&preparation.data, reducer)),
+        crate::validation::validate_phys_cal(data)
+            .and_then(|()| crate::validation::validate_reducer_rank(data, reducer)),
         reducer,
         "PhysCal validation",
     )?;
@@ -295,54 +337,58 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
         Ok(())
     };
     collective_result(output_setup, reducer, "PhysCal output directory")?;
-    let mut init_data = preparation.data.clone();
-    init_parameter(&mut init_data, &mut preparation.rng);
-    if preparation.data.modpara.nmp_trans == 0 {
-        preparation.data.modpara.nmp_trans = 1;
-    } else if preparation.data.modpara.nmp_trans < 0 {
-        preparation.data.modpara.nmp_trans = preparation.data.modpara.nmp_trans.abs();
+    let mut init_data = data.clone();
+    init_parameter(&mut init_data, rng);
+    if data.modpara.nmp_trans == 0 {
+        data.modpara.nmp_trans = 1;
+    } else if data.modpara.nmp_trans < 0 {
+        data.modpara.nmp_trans = data.modpara.nmp_trans.abs();
     }
-    preparation.data.modpara.vmc_calc_mode = 1;
-    init_qp_weight(&mut preparation.data);
-    let all_complex = get_all_complex_flag(&preparation.data);
-    let use_fsz = preparation.data.i_flg_orbital_general != 0;
-    let mut state = state_from_data(&preparation.data);
+    data.modpara.vmc_calc_mode = 1;
+    init_qp_weight(data);
+    let all_complex = get_all_complex_flag(data);
+    let use_fsz = data.i_flg_orbital_general != 0;
+    *state = state_from_data(data);
     if use_fsz {
-        update_slater_elm_fsz(&mut preparation.data, &mut state);
+        update_slater_elm_fsz(data, state);
     } else {
-        update_slater_elm(&mut preparation.data, &mut state);
+        update_slater_elm(data, state);
     }
-    let iterations = preparation.data.modpara.n_data_qty_smp.max(0) as usize;
+    let iterations = data.modpara.n_data_qty_smp.max(0) as usize;
     for sample in 0..iterations {
         let sample_result = if use_fsz {
             if all_complex {
-                crate::sampling::driver::vmc_make_sample_fsz(
-                    &preparation.data,
-                    &mut state,
-                    &mut preparation.rng,
+                crate::sampling::driver::vmc_make_sample_fsz_with_reducer_timed(
+                    data,
+                    state,
+                    rng,
+                    &mut CTimer::<false>::new(),
+                    reducer,
                 );
                 Ok(())
             } else {
-                crate::sampling::vmc_make_sample_fsz_real(
-                    &preparation.data,
-                    &mut state,
-                    &mut preparation.rng,
+                crate::sampling::driver::vmc_make_sample_fsz_real_with_reducer(
+                    data, state, rng, reducer,
                 )
                 .map(|_| ())
                 .map_err(|error| error.to_string())
             }
         } else if all_complex {
-            crate::sampling::driver::vmc_make_sample(
-                &preparation.data,
-                &mut state,
-                &mut preparation.rng,
+            crate::sampling::driver::vmc_make_sample_with_reducer_timed(
+                data,
+                state,
+                rng,
+                &mut CTimer::<false>::new(),
+                reducer,
             );
             Ok(())
         } else {
-            crate::sampling::driver::vmc_make_sample_real(
-                &preparation.data,
-                &mut state,
-                &mut preparation.rng,
+            crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
+                data,
+                state,
+                rng,
+                &mut CTimer::<false>::new(),
+                reducer,
             );
             Ok(())
         };
@@ -353,23 +399,24 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
         }
         sample_result?;
         if use_fsz && !all_complex {
-            sync_real_fsz_shadow(&mut state);
+            sync_real_fsz_shadow(state);
         }
-        clear_phys_quantity(&mut state);
+        clear_phys_quantity(state);
         accumulate_observables(
-            &preparation.data,
-            &mut state,
+            data,
+            state,
             all_complex,
             use_fsz,
             &mut CTimer::<false>::new(),
+            reducer,
         );
-        reduce_accumulators(&mut state, reducer);
-        weight_average_we(&mut state);
-        average_physcal_rank_contributions(&mut state, reducer);
-        reduce_counter(&mut state, reducer);
+        reduce_accumulators(state, reducer, all_complex);
+        weight_average_we(state);
+        average_physcal_rank_contributions(state, reducer);
+        reduce_counter(state, reducer);
         let output_error = if reducer.is_output_root() {
             if let Some(output_dir) = output_dir {
-                crate::io::output_phys_data(&preparation.data, &state, sample, Some(output_dir))
+                crate::io::output_phys_data(data, state, sample, Some(output_dir))
                     .err()
                     .map(|error| error.to_string())
             } else {
@@ -384,9 +431,9 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
         }
 
         {
-            let callback_error = callback.as_deref_mut().and_then(|callback| {
-                callback(sample, &preparation.data, state.energy.etot, 0).err()
-            });
+            let callback_error = callback
+                .as_deref_mut()
+                .and_then(|callback| callback(sample, data, state.energy.etot, 0).err());
             let any_callback_error = reducer.any_failure(callback_error.is_some());
             if any_callback_error {
                 return Err(callback_error
@@ -394,11 +441,7 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
             }
         }
     }
-    Ok(PhysCalResult {
-        data: preparation.data,
-        state,
-        iterations,
-    })
+    Ok(iterations)
 }
 
 fn average_physcal_rank_contributions<R: Reducer + ?Sized>(
@@ -479,24 +522,30 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             crate::validation::RuntimeEntryPoint::ParaOpt,
         )
         .and_then(|()| crate::validation::validate_reducer_rank(data, reducer))
-        .and_then(|()| crate::validation::validate_para_opt(data)),
+        .and_then(|()| crate::validation::validate_para_opt(data))
+        .and_then(|()| {
+            validate_optimization_window(
+                data.modpara.nsr_opt_itr_step,
+                data.modpara.nsr_opt_itr_smp,
+            )
+        }),
         reducer,
         "optimization validation",
     )?;
-    let world_size = reducer.world_size();
-    let rank = reducer.rank();
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
-    let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
+    // Validation excludes C's unwritten leading rows for oversized windows.
+    // Freeze the explicitly selected supported window before callbacks run.
+    let window_len = data.modpara.nsr_opt_itr_smp as usize;
+    let window_start = n_steps - window_len;
+    state.opt_data.clear();
     let n_para = data.count_variational_parameters();
     data.ensure_optimization_flags(n_para);
     let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
     let use_fsz = i_flg_general != 0;
-    if world_size > 1 {
-        let total_samples = data.modpara.nvmc_sample.max(0) as usize;
-        let local = crate::parallel::partition_range(total_samples, world_size, rank);
-        data.modpara.nvmc_sample = (local.end - local.start) as i64;
-    }
+    // C VMCMakeSample(comm_child1) generates NVMCSample saved configurations
+    // on every chain. Only VMCMainCal partitions those saved configurations
+    // within comm_child1; partitioning this count changes the RNG trajectory.
     timer.start(2);
     for step in 0..n_steps {
         timer.start(20);
@@ -512,20 +561,26 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         // 2. Sampler.
         let sample_result: Result<crate::sampling::SampleStats, String> = if use_fsz {
             if all_complex {
-                Ok(crate::sampling::driver::vmc_make_sample_fsz_timed(
-                    data, state, rng, timer,
-                ))
+                Ok(
+                    crate::sampling::driver::vmc_make_sample_fsz_with_reducer_timed(
+                        data, state, rng, timer, reducer,
+                    ),
+                )
             } else {
-                crate::sampling::vmc_make_sample_fsz_real(data, state, rng)
-                    .map_err(|error| error.to_string())
+                crate::sampling::driver::vmc_make_sample_fsz_real_with_reducer(
+                    data, state, rng, reducer,
+                )
+                .map_err(|error| error.to_string())
             }
         } else if !all_complex {
-            Ok(crate::sampling::driver::vmc_make_sample_real_timed(
-                data, state, rng, timer,
-            ))
+            Ok(
+                crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
+                    data, state, rng, timer, reducer,
+                ),
+            )
         } else {
-            Ok(crate::sampling::driver::vmc_make_sample_timed(
-                data, state, rng, timer,
+            Ok(crate::sampling::driver::vmc_make_sample_with_reducer_timed(
+                data, state, rng, timer, reducer,
             ))
         };
         let sample_error = sample_result.as_ref().err().cloned();
@@ -546,11 +601,11 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.start(24);
         clear_phys_quantity(state);
         timer.stop(24);
-        accumulate_observables(data, state, all_complex, use_fsz, timer);
+        accumulate_observables(data, state, all_complex, use_fsz, timer, reducer);
 
         timer.stop(4);
         timer.start(21);
-        reduce_accumulators(state, reducer);
+        reduce_accumulators(state, reducer, all_complex);
         timer.start_diag(960, timer.diagnostics.weightavg);
         // 4. Weighted averages + counter reduction.
         timer.start_diag(962, timer.diagnostics.weightavg);
@@ -561,7 +616,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         if all_complex {
             weight_average_sr_opt(state);
         } else {
-            weight_average_sr_opt_real(state);
+            weight_average_sr_opt_real(state, data.modpara.nsrcg != 0);
         }
         timer.stop_diag(965, timer.diagnostics.weightavg);
         timer.stop(25);
@@ -606,7 +661,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             } else {
                 None
             };
-            crate::sr_cg::stochastic_opt_cg(data, state, sr_output).map_err(|e| e.to_string())
+            crate::sr_cg::stochastic_opt_cg_with_reducer(data, state, sr_output, reducer)
+                .map_err(|e| e.to_string())
         } else if all_complex {
             Ok(crate::sr::stochastic_opt_complex_timed(data, state, timer))
         } else {
@@ -634,8 +690,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.start(23);
         sync_modified(data, reducer);
         timer.stop(23);
-        if step as i64 >= window_start {
-            store_opt_data(data, state, (step as i64 - window_start) as usize);
+        if step >= window_start {
+            store_opt_data(data, state, step - window_start);
         }
         let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
             callback(step, data, state.energy.etot, info)
@@ -644,7 +700,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     }
 
     let output_error = if reducer.is_output_root() {
-        output_opt_data(data, output_dir)
+        output_opt_data(data, state, output_dir)
             .err()
             .map(|error| error.to_string())
     } else {
@@ -768,6 +824,18 @@ fn validate_run_options(config: &RunConfig) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_optimization_window(nsteps: i64, nsmp: i64) -> Result<(), String> {
+    if nsmp <= 0 {
+        return Err(format!("effective nsmp must be positive; got {nsmp}"));
+    }
+    if nsteps < nsmp {
+        return Err(format!(
+            "nsteps ({nsteps}) must be >= nsmp ({nsmp}); C leaves oversized-window rows unwritten"
+        ));
+    }
+    Ok(())
+}
+
 fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
@@ -802,9 +870,7 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 "effective nsmp must be positive; got {effective_nsmp}"
             ));
         }
-        if config.nsteps < effective_nsmp {
-            return Err(format!("nsteps ({}) must be >= nsmp ({effective_nsmp}); smaller nsteps would zero-pad optimisation averages", config.nsteps));
-        }
+        validate_optimization_window(config.nsteps, effective_nsmp)?;
         Ok((data, effective_nsmp))
     })();
     let (mut data, effective_nsmp) =
@@ -858,7 +924,8 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         Ok(())
     })();
     collective_result(loaded, reducer, "optimization parameter load")?;
-    sync_modified_parameter(&mut data, true);
+    // C SyncModifiedParameter(comm0): publish root parameters before local gauge fixing.
+    sync_modified(&mut data, reducer);
     timer.stop(13);
     init_qp_weight(&mut data);
     timer.stop(1);
@@ -951,7 +1018,11 @@ fn fresh_output_directory() -> Result<std::path::PathBuf, String> {
 /// Sampling buffers remain rank-local; only quantities that feed the global
 /// weighted averages are reduced.  This mirrors Julia's `WeightAverage!`
 /// boundary and keeps rank-local configurations available for diagnostics.
-fn reduce_accumulators<R: Reducer + ?Sized>(state: &mut VmcOptimizationState, reducer: &R) {
+fn reduce_accumulators<R: Reducer + ?Sized>(
+    state: &mut VmcOptimizationState,
+    reducer: &R,
+    all_complex: bool,
+) {
     let mut energy = [
         state.energy.wc,
         state.energy.etot,
@@ -971,9 +1042,12 @@ fn reduce_accumulators<R: Reducer + ?Sized>(state: &mut VmcOptimizationState, re
     .zip(energy)
     .for_each(|(dst, value)| *dst = value);
 
-    reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_oo);
-    reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_ho);
-    if !state.sr_opt.sr_opt_oo_real.is_empty() {
+    // vmcmain.c selects exactly one WeightAverageSROpt branch by AllComplexFlag.
+    // Allocated inactive shadow buffers must not introduce extra collectives.
+    if all_complex {
+        reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_oo);
+        reducer.allreduce_sum_c64(&mut state.sr_opt.sr_opt_ho);
+    } else {
         reducer.allreduce_sum_f64(&mut state.sr_opt.sr_opt_oo_real);
         reducer.allreduce_sum_f64(&mut state.sr_opt.sr_opt_ho_real);
     }
@@ -1032,10 +1106,58 @@ mod mpi_tests {
         state.energy.wc = Complex64::new(3.0, 0.0);
         state.sr_opt.sr_opt_oo[0] = Complex64::new(4.0, -1.0);
         state.sr_opt.sr_opt_ho[0] = Complex64::new(-2.0, 0.5);
-        reduce_accumulators(&mut state, &ScalingReducer { world: 2, rank: 1 });
+        reduce_accumulators(&mut state, &ScalingReducer { world: 2, rank: 1 }, true);
         assert_eq!(state.energy.wc, Complex64::new(6.0, 0.0));
         assert_eq!(state.sr_opt.sr_opt_oo[0], Complex64::new(8.0, -2.0));
         assert_eq!(state.sr_opt.sr_opt_ho[0], Complex64::new(-4.0, 1.0));
+    }
+
+    #[test]
+    fn accumulator_reduction_selects_only_active_sr_branch_in_exact_order() {
+        use std::cell::RefCell;
+        #[derive(Default)]
+        struct RecordingReducer(RefCell<Vec<(&'static str, usize)>>);
+        impl Reducer for RecordingReducer {
+            fn allreduce_sum_f64(&self, values: &mut [f64]) {
+                self.0.borrow_mut().push(("real", values.len()));
+                values.iter_mut().for_each(|value| *value *= 2.0);
+            }
+            fn allreduce_sum_c64(&self, values: &mut [Complex64]) {
+                self.0.borrow_mut().push(("complex", values.len()));
+                values.iter_mut().for_each(|value| *value *= 2.0);
+            }
+            fn allreduce_sum_i64(&self, _: &mut [i64]) {
+                panic!("no integer accumulator reduction");
+            }
+        }
+        for all_complex in [false, true] {
+            let mut state = VmcOptimizationState::zeros(2, 2, 0, 1, 1, 2, true, false);
+            state.sr_opt.sr_opt_oo.fill(Complex64::new(3.0, -4.0));
+            state.sr_opt.sr_opt_ho.fill(Complex64::new(-5.0, 6.0));
+            state.sr_opt.sr_opt_oo_real.fill(7.0);
+            state.sr_opt.sr_opt_ho_real.fill(-8.0);
+            let before = state.sr_opt.clone();
+            let reducer = RecordingReducer::default();
+            reduce_accumulators(&mut state, &reducer, all_complex);
+            let expected = if all_complex {
+                assert_eq!(state.sr_opt.sr_opt_oo_real, before.sr_opt_oo_real);
+                assert_eq!(state.sr_opt.sr_opt_ho_real, before.sr_opt_ho_real);
+                vec![
+                    ("complex", 5),
+                    ("complex", before.sr_opt_oo.len()),
+                    ("complex", before.sr_opt_ho.len()),
+                ]
+            } else {
+                assert_eq!(state.sr_opt.sr_opt_oo, before.sr_opt_oo);
+                assert_eq!(state.sr_opt.sr_opt_ho, before.sr_opt_ho);
+                vec![
+                    ("complex", 5),
+                    ("real", before.sr_opt_oo_real.len()),
+                    ("real", before.sr_opt_ho_real.len()),
+                ]
+            };
+            assert_eq!(*reducer.0.borrow(), expected);
+        }
     }
 }
 
@@ -1372,32 +1494,18 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
 
 /// Make real-FSZ sampling results visible to the shared observable kernels.
 fn sync_real_fsz_shadow(state: &mut VmcOptimizationState) {
-    for (dst, src) in state
-        .slater_matrix
-        .slater_elm
-        .as_mut_slice()
-        .iter_mut()
-        .zip(state.slater_matrix.slater_elm_real.as_slice())
-    {
-        *dst = Complex64::new(*src, 0.0);
-    }
-    for (dst, src) in state
-        .slater_matrix
-        .inv_m
-        .as_mut_slice()
-        .iter_mut()
-        .zip(state.slater_matrix.inv_m_real.as_slice())
-    {
-        *dst = Complex64::new(*src, 0.0);
-    }
-    for (dst, src) in state
-        .slater_matrix
-        .pf_m
-        .iter_mut()
-        .zip(state.slater_matrix.pf_m_real.iter())
-    {
-        *dst = Complex64::new(*src, 0.0);
-    }
+    crate::threading::copy_real_to_complex(
+        state.slater_matrix.slater_elm.as_mut_slice(),
+        state.slater_matrix.slater_elm_real.as_slice(),
+    );
+    crate::threading::copy_real_to_complex(
+        state.slater_matrix.inv_m.as_mut_slice(),
+        state.slater_matrix.inv_m_real.as_slice(),
+    );
+    crate::threading::copy_real_to_complex(
+        &mut state.slater_matrix.pf_m,
+        &state.slater_matrix.pf_m_real,
+    );
 }
 
 #[cfg(test)]
@@ -1434,6 +1542,41 @@ mod mode_tests {
         assert_eq!(state_from_data(&data).sr_opt.sr_opt_size, 37);
     }
 
+    #[test]
+    fn public_runner_rejects_archived_sparse_rbm_definitions_before_output() {
+        // These archived Julia inputs are used by test-only programmatic
+        // models, not accepted native C definitions. Never manufacture the
+        // missing declared flag pairs to turn them into C parity inputs.
+        let fixtures =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+        for (index, relative) in [
+            "rbm/run_rbm_general_cmp/namelist.def",
+            "opttrans/run_opt_dh24_rbm_cmp/namelist.def",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let output = std::env::temp_dir().join(format!(
+                "mvmc-rejected-sparse-rbm-{}-{index}",
+                std::process::id()
+            ));
+            assert!(!output.exists());
+            let mut config = RunConfig::new(1, "cmp");
+            config.nsmp = Some(1);
+            config.seed = Some(12395);
+            config.output_dir = Some(output.clone());
+            let error = run_para_opt_from_namelist(fixtures.join(relative), config)
+                .expect_err("incomplete native RBM definitions must not execute");
+            assert!(
+                error.contains(
+                    "RBM requires complete spatial mappings and exactly the declared flag pairs"
+                ),
+                "{relative}: {error}"
+            );
+            assert!(!output.exists(), "rejection must precede output setup");
+        }
+    }
+
     fn data() -> ExpertModeData {
         let mut data = ExpertModeData::new();
         data.modpara.nsite = 2;
@@ -1450,6 +1593,24 @@ mod mode_tests {
             sign: 1,
         });
         data
+    }
+
+    #[test]
+    fn real_fsz_shadow_copies_inverse_pads_and_preserves_unmatched_tail() {
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, true);
+        state.slater_matrix.inv_m_real.as_mut_slice().fill(3.0);
+        state.slater_matrix.pf_m_real.fill(5.0);
+        let tail = Complex64::new(7.0, -9.0);
+        state.slater_matrix.pf_m.push(tail);
+        sync_real_fsz_shadow(&mut state);
+        assert!(state
+            .slater_matrix
+            .inv_m
+            .as_slice()
+            .iter()
+            .all(|&value| value == Complex64::new(3.0, 0.0)));
+        assert_eq!(state.slater_matrix.pf_m[0], Complex64::new(5.0, 0.0));
+        assert_eq!(state.slater_matrix.pf_m.last(), Some(&tail));
     }
 
     #[test]
@@ -1563,59 +1724,91 @@ mod mode_tests {
 
     #[test]
     fn physcal_preparation_loads_fixed_parameters_before_rng_consumption() {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/opttrans");
-        let parsed = parse_expert_mode_files(root.join("namelist_layout.def")).unwrap();
-        let n_fields = 6 + 3 * parsed.count_variational_parameters();
-        let opt_path =
-            std::env::temp_dir().join(format!("mvmc-physcal-opt-{}", std::process::id()));
-        fs::write(
-            &opt_path,
-            (0..n_fields).map(|_| "0").collect::<Vec<_>>().join(" "),
-        )
-        .unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/physcal_ref",
+        );
+        // Decode the reference record independently of the production loader:
+        // six summary fields, two projection triples, then twelve Slater triples.
+        let fields: Vec<f64> = fs::read_to_string(root.join("zqp_opt.dat"))
+            .unwrap()
+            .split_whitespace()
+            .map(|field| field.parse().unwrap())
+            .collect();
+        assert_eq!(fields.len(), 6 + 3 * 14);
+        let raw_slater: Vec<f64> = fields[12..]
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|triple| {
+                assert_eq!(triple[1], 0.0);
+                triple[0]
+            })
+            .collect();
+        let max = raw_slater
+            .iter()
+            .map(|value| value.abs())
+            .fold(0.0, f64::max);
+        let expected_slater: Vec<f64> =
+            raw_slater.iter().map(|value| value * (4.0 / max)).collect();
         let prepared = prepare_phys_cal_from_namelist(
-            root.join("namelist_layout.def"),
-            &opt_path,
+            root.join("inputs/namelist.def"),
+            root.join("zqp_opt.dat"),
             "real",
             Some(11272),
         )
         .expect("fixed PhysCal preparation");
-        fs::remove_file(opt_path).unwrap();
-        assert!(prepared.n_para_consumed > 0);
-        assert!(
-            prepared.data.modpara.vmc_calc_mode == 0 || prepared.data.modpara.vmc_calc_mode == 1
+        assert_eq!(prepared.n_para_consumed, 14);
+        assert_eq!(prepared.data.modpara.vmc_calc_mode, 1);
+        assert_eq!(
+            prepared.data.projection_parameters(),
+            vec![
+                Complex64::new(fields[6], fields[7]),
+                Complex64::new(fields[9], fields[10])
+            ]
         );
-        let mut rng = prepared.rng;
-        assert_ne!(rng.gen_rand32(), 0);
+        let actual_slater: Vec<f64> = prepared
+            .data
+            .slater_params
+            .iter()
+            .map(|value| {
+                assert_eq!(value.im, 0.0);
+                value.re
+            })
+            .collect();
+        // One positive rescaling of the independently decoded fixed values.
+        crate::numerical_comparison::assert_values_close(
+            actual_slater,
+            expected_slater,
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "fixed PhysCal Slater normalization",
+        );
+        let mut actual_rng = prepared.rng;
+        let mut expected_rng = Sfmt19937Rng::new(11272);
+        for _ in 0..624 {
+            assert_eq!(actual_rng.gen_rand32(), expected_rng.gen_rand32());
+        }
     }
 
     #[test]
     fn physcal_iteration_keeps_fixed_parameters_unchanged() {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/opttrans");
-        let parsed = parse_expert_mode_files(root.join("namelist_layout.def")).unwrap();
-        let n_fields = 6 + 3 * parsed.count_variational_parameters();
-        let opt_path =
-            std::env::temp_dir().join(format!("mvmc-physcal-iteration-{}", std::process::id()));
-        fs::write(
-            &opt_path,
-            (0..n_fields).map(|_| "0").collect::<Vec<_>>().join(" "),
-        )
-        .unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/physcal_ref",
+        );
         let mut preparation = prepare_phys_cal_from_namelist(
-            root.join("namelist_layout.def"),
-            &opt_path,
+            root.join("inputs/namelist.def"),
+            root.join("zqp_opt.dat"),
             "real",
             Some(11272),
         )
         .unwrap();
-        fs::remove_file(opt_path).unwrap();
         preparation.data.modpara.n_data_qty_smp = 1;
         let before = preparation.data.slater_params.clone();
+        let projection_before = preparation.data.projection_parameters();
         let result = vmc_phys_cal(preparation).unwrap();
         assert_eq!(result.iterations, 1);
         assert_eq!(result.data.slater_params, before);
+        assert_eq!(result.data.projection_parameters(), projection_before);
     }
 
     #[test]
@@ -1657,6 +1850,7 @@ mod mode_tests {
         let run = |pure_general| {
             let mut data = template.clone();
             data.modpara.nsr_opt_itr_step = 1;
+            data.modpara.nsr_opt_itr_smp = 1;
             if pure_general {
                 let nsite = data.modpara.nsite;
                 let ap = data.n_orbital_anti_parallel;
@@ -1785,12 +1979,13 @@ pub struct RunSummary {
     pub effective_nsmp: usize,
 }
 
-fn accumulate_observables<const TIMED: bool>(
+fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     all_complex: bool,
     use_fsz: bool,
     timer: &mut CTimer<TIMED>,
+    reducer: &R,
 ) {
     let diag = timer.diagnostics.maincal && !use_fsz;
     timer.start_diag(940, diag);
@@ -1812,7 +2007,16 @@ fn accumulate_observables<const TIMED: bool>(
 
     timer.stop_diag(941, diag);
     timer.stop_diag(940, diag);
-    for sample in 0..n_vmc_sample {
+    // C VMCMainCal(comm_child1), vmccal.c:103–114. The saved chain and its
+    // allocation remain full length even for ranks with no measurement work.
+    let measurement_range = if reducer.supports_grouped_sampling() {
+        crate::parallel::partition_range(n_vmc_sample, reducer.world_size(), reducer.rank())
+    } else {
+        // NSplitSize=1 makes comm_child1 MPI_COMM_SELF, not comm0/world.
+        // Every independent chain measures all its own saved configurations.
+        0..n_vmc_sample
+    };
+    for sample in measurement_range {
         timer.start_diag(940, diag);
         timer.start_diag(942, diag);
         let ele_idx = state.electron_config.ele_idx_slice(sample).to_vec();
@@ -1879,18 +2083,16 @@ fn accumulate_observables<const TIMED: bool>(
         if !all_complex {
             for qp in 0..n_qp_full {
                 let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
-                for col in 0..n_size {
-                    for row in 0..n_size {
-                        let value = real_plane[row + col * n_size];
-                        state
-                            .slater_matrix
-                            .inv_m
-                            .set(qp, row, col, Complex64::new(value, 0.0));
-                    }
-                }
-                state.slater_matrix.pf_m[qp] =
-                    Complex64::new(state.slater_matrix.pf_m_real[qp], 0.0);
+                // Copy only the matrix, leaving the per-QP inverse pad untouched.
+                crate::threading::copy_real_to_complex(
+                    &mut state.slater_matrix.inv_m.qp_matrix_slice_mut(qp)[..n_size * n_size],
+                    &real_plane[..n_size * n_size],
+                );
             }
+            crate::threading::copy_real_to_complex(
+                &mut state.slater_matrix.pf_m[..n_qp_full],
+                &state.slater_matrix.pf_m_real[..n_qp_full],
+            );
         }
         timer.stop_diag(943, diag);
         timer.stop_diag(940, diag);
@@ -2339,7 +2541,7 @@ mod callback_tests {
     use super::reference_slater::{declared_output, declared_slater_rows};
 
     fn declared_history_values(data: &ExpertModeData, historical: Vec<f64>) -> Vec<f64> {
-        let prefix = 2 * (data.gutzwiller_terms.len() + data.jastrow_terms.len());
+        let prefix = 2 * data.projection_layout().n_proj;
         let mapped: Vec<[f64; 2]> = historical[prefix..]
             .as_chunks::<2>()
             .0
@@ -2353,9 +2555,80 @@ mod callback_tests {
             .collect()
     }
 
+    fn assert_complete_dh_history(
+        data: &ExpertModeData,
+        fixtures: &Path,
+        case: &str,
+        step: usize,
+        point: &crate::state::OptDataPoint,
+        archived: Vec<f64>,
+    ) {
+        let read = |suffix: &str| {
+            let relative = format!("sr_direct/{case}_runner/step-{step}-{suffix}");
+            let path = if case.ends_with("fsz") && native_fsz_fixture::directory(fixtures).is_some()
+            {
+                native_fsz_fixture::resolve(
+                    native_fsz_fixture::directory(fixtures)
+                        .unwrap()
+                        .join(relative),
+                )
+            } else {
+                julia_fixture::fixture_path(fixtures, relative)
+            };
+            fs::read_to_string(path).unwrap()
+        };
+        // Independent prefix records contain DH slots omitted by the old
+        // history observer. They are not reconstructed from the Rust run.
+        let complete: Vec<f64> = read("parameters.txt")
+            .split_whitespace()
+            .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
+            .collect();
+        let old_prefix = 2 * (data.gutzwiller_terms.len() + data.jastrow_terms.len());
+        let projection = 2 * data.projection_layout().n_proj;
+        crate::numerical_comparison::assert_values_close(
+            complete[..old_prefix]
+                .iter()
+                .chain(&complete[projection..])
+                .copied(),
+            archived,
+            1e-11,
+            1e-11,
+            format!("{case} step {step}: archived history projection"),
+        );
+        let expected = declared_history_values(data, complete);
+        assert_eq!(point.parameters.len(), data.count_variational_parameters());
+        assert_eq!(expected.len(), 2 * point.parameters.len());
+        crate::numerical_comparison::assert_values_close(
+            point.parameters.iter().flat_map(|v| [v.re, v.im]),
+            expected,
+            1e-11,
+            1e-11,
+            format!("{case} step {step}: complete declared history"),
+        );
+        // `read` resolves the checked-in reference prefix, never the Rust output directory.
+        // The archived observer's pre-SR output carries the independently captured Etot2.
+        let output = read("zvo_var.dat");
+        let measured: Vec<f64> = output
+            .lines()
+            .last()
+            .unwrap()
+            .split_whitespace()
+            .map(|s| s.parse().unwrap())
+            .collect();
+        crate::numerical_comparison::assert_values_close(
+            [point.energy_squared.re, point.energy_squared.im],
+            [measured[3], measured[4]],
+            1e-11,
+            1e-11,
+            format!("{case} step {step}: archived reference zvo_var Etot2"),
+        );
+    }
+
     // Archived Julia output omitted RBM coefficients. C-compatible output
     // includes them in declared order. Preserve every archived output field
-    // and insert the independently captured pre-SR coefficients for each row.
+    // and insert Rust-observed pre-SR coefficients for each row. This is only
+    // a consistency check, not an independent RBM output oracle; replace it
+    // with separately captured complete C-contract histories.
     fn declared_runner_output(
         data: &ExpertModeData,
         name: &str,
@@ -2419,11 +2692,12 @@ mod callback_tests {
         }
         let (mut data, mut state, mut rng) = prepared(1);
         let before = data.clone();
+        let output = fresh_output_directory().unwrap();
         let error = vmc_para_opt(
             &mut data,
             &mut state,
             &mut rng,
-            None,
+            Some(&output),
             &RemoteSrFailure,
             OptimizationOptions::default(),
         )
@@ -2433,6 +2707,7 @@ mod callback_tests {
         assert_eq!(data.projection_parameters(), before.projection_parameters());
         assert_eq!(data.qp_weights, before.qp_weights);
         assert_eq!(data.optimization_flags, before.optimization_flags);
+        fs::remove_dir_all(output).unwrap();
     }
 
     fn prepared_case(
@@ -2568,6 +2843,8 @@ mod callback_tests {
             for step in 0..3 {
                 baseline.modpara.nsr_opt_itr_step = 1;
                 observed.modpara.nsr_opt_itr_step = 1;
+                baseline.modpara.nsr_opt_itr_smp = 1;
+                observed.modpara.nsr_opt_itr_smp = 1;
                 vmc_para_opt(
                     &mut baseline,
                     &mut base_state,
@@ -2675,6 +2952,71 @@ mod callback_tests {
     }
 
     #[test]
+    fn mpi_measurement_partition_preserves_full_chain_count_and_rng() {
+        struct MeasurementRank(usize);
+        impl Reducer for MeasurementRank {
+            fn allreduce_sum_f64(&self, _: &mut [f64]) {}
+            fn allreduce_sum_c64(&self, _: &mut [Complex64]) {}
+            fn allreduce_sum_i64(&self, _: &mut [i64]) {}
+            fn world_size(&self) -> usize {
+                2
+            }
+            fn rank(&self) -> usize {
+                self.0
+            }
+            fn supports_grouped_sampling(&self) -> bool {
+                true
+            }
+        }
+        let (mut baseline, _, initial_rng) = prepared(1);
+        baseline.modpara.nvmc_sample = 3;
+        let mut baseline_state = state_from_data(&baseline);
+        let mut baseline_rng = initial_rng.clone();
+        let dir = fresh_output_directory().unwrap();
+        vmc_para_opt(
+            &mut baseline,
+            &mut baseline_state,
+            &mut baseline_rng,
+            Some(&dir),
+            &SingleProcessReducer,
+            OptimizationOptions {
+                skip_sr: true,
+                ..OptimizationOptions::default()
+            },
+        )
+        .unwrap();
+        for rank in 0..2 {
+            let (mut data, _, _) = prepared(1);
+            data.modpara.nvmc_sample = 3;
+            let mut state = state_from_data(&data);
+            let mut rng = initial_rng.clone();
+            vmc_para_opt(
+                &mut data,
+                &mut state,
+                &mut rng,
+                Some(&dir),
+                &MeasurementRank(rank),
+                OptimizationOptions {
+                    skip_sr: true,
+                    ..OptimizationOptions::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(data.modpara.nvmc_sample, 3);
+            assert_eq!(state.electron_config, baseline_state.electron_config);
+            let mut expected_rng = baseline_rng.clone();
+            for word in 0..624 {
+                assert_eq!(
+                    rng.gen_rand32(),
+                    expected_rng.gen_rand32(),
+                    "rank {rank}, word {word}"
+                );
+            }
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn sampling_only_stops_after_one_output_and_before_sr_or_final_parameters() {
         let (mut data, mut state, mut rng) = prepared(3);
         data.modpara.dsr_opt_step_dt = f64::NAN; // Prove the solver is skipped.
@@ -2777,7 +3119,7 @@ mod callback_tests {
     }
     #[test]
     fn final_window_history_is_stored_before_callback_and_uses_initial_window() {
-        for window in [2, 5] {
+        for window in [2, 3] {
             let (mut data, mut state, mut rng) = prepared(3);
             data.modpara.nsr_opt_itr_smp = window;
             let dir = fresh_output_directory().unwrap();
@@ -2809,15 +3151,12 @@ mod callback_tests {
                 },
             )
             .unwrap();
-            assert_eq!(state.opt_data.len(), window as usize);
+            let effective_window = window;
+            assert_eq!(state.opt_data.len(), effective_window as usize);
             for (index, point) in state.opt_data.iter().enumerate() {
-                let step = index as i64 + 3 - window;
-                if step < 0 {
-                    assert!(point.parameters.is_empty());
-                } else {
-                    assert_eq!(point.parameters, records[step as usize].1);
-                    assert_eq!(point.energy, records[step as usize].2);
-                }
+                let step = index as i64 + 3 - effective_window;
+                assert_eq!(point.parameters, records[step as usize].1);
+                assert_eq!(point.energy, records[step as usize].2);
             }
             assert_ne!(state.opt_data.last().unwrap().parameters.last(), None);
             let snapshot = state.opt_data.last().unwrap().parameters.clone();
@@ -2826,6 +3165,33 @@ mod callback_tests {
             fs::remove_dir_all(dir).unwrap();
         }
     }
+    #[test]
+    fn oversized_optimization_window_rejects_before_mutation_output_or_rng() {
+        let (mut data, mut state, mut rng) = prepared(3);
+        data.modpara.nsr_opt_itr_smp = 5;
+        let before_parameters = data.slater_params.clone();
+        let before_configs = state.electron_config.ele_idx.clone();
+        let mut before_rng = rng.clone();
+        let directory = fresh_output_directory().unwrap();
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            Some(&directory),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        assert!(error.contains("must be >= nsmp"), "{error}");
+        assert_eq!(data.slater_params, before_parameters);
+        assert_eq!(state.electron_config.ele_idx, before_configs);
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), before_rng.gen_rand32());
+        }
+        fs::remove_dir(directory).unwrap();
+    }
+
     #[test]
     fn enabled_sections_preserve_parameters_samples_energy_and_rng() {
         for case in [
@@ -3069,7 +3435,7 @@ mod callback_tests {
             .unwrap();
             let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
-            for point in &state.opt_data {
+            for (index, point) in state.opt_data.iter().enumerate() {
                 crate::numerical_comparison::assert_values_close(
                     serialize(vec![point.energy]),
                     scalars(lines.next().unwrap()),
@@ -3077,12 +3443,13 @@ mod callback_tests {
                     1e-11,
                     format!("{mode} history energy"),
                 );
-                crate::numerical_comparison::assert_values_close(
-                    serialize(point.parameters.clone()),
-                    declared_history_values(&data, scalars(lines.next().unwrap())),
-                    1e-11,
-                    1e-11,
-                    format!("{mode} history values"),
+                assert_complete_dh_history(
+                    &data,
+                    fixtures,
+                    &case,
+                    index + 1,
+                    point,
+                    scalars(lines.next().unwrap()),
                 );
             }
             assert!(lines.next().is_none());
@@ -3207,7 +3574,7 @@ mod callback_tests {
             .unwrap();
             let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
-            for point in &state.opt_data {
+            for (index, point) in state.opt_data.iter().enumerate() {
                 crate::numerical_comparison::assert_values_close(
                     serialize(vec![point.energy]),
                     scalars(lines.next().unwrap()),
@@ -3215,12 +3582,13 @@ mod callback_tests {
                     1e-11,
                     format!("{mode} history energy"),
                 );
-                crate::numerical_comparison::assert_values_close(
-                    serialize(point.parameters.clone()),
-                    declared_history_values(&data, scalars(lines.next().unwrap())),
-                    1e-11,
-                    1e-11,
-                    format!("{mode} history values"),
+                assert_complete_dh_history(
+                    &data,
+                    fixtures,
+                    &case,
+                    index + 1,
+                    point,
+                    scalars(lines.next().unwrap()),
                 );
             }
             assert!(lines.next().is_none());
@@ -3768,8 +4136,57 @@ mod callback_tests {
         } else {
             root
         };
+        let reviewed_case_dir =
+            fixtures
+                .join("reviewed_cg_62b")
+                .join(if case == "rbm_reference_cmp" {
+                    "canonical_general_rbm"
+                } else {
+                    reference_case
+                });
+        let reviewed_cg = cg && reviewed_case_dir.join("acquisition-complete.txt").is_file();
+        if cg {
+            assert!(reviewed_cg,
+                "{case}: reviewed 62b prefixes1/2/3/20 acquisition is incomplete; historical CG references are not a current numerical comparison");
+            for prefix in [1, 2, 3, 20] {
+                for kind in ["parameters", "configs", "energy", "rng", "SRinfo"] {
+                    assert!(
+                        reviewed_case_dir
+                            .join(format!("step-{prefix}-{kind}.txt"))
+                            .is_file(),
+                        "{case}: incomplete reviewed prefix{prefix} {kind}"
+                    );
+                }
+                if case.starts_with("dh") || case.starts_with("rbm_") || case.starts_with("opt_") {
+                    for relative in [
+                        format!("step-{prefix}-zvo_out.dat"),
+                        format!("step-{prefix}/zvo_var.dat"),
+                        format!("step-{prefix}/provenance.txt"),
+                    ] {
+                        assert!(
+                            reviewed_case_dir.join(&relative).is_file(),
+                            "{case}: incomplete reviewed output {relative}"
+                        );
+                    }
+                }
+            }
+        }
+        let reviewed_direct_dir = reviewed_case_dir.join(format!("direct-store{store}"));
+        let reviewed_direct = !cg
+            && reviewed_direct_dir
+                .join("acquisition-complete.txt")
+                .is_file();
         let read_fixture = |name: &str| {
-            julia_fixture::read_text(if native_fsz {
+            let reviewed = reviewed_case_dir.join(name);
+            let reviewed_prefix = ["step-1-", "step-2-", "step-3-", "step-20-"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix));
+            julia_fixture::read_text(if reviewed_cg && reviewed_prefix {
+                reviewed
+            } else if !cg && name.starts_with("step-20-") {
+                assert!(reviewed_direct, "{case}: reviewed direct/store{store} 20-step acquisition incomplete; no historical50 truncation");
+                reviewed_direct_dir.join(name)
+            } else if native_fsz {
                 native_fsz_fixture::resolve(root.join(name))
             } else {
                 julia_fixture::fixture_path(
@@ -3777,10 +4194,19 @@ mod callback_tests {
                     root.strip_prefix(&fixtures).unwrap().join(name),
                 )
             })
-            .unwrap()
+            .unwrap_or_else(|error| panic!("{case}: reference {name}: {error}"))
         };
-        let prefixes = if !cg && case == "hubbard" {
+        let prefixes = if cg {
+            // User-selected long-run baseline; fresh 20-step references,
+            // never a truncation of historical 50-step final parameters.
+            vec![1, 2, 3, 20]
+        } else if case == "hubbard" {
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20]
+        } else if !cg && store == 0 && case == "opt_real" {
+            // Keep prefixes around the archived Julia failure at step 29.
+            // Preserve purposeful historical failure-boundary regressions,
+            // independently of the user-selected 20-step long baseline.
+            vec![1, 2, 3, 20, 27, 28, 29]
         } else {
             vec![1, 2, 3, 20]
         };
@@ -4073,7 +4499,92 @@ mod callback_tests {
                     format!("{case} step {steps} SR diagnostics"),
                 );
             }
-            if case.starts_with("dh2_")
+            if (reviewed_cg || (steps == 20 && reviewed_direct))
+                && (case.starts_with("dh") || case.starts_with("rbm_") || case.starts_with("opt_"))
+                || (matches!(
+                    case,
+                    "dh2_real"
+                        | "dh2_cmp"
+                        | "dh4_real"
+                        | "dh4_cmp"
+                        | "dh24_real"
+                        | "dh24_cmp"
+                        | "rbm_real"
+                        | "rbm_cmp"
+                        | "rbm_general_cmp"
+                        | "rbm_dh24_cmp"
+                        | "opt_real"
+                        | "opt_cmp"
+                        | "opt_dh24_rbm_cmp"
+                ) && (store == 0 || !cg))
+                || (matches!(case, "rbm_fsz" | "rbm_reference_cmp") && (store == 0 || !cg))
+                || (matches!(case, "dh2_fsz" | "dh4_fsz") && (store == 0 || !cg))
+                || (case == "dh24_fsz" && (store == 0 || !cg))
+                || (case == "opt_fsz" && !cg)
+            {
+                let historical_expected_dir = fixtures
+                    .join(format!(
+                        "runner_opt_windows/{case}/{}-store{store}",
+                        if cg { "cg" } else { "direct" }
+                    ))
+                    .join(format!("step-{steps}"));
+                let reviewed_expected_dir = reviewed_case_dir.join(format!("step-{steps}"));
+                let expected_dir = if reviewed_cg {
+                    reviewed_expected_dir
+                } else if steps == 20 && reviewed_direct {
+                    reviewed_direct_dir.join("step-20")
+                } else {
+                    historical_expected_dir
+                };
+                let output_names = |directory: &Path| {
+                    let mut names: Vec<_> = fs::read_dir(directory)
+                        .unwrap()
+                        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                        .filter(|name| name.starts_with("zqp_") && name.ends_with(".dat"))
+                        .collect();
+                    names.sort();
+                    names
+                };
+                let expected_names = output_names(&expected_dir);
+                if failed {
+                    assert!(expected_names.is_empty(), "{case} {steps}: failed SR must not aggregate partial history as final output");
+                    assert!(expected_dir
+                        .join("successful-history-not-final-output.txt")
+                        .exists());
+                    assert!(!expected_dir.join("c-window-input.txt").exists());
+                } else {
+                    assert!(expected_dir.join("c-window-input.txt").exists());
+                }
+                // C window=1 emits only the contiguous main row. Larger windows
+                // emit every active block, including both DH sections.
+                assert_eq!(
+                    output_names(&dir),
+                    expected_names,
+                    "{case} {steps} C output manifest"
+                );
+                for name in expected_names.into_iter().chain(["zvo_var.dat".into()]) {
+                    crate::numerical_comparison::assert_numeric_text(
+                        &fs::read_to_string(dir.join(&name)).unwrap(),
+                        &fs::read_to_string(expected_dir.join(&name)).unwrap(),
+                        1e-11,
+                        1e-11,
+                        if name.starts_with("zqp_") && name != "zqp_opt.dat" {
+                            &[0]
+                        } else {
+                            &[]
+                        },
+                        format!("{case} {steps} independent declared C window {name}"),
+                    );
+                }
+                crate::numerical_comparison::assert_numeric_text(
+                    &fs::read_to_string(dir.join("zvo_out.dat")).unwrap(),
+                    &read_fixture(&format!("step-{steps}-zvo_out.dat")),
+                    1e-11,
+                    1e-11,
+                    &[],
+                    format!("{case} {steps} archived energy output"),
+                );
+            } else if case.starts_with("dh2_")
                 || case.starts_with("dh4_")
                 || case.starts_with("dh24_")
                 || case.starts_with("rbm_")
@@ -4118,6 +4629,212 @@ mod callback_tests {
             }
             fs::remove_dir_all(dir).unwrap();
         }
+    }
+
+    #[test]
+    fn dh24_real_direct_output_matches_independent_complete_c_windows() {
+        check_sr_prefixes("dh24_real", false, 0);
+    }
+
+    #[test]
+    fn canonical_cg_fixed_seed_same_configuration_is_repeatable() {
+        let run = || {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def");
+            let mut data = parse_expert_mode_files(&path).unwrap();
+            data.modpara.nsr_opt_itr_step = 3;
+            data.modpara.nsr_opt_itr_smp = 3;
+            data.modpara.nsrcg = 1;
+            data.modpara.nstore_o = 0;
+            let mut rng = Sfmt19937Rng::new(12395);
+            init_parameter(&mut data, &mut rng);
+            assert!(
+                read_initial_def(&mut data, path.parent().unwrap().join("initial.def")).unwrap()
+            );
+            read_input_parameters(&mut data, &path).unwrap();
+            sync_modified_parameter(&mut data, true);
+            init_qp_weight(&mut data);
+            let mut state = state_from_data(&data);
+            let dir = fresh_output_directory().unwrap();
+            vmc_para_opt(
+                &mut data,
+                &mut state,
+                &mut rng,
+                Some(&dir),
+                &SingleProcessReducer,
+                OptimizationOptions::default(),
+            )
+            .unwrap();
+            (data, state, rng, dir)
+        };
+        let (a, sa, mut ra, da) = run();
+        let (b, sb, mut rb, db) = run();
+        // Same Rust implementation/configuration: exact identity is appropriate,
+        // not a cross-language computed-floating comparison policy.
+        assert_eq!(a.projection_parameters(), b.projection_parameters());
+        assert_eq!(a.rbm_parameters(), b.rbm_parameters());
+        assert_eq!(a.slater_params, b.slater_params);
+        assert_eq!(a.opt_trans, b.opt_trans);
+        assert_eq!(a.optimization_flags, b.optimization_flags);
+        assert_eq!(sa.energy.wc, sb.energy.wc);
+        assert_eq!(sa.energy.etot, sb.energy.etot);
+        assert_eq!(sa.energy.etot2, sb.energy.etot2);
+        assert_eq!(sa.sr_opt.sr_opt_oo, sb.sr_opt.sr_opt_oo);
+        assert_eq!(sa.sr_opt.sr_opt_ho, sb.sr_opt.sr_opt_ho);
+        assert_eq!(sa.sr_opt.sr_opt_o_store, sb.sr_opt.sr_opt_o_store);
+        assert_eq!(sa.electron_config.ele_idx, sb.electron_config.ele_idx);
+        assert_eq!(sa.electron_config.ele_cfg, sb.electron_config.ele_cfg);
+        assert_eq!(sa.electron_config.ele_num, sb.electron_config.ele_num);
+        assert_eq!(sa.electron_config.ele_spn, sb.electron_config.ele_spn);
+        assert_eq!(
+            sa.electron_config.ele_proj_cnt,
+            sb.electron_config.ele_proj_cnt
+        );
+        assert_eq!(
+            sa.electron_config.burn_ele_idx,
+            sb.electron_config.burn_ele_idx
+        );
+        assert_eq!(sa.electron_config.counter, sb.electron_config.counter);
+        assert_eq!(ra.words_consumed(), rb.words_consumed());
+        for _ in 0..624 {
+            assert_eq!(ra.gen_rand32(), rb.gen_rand32());
+        }
+        let files = |dir: &Path| {
+            let mut files: Vec<_> = fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .filter(|name| !name.to_string_lossy().contains("time"))
+                .collect();
+            files.sort();
+            files
+        };
+        let names = files(&da);
+        assert_eq!(names, files(&db));
+        for name in names {
+            assert_eq!(
+                fs::read(da.join(&name)).unwrap(),
+                fs::read(db.join(&name)).unwrap(),
+                "{name:?}"
+            );
+        }
+        fs::remove_dir_all(da).unwrap();
+        fs::remove_dir_all(db).unwrap();
+    }
+
+    #[test]
+    fn actual_cg_sampling_observer_preserves_configs_rng_count_and_next624() {
+        use crate::sr_cg::{CgObserver, CgProductPhase};
+        use std::{cell::Cell, rc::Rc};
+        #[derive(Default)]
+        struct CountProducts(Cell<usize>);
+        impl CgObserver for CountProducts {
+            fn product(&self, _: CgProductPhase, _: &[f64], _: &[f64]) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let (mut baseline, mut base_state, mut base_rng) =
+            prepared_case(3, "heisenberg_chain_real");
+        baseline.modpara.nsrcg = 1;
+        let (mut data, mut state, mut rng) = prepared_case(3, "heisenberg_chain_real");
+        data.modpara.nsrcg = 1;
+        let baseline_dir = fresh_output_directory().unwrap();
+        let observed_dir = fresh_output_directory().unwrap();
+        vmc_para_opt(
+            &mut baseline,
+            &mut base_state,
+            &mut base_rng,
+            Some(&baseline_dir),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap();
+        let observer = Rc::new(CountProducts::default());
+        let guard = crate::sr_cg::install_cg_observer(observer.clone()).unwrap();
+        vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            Some(&observed_dir),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap();
+        drop(guard);
+        assert!(observer.0.get() > 0);
+        // Exact Rust-to-Rust observer identity, not a floating reference policy.
+        let parameters = |data: &ExpertModeData| {
+            data.projection_parameters()
+                .into_iter()
+                .chain(data.rbm_parameters())
+                .chain(data.slater_params.iter().copied())
+                .chain(data.opt_trans.iter().copied())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(parameters(&data), parameters(&baseline));
+        assert_eq!(data.optimization_flags, baseline.optimization_flags);
+        assert_eq!(state.energy.wc, base_state.energy.wc);
+        assert_eq!(state.energy.etot, base_state.energy.etot);
+        assert_eq!(state.energy.etot2, base_state.energy.etot2);
+        assert_eq!(
+            state.sr_opt.sr_opt_oo_real,
+            base_state.sr_opt.sr_opt_oo_real
+        );
+        assert_eq!(
+            state.sr_opt.sr_opt_ho_real,
+            base_state.sr_opt.sr_opt_ho_real
+        );
+        assert_eq!(state.sr_opt.sr_opt_oo, base_state.sr_opt.sr_opt_oo);
+        assert_eq!(state.sr_opt.sr_opt_ho, base_state.sr_opt.sr_opt_ho);
+        assert_eq!(
+            state.sr_opt.sr_opt_o_store_real,
+            base_state.sr_opt.sr_opt_o_store_real
+        );
+        assert_eq!(
+            state.sr_opt.sr_opt_o_store,
+            base_state.sr_opt.sr_opt_o_store
+        );
+        let files = |directory: &Path| {
+            let mut files: Vec<_> = fs::read_dir(directory)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect();
+            files.sort();
+            files
+        };
+        let expected_files = files(&baseline_dir);
+        assert_eq!(files(&observed_dir), expected_files);
+        for file in expected_files {
+            assert_eq!(
+                fs::read(observed_dir.join(&file)).unwrap(),
+                fs::read(baseline_dir.join(&file)).unwrap(),
+                "observer identity: {file:?}"
+            );
+        }
+        assert_eq!(
+            state.electron_config.ele_cfg,
+            base_state.electron_config.ele_cfg
+        );
+        assert_eq!(
+            state.electron_config.ele_idx,
+            base_state.electron_config.ele_idx
+        );
+        assert_eq!(
+            state.electron_config.ele_num,
+            base_state.electron_config.ele_num
+        );
+        assert_eq!(
+            state.electron_config.ele_spn,
+            base_state.electron_config.ele_spn
+        );
+        assert_eq!(
+            state.electron_config.counter,
+            base_state.electron_config.counter
+        );
+        assert_eq!(rng.words_consumed(), base_rng.words_consumed());
+        for _ in 0..624 {
+            assert_eq!(rng.gen_rand32(), base_rng.gen_rand32());
+        }
+        fs::remove_dir_all(baseline_dir).unwrap();
+        fs::remove_dir_all(observed_dir).unwrap();
     }
 
     #[test]
@@ -4190,7 +4907,14 @@ mod callback_tests {
             let complex = get_all_complex_flag(&data);
             let fsz = data.i_flg_orbital_general != 0;
             let mut timer = CTimer::<true>::new();
-            accumulate_observables(&data, &mut state, complex, fsz, &mut timer);
+            accumulate_observables(
+                &data,
+                &mut state,
+                complex,
+                fsz,
+                &mut timer,
+                &SingleProcessReducer,
+            );
             assert!(timer.elapsed_ns[45] > 0);
             let samples = data.modpara.nvmc_sample as usize;
             let n = state.sr_opt.sr_opt_size;
@@ -4265,7 +4989,14 @@ mod callback_tests {
             clear_phys_quantity(&mut state);
             let complex = get_all_complex_flag(&data);
             let fsz = data.i_flg_orbital_general != 0;
-            accumulate_observables(&data, &mut state, complex, fsz, &mut CTimer::<false>::new());
+            accumulate_observables(
+                &data,
+                &mut state,
+                complex,
+                fsz,
+                &mut CTimer::<false>::new(),
+                &SingleProcessReducer,
+            );
             assert_eq!(state.energy.wc, Complex64::new(0.0, 0.0), "{case}");
             assert_eq!(state.energy.etot, Complex64::new(0.0, 0.0), "{case}");
             assert!(state
@@ -4309,7 +5040,14 @@ mod callback_tests {
             let complex = get_all_complex_flag(&data);
             let fsz = data.i_flg_orbital_general != 0;
             let mut timer = CTimer::<true>::new();
-            accumulate_observables(&data, &mut state, complex, fsz, &mut timer);
+            accumulate_observables(
+                &data,
+                &mut state,
+                complex,
+                fsz,
+                &mut timer,
+                &SingleProcessReducer,
+            );
             assert!(timer.elapsed_ns[45] > 0);
             assert!(state
                 .sr_opt

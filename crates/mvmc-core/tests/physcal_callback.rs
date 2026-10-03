@@ -1,4 +1,6 @@
 //! Focused PhysCal callback contract tests.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 
 use std::cell::Cell;
 use std::fs;
@@ -45,6 +47,46 @@ fn output_snapshot(dir: &Path) -> Vec<(String, String)> {
 }
 
 #[test]
+fn in_place_callback_error_retains_actual_completed_sample_rng_and_state() {
+    // Both sides execute the same public production core, not a sampler replay.
+    // This local boundary check complements the independent trajectory fixtures.
+    let baseline = mvmc_core::vmc_phys_cal_with_reducer(
+        preparation(1),
+        None,
+        &mvmc_core::SingleProcessReducer,
+    )
+    .unwrap();
+    let mut prepared = preparation(3);
+    let mut state = mvmc_core::VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+    let mut calls = Vec::new();
+    let mut callback = |sample, _: &ExpertModeData, _: Complex64, _| {
+        calls.push(sample);
+        Err("stop after completed sample".to_string())
+    };
+    let error = mvmc_core::vmc_phys_cal_in_place(
+        &mut prepared.data,
+        &mut state,
+        &mut prepared.rng,
+        None,
+        &mvmc_core::SingleProcessReducer,
+        Some(&mut callback),
+    )
+    .unwrap_err();
+    assert_eq!(error, "stop after completed sample");
+    assert_eq!(calls, [0]);
+    assert_eq!(state.electron_config, baseline.state.electron_config);
+    assert_eq!(prepared.data.slater_params, baseline.data.slater_params);
+    let mut expected_rng = baseline.final_rng;
+    for word in 0..624 {
+        assert_eq!(
+            prepared.rng.gen_rand32(),
+            expected_rng.gen_rand32(),
+            "draw after callback error at word {word}"
+        );
+    }
+}
+
+#[test]
 fn callback_is_called_for_each_sample_after_average_without_changing_run() {
     let baseline_dir =
         std::env::temp_dir().join(format!("mvmc-physcal-callback-base-{}", std::process::id()));
@@ -74,18 +116,85 @@ fn callback_is_called_for_each_sample_after_average_without_changing_run() {
     );
     assert!(observations.iter().all(|row| row.2 == 0));
     assert_eq!(baseline.iterations, observed.iterations);
+    let mut baseline_rng = baseline.final_rng.clone();
+    let mut observed_rng = observed.final_rng.clone();
+    for word in 0..624 {
+        assert_eq!(
+            baseline_rng.gen_rand32(),
+            observed_rng.gen_rand32(),
+            "callback changed actual runner RNG word {word}"
+        );
+    }
     assert_eq!(baseline.data.slater_params, observed.data.slater_params);
     assert_eq!(
         baseline.state.electron_config,
         observed.state.electron_config
     );
-    assert_eq!(baseline.state.energy, observed.state.energy);
-    assert_eq!(observations.last().unwrap().1, observed.state.energy.etot);
-    assert_eq!(baseline.data.qp_weights, observed.data.qp_weights);
-    assert_eq!(
-        output_snapshot(&baseline_dir),
-        output_snapshot(&callback_dir)
+    // Three measurement frames use the merged policy's accumulation budget.
+    let energy_values = |energy: &mvmc_core::EnergyData| {
+        [
+            energy.wc,
+            energy.etot,
+            energy.etot2,
+            energy.sztot,
+            energy.sztot2,
+        ]
+        .into_iter()
+        .flat_map(|value| [value.re, value.im])
+        .collect::<Vec<_>>()
+    };
+    numerical_comparison::assert_values_close(
+        energy_values(&observed.state.energy),
+        energy_values(&baseline.state.energy),
+        1e-12,
+        1e-12,
+        "callback measurement energy",
     );
+    assert_eq!(observations.last().unwrap().1, observed.state.energy.etot);
+    let expected_weights = baseline.data.qp_weights.as_ref().unwrap();
+    let actual_weights = observed.data.qp_weights.as_ref().unwrap();
+    // QP initialization is a short coefficient/quadrature calculation.
+    for (actual, expected) in [
+        (
+            &actual_weights.qp_full_weight,
+            &expected_weights.qp_full_weight,
+        ),
+        (
+            &actual_weights.qp_fix_weight,
+            &expected_weights.qp_fix_weight,
+        ),
+        (&actual_weights.spgl_cos, &expected_weights.spgl_cos),
+        (&actual_weights.spgl_sin, &expected_weights.spgl_sin),
+        (&actual_weights.spgl_cos_sin, &expected_weights.spgl_cos_sin),
+        (&actual_weights.spgl_cos_cos, &expected_weights.spgl_cos_cos),
+        (&actual_weights.spgl_sin_sin, &expected_weights.spgl_sin_sin),
+    ] {
+        numerical_comparison::assert_values_close(
+            actual.iter().flat_map(|value| [value.re, value.im]),
+            expected.iter().flat_map(|value| [value.re, value.im]),
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "callback QP weights",
+        );
+    }
+    let baseline_files = output_snapshot(&baseline_dir);
+    let callback_files = output_snapshot(&callback_dir);
+    assert_eq!(baseline_files.len(), callback_files.len());
+    for ((name, expected), (actual_name, actual)) in baseline_files.iter().zip(&callback_files) {
+        assert_eq!(name, actual_name);
+        // Indexed Green output retains its coordinates exactly; scalar output
+        // has no index columns. Formatting has separate writer tests.
+        let indices: &[usize] = if name.contains("cisajscktaltex") {
+            &[]
+        } else if name.contains("cisajscktalt") {
+            &[0, 1, 2, 3, 4, 5, 6, 7]
+        } else if name.contains("cisajs") {
+            &[0, 1, 2, 3]
+        } else {
+            &[]
+        };
+        numerical_comparison::assert_numeric_text(actual, expected, 1e-12, 1e-12, indices, name);
+    }
 
     let _ = fs::remove_dir_all(baseline_dir);
     let _ = fs::remove_dir_all(callback_dir);

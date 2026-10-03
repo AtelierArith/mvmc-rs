@@ -1,0 +1,30 @@
+2 5 1 1 4 4 4 3 3 3 4 4 4 12 3 1 6 6 1
+0 1 1
+0 1 1 1 1 1
+0 1 1 1 1 1 1
+0 1 1 1 1 1 1 1 1 1 1
+0 1 1 0 0
+0 1 1 0 0
+1 1 1 0 0
+0 1 1 0
+0 1 1 0
+1 1 1 0
+0 1 1 0 0
+0 1 1 0 0
+1 1 1 0 0
+1 1 1 1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 1 1 0 1 1 1 0 1 1 0 1 1 0 1 1 0 1 1 1 0 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+0.25 -0.75 0.5
+/workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/opttrans.def
+30 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbmhidden.def
+32 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
+31 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
+28 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/indh2.def
+29 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/indh4.def
+36 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbmhidden.def
+38 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
+37 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
+48 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inopttrans.def
+33 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbmhidden.def
+35 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
+34 /workspaces/mvmc-rs/tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs/inrbm.def
