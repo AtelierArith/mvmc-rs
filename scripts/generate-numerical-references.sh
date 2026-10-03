@@ -7,6 +7,7 @@ reference=c
 output=
 check=false
 instantiate=false
+prefixes=1,2,3,50
 compiler=${CC:-cc}
 julia_binary=${JULIA_BINARY:-}
 selected=()
@@ -26,6 +27,7 @@ The source checkout and its macOS fixtures are never overwritten by generation.
   --compiler EXECUTABLE  C compiler; default $CC or cc (one executable)
   --julia EXECUTABLE     Julia 1.13.1 binary; otherwise Julia binary/juliaup on PATH
   --instantiate          Instantiate/build Julia packages in the staging copy
+  --steps 1,2,3,50      Prefixes for explicitly selected Linux Julia runners
   --list                 List supported suites, without running prerequisites
   --apply DIRECTORY      Apply previously reviewed successful staging changes
   --help                 Print this help
@@ -66,6 +68,16 @@ julia-fsz-setup          Small real FSZ setup/failure/RNG cases
 julia-fsz-moves          Small real FSZ proposals/inverse/bilinear cases
 julia-fsz-real-sampling  Small real FSZ sampling/RNG cases (explicit selection)
 julia-fsz-complex-sampling Small complex FSZ sampling/RNG cases (explicit selection)
+julia-linux-all          Full historical Linux overlay (explicit, longer workload)
+julia-linux-setup        Linux overlay: fixed setup
+julia-linux-real-sampling Linux overlay: real sampling
+julia-linux-complex-sampling Linux overlay: complex sampling
+julia-linux-dh2-history  Linux overlay: DH2 history
+julia-linux-dh4-history  Linux overlay: DH4/DH24 history
+julia-linux-direct-CASE  Linux overlay: Direct SR, NStore=0
+julia-linux-store-CASE   Linux overlay: Direct SR, NStore=1
+julia-linux-cg-CASE      Linux overlay: CG
+  CASE: fsz interall pairhop_fsz dh2_fsz dh4_fsz dh24_fsz rbm_fsz opt_fsz
 LIST
 }
 suite_script() {
@@ -90,6 +102,7 @@ suite_script() {
         c-interall-complex) suite_file=check_interall_complex_c_parity.py ;;
         c-fsz-real) suite_file=check_fsz_green_c_parity.py; suite_flags=(--real) ;;
         c-fsz-complex) suite_file=check_fsz_green_c_parity.py ;;
+        julia-linux-*) suite_file=generate_linux_julia_references.jl ;;
         julia-fsz-setup) suite_file=check_real_fsz_setup_parity.jl ;;
         julia-fsz-moves) suite_file=check_real_fsz_moves_parity.jl ;;
         julia-fsz-real-sampling) suite_file=check_real_fsz_sampling_parity.jl ;;
@@ -101,9 +114,10 @@ while (($#)); do
     case "$1" in
         --help|-h) help; exit 0 ;;
         --list) list; exit 0 ;;
-        --reference|--workspace|--output|--suite|--compiler|--julia|--apply)
+        --reference|--workspace|--output|--suite|--compiler|--julia|--apply|--steps)
             (($# >= 2)) || { echo "Missing value: $1" >&2; exit 2; }
             case "$1" in
+                --steps) prefixes=$2 ;;
                 --reference) reference=$2 ;;
                 --workspace) root=$(cd "$2" && pwd -P) ;;
                 --output) output=$2 ;;
@@ -196,8 +210,10 @@ if $needs_julia; then
     cat "$output/julia-environment.log"
 fi
 cd "$output/workspace"
+linux_suites=()
 for suite in "${selected[@]}"; do
     suite_script "$suite"
+    if [[ $suite == julia-linux-* ]]; then linux_suites+=("$suite"); continue; fi
     case "$suite" in
         c-*) command_args=(uv run --no-project python "scripts/$suite_file") ;;
         julia-*) command_args=("${julia_command[@]}" --startup-file=no --project=extern/Julia-mVMC "scripts/$suite_file") ;;
@@ -210,3 +226,12 @@ for suite in "${selected[@]}"; do
     echo "Running $suite"
     "${command_args[@]}" 2>&1 | tee "$output/$suite.log"
 done
+
+if ((${#linux_suites[@]})); then
+    command_args=("${julia_command[@]}" --startup-file=no --project=extern/Julia-mVMC scripts/generate_linux_julia_references.jl "$prefixes" "$output/julia-generated-paths.txt" "${linux_suites[@]}")
+    printf '%s\t' julia-linux-overlay >> "$output/commands.txt"
+    printf '%q ' "${command_args[@]}" >> "$output/commands.txt"
+    printf '\n' >> "$output/commands.txt"
+    "${command_args[@]}" 2>&1 | tee "$output/julia-linux-overlay.log"
+    uv run --no-project python "$helper" julia-overlay "$root" "$output" "$check"
+fi

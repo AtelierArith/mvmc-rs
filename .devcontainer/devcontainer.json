@@ -1,59 +1,52 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
 {
-	"name": "mvmc-dev-container",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
-	"features": {
-	    "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-			"packages": "nano,git,tig,openssh-server,gnuplot,build-essential,cmake,gfortran,libopenblas-dev,liblapack-dev,libopenmpi-dev,openmpi-bin,"
-		},
-		"ghcr.io/julialang/devcontainer-features/julia:1": {
-			"channel": "release"
-		},
-		"ghcr.io/devcontainers/features/rust:1.5.0": {},
-		// https://github.com/devcontainers/features/tree/main/src/python#options
-		"ghcr.io/devcontainers/features/python:1": {
-			"installTools": true,
-			"toolsToInstall": "jupytext, ruff, uv",
-			"installJupyterlab": true,
-			"optimize": false,
-			"version": "3.12"
-		}
-	},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"julialang.language-julia",
-				"tamasfe.even-better-toml",
-				"ms-toolsai.jupyter",
-				"ms-python.python",
-				"mhutchie.git-graph",
-				"congyiwu.vscode-jupytext",
-				"charliermarsh.ruff",
-				"wdawson.better-kill-ring",
-				"ms-vscode.cpptools",
-				"twxs.cmake",
-				"ms-vscode.cmake-tools"
-			]
-		}
-	},
-
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// https://github.com/fonsp/Pluto.jl/issues/687
-	// import Pluto; Pluto.run(require_secret_for_access=false, require_secret_for_open_links=false)
-	"forwardPorts": [1234, 8000, 8080, 8888],
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	//"postCreateCommand": "julia script/postcreatecommand.jl",
-
-	// Configure tool-specific properties.
-	// "customizations": {},
-
-	"remoteEnv": {
-		"JULIA_PROJECT": "@.",
-		"JULIA_NUM_THREADS": "auto"
-	}
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+  "name": "mVMC Rust (Linux x86_64)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "options": [
+      "--platform=linux/amd64"
+    ]
+  },
+  "runArgs": [
+    "--platform=linux/amd64"
+  ],
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "mounts": [
+    "source=mvmc-cargo-${devcontainerId},target=/home/vscode/.cargo,type=volume",
+    "source=mvmc-linux-cache-${devcontainerId},target=/home/vscode/.cache/mvmc,type=volume",
+    "source=${localWorkspaceFolder}/.devcontainer/cargo-config.toml,target=${containerWorkspaceFolder}/.cargo/config.toml,type=bind,readonly"
+  ],
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "julialang.language-julia",
+        "ms-toolsai.jupyter",
+        "ms-python.python",
+        "mhutchie.git-graph",
+        "congyiwu.vscode-jupytext",
+        "charliermarsh.ruff",
+        "wdawson.better-kill-ring",
+        "ms-vscode.cpptools",
+        "twxs.cmake",
+        "ms-vscode.cmake-tools"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy"
+      }
+    }
+  },
+  "forwardPorts": [
+    1234,
+    8000,
+    8080,
+    8888
+  ],
+  "remoteEnv": {
+    "JULIA_PROJECT": "@.",
+    "JULIA_NUM_THREADS": "1"
+  }
 }

@@ -1,5 +1,9 @@
 # Development builds and tests
 
+For a Linux x86_64 environment with Rust, nextest, kache, uv, BLAS/LAPACK and
+MPI already configured, open the repository's [Dev Container](DEV_CONTAINER.md).
+Its Cargo targets and caches are isolated from host macOS artifacts.
+
 Use `cargo nextest run` for Rust unit and integration tests. Start with a
 targeted test while changing code, then run the workspace regressions. Run
 documentation tests separately:

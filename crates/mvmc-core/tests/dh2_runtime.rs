@@ -1,6 +1,8 @@
 //! DH2 production support and canonical complex-mode selection.
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+#[path = "../../../tests/support/julia_fixture.rs"]
+mod julia_fixture;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -92,7 +94,14 @@ fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_outp
                 declared_output(
                     &data,
                     name,
-                    std::fs::read_to_string(reference.join(format!("step-3-{name}"))).unwrap()
+                    std::fs::read_to_string(julia_fixture::fixture_path(
+                        &root,
+                        reference
+                            .strip_prefix(&root)
+                            .unwrap()
+                            .join(format!("step-3-{name}"))
+                    ))
+                    .unwrap()
                 ),
                 "{mode} {name}"
             );

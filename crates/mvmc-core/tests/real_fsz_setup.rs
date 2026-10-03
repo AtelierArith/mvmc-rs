@@ -1,4 +1,5 @@
 //! Julia 1.13.1 real FSZ setup fixtures, including full post-retry RNG blocks.
+
 use mvmc_core::pfaffian::{calc_m_all_fsz_real, CalcMAllError};
 use mvmc_core::sampling::initial::make_initial_sample_fsz_real;
 use mvmc_core::{ExpertModeData, SlaterMatrixData, ThreadedPfaPackWorkspace, VmcOptimizationState};
@@ -41,7 +42,15 @@ fn assert_bits(actual: impl IntoIterator<Item = f64>, expected: &[f64]) {
 
 #[test]
 fn real_fsz_calculation_and_initial_retries_match_julia() {
-    let fixture = include_str!("../../../tests/fixtures/real_fsz/setup.txt");
+    let fixture = if cfg!(all(
+        target_os = "linux",
+        target_env = "gnu",
+        target_arch = "x86_64"
+    )) {
+        include_str!("../../../tests/fixtures/linux_gnu_julia/real_fsz/setup.txt")
+    } else {
+        include_str!("../../../tests/fixtures/real_fsz/setup.txt")
+    };
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     for _ in 0..16 {
         let header = integers(lines.next().unwrap());
@@ -61,6 +70,16 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
         calc_m_all_fsz_real(&idx, &spins, &mut s, 1, 3, ns, ne, &pool).unwrap();
         assert_bits(s.pf_m.iter().flat_map(|z| [z.re, z.im]), &pf);
         assert_bits(s.pf_m_real.iter().copied(), &real_pf);
+        // Published inverse values use native-library arithmetic; unchanged
+        // QP planes remain an exact state-preservation gate.
+        for qp in [0, 3] {
+            assert!(s
+                .inv_m
+                .qp_matrix_slice(qp)
+                .iter()
+                .all(|&z| z == Complex64::new(37.0, 11.0)));
+            assert!(s.inv_m_real.qp_matrix_slice(qp).iter().all(|&v| v == 23.0));
+        }
         assert_bits(
             (0..4).flat_map(|qp| {
                 s.inv_m

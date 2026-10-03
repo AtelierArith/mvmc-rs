@@ -1991,7 +1991,12 @@ fn refresh_fsz_observation_matrix(
 }
 
 #[cfg(test)]
+#[path = "../../../tests/support/julia_fixture.rs"]
+mod julia_fixture;
+
+#[cfg(test)]
 mod callback_tests {
+    use super::julia_fixture;
     use super::*;
 
     use super::reference_slater::{declared_output, declared_slater_rows};
@@ -2533,7 +2538,21 @@ mod callback_tests {
                 OptimizationOptions::default(),
             )
             .unwrap();
-            let text = fs::read_to_string(root.join(format!("history-{mode}.txt"))).unwrap();
+            let fixtures = root.parent().unwrap();
+            let case = format!("dh2_{mode}");
+            let read_checkpoint = |kind: &str| {
+                fs::read_to_string(julia_fixture::fixture_path(
+                    fixtures,
+                    format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
+                ))
+                .unwrap()
+            };
+            assert_sampling_checkpoint(&case, 3, &state, &mut rng, &read_checkpoint);
+            let text = fs::read_to_string(julia_fixture::fixture_path(
+                fixtures,
+                format!("dh2/history-{mode}.txt"),
+            ))
+            .unwrap();
             let mut lines = text.lines().skip(1);
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
@@ -2627,7 +2646,21 @@ mod callback_tests {
                 OptimizationOptions::default(),
             )
             .unwrap();
-            let text = fs::read_to_string(root.join(format!("history-{mode}.txt"))).unwrap();
+            let fixtures = root.parent().unwrap();
+            let case = mode.to_owned();
+            let read_checkpoint = |kind: &str| {
+                fs::read_to_string(julia_fixture::fixture_path(
+                    fixtures,
+                    format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
+                ))
+                .unwrap()
+            };
+            assert_sampling_checkpoint(&case, 3, &state, &mut rng, &read_checkpoint);
+            let text = fs::read_to_string(julia_fixture::fixture_path(
+                fixtures,
+                format!("dh4/history-{mode}.txt"),
+            ))
+            .unwrap();
             let mut lines = text.lines().skip(1);
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
@@ -3055,12 +3088,82 @@ mod callback_tests {
         check_sr_prefixes("rbm_reference_cmp", true, 0);
     }
 
+    fn assert_sampling_checkpoint(
+        case: &str,
+        steps: i64,
+        state: &VmcOptimizationState,
+        rng: &mut Sfmt19937Rng,
+        read: &impl Fn(&str) -> String,
+    ) {
+        // The complete saved state and SFMT block are independent gates:
+        // numerical comparison must never prevent detecting trajectory drift.
+        let conf = read("configs");
+        let mut lines = conf.lines();
+        for (name, actual) in [
+            ("indices", &state.electron_config.ele_idx),
+            ("configuration", &state.electron_config.ele_cfg),
+            ("occupancy", &state.electron_config.ele_num),
+            ("projection", &state.electron_config.ele_proj_cnt),
+        ] {
+            let expected: Vec<i64> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect();
+            assert_eq!(actual, &expected, "step {steps} {name}");
+        }
+        if matches!(
+            case,
+            "interall" | "pairhop_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz" | "rbm_fsz" | "opt_fsz"
+        ) {
+            for (name, actual) in [
+                ("spins", &state.electron_config.ele_spn),
+                ("burn", &state.electron_config.burn_ele_idx),
+                ("counters", &state.electron_config.counter.to_vec()),
+            ] {
+                let expected: Vec<i64> = lines
+                    .next()
+                    .unwrap()
+                    .split_whitespace()
+                    .map(|v| v.parse().unwrap())
+                    .collect();
+                assert_eq!(actual, &expected, "step {steps} {name}");
+            }
+        }
+        if (case.starts_with("rbm_") || case.starts_with("opt_"))
+            && case != "rbm_fsz"
+            && case != "opt_fsz"
+        {
+            for (name, actual) in [
+                ("burn", &state.electron_config.burn_ele_idx),
+                ("counters", &state.electron_config.counter.to_vec()),
+            ] {
+                let expected: Vec<i64> = lines
+                    .next()
+                    .unwrap()
+                    .split_whitespace()
+                    .map(|v| v.parse().unwrap())
+                    .collect();
+                assert_eq!(actual, &expected, "{case} step {steps} {name}");
+            }
+        }
+        assert!(lines.next().is_none());
+        let expected: Vec<u32> = read("rng")
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        let actual: Vec<u32> = (0..624).map(|_| rng.gen_rand32()).collect();
+        assert_eq!(actual, expected, "step {steps} RNG block");
+    }
+
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
         let reference_case = if case == "general" { "fsz" } else { case };
         // C's counter grouping and subthreshold Slater retention differ from
         // Julia. These cases use a separately labelled mixed reference whose
         // counter translation is checked against all 4,994 native C cases.
         let c_kernel_order = case == "rbm_reference_cmp" || (case == "opt_real" && !cg);
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(if c_kernel_order && cg {
                 "../../tests/fixtures/c_kernel_order/sr_cg"
@@ -3079,6 +3182,9 @@ mod callback_tests {
                     "_store_runner"
                 }
             ));
+        let fixture_file = |name: &str| {
+            julia_fixture::fixture_path(&fixtures, root.strip_prefix(&fixtures).unwrap().join(name))
+        };
         let prefixes = if !cg && case == "hubbard" {
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 50]
         } else if !cg && store == 0 && case == "opt_real" {
@@ -3179,7 +3285,7 @@ mod callback_tests {
             );
             let failed = if case == "rbm_fsz" || case.starts_with("opt_") {
                 let status =
-                    fs::read_to_string(root.join(format!("step-{steps}-status.txt"))).unwrap();
+                    fs::read_to_string(fixture_file(&format!("step-{steps}-status.txt"))).unwrap();
                 let mut status = status.split_whitespace();
                 let info: i32 = status.next().unwrap().parse().unwrap();
                 let step: i32 = status.next().unwrap().parse().unwrap();
@@ -3195,45 +3301,16 @@ mod callback_tests {
                 false
             };
             let read = |kind: &str| {
-                fs::read_to_string(root.join(format!("step-{steps}-{kind}.txt"))).unwrap()
+                fs::read_to_string(fixture_file(&format!("step-{steps}-{kind}.txt"))).unwrap()
             };
-            if case.starts_with("rbm_") || case.starts_with("opt_") {
-                let mut probe = rng.clone();
-                let expected: Vec<u32> = read("rng")
-                    .split_whitespace()
-                    .map(|v| v.parse().unwrap())
-                    .collect();
-                assert_eq!(
-                    (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
-                    expected,
-                    "{case} step {steps} RNG before numerical checks"
-                );
-                let configurations = read("configs");
-                for ((name, actual), line) in [
-                    ("indices", &state.electron_config.ele_idx),
-                    ("configuration", &state.electron_config.ele_cfg),
-                    ("occupation", &state.electron_config.ele_num),
-                ]
-                .into_iter()
-                .zip(configurations.lines())
-                {
-                    let expected: Vec<i64> = line
-                        .split_whitespace()
-                        .map(|v| v.parse().unwrap())
-                        .collect();
-                    assert_eq!(
-                        actual, &expected,
-                        "{case} step {steps} {name} before numerical checks"
-                    );
-                }
-            }
+            assert_sampling_checkpoint(case, steps, &state, &mut rng, &read);
             let bits = |text: &str| -> Vec<u64> {
                 text.split_whitespace()
                     .map(|v| u64::from_str_radix(v, 16).unwrap())
                     .collect()
             };
             if (case.starts_with("rbm_") || case.starts_with("opt_")) && steps == 1 && !cg {
-                let fixture = fs::read_to_string(root.join("fixed-input.txt")).unwrap();
+                let fixture = fs::read_to_string(fixture_file("fixed-input.txt")).unwrap();
                 let lines: Vec<&str> = fixture.lines().filter(|l| !l.starts_with('#')).collect();
                 let complex_bits = |values: &[Complex64]| -> Vec<u64> {
                     values
@@ -3265,7 +3342,7 @@ mod callback_tests {
                 assert_eq!(oo, bits(lines[2]), "{case} sampled SR OO");
                 assert_eq!(ho, bits(lines[3]), "{case} sampled SR HO");
                 if store == 1 {
-                    let fixture = fs::read_to_string(root.join("gram.txt")).unwrap();
+                    let fixture = fs::read_to_string(fixture_file("gram.txt")).unwrap();
                     let expected = bits(fixture.lines().nth(1).unwrap());
                     let actual = if get_all_complex_flag(&data) {
                         complex_bits(&state.sr_opt.sr_opt_o_store)
@@ -3312,70 +3389,6 @@ mod callback_tests {
                 bits(&read("energy")),
                 "step {steps} energy"
             );
-            let conf = read("configs");
-            let mut lines = conf.lines();
-            for (name, actual) in [
-                ("indices", &state.electron_config.ele_idx),
-                ("configuration", &state.electron_config.ele_cfg),
-                ("occupancy", &state.electron_config.ele_num),
-                ("projection", &state.electron_config.ele_proj_cnt),
-            ] {
-                let expected: Vec<i64> = lines
-                    .next()
-                    .unwrap()
-                    .split_whitespace()
-                    .map(|v| v.parse().unwrap())
-                    .collect();
-                assert_eq!(actual, &expected, "step {steps} {name}");
-            }
-            if matches!(
-                case,
-                "interall"
-                    | "pairhop_fsz"
-                    | "dh2_fsz"
-                    | "dh4_fsz"
-                    | "dh24_fsz"
-                    | "rbm_fsz"
-                    | "opt_fsz"
-            ) {
-                for (name, actual) in [
-                    ("spins", &state.electron_config.ele_spn),
-                    ("burn", &state.electron_config.burn_ele_idx),
-                    ("counters", &state.electron_config.counter.to_vec()),
-                ] {
-                    let expected: Vec<i64> = lines
-                        .next()
-                        .unwrap()
-                        .split_whitespace()
-                        .map(|v| v.parse().unwrap())
-                        .collect();
-                    assert_eq!(actual, &expected, "step {steps} {name}");
-                }
-            }
-            if (case.starts_with("rbm_") || case.starts_with("opt_"))
-                && case != "rbm_fsz"
-                && case != "opt_fsz"
-            {
-                for (name, actual) in [
-                    ("burn", &state.electron_config.burn_ele_idx),
-                    ("counters", &state.electron_config.counter.to_vec()),
-                ] {
-                    let expected: Vec<i64> = lines
-                        .next()
-                        .unwrap()
-                        .split_whitespace()
-                        .map(|v| v.parse().unwrap())
-                        .collect();
-                    assert_eq!(actual, &expected, "{case} step {steps} {name}");
-                }
-            }
-            assert!(lines.next().is_none());
-            let expected: Vec<u32> = read("rng")
-                .split_whitespace()
-                .map(|v| v.parse().unwrap())
-                .collect();
-            let actual: Vec<u32> = (0..624).map(|_| rng.gen_rand32()).collect();
-            assert_eq!(actual, expected, "step {steps} RNG block");
             if cg {
                 assert_eq!(
                     fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap(),
@@ -3399,7 +3412,8 @@ mod callback_tests {
                     if failed && name.starts_with("zqp_") {
                         assert!(!dir.join(name).exists(), "{case} {steps} {name}");
                         assert_eq!(
-                            fs::read_to_string(root.join(format!("step-{steps}-{name}"))).unwrap(),
+                            fs::read_to_string(fixture_file(&format!("step-{steps}-{name}")))
+                                .unwrap(),
                             "# absent after source SR failure\n"
                         );
                     } else {
@@ -3408,7 +3422,7 @@ mod callback_tests {
                             declared_runner_output(
                                 &data,
                                 name,
-                                fs::read_to_string(root.join(format!("step-{steps}-{name}")))
+                                fs::read_to_string(fixture_file(&format!("step-{steps}-{name}")))
                                     .unwrap(),
                                 &rbm_before_sr,
                             ),

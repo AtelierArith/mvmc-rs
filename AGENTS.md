@@ -57,6 +57,8 @@ Julia-side verification may accept numerical calculation error with explicit, ju
 
 ## Commit & Pull Request Guidelines
 
+Create an issue describing the problem, scope and acceptance criteria before starting new implementation work. If the related issue is already closed but work remains, create a follow-up issue and link the earlier issue. Implement and validate against that open issue, then reference it in the pull request.
+
 Recent history uses short imperative commit subjects such as `Optimize utu2 inverse slice access` and `Add SIMD plus BLAS benchmark variant`. Keep commits focused and avoid mixing generated benchmark artifacts with code changes unless the report is requested. Pull requests should describe the numerical behavior changed, list commands run, mention enabled features such as `simd-backend` or `blas-backend`, and link related issues. Every pull request body must explicitly identify the related issue with `Closes #...` when it completes the issue or `Related to #...` when the issue remains open. Include benchmark report paths when performance claims are made.
 
 For the issue #56 implementation work, commit each validated implementation milestone, create a pull request, and merge it into `main` before starting the next milestone on a new branch. This workflow is authorized by the user; do not ask for confirmation at each commit, pull request, or merge. Keep issues open until their full acceptance criteria have been implemented and verified.
@@ -66,6 +68,10 @@ Julia reference defects should be fixed on a dedicated fork branch with focused 
 ## Agent-Specific Instructions
 
 Do not revert unrelated user changes. Prefer `rg` for repository searches. Treat `extern/` as reference material unless directed otherwise, and keep generated `target*` directories out of commits.
+
+Use the Linux x86_64 environment in `.devcontainer/` for container development. Keep container Cargo targets and caches in its named volumes, separate from macOS artifacts. Follow [docs/DEV_CONTAINER.md](docs/DEV_CONTAINER.md) for opening, verification and reference-generation commands; ordinary Rust tests must remain independent of reference runtimes.
+
+Until issue #186 is resolved, prioritize matching native macOS C behavior. After #186 is resolved, use Linux as the numerical reference environment; on a non-Linux host run numerical work in the Linux x86_64 Dev Container. Keep independent platform fixtures and provenance, and do not present one platform's results as verification of the other. Rust and Julia can use different BLAS providers or integer ABIs; for BLAS-dependent Julia comparisons, justified absolute/relative error bounds are permitted after locating the numerical divergence and verifying exact RNG, controls and configurations. Preserve reproducible native C kernel checks and the C numerical contract; do not impose universal bit identity across different BLAS backends.
 
 ## Local Agent Skills
 

@@ -147,3 +147,25 @@ temporary Git repository: changed oracle source and altered staged outputs
 were rejected before writes, while unrelated Rust edits were allowed and file
 permissions were preserved. These tool checks do not prove full Rust workspace
 tests are green or that numerical contracts are identical across platforms.
+
+
+For independent historical Linux Julia overlays, use an explicit suite:
+
+```sh
+scripts/generate-numerical-references.sh --suite julia-linux-cg-fsz --steps 1 --check
+scripts/generate-numerical-references.sh --suite julia-linux-all --output /tmp/linux-julia-review
+```
+
+These commands require Linux x86_64 and Julia 1.13.1 with the pinned manifest.
+The full suite includes setup, sampling, DH histories and all eight FSZ runner
+families, using prefixes 1,2,3,50. It is longer than the default two small Julia
+suites. `--list` lists per-case choices and `--steps` restricts runner prefixes.
+The staged generators record every independent output hash, preserve the
+historical fixture tree, and write changed consumed values to the Linux overlay.
+`--check` compares the generated values with that overlay or an identical
+historical fallback. The source checkout remains unchanged. Review the stage's
+`regeneration.json` in the overlay (a generation run) and `manifest.json` before applying.
+
+
+The `julia-fsz-*` suites retain their raw generator layout for small probes;
+select `julia-linux-*` when preparing platform overlays for application.

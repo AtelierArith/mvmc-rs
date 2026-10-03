@@ -578,6 +578,7 @@ fn calc_m_all_child_fsz_complex(
             &ws.pivots[..n_size],
             &mut ws.v_t_complex[..n_size - 1],
             &mut m_work,
+            fsz_inverse_divide,
         );
     }
 
@@ -585,6 +586,18 @@ fn calc_m_all_child_fsz_complex(
         *z = -*z;
     }
     Ok(())
+}
+
+// Julia's FSZ native C++ inverse uses the platform complex division runtime.
+// GNU/Linux uses libgcc's Smith ratio; retain the archived macOS arithmetic.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn fsz_inverse_divide(a: Complex64, b: Complex64) -> Complex64 {
+    crate::c_complex::divide(a, b)
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn fsz_inverse_divide(a: Complex64, b: Complex64) -> Complex64 {
+    a / b
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 //! Source-level real FSZ sampler parity; see the fixture README for the
 //! reference's unused save-log argument adaptation.
+
 use mvmc_core::sampling::vmc_make_sample_fsz_real;
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, LocSpinTerm, QuantumProjectionWeights};
@@ -89,7 +90,15 @@ fn state() -> VmcOptimizationState {
 
 #[test]
 fn real_fsz_sampler_matches_julia_configurations_counters_inverse_and_full_rng_blocks() {
-    let fixture = include_str!("../../../tests/fixtures/real_fsz/sampling.txt");
+    let fixture = if cfg!(all(
+        target_os = "linux",
+        target_env = "gnu",
+        target_arch = "x86_64"
+    )) {
+        include_str!("../../../tests/fixtures/linux_gnu_julia/real_fsz/sampling.txt")
+    } else {
+        include_str!("../../../tests/fixtures/real_fsz/sampling.txt")
+    };
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     while let Some(header) = lines.next() {
         let mut header_fields = header.split_whitespace();
@@ -132,27 +141,8 @@ fn real_fsz_sampler_matches_julia_configurations_counters_inverse_and_full_rng_b
         }
         let actual_burn = c.burn_ele_idx[..26].to_vec();
         assert_eq!(actual_burn, burn, "{header} burn");
-        assert_eq!(
-            s.slater_matrix
-                .pf_m_real
-                .iter()
-                .map(|v| v.to_bits())
-                .collect::<Vec<_>>(),
-            pf,
-            "{header} pf"
-        );
-        assert_eq!(
-            (0..2)
-                .flat_map(|qp| s
-                    .slater_matrix
-                    .inv_m_real
-                    .qp_matrix_slice(qp)
-                    .iter()
-                    .map(|v| v.to_bits()))
-                .collect::<Vec<_>>(),
-            inverse,
-            "{header} inverse"
-        );
+        // RNG and the complete saved/burn state must pass before comparing
+        // archived macOS Julia native-library results numerically.
         assert_eq!(
             (0..624)
                 .map(|_| rng.gen_rand32() as i64)
@@ -160,6 +150,23 @@ fn real_fsz_sampler_matches_julia_configurations_counters_inverse_and_full_rng_b
             rng_block,
             "{header} RNG"
         );
+        let actual_pf: Vec<_> = s
+            .slater_matrix
+            .pf_m_real
+            .iter()
+            .map(|v| v.to_bits())
+            .collect();
+        let actual_inverse: Vec<_> = (0..2)
+            .flat_map(|qp| {
+                s.slater_matrix
+                    .inv_m_real
+                    .qp_matrix_slice(qp)
+                    .iter()
+                    .map(|v| v.to_bits())
+            })
+            .collect();
+        assert_eq!(actual_pf, pf, "{header} pf");
+        assert_eq!(actual_inverse, inverse, "{header} inverse");
     }
 }
 
