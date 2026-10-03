@@ -36,6 +36,25 @@ struct Model {
     julia_input_dir: &'static str,
 }
 
+/// Commit-checked Hubbard-chain inputs generated with C StdFace (see
+/// `benchmark/hubbard_chain/README.md`). Used by `bench-hubbard`.
+const HUBBARD_MODELS: &[HubbardModel] = &[
+    HubbardModel {
+        name: "hubbard_chain_L16",
+    },
+    HubbardModel {
+        name: "hubbard_chain_L24",
+    },
+    HubbardModel {
+        name: "hubbard_chain_L32",
+    },
+];
+
+#[derive(Debug, Clone, Copy)]
+struct HubbardModel {
+    name: &'static str,
+}
+
 #[derive(Debug)]
 struct BenchConfig {
     steps: usize,
@@ -67,6 +86,13 @@ fn main() {
             let rest: Vec<String> = args.collect();
             if let Err(e) = bench_julia_vs_rust(&rest) {
                 eprintln!("xtask bench-julia: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some("bench-hubbard") => {
+            let rest: Vec<String> = args.collect();
+            if let Err(e) = bench_hubbard(&rest) {
+                eprintln!("xtask bench-hubbard: {e}");
                 std::process::exit(1);
             }
         }
@@ -570,6 +596,554 @@ fn write_csv(path: &Path, measurements: &[Measurement]) -> Result<(), String> {
     fs::write(path, body).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
+// ── bench-hubbard: report-parameter Rust vs Julia comparison ────────────────
+
+#[derive(Debug)]
+struct HubbardBenchConfig {
+    steps: usize,
+    reps: usize,
+    warmups: usize,
+    threads: usize,
+    keep_output: bool,
+    julia_root: PathBuf,
+    julia_bin: PathBuf,
+    csv: PathBuf,
+    report: PathBuf,
+    models: Vec<HubbardModel>,
+}
+
+fn bench_hubbard(args: &[String]) -> Result<(), String> {
+    let workspace = workspace_root();
+    let config = parse_hubbard_args(args, &workspace)?;
+
+    println!("=== Rust vs Julia Hubbard-chain benchmark ===");
+    println!("steps      : {}", config.steps);
+    println!("warmups    : {}", config.warmups);
+    println!("reps       : {}", config.reps);
+    println!(
+        "threads    : {} (pinned on both Rust & Julia)",
+        config.threads
+    );
+    println!("inputs     : benchmark/hubbard_chain/inputs");
+    println!("julia root : {}", config.julia_root.display());
+    println!("julia bin  : {}", config.julia_bin.display());
+    println!("csv        : {}", config.csv.display());
+    println!("report     : {}", config.report.display());
+    println!();
+
+    build_rust_cli(&workspace)?;
+
+    let run_root = workspace
+        .join("target")
+        .join("bench-output")
+        .join(format!("hubbard-{}", unix_timestamp_millis()));
+    fs::create_dir_all(&run_root)
+        .map_err(|e| format!("cannot create {}: {e}", run_root.display()))?;
+
+    let julia_runner = write_julia_runner(&workspace)?;
+    let mut measurements = Vec::new();
+
+    for model in &config.models {
+        println!("--- {} ---", model.name);
+        let rust = run_rust_hubbard(&workspace, &run_root, *model, &config)?;
+        print_summary("rust", &rust);
+        measurements.extend(rust);
+
+        let julia = run_julia_hubbard(
+            &config.julia_root,
+            &julia_runner,
+            &run_root,
+            *model,
+            &config,
+        )?;
+        print_summary("julia", &julia);
+        measurements.extend(julia);
+        println!();
+    }
+
+    write_csv(&config.csv, &measurements)?;
+    print_hubbard_comparison(&measurements, &config.models);
+    write_report(
+        &config.report,
+        &build_hubbard_report(&config, &measurements),
+    )?;
+    println!("csv    : {}", config.csv.display());
+    println!("report : {}", config.report.display());
+
+    if config.keep_output {
+        println!("kept outputs: {}", run_root.display());
+    } else if let Err(e) = fs::remove_dir_all(&run_root) {
+        eprintln!("warning: failed to remove {}: {e}", run_root.display());
+    }
+
+    Ok(())
+}
+
+fn parse_hubbard_args(args: &[String], workspace: &Path) -> Result<HubbardBenchConfig, String> {
+    let mut steps = 300usize;
+    let mut reps = 3usize;
+    let mut warmups = 1usize;
+    let mut threads = 1usize;
+    let mut model_names: Vec<String> = Vec::new();
+    let mut julia_root = workspace.join("extern/Julia-mVMC");
+    let mut csv = workspace
+        .join("target")
+        .join("bench")
+        .join("hubbard_chain.csv");
+    let mut report = workspace
+        .join("target")
+        .join("bench")
+        .join("hubbard_chain_report.md");
+    let mut julia_bin = PathBuf::from("julia");
+    let mut keep_output = false;
+
+    let mut idx = 0;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--help" | "-h" => {
+                print_hubbard_help();
+                std::process::exit(0);
+            }
+            "--steps" => {
+                idx += 1;
+                steps = parse_value(args.get(idx), "--steps")?;
+            }
+            "--reps" => {
+                idx += 1;
+                reps = parse_value(args.get(idx), "--reps")?;
+            }
+            "--warmups" => {
+                idx += 1;
+                warmups = parse_value(args.get(idx), "--warmups")?;
+            }
+            "--threads" => {
+                idx += 1;
+                threads = parse_value(args.get(idx), "--threads")?;
+            }
+            "--model" => {
+                idx += 1;
+                model_names.push(
+                    args.get(idx)
+                        .ok_or_else(|| "--model requires a value".to_string())?
+                        .clone(),
+                );
+            }
+            "--julia-root" => {
+                idx += 1;
+                julia_root = PathBuf::from(
+                    args.get(idx)
+                        .ok_or_else(|| "--julia-root requires a value".to_string())?,
+                );
+            }
+            "--julia-bin" => {
+                idx += 1;
+                julia_bin = PathBuf::from(
+                    args.get(idx)
+                        .ok_or_else(|| "--julia-bin requires a value".to_string())?,
+                );
+            }
+            "--csv" => {
+                idx += 1;
+                csv = PathBuf::from(
+                    args.get(idx)
+                        .ok_or_else(|| "--csv requires a value".to_string())?,
+                );
+            }
+            "--report" => {
+                idx += 1;
+                report = PathBuf::from(
+                    args.get(idx)
+                        .ok_or_else(|| "--report requires a value".to_string())?,
+                );
+            }
+            "--keep-output" => keep_output = true,
+            flag => return Err(format!("unknown bench-hubbard flag `{flag}`")),
+        }
+        idx += 1;
+    }
+
+    if steps == 0 {
+        return Err("--steps must be positive".to_string());
+    }
+    if reps == 0 {
+        return Err("--reps must be positive".to_string());
+    }
+    if threads == 0 {
+        return Err("--threads must be positive".to_string());
+    }
+    if warmups + reps == 0 {
+        return Err("--warmups + --reps must be positive".to_string());
+    }
+
+    let julia_root = canonicalize_existing_dir(&julia_root, "Julia-mVMC root")?;
+    let models = if model_names.is_empty() {
+        HUBBARD_MODELS.to_vec()
+    } else {
+        model_names
+            .iter()
+            .map(|name| {
+                HUBBARD_MODELS
+                    .iter()
+                    .copied()
+                    .find(|model| model.name == name)
+                    .ok_or_else(|| format!("unknown model `{name}`"))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+
+    Ok(HubbardBenchConfig {
+        steps,
+        reps,
+        warmups,
+        threads,
+        keep_output,
+        julia_root,
+        julia_bin,
+        csv,
+        report,
+        models,
+    })
+}
+
+fn build_rust_cli(workspace: &Path) -> Result<(), String> {
+    println!("building mvmc-cli release binary...");
+    let mut command = Command::new("cargo");
+    command
+        .arg("build")
+        .arg("--release")
+        .arg("-p")
+        .arg("mvmc-cli");
+    let output = command
+        .current_dir(workspace)
+        .output()
+        .map_err(|e| format!("failed to spawn cargo build: {e}"))?;
+    ensure_success("cargo build --release -p mvmc-cli", &output)?;
+    Ok(())
+}
+
+fn hubbard_namelist(workspace: &Path, model: HubbardModel) -> PathBuf {
+    workspace
+        .join("benchmark")
+        .join("hubbard_chain")
+        .join("inputs")
+        .join(model.name)
+        .join("namelist.def")
+}
+
+fn run_rust_hubbard(
+    workspace: &Path,
+    run_root: &Path,
+    model: HubbardModel,
+    config: &HubbardBenchConfig,
+) -> Result<Vec<Measurement>, String> {
+    let binary = workspace
+        .join("target")
+        .join("release")
+        .join(executable_name("mvmc"));
+    if !binary.is_file() {
+        return Err(format!("Rust CLI binary not found: {}", binary.display()));
+    }
+
+    for warmup in 0..config.warmups {
+        let out = run_root
+            .join("rust")
+            .join(model.name)
+            .join(format!("warmup-{}", warmup + 1));
+        run_rust_hubbard_once(workspace, &binary, model, &out, config)?;
+    }
+
+    let mut measurements = Vec::with_capacity(config.reps);
+    for rep in 0..config.reps {
+        let out = run_root
+            .join("rust")
+            .join(model.name)
+            .join(format!("rep-{}", rep + 1));
+        let (seconds, energy, _output) =
+            run_rust_hubbard_once(workspace, &binary, model, &out, config)?;
+        measurements.push(Measurement {
+            implementation: "rust",
+            model: model.name.to_string(),
+            rep: rep + 1,
+            steps: config.steps,
+            seconds,
+            final_energy_per_site: energy,
+        });
+    }
+    Ok(measurements)
+}
+
+fn run_rust_hubbard_once(
+    workspace: &Path,
+    binary: &Path,
+    model: HubbardModel,
+    out_root: &Path,
+    config: &HubbardBenchConfig,
+) -> Result<(f64, Option<f64>, Output), String> {
+    let namelist = hubbard_namelist(workspace, model);
+    let mut command = Command::new(binary);
+    command
+        .arg(&namelist)
+        .arg("--mode")
+        .arg("real")
+        .arg("--nsteps")
+        .arg(config.steps.to_string())
+        .arg("--nsmp")
+        .arg(config.steps.to_string())
+        .arg("--out-dir")
+        .arg(out_root);
+    apply_thread_env(&mut command, config.threads);
+    let output = command
+        .output()
+        .map_err(|e| format!("failed to spawn {}: {e}", binary.display()))?;
+    ensure_success(&binary.to_string_lossy(), &output)?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let seconds = parse_rust_seconds(&stdout).ok_or_else(|| {
+        format!(
+            "cannot parse Rust internal timing for {} from:\n{stdout}",
+            model.name
+        )
+    })?;
+    // Prefer the full-precision zvo_out.dat value; the CLI prints only 10 decimals.
+    let energy =
+        read_rust_energy_per_site(out_root, &namelist).or_else(|| parse_rust_final_energy(&stdout));
+    Ok((seconds, energy, output))
+}
+
+/// Read the last `zvo_out.dat` row, divide the total energy by `Nsite`, and
+/// return the energy per site at full printed precision.
+fn read_rust_energy_per_site(out_root: &Path, namelist: &Path) -> Option<f64> {
+    let text = fs::read_to_string(out_root.join("zvo_out.dat")).ok()?;
+    let last = text.lines().rfind(|line| !line.trim().is_empty())?;
+    let etot = last.split_whitespace().next()?.parse::<f64>().ok()?;
+    let nsite = modpara_nsite(namelist)?;
+    if nsite == 0 {
+        return None;
+    }
+    Some(etot / nsite as f64)
+}
+
+/// Resolve `Nsite` through the namelist's `ModPara` entry.
+fn modpara_nsite(namelist: &Path) -> Option<usize> {
+    let dir = namelist.parent()?;
+    let namelist_text = fs::read_to_string(namelist).ok()?;
+    let modpara_name = namelist_text.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        match (fields.next(), fields.next()) {
+            (Some("ModPara"), Some(name)) => Some(name.to_string()),
+            _ => None,
+        }
+    })?;
+    let modpara_text = fs::read_to_string(dir.join(modpara_name)).ok()?;
+    modpara_text.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        if fields.next() == Some("Nsite") {
+            fields.next()?.parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+fn run_julia_hubbard(
+    julia_root: &Path,
+    runner: &Path,
+    run_root: &Path,
+    model: HubbardModel,
+    config: &HubbardBenchConfig,
+) -> Result<Vec<Measurement>, String> {
+    let namelist = hubbard_namelist(&workspace_root(), model);
+    if !namelist.is_file() {
+        return Err(format!("namelist not found: {}", namelist.display()));
+    }
+
+    let out_root = run_root.join("julia").join(model.name);
+    fs::create_dir_all(&out_root)
+        .map_err(|e| format!("cannot create {}: {e}", out_root.display()))?;
+
+    let mut command = Command::new(&config.julia_bin);
+    if config.julia_bin == Path::new("julia") {
+        command.arg("+1.13.1");
+    }
+    command
+        .arg(format!("--project={}", julia_root.display()))
+        .arg("--startup-file=no")
+        .arg("--history-file=no")
+        .arg(format!("--threads={}", config.threads));
+    apply_thread_env(&mut command, config.threads);
+    let output = command
+        .arg(runner)
+        .arg(model.name)
+        .arg("real")
+        .arg(&namelist)
+        .arg(config.steps.to_string())
+        .arg(config.warmups.to_string())
+        .arg(config.reps.to_string())
+        .arg(&out_root)
+        .current_dir(julia_root)
+        .output()
+        .map_err(|e| format!("failed to spawn Julia: {e}"))?;
+    ensure_success("julia bench-hubbard runner", &output)?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut measurements = Vec::with_capacity(config.reps);
+    for line in stdout.lines() {
+        if let Some(measurement) = parse_julia_bench_line(line, model.name, config.steps) {
+            measurements.push(measurement);
+        }
+    }
+
+    if measurements.len() != config.reps {
+        return Err(format!(
+            "Julia benchmark produced {} measurements, expected {}\nstdout:\n{}\nstderr:\n{}",
+            measurements.len(),
+            config.reps,
+            stdout,
+            String::from_utf8_lossy(&output.stderr),
+        ));
+    }
+    Ok(measurements)
+}
+
+/// Parse `=== Completed 300 SR steps in 4.11s ===` into `4.11`.
+fn parse_rust_seconds(stdout: &str) -> Option<f64> {
+    stdout.lines().find_map(|line| {
+        let rest = line.strip_prefix("=== Completed ")?;
+        let (_, tail) = rest.split_once(" SR steps in ")?;
+        let token = tail.split_whitespace().next()?;
+        token.trim_end_matches('s').parse().ok()
+    })
+}
+
+/// Parse `Final energy / site: -0.5418807042`.
+fn parse_rust_final_energy(stdout: &str) -> Option<f64> {
+    stdout.lines().find_map(|line| {
+        line.split_once("Final energy / site:")
+            .and_then(|(_, value)| value.trim().parse().ok())
+    })
+}
+
+/// Parse one `BENCH\tjulia\t<model>\t<rep>\t<seconds>\t<energy>` line.
+fn parse_julia_bench_line(line: &str, model: &str, steps: usize) -> Option<Measurement> {
+    let fields: Vec<&str> = line.split('\t').collect();
+    if fields.len() != 6 || fields[0] != "BENCH" {
+        return None;
+    }
+    Some(Measurement {
+        implementation: "julia",
+        model: model.to_string(),
+        rep: fields[3].parse().ok()?,
+        steps,
+        seconds: fields[4].parse().ok()?,
+        final_energy_per_site: fields[5].parse().ok(),
+    })
+}
+
+fn print_hubbard_comparison(measurements: &[Measurement], models: &[HubbardModel]) {
+    println!("=== Summary ===");
+    for model in models {
+        let rust = seconds_for(measurements, "rust", model.name);
+        let julia = seconds_for(measurements, "julia", model.name);
+        if rust.is_empty() || julia.is_empty() {
+            continue;
+        }
+        let rust_median = median(&rust);
+        let julia_median = median(&julia);
+        let energy_str = match energy_delta(measurements, model.name) {
+            Some(d) => format!("|ΔE|={d:.2e}"),
+            None => "|ΔE|=   n/a".to_string(),
+        };
+        println!(
+            "{:<24} rust(med)={:>7.3}s julia(med)={:>7.3}s  speedup(julia/rust)={:>5.2}x  {}",
+            model.name,
+            rust_median,
+            julia_median,
+            julia_median / rust_median,
+            energy_str,
+        );
+    }
+}
+
+fn build_hubbard_report(config: &HubbardBenchConfig, measurements: &[Measurement]) -> String {
+    let julia_version = if config.julia_bin == Path::new("julia") {
+        command_output("julia", &["+1.13.1", "--version"])
+    } else {
+        command_output(&config.julia_bin.to_string_lossy(), &["--version"])
+    };
+    let mut report = String::new();
+    report.push_str("# Rust vs Julia Hubbard-chain benchmark\n\n");
+    report.push_str(&format!(
+        "- generated: {}\n",
+        command_output("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"])
+    ));
+    report.push_str(&format!(
+        "- platform: {}\n",
+        command_output("uname", &["-sm"])
+    ));
+    report.push_str(&format!(
+        "- rustc: {}\n",
+        command_output("rustc", &["--version"])
+    ));
+    report.push_str(&format!("- julia: {julia_version}\n"));
+    report.push_str(&format!(
+        "- steps/reps/warmups/threads: {}/{}/{}/{}\n",
+        config.steps, config.reps, config.warmups, config.threads
+    ));
+    report.push_str("- inputs: benchmark/hubbard_chain/inputs\n");
+    report.push_str(
+        "- timing: internal `run_para_opt_from_namelist` wall clock; Julia JIT and\n  process startup are excluded, and both sides are thread-pinned\n\n",
+    );
+    report
+        .push_str("| model | Rust median (s) | Julia median (s) | speedup (julia/rust) | |ΔE| |\n");
+    report.push_str("|---|---:|---:|---:|---:|\n");
+    for model in &config.models {
+        let rust = seconds_for(measurements, "rust", model.name);
+        let julia = seconds_for(measurements, "julia", model.name);
+        if rust.is_empty() || julia.is_empty() {
+            continue;
+        }
+        let rust_median = median(&rust);
+        let julia_median = median(&julia);
+        let energy = energy_delta(measurements, model.name)
+            .map(|d| format!("{d:.2e}"))
+            .unwrap_or_else(|| "n/a".to_string());
+        report.push_str(&format!(
+            "| {} | {:.3} | {:.3} | {:.3}x | {} |\n",
+            model.name,
+            rust_median,
+            julia_median,
+            julia_median / rust_median,
+            energy,
+        ));
+    }
+    report.push_str("\n`speedup = julia / rust`; values above `1.0x` mean Rust was faster.\n");
+    report
+}
+
+fn write_report(path: &Path, body: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    }
+    fs::write(path, body).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+fn command_output(program: &str, args: &[&str]) -> String {
+    Command::new(program)
+        .args(args)
+        .output()
+        .ok()
+        .map(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if stdout.is_empty() {
+                String::from_utf8_lossy(&output.stderr).trim().to_string()
+            } else {
+                stdout
+            }
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 fn write_julia_runner(workspace: &Path) -> Result<PathBuf, String> {
     let dir = workspace.join("target").join("bench");
     fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -667,6 +1241,7 @@ fn print_help() {
     println!();
     println!("TASKS:");
     println!("  bench-julia     compare Rust examples with ../extern/Julia-mVMC");
+    println!("  bench-hubbard   compare Rust vs Julia on the report Hubbard-chain inputs");
 }
 
 fn print_bench_help() {
@@ -682,6 +1257,27 @@ fn print_bench_help() {
     println!("  --julia-bin <PATH>   Julia executable or pinned binary [default: julia +1.13.1]");
     println!("  --csv <PATH>         CSV output [default: target/bench/julia_vs_rust.csv]");
     println!("  --keep-output        keep per-run zvo_out.dat / zqp_opt.dat files");
+}
+
+fn print_hubbard_help() {
+    println!("USAGE: cargo run -p xtask -- bench-hubbard [options]");
+    println!();
+    println!("Compares Rust (mvmc-cli) and Julia on the C-vs-Julia report Hubbard-chain");
+    println!("inputs (L=16/24/32, half filling) with matching internal timing.");
+    println!();
+    println!("Options:");
+    println!("  --steps <N>          SR steps per run [default: 300]");
+    println!("  --reps <N>           measured repetitions [default: 3]");
+    println!("  --warmups <N>        warmup repetitions [default: 1]");
+    println!("  --threads <N>        pin BLAS / OpenMP / Julia threads [default: 1]");
+    println!("  --model <NAME>       benchmark one model; repeatable");
+    println!("  --julia-root <DIR>   Julia-mVMC checkout [default: extern/Julia-mVMC]");
+    println!("  --julia-bin <PATH>   Julia executable or pinned binary [default: julia +1.13.1]");
+    println!("  --csv <PATH>         CSV output [default: target/bench/hubbard_chain.csv]");
+    println!(
+        "  --report <PATH>      Markdown report [default: target/bench/hubbard_chain_report.md]"
+    );
+    println!("  --keep-output        keep per-run output files");
 }
 
 const JULIA_BENCH_RUNNER: &str = r#"
@@ -740,7 +1336,9 @@ end
 
 #[cfg(test)]
 mod tests {
-    use super::ctest_failure;
+    use super::{
+        ctest_failure, parse_julia_bench_line, parse_rust_final_energy, parse_rust_seconds,
+    };
 
     #[test]
     fn ctest_requires_both_statistical_and_absolute_thresholds() {
@@ -748,5 +1346,54 @@ mod tests {
         assert!(!ctest_failure(2.0e-8, 1.0e-8));
         assert!(ctest_failure(3.1e-8, 1.0e-8));
         assert!(!ctest_failure(f64::NAN, 0.0));
+    }
+
+    #[test]
+    fn parses_rust_internal_timing() {
+        let stdout = "some output\n=== Completed 300 SR steps in 4.11s ===\nmore\n";
+        assert_eq!(parse_rust_seconds(stdout), Some(4.11));
+        assert_eq!(parse_rust_seconds("no timing here"), None);
+    }
+
+    #[test]
+    fn parses_rust_final_energy() {
+        let stdout = "Final energy / site: -0.5418807042\n";
+        assert_eq!(parse_rust_final_energy(stdout), Some(-0.5418807042));
+        assert_eq!(parse_rust_final_energy("Final energy / site = 0.1"), None);
+    }
+
+    #[test]
+    fn parses_julia_bench_line() {
+        let line = "BENCH\tjulia\thubbard_chain_L16\t2\t2.968304542\t-0.5418807042567225";
+        let measurement =
+            parse_julia_bench_line(line, "hubbard_chain_L16", 300).expect("valid BENCH line");
+        assert_eq!(measurement.implementation, "julia");
+        assert_eq!(measurement.rep, 2);
+        assert_eq!(measurement.steps, 300);
+        assert!((measurement.seconds - 2.968304542).abs() < 1e-12);
+        assert!(parse_julia_bench_line("WARMUP\tjulia\tx\t1\t1.0\t0.0", "x", 1).is_none());
+        assert!(parse_julia_bench_line("garbage", "x", 1).is_none());
+    }
+
+    #[test]
+    fn committed_hubbard_inputs_report_nsite() {
+        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask has a workspace parent");
+        for (model, expected) in [
+            ("hubbard_chain_L16", 16usize),
+            ("hubbard_chain_L24", 24),
+            ("hubbard_chain_L32", 32),
+        ] {
+            let namelist = workspace
+                .join("benchmark/hubbard_chain/inputs")
+                .join(model)
+                .join("namelist.def");
+            assert_eq!(
+                super::modpara_nsite(&namelist),
+                Some(expected),
+                "model {model}"
+            );
+        }
     }
 }
