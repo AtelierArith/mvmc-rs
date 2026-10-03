@@ -3491,6 +3491,13 @@ mod callback_tests {
                 // General math and reduction rounding may change an acceptance
                 // branch. Compare long trajectories within this implementation;
                 // fixed-input kernels and short prefixes retain oracle checks.
+                match &result {
+                    Ok(()) => assert_eq!(state.opt_data.len(), steps as usize),
+                    Err(error) => {
+                        assert!(error.contains("SR failed at step"), "{case}: {error}");
+                        assert!(state.opt_data.len() < steps as usize);
+                    }
+                }
                 let mut repeat_data = initial_data;
                 let mut repeat_state = state_from_data(&repeat_data);
                 let mut repeat_rng = initial_rng;
