@@ -1269,6 +1269,55 @@ fn factored_output_requires_one_ordered_row_of_pairs() {
 }
 
 #[test]
+fn green_reference_schema_rejects_identical_malformed_factored_files() {
+    // Original GreenCompare M1329: byte equality must not bypass the C
+    // single-ordered-row contract. This asserts the Rust gate's schema,
+    // not Julia's GreenCompareResult exact/fallback/detail fields.
+    let dir = output_dir("green-identical-malformed", "original-m1329");
+    let actual = dir.join("actual.dat");
+    let expected = dir.join("zvo_cisajscktaltex_001.dat");
+    let malformed = "2.5 -1.0\n0.3 0.1\n";
+    fs::write(&actual, malformed).unwrap();
+    fs::write(&expected, "2.5 -1.0 0.3 0.1 \n").unwrap();
+    // M1328: malformed candidate versus a valid single-line reference.
+    assert!(std::panic::catch_unwind(|| assert_reference(&actual, &expected)).is_err());
+    fs::write(&expected, malformed).unwrap();
+    assert_eq!(fs::read(&actual).unwrap(), fs::read(&expected).unwrap());
+    assert!(std::panic::catch_unwind(|| assert_reference(&actual, &expected)).is_err());
+    // Literal original positive control: the same ordered values in one row.
+    fs::write(&actual, "2.5 -1.0 0.3 0.1 \n").unwrap();
+    fs::write(&expected, "2.5 -1.0 0.3 0.1 \n").unwrap();
+    assert_reference(&actual, &expected);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn green_reference_gate_requires_candidate_and_reference_files() {
+    // Original GreenCompare M1333/M1334 use ONE_A and a missing nope.dat
+    // on each side. Rust's assertion-based test API fails on missing files;
+    // it does not return Julia's structured "missing" diagnostic result.
+    let dir = output_dir("green-missing-files", "original-m1333-m1334");
+    let actual = dir.join("actual.dat");
+    let expected = dir.join("zvo_cisajs_001.dat");
+    let one_a = "0 0 1 0 1.0 0.0 \n1 1 0 1 2.0 0.0 \n\n";
+    fs::write(&actual, one_a).unwrap();
+    assert!(!expected.exists());
+    assert!(std::panic::catch_unwind(|| assert_reference(&actual, &expected)).is_err());
+    fs::write(&expected, one_a).unwrap();
+    assert_reference(&actual, &expected);
+    // M1330-M1332: different fixed formatting, identical numeric payload.
+    // Rust deliberately exposes no raw-exact/fallback result flags.
+    fs::write(&actual, "0 0 1 0 1.0 0.0 \n\n").unwrap();
+    fs::write(&expected, "0 0 1 0 1.0 0.0\n").unwrap();
+    assert_ne!(fs::read(&actual).unwrap(), fs::read(&expected).unwrap());
+    assert_reference(&actual, &expected);
+    let missing = dir.join("nope.dat");
+    assert!(!missing.exists());
+    assert!(std::panic::catch_unwind(|| assert_reference(&missing, &expected)).is_err());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
     use mvmc_expert_parsers::{ExpertModeData, GreenOneTerm, Spin};
     let mut data = ExpertModeData::new();

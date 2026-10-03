@@ -3,7 +3,61 @@
 //! See docs/OPTIONAL_GATES.md for building and selecting the exact MPI test binary.
 
 mod support;
+#[cfg(feature = "mpi")]
+use mvmc_core::Reducer;
 use support::{report_gate, require_gate, GateStatus};
+
+#[cfg(feature = "mpi")]
+fn next624(rng: &sfmt19937::Sfmt19937Rng) -> Vec<u32> {
+    let mut copy = rng.clone();
+    (0..624).map(|_| copy.gen_rand32()).collect()
+}
+
+#[cfg(feature = "mpi")]
+fn fixed_parameters(data: &mvmc_core::ExpertModeData) -> Vec<(u64, u64)> {
+    data.projection_parameters()
+        .into_iter()
+        .chain(data.rbm_parameters())
+        .chain(data.slater_params.iter().copied())
+        .chain(data.opt_trans.iter().copied())
+        // Immutable loaded values are a copy contract, not computed-float parity.
+        // Preserve both signed zeros as well as every other stored bit.
+        .map(|value| (value.re.to_bits(), value.im.to_bits()))
+        .collect()
+}
+
+#[cfg(feature = "mpi")]
+fn close(a: f64, b: f64) -> bool {
+    // Repeat-local elementary/BLAS arithmetic only; inherited from the scoped
+    // S196 PhysCal repeat gate. No independent reference/solver budget is widened.
+    a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-12 + 1e-12 * a.abs().max(b.abs())
+}
+
+#[cfg(feature = "mpi")]
+fn output_agrees(a: &std::path::Path, b: &std::path::Path, indices: usize) -> bool {
+    let (Ok(a), Ok(b)) = (std::fs::read_to_string(a), std::fs::read_to_string(b)) else {
+        return false;
+    };
+    let a: Vec<_> = a.lines().collect();
+    let b: Vec<_> = b.lines().collect();
+    !a.is_empty()
+        && a.iter().any(|line| !line.trim().is_empty())
+        && a.len() == b.len()
+        && a.iter().zip(b).all(|(a, b)| {
+            let a: Vec<_> = a.split_whitespace().collect();
+            let b: Vec<_> = b.split_whitespace().collect();
+            a.len() == b.len()
+                && (a.is_empty()
+                    || (a.len() > indices
+                        && a[..indices] == b[..indices]
+                        && a[indices..].iter().zip(&b[indices..]).all(|(a, b)| {
+                            match (a.parse::<f64>(), b.parse::<f64>()) {
+                                (Ok(a), Ok(b)) => close(a, b),
+                                _ => false,
+                            }
+                        })))
+        })
+}
 
 #[cfg(feature = "mpi")]
 #[test]
@@ -11,9 +65,9 @@ use support::{report_gate, require_gate, GateStatus};
 fn mpi_physcal_reduces_fixed_parameter_samples() {
     require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
 
-    let root = support::julia_mvmc_root()
-        .unwrap_or_else(|| support::missing_fixture("mpi-physcal", "Julia-mVMC checkout not found"))
-        .join("test/integration/reference/heisenberg_chain_real/physcal_ref");
+    // Offline copy has independent provenance; no reference runtime is required.
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/physcal_181/heisenberg_chain_real");
     for path in [root.join("inputs/namelist.def"), root.join("zqp_opt.dat")] {
         if !path.is_file() {
             support::missing_fixture("mpi-physcal", path.display().to_string());
@@ -30,25 +84,137 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
         );
     }
     let context = mvmc_core::mpi::MpiContext::initialize().expect("MPI initialization");
-    if context.world_size() < 2 {
+    if !matches!(context.world_size(), 2 | 4) {
         support::unsupported(
             "mpi-physcal",
-            "actual MPI world must contain at least two ranks",
+            "this bounded gate requires an actual 2/4-rank MPI world",
         );
     }
-    let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer(
-        root.join("inputs/namelist.def"),
-        root.join("zqp_opt.dat"),
-        "real",
-        Some(1),
-        &context,
-    )
-    .expect("prepare PhysCal");
-    let result =
-        mvmc_core::vmc_phys_cal_with_reducer(preparation, None, &context).expect("MPI PhysCal");
-    assert_eq!(result.iterations, 1);
-
+    let output = std::path::PathBuf::from(
+        std::env::var("MPI179_PHYSCAL_OUTPUT").expect("exclusive retained output root required"),
+    );
+    let setup = if context.is_root() {
+        std::fs::create_dir(&output)
+    } else {
+        Ok(())
+    };
+    assert!(
+        !context.any_failure(setup.is_err()),
+        "output root must be new"
+    );
     let group = context.split_groups(2).expect("MPI PhysCal group split");
+    for (width, reducer) in [
+        (1, &context as &dyn mvmc_core::Reducer),
+        (2, &group as &dyn mvmc_core::Reducer),
+    ] {
+        let mut discrete = None;
+        let mut numerical: Option<Vec<f64>> = None;
+        for repeat in 1..=2 {
+            let mut preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer(
+                root.join("inputs/namelist.def"),
+                root.join("zqp_opt.dat"),
+                "real",
+                Some(1),
+                reducer,
+            )
+            .expect("prepare normal PhysCal");
+            let data = &mut preparation.data;
+            assert_eq!(data.i_flg_orbital_general, 0);
+            assert_eq!(data.modpara.lanczos_mode, 0);
+            assert!(data.inter_all_terms.is_empty());
+            assert!(data.n_qp_opt_trans <= 1 && data.opt_trans.len() <= 1);
+            // Retain the fixture's nontrivial standard projection, not identity QP.
+            assert_eq!(data.modpara.nsp_gauss_leg, 8);
+            assert_eq!(data.modpara.nmp_trans, -1);
+            data.modpara.nsplit_size = width;
+            data.modpara.nvmc_sample = 3;
+            data.modpara.nvmc_warmup = 1;
+            data.modpara.n_data_qty_smp = 1;
+            mvmc_core::validation::validate_phys_cal(data).unwrap();
+            let fixed = fixed_parameters(data);
+            assert_eq!(preparation.rng.words_consumed(), 0);
+            let expected = sfmt19937::Sfmt19937Rng::new((1 + reducer.seed_offset()) as u32);
+            assert_eq!(preparation.rng.state_snapshot(), expected.state_snapshot());
+            assert_eq!(next624(&preparation.rng), next624(&expected));
+            let dir = output.join(format!("width{width}-repeat{repeat}"));
+            let result = mvmc_core::vmc_phys_cal_with_reducer(preparation, Some(&dir), reducer)
+                .expect("supported normal MPI PhysCal");
+            assert_eq!(result.iterations, 1);
+            assert_eq!(fixed_parameters(&result.data), fixed);
+            let config = &result.state.electron_config;
+            let actual = (
+                config.ele_idx.clone(),
+                config.ele_cfg.clone(),
+                config.ele_num.clone(),
+                config.ele_proj_cnt.clone(),
+                config.ele_spn.clone(),
+                config.counter,
+                result.final_rng.words_consumed(),
+                result.final_rng.state_snapshot(),
+                next624(&result.final_rng),
+            );
+            if let Some(before) = &discrete {
+                assert_eq!(&actual, before);
+            }
+            discrete = Some(actual);
+            let phys = result.state.phys_quantities.as_ref().unwrap();
+            let e = result.state.energy;
+            let values: Vec<_> = [e.wc, e.etot, e.etot2, e.sztot, e.sztot2]
+                .into_iter()
+                .chain(phys.phys_cis_ajs.iter().copied())
+                .chain(phys.phys_cis_ajs_ckt_alt.iter().copied())
+                .chain(phys.phys_cis_ajs_ckt_alt_dc.iter().copied())
+                .flat_map(|z| [z.re, z.im])
+                .collect();
+            assert!(values.iter().all(|v| v.is_finite()));
+            if let Some(before) = &numerical {
+                assert_eq!(values.len(), before.len());
+                assert!(values.iter().zip(before).all(|(&a, &b)| close(a, b)));
+            }
+            numerical = Some(values);
+            context.barrier();
+            let mut bad_output = false;
+            if context.is_root() {
+                let previous = output.join(format!("width{width}-repeat1"));
+                let mut names: Vec<_> = std::fs::read_dir(&dir)
+                    .unwrap()
+                    .map(|v| v.unwrap().file_name())
+                    .collect();
+                let mut expected: Vec<_> = [
+                    "zvo_out_001.dat",
+                    "zvo_var_001.dat",
+                    "zvo_cisajs_001.dat",
+                    "zvo_cisajscktalt_001.dat",
+                    "zvo_cisajscktaltex_001.dat",
+                ]
+                .into_iter()
+                .map(std::ffi::OsString::from)
+                .collect();
+                names.sort();
+                expected.sort();
+                bad_output |= names != expected;
+                for (name, indices) in [
+                    ("zvo_out_001.dat", 0),
+                    ("zvo_var_001.dat", 0),
+                    ("zvo_cisajs_001.dat", 4),
+                    ("zvo_cisajscktalt_001.dat", 8),
+                    ("zvo_cisajscktaltex_001.dat", 0),
+                ] {
+                    bad_output |= !output_agrees(&dir.join(name), &previous.join(name), indices);
+                }
+            }
+            assert!(
+                !context.any_failure(bad_output),
+                "finite indexed output repeatability"
+            );
+            println!(
+                "MPI_PHYSCAL rank={} world={} width={width} repeat={repeat} words={}",
+                context.rank(),
+                context.world_size(),
+                result.final_rng.words_consumed()
+            );
+        }
+    }
     let mut grouped = mvmc_core::prepare_phys_cal_from_namelist_with_reducer(
         root.join("inputs/namelist.def"),
         root.join("zqp_opt.dat"),
@@ -57,18 +223,41 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
         &group,
     )
     .expect("prepare grouped PhysCal");
-    // The committed fixture is serial by design; changing only this runtime
-    // control verifies grouped PhysCal is rejected before sampling.
+    // Independent capability negative: grouped Lanczos, not valid normal Green.
     grouped.data.modpara.nsplit_size = 2;
-    let error = mvmc_core::vmc_phys_cal_with_reducer(grouped, None, &group).unwrap_err();
+    grouped.data.modpara.lanczos_mode = 1;
+    let before_data = format!("{:?}", grouped.data);
+    let before_fixed = fixed_parameters(&grouped.data);
+    let before_rng = next624(&grouped.rng);
+    let before_raw_rng = grouped.rng.state_snapshot();
+    let words = grouped.rng.words_consumed();
+    let mut state = mvmc_core::VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
+    let before_state = format!("{state:?}");
+    let rejected_output = output.join("rejected-lanczos");
+    let error = mvmc_core::vmc_phys_cal_in_place(
+        &mut grouped.data,
+        &mut state,
+        &mut grouped.rng,
+        Some(&rejected_output),
+        &group,
+        None,
+    )
+    .unwrap_err();
     assert!(
-        error.contains("NSplitSize") && error.contains("PhysCal"),
+        error.contains("NSplitSize") && error.contains("NLanczosMode"),
         "{error}"
     );
+    assert_eq!(format!("{:?}", grouped.data), before_data);
+    assert_eq!(fixed_parameters(&grouped.data), before_fixed);
+    assert_eq!(format!("{state:?}"), before_state);
+    assert_eq!(next624(&grouped.rng), before_rng);
+    assert_eq!(grouped.rng.state_snapshot(), before_raw_rng);
+    assert_eq!(grouped.rng.words_consumed(), words);
+    assert!(!rejected_output.exists());
     report_gate(
         "mpi-physcal",
         GateStatus::Pass,
-        "serial PhysCal completed; unsupported grouped PhysCal rejected",
+        "MPI world/grouped normal PhysCal repeated fixed/discrete/indexed outputs; grouped Lanczos rejected before mutation",
     );
 }
 

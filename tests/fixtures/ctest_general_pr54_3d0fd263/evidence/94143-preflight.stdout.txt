@@ -1,0 +1,16 @@
+WARNING: Imported binding PfaPack.julia_zsktf2! was undeclared at import time during import to MVMCOptimizers.
+WARNING: Imported binding PfaPack.utu2pfa was undeclared at import time during import to MVMCOptimizers.
+ERROR: LoadError: capture boundary changed:         potrf!('U', S)
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:44
+ [2] top-level scope
+   @ /tmp/mvmc-general-pr54-3d0fd263.aEqff0/c_toolbox/ctest_direct_sr_metrics.jl:68
+ [3] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [4] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [5] _start()
+   @ Base ./client.jl:577
+in expression starting at /tmp/mvmc-general-pr54-3d0fd263.aEqff0/c_toolbox/ctest_direct_sr_metrics.jl:65
+exit status 1
