@@ -34,7 +34,7 @@ fn all_declared_rbm_slots_and_following_slater_values_match_native_c_and_rng() {
         "===\nWidth 2\nComplexType 0\n===\n===\n0 0\n1 0\n2 0\n-7 3\n-7 -2\n",
     )
     .unwrap();
-    for record in rows.chunks_exact(6) {
+    for record in rows.as_chunks::<6>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let neurons: i64 = header[3].parse().unwrap();
         let seed: u32 = header[4].parse().unwrap();

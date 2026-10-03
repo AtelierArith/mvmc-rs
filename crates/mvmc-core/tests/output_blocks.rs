@@ -44,7 +44,7 @@ fn block_files_keep_declared_slater_order_and_unmapped_slots_with_existing_heade
     let row = " 1.500000000000000000e+00 -2.000000000000000000e+00 \n";
     let reverse = "-2.000000000000000000e+00  1.500000000000000000e+00 \n";
     let header = |name, count| {
-        format!("======================\n{name} {count}\n======================\n======================\n======================\n")
+        format!("===============================\n{name} {count}\n===============================\n===============================\n")
     };
     assert_eq!(
         fs::read_to_string(dir.join("custom_opt.dat")).unwrap(),
@@ -108,7 +108,7 @@ fn rbm_blocks_follow_c_declared_section_order() {
     for (suffix, label, value) in names {
         let content = fs::read_to_string(dir.join(format!("rbm_{suffix}_opt.dat"))).unwrap();
         assert!(content.starts_with(&format!(
-            "======================\n{label} 1\n======================\n======================\n======================\n"
+            "===============================\n{label} 1\n===============================\n===============================\n"
         )));
         assert!(content.ends_with(&format!(
             "0 {} {} \n",

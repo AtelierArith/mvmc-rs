@@ -26,7 +26,7 @@ pub(crate) fn component_is_optimized(data: &ExpertModeData, component: usize) ->
         && parameter >= opt_start
         && parameter < opt_start + data.count_opt_trans_parameters()
     {
-        if component % 2 != 0 {
+        if !component.is_multiple_of(2) {
             return false;
         }
         let c_index = layout.n_proj + n_slater(data) + (parameter - opt_start);
@@ -525,7 +525,9 @@ mod opttrans_tests {
                     .filter(|line| !line.starts_with('#'))
                     .collect();
             let c_sync = c_rows
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .find(|row| row[0] == "layout_sync")
                 .unwrap();
             if n_slater(&data) == 4 {
@@ -840,11 +842,15 @@ mod tests {
             let ho = read(lines.next().unwrap());
             if complex {
                 state.sr_opt.sr_opt_oo = oo
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|z| Complex64::new(z[0], z[1]))
                     .collect();
                 state.sr_opt.sr_opt_ho = ho
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|z| Complex64::new(z[0], z[1]))
                     .collect();
             } else {

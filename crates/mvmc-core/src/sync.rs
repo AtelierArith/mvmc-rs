@@ -82,6 +82,27 @@ fn unpack_variational_parameters(data: &mut ExpertModeData, values: &[Complex64]
         .copy_from_slice(&values[offset..offset + opt_trans_len]);
 }
 
+/// Apply Julia's local optimizer synchronization, including OptTrans normalization.
+/// Correlation shifts can be disabled independently of Slater/OptTrans rescaling.
+pub fn sync_modified_parameter_local(data: &mut ExpertModeData, shift_correlations: bool) {
+    sync_inner(data, shift_correlations);
+    let mut xmax = 0.0_f64;
+    for value in &data.opt_trans {
+        let amplitude = mvmc_expert_parsers::utils::julia_hypot::hypot(value.re, value.im);
+        if amplitude.is_nan() {
+            xmax = f64::NAN;
+            break;
+        }
+        xmax = xmax.max(amplitude);
+    }
+    if xmax > 0.0 {
+        let ratio = 1.0 / xmax;
+        for value in &mut data.opt_trans {
+            *value *= ratio;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,26 +139,5 @@ mod tests {
         // OptTrans is normalized by the Julia synchronization step after the
         // broadcast, so its amplitude is one while preserving its phase.
         assert_eq!(data.opt_trans[0], replacement[1]);
-    }
-}
-
-/// Apply Julia's local optimizer synchronization, including OptTrans normalization.
-/// Correlation shifts can be disabled independently of Slater/OptTrans rescaling.
-pub fn sync_modified_parameter_local(data: &mut ExpertModeData, shift_correlations: bool) {
-    sync_inner(data, shift_correlations);
-    let mut xmax = 0.0_f64;
-    for value in &data.opt_trans {
-        let amplitude = mvmc_expert_parsers::utils::julia_hypot::hypot(value.re, value.im);
-        if amplitude.is_nan() {
-            xmax = f64::NAN;
-            break;
-        }
-        xmax = xmax.max(amplitude);
-    }
-    if xmax > 0.0 {
-        let ratio = 1.0 / xmax;
-        for value in &mut data.opt_trans {
-            *value *= ratio;
-        }
     }
 }

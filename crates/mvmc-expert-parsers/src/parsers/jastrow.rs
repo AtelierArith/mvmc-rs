@@ -73,7 +73,7 @@ pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSec
             .map_err(|_| invalid("invalid integer in Jastrow definition"))
     };
     let mut idx_matrix = vec![vec![-1; nsite]; nsite];
-    for triple in fields[..mapping_fields].chunks_exact(3) {
+    for triple in fields[..mapping_fields].as_chunks::<3>().0.iter() {
         let site1 = integer(triple[0])?;
         let site2 = integer(triple[1])?;
         let idx = integer(triple[2])?;
@@ -91,7 +91,12 @@ pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSec
         idx_matrix[site1 as usize][site2 as usize] = idx;
     }
     let mut opt_flags = BTreeMap::new();
-    for (index, pair) in fields[mapping_fields..].chunks_exact(2).enumerate() {
+    for (index, pair) in fields[mapping_fields..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .enumerate()
+    {
         let _printed_index = integer(pair[0])?;
         opt_flags.insert(index as i64, integer(pair[1])?);
     }

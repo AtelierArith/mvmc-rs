@@ -18,7 +18,7 @@ fn directional_jastrow_mapping_matches_actual_c_reader() {
     let rows = records();
     assert_eq!(rows.len(), 144 * 4);
     let mut checked = 0;
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         if header[6] != "0" {
             continue;
@@ -57,7 +57,7 @@ fn directional_jastrow_mapping_matches_actual_c_reader() {
 fn jastrow_flags_preserve_read_order_signed_values_and_nonzero_offset() {
     let rows = records();
     let mut checked = 0;
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         if header[6] != "0" {
             continue;
@@ -110,7 +110,7 @@ fn namelist_jastrow_geometry_and_declared_flag_count_match_c_acceptance() {
     )
     .unwrap();
     let mut failures = Vec::new();
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let nsite: usize = header[1].parse().unwrap();
         let expected = header[6] == "0";

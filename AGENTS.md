@@ -35,6 +35,8 @@ Use Rust's built-in test framework plus crate-local integration tests. Golden an
 
 Use `cargo nextest run` for development unit and integration test runs. Use `--cargo-profile test-fast` for full-workspace verification and long numerical regressions; reserve the normal profile for short targeted TDD checks instead of running the full suite unoptimized. Preserve requested features, profiles and lock-file constraints; use `--no-fail-fast --retries 0` when collecting all failures. Run documentation tests separately with `cargo test --workspace --doc`, because nextest does not run doctests. Compiler caching remains configured through kache.
 
+All tests on `main` must pass. Before merging a milestone, fix known workspace test failures, including pre-existing regressions, and verify the final changes. Do not merge with failing tests or hide failures by skipping tests, loosening numerical tolerances, or replacing independent expectations with Rust-generated results. Distinguish historical Julia fixtures from C-compatible references explicitly when their contracts differ.
+
 The normal development/test profiles omit debug information and strip symbols. Use `test-fast` for long numerical regressions; it retains debug assertions and overflow checks while avoiding release LTO. Keep each checkout's target directory separate and use kache for cross-checkout cache reuse. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for measurements and environment overrides when debugger symbols are needed.
 
 ### C Reference Toolbox

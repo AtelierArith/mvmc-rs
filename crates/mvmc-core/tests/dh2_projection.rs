@@ -265,6 +265,12 @@ fn strict_indh2_overlay_uses_definition_count_and_commits_each_record_atomically
     let nml = dir.join("namelist.def");
     let path = dir.join("indh2.def");
     fs::write(&nml, "InDH2 absent.def\nInDH2 indh2.def\n").unwrap();
+    let before = d.projection_parameters();
+    assert!(read_input_parameters(&mut d, &nml)
+        .unwrap_err()
+        .contains("duplicate keyword InDH2"));
+    assert_eq!(d.projection_parameters(), before);
+    fs::write(&nml, "InDH2 indh2.def\n").unwrap();
     let text = format!(
         "===\nNDoublonHolon2siteIdx 2\nComplexType 1\n===\n===\n{}\n",
         (0..12)

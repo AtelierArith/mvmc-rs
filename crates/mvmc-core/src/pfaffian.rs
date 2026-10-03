@@ -193,9 +193,7 @@ pub fn calc_m_all_real(
             .collect();
         let chunks = chunks?;
         for (start, end, local_inv, local_pf) in chunks {
-            for qp in start..end {
-                pf_m[qp] = local_pf[qp];
-            }
+            pf_m[start..end].copy_from_slice(&local_pf[start..end]);
             for qp in start..end {
                 let source = local_inv.qp_matrix_slice(qp);
                 inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
@@ -315,9 +313,7 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
             .collect();
         let chunks = chunks?;
         for (start, end, local_inv, local_pf) in chunks {
-            for qp in start..end {
-                pf_m[qp] = local_pf[qp];
-            }
+            pf_m[start..end].copy_from_slice(&local_pf[start..end]);
             for qp in start..end {
                 let source = local_inv.qp_matrix_slice(qp);
                 inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);

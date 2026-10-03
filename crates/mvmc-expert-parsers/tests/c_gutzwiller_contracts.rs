@@ -19,7 +19,7 @@ fn accepted_c_gutzwiller_rows_preserve_declared_slots_maps_and_raw_component_fla
         .collect();
     assert_eq!(rows.len(), 144 * 4);
     let mut accepted = 0;
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         if header[6] != "0" {
             continue;
@@ -70,7 +70,7 @@ fn complete_gutzwiller_contract_is_enforced_by_namelist_loading() {
     )
     .unwrap();
     let mut rejected = 0;
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let expected = header[6] == "0";
         fs::write(

@@ -446,7 +446,9 @@ mod tests {
                 .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect();
             doubles
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|z| Complex64::new(z[0], z[1]))
                 .collect()
         };

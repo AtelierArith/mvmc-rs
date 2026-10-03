@@ -24,7 +24,9 @@ fn projection_and_rbm_component_assembly_preserves_c_generic_raw_flags() {
         .filter(|line| !line.starts_with('#'))
         .collect();
     for record in rows
-        .chunks_exact(5)
+        .as_chunks::<5>()
+        .0
+        .iter()
         .filter(|record| record[0].split_whitespace().nth(1) == Some("2"))
     {
         let complex = record[0].split_whitespace().nth(2) == Some("1");
@@ -82,7 +84,7 @@ fn dh_row_order_raw_flags_and_component_offsets_match_native_c() {
         .filter(|line| !line.starts_with('#'))
         .collect();
     assert_eq!(rows.len(), 24 * 5);
-    for record in rows.chunks_exact(5) {
+    for record in rows.as_chunks::<5>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let family = header[1];
         let complex = header[2] == "1";
@@ -168,7 +170,7 @@ fn correlation_gauge_eligibility_matches_c_set_flag_shift() {
         .filter(|line| !line.starts_with('#'))
         .collect();
     assert_eq!(rows.len(), 86 * 3);
-    for record in rows.chunks_exact(3) {
+    for record in rows.as_chunks::<3>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let counts: Vec<usize> = header[1..].iter().map(|s| s.parse().unwrap()).collect();
         let gates = integers(record[2]);
@@ -245,7 +247,7 @@ fn integer_component_flags_header_normalization_coefficients_and_rng_match_c() {
     let dir = std::env::temp_dir().join(format!("mvmc-c-integer-flags-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let mut failures = Vec::new();
-    for record in rows.chunks_exact(7) {
+    for record in rows.as_chunks::<7>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let seed = header[1].parse().unwrap();
         fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\nNMPTrans -1\n").unwrap();

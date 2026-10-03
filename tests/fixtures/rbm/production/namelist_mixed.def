@@ -10,5 +10,4 @@ GeneralRBM_HiddenLayer ../GeneralRBM_HiddenLayer.def
 InGeneralRBM_HiddenLayer overlay.def
 SpinRBM_PhysHidden ../SpinRBM_PhysHidden.def
 InSpinRBM_PhysHidden overlay.def
-InChargeRBM_PhysLayer missing.def
 InChargeRBM_Unknown overlay.def

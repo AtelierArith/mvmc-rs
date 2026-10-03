@@ -59,7 +59,7 @@ fn rbm_declarations_reserve_unused_slots_in_all_nine_sections() {
     let input = Input::new("widths");
     let records = records();
     let mut checked = 0;
-    for record in records.chunks_exact(4) {
+    for record in records.as_chunks::<4>().0.iter() {
         let h: Vec<_> = record[0].split_whitespace().collect();
         if h[8] != "0" {
             continue;
@@ -85,7 +85,7 @@ fn rbm_declarations_reserve_unused_slots_in_all_nine_sections() {
 fn rbm_raw_flags_follow_pair_order_with_nonzero_projection_prefix() {
     let input = Input::new("flags");
     let records = records();
-    for record in records.chunks_exact(4) {
+    for record in records.as_chunks::<4>().0.iter() {
         let h: Vec<_> = record[0].split_whitespace().collect();
         if h[8] != "0" {
             continue;
@@ -104,7 +104,7 @@ fn rbm_requires_complete_c_mapping_and_declared_flag_counts() {
     let input = Input::new("acceptance");
     let records = records();
     let mut failures = Vec::new();
-    for record in records.chunks_exact(4) {
+    for record in records.as_chunks::<4>().0.iter() {
         let h: Vec<_> = record[0].split_whitespace().collect();
         let expected = h[8] == "0";
         let data = input.parse(record);
@@ -124,7 +124,7 @@ fn final_rbm_coordinate_assignments_match_all_nine_native_c_arrays() {
     use mvmc_expert_parsers::parsers::rbm::parse_rbm_content;
     let records = records();
     let mut checked = 0;
-    for record in records.chunks_exact(4) {
+    for record in records.as_chunks::<4>().0.iter() {
         let h: Vec<_> = record[0].split_whitespace().collect();
         if h[8] != "0" {
             continue;

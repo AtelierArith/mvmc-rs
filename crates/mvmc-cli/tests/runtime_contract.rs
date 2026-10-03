@@ -1,7 +1,4 @@
 //! Errors must reach the process status without creating misleading outputs.
-#[path = "../../../tests/support/reference_slater.rs"]
-mod reference_slater;
-use reference_slater::declared_output;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -198,8 +195,92 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
     );
 }
 
+// Historical Julia runner goldens are checked by the core trajectory tests.
+// These frontend checks use the complete C declarations (including fixed-zero
+// padding) and C's explicit OptTrans activation/flags through both entry points.
+fn check_cli_and_library_model(
+    dir: &TestDir,
+    case: &str,
+    namelist: &std::path::Path,
+    opt_trans: bool,
+) -> String {
+    let suffix = if opt_trans { "enabled" } else { "disabled" };
+    let out = dir.0.join(format!("cli-{case}-{suffix}"));
+    let data =
+        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(namelist, opt_trans).unwrap();
+    assert!(
+        data.input_errors.is_empty(),
+        "{case}: {:?}",
+        data.input_errors
+    );
+    let mode = if data.i_flg_orbital_general != 0 {
+        "fsz"
+    } else if mvmc_core::get_all_complex_flag(&data) {
+        "cmp"
+    } else {
+        "real"
+    };
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+    command
+        .arg(namelist)
+        .args(["--nsteps", "1", "--nsmp", "1", "--seed", "1", "--out-dir"])
+        .arg(&out);
+    if opt_trans {
+        command.arg("--opt-trans");
+    }
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{case}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary = mvmc_core::run_para_opt_from_namelist(
+        namelist,
+        mvmc_core::RunConfig {
+            nsmp: Some(1),
+            seed: Some(1),
+            enable_opt_trans: Some(opt_trans),
+            output_dir: Some(dir.0.join(format!("library-{case}-{suffix}"))),
+            ..mvmc_core::RunConfig::new(1, mode)
+        },
+    )
+    .unwrap();
+    assert_eq!(summary.status, 0);
+    for name in [
+        "zvo_out.dat",
+        "zvo_var.dat",
+        "zqp_opt.dat",
+        "zqp_gutzwiller_opt.dat",
+        "zqp_jastrow_opt.dat",
+        "zqp_orbital_opt.dat",
+        "zqp_chargeRBM_physlayer_opt.dat",
+        "zqp_spinRBM_physlayer_opt.dat",
+        "zqp_generalRBM_physlayer_opt.dat",
+        "zqp_chargeRBM_hiddenlayer_opt.dat",
+        "zqp_spinRBM_hiddenlayer_opt.dat",
+        "zqp_generalRBM_hiddenlayer_opt.dat",
+        "zqp_chargeRBM_physhidden_opt.dat",
+        "zqp_spinRBM_physhidden_opt.dat",
+        "zqp_generalRBM_physhidden_opt.dat",
+    ] {
+        assert_eq!(
+            out.join(name).exists(),
+            summary.output_dir.join(name).exists(),
+            "{case} {name} presence"
+        );
+        if out.join(name).exists() {
+            assert_eq!(
+                fs::read(out.join(name)).unwrap(),
+                fs::read(summary.output_dir.join(name)).unwrap(),
+                "{case} {suffix} {name}"
+            );
+        }
+    }
+    fs::read_to_string(out.join("zvo_out.dat")).unwrap()
+}
+
 #[test]
-fn rbm_namelists_reach_production_and_match_source_output() {
+fn rbm_namelists_match_library_with_complete_c_declarations() {
     let dir = TestDir::new("rbm");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for case in [
@@ -209,36 +290,12 @@ fn rbm_namelists_reach_production_and_match_source_output() {
         "rbm_dh24_cmp",
         "rbm_fsz",
     ] {
-        let out = dir.0.join(case);
-        // Explicit legacy binary inputs preserve these Julia SR goldens.
-        // Native integer flag 2 remains fixed for SR in production.
-        let namelist = root.join(format!("c_orbital_inputs/namelist_{case}.def"));
-        let data = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
-            .arg(&namelist)
-            .args(["--nsteps", "1", "--nsmp", "1", "--seed", "1", "--out-dir"])
-            .arg(&out)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{case}: {}",
-            String::from_utf8_lossy(&output.stderr)
+        check_cli_and_library_model(
+            &dir,
+            case,
+            &root.join(format!("c_orbital_inputs/namelist_{case}.def")),
+            false,
         );
-        for name in ["zvo_out.dat", "zqp_opt.dat"] {
-            assert_eq!(
-                fs::read_to_string(out.join(name)).unwrap(),
-                declared_output(
-                    &data,
-                    name,
-                    fs::read_to_string(
-                        root.join(format!("sr_direct/{case}_store_runner/step-1-{name}"))
-                    )
-                    .unwrap()
-                ),
-                "{case} {name}"
-            );
-        }
     }
 }
 
@@ -319,48 +376,26 @@ fn positive_nonunit_flags_initialize_but_stay_fixed_through_cli_sr_steps() {
 }
 
 #[test]
-fn nonidentity_opttrans_namelists_reach_production_and_match_source_output() {
+fn nonidentity_opttrans_namelists_match_library_with_c_activation_and_flags() {
     let dir = TestDir::new("opttrans");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for case in ["opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp"] {
-        let out = dir.0.join(case);
         let namelist = if case == "opt_dh24_rbm_cmp" {
             root.join("c_orbital_inputs/namelist_opt_dh24_rbm_cmp.def")
         } else {
             root.join(format!("opttrans/run_{case}/namelist.def"))
         };
-        let data = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
-            .arg(&namelist)
-            .args(["--nsteps", "1", "--nsmp", "1", "--seed", "1", "--out-dir"])
-            .arg(&out)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{case}: {}",
-            String::from_utf8_lossy(&output.stderr)
+        let disabled = check_cli_and_library_model(&dir, case, &namelist, false);
+        let enabled = check_cli_and_library_model(&dir, case, &namelist, true);
+        assert_ne!(
+            disabled, enabled,
+            "{case}: explicit OptTrans must activate the nonidentity sectors"
         );
-        for name in ["zvo_out.dat", "zqp_opt.dat"] {
-            assert_eq!(
-                fs::read_to_string(out.join(name)).unwrap(),
-                declared_output(
-                    &data,
-                    name,
-                    fs::read_to_string(
-                        root.join(format!("sr_direct/{case}_store_runner/step-1-{name}"))
-                    )
-                    .unwrap()
-                ),
-                "{case} {name}"
-            );
-        }
-        assert!(!out.join("zqp_opttrans_opt.dat").exists());
     }
 }
 
 #[test]
-fn opttrans_source_sr_failure_reaches_cli_status_and_preserves_output_boundary() {
+fn opttrans_sr_failure_reaches_cli_status_and_preserves_failure_boundary() {
     let dir = TestDir::new("opttrans-failed-sr");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     let input = root.join("opttrans/run_opt_real").canonicalize().unwrap();
@@ -374,7 +409,7 @@ fn opttrans_source_sr_failure_reaches_cli_status_and_preserves_output_boundary()
         let path = input.join(words.next().unwrap());
         let path = if kind == "ModPara" {
             let mut text = fs::read_to_string(path).unwrap();
-            text.push_str("\nNStore 0\n");
+            text.push_str("\nNStore 0\nDSROptStepDt NaN\n");
             let path = dir.0.join("modpara.def");
             fs::write(&path, text).unwrap();
             path
@@ -387,24 +422,59 @@ fn opttrans_source_sr_failure_reaches_cli_status_and_preserves_output_boundary()
     let out = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
         .arg(dir.0.join("namelist.def"))
-        .args(["--nsteps", "50", "--nsmp", "50", "--seed", "1", "--out-dir"])
+        .args([
+            "--opt-trans",
+            "--nsteps",
+            "50",
+            "--nsmp",
+            "50",
+            "--seed",
+            "1",
+            "--out-dir",
+        ])
         .arg(&out)
         .output()
         .unwrap();
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
-    assert!(error.contains("direct SR failed at step 29"), "{error}");
-    let data = mvmc_expert_parsers::parse_expert_mode_files(dir.0.join("namelist.def")).unwrap();
+    assert!(error.contains("direct SR failed at step 0"), "{error}");
+    // A nonfinite step size rejects the first update. Sampling/output happen
+    // before that update, including the active OptTrans sectors.
+    let modpara = dir.0.join("modpara.def");
+    let text = fs::read_to_string(&modpara).unwrap();
+    fs::write(&modpara, text + "\nDSROptStepDt 0.003\n").unwrap();
+    let baseline = dir.0.join("baseline");
+    let successful = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(dir.0.join("namelist.def"))
+        .args([
+            "--opt-trans",
+            "--nsteps",
+            "1",
+            "--nsmp",
+            "1",
+            "--seed",
+            "1",
+            "--out-dir",
+        ])
+        .arg(&baseline)
+        .output()
+        .unwrap();
+    assert!(
+        successful.status.success(),
+        "{}",
+        String::from_utf8_lossy(&successful.stderr)
+    );
     for name in ["zvo_out.dat", "zvo_var.dat"] {
+        let actual = fs::read_to_string(out.join(name)).unwrap();
         assert_eq!(
-            fs::read_to_string(out.join(name)).unwrap(),
-            declared_output(
-                &data,
-                name,
-                fs::read_to_string(root.join(format!("sr_direct/opt_real_runner/step-50-{name}")))
-                    .unwrap()
-            ),
-            "{name}"
+            actual.lines().count(),
+            1,
+            "{name}: stop at the first failed update"
+        );
+        assert_eq!(
+            actual,
+            fs::read_to_string(baseline.join(name)).unwrap(),
+            "{name}: SR failure must preserve the pre-update sample/output"
         );
     }
     assert!(!out.join("zqp_opt.dat").exists());

@@ -329,7 +329,7 @@ fn full_declared_slater_load_and_sync_match_c_without_consuming_rng() {
         .filter(|line| !line.starts_with('#'))
         .collect();
     assert_eq!(rows.len(), 8);
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let complex = record[0] == "1";
         let mut payload = "0 0 0 0 0 0".to_owned();
         for index in 0..13 {

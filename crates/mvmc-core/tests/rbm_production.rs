@@ -67,7 +67,9 @@ fn complex_line(line: &str) -> Vec<Complex64> {
         .map(|s| u64::from_str_radix(s, 16).unwrap())
         .collect();
     words
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|w| Complex64::new(f64::from_bits(w[0]), f64::from_bits(w[1])))
         .collect()
 }
@@ -190,14 +192,14 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             "{case} C declared Slater initialization"
         );
         let c_slater = if case == "all" {
-            include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
+            *include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
                 .lines()
                 .filter(|line| !line.starts_with('#'))
                 .collect::<Vec<_>>()
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .find(|record| record[0] == "rbm_layout_loaded")
-                .unwrap()
-                .try_into()
                 .unwrap()
         } else {
             c_orbital_rng::declared_slater_record(&data)

@@ -14,7 +14,7 @@ fn orbital_headers_mapping_rows_and_flag_fields_match_c_acceptance() {
     fs::create_dir_all(&dir).unwrap();
     let mut failures = Vec::new();
     let mut accepted = 0;
-    for record in rows.chunks_exact(2) {
+    for record in rows.as_chunks::<2>().0.iter() {
         let fields: Vec<_> = record[0].split_whitespace().collect();
         let nsite: usize = fields[2].parse().unwrap();
         let expected = fields[3] == "1" && fields[6] == "0";

@@ -105,7 +105,9 @@ fn complex_slater_pfaffians_and_inverses_match_julia_turbo_bits() {
             .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
             .collect();
         doubles
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|v| C::new(v[0], v[1]))
             .collect()
     };

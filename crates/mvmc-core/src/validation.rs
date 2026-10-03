@@ -47,14 +47,15 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             p.vmc_calc_mode
         ));
     }
-    if p.nsplit_size > 1 {
-        if data.n_qp_opt_trans.max(1) > 1 || data.opt_trans.len() > 1 || data.qp_opt_trans.len() > 1
-        {
-            return Err(format!(
+    if p.nsplit_size > 1
+        && (data.n_qp_opt_trans.max(1) > 1
+            || data.opt_trans.len() > 1
+            || data.qp_opt_trans.len() > 1)
+    {
+        return Err(format!(
                 "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
                 p.nsplit_size, data.n_qp_opt_trans
             ));
-        }
     }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
@@ -263,7 +264,9 @@ mod tests {
             .enumerate()
         {
             let record = rows
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .find(|record| {
                     let h: Vec<_> = record[0].split_whitespace().collect();
                     h[1] == section.to_string()

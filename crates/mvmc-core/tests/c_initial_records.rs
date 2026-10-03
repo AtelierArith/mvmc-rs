@@ -152,7 +152,7 @@ fn complete_c_records_and_scalar_conversions_preserve_final_values_and_rng() {
         .filter(|line| !line.starts_with('#'))
         .collect();
     assert_eq!(rows.len(), 140);
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let fields: Vec<_> = record[0].split_whitespace().collect();
         let dims: Vec<usize> = fields[1..].iter().map(|s| s.parse().unwrap()).collect();
         let expected: Vec<u64> = record[2]

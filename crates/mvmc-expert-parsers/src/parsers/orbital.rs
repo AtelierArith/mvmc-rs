@@ -157,7 +157,7 @@ pub fn parse_orbital_content(
         ));
     }
     let mut opt_flags = BTreeMap::new();
-    for (index, pair) in fields.chunks_exact(2).enumerate() {
+    for (index, pair) in fields.as_chunks::<2>().0.iter().enumerate() {
         let _printed_index = pair[0]
             .parse::<i32>()
             .map_err(|_| invalid("invalid printed integer in orbital flag section"))?;

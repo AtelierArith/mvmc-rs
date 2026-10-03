@@ -118,7 +118,12 @@ pub fn parse_rbm_content(
         assignments.insert(coordinates, index);
     }
     let mut opt_flags = BTreeMap::new();
-    for (index, pair) in values[mapping_fields..].chunks_exact(2).enumerate() {
+    for (index, pair) in values[mapping_fields..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .enumerate()
+    {
         integer(pair[0])?; // C ignores the printed label.
         opt_flags.insert(index as i64, integer(pair[1])?);
     }

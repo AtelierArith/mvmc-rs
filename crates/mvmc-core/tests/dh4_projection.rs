@@ -305,6 +305,12 @@ fn check_strict_indh4_overlay_uses_definition_count_and_commits_each_record_atom
     let nml = dir.join("namelist.def");
     let path = dir.join("indh4.def");
     fs::write(&nml, "InDH4 absent.def\nInDH4 indh4.def\n").unwrap();
+    let before = d.projection_parameters();
+    assert!(read_input_parameters(&mut d, &nml)
+        .unwrap_err()
+        .contains("duplicate keyword InDH4"));
+    assert_eq!(d.projection_parameters(), before);
+    fs::write(&nml, "InDH4 indh4.def\n").unwrap();
     let text = format!(
         "===\nNDoublonHolon4siteIdx 2\nComplexType 1\n===\n===\n{}\n",
         (0..20)

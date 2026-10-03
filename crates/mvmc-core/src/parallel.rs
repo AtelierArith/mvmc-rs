@@ -74,7 +74,7 @@ pub fn assign_group(context: LaunchContext, nsplit: usize) -> Result<GroupAssign
     if nsplit == 0 {
         return Err("NSplitSize must be positive".into());
     }
-    if context.world_size % nsplit != 0 {
+    if !context.world_size.is_multiple_of(nsplit) {
         return Err(format!(
             "MPI world size {} must be divisible by NSplitSize {}",
             context.world_size, nsplit

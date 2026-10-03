@@ -1159,7 +1159,11 @@ fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationStat
     if state.transfer_cache.signature == signature {
         return;
     }
-    let all_real = !crate::run::get_all_complex_flag(data)
+    // The Julia real Transfer shortcut sums the section separately and is
+    // disabled for RBM. The generic RBM/C complex path adds each contribution
+    // directly to the diagonal energy; grouping that sum changes SR's HO.
+    let all_real = !data.has_rbm_terms()
+        && !crate::run::get_all_complex_flag(data)
         && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
     let n_site = data.modpara.nsite.max(0) as usize;
     let direct_projection_eligible = !data.has_rbm_terms()
@@ -2881,7 +2885,9 @@ mod tests {
                     | "rbm_reference_cmp"
             ) {
                 let store: Vec<Complex64> = store
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|z| Complex64::new(z[0], z[1]))
                     .collect();
                 let mut oo = vec![Complex64::new(0.0, 0.0); expected.len() / 2];

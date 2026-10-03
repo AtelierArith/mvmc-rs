@@ -194,7 +194,9 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
                 .filter(|line| !line.starts_with('#'))
                 .collect();
         let c_record = c_rows
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .find(|record| {
                 record[0]
                     == format!(

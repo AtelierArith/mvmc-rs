@@ -11,6 +11,9 @@ use mvmc_expert_parsers::{
 };
 use num_complex::Complex64;
 
+#[path = "../../../tests/support/historical_orbital_model.rs"]
+mod historical_orbital_model;
+
 fn integers(line: &str) -> Vec<i64> {
     line.split_whitespace()
         .map(|v| v.parse().unwrap())
@@ -22,7 +25,9 @@ fn complex_bits(line: &str) -> Vec<Complex64> {
         .split_whitespace()
         .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
         .collect();
-    bits.chunks_exact(2)
+    bits.as_chunks::<2>()
+        .0
+        .iter()
         .map(|v| Complex64::new(v[0], v[1]))
         .collect()
 }
@@ -547,7 +552,10 @@ fn exhaustive_dh24_fsz_one_and_two_body_spin_changes_match_original_julia_bits()
 fn add_rbm_green_model(data: &mut ExpertModeData) {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/rbm/production/namelist_all.def");
-    let mut parsed = mvmc_expert_parsers::parse_expert_mode_files(&file).unwrap();
+    // The archived RBM control files intentionally contain sparse Julia
+    // tables.  Use the historical test model, which restores those tables
+    // after validating the complete C-compatible controls.
+    let mut parsed = crate::historical_orbital_model::historical_kernel_model(&file).unwrap();
     mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut parsed, &file)
         .unwrap();
     data.rbm_section_widths = parsed.rbm_section_widths;
