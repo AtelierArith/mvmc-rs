@@ -754,6 +754,12 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
 
 #[cfg(test)]
 mod tests {
+    mod historical_overlay_stage {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/support/historical_overlay_stage.rs"
+        ));
+    }
     use super::*;
     use crate::julia_fixture;
     use mvmc_expert_parsers::OrbitalTerm;
@@ -1027,10 +1033,7 @@ mod tests {
         while let Some(case) = lines.next() {
             let file = root.join(format!("namelist_{case}.def"));
             let mut data = crate::historical_orbital_model::historical_kernel_model(&file).unwrap();
-            mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(
-                &mut data, &file,
-            )
-            .unwrap();
+            historical_overlay_stage::read_input_parameters(&mut data, &file).unwrap();
             let counts: Vec<usize> = lines
                 .next()
                 .unwrap()

@@ -337,10 +337,24 @@ fn check_strict_indh4_overlay_uses_definition_count_and_commits_each_record_atom
             .map(|i| Complex64::new(i as f64 / 8.0, -(i as f64) / 16.0))
             .collect::<Vec<_>>()
     );
+    // Original C ordered scatter keeps index19's initialized value when both
+    // first and later records target18; the later original18 record wins.
+    d.doublon_holon_4site_params[19] = Complex64::new(900.0, 901.0);
+    fs::write(&path, text.replace("19 2.375 -1.1875", "18 2.375 -1.1875")).unwrap();
+    read_input_parameters(&mut d, &nml).unwrap();
+    assert_eq!(
+        d.doublon_holon_4site_params[18],
+        Complex64::new(2.25, -1.125)
+    );
+    assert_eq!(
+        d.doublon_holon_4site_params[19],
+        Complex64::new(900.0, 901.0)
+    );
+    fs::write(&path, &text).unwrap();
+    read_input_parameters(&mut d, &nml).unwrap();
     let before = d.projection_parameters();
     for bad in [
         text.replace("Idx 2", "Idx 20"),
-        text.replace("19 2.375 -1.1875", "18 2.375 -1.1875"),
         text.replace("19 2.375 -1.1875", "20 2.375 -1.1875"),
         text.replace("2.375", "NaN"),
         text.replace("19 2.375 -1.1875\n", ""),
