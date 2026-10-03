@@ -1,5 +1,4 @@
-# Structure follows tensor4all/tenferro-rs: read-only permissions, cancellation,
-# Rust dependency cache, nextest, and a separate workflow configuration check.
+# Independent test, lint and documentation jobs share the numerical environment.
 name: CI
 
 on:
@@ -24,82 +23,95 @@ env:
   BLIS_NUM_THREADS: '1'
 
 jobs:
-  workspace:
-    name: Workspace (${{ matrix.platform }})
-    runs-on: ${{ matrix.os }}
+  tests:
+    name: Tests (${{ matrix.platform.name }}, ${{ matrix.configuration.name }})
+    runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 45
+    env:
+      OPENBLAS_CORETYPE: ${{ matrix.platform.blas_core }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x86_64
-            arch: X64
-          - os: macos-15
-            platform: macos-arm64
-            arch: ARM64
+        platform:
+          - { name: Linux x86_64, os: ubuntu-24.04, arch: X64, blas_core: HASWELL, cache: linux-x86_64 }
+          - { name: macOS ARM64, os: macos-15, arch: ARM64, blas_core: NEOVERSEN1, cache: macos-arm64 }
+        configuration:
+          - { name: Default features — serial, args: '', cache: default }
+          - { name: All features — MPI + SIMD, args: --all-features, cache: all-features }
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
-      - name: Verify runner architecture
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: ${{ matrix.platform.arch }}
+          platform: ${{ matrix.platform.cache }}
+          cache-key: tests-${{ matrix.configuration.cache }}
+          tools: nextest
+      - name: Run unit and integration tests
         env:
-          EXPECTED_ARCH: ${{ matrix.arch }}
-        run: test "$RUNNER_ARCH" = "$EXPECTED_ARCH"
-      - name: Install Linux numerical libraries and MPI
-        if: runner.os == 'Linux'
+          FEATURE_ARGS: ${{ matrix.configuration.args }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libopenblas-dev liblapack-dev libclang-dev libmpich-dev mpich pkg-config
-      - name: Install macOS numerical libraries and MPI
-        if: runner.os == 'macOS'
-        run: |
-          brew install openblas mpich
-          echo "PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
-          echo "LIBCLANG_PATH=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: workspace-${{ matrix.platform }}
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: nextest
-      - name: Record tool and backend versions
-        run: |
-          uname -a
-          rustc -Vv
-          cargo nextest --version
-          pkg-config --modversion openblas
-          mpicc -show
-      - name: Check formatting
-        run: cargo fmt --all --check
-      - name: Run default workspace tests
-        run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0
-      - name: Run all-feature workspace tests
-        run: cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0
-      - name: Run documentation tests
-        run: cargo test --workspace --all-features --locked --doc --profile ci
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked --profile ci -- -D warnings
-      - name: Build documentation
-        run: cargo doc --workspace --all-features --locked --no-deps --profile ci
+          feature_args=()
+          if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
+          cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Log target disk usage
         if: always()
         run: |
           du -sh target || true
           df -h .
 
-  ci-config:
-    name: CI configuration checks
-    runs-on: ubuntu-24.04
+  lint:
+    name: Lint — fmt, Clippy, workflows (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 45
+    env:
+      OPENBLAS_CORETYPE: ${{ matrix.platform.blas_core }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: Linux x86_64, os: ubuntu-24.04, arch: X64, blas_core: HASWELL, cache: linux-x86_64 }
+          - { name: macOS ARM64, os: macos-15, arch: ARM64, blas_core: NEOVERSEN1, cache: macos-arm64 }
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
         with:
-          go-version: stable
-      - name: Install actionlint
-        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-      - name: Validate workflows
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: ${{ matrix.platform.arch }}
+          platform: ${{ matrix.platform.cache }}
+          cache-key: lint
+          tools: actionlint@1.7.7
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+      - name: Validate GitHub workflows
         run: actionlint
+      - name: Run Clippy with all features
+        run: cargo clippy --workspace --all-targets --all-features --locked --profile ci -- -D warnings
+
+  documentation:
+    name: Documentation — doctests and build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 45
+    env:
+      OPENBLAS_CORETYPE: ${{ matrix.platform.blas_core }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: Linux x86_64, os: ubuntu-24.04, arch: X64, blas_core: HASWELL, cache: linux-x86_64 }
+          - { name: macOS ARM64, os: macos-15, arch: ARM64, blas_core: NEOVERSEN1, cache: macos-arm64 }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: ${{ matrix.platform.arch }}
+          platform: ${{ matrix.platform.cache }}
+          cache-key: documentation
+      - name: Run documentation tests with all features
+        run: cargo test --workspace --all-features --locked --doc --profile ci
+      - name: Build API documentation with all features
+        run: cargo doc --workspace --all-features --locked --no-deps --profile ci
