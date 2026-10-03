@@ -29,6 +29,63 @@ fixtures. They check the smoke's missing checkout/namelist, all four gates'
 unset/empty/skip selectors and missing checkout/namelist, and missing expected
 50-step output preflight. Other unit and integration tests remain normal.
 
+### Shared integration compile checkpoint
+
+After merging #197 with the shared numerical drafts, parent workspace process
+67117 stopped during compilation, not numerical execution: the gate conflict
+resolution omitted Lanczos `report_gate`/`GateStatus` imports and left unused
+`require_gate` imports in four phase4/5 files. An import-only repair restored
+the Lanczos imports and removed those four unused imports; no scenario body,
+algorithm, tolerance or fixture changed. Focused nextest handle 20560 exited 0:
+43 passed, 9 ignored (the shared #180 draft has two additional ignored audits).
+Run ID: `76357a9c-ec00-43a3-a7f3-b93ef9d7fe59`. Targeted formatting passed.
+Strict focused Clippy handle 14051 was blocked by the unrelated shared
+`sampling/candidate.rs:400` eight-argument lint; it was not a gate lint pass.
+This checkpoint is separate from the isolated milestone validation below and
+does not establish shared full-workspace or MPI numerical validation.
+Parent committed that five-file import repair as `077231b`; the parent's
+ongoing full-workspace run is separate and its result is not inferred here.
+
+### Follow-up final validation
+
+Validated in a new isolated worktree from main `8ecea4f`, with its own
+`target` directory and the same pinned reference submodules recorded below.
+Linux x86_64, Rust 1.99.0, nextest 0.9.146, default features, locked dependencies,
+`test-fast`. Final Rust implementation is commit `8936a45`; subsequent
+validation-record edits change documentation only. No reference runtime ran.
+
+| Command/check | Captured final result |
+| --- | --- |
+| `cargo nextest run --workspace --locked --cargo-profile test-fast --no-fail-fast --retries 0` | handle 83065, exit 0: 549 passed, 19 skipped, 112.848 seconds; run `49b930df-e200-4f97-bbe2-d9c288f4e92c` |
+| `cargo test --workspace --locked --doc --profile test-fast` | handle 25779, exit 0, no doctest cases; no library/doc-test source subsequently changed |
+| `cargo clippy --workspace --locked --all-targets --profile test-fast -- -D warnings` | refreshed handle 67691, exit 0 |
+| `cargo fmt --all --check`, `git diff --check` | exit 0 |
+| Selected 50-step command above | handle 4005, exit 0: 4 passed, 8 skipped; run `29b55453-18fc-4146-a2a8-8903acfe9800` |
+| Unset-selector command above | handle 9144, expected exit 100: 0 passed, 4 NotRun failures, 8 skipped; run `3831d2a3-9f45-4e3e-b94c-c3233697a513` |
+| Three repetitions of `cargo test --locked -p mvmc-core --profile test-fast --test run_smoke -- --test-threads=8` | handle 53712, exit 0: 8 passed each repetition |
+
+The full default count changes from #197's 550 passed/15 skipped to 549
+passed/19 skipped: four long comparisons become explicitly ignored and three
+reporting regressions are added. All four long comparisons also passed when
+explicitly requested. Negative subprocess checks cover two smoke fixture cases
+and twenty long-gate selector/fixture cases; the missing expected-output
+preflight regression adds one more negative case. They read no oracle output.
+The smoke temporary-directory helper uses a per-call atomic sequence and
+exclusive `create_dir`, retries collisions and never deletes existing paths;
+the repeated parallel libtest runs verify it outside nextest's isolation.
+
+Tested SHA-256:
+
+- `run_smoke.rs`: `fd8d8ec5e5c3a7e18041b636b0cb37fea22b62ddac1638c48842a0ec6c6b9371`
+- `phase5_regression_50step.rs`: `c79194afe61f32c7ccf53a225173a797a09aa06f15c90064f9f4d8a346deecd2`
+
+The earlier full run (96225) passed 549/19 on `62c8768` before the temporary
+directory race repair; it is superseded for final-source validation by 83065.
+The selected/unset checks cover the unchanged phase5 source hash above.
+An existing third-party deprecated atomic-method warning remains unchanged.
+These results do not validate shared #179/#180/#181/#182 numerical drafts or
+complete all #183 acceptance criteria.
+
 The four phase4/5 fixture gates, Lanczos PhysCal, MPI PhysCal and existing
 ctest-equivalent gate are ignored opt-in tests. Default nextest runs report
 them as skipped, not passed. Environment variables alone do not enable them:
