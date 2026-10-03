@@ -1,0 +1,26 @@
+# Issue184 parameter-overlay evidence (publication candidate)
+
+Related to #184 and #185; neither issue is complete. This document is a SOURCE-only publication candidate, not an accepted main-tree milestone. The candidate production/test base is main `d7cb76b15c59595c6b9ee8940d1119e001108841`. No numerical tolerances, RNG expectations, or independent golden data change.
+
+| Acceptance cell | Contract and evidence | Actual state |
+| --- | --- | --- |
+| Projection4/RBM9 ordered overlay | Declared-count prefix consumption; repeated valid indices use the last write; unwritten initialized slots and neighboring offsets remain intact | Candidate Rust focused10 PASS; parser187 PASS |
+| Consumed invalid records/header | Count/range/consumed-field checks reject before changing the current section; an earlier successful section remains applied | Candidate focused assertions PASS; not a claim of whole-loader atomicity or native undefined-input parity |
+| Valid trailing input | Extra valid or malformed unconsumed tokens are ignored; same-line and split-field consumed triples are supported | Projection4 and RBM9 loops exercised in the ten tests; independent native trailing probe PASS |
+| C authority | Original readdef.c SHA256 `6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`, mVMC revision `d73d06bd529d3b2573f38eb5817c4a5f52971006`; standalone extracted Gutz/DH2/header/trailing kernels | Native receipts0; NOT a full C sampler/MPI executable or native test of every RBM family |
+| Strict lint and formatting | First candidate Clippy rejected needless `&kind` borrow; the one-line correction was separately validated | Corrected parser Clippy/fmt PASS |
+| Whole workspace | Potential C-contract consumer regressions require source audit and actual workspace execution; no new workspace failure has been observed for this candidate | NotRun for the new retained-scatter candidate |
+| Optional-gate scope (#183) | Missing independent realFSZ references, selected missing-fixture/unsupported reporting, and broad thread/callsite evidence remain separate | Open; parser results do not promote these cells |
+
+## Executed receipts and failures retained
+
+The two native receipt roots below are host paths. Rust receipt roots are paths inside container `73c57e563c61`; these locations must not be conflated.
+
+* Host `/tmp/mvmc-184-overlay-native-proof.OigIlz`: original standalone native probe (owner6415), all recorded terminal receipts0; stdout SHA256 `469f1bf04f1bf5edf935fa2a455e90542c42e3896608598418e8bf46fe7ef85a`.
+* Host `/tmp/mvmc-184-overlay-trailing-proof.vZWUlj`: trailing-input native probe (owner2287), all13 terminal receipts0; stdout SHA256 `9cc838c0f359e3cd7dee8c487294dcf62354020bb320306a22f82fb74a27d42d`. GCC13.3 GNU C11/O0, PIE, assertions enabled; included-header, compiler/linker/startup, binary and runtime-provider pins checked before/after. Native provenance and reproduction source remain separate toolbox publication candidates; normal Cargo neither invokes nor reads them.
+* Container `/tmp/mvmc-184-overlay-rust.ldNKwQ`: owner16657/PID1494812; ten exact selected tests PASS, parser187/187 PASS/zero skipped, fmt0, Clippy101 (`needless_borrow` at line350). Source/tools/binary/runtime and actual post-list identities0; inner aggregate1. Outer launch status files are absent owing to set-e around wait; they are not inferred successful. Guard monitored to terminal without budget breach.
+* Container `/tmp/mvmc-184-overlay-repeat.fPzBUn`: owner51373/PID1502314; corrected source staged, but initial free914720KiB was below917504KiB. Cargo NotStarted; inner1/outer1/watch0; source/tools posts0. This is an infrastructure failure, not a numerical test failure or a successful retry.
+* Container `/tmp/mvmc-184-overlay-corrected.WAc7rL`: owner52460/PID1502922; ten exact focused tests PASS and parser187/187 PASS, zero skipped; strict parser Clippy/fmt0. Inner/outer/watch0 and every recorded source/tool/binary/runtime/post-list/selection check0. Guard monitored to terminal. This corrected parser receipt does not establish a full-workspace pass.
+* Container `/tmp/mvmc-184-overlay-workspace.UTf8Jr`: owner34711/PID1510319; list compilation did not complete, so no workspace tests/docs/Clippy/fmt ran. Original watch2 followed a transient Cargo-deleted file; replacement watch1 terminated the verified same process group when target growth525612KiB exceeded524288KiB. Outer143 is an infrastructure failure. Inner terminal0 is an incorrect signal-cleanup receipt, not success. Source/tools posts0; an unguarded interval is documented in guard-gap.txt. This failed acquisition is preserved, not relabelled as a953-test pass. Future launchers include explicit signal failure and bounded transient-du retries; they have not rerun this gate.
+
+The accepted main PR240/old943-test proof predates this retained-scatter change. It remains historical evidence of that distinct source, not workspace validation of this candidate. Expected new inventory953 and ignored40 are not observed passing results; CI and local full-workspace verification are pending. Baseline20-step model gates, complete API/example/scenario reconciliation, portability of the new production change, and full #183/#184/#185 acceptance remain unresolved unless separately evidenced.

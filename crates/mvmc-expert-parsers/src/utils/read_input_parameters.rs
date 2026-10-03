@@ -130,12 +130,80 @@ pub fn parse_indexed_input_parameter_file_strict(
     Ok(params)
 }
 
+// Ordered, bounded scatter records for native projection/RBM families.
+// Duplicate indices intentionally remain in input order. No zero-filled
+// replacement buffer: an unwritten initialized coefficient must survive.
+fn parse_scatter_records(
+    path: &Path,
+    header_count: usize,
+    coefficient_count: usize,
+    label: &str,
+    require_finite: bool,
+) -> Result<Vec<(usize, Complex64)>, String> {
+    let content = read_def_file(path).map_err(|error| error.to_string())?;
+    let lines: Vec<_> = content.lines().collect();
+    if lines.len() < 5 {
+        return Err(format!(
+            "{label}: {} must include 5 header lines",
+            path.display()
+        ));
+    }
+    let count = split_def_line(lines[1])
+        .get(1)
+        .and_then(|token| julia_parse_int(token))
+        .ok_or_else(|| format!("{label}: invalid count header in {}", path.display()))?;
+    if count < 0 || count as usize != header_count {
+        return Err(format!(
+            "{label}: header count mismatch in {}: got {count}, expected {header_count}",
+            path.display()
+        ));
+    }
+    let mut records = Vec::with_capacity(coefficient_count);
+    // Native fscanf consumes whitespace-separated fields, not physical rows.
+    // Blank lines are whitespace; comments in the consumed prefix are not
+    // stripped. Anything after the declared record prefix is never inspected.
+    let mut body = lines
+        .iter()
+        .skip(5)
+        .flat_map(|line| line.split_ascii_whitespace());
+    for record in 0..coefficient_count {
+        let mut field = || {
+            body.next().ok_or_else(|| {
+                format!(
+                    "{label}: missing field in consumed record {} of {coefficient_count}",
+                    record + 1
+                )
+            })
+        };
+        let tokens = [field()?, field()?, field()?];
+        let index = julia_parse_int(tokens[0])
+            .ok_or_else(|| format!("{label}: invalid index '{}'", tokens[0]))?;
+        if index < 0 || index as usize >= coefficient_count {
+            return Err(format!(
+                "{label}: index {index} out of range for {coefficient_count} coefficients"
+            ));
+        }
+        let real = julia_parse_float(tokens[1])
+            .ok_or_else(|| format!("{label}: invalid real value '{}'", tokens[1]))?;
+        let imag = julia_parse_float(tokens[2])
+            .ok_or_else(|| format!("{label}: invalid imag value '{}'", tokens[2]))?;
+        // Preserve pre-existing finite safety for DH, not a C fscanf claim.
+        if require_finite && (!real.is_finite() || !imag.is_finite()) {
+            return Err(format!("{label}: non-finite parameter value"));
+        }
+        records.push((index as usize, Complex64::new(real, imag)));
+    }
+    Ok(records)
+}
+
 /// Read optional overlays after initial.def and before synchronization.
 /// Missing referenced files are skipped; applied records follow namelist order.
 /// Supported factors are Gutzwiller, Jastrow and normal/AP/Parallel/General
-/// orbitals, strict DH2/DH4/OptTrans, and the nine indexed RBM sections.
-/// Each strict overlay commits atomically;
-/// earlier successful overlays remain applied if a later record fails.
+/// orbitals, DH2/DH4/OptTrans, and the nine indexed RBM sections.
+/// Projection/RBM records scatter sequentially into retained initialized values;
+/// valid duplicate indices keep the last write. Malformed/out-of-range records
+/// are rejected before that section mutates (Rust safety, not C undefined-input
+/// parity); earlier successful sections stay applied if a later record fails.
 pub fn read_input_parameters(
     data: &mut ExpertModeData,
     namelist_path: impl AsRef<Path>,
@@ -168,15 +236,23 @@ pub fn read_input_parameters(
         }
         match kind.as_str() {
             "InGutzwiller" | "InJastrow" => {
-                let params =
-                    parse_input_parameter_file(&path).map_err(|error| error.to_string())?;
-                for (index, value) in params {
+                let layout = data.projection_layout();
+                let (width, retained) = if kind == "InGutzwiller" {
+                    (layout.n_gutzwiller, data.gutzwiller_terms.len())
+                } else {
+                    (layout.n_jastrow, data.jastrow_terms.len())
+                };
+                if retained < width {
+                    return Err(format!(
+                        "{kind}: initialized target length {retained} below declared width {width}"
+                    ));
+                }
+                let records = parse_scatter_records(&path, width, width, &kind, false)?;
+                for (index, value) in records {
                     if kind == "InGutzwiller" {
-                        if let Some(term) = data.gutzwiller_terms.get_mut(index as usize) {
-                            term.value = value;
-                        }
-                    } else if let Some(term) = data.jastrow_terms.get_mut(index as usize) {
-                        term.value = value;
+                        data.gutzwiller_terms[index].value = value;
+                    } else {
+                        data.jastrow_terms[index].value = value;
                     }
                 }
             }
@@ -219,13 +295,10 @@ pub fn read_input_parameters(
                         data.doublon_holon_2site_params.len()
                     ));
                 }
-                let params = parse_indexed_input_parameter_file_strict(
-                    &path,
-                    layout.n_dh2,
-                    expected,
-                    "InDH2",
-                )?;
-                data.doublon_holon_2site_params.copy_from_slice(&params);
+                let records = parse_scatter_records(&path, layout.n_dh2, expected, "InDH2", true)?;
+                for (index, value) in records {
+                    data.doublon_holon_2site_params[index] = value;
+                }
             }
             "InDH4" => {
                 let layout = data.projection_layout();
@@ -236,13 +309,10 @@ pub fn read_input_parameters(
                         data.doublon_holon_4site_params.len()
                     ));
                 }
-                let params = parse_indexed_input_parameter_file_strict(
-                    &path,
-                    layout.n_dh4,
-                    expected,
-                    "InDH4",
-                )?;
-                data.doublon_holon_4site_params.copy_from_slice(&params);
+                let records = parse_scatter_records(&path, layout.n_dh4, expected, "InDH4", true)?;
+                for (index, value) in records {
+                    data.doublon_holon_4site_params[index] = value;
+                }
             }
             "InOptTrans" => {
                 let expected = data.count_opt_trans_parameters();
@@ -264,18 +334,24 @@ pub fn read_input_parameters(
                 || kind.starts_with("InSpinRBM_")
                 || kind.starts_with("InGeneralRBM_") =>
             {
-                let params =
-                    parse_input_parameter_file(&path).map_err(|error| error.to_string())?;
                 if let Some(section) = crate::parsers::rbm::SECTION_NAMES
                     .iter()
                     .position(|&name| kind.strip_prefix("In") == Some(name))
                 {
                     let widths = data.rbm_section_sizes();
                     let offset: usize = widths[..section].iter().sum();
-                    for (&index, &value) in &params {
-                        if index >= 0 && (index as usize) < widths[section] {
-                            data.set_rbm_parameter(offset + index as usize, value);
-                        }
+                    if data.rbm_params.len() != widths.iter().sum::<usize>() {
+                        return Err(format!("{kind}: initialized RBM buffer length mismatch"));
+                    }
+                    let records = parse_scatter_records(
+                        &path,
+                        widths[section],
+                        widths[section],
+                        kind,
+                        false,
+                    )?;
+                    for (index, value) in records {
+                        data.set_rbm_parameter(offset + index, value);
                     }
                 }
             }
