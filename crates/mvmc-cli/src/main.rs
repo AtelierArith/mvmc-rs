@@ -27,6 +27,8 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Instant;
 
+mod physcal_trace;
+
 fn print_usage(program: &str) {
     eprintln!("Usage: {program} <namelist.def> [options]");
     eprintln!();
@@ -39,6 +41,7 @@ fn print_usage(program: &str) {
     eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
     eprintln!("  -o, --opt-trans Enable C OptTrans mode [default: disabled]");
     eprintln!("  --physcal <PATH> Run fixed-parameter PhysCal using PATH");
+    eprintln!("  --physcal-trace <NEW_DIR> Nonconsuming serial PhysCal diagnostics");
     eprintln!("  --help, -h      Print this help");
     eprintln!();
     eprintln!("Environment:");
@@ -59,6 +62,7 @@ fn main() {
     let mut initial_def = mvmc_core::InitialDef::Auto;
     let mut opt_trans_arg = false;
     let mut physcal_params: Option<PathBuf> = None;
+    let mut physcal_trace_dir: Option<PathBuf> = None;
 
     let mut idx = 1;
     while idx < args.len() {
@@ -134,6 +138,13 @@ fn main() {
                     process::exit(2)
                 }));
             }
+            "--physcal-trace" => {
+                idx += 1;
+                physcal_trace_dir = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
+                    eprintln!("error: --physcal-trace requires a NEW directory");
+                    process::exit(2);
+                }));
+            }
             flag if flag.starts_with('-') => {
                 eprintln!("error: unknown flag `{flag}`");
                 print_usage(program);
@@ -159,6 +170,15 @@ fn main() {
             process::exit(2);
         }
     };
+
+    if physcal_trace_dir.is_some()
+        && (physcal_params.is_none()
+            || mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok())
+                .is_some_and(|context| context.world_size > 1))
+    {
+        eprintln!("error: --physcal-trace requires serial --physcal execution");
+        process::exit(2);
+    }
 
     #[cfg(feature = "mpi")]
     let mpi_context = {
@@ -304,6 +324,28 @@ fn main() {
     let t0 = Instant::now();
 
     if let Some(fixed_params) = physcal_params {
+        let trace = physcal_trace_dir
+            .as_ref()
+            .map(|directory| {
+                physcal_trace::Trace::create(
+                    directory,
+                    seed_arg,
+                    mode_arg.as_deref().unwrap_or(inferred_mode),
+                    opt_trans_arg,
+                )
+                .map(std::rc::Rc::new)
+            })
+            .transpose()
+            .unwrap_or_else(|error| {
+                eprintln!("error: {error}");
+                process::exit(1);
+            });
+        let _trace_guard = trace.as_ref().map(|trace| {
+            mvmc_core::run::install_physcal_green_observer(trace.clone()).unwrap_or_else(|error| {
+                eprintln!("error: {error}");
+                process::exit(1);
+            })
+        });
         match run_physcal_with_selected_backend(
             &namelist,
             &fixed_params,
@@ -315,6 +357,12 @@ fn main() {
             mpi_context.as_ref(),
         ) {
             Ok(result) => {
+                if let Some(trace) = &trace {
+                    trace.finish(result.iterations).unwrap_or_else(|error| {
+                        eprintln!("error: PhysCal trace failed: {error}");
+                        process::exit(1);
+                    });
+                }
                 if output_root {
                     println!();
                     println!(
