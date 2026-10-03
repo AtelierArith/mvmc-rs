@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 mod support;
+use support::{report_gate, GateStatus};
 
 fn values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)

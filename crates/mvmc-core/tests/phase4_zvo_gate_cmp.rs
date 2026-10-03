@@ -6,7 +6,7 @@
 use std::fs;
 
 mod support;
-use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
+use support::{julia_mvmc_root, report_gate, GateStatus};
 
 #[test]
 #[ignore = "optional parity gate: MVMC_RS_PHASE4_CMP_ZVO required"]
