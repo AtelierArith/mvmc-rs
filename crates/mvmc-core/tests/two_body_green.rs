@@ -1,7 +1,8 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
 use mvmc_core::observables::{
     calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func1_fsz_complex,
-    green_func2, green_func2_complex, green_func2_fsz, green_func2_fsz_complex, green_func2_real,
+    green_func1_fsz_real, green_func2, green_func2_complex, green_func2_fsz,
+    green_func2_fsz_complex, green_func2_fsz_real, green_func2_real,
 };
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
@@ -603,9 +604,21 @@ fn native_fsz_green_rejects_rbm_before_density_reductions() {
     let spins = [0, 0, 1, 1];
     let ip = Complex64::new(1.0, 0.0);
     // Even a density shortcut must not silently discard a requested RBM.
-    for two_body in [false, true] {
+    for (real, two_body) in [(false, false), (false, true), (true, false), (true, true)] {
         let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            if two_body {
+            if real {
+                let value = if two_body {
+                    green_func2_fsz_real(
+                        0, 0, 0, 0, 0, 0, 0, 0, ip.re, &data, &mut state, &idx, &cfg, &num, &cnt,
+                        &spins,
+                    )
+                } else {
+                    green_func1_fsz_real(
+                        0, 0, 0, 0, ip.re, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                    )
+                };
+                Complex64::new(value, 0.0)
+            } else if two_body {
                 green_func2_fsz_complex(
                     0, 0, 0, 0, 0, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
                 )
@@ -625,12 +638,24 @@ fn native_fsz_green_rejects_rbm_before_density_reductions() {
 
 #[test]
 fn exhaustive_fsz_green_kernels_match_native_c_bits() {
-    let mut lines = include_str!("../../../tests/fixtures/interall/c_fsz_green.txt")
-        .lines()
-        .filter(|line| !line.starts_with('#'));
+    check_native_fsz_green::<false>();
+}
+
+#[test]
+fn exhaustive_real_fsz_green_kernels_match_native_c_bits() {
+    check_native_fsz_green::<true>();
+}
+
+fn check_native_fsz_green<const REAL: bool>() {
+    let fixture = if REAL {
+        include_str!("../../../tests/fixtures/interall/c_fsz_real_green.txt")
+    } else {
+        include_str!("../../../tests/fixtures/interall/c_fsz_green.txt")
+    };
+    let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut mismatches = 0;
     let mut first = None;
-    for case in 0..12 {
+    for case in 0..if REAL { 6 } else { 12 } {
         let complex = lines.next().unwrap() == "1";
         let idx = integers(lines.next().unwrap());
         let spins = integers(lines.next().unwrap());
@@ -649,20 +674,70 @@ fn exhaustive_fsz_green_kernels_match_native_c_bits() {
             .slater_elm
             .as_mut_slice()
             .copy_from_slice(&slater);
+        if REAL {
+            for (target, source) in state
+                .slater_matrix
+                .slater_elm_real
+                .as_mut_slice()
+                .iter_mut()
+                .zip(&slater)
+            {
+                *target = source.re;
+            }
+        }
         let pf = complex_bits(lines.next().unwrap());
         state.slater_matrix.pf_m.copy_from_slice(&pf);
+        if REAL {
+            for (target, source) in state.slater_matrix.pf_m_real.iter_mut().zip(&pf) {
+                *target = source.re;
+            }
+        }
         let inv = complex_bits(lines.next().unwrap());
         for qp in 0..2 {
             state.slater_matrix.inv_m.as_mut_slice()[qp * 17..qp * 17 + 16]
                 .copy_from_slice(&inv[qp * 16..qp * 16 + 16]);
+            if REAL {
+                for (target, source) in state.slater_matrix.inv_m_real.as_mut_slice()
+                    [qp * 17..qp * 17 + 16]
+                    .iter_mut()
+                    .zip(&inv[qp * 16..qp * 16 + 16])
+                {
+                    *target = source.re;
+                }
+            }
         }
         let ip = complex_bits(lines.next().unwrap())[0];
+        if REAL {
+            state
+                .slater_matrix
+                .slater_elm
+                .as_mut_slice()
+                .fill(Complex64::new(7.0, -2.0));
+            state.slater_matrix.pf_m.fill(Complex64::new(-11.0, 3.0));
+            state
+                .slater_matrix
+                .inv_m
+                .as_mut_slice()
+                .fill(Complex64::new(13.0, -5.0));
+        }
         let before = state.slater_matrix.inv_m.as_slice().to_vec();
+        let before_pf = state.slater_matrix.pf_m.clone();
+        let before_slater = state.slater_matrix.slater_elm.as_slice().to_vec();
+        let before_real = state.slater_matrix.inv_m_real.as_slice().to_vec();
+        let before_pf_real = state.slater_matrix.pf_m_real.clone();
+        let before_slater_real = state.slater_matrix.slater_elm_real.as_slice().to_vec();
         let expected_one = complex_bits(lines.next().unwrap());
         let expected_two = complex_bits(lines.next().unwrap());
         assert_eq!(expected_one.len(), 64);
         assert_eq!(expected_two.len(), 4096);
         let mut check = |actual: Complex64, expected: Complex64, operator: Vec<usize>| {
+            // Scalar C returns only a real component; complex signed zeros are
+            // checked independently by the complex-family fixture above.
+            let actual = if REAL {
+                Complex64::new(actual.re, 0.0)
+            } else {
+                actual
+            };
             let actual_bits = [actual.re.to_bits(), actual.im.to_bits()];
             let expected_bits = [expected.re.to_bits(), expected.im.to_bits()];
             if actual_bits != expected_bits {
@@ -678,9 +753,20 @@ fn exhaustive_fsz_green_kernels_match_native_c_bits() {
                 for ri in 0..4 {
                     for rj in 0..4 {
                         check(
-                            green_func1_fsz_complex(
-                                ri, rj, s, t, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
-                            ),
+                            if REAL {
+                                Complex64::new(
+                                    green_func1_fsz_real(
+                                        ri, rj, s, t, ip.re, &data, &mut state, &idx, &cfg, &num,
+                                        &cnt, &spins,
+                                    ),
+                                    0.0,
+                                )
+                            } else {
+                                green_func1_fsz_complex(
+                                    ri, rj, s, t, ip, &data, &mut state, &idx, &cfg, &num, &cnt,
+                                    &spins,
+                                )
+                            },
                             expected_one[index],
                             vec![ri, rj, s as usize, t as usize],
                         );
@@ -700,10 +786,20 @@ fn exhaustive_fsz_green_kernels_match_native_c_bits() {
                             for rj in 0..4 {
                                 for rk in 0..4 {
                                     for rl in 0..4 {
-                                        let actual = green_func2_fsz_complex(
-                                            ri, rj, rk, rl, s, t, u, v, ip, &data, &mut state,
-                                            &idx, &cfg, &num, &cnt, &spins,
-                                        );
+                                        let actual = if REAL {
+                                            Complex64::new(
+                                                green_func2_fsz_real(
+                                                    ri, rj, rk, rl, s, t, u, v, ip.re, &data,
+                                                    &mut state, &idx, &cfg, &num, &cnt, &spins,
+                                                ),
+                                                0.0,
+                                            )
+                                        } else {
+                                            green_func2_fsz_complex(
+                                                ri, rj, rk, rl, s, t, u, v, ip, &data, &mut state,
+                                                &idx, &cfg, &num, &cnt, &spins,
+                                            )
+                                        };
                                         check(
                                             actual,
                                             expected_two[index],
@@ -716,7 +812,11 @@ fn exhaustive_fsz_green_kernels_match_native_c_bits() {
                                             (index % 7) as f64 / 16.0 - 3.0 / 16.0,
                                             (index % 11) as f64 / 32.0 - 5.0 / 32.0,
                                         );
-                                        let contribution = coefficient * actual;
+                                        let contribution = if REAL {
+                                            Complex64::new(coefficient.re * actual.re, 0.0)
+                                        } else {
+                                            coefficient * actual
+                                        };
                                         interall_energy += contribution;
                                         if index == 73 {
                                             duplicate_contributions[0] = contribution;
@@ -737,14 +837,16 @@ fn exhaustive_fsz_green_kernels_match_native_c_bits() {
             interall_energy += contribution;
         }
         let expected_energy = complex_bits(lines.next().unwrap())[0];
-        assert_eq!(
-            [interall_energy.re.to_bits(), interall_energy.im.to_bits()],
-            [expected_energy.re.to_bits(), expected_energy.im.to_bits()],
-            "case={case} native C serial InterAll sum",
-        );
+        check(interall_energy, expected_energy, vec![4098]);
         assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
-        assert_eq!(state.slater_matrix.pf_m, pf);
-        assert_eq!(state.slater_matrix.slater_elm.as_slice(), slater);
+        assert_eq!(state.slater_matrix.pf_m, before_pf);
+        assert_eq!(state.slater_matrix.slater_elm.as_slice(), before_slater);
+        assert_eq!(state.slater_matrix.inv_m_real.as_slice(), before_real);
+        assert_eq!(state.slater_matrix.pf_m_real, before_pf_real);
+        assert_eq!(
+            state.slater_matrix.slater_elm_real.as_slice(),
+            before_slater_real
+        );
     }
     assert!(lines.next().is_none());
     assert_eq!(mismatches, 0, "first native C mismatch: {first:?}");

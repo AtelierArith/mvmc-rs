@@ -349,7 +349,42 @@ cargo nextest run -p mvmc-core --test two_body_green -E 'test(native_fsz) | test
 
 This milestone ports and verifies the complex FSZ helper kernels. It does
 not yet route the FSZ production local-energy/measurement runner through
-them. That integration, the separate `locgrn_fsz_real.c` family, DH/RBM
+them. That integration, DH/RBM
 extensions and independent full C sampling/SR/MPI comparisons remain under
 #23/#56. Real Slater inputs here still use complex inverse/Pfaffian buffers;
 they are not proof of the C real FSZ family.
+
+## Native C real FSZ Green kernels
+
+`c_fsz_real_green.txt` records the separate scalar C family: 384 one-body and
+24,576 two-body operators from `locgrn_fsz_real.c`, plus six ordered InterAll
+sums from `calham_fsz_real.c`, each containing 4,096 operators and two duplicates.
+The real Pfaffian updates and overlap come from `pfupdate_fsz_real.c`,
+`pfupdate_two_fsz_real.c` and `qp_real.c`. Three real Slater/configuration cases
+are tested with zero/nonzero Gutzwiller/Jastrow parameters and unequal QP weights.
+Historical Julia arrays supply inputs only; every expected result comes from
+native C compiled with Apple clang 17, `-O0 -ffp-contract=off`.
+
+The initial TDD test found 550 operator/accumulator discrepancies in the old
+complex-buffer Julia helper path. Pure Rust `green_func1_fsz_real` and
+`green_func2_fsz_real` now use scalar buffers, Pfaffian updates, projection and
+division. Every real result is checked bit for bit, including signed zero.
+The regression deliberately fills complex Slater/Pfaffian/inverse storage with
+unrelated finite values to prove that the real kernels use only real storage;
+both families' input buffers must remain unchanged. Both public scalar kernels
+reject RBM before any density shortcut, as do their complex counterparts.
+
+The native real Hamiltonian has a `double` accumulator although InterAll
+coefficients are complex. Its compound assignments discard each coefficient's
+imaginary contribution; the ordered-sum test reproduces that callee behavior.
+This does not establish which production mode C selects for a complex
+Hamiltonian, or a complete real local-energy calculation.
+
+```sh
+uv run --no-project python scripts/check_fsz_green_c_parity.py --real
+cargo nextest run -p mvmc-core --test two_body_green -E 'test(exhaustive_real_fsz) | test(native_fsz)'
+```
+
+Cargo tests load only the checked-in fixture and do not need `c_toolbox`, C
+compilation or Julia. Production FSZ local-energy/measurement dispatch, DH/RBM,
+full same-seed C sampling/SR and MPI validation remain separate work under #23/#56.
