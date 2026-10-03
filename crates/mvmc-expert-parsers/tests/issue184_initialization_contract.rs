@@ -63,6 +63,13 @@ fn literal_five_slots_respect_real_and_complex_conditional_draws() {
             // Explicit operation-rounding budget, not computed-float bitwise parity.
             assert!((*value - target).norm() <= 4.0 * f64::EPSILON);
             assert!(value.norm() > 1e-10);
+            if complex && active == 5 {
+                // Original M0168: a norm threshold is not equivalent to this OR.
+                assert!(
+                    value.re.abs() > 1e-10 || value.im.abs() > 1e-10,
+                    "seed {SEED}, complex active-five slot {i}: {value:?}"
+                );
+            }
             if !complex {
                 assert!(value.re >= -1.0 && value.re < 1.0);
                 assert_eq!(value.im, 0.0);
