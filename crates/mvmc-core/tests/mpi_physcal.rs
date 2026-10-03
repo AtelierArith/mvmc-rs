@@ -214,6 +214,14 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
                 result.final_rng.words_consumed()
             );
         }
+        // Explicit manual CI observes actual communicator sizes only after
+        // both fixed-parameter/output repeatability checks completed.
+        println!(
+            "OPTIONAL183_MPI rank={} world={} width={width} group_size={}",
+            context.rank(),
+            context.world_size(),
+            reducer.world_size()
+        );
     }
     let mut grouped = mvmc_core::prepare_phys_cal_from_namelist_with_reducer(
         root.join("inputs/namelist.def"),

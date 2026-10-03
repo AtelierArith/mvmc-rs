@@ -1,0 +1,73 @@
+name: Explicit bounded optional gates
+
+"on":
+  workflow_dispatch:
+    inputs:
+      family:
+        description: Bounded scope (not full model/Julia coverage)
+        required: true
+        default: general
+        type: choice
+        options: [general, lanczos, mpi, thread, all]
+
+permissions:
+  contents: read
+
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
+  OPENBLAS_CORETYPE: HASWELL
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    name: Validate explicit dispatch scope (no numerical execution)
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      - id: scope
+        env:
+          SCOPE: ${{ inputs.family }}
+        run: |
+          case "$SCOPE" in
+            general|lanczos|mpi|thread) printf 'matrix={"family":["%s"]}\n' "$SCOPE" >> "$GITHUB_OUTPUT" ;;
+            all) printf 'matrix={"family":["general","lanczos","mpi","thread"]}\n' >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+  bounded:
+    needs: plan
+    name: Explicit ${{ matrix.family }} (Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: optional-${{ matrix.family }}
+          tools: nextest
+      - uses: astral-sh/setup-uv@v6
+      - name: Infrastructure tests (not model execution)
+        run: uv run --no-project python scripts/test_optional_gates_183.py
+      - name: Execute ONLY requested bounded gates
+        env:
+          FAMILY: ${{ matrix.family }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/optional-${{ matrix.family }}
+          EVIDENCE: ${{ runner.temp }}/optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: uv run --no-project python scripts/run_optional_gates_183.py "$FAMILY" "$EVIDENCE"
+      - name: Retain evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
