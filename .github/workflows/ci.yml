@@ -62,7 +62,7 @@ jobs:
           df -h .
 
   lint:
-    name: Lint — fmt, Clippy, workflows (${{ matrix.platform.name }})
+    name: Lint — fmt and Clippy (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 45
     env:
