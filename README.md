@@ -159,6 +159,29 @@ propagates `OPENBLAS_NUM_THREADS` / `OMP_NUM_THREADS` / `MKL_NUM_THREADS`
 `|ΔE| = |E_rust - E_julia|` per site so divergent setups (e.g. mismatched
 `namelist.def`) are caught immediately.
 
+### Hubbard-chain report benchmark
+
+`bench-julia` only covers the four small `examples` models. Use `bench-hubbard`
+for the larger Hubbard-chain workloads used by the C-vs-Julia performance
+reports (see
+`docs/reference/c-to-julia/performance/2026-06-17-julia-mvmc-hubbard-locenergy-slater-calham1-optimization-record.md`).
+It runs `L=16/24/32`, half filling, `U=4.0`, `t=1.0`, `NSPGaussLeg=8`,
+`NSPStot=0`, `NSplitSize=1`, `NStore=1`, `NSRCG=0` at `R=1` and one thread:
+
+```bash
+cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1
+```
+
+The committed Expert inputs live in `benchmark/hubbard_chain/inputs/` with
+their `StdFace.def` and provenance (see `benchmark/hubbard_chain/README.md`), so
+no C/StdFace rebuild is needed. Unlike `bench-julia`, this task invokes the Rust
+`mvmc-cli` binary and matches the two sides on the internal
+`run_para_opt_from_namelist` wall clock (Julia JIT and process startup are
+excluded). It writes per-repetition CSV
+(`target/bench/hubbard_chain.csv`) and a Markdown report
+(`target/bench/hubbard_chain_report.md`) with median timings, `speedup =
+julia / rust`, and full-precision `|ΔE|` per size.
+
 ## pfapack BLAS backend
 
 `crates/pfapack` ships two interchangeable kernel implementations selected

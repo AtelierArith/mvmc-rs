@@ -15,6 +15,7 @@ This repository is a Rust port of mVMC organized as a Cargo workspace. Core crat
 - `cargo fmt --all --check`: verify formatting.
 - `cargo run -p mvmc-cli -- <namelist.def>`: run the CLI on an Expert-mode input.
 - `cargo run -p xtask -- bench-julia --steps 50 --reps 5 --warmups 1 --threads 1`: compare Rust and Julia workloads.
+- `cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1`: compare Rust and Julia on the report Hubbard-chain inputs (`L=16/24/32`).
 - `scripts/run_all.sh`: run the PfaPack comparison suite and generate a report.
 
 ## Coding Style & Naming Conventions
