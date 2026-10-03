@@ -4390,14 +4390,12 @@ mod callback_tests {
         } else {
             root
         };
-        let reviewed_case_dir =
-            fixtures
-                .join("reviewed_cg_62b")
-                .join(if case == "rbm_reference_cmp" {
-                    "canonical_general_rbm"
-                } else {
-                    reference_case
-                });
+        let reviewed_case_name = if case == "rbm_reference_cmp" {
+            "canonical_general_rbm"
+        } else {
+            reference_case
+        };
+        let reviewed_case_dir = fixtures.join("reviewed_cg_62b").join(reviewed_case_name);
         let reviewed_cg = cg && reviewed_case_dir.join("acquisition-complete.txt").is_file();
         if cg {
             assert!(reviewed_cg,
@@ -4431,12 +4429,19 @@ mod callback_tests {
                 .join("acquisition-complete.txt")
                 .is_file();
         let read_fixture = |name: &str| {
-            let reviewed = reviewed_case_dir.join(name);
             let reviewed_prefix = ["step-1-", "step-2-", "step-3-", "step-20-"]
                 .iter()
                 .any(|prefix| name.starts_with(prefix));
             julia_fixture::read_text(if reviewed_cg && reviewed_prefix {
-                reviewed
+                // Platform-specific independently generated references override
+                // the archived Linux reviewed lineage through fixture_path, which
+                // falls back to the base reviewed_cg_62b directory.
+                julia_fixture::fixture_path(
+                    &fixtures,
+                    Path::new("reviewed_cg_62b")
+                        .join(reviewed_case_name)
+                        .join(name),
+                )
             } else if !cg && name.starts_with("step-20-") {
                 assert!(reviewed_direct, "{case}: reviewed direct/store{store} 20-step acquisition incomplete; no historical50 truncation");
                 reviewed_direct_dir.join(name)
@@ -4799,7 +4804,17 @@ mod callback_tests {
                         if cg { "cg" } else { "direct" }
                     ))
                     .join(format!("step-{steps}"));
-                let reviewed_expected_dir = reviewed_case_dir.join(format!("step-{steps}"));
+                // Platform-specific reviewed windows override the archived Linux
+                // directory as a whole, so the manifest, c-window-input and
+                // zqp_*.dat files come from the same generated stage.
+                let reviewed_expected_dir = julia_fixture::arm_directory(&fixtures)
+                    .map(|root| {
+                        root.join("reviewed_cg_62b")
+                            .join(reviewed_case_name)
+                            .join(format!("step-{steps}"))
+                    })
+                    .filter(|dir| dir.is_dir())
+                    .unwrap_or_else(|| reviewed_case_dir.join(format!("step-{steps}")));
                 let expected_dir = if reviewed_cg {
                     reviewed_expected_dir
                 } else if steps == 20 && reviewed_direct {

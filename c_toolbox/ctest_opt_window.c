@@ -16,7 +16,11 @@ double complex Etot, Etot2, *Para, *SROptData;
 #include "ctest_opt_window_upstream.inc"
 
 int main(int argc, char **argv) {
-    if (argc != 3 || strlen(argv[2]) + 64 >= sizeof(CParaFileHead)) return 2;
+    if ((argc != 3 && argc != 6) || strlen(argv[2]) + 64 >= sizeof(CParaFileHead)) return 2;
+    if (argc == 6 &&
+        (sscanf(argv[3], "%d", &iFlgOrbitalGeneral) != 1 ||
+         sscanf(argv[4], "%d", &iNOrbitalAntiParallel) != 1 ||
+         sscanf(argv[5], "%d", &iNOrbitalParallel) != 1)) return 10;
     FILE *input = fopen(argv[1], "r");
     if (!input) return 3;
     if (fscanf(input, "%d %d", &NSROptItrSmp, &NPara) != 2 ||
