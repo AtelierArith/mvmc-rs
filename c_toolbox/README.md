@@ -200,3 +200,16 @@ SFMT. The accompanying Rust tests use checked-in data only. These probes do
 not establish complex transcendental arithmetic, parameter normalization,
 full executable/MPI execution or production sampling trajectories. The older
 Julia RBM definitions and numerical fixture bytes remain historical evidence.
+
+## GNU runtime reference
+
+`gcc_divdc3_reference.inc` preserves the GCC 13.3.0 double-mode macro branch and
+complete complex divide definition from `libgcc/libgcc2.c`, including the
+upstream license notice, whole-source SHA-256 and extraction boundaries.
+It is archival reference material; Cargo does not compile or invoke it. The
+Linux x86_64 quotient probe links its compiler's actual static libgcc routine,
+whose archive path/hash appear in the native fixture header. The Rust algorithm
+is a scalar port with the GPL/GCC Runtime Exception notice retained. See
+[Linux numerical contracts](../docs/LINUX_NUMERICAL_CONTRACTS.md) for native
+fixture reproduction and differences from the archived Apple compiler-rt
+contract.

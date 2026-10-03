@@ -1,0 +1,7 @@
+# Mounted read-only over workspace-local host Cargo settings inside the container.
+[build]
+rustc-wrapper = "/opt/devtools/bin/kache"
+target-dir = "/home/vscode/.cache/mvmc/target/linux-x86_64"
+
+[env]
+KACHE_CONFIG = { value = "/opt/devcontainer/kache.toml", force = true }

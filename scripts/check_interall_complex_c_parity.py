@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from c_toolbox import materialize
+from c_toolbox import materialize, add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 from check_general_orbital_c_parity import function
 from check_interall_real_c_parity import bits
 
@@ -19,7 +19,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--source", type=Path)
+    add_native_platform_argument(parser)
     args = parser.parse_args()
+    kind = native_platform(args.platform)
     root = Path(__file__).resolve().parent.parent
     src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
     selected = {
@@ -50,12 +52,14 @@ def main():
     output = ("# actual C complex GreenFunc1/2, projection, Pfaffian update, overlap and serial InterAll loop; "
               "historical Julia wavefunction inputs; no RBM; MPI_COMM_SELF only; "
               "Apple clang 17 -O0 -ffp-contract=off; " + provenance + "\n")
+    if kind == "linux-gnu":
+        output = output.replace("Apple clang 17 -O0 -ffp-contract=off", native_provenance(kind))
     original = [line for line in (root / "tests/fixtures/interall/green_normal.txt").read_text().splitlines()
                 if not line.startswith("#")]
     checked = models = 0
     with tempfile.TemporaryDirectory(prefix="mvmc-c-interall-complex-") as directory:
         exe = Path(directory) / "probe"
-        subprocess.run(["cc", "-O0", "-ffp-contract=off", str(root / "c_toolbox/interall_complex.c"),
+        subprocess.run(native_compiler() + ["-O0", "-ffp-contract=off", str(root / "c_toolbox/interall_complex.c"),
                         "-lm", "-o", str(exe)], check=True)
         for case in range(4):
             rows = original[case*1034:(case+1)*1034]
@@ -79,7 +83,7 @@ def main():
                 output += "\n".join(expected[-2:]) + "\n"
                 checked += 1024
                 models += 1
-    target = root / "tests/fixtures/interall/c_complex_green.txt"
+    target = native_target(root, "c_complex_green", kind)
     if args.write:
         if not target.exists() or target.read_text() != output:
             target.write_text(output)

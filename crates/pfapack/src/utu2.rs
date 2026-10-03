@@ -326,7 +326,7 @@ pub fn utu2inv_real(
     vt: &mut [f64],
     m_work: &mut SqMat<'_, f64>,
 ) {
-    utu2inv_generic::<f64>(a, pivots, vt, m_work, false);
+    utu2inv_generic::<f64>(a, pivots, vt, m_work, None);
 }
 
 /// Compute the inverse of a complex skew-symmetric matrix from its
@@ -337,37 +337,45 @@ pub fn utu2inv_complex(
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, false);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None);
 }
 
 /// Inverse arithmetic used by Julia's FSZ runtime: direct tridiagonal
 /// divisions and its native BLAS provider, without a PfaPack wrapper call.
+/// `divide` specifies the caller's platform complex division arithmetic;
+/// the ordinary PfaPack inverse keeps its separate scalar reference path.
 pub fn utu2inv_complex_fsz(
     a: &mut SqMat<'_, Complex64>,
     pivots: &[PivotIndex1Based],
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
+    divide: fn(Complex64, Complex64) -> Complex64,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, true);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide));
 }
 
-fn solve_sktd_direct<T: BlasScalar>(vt: &[T], b: &SqMat<'_, T>, c: &mut SqMat<'_, T>) {
+fn solve_sktd_direct<T: BlasScalar>(
+    vt: &[T],
+    b: &SqMat<'_, T>,
+    c: &mut SqMat<'_, T>,
+    divide: fn(T, T) -> T,
+) {
     let n = b.n();
     for j in 0..n {
-        c.set(1, j, b.get(0, j) / -vt[0]);
+        c.set(1, j, divide(b.get(0, j), -vt[0]));
         for i in (2..n).step_by(2) {
             c.set(
                 i + 1,
                 j,
-                (b.get(i, j) - c.get(i - 1, j) * vt[i - 1]) / -vt[i],
+                divide(b.get(i, j) - c.get(i - 1, j) * vt[i - 1], -vt[i]),
             );
         }
-        c.set(n - 2, j, b.get(n - 1, j) / vt[n - 2]);
+        c.set(n - 2, j, divide(b.get(n - 1, j), vt[n - 2]));
         for i in (1..n - 2).rev().step_by(2) {
             c.set(
                 i - 1,
                 j,
-                (b.get(i, j) + c.get(i + 1, j) * vt[i]) / vt[i - 1],
+                divide(b.get(i, j) + c.get(i + 1, j) * vt[i], vt[i - 1]),
             );
         }
     }
@@ -378,7 +386,7 @@ fn utu2inv_generic<T>(
     pivots: &[PivotIndex1Based],
     vt: &mut [T],
     m: &mut SqMat<'_, T>,
-    fsz: bool,
+    fsz: Option<fn(T, T) -> T>,
 ) where
     T: BlasScalar,
 {
@@ -421,7 +429,7 @@ fn utu2inv_generic<T>(
         // triangular (diagonal is forced to 1); we replicate that with
         // our own implementation.
         let lda = a.lda();
-        if fsz {
+        if fsz.is_some() {
             T::fsz_trtri(a.as_mut_slice(), lda, n - 1);
         } else {
             backend::trtri_uu_inplace::<T>(a.as_mut_slice(), lda, 0, 1, n - 1);
@@ -453,8 +461,8 @@ fn utu2inv_generic<T>(
     //
     // We pass `m` by shared reference and `a` by mutable reference;
     // the helper only writes into the output (`a`).
-    if fsz {
-        solve_sktd_direct(vt, m, a);
+    if let Some(divide) = fsz {
+        solve_sktd_direct(vt, m, a, divide);
     } else {
         solve_sktd::<T>(vt, m, a);
     }
@@ -485,7 +493,7 @@ fn utu2inv_generic<T>(
     // Step 7: A <- M^T * A   (trmm, M unit upper-triangular)
     if !panel_trmmt {
         let n_local = a.n();
-        if fsz {
+        if fsz.is_some() {
             T::fsz_trmm(m.as_slice(), a.as_mut_slice(), n_local);
         } else {
             backend::trmm_lutu::<T>(m.as_slice(), a.as_mut_slice(), n_local);

@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 
 from check_interall_real_c_parity import bits
+from c_toolbox import add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 
 
 def cases():
@@ -40,23 +41,28 @@ def cases():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--write', action='store_true')
+    add_native_platform_argument(parser)
     args = parser.parse_args()
+    kind = native_platform(args.platform)
     root = Path(__file__).resolve().parent.parent
     source = root/'c_toolbox/complex_division.c'
-    llvm = root/'c_toolbox/llvm_divdc3.c'
+    runtime = root / 'c_toolbox' / ('gcc_divdc3_reference.inc' if kind == 'linux-gnu'
+                                  else 'llvm_divdc3.c')
     provenance = '; '.join(f'{path.name} sha256={hashlib.sha256(path.read_bytes()).hexdigest()}'
-                           for path in (source, llvm))
+                           for path in (source, runtime))
     inputs = list(cases())
     with tempfile.TemporaryDirectory(prefix='mvmc-c-division-') as directory:
         exe = Path(directory)/'probe'
-        subprocess.run(['cc','-O0','-ffp-contract=off',str(source),'-o',str(exe)],check=True)
+        subprocess.run(native_compiler() + ['-O0','-ffp-contract=off',str(source),'-o',str(exe)],check=True)
         actual = subprocess.check_output([str(exe)],input='\n'.join(inputs)+'\n',text=True).splitlines()
     assert len(actual) == len(inputs)
     output = ('# Native Apple clang 17 complex quotient -O0 -ffp-contract=off; '
               'normal/subnormal/range/nonfinite inputs; NaN classification, all other bits exact; '
               'LLVM reference llvmorg-17.0.6/compiler-rt/lib/builtins/divdc3.c; '+provenance+'\n')
+    if kind == 'linux-gnu':
+        output = '# Native GNU complex quotient; ' + native_provenance(kind) + '; normal/subnormal/range/nonfinite inputs; NaN classification, all other bits exact; ' + provenance + '\n'
     output += '\n'.join(row+' '+value for row,value in zip(inputs,actual))+'\n'
-    target = root/'tests/fixtures/interall/c_complex_division.txt'
+    target = native_target(root, 'c_complex_division', kind)
     if args.write:
         if not target.exists() or target.read_text() != output:
             target.write_text(output)

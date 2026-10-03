@@ -215,9 +215,11 @@ fn exhaustive_four_site_two_body_ratios_match_original_julia() {
 
 #[test]
 fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
-    let mut lines = include_str!("../../../tests/fixtures/interall/c_complex_green.txt")
-        .lines()
-        .filter(|line| !line.starts_with('#'));
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    let fixture = include_str!("../../../tests/fixtures/interall/c_complex_green_linux_gnu.txt");
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    let fixture = include_str!("../../../tests/fixtures/interall/c_complex_green.txt");
+    let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut failures = Vec::new();
     for case in 0..4 {
         assert_eq!(lines.next().unwrap(), "1");
@@ -339,9 +341,11 @@ fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
 
 #[test]
 fn normal_real_interall_matches_native_c_green_kernels_and_ordered_sums() {
-    let mut lines = include_str!("../../../tests/fixtures/interall/c_real_green.txt")
-        .lines()
-        .filter(|line| !line.starts_with('#'));
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    let fixture = include_str!("../../../tests/fixtures/interall/c_real_green_linux_gnu.txt");
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    let fixture = include_str!("../../../tests/fixtures/interall/c_real_green.txt");
+    let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     for case in 0..4 {
         assert_eq!(lines.next().unwrap(), "0");
         let idx = integers(lines.next().unwrap());
@@ -648,9 +652,18 @@ fn exhaustive_real_fsz_green_kernels_match_native_c_bits() {
 
 fn check_native_fsz_green<const REAL: bool>() {
     let fixture = if REAL {
-        include_str!("../../../tests/fixtures/interall/c_fsz_real_green.txt")
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        let fixture =
+            include_str!("../../../tests/fixtures/interall/c_fsz_real_green_linux_gnu.txt");
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_real_green.txt");
+        fixture
     } else {
-        include_str!("../../../tests/fixtures/interall/c_fsz_green.txt")
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_green_linux_gnu.txt");
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_green.txt");
+        fixture
     };
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut mismatches = 0;

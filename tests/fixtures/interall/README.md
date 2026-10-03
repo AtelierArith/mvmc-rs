@@ -388,3 +388,14 @@ cargo nextest run -p mvmc-core --test two_body_green -E 'test(exhaustive_real_fs
 Cargo tests load only the checked-in fixture and do not need `c_toolbox`, C
 compilation or Julia. Production FSZ local-energy/measurement dispatch, DH/RBM,
 full same-seed C sampling/SR and MPI validation remain separate work under #23/#56.
+
+## Native Linux GNU fixtures
+
+The `*_linux_gnu.txt` companions preserve independent Linux x86_64 C results and
+actual compiler/libc/runtime archive provenance. GNU/Linux uses the pure-Rust
+libgcc quotient port; archived macOS fixtures and their LLVM operation order
+remain unchanged. Tests select their native platform fixtures and compare all
+non-NaN bits exactly. Real normal/FSZ numerical bodies agree across these two
+verified environments. See [Linux numerical contracts](../../../docs/LINUX_NUMERICAL_CONTRACTS.md)
+for reproduction, source/licensing provenance, scope and the separately
+classified reader/derivative/normalization differences.

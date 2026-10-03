@@ -3,8 +3,14 @@
 //! Derived from LLVM 17 compiler-rt/lib/builtins/divdc3.c.
 //! SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //! Full notice: LICENSE-llvm.txt. Native C oracle expectations live separately.
+//! GNU/Linux selects the libgcc quotient; see c_complex_gnu.rs and its notice.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub(crate) use crate::c_complex_gnu::divide;
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 use num_complex::Complex64;
 
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 fn scale(mut value: f64, mut power: i32) -> f64 {
     // Intermediate downscales remain normal until the final multiplication,
     // avoiding double rounding when the result is subnormal.
@@ -20,6 +26,7 @@ fn scale(mut value: f64, mut power: i32) -> f64 {
 }
 
 /// C complex division, with binary exponent scaling and nonfinite recovery.
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 pub(crate) fn divide(z: Complex64, w: Complex64) -> Complex64 {
     let (mut a, mut b, mut c, mut d) = (z.re, z.im, w.re, w.im);
     let magnitude = c.abs().max(d.abs());
@@ -63,9 +70,14 @@ pub(crate) fn divide(z: Complex64, w: Complex64) -> Complex64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_complex::Complex64;
 
     #[test]
     fn scaled_complex_quotients_and_range_recovery_match_native_c() {
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        let input =
+            include_str!("../../../tests/fixtures/interall/c_complex_division_linux_gnu.txt");
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
         let input = include_str!("../../../tests/fixtures/interall/c_complex_division.txt");
         for (case, line) in input
             .lines()

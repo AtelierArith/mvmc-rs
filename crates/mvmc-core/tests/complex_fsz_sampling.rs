@@ -1,4 +1,5 @@
 //! Exact original-source intermediate state for both complex FSZ proposal families.
+
 use mvmc_core::{sampling::driver::vmc_make_sample_fsz, ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, LocSpinTerm};
 use num_complex::Complex64;
@@ -37,21 +38,31 @@ fn check_matrix_state(label: &str, state: &VmcOptimizationState, pf: &str, inv: 
         ("inverse", &actual_inv, &inv),
     ] {
         assert_eq!(actual.len(), expected.len());
-        for (i, (a, e)) in actual.iter().zip(expected).enumerate() {
-            assert_eq!(
-                [a.re.to_bits(), a.im.to_bits()],
-                [e.re.to_bits(), e.im.to_bits()],
-                "{label} {name}[{i}]: {a} vs {e}"
-            );
-        }
+        let actual: Vec<_> = actual
+            .iter()
+            .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+            .collect();
+        let expected: Vec<_> = expected
+            .iter()
+            .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+            .collect();
+        assert_eq!(actual, expected, "{label} {name}");
     }
 }
 
 #[test]
 fn complex_fsz_proposals_burn_reuse_inverse_pfaffian_counters_and_rng_match_julia() {
-    let mut lines = include_str!("../../../tests/fixtures/complex_fsz/sampling.txt")
-        .lines()
-        .filter(|l| !l.starts_with('#'));
+    let mut lines = if cfg!(all(
+        target_os = "linux",
+        target_env = "gnu",
+        target_arch = "x86_64"
+    )) {
+        include_str!("../../../tests/fixtures/linux_gnu_julia/complex_fsz/sampling.txt")
+    } else {
+        include_str!("../../../tests/fixtures/complex_fsz/sampling.txt")
+    }
+    .lines()
+    .filter(|l| !l.starts_with('#'));
     for (name, local, two_sz, path) in [
         ("conduction", false, -1, 0),
         ("fixed_sz", false, 0, 0),
@@ -148,12 +159,8 @@ fn complex_fsz_proposals_burn_reuse_inverse_pfaffian_counters_and_rng_match_juli
                 ] {
                     assert_eq!(values, &integers(lines.next().unwrap()), "{name} initial");
                 }
-                check_matrix_state(
-                    &format!("{name} initial"),
-                    &probe,
-                    lines.next().unwrap(),
-                    lines.next().unwrap(),
-                );
+                let initial_pf = lines.next().unwrap();
+                let initial_inverse = lines.next().unwrap();
                 let words: Vec<u32> = lines
                     .next()
                     .unwrap()
@@ -164,6 +171,12 @@ fn complex_fsz_proposals_burn_reuse_inverse_pfaffian_counters_and_rng_match_juli
                     (0..624).map(|_| probe_rng.gen_rand32()).collect::<Vec<_>>(),
                     words,
                     "{name} initial RNG"
+                );
+                check_matrix_state(
+                    &format!("{name} initial"),
+                    &probe,
+                    initial_pf,
+                    initial_inverse,
                 );
             }
             let mut rng = Sfmt19937Rng::new(11272);
@@ -198,12 +211,8 @@ fn complex_fsz_proposals_burn_reuse_inverse_pfaffian_counters_and_rng_match_juli
                 integers(lines.next().unwrap()),
                 "{name} calls={calls} counters"
             );
-            check_matrix_state(
-                &format!("{name} calls={calls}"),
-                &state,
-                lines.next().unwrap(),
-                lines.next().unwrap(),
-            );
+            let expected_pf = lines.next().unwrap();
+            let expected_inverse = lines.next().unwrap();
             let words: Vec<u32> = lines
                 .next()
                 .unwrap()
@@ -215,6 +224,12 @@ fn complex_fsz_proposals_burn_reuse_inverse_pfaffian_counters_and_rng_match_juli
                 (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),
                 words,
                 "{name} calls={calls} RNG"
+            );
+            check_matrix_state(
+                &format!("{name} calls={calls}"),
+                &state,
+                expected_pf,
+                expected_inverse,
             );
         }
     }

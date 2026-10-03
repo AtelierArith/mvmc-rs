@@ -15,6 +15,8 @@
 
 pub mod average;
 mod c_complex;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod c_complex_gnu;
 pub mod c_timer;
 pub mod counter;
 pub mod initial_params;

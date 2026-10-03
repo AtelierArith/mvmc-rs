@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from c_toolbox import materialize
+from c_toolbox import materialize, add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 from check_general_orbital_c_parity import function
 from check_interall_real_c_parity import bits
 
@@ -19,7 +19,9 @@ def main():
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--source", type=Path)
     parser.add_argument("--real", action="store_true", help="Probe the separate scalar FSZ family")
+    add_native_platform_argument(parser)
     args = parser.parse_args()
+    kind = native_platform(args.platform)
     root = Path(__file__).resolve().parent.parent
     src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
     selected = {
@@ -61,13 +63,15 @@ def main():
     output = ("# " + family +
               "zero/nonzero real projection; no RBM; MPI_COMM_SELF only; "
               "Apple clang 17 -O0 -ffp-contract=off; " + provenance + "\n")
+    if kind == "linux-gnu":
+        output = output.replace("Apple clang 17 -O0 -ffp-contract=off", native_provenance(kind))
     original = [line for line in (root / "tests/fixtures/interall/green_fsz.txt").read_text().splitlines()
                 if not line.startswith("#")]
     checked_one = checked_two = models = 0
     with tempfile.TemporaryDirectory(prefix="mvmc-c-fsz-green-") as directory:
         exe = Path(directory) / "probe"
         flags = ["-DFSZ_REAL=1"] if args.real else []
-        subprocess.run(["cc", "-O0", "-ffp-contract=off"] + flags + [str(root / "c_toolbox/fsz_green.c"),
+        subprocess.run(native_compiler() + ["-O0", "-ffp-contract=off"] + flags + [str(root / "c_toolbox/fsz_green.c"),
                         "-lm", "-o", str(exe)], check=True)
         for case in range(6):
             rows = original[case*13:(case+1)*13]
@@ -88,7 +92,7 @@ def main():
                 checked_one += 64
                 checked_two += 4096
                 models += 1
-    target = root / "tests/fixtures/interall" / ("c_fsz_real_green.txt" if args.real else "c_fsz_green.txt")
+    target = native_target(root, "c_fsz_real_green" if args.real else "c_fsz_green", kind)
     if args.write:
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
