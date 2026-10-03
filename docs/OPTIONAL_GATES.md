@@ -44,7 +44,7 @@ Strict focused Clippy handle 14051 was blocked by the unrelated shared
 This checkpoint is separate from the isolated milestone validation below and
 does not establish shared full-workspace or MPI numerical validation.
 Parent committed that five-file import repair as `077231b`; the parent's
-ongoing full-workspace run is separate and its result is not inferred here.
+separate full-workspace result is not inferred here.
 
 ### Follow-up final validation
 
