@@ -159,11 +159,48 @@ executed numerical/reference evidence.
 
 The actual handle22750 proof above predates this reporting change and remains
 historical source-specific evidence. No numerical gate was rerun for this
-follow-up; workflow YAML and ordinary Cargo behavior are unchanged. A future
-separately reviewed workflow plan could emit a selected/excluded/not-selected
-four-family planning ledger and aggregate per-job terminal artifacts. That
-workflow aggregate is **not implemented or claimed here**, nor is this a ledger
-of every optional test identity in the workspace. No external dispatch occurs.
+driver follow-up; ordinary Cargo behavior is unchanged. The separate workflow
+aggregation follow-up below implements bounded four-family reporting, not a
+ledger of every optional test identity in the workspace.
+
+## Workflow aggregation: implemented, external dispatch not executed
+
+The dispatch-only workflow now saves a four-family plan and instantiates only
+its selected jobs. Unselected families remain `NotRun`, not PASS or ExplicitSkip;
+the current dispatch input has no explicit exclusion control. Each job seals a
+separate package without modifying original driver evidence. Plan, envelope and
+aggregation bind the full head SHA, run ID, attempt, workflow identity and family;
+seal independently checks actual `git rev-parse HEAD` and records that checkout.
+Bounded execution uses `CARGO_TERM_COLOR=never`, recorded in the envelope, so
+strict nextest failure matching is not defeated by ANSI color.
+
+An `always()` aggregation job validates selected package names, envelope/driver
+hashes, exact selection identities, source/fixture/binary before-after closure,
+runtime backend and the separate eight DC references/four C empty contracts.
+Missing evidence (including prebuild failure), cancellation, wrong run/head/
+attempt, duplicates, tampering or unsafe paths cannot produce PASS. A verified
+failed-driver classification remains MissingFixture/Unsupported/Failure; missing
+or unverifiable selected-job evidence is Failure. Numerical/empty/helper counts
+remain separate. Ordinary CI and Cargo acquire no oracle/toolbox dependency.
+
+Validation is **infrastructure only**: ten synthetic aggregation tests, eighteen
+existing driver tests, actionlint and YAML checks passed. A separate read-only
+regression rehashed actual historical handle22750 artifacts and checked their
+real driver schema. That producer predates the new ledger: no current run/
+attempt binding or ledger was invented, and no numerical gate was rerun.
+Commands, actual outputs, terminal codes and source hashes are retained in
+`/tmp/mvmc-183-aggregation-headproof.Q5mNX2/*.json`.
+
+```sh
+uv run --no-project python scripts/test_optional_gate_aggregation_183.py
+uv run --no-project python scripts/test_optional_gates_183.py
+uv run --no-project python scripts/test_optional_gate_aggregation_183.py \
+  --historical-evidence /tmp/mvmc-183-dc-final.vxNlfJ/lanczos-evidence
+```
+
+No external workflow dispatch has been executed. This is not current remote
+four-family numerical proof, native macOS proof, full model/Julia coverage or
+issue183 completion; remaining acceptance must be audited separately.
 Unknown/empty family, missing inputs, source/fixture changes, missing/empty
 required artifacts and nonzero gate exits fail. Artifact roots are exclusively
 new; output roots are never deleted/reused. MPI additionally receives its
