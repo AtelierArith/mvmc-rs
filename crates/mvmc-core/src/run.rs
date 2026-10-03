@@ -1147,6 +1147,7 @@ pub struct RunConfig {
     /// Final averaging window; None preserves NSROptItrSmp from modpara.def.
     pub nsmp: Option<i64>,
     /// Output directory; None creates a fresh directory in the system temp area.
+    /// Explicit paths may be rank-local. Only the output root reads output files.
     pub output_dir: Option<std::path::PathBuf>,
     /// Explicit seed override.
     pub seed: Option<i64>,
@@ -1409,7 +1410,21 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                     .map_err(|error| error.to_string())?;
             }
         }
-        read_run_summary(&data, &output_dir)
+        if reducer.is_output_root() {
+            read_run_summary(&data, &output_dir)
+        } else {
+            // Julia's non-output ranks return metadata without file readback.
+            Ok(RunSummary {
+                status: 0,
+                output_dir: std::fs::canonicalize(&output_dir)
+                    .map_err(|error| error.to_string())?,
+                zvo_first_n: Vec::new(),
+                ctest_values: Vec::new(),
+                final_energy_per_site: f64::NAN,
+                effective_nsteps: data.modpara.nsr_opt_itr_step as usize,
+                effective_nsmp: data.modpara.nsr_opt_itr_smp as usize,
+            })
+        }
     })();
     collective_result(final_result, reducer, "optimization final output/summary")
 }
@@ -2375,6 +2390,8 @@ mod mode_tests {
 /// Summary returned by [`run_para_opt_from_namelist`].
 ///
 /// Mirrors the `NamedTuple` returned by Julia's `run_para_opt_from_namelist`.
+/// Non-output ranks return empty rows/means and NaN energy, without file readback.
+/// Root readback errors still propagate collectively to every rank.
 #[derive(Debug, Clone)]
 pub struct RunSummary {
     /// Successful optimizer status (failures return an error).
