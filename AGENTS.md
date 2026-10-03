@@ -27,6 +27,8 @@ This Rust crate and its workspace are under active development. Backward compati
 
 The historical implementation was written in C and later reimplemented in Julia. Rust should follow the Julia design for public APIs, runner structure, lifecycle, and test organization, while following C for numerical authority: parameter layout and offsets, initialization and draw order, arithmetic and operation order, signs, formatting, and floating-point results. When the two references differ, keep the Julia architecture and adopt the defined C numerical contract. Record the distinction in focused tests instead of weakening tolerances or silently treating one implementation as authoritative for both concerns.
 
+The project target is a pure-Rust implementation. When an implementation choice is unclear, port the C algorithm and numerical operation order into Rust rather than adding a C FFI or runtime dependency; use C only as the reference for behavior and validation.
+
 ## Testing Guidelines
 
 Use Rust's built-in test framework plus crate-local integration tests. Golden and parity tests compare against C/reference fixtures, using Julia fixtures where they agree with C; keep tolerances explicit near assertions. Name tests by behavior, for example `pfaffian_matches_julia_fixture` or `rejects_invalid_header`. For performance-sensitive changes, run both correctness tests and the relevant benchmark variant.
