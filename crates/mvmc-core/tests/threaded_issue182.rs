@@ -2,6 +2,8 @@
 //! Kernel expectations are analytic or archived independent Julia values.
 //! Runner comparisons are Rust worker invariance, not fresh C/Julia parity.
 
+#[path = "support/ctest_provenance.rs"]
+mod ctest_provenance;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 mod support;
@@ -192,6 +194,43 @@ fn runner_workers_preserve_rng_configurations_direct_store_cg_and_physcal() {
 }
 
 #[test]
+#[ignore = "opt-in synthetic long20 supported success/rejection outcomes; MVMC_RS_THREADED_182=1"]
+fn runner_twenty_step_workers_repeat_supported_outcomes_and_physcal() {
+    support::require_gate("threaded-issue182-matrix-long20", "MVMC_RS_THREADED_182");
+    require_runner_fixtures();
+    let mut serial = None;
+    for workers in [1, 2, 4] {
+        let first = child("runners-long20-observed", workers, 32);
+        compare(&first, &child("runners-long20-observed", workers, 32));
+        if let Some(reference) = &serial {
+            compare(reference, &first);
+        } else {
+            serial = Some(first);
+        }
+    }
+}
+
+#[test]
+#[ignore = "opt-in actual non-SPD direct SR boundary; MVMC_RS_THREADED_182=1"]
+fn direct_sr_non_spd_boundary_repeats_workers_one_two_four() {
+    support::require_gate(
+        "threaded-issue182-direct-sr-boundary",
+        "MVMC_RS_THREADED_182",
+    );
+    require_runner_fixtures();
+    let mut serial = None;
+    for workers in [1, 2, 4] {
+        let first = child("direct-sr-failure-boundary", workers, 32);
+        compare(&first, &child("direct-sr-failure-boundary", workers, 32));
+        if let Some(reference) = &serial {
+            compare(reference, &first);
+        } else {
+            serial = Some(first);
+        }
+    }
+}
+
+#[test]
 #[ignore = "optional independent SR prefix proof; set MVMC_RS_THREADED_182=1"]
 fn independent_runner_prefixes_match_full_normalized_pre_sr_arrays() {
     support::require_gate("threaded-issue182-prefixes", "MVMC_RS_THREADED_182");
@@ -326,6 +365,7 @@ fn require_runner_fixtures() {
             "sr_oo.txt",
             "sr_ho.txt",
             "model-settings.txt",
+            "inputs.sha256",
         ] {
             let path = references.join(model).join("step-1").join(name);
             if !path.is_file() {
@@ -338,6 +378,10 @@ fn require_runner_fixtures() {
         if !input.is_file() {
             support::missing_fixture("threaded-issue182", input.display().to_string());
         }
+        ctest_provenance::verify_inputs(
+            &references.join(model).join("step-1/inputs.sha256"),
+            input.parent().unwrap(),
+        );
     }
     let reviewed = repo.join("tests/fixtures/reviewed_cg_62b/canonical_general_rbm");
     for name in [
@@ -459,10 +503,30 @@ fn issue182_child() {
         independent_physcal(&fresh_output_root());
     } else if job == "independent-real-fsz" {
         independent_real_fsz(&fresh_output_root());
+    } else if job == "direct-sr-failure-boundary" {
+        runner_matrix(20, true, false);
+    } else if job == "runners-long20-diagnostic" {
+        support::require_gate(
+            "threaded-issue182-diagnostic",
+            "ISSUE182_DIAGNOSTIC_COLLECT_ALL",
+        );
+        require_runner_fixtures();
+        runner_matrix(20, false, true);
     } else {
-        assert!(matches!(job.as_str(), "runners" | "runners-observed"));
-        let observer = (job == "runners-observed").then(start_observation);
-        runner_matrix();
+        assert!(matches!(
+            job.as_str(),
+            "runners" | "runners-observed" | "runners-long20-observed"
+        ));
+        let observer = job.ends_with("-observed").then(start_observation);
+        runner_matrix(
+            if job == "runners-long20-observed" {
+                20
+            } else {
+                2
+            },
+            false,
+            false,
+        );
         if let Some(observer) = observer {
             let snapshot = observer.finish();
             assert!(snapshot.serial_qp_items > 0);
@@ -1377,9 +1441,14 @@ fn fresh_output_root() -> std::path::PathBuf {
     output_root
 }
 
-fn runner_matrix() {
+fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all: bool) {
     let output_root = fresh_output_root();
-    independent_runner_prefixes(&output_root, false);
+    let mut diagnostic_failures = Vec::new();
+    let mut executed_optimization_cases = 0;
+    let mut verified_rejections = 0;
+    if !failure_boundary_only {
+        independent_runner_prefixes(&output_root, false);
+    }
     for (model, real_fsz) in [
         ("heisenberg_chain_real", false),
         ("heisenberg_chain_cmp", false),
@@ -1389,7 +1458,24 @@ fn runner_matrix() {
     ] {
         let root = runner_fixture_root().join("extern/Julia-mVMC");
         for size in SIZES {
-            for (store, cg) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            // Long mode couples sample and QP lengths at the 31/32/33
+            // threshold and has 5*3*3 optimization cases per child. The
+            // historical two-step mode retains all four settings and 200
+            // samples. This is new coverage, not the external 200-sample proof.
+            let samples = if steps == 20 { size } else { 200 };
+            let settings: &[(i64, i64)] = if steps == 20 {
+                &[(0, 0), (1, 0), (0, 1)]
+            } else {
+                &[(0, 0), (1, 0), (0, 1), (1, 1)]
+            };
+            for &(store, cg) in settings {
+                // A separately named failure-contract test, not a skipped
+                // case in the full success matrix (which still propagates it).
+                if failure_boundary_only
+                    && !(model == "hubbard_chain_real" && size == 32 && store == 0 && cg == 0)
+                {
+                    continue;
+                }
                 let mut data = mvmc_expert_parsers::parse_expert_mode_files(root.join(format!(
                     "test/integration/reference/{model}/inputs/namelist.def"
                 )))
@@ -1403,17 +1489,18 @@ fn runner_matrix() {
                     threshold_transfer_input(&mut data, size);
                 }
                 data.modpara.nvmc_warmup = 10;
-                data.modpara.nvmc_sample = 200;
+                data.modpara.nvmc_sample = samples as i64;
                 data.modpara.nvmc_interval = 1;
-                data.modpara.nsr_opt_itr_step = 2;
-                data.modpara.nsr_opt_itr_smp = 2;
+                data.modpara.nsr_opt_itr_step = steps;
+                data.modpara.nsr_opt_itr_smp = steps;
                 data.modpara.nstore_o = store;
                 data.modpara.nsrcg = cg;
                 if real_fsz {
                     data.complex_flags = vec![0];
                 }
                 let variant = if real_fsz { "real-fsz" } else { model };
-                let label = format!("synthetic-{variant}-{size}-store{store}-cg{cg}");
+                let label =
+                    format!("synthetic-{variant}-qp{size}-samples{samples}-store{store}-cg{cg}");
                 let output = output_root.join(&label);
                 std::fs::create_dir(&output).unwrap();
                 let mut rng = Sfmt19937Rng::new(1);
@@ -1432,17 +1519,45 @@ fn runner_matrix() {
                     data.projection_layout().n_proj,
                     data.count_variational_parameters(),
                     size,
-                    200,
+                    samples,
                     mvmc_core::get_all_complex_flag(&data),
                     data.i_flg_orbital_general != 0,
                 );
+                let mut completed_steps = Vec::new();
+                let mut last_parameters = parameters(&data);
                 let mut callback = |step, data: &mut ExpertModeData, energy: C, status| {
+                    completed_steps.push(step);
+                    last_parameters = parameters(data);
                     discrete(&format!("{label}-step{step}-status"), status);
                     complex(&format!("{label}-step{step}-parameters"), &parameters(data));
                     complex(&format!("{label}-step{step}-energy"), &[energy]);
                     Ok(())
                 };
-                mvmc_core::vmc_para_opt(
+                // Developer-only observation of the ORIGINAL solve, including
+                // its failure buffers; never reconstruct a system from outputs.
+                // Retained original operands were independently replayed by
+                // native C DPOSV on all six captured worker/repeat operands.
+                // Only these case/step/INFO tuples are verified rejections.
+                let rejection = if steps == 20 && model == "hubbard_chain_real" && cg == 0 {
+                    match (size, store) {
+                        (32, 0) => Some((10, 2)),
+                        (32, 1) => Some((10, 4)),
+                        (33, 1) => Some((16, 2)),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                let verified_non_spd = rejection.is_some();
+                let capture = (diagnostic_collect_all && cg == 0
+                    || verified_non_spd
+                    || std::env::var_os("ISSUE182_SR_DIAGNOSTICS").is_some()
+                        && model == "hubbard_chain_real"
+                        && size == 32
+                        && cg == 0)
+                    .then(|| mvmc_core::sr::observer::capture().unwrap());
+                executed_optimization_cases += 1;
+                let result = mvmc_core::vmc_para_opt(
                     &mut data,
                     &mut state,
                     &mut rng,
@@ -1452,9 +1567,160 @@ fn runner_matrix() {
                         callback: Some(&mut callback),
                         skip_sr: false,
                     },
-                )
-                .unwrap_or_else(|e| panic!("{label}: output {}: {e}", output.display()));
+                );
+                if diagnostic_collect_all {
+                    let mut next = rng.clone();
+                    std::fs::write(
+                        output.join("diagnostic-outcome.txt"),
+                        format!(
+                            "label={label}\nworkers={:?}\nresult={result:?}\ncompleted_steps={completed_steps:?}\nlast_post_sync_parameters={last_parameters:?}\nparameters={:?}\nrng={rng:?}\nwords={}\nnext624={:?}\nconfig={:?}\n",
+                            inner_thread_config(), parameters(&data), rng.words_consumed(),
+                            (0..624).map(|_| next.gen_rand32()).collect::<Vec<_>>(), state.electron_config,
+                        ),
+                    ).unwrap();
+                    eprintln!(
+                        "DIAGNOSTIC CASE {label}: {result:?}; artifacts {}",
+                        output.display()
+                    );
+                    if let Err(error) = &result {
+                        diagnostic_failures.push(format!("{label}: {error}"));
+                    }
+                }
+                if let Some(capture) = capture {
+                    let records = capture.finish();
+                    if verified_non_spd && !diagnostic_collect_all {
+                        let (failed_step, factor_info) = rejection.unwrap();
+                        assert_eq!(result.as_ref().unwrap_err(), &format!("vmc_para_opt: direct SR failed at step {failed_step} (local status 1); parameters were not updated"));
+                        assert_eq!(completed_steps, (0..failed_step).collect::<Vec<_>>());
+                        let bits = |values: &[C]| {
+                            values
+                                .iter()
+                                .map(|z| (z.re.to_bits(), z.im.to_bits()))
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(
+                            bits(&parameters(&data)),
+                            bits(&last_parameters),
+                            "failed SR must not update last successful post-sync parameters"
+                        );
+                        assert_eq!(records.len(), failed_step + 1);
+                        assert!(records[..failed_step].iter().all(|r| r.status == Some(0)));
+                        let failed = &records[failed_step];
+                        assert_eq!(failed.dimension, 5);
+                        assert_eq!(failed.triangle, 'U');
+                        assert_eq!(failed.status, Some(1));
+                        assert_eq!(failed.factor_info, Some(factor_info));
+                        assert_eq!(
+                            failed.solve_info, None,
+                            "POTRS must not run after failed POTRF"
+                        );
+                        assert_eq!(
+                            failed.rhs.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            failed
+                                .increment
+                                .iter()
+                                .map(|v| v.to_bits())
+                                .collect::<Vec<_>>(),
+                            "failed POTRF must leave RHS untouched, including signed zero"
+                        );
+                        if factor_info == 2 {
+                            assert!(
+                                failed.matrix[0] * failed.matrix[6]
+                                    - failed.matrix[5] * failed.matrix[5]
+                                    < 0.0
+                            );
+                        }
+                        verified_rejections += 1;
+                        discrete(
+                            &format!("{label}-outcome"),
+                            format!("verified-non-spd-step{failed_step}-info{factor_info}"),
+                        );
+                        // A/RHS are computed values: compare across workers
+                        // using the existing numerical policy, not bitwise.
+                        numerical(
+                            &format!("{label}-failed-matrix"),
+                            failed.matrix.iter().copied(),
+                        );
+                        numerical(&format!("{label}-failed-rhs"), failed.rhs.iter().copied());
+                        discrete(
+                            &format!("{label}-failed-shape"),
+                            (failed.dimension, failed.triangle),
+                        );
+                        discrete(&format!("{label}-failed-flags"), &failed.flags);
+                        discrete(
+                            &format!("{label}-failed-active-indices"),
+                            &failed.active_indices,
+                        );
+                        discrete(
+                            &format!("{label}-failed-status"),
+                            (failed.status, failed.factor_info, failed.solve_info),
+                        );
+                    }
+                    // Preserve actual failure-boundary discrete state before
+                    // propagating the error. This does not turn failure green.
+                    std::fs::write(
+                        output.join("direct-sr-boundary-state.txt"),
+                        format!(
+                            "result={result:?}\nrng={rng:?}\nwords={}\nnext624={:?}\nconfig={:?}\nparameters={:?}\ncompleted_steps={completed_steps:?}\nlast_post_sync_parameters={last_parameters:?}\n",
+                            rng.words_consumed(),
+                            (0..624).map({ let mut next = rng.clone(); move |_| next.gen_rand32() }).collect::<Vec<_>>(),
+                            state.electron_config,
+                            parameters(&data),
+                        ),
+                    ).unwrap();
+                    for (index, record) in records.iter().enumerate() {
+                        let prefix = output.join(format!("direct-sr-observed-{index}"));
+                        std::fs::write(
+                            prefix.with_extension("metadata.txt"),
+                            format!("{record:#?}"),
+                        )
+                        .unwrap();
+                        for (name, values) in [
+                            ("matrix", &record.matrix),
+                            ("rhs", &record.rhs),
+                            ("increment", &record.increment),
+                        ] {
+                            let text: String =
+                                values.iter().map(|v| format!("{v:.17e}\n")).collect();
+                            std::fs::write(prefix.with_extension(format!("{name}.txt")), text)
+                                .unwrap();
+                        }
+                    }
+                    eprintln!(
+                        "original direct SR observations: {} records in {}",
+                        records.len(),
+                        output.display()
+                    );
+                }
+                if failure_boundary_only {
+                    discrete("direct-sr-failure-rng", &rng);
+                    discrete("direct-sr-failure-words", rng.words_consumed());
+                    let mut next = rng.clone();
+                    discrete(
+                        "direct-sr-failure-next624",
+                        (0..624).map(|_| next.gen_rand32()).collect::<Vec<_>>(),
+                    );
+                    discrete("direct-sr-failure-config", &state.electron_config);
+                    complex("direct-sr-failure-parameters", &parameters(&data));
+                    return;
+                }
+                if diagnostic_collect_all && result.is_err() {
+                    // Only this explicit diagnostic mode continues. The
+                    // normal gate still rejects every unverified error.
+                    emit_state(&label, &data, &state);
+                    continue;
+                }
+                if !verified_non_spd {
+                    result.unwrap_or_else(|e| panic!("{label}: output {}: {e}", output.display()));
+                    discrete(&format!("{label}-outcome"), "success");
+                }
                 discrete(&format!("{label}-final-rng"), &rng);
+                discrete(&format!("{label}-draw-count"), rng.words_consumed());
+                let mut peek = rng.clone();
+                discrete(
+                    &format!("{label}-next624"),
+                    (0..624).map(|_| peek.gen_rand32()).collect::<Vec<_>>(),
+                );
                 emit_state(&label, &data, &state);
             }
             let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
@@ -1489,12 +1755,45 @@ fn runner_matrix() {
             let label = format!("synthetic-{variant}-{size}-physcal");
             discrete(&format!("{label}-initial-rng"), &prepared.rng);
             let output = output_root.join(&label);
-            let result = mvmc_core::vmc_phys_cal_to_dir(prepared, &output)
-                .unwrap_or_else(|e| panic!("{label}: output {}: {e}", output.display()));
+            let result = mvmc_core::vmc_phys_cal_to_dir(prepared, &output);
+            if diagnostic_collect_all {
+                if let Err(error) = &result {
+                    diagnostic_failures.push(format!("{label}: {error}"));
+                    eprintln!("DIAGNOSTIC PHYSCAL {label}: {error}");
+                    continue;
+                }
+            }
+            let result =
+                result.unwrap_or_else(|e| panic!("{label}: output {}: {e}", output.display()));
             discrete(&format!("{label}-final-rng"), &result.final_rng);
             discrete(&format!("{label}-iterations"), result.iterations);
             emit_state(&label, &result.data, &result.state);
         }
+    }
+    if steps == 20 && !failure_boundary_only {
+        assert_eq!(
+            executed_optimization_cases, 45,
+            "no missing or dropped long20 case"
+        );
+        if !diagnostic_collect_all {
+            assert_eq!(
+                verified_rejections, 3,
+                "all independently verified rejections must execute"
+            );
+        }
+    }
+    if diagnostic_collect_all {
+        std::fs::write(
+            output_root.join("diagnostic-failures.txt"),
+            diagnostic_failures.join("\n"),
+        )
+        .unwrap();
+        assert!(
+            diagnostic_failures.is_empty(),
+            "diagnostic collection completed, NOT acceptance: {} actual failures; see {}",
+            diagnostic_failures.len(),
+            output_root.display()
+        );
     }
 }
 

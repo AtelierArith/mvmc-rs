@@ -913,3 +913,223 @@ milestone verification requires a fresh archive after all owners' final
 source/fixture changes; this earlier archive must not be relabelled final.
 Focused strict clippy, owned-file formatting and diff checks passed on the
 current test source. No shared production source was changed for these tests.
+
+### Exact PR204 snapshot and extended-matrix gap
+
+Commit `02c83f31e0feec8c97105727a4975f48afaa5687` was extracted into
+`/tmp/mvmc-pr204-02c83f31.uudrv1` with its own Cargo target and pinned Julia
+submodule `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`. Cargo executed no Julia
+or C oracle. Handle 51571, run `deb4d95c-3585-43dc-bbc5-8ee9d2bfb192`,
+terminated 0: four passed, thirteen excluded, 9.574 s. The selected tests
+were QP threshold/lifecycle, observed kernel classification, transfer
+activation, and canonical CG long20 repeatability. Three production-kernel
+hashes and the test hash verified unchanged; `fixtures.before.sha256` and
+`fixtures.after.sha256` compared equal after terminal completion.
+
+This exact-commit result does not turn the broader two-step runner matrix
+into twenty-step coverage. A separate external test extension in
+`/tmp/mvmc-pr204-augmented-long20.xjhBkN` sets that existing matrix's steps
+and window to twenty and repeats every worker configuration twice. Its
+five variants and threshold-modified operands remain explicitly synthetic
+kernel/runner coverage, not new independent public-input oracles. This
+extension is not the exact PR204 test source. At this checkpoint no terminal
+pass had been recorded; the subsequent result below keeps its distinct settings.
+RBM-FSZ failure-boundary coverage and scoped timing evidence are
+also outstanding. Neither activation nor one canonical long20 case proves
+the complete issue acceptance matrix.
+
+### Subsequent external and threshold-sample outcome checkpoints
+
+External handle 83227 terminated 0, run
+`507c1191-b585-4026-a370-2688af75b0da`: one passed, seventeen excluded,
+1767.916 s. Its test SHA was
+`5e8cbf3add2b967c385fb9f7578c65d1abd47ce2db355fc67d5220bc62c4eda3`.
+This extension used **200 samples**, QP sizes 31/32/33, five variants and
+four store/CG combinations: sixty optimization cases per worker child,
+workers 1/2/4 each twice. It did not prove the later 45-case matrix with
+sample counts 31/32/33. Its source/fixture after-hashes matched their
+before-hashes. No native macOS, MPI or performance claim follows.
+
+The new long20 outcome matrix instead uses samples and QP lengths 31/32/33,
+five synthetic variants, and direct/no-store, direct/store and CG/no-store:
+45 cases per child. The initial success-only run 17558 failed at Hubbard
+sample32/store0, step10. Capture 39518 retained eleven original SR solves;
+native C DPOSV replay of the same upper-column-major A/b returned INFO2.
+Run 24298 then failed at sample32/store1, step10; capture 65626 retained
+INFO4 with no substitution. These failed runs remain evidence, not passes.
+
+Explicit diagnostic collection 27704 used frozen binary
+`/tmp/mvmc-182-all45-diagnostic.hfiaGD/threaded_issue182`, SHA
+`8a149b75e483a18cd28b8a29cff4bd6fdd3a70bf8d39f9e4e3595b9326115153`,
+from test source SHA
+`b0c750de711f9ff7ac645ff5c1af54b11715d319e34b0448be84a4cd1bcde4eb`.
+Each of six worker/repeat children executed all 45 cases: 42 successes and
+the same three direct-SR failures, then exited **101**, not acceptance success:
+
+| Hubbard sample/QP count | NStore | first failing zero-based step | original factor INFO |
+| --- | --- | --- | --- |
+| 32 | 0 | 10 | 2 |
+| 32 | 1 | 10 | 4 |
+| 33 | 1 | 16 | 2 |
+
+All have dimension five and no POTRS call. All eighteen original failure
+operands were independently replayed with the native developer-only probe
+documented in `c_toolbox/retained_direct_sr_status.md`, reproducing their
+respective INFO values. This is retained-system factorization authority,
+not a full native C sampler proof. Actual probe log:
+`/tmp/mvmc-182-all45-retained-c-probes.log`, SHA
+`9e48cbcf11adea9ab2a597fad041d87c99da354fcdaa15ccfe4df705ed716428`.
+
+Diagnostic logs and per-case artifacts are retained under the frozen directory
+and `/tmp/mvmc-issue182-{2662802,2663025,2663195,2663608,2665399,2695793}-0`.
+All 45 outcome files compared byte-identical across the five other children
+after excluding only the requested-worker metadata line: actual result,
+completed steps, parameters/last successful post-sync parameters, full RNG,
+draw count, next624 and saved configurations. This is Rust repeatability,
+not a replacement for independent numerical oracles.
+
+That byte-identical diagnostic comparison is historical observational evidence,
+not the portable computed-float acceptance policy. Computed A/RHS and parameters
+across worker configurations use the existing explicit numerical comparison
+bound (`512 * f64::EPSILON` absolute and relative), with no tolerance increase.
+Only the **same solve's original RHS versus its actual post-return immutable
+copy**, and unchanged parameters versus the last successful post-sync copy,
+retain bitwise assertions (including signed zero). INFO, first failing step,
+shape, flags, active indices, no-POTRS, RNG and saved configurations remain exact.
+
+The supported-outcome gate must assert these three exact case/step/INFO
+contracts, parameters and RHS unchanged (including signed zero), no POTRS,
+and execution counts 45/three rejections. Other errors remain failures;
+the diagnostic-only collector's continuation is not enabled in normal gates.
+Source SHA `5c2f7b72644991abcc199706f6fc2bf58efd091c0080526a6e2517210803a79f`
+completed handle 94157 with terminal zero, run
+`ca1e152d-faf5-4c8e-a49c-473d26c19cb4`: two passed, twenty-one excluded,
+228.543 s (focused failure boundary and full supported-outcome matrix).
+Each worker configuration ran twice; 3848 records compared with maximum
+computed numerical difference zero. Actual worker snapshots were retained
+for all six children; worker1 had no parallel entries. This is 42 successful
+optimization cases and three verified rejections per child, **not** 45
+successful optimizations. PhysCal remains two frames/four samples, not twenty
+SR steps. The shared-source result is separate from the clean dependency
+snapshot below and is not full issue #182/#185 acceptance.
+
+Parent review artifacts for that diagnostic collection (not Cargo dependencies):
+
+- Historical v1 comparator source `/tmp/mvmc-182-all45-artifact-review.v1.sh`, SHA
+  `efc182283e9c5971c573c4453ce317a2c2a8fa0779e1794e56c8d1ac61a5877b`.
+- All eighteen input manifests, native C stdout, probe/source/library identities
+  and unchanged-parameter/RHS checks:
+  `/tmp/mvmc-182-all45-artifact-review.stdout.txt`, SHA
+  `e516e0ecf11ffff2f636a89a5f9ad0a84aaa7c74ed229dcef59c08ed3dec1fee`.
+  Running the comparator completed exit zero; this reports artifact consistency,
+  not a successful 45-case optimization run.
+- Strengthened comparator `/tmp/mvmc-182-all45-artifact-review.sh`, SHA
+  `958ada315f109c020f9bf1d6a649cd62b785d0ecd9f1bea558cfb0054dfe2b08`,
+  captures each probe's stdout and asserts the exact dimension/triangle/NRHS/
+  expected INFO line itself. It completed exit zero for all eighteen operands;
+  `/tmp/mvmc-182-all45-artifact-review.v2.stdout.txt` has the same stdout SHA
+  `e516e0ecf11ffff2f636a89a5f9ad0a84aaa7c74ed229dcef59c08ed3dec1fee`.
+  Historical v1 stdout remains unmodified at its original path.
+- Reviewed test-only patch capture `/tmp/mvmc-182-three-rejections-source.patch`,
+  SHA `db82020d3f0e8d484fed86abbb1e31cfb4f009fb2ed12d3ae8ac8970260c40ea`.
+
+For **each** of the six PID roots above, the corresponding first-failure files
+have these identical SHA-256 values (RHS and actual post-return increment also
+compare byte-identical, including signed zero):
+
+```text
+samples32/store0/step10 matrix bf89c6d1286e714b0fa3825bf000fc0e7b9f4a70bec8fc5d285f69b22d21a36b
+samples32/store0/step10 rhs    204814be0e9cf40e2c17961044386ed252c04467e3b0dbaf1beeac558ca9a90a
+samples32/store0/step10 meta   6b3316dca7ea5641cd167ac54c0d829aa596398f5a7cff7ada6c9be8020635b2
+samples32/store1/step10 matrix 59b3f63c15161b08f33b2dc58951356b6f963d6d40389f2cd8f4a809427e4400
+samples32/store1/step10 rhs    f4f7ac898226788c07a8943dd0b10dd724e3b130b207511cca373637f943082e
+samples32/store1/step10 meta   bc7942faeb3b7524c27489913a56f9023655d51960d5199fe64882660ee02542
+samples33/store1/step16 matrix f0872672e841ec3c09064cefecd3f33e0561eec00bf9e4bc84ec5b8dfcef6fde
+samples33/store1/step16 rhs    0ab6fc246f182908c22084325c4850885cecedd737640006c7850c50d8774771
+samples33/store1/step16 meta   7e5750209434a95f3cf9bc37f81d1927b42658353cc98f5f719b03ff40b53b30
+```
+
+The native probe executable SHA is
+`626a1bd68106c7892ca3f9092f49c3220396532dc4eeb550a76331aa4394f6ee`,
+adapter source SHA
+`e60376b86872c67db282a46c4f67bf2bfe380c061f6b8c1038cef53a6c5aaf0a`;
+upstream calling-contract source/compiler/LAPACK versions are documented in
+`c_toolbox/retained_direct_sr_status.md`. These hashes describe retained-system
+replays and must not be relabelled full-C sampler or native macOS proof.
+
+Independent clean-dependency verification was performed in
+`/tmp/mvmc-182-committed-helper.h0Cn0R`, extracted from committed
+`b2096d2ae84bcbae58e2144b7ef88db5f9bf8d61` with only the owned thread test
+overlaid. Committed `support/ctest_provenance.rs` SHA is
+`b957320c502b7331d5476976353fd682ebbc1c11d147b420ddc62666c7012246`;
+no dirty helper tests or fresh52 archive were copied. It uses a separate Cargo
+target. Handle 32416 terminated 100, run
+`79e4b178-9ab2-4f45-9736-59204eedd988`: all three selected tests failed
+MissingFixture before numerical execution. The archived submodule placeholder
+caused the attempted reference symlink to be nested instead of replacing the
+placeholder; this was a snapshot setup defect, not a numerical failure.
+The original placeholder was preserved as `extern/Julia-mVMC.unconfigured`.
+The correct reference directory was then populated by `git archive` of pinned
+Julia commit `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`, without running Julia
+or C. Source and committed helper hashes did not change. Corrected verification
+handle 41033 terminated zero, run
+`ca1c813e-70dd-41c8-a0bb-6d738a99c975`: three passed, nineteen excluded,
+225.685 s. This selected the independent five-model normalized pre-SR
+OO/HO prefix gate, focused failure boundary and all 45 supported-outcome cases
+per worker child, workers 1/2/4 each twice. The 3848 runner records compared
+with maximum numerical difference zero. The original test/helper hashes above
+were unchanged after terminal completion. Actual worker counters and all three
+failure payloads remain in `validation-reference-fixed.log` and the fresh
+per-child `/tmp/mvmc-issue182-*-0` directories named by that log. This is
+same-platform repeatability of 42 successful cases plus three strict supported
+rejections, not 45 successful numeric goldens or complete issue acceptance.
+Clean-snapshot strict clippy handle 45445 terminated zero in 36.92 s
+(existing nonfatal vendor deprecation warning only).
+
+The source `5c2f7b...`/run 41033 checkpoint above is retained as historical:
+parent review subsequently found computed A/RHS emitted as discrete bit records.
+Those records were replaced with numerical records using the unchanged bound;
+self-copy immutability checks were retained. New source SHA
+`41452d5fe1c6deb42c8868bda4b5df1f06c5570f7a15de2668100f269ee20024`
+required fresh focused and full-45 verification at that review checkpoint;
+its completed result is recorded below with the same committed helper.
+Native C retained-input replay operands and their historical hashes are unchanged.
+Policy-corrected verification handle 29780 terminated zero, run
+`eb87b111-8c44-4f76-bc57-bd123b71f0c2`: three passed, nineteen excluded,
+230.072 s, with the same committed helper and pinned reference snapshot.
+Independent OO/HO passed in 1.390 s, the focused failure boundary in 2.752 s,
+and the 45-outcome worker/repeat gate in 230.071 s. It compared 3860 records
+with maximum numerical difference zero using the unchanged explicit numerical
+policy for computed values; original-RHS immutable-copy checks and parameter
+rollback checks remain bitwise within the same run. This proves the scoped
+42-success/three-strict-rejection outcome matrix, not 45 successful numerical
+goldens or full issue acceptance. After termination the test SHA remained
+`41452d5fe1c6deb42c8868bda4b5df1f06c5570f7a15de2668100f269ee20024`
+and committed helper SHA remained
+`b957320c502b7331d5476976353fd682ebbc1c11d147b420ddc62666c7012246`.
+Strict clippy handle 13926 terminated zero in 1.25 s (same vendor warning).
+Final policy-corrected logs and SHA-256:
+
+```text
+/tmp/mvmc-182-committed-helper.h0Cn0R/validation-numeric-policy.log
+54516d2a492b1f07184af0c97a87c702504bafae4ce5fe9ae6a483e2a1c68a70
+/tmp/mvmc-182-committed-helper.h0Cn0R/clippy-numeric-policy.log
+cc30ef4bd50f11623392cc9f1f42194d9d148a483a1e7ad2d97de46c78de4707
+```
+
+Remaining MPI activation scope is separate: grouped QP8 with threshold32
+falls back to serial QP kernels even when independent SR entries run in
+parallel. That does not prove MPI/QP worker activation or all fourteen
+callsite branches. The MPI owner must record the actual local QP range and
+entered QP/term workers, while separately checking that collectives stay on
+the initiating FUNNELED thread. Threshold1 experiments are labelled distinct
+from default-threshold32 boundary checks. With groups of width two, global
+QP31/32/33 ranges may each be locally below threshold; global lengths around
+63/64/65/66 expose the local32 boundary instead.
+
+No speedup is claimed. Issue #182's allocation/timer/benchmark-settings
+acceptance is conditional on such a claim; kernel activation is not a speed
+measurement. Any scoped benchmark evidence uses the existing workflow and
+explicit settings, not an invented pipeline or an unrequested optimization.
+Original thread84 semantic/API mapping and MPI activation remain explicit
+acceptance work; the result above must not be promoted to full issue completion.
