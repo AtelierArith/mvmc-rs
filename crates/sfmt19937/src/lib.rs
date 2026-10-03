@@ -119,6 +119,17 @@ impl Sfmt19937Rng {
         self.words_consumed
     }
 
+    /// Copy the actual 624 internal words and current word index without drawing.
+    ///
+    /// This diagnostic snapshot preserves the stream, cursor and primitive draw
+    /// count. Index 624 means that the next draw refills the internal buffer.
+    pub fn state_snapshot(&self) -> ([u32; 624], usize) {
+        (
+            std::array::from_fn(|index| self.inner.word(index)),
+            self.inner.idx,
+        )
+    }
+
     /// `gen_rand32` from `SFMT.c`.
     ///
     /// Refills the buffer via `gen_rand_all` when exhausted (i.e. when
