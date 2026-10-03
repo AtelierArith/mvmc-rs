@@ -538,6 +538,10 @@ fn state() -> VmcOptimizationState {
                 .slater_matrix
                 .slater_elm
                 .set(0, j, i, Complex64::new(-scale, 0.0));
+            // Prepare C's real-table input explicitly; public runners still
+            // own their parameter-to-table refresh. No historical kernel overlay.
+            state.slater_matrix.slater_elm_real.set(0, i, j, scale);
+            state.slater_matrix.slater_elm_real.set(0, j, i, -scale);
         }
     }
     assert!(state
