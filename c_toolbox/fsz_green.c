@@ -13,22 +13,45 @@ int NDoublonHolon2siteIdx = 0, NDoublonHolon4siteIdx = 0;
 int gutz[4], jast[4][4], *GutzwillerIdx = gutz;
 int *JastrowIdx[4], **DoublonHolon2siteIdx, **DoublonHolon4siteIdx;
 double complex Proj[2], QPFullWeight[2] = {1, -0.375};
-double complex SlaterElm[128], InvM[32], PfM[2];
+#ifdef FSZ_REAL
+typedef double GreenScalar;
+#define SlaterElm SlaterElm_real
+#define InvM InvM_real
+#define PfM PfM_real
+#else
+typedef double complex GreenScalar;
+#endif
+GreenScalar SlaterElm[128], InvM[32], PfM[2];
 
 typedef int MPI_Comm;
 #define MPI_COMM_SELF 0
 #define MPI_DOUBLE_COMPLEX 0
+#define MPI_DOUBLE 0
 #define MPI_SUM 0
 void MPI_Comm_size(MPI_Comm comm, int *size) { (void)comm; *size = 1; }
 void MPI_Allreduce(const void *a, void *b, int n, int kind, int op, MPI_Comm comm) {
   (void)a; (void)b; (void)n; (void)kind; (void)op; (void)comm; assert(0);
 }
+#ifdef FSZ_REAL
+void calculateNewPfMTwo_child_fsz_real(const int, const int, const int, const int,
+                                 double *, const int *, const int *,
+                                 const int, const int, const int, double *, double *);
+#else
 void calculateNewPfMTwo_child_fsz(const int, const int, const int, const int,
                                  double complex *, const int *, const int *,
                                  const int, const int, const int,
                                  double complex *, double complex *);
+#endif
 #define inline static inline
+#ifdef FSZ_REAL
+#include "fsz_green_real_upstream.inc"
+#define GreenFunc1_fsz GreenFunc1_fsz_real
+#define GreenFunc1_fsz2 GreenFunc1_fsz2_real
+#define GreenFunc2_fsz GreenFunc2_fsz_real
+#define GreenFunc2_fsz2 GreenFunc2_fsz2_real
+#else
 #include "fsz_green_upstream.inc"
+#endif
 #undef inline
 
 static double read_double(void) {
@@ -46,6 +69,15 @@ static void print_complex(double complex value) {
   union { uint64_t bits; double value; } im = {.value = cimag(value)};
   printf("%016" PRIx64 " %016" PRIx64 "\n", re.bits, im.bits);
 }
+static GreenScalar read_green(void) {
+  double complex value = read_complex();
+#ifdef FSZ_REAL
+  assert(cimag(value) == 0.0);
+  return creal(value);
+#else
+  return value;
+#endif
+}
 
 int main(void) {
   int inputIdx[4], cfg[8], num[8], cnt[2], spins[4], new_cnt[2];
@@ -55,10 +87,10 @@ int main(void) {
   for (int i = 0; i < 8; i++) assert(scanf("%d", &num[i]) == 1);
   for (int i = 0; i < 2; i++) assert(scanf("%d", &cnt[i]) == 1);
   for (int i = 0; i < 2; i++) Proj[i] = read_complex();
-  for (int i = 0; i < 128; i++) SlaterElm[i] = read_complex();
-  for (int i = 0; i < 2; i++) PfM[i] = read_complex();
-  for (int i = 0; i < 32; i++) InvM[i] = read_complex();
-  double complex ip = read_complex(), buffer[10];
+  for (int i = 0; i < 128; i++) SlaterElm[i] = read_green();
+  for (int i = 0; i < 2; i++) PfM[i] = read_green();
+  for (int i = 0; i < 32; i++) InvM[i] = read_green();
+  GreenScalar ip = read_green(), buffer[10];
   for (int i = 0; i < 4; i++) {
     JastrowIdx[i] = jast[i];
     for (int j = 0; j < 4; j++) jast[i][j] = i == j ? -1 : 0;
@@ -100,11 +132,15 @@ int main(void) {
     memcpy(InterAll[4096 + duplicate], InterAll[original], sizeof(InterAll[0]));
     ParaInterAll[4096 + duplicate] = ParaInterAll[original];
   }
-  double complex myEnergy = 0, *myBuffer = buffer;
+  GreenScalar myEnergy = 0, *myBuffer = buffer;
   int *myEleIdx = inputIdx, *myEleSpn = spins, *myEleNum = num;
   int *eleCfg = cfg, *eleProjCnt = cnt, *myProjCntNew = new_cnt;
   int idx, ri, rj, rk, rl, s, t, u, v;
+#ifdef FSZ_REAL
+#include "fsz_interall_real_accumulator_upstream.inc"
+#else
 #include "fsz_interall_accumulator_upstream.inc"
+#endif
   print_complex(myEnergy);
   assert(memcmp(before_idx, myEleIdx, sizeof(before_idx)) == 0);
   assert(memcmp(before_spins, myEleSpn, sizeof(before_spins)) == 0);

@@ -25,14 +25,14 @@ use crate::c_timer::CTimer;
 use crate::sampling::projection::update_proj_cnt;
 use crate::sampling::updates::{
     calculate_new_pf_m2_complex_flat, calculate_new_pf_m2_fsz_complex_flat,
-    calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_complex_flat,
-    calculate_new_pf_m_two2_real_flat,
+    calculate_new_pf_m2_fsz_real_flat, calculate_new_pf_m2_real_flat,
+    calculate_new_pf_m_two2_complex_flat, calculate_new_pf_m_two2_real_flat,
 };
 use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 
 mod fsz_green;
-pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex};
+pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex, green_func2_fsz_real};
 
 /// Complete Julia's projection ratio with the RBM ratio for an operator move.
 /// Counters are rebuilt from occupations and current parameters, including saved walkers.
@@ -920,7 +920,7 @@ pub fn green_func1_fsz(
     ele_proj_cnt: &[i64],
     ele_spn: &[i64],
 ) -> Complex64 {
-    green_func1_fsz_impl::<false>(
+    green_func1_fsz_impl::<false, false>(
         ri,
         rj,
         spin_create,
@@ -960,7 +960,7 @@ pub fn green_func1_fsz_complex(
         !data.has_rbm_terms(),
         "native C FSZ Green kernel does not support RBM"
     );
-    green_func1_fsz_impl::<true>(
+    green_func1_fsz_impl::<true, false>(
         ri,
         rj,
         spin_create,
@@ -976,8 +976,48 @@ pub fn green_func1_fsz_complex(
     )
 }
 
+/// Native C real FSZ one-body kernel, including spin-changing hops.
+///
+/// Uses only real Slater, inverse and Pfaffian buffers and scalar arithmetic.
+/// Panics if RBM terms are supplied, before evaluating any operator.
 #[allow(clippy::too_many_arguments)]
-fn green_func1_fsz_impl<const C_KERNEL: bool>(
+pub fn green_func1_fsz_real(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: f64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+) -> f64 {
+    assert!(
+        !data.has_rbm_terms(),
+        "native C FSZ Green kernel does not support RBM"
+    );
+    green_func1_fsz_impl::<true, true>(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        Complex64::new(ip, 0.0),
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+    )
+    .re
+}
+
+#[allow(clippy::too_many_arguments)]
+fn green_func1_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
     ri: usize,
     rj: usize,
     spin_create: u8,
@@ -993,7 +1033,11 @@ fn green_func1_fsz_impl<const C_KERNEL: bool>(
 ) -> Complex64 {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
-    let n_qp_full = state.slater_matrix.pf_m.len();
+    let n_qp_full = if C_REAL {
+        state.slater_matrix.pf_m_real.len()
+    } else {
+        state.slater_matrix.pf_m.len()
+    };
     if !C_KERNEL && ip.norm() == 0.0 {
         return Complex64::new(0.0, 0.0);
     }
@@ -1039,12 +1083,34 @@ fn green_func1_fsz_impl<const C_KERNEL: bool>(
         }
     };
 
+    let n_size = 2 * n_elec;
+    if C_REAL {
+        let mut new_pf = vec![0.0; n_qp_full];
+        calculate_new_pf_m2_fsz_real_flat(
+            mj,
+            spin_create,
+            &mut new_pf,
+            &my_ele_idx,
+            &my_ele_spn,
+            &state.slater_matrix.slater_elm_real,
+            state.slater_matrix.inv_m_real.as_slice(),
+            n_size * n_size + 1,
+            &state.slater_matrix.pf_m_real,
+            0,
+            n_qp_full,
+            n_site,
+            n_elec,
+        );
+        return Complex64::new(
+            proj_ratio * calculate_ip_real(&new_pf, 0, n_qp_full, data) / ip.re,
+            0.0,
+        );
+    }
     let proj_ratio = if C_KERNEL {
         Complex64::new(proj_ratio, 0.0)
     } else {
         with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data)
     };
-    let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     calculate_new_pf_m2_fsz_complex_flat(
         mj,

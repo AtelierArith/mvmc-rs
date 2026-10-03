@@ -61,6 +61,8 @@ Recent history uses short imperative commit subjects such as `Optimize utu2 inve
 
 For the issue #56 implementation work, commit each validated implementation milestone, create a pull request, and merge it into `main` before starting the next milestone on a new branch. This workflow is authorized by the user; do not ask for confirmation at each commit, pull request, or merge. Keep issues open until their full acceptance criteria have been implemented and verified.
 
+Julia reference defects should be fixed on a dedicated fork branch with focused regression tests. Submit all Julia-side patches to a single upstream pull request titled `julia-patch` at `https://github.com/tmisawa/Julia-mVMC`; append further fixes to that same PR instead of creating a separate PR for each defect. The current Julia patch PR is `https://github.com/tmisawa/Julia-mVMC/pull/54`. This Julia aggregation rule is separate from the Rust milestone commit/PR/merge workflow.
+
 ## Agent-Specific Instructions
 
 Do not revert unrelated user changes. Prefer `rg` for repository searches. Treat `extern/` as reference material unless directed otherwise, and keep generated `target*` directories out of commits.
