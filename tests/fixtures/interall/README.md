@@ -234,9 +234,9 @@ restored after every call.
 
 Rust compares every real output bit and the complete ordered energy sum.
 The real InterAll kernel uses C's scalar nested reduction, platform `exp`, and
-real multiplication followed by division. Historical Julia PairHop, Exchange,
-sampling and Green helpers retain their separately labelled reduction and
-quotient paths, so their original regression gates are not rewritten.
+real multiplication followed by division. Historical Julia real PairHop,
+Exchange, sampling and Green helpers retain their separately labelled reduction
+and quotient paths. Their original fixture bytes and tolerances are unchanged.
 
 The optional probe runs Apple clang 17 with `-O0 -ffp-contract=off`, and stores
 SHA-256 hashes and verbatim extraction boundaries in `c_toolbox/`. Its MPI
@@ -260,3 +260,57 @@ callback's energy/parameter bits, saved and scratch configurations, projections,
 combined burn buffers, move counters and all 624 following SFMT words. This is
 an algebraic production-path check, alongside independent kernel fixtures;
 it is not an independently generated full C trajectory.
+
+## Native C normal complex InterAll and PairHop
+
+`c_complex_green.txt` contains 4,096 expected complex `GreenFunc2` values,
+four ordered InterAll sums and four PairHop sums. The probe executes verbatim
+`GreenFunc1/2`, projection updates, one-/two-electron Pfaffian updates and
+`CalculateIP_fcmp` bodies, plus the actual serial accumulator loops from
+`calham.c`. Two complex wavefunction inputs each use zero and nonzero real
+Gutzwiller/Jastrow parameters, with unequal QP weights. All same-/opposite-spin
+operators, coincident indices and one-body reductions are covered. The driver
+checks that electron buffers are restored after every call. Six bounded
+historical PairHop operators cover repeated terms and density reductions; the
+historical seventh out-of-range row is not executed or claimed as C-valid input.
+
+The first comparison found 377 bit discrepancies, beginning at a one-body
+reduction's quotient. Rust now uses C's platform `exp` for the projection ratio
+and a pure Rust port of clang/compiler-rt's scaled complex division. Both
+InterAll and complex normal PairHop use this kernel, including PairHop's
+Lanczos move weight. The existing three-step direct NStore=0/1 and SR-CG
+equivalence test remains exact for every parameter/energy bit, stored
+configuration, burn buffer, move counter and next 624 SFMT words.
+
+`c_complex_division.txt` independently covers 373 native compiler quotient
+cases, including tiny/huge denominators, signed zero, subnormals and nonfinite
+recovery, plus 256 deterministic random finite bit-pattern inputs. All
+non-NaN output bits are exact; invalid arithmetic checks NaN classification
+because C does not specify its payload/sign. Green and energy fixtures remain
+fully bitwise, including zero signs.
+
+The optional compiler probe performs actual C `/` operations. The saved LLVM
+17 `divdc3.c` source is a separately licensed reference, not a Cargo/FFI
+dependency; its original notice and source hash are retained in `c_toolbox/`,
+and the Rust port's full license is in `crates/mvmc-core/LICENSE-llvm.txt`.
+Binary exponent scaling is implemented in Rust rather than invoking `scalbn`.
+
+Archived Julia PairHop energy expectations remain unchanged and are checked
+using their explicit historical quotient and PairHop-before-Exchange order.
+Production complex PairHop energy is checked independently against native C
+values. This distinction preserves the original oracle without treating its
+different arithmetic as the authoritative C contract.
+
+```sh
+uv run --no-project python scripts/check_interall_complex_c_parity.py
+uv run --no-project python scripts/check_complex_division_c_parity.py
+cargo nextest run -p mvmc-core --test two_body_green -E 'test(normal_complex_interall)'
+cargo nextest run -p mvmc-core --lib -E 'test(scaled_complex_quotients)'
+cargo nextest run -p mvmc-core --cargo-profile test-fast -E 'test(normal_interall_equivalents)'
+```
+
+These probes run Apple clang 17 with `-O0 -ffp-contract=off`, supply one-process
+`MPI_COMM_SELF` plumbing, and exclude RBM. They establish these normal Green
+operators and ordered energy contributions, not complete C initialization,
+FSZ kernels, general Lanczos moments, actual MPI execution or full sampling/SR
+trajectories. Those broader numerical checks remain separate under #23/#56.

@@ -14,6 +14,7 @@
 #![warn(missing_docs)]
 
 pub mod average;
+mod c_complex;
 pub mod c_timer;
 pub mod counter;
 pub mod initial_params;

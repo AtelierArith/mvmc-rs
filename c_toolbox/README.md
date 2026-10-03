@@ -21,6 +21,8 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
+| `interall_complex.c` | Actual complex Green/Pfaffian/projection/overlap kernels, 4,096 operators, four ordered InterAll sums and four PairHop sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_complex_c_parity.py` |
+| `complex_division.c` | Actual compiler complex division: 373 normal/subnormal/range/nonfinite cases; pure Rust scaled quotient port | `uv run --no-project python scripts/check_complex_division_c_parity.py` |
 | `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
@@ -35,6 +37,20 @@ ends before the upstream status print, and the AP header switch block ends at
 `KWOrbitalGeneral`. Driver files hold only the comparison environment and cases.
 The canonical C files are not modified. `.gitattributes` preserves trailing
 whitespace in these verbatim `.inc` excerpts; driver files follow normal checks.
+
+`llvm_divdc3.c` is the original LLVM 17 compiler-rt quotient reference from
+[`llvmorg-17.0.6`](https://github.com/llvm/llvm-project/blob/llvmorg-17.0.6/compiler-rt/lib/builtins/divdc3.c),
+under Apache-2.0 WITH LLVM-exception, with its original notice retained. It is
+not compiled into the probes or Rust. The division probe evaluates the C
+compiler's actual `/` operator, recording both driver/reference SHA-256 hashes
+with the expected fixture. The pure Rust derivative retains its SPDX notice
+and full license in `crates/mvmc-core/LICENSE-llvm.txt`.
+
+Both complex probes use `-O0 -ffp-contract=off`. The Green probe supplies only
+single-process overlap plumbing and disabled RBM stubs that must never execute.
+It checks restoration of the electron buffers and preserves the actual C
+accumulator order, but does not establish full C initialization, sampling/SR,
+FSZ, Lanczos or MPI execution. Details: `tests/fixtures/interall/README.md`.
 
 The InterAll reader driver overallocates bounded comparison storage to observe
 extra-row count errors without overrunning the declared production allocation.
