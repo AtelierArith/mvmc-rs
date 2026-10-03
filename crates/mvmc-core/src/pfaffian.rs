@@ -32,7 +32,7 @@
 use num_complex::Complex64;
 use pfapack::{
     dsktf2, utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real,
-    zsktf2, zsktf2_c_compat, SqMat,
+    zsktf2, zsktf2_c_compat, zsktf2_turbo, SqMat,
 };
 use rayon::prelude::*;
 
@@ -220,6 +220,42 @@ pub fn calc_m_all_complex(
     n_elec: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    calc_m_all_complex_with_kernel::<false>(
+        ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+    )
+}
+
+/// Complex `calculate_m_all` using the operation order from C's `ZSKTRF` path.
+///
+/// This is reserved for C-authoritative numerical paths such as Full Lanczos;
+/// ordinary sampling keeps the Julia-compatible production kernel above.
+pub(crate) fn calc_m_all_complex_c_compat(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m: &mut InvMColMajor<Complex64>,
+    pf_m: &mut [Complex64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    calc_m_all_complex_with_kernel::<true>(
+        ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+    )
+}
+
+fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m: &mut InvMColMajor<Complex64>,
+    pf_m: &mut [Complex64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
     let n_size = 2 * n_elec;
     debug_assert!(qp_start <= qp_end);
     debug_assert!(qp_end <= slater_elm.n_qp_full());
@@ -232,7 +268,7 @@ pub fn calc_m_all_complex(
     if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
-            calc_m_all_child_complex(
+            calc_m_all_child_complex::<C_COMPAT>(
                 qp,
                 ele_idx,
                 slater_elm,
@@ -262,7 +298,7 @@ pub fn calc_m_all_complex(
                 let mut local_inv = InvMColMajor::zeros(end, n_elec);
                 let mut local_pf = vec![Complex64::default(); end];
                 let result = (start..end).try_for_each(|qp| {
-                    calc_m_all_child_complex(
+                    calc_m_all_child_complex::<C_COMPAT>(
                         qp,
                         ele_idx,
                         slater_elm,
@@ -450,7 +486,7 @@ fn calc_m_all_child_real(
     Ok(())
 }
 
-fn calc_m_all_child_complex(
+fn calc_m_all_child_complex<const C_COMPAT: bool>(
     qp: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
@@ -473,8 +509,12 @@ fn calc_m_all_child_complex(
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
-        zsktf2_c_compat(&mut a, &mut ws.pivots[..n_size])
-            .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
+        let result = if C_COMPAT {
+            zsktf2_c_compat(&mut a, &mut ws.pivots[..n_size])
+        } else {
+            zsktf2_turbo(&mut a, &mut ws.pivots[..n_size])
+        };
+        result.map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_complex(&a, &ws.pivots[..n_size])
     };
     if !pf_value.re.is_finite() || !pf_value.im.is_finite() {

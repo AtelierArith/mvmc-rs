@@ -1860,7 +1860,7 @@ fn lanczos_evaluate_moved(
     pool: &crate::state::ThreadedPfaPackWorkspace,
 ) -> Option<Complex64> {
     let calculation = if all_complex {
-        crate::pfaffian::calc_m_all_complex(
+        crate::pfaffian::calc_m_all_complex_c_compat(
             moved_idx,
             &state.slater_matrix.slater_elm,
             &mut state.slater_matrix.inv_m,
@@ -2183,7 +2183,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         moved_cfg[dst] = electron as i64;
 
         if all_complex {
-            let _ = crate::pfaffian::calc_m_all_complex(
+            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
                 &moved_idx,
                 &state.slater_matrix.slater_elm,
                 &mut state.slater_matrix.inv_m,
@@ -2270,7 +2270,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             continue;
         }
         if all_complex {
-            let _ = crate::pfaffian::calc_m_all_complex(
+            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
                 &moved_idx,
                 &state.slater_matrix.slater_elm,
                 &mut state.slater_matrix.inv_m,
