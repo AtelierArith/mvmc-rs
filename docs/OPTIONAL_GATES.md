@@ -145,8 +145,54 @@ with `env -u`. The missing-reference run set `JULIA_MVMC_ROOT` to the absent
 The unsupported ctest result concerns this unchanged harness declaration,
 not a new claim that the production Hamiltonian is unsupported.
 
-MPI-feature-enabled declaration execution and MPI numerical parity are
-**unverified** on this host. No MPI toolchain was installed and no launcher was
-run. The failed build attempts are not test passes or expected test-failure
-evidence. Parent MPI/runtime validation remains separate from this focused
-feature-disabled reporting milestone.
+The initial host MPI builds remain unavailable: no MPI toolchain was installed.
+Those build failures are not test passes or expected test-failure evidence.
+
+### Container MPI-feature declaration checks
+
+The existing container `232f26a94452` compiled and checked source commit
+`3040c72573ea9a726310e84c20aacf6d7273a35b`, copied with `docker cp` into the fresh
+`/tmp/mvmc-issue183-snapshot-2SyKg3/workspace`; no bind-mounted source changed.
+The source archive SHA-256 is
+`35aad874fafa486340341a012f344ebb8de4b19091fc4503c670dd9aceaa0385`.
+The separately copied pinned Julia reference archive SHA-256 is
+`008b0ceaa7731e9b723b2df260d9394c57c6fbe7048f1b185c1ac6ef667b695d`.
+The tested `mpi_physcal.rs` SHA-256 is
+`10820c80e0d46df89418b45334caf325cf11c8ce6f9a0ad2979cc6b989d44292`.
+
+Commands used the existing Rust 1.99.0/MPICH 4.2.0 toolchain, explicit
+`MPICC=/usr/bin/mpicc` and separate named-cache target
+`CARGO_TARGET_DIR=/home/vscode/.cache/mvmc/target/issue183-feature-check`.
+Inherited kache and UV configuration were unchanged. In the snapshot directory:
+
+```sh
+export CARGO_TARGET_DIR=/home/vscode/.cache/mvmc/target/issue183-feature-check
+export MPICC=/usr/bin/mpicc
+cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --features mpi --test mpi_physcal --no-fail-fast --retries 0
+env -u MVMC_RS_MPI_PHYSICAL cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --features mpi --test mpi_physcal --run-ignored only --no-fail-fast --retries 0
+MVMC_RS_MPI_PHYSICAL=1 JULIA_MVMC_ROOT=/tmp/mvmc-issue183-snapshot-2SyKg3/missing-reference-root cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --features mpi --test mpi_physcal --run-ignored only --no-fail-fast --retries 0
+env -u MVMC_RS_MPI_RANK -u MVMC_RS_MPI_SIZE -u OMPI_COMM_WORLD_RANK -u OMPI_COMM_WORLD_SIZE -u PMIX_RANK -u PMIX_SIZE MVMC_RS_MPI_PHYSICAL=1 PMI_RANK=0 PMI_SIZE=1 JULIA_MVMC_ROOT=/tmp/mvmc-issue183-snapshot-2SyKg3/workspace/extern/Julia-mVMC cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --features mpi --test mpi_physcal --run-ignored only --no-fail-fast --retries 0
+```
+
+| MPI-feature reporting case | Exact result |
+| --- | --- |
+| Default (handle 68349) | exit 0: 6 helpers passed, 1 gate skipped |
+| Selector unset (run `0775946e-199f-49fa-9f6f-01cfd1190f8b`) | expected exit 100: 0 passed, 1 NotRun failure, 6 skipped |
+| Selected, missing reference root (run `ae5b8fe0-209a-44c5-88a7-8950b802df9d`) | expected exit 100: 0 passed, 1 MissingFixture failure, 6 skipped |
+| Selected, singleton launcher metadata (run `b8818849-6ac7-48a4-a2ca-66f60e167428`) | expected exit 100: 0 passed, 1 Unsupported failure, 6 skipped |
+
+All three negative probes failed before MPI initialization. The gate also
+checks the actual initialized `MpiContext.world_size()` and rejects values below
+two even when launcher metadata claims multiple ranks; that post-initialization
+branch was compiled, not runtime exercised. Singleton library use remains valid.
+These are compile/feature/gate-metadata checks, **not MPI protocol or numerical
+parity validation**. No MPI launcher, reference executable or numerical body ran.
+Parent MPI/runtime validation remains separate.
+
+After the MPI guard amendment, the default seven-binary reporting rerun
+(handle 7165, source `3040c725`) again passed: 43 passed, 7 skipped, exit 0.
+Container `cargo clippy --locked -p mvmc-core --profile test-fast --features mpi
+--test mpi_physcal -- -D warnings` passed against that same copied source
+(handle 41998, exit 0). Formatting and whitespace checks also passed.
+The full-workspace results above precede this MPI-only guard amendment;
+the amendment's feature-enabled branch was compiled and linted in the container.
