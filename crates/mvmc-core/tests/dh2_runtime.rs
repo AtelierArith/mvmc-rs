@@ -1,4 +1,6 @@
 //! DH2 production support and canonical complex-mode selection.
+#[path = "../../mvmc-expert-parsers/tests/support/historical_component_sequence.rs"]
+mod historical_component_sequence;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 #[path = "../../../tests/support/julia_fixture.rs"]
@@ -27,7 +29,24 @@ fn supported_dh2_sections_pass_runtime_validation_with_or_without_namelist() {
         "empty",
         "replacement",
     ] {
-        let mut data = parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
+        // A repeated archived keyword is component-sequence metadata, not C
+        // loader acceptance. The helper checks duplicate rejection, separately
+        // reads the sections and builds a valid single-keyword final model.
+        let mut data = historical_component_sequence::model(
+            &root.join(format!("namelist_{name}.def")),
+            "DH2",
+            |path| parse_expert_mode_files(path),
+        );
+        // Use the same final single-keyword metadata as the valid loader stage,
+        // not the archived component sequence preserved by the parser helper.
+        let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH2");
+        data.namelist = data
+            .namelist
+            .iter()
+            .enumerate()
+            .filter(|(index, (kind, _))| kind != "DH2" || Some(*index) == final_definition)
+            .map(|(_, entry)| entry.clone())
+            .collect();
         mvmc_core::validation::validate_para_opt(&data).unwrap();
         data.namelist.clear();
         mvmc_core::validation::validate_para_opt(&data).unwrap();

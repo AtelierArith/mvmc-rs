@@ -1,4 +1,6 @@
 //! Canonical strict DH2 table and final projection-layout contracts.
+#[path = "support/historical_component_sequence.rs"]
+mod historical_component_sequence;
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
@@ -147,8 +149,11 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
         "replacement",
     ] {
         assert_eq!(lines.next().unwrap(), name);
-        let mut data =
-            parse_expert_mode_files(root().join(format!("namelist_{name}.def"))).unwrap();
+        let mut data = historical_component_sequence::model(
+            &root().join(format!("namelist_{name}.def")),
+            "DH2",
+            |path| parse_expert_mode_files(path),
+        );
         let layout = data.projection_layout();
         assert_eq!(
             [
