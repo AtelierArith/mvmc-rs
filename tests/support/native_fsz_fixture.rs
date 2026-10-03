@@ -2,6 +2,12 @@
 use std::path::{Path, PathBuf};
 
 pub fn directory(fixtures: &Path) -> Option<PathBuf> {
+    if let Some(arm) = super::julia_fixture::arm_directory(fixtures) {
+        let root = arm.join("c_kernel_order/native_fsz");
+        if root.is_dir() {
+            return Some(root);
+        }
+    }
     let root = fixtures.join("c_kernel_order/native_fsz");
     if cfg!(all(
         target_os = "linux",
@@ -18,13 +24,22 @@ pub fn directory(fixtures: &Path) -> Option<PathBuf> {
 
 pub fn resolve(path: impl AsRef<Path>) -> PathBuf {
     let path = path.as_ref();
-    if path.is_file() {
+    if super::julia_fixture::exists(path) {
         return path.to_path_buf();
     }
     let root = path
         .ancestors()
         .find(|p| p.file_name().is_some_and(|name| name == "native_fsz"))
         .unwrap_or_else(|| panic!("missing reference fixture {}", path.display()));
+    if let Some(fixtures) = root
+        .ancestors()
+        .find(|p| p.file_name().is_some_and(|n| n == "fixtures"))
+    {
+        let canonical = fixtures.join("c_kernel_order/native_fsz");
+        if root != canonical && root.starts_with(fixtures.join("macos_arm_julia")) {
+            return resolve(canonical.join(path.strip_prefix(root).unwrap()));
+        }
+    }
     let key = path.strip_prefix(root).unwrap().to_str().unwrap();
     let manifest = std::fs::read_to_string(root.join("inheritance.tsv")).unwrap();
     let mut entries = manifest

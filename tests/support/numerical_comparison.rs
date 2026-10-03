@@ -4,6 +4,12 @@
 
 use std::fmt::Display;
 
+/// Exact representation except for arithmetic-generated NaNs, whose sign and
+/// payload depend on the CPU. Parsed/copied representations must use equality.
+pub fn arithmetic_bits_match(actual: u64, expected: u64) -> bool {
+    actual == expected || (f64::from_bits(actual).is_nan() && f64::from_bits(expected).is_nan())
+}
+
 /// Componentwise absolute-plus-relative comparison. NaNs match only NaNs;
 /// infinities must have the same sign. Signed zeros are numerically equivalent.
 pub fn within(actual: f64, expected: f64, absolute: f64, relative: f64) -> bool {

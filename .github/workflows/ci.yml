@@ -1,78 +1,105 @@
+# Structure follows tensor4all/tenferro-rs: read-only permissions, cancellation,
+# Rust dependency cache, nextest, and a separate workflow configuration check.
 name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
+  workspace:
+    name: Workspace (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+            arch: X64
+          - os: macos-15
+            platform: macos-arm64
+            arch: ARM64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          submodules: true
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+          submodules: recursive
+      - name: Verify runner architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: test "$RUNNER_ARCH" = "$EXPECTED_ARCH"
+      - name: Install Linux numerical libraries and MPI
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev liblapack-dev libclang-dev libmpich-dev mpich pkg-config
+      - name: Install macOS numerical libraries and MPI
+        if: runner.os == 'macOS'
+        run: |
+          brew install openblas mpich
+          echo "PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          echo "LIBCLANG_PATH=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-
-      - name: Run tests
-        run: cargo test --workspace --all-features
-
-      - name: Run tests (release mode)
-        run: cargo test --workspace --all-features --release
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
         with:
-          submodules: true
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+          shared-key: workspace-${{ matrix.platform }}
+      - uses: taiki-e/install-action@v2
         with:
-          toolchain: stable
-          components: clippy
-
-      - name: Run clippy
-        run: cargo clippy --workspace --all-features -- -D warnings
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: rustfmt
-
+          tool: nextest
+      - name: Record tool and backend versions
+        run: |
+          uname -a
+          rustc -Vv
+          cargo nextest --version
+          pkg-config --modversion openblas
+          mpicc -show
       - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  doc:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
+        run: cargo fmt --all --check
+      - name: Run default workspace tests
+        run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Run all-feature workspace tests
+        run: cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Run documentation tests
+        run: cargo test --workspace --all-features --locked --doc --profile ci
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked --profile ci -- -D warnings
       - name: Build documentation
-        run: cargo doc --workspace --all-features --no-deps
+        run: cargo doc --workspace --all-features --locked --no-deps --profile ci
+      - name: Log target disk usage
+        if: always()
+        run: |
+          du -sh target || true
+          df -h .
+
+  ci-config:
+    name: CI configuration checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Validate workflows
+        run: actionlint

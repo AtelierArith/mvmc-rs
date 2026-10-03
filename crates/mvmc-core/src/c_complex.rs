@@ -42,10 +42,19 @@ pub(crate) fn divide(z: Complex64, w: Complex64) -> Complex64 {
         c = scale(c, -power);
         d = scale(d, -power);
     }
-    let denominator = c * c + d * d;
+    // Native ARM compiler-rt contracts these expressions even when the
+    // calling C translation unit was compiled with -ffp-contract=off.
+    let product_sum = |x: f64, y: f64, z: f64| {
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            x.mul_add(y, z)
+        } else {
+            x * y + z
+        }
+    };
+    let denominator = product_sum(c, c, d * d);
     let mut result = Complex64::new(
-        scale((a * c + b * d) / denominator, -power),
-        scale((b * c - a * d) / denominator, -power),
+        scale(product_sum(a, c, b * d) / denominator, -power),
+        scale(product_sum(b, c, -(a * d)) / denominator, -power),
     );
     if result.re.is_nan() && result.im.is_nan() {
         if denominator == 0.0 && (!a.is_nan() || !b.is_nan()) {
@@ -55,13 +64,16 @@ pub(crate) fn divide(z: Complex64, w: Complex64) -> Complex64 {
             a = f64::from(u8::from(a.is_infinite())).copysign(a);
             b = f64::from(u8::from(b.is_infinite())).copysign(b);
             result = Complex64::new(
-                f64::INFINITY * (a * c + b * d),
-                f64::INFINITY * (b * c - a * d),
+                f64::INFINITY * product_sum(a, c, b * d),
+                f64::INFINITY * product_sum(b, c, -(a * d)),
             );
         } else if magnitude.is_infinite() && a.is_finite() && b.is_finite() {
             c = f64::from(u8::from(c.is_infinite())).copysign(c);
             d = f64::from(u8::from(d.is_infinite())).copysign(d);
-            result = Complex64::new(0.0 * (a * c + b * d), 0.0 * (b * c - a * d));
+            result = Complex64::new(
+                0.0 * product_sum(a, c, b * d),
+                0.0 * product_sum(b, c, -(a * d)),
+            );
         }
     }
     result
@@ -77,7 +89,13 @@ mod tests {
         #[cfg(all(target_os = "linux", target_env = "gnu"))]
         let input =
             include_str!("../../../tests/fixtures/interall/c_complex_division_linux_gnu.txt");
-        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        let input =
+            include_str!("../../../tests/fixtures/interall/c_complex_division_macos_arm.txt");
+        #[cfg(not(any(
+            all(target_os = "linux", target_env = "gnu"),
+            all(target_os = "macos", target_arch = "aarch64")
+        )))]
         let input = include_str!("../../../tests/fixtures/interall/c_complex_division.txt");
         for (case, line) in input
             .lines()

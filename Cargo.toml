@@ -86,6 +86,14 @@ inherits = "test"
 opt-level = 2
 lto = "off"
 
+# Hosted CI follows tenferro-rs: omit debug/symbol artifacts and incremental
+# state. Keep optimized numerical kernels and the test overflow/debug checks.
+[profile.ci]
+inherits = "test-fast"
+debug = 0
+incremental = false
+strip = "symbols"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

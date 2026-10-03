@@ -215,3 +215,35 @@ is a scalar port with the GPL/GCC Runtime Exception notice retained. See
 [Linux numerical contracts](../docs/LINUX_NUMERICAL_CONTRACTS.md) for native
 fixture reproduction and differences from the archived Apple compiler-rt
 contract.
+
+## Julia ILP64 / system LP64 BLAS adapter (#200)
+
+`blas_lp64_reference.c` is authored ABI plumbing, not extracted numerical
+source. It checks each signed 64-bit dimension/increment before conversion
+to a signed 32-bit OpenBLAS argument, forwards unchanged arrays and scalars,
+and widens LAPACK's returned status. It forwards the numerical routines
+unmodified and forces one BLAS thread. Cargo never builds or loads it.
+
+The complete file is the extraction boundary (no upstream numerical body is
+embedded). Compiler flags are `clang -O0 -ffp-contract=off -dynamiclib`, linked
+to the Homebrew system OpenBLAS. Source hashes, compiler/backend versions,
+compiled bridge hashes and independent oracle output hashes are retained in
+`tests/fixtures/macos_arm_julia/`. See
+[Apple Silicon parity](../docs/APPLE_SILICON_PARITY.md) for exact reproduction
+commands and the separate archived-reduction and native FSZ contracts.
+
+## Weighted complex SR accumulation (#200)
+
+`weighted_oo.c` embeds `calculateOO` verbatim from
+`extern/mVMC-1.3.0/src/mVMC/vmccal.c`, lines 769–794. Its header records the
+upstream SHA-256 and compiler command. The only harness additions supply
+weighted large, tiny and ordinary operands and print their binary values.
+Compile and generate independently:
+
+```sh
+clang -O0 -ffp-contract=off -Wno-unknown-pragmas c_toolbox/weighted_oo.c -o /tmp/weighted-oo
+/tmp/weighted-oo
+```
+
+The checked-in output is `tests/fixtures/sr_direct/c_weighted_oo.txt`;
+Rust tests read that fixture without compiling or invoking C.

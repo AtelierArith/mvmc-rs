@@ -252,7 +252,10 @@ pub fn calculate_oo(
     }
     for i in 2..size_2 {
         for j in 0..size_2 {
-            sr_opt_oo[i * size_2 + j] += sr_opt_o[j] * sr_opt_o[i].conj() * w;
+            // C vmccal.c:788 and Julia scale O[j] before the complex product.
+            // Reassociating the weight changes rounding for non-unit weights
+            // and can amplify into a different SR optimization trajectory.
+            sr_opt_oo[i * size_2 + j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
         }
     }
 }
@@ -2926,6 +2929,52 @@ mod tests {
         let e = calculate_hamiltonian_diagonal(&ele_num, &data);
         assert!((e.re - 4.0).abs() < 1e-15);
         assert!(e.im.abs() < 1e-15);
+    }
+
+    #[test]
+    fn complex_sr_scales_weight_before_products_like_native_c() {
+        let fixture = include_str!("../../../tests/fixtures/sr_direct/c_weighted_oo.txt");
+        let lines: Vec<_> = fixture
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .collect();
+        let parse = |line: &str| -> Vec<Complex64> {
+            let values: Vec<_> = line
+                .split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect();
+            values
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|v| Complex64::new(v[0], v[1]))
+                .collect()
+        };
+        assert_eq!(lines.len(), 12);
+        for (case, rows) in lines.as_chunks::<4>().0.iter().enumerate() {
+            let weight = parse(rows[0])[0].re;
+            let input = parse(rows[1]);
+            let mut oo = vec![Complex64::default(); 16];
+            let mut ho = vec![Complex64::default(); 4];
+            calculate_oo(&mut oo, &mut ho, &input, weight, Complex64::default(), 2);
+            let components = |v: Vec<Complex64>| v.into_iter().flat_map(|z| [z.re, z.im]);
+            // Three products/additions per component; zero absolute allowance
+            // also rejects the old underflowed zero and overflowed infinity.
+            crate::numerical_comparison::assert_values_close(
+                components(oo),
+                components(parse(rows[2])),
+                0.0,
+                32.0 * f64::EPSILON,
+                format!("native C weighted OO case {case}"),
+            );
+            crate::numerical_comparison::assert_values_close(
+                components(ho),
+                components(parse(rows[3])),
+                0.0,
+                32.0 * f64::EPSILON,
+                format!("native C weighted HO case {case}"),
+            );
+        }
     }
 
     #[test]

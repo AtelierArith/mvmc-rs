@@ -2,6 +2,27 @@
 mod comparison;
 
 #[test]
+fn arithmetic_nan_bits_are_portable_without_relaxing_literal_bits() {
+    assert!(comparison::arithmetic_bits_match(
+        0x7ff8000000000000,
+        0xfff8000000000000
+    ));
+    assert!(comparison::arithmetic_bits_match(
+        0x7ff8000000000042,
+        0x7ff8000000000000
+    ));
+    assert!(!comparison::arithmetic_bits_match(
+        0x7ff8000000000000,
+        0x7ff0000000000000
+    ));
+    assert!(!comparison::arithmetic_bits_match(0, 1 << 63));
+    assert!(!comparison::arithmetic_bits_match(
+        1.0_f64.to_bits(),
+        1.0000000000000002_f64.to_bits()
+    ));
+}
+
+#[test]
 fn portable_comparison_handles_scale_zero_and_nonfinite_values() {
     use comparison::within;
     assert!(within(
