@@ -36,9 +36,37 @@ references, not values reconstructed from Rust's normalized outputs.
 
 Normal Rust tests read these fixtures only. The actual runner's recording
 reducer compares raw energy and already-normalized Green arrays to independent
-Julia and native C results. Actual raw Green runner snapshots await the
-runner owner's read-only observer; these native kernel fixtures alone do not
-claim that missing boundary was observed.
+Julia and native C results. The same two-sample test now installs the public
+read-only Green observer and compares actual serial pre-division weight and
+all three ordered Green arrays to `two-samples/*/accumulated-{0,1}` for all
+nine models. This is actual runner observation, not a second sampler or
+fixture-fed averaging replay; it does not claim globally reduced MPI raw
+arrays or full native C sampling. The observer's separate normal/FSZ identity
+tests verify that observation preserves outputs, configuration and RNG.
+
+## Fresh bounded serial runner verification
+
+On committed source77ac9976, parent fresh run
+`a9efb626-781d-4783-b229-69d9dce6dd57` terminal0:1PASS,43 unselected,0.792s.
+Exact command:
+
+```sh
+cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test physcal_issue181 -E 'test(two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs)' --no-fail-fast --retries 0
+```
+
+Parent confirmed the actual public read-only serial raw observer and all nine
+models/two frames in this ONE named test. Test SHA256
+`fc39e4901470b13650bf31e11cead4c821730d1c32b4affeb789c4a5e8798b60`;
+run.rs SHA256 `af5204754499721f75667ae20df8e802ef8c220f24a0a515a159d92131563a6e`.
+Working-file hashes and `git show 77ac9976:` hashes were independently checked
+equal during this documentation handoff. Only these selected production/test
+files were matched to committed hashes. The shared checkout includes dirty
+harness/support files, including support/ctest_provenance.rs; no complete
+compiler-input closure was captured or verified. No production or fixture
+changes here, no fresh C/Julia acquisition, no numerical-bound change.
+Historical raw-observer and separate identity runs retain their own versions;
+this fresh selection does not rerun those separate identity tests, every #181
+case, globally reduced MPI raw arrays, native macOS or full native C sampling.
 
 This satisfies independent C normalization-contract verification, not full
 native C composed-input sampling. The latter is stronger optional evidence,
