@@ -66,6 +66,110 @@ fn collective_result<T, R: Reducer + ?Sized>(
 /// valid seed, and negative ModPara seeds request the current Unix time.
 pub const FALLBACK_SEED: i64 = 11272;
 
+/// Borrowed local PhysCal accumulation immediately before Green normalization.
+/// This is not a globally reduced mean; MPI callers observe each rank separately.
+pub struct PhysCalGreenView<'a> {
+    /// Actual fixed-parameter input, including the ordered Green descriptors.
+    pub data: &'a ExpertModeData,
+    /// Zero-based completed measurement-frame index.
+    pub sample: usize,
+    /// Whether the General/FSZ measurement path was used.
+    pub use_fsz: bool,
+    /// Actual local accumulated correlation-sampling weight before averaging.
+    pub weight: Complex64,
+    /// Raw ordered one-body sums, before division by the weight.
+    pub one_body: &'a [Complex64],
+    /// Raw factored two-body sums, in descriptor order.
+    pub factored_two_body: &'a [Complex64],
+    /// Raw direct two-body sums, in descriptor order.
+    pub direct_two_body: &'a [Complex64],
+}
+
+/// Read-only diagnostic observation of the actual production accumulation.
+pub trait PhysCalGreenObserver {
+    /// Actual saved chain and nonconsuming RNG immediately after sampling,
+    /// before measurement changes matrix/configuration scratch. No replay.
+    fn sample_completed(
+        &self,
+        _data: &ExpertModeData,
+        _sample: usize,
+        _state: &VmcOptimizationState,
+        _rng: &Sfmt19937Rng,
+    ) {
+    }
+    /// Observe the borrowed actual buffers without mutating runner state or RNG.
+    fn accumulated(&self, view: PhysCalGreenView<'_>);
+}
+
+thread_local! {
+    static PHYSCAL_GREEN_OBSERVER: std::cell::RefCell<Option<std::rc::Rc<dyn PhysCalGreenObserver>>> = const { std::cell::RefCell::new(None) };
+    static PHYSCAL_GREEN_SAMPLE: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// Thread-bound scope; dropping it also clears observation during unwinding.
+pub struct PhysCalGreenObserverGuard {
+    _thread_bound: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+/// Install an observer on the calling thread. Nested scopes are rejected.
+/// Disabled observation does not allocate or copy numerical buffers.
+pub fn install_physcal_green_observer(
+    observer: std::rc::Rc<dyn PhysCalGreenObserver>,
+) -> Result<PhysCalGreenObserverGuard, &'static str> {
+    PHYSCAL_GREEN_OBSERVER.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_some() {
+            return Err("PhysCal Green observer already active on this thread");
+        }
+        *slot = Some(observer);
+        Ok(PhysCalGreenObserverGuard {
+            _thread_bound: std::marker::PhantomData,
+        })
+    })
+}
+
+impl Drop for PhysCalGreenObserverGuard {
+    fn drop(&mut self) {
+        PHYSCAL_GREEN_OBSERVER.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+
+fn with_physcal_green_sample<T>(sample: usize, operation: impl FnOnce() -> T) -> T {
+    struct Restore(Option<usize>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            PHYSCAL_GREEN_SAMPLE.with(|slot| slot.set(self.0));
+        }
+    }
+    let _restore = Restore(PHYSCAL_GREEN_SAMPLE.with(|slot| slot.replace(Some(sample))));
+    operation()
+}
+
+fn observe_physcal_green(data: &ExpertModeData, state: &VmcOptimizationState, use_fsz: bool) {
+    if data.modpara.vmc_calc_mode != 1 {
+        return;
+    }
+    let Some(sample) = PHYSCAL_GREEN_SAMPLE.with(std::cell::Cell::get) else {
+        return;
+    };
+    PHYSCAL_GREEN_OBSERVER.with(|slot| {
+        // Clone only the observer handle, never the numerical data. Release the
+        // TLS borrow before invoking user diagnostics so nested installs reject cleanly.
+        let observer = slot.borrow().clone();
+        if let (Some(observer), Some(phys)) = (observer, state.phys_quantities.as_ref()) {
+            observer.accumulated(PhysCalGreenView {
+                data,
+                sample,
+                use_fsz,
+                weight: state.energy.wc,
+                one_body: &phys.phys_cis_ajs,
+                factored_two_body: &phys.phys_cis_ajs_ckt_alt,
+                direct_two_body: &phys.phys_cis_ajs_ckt_alt_dc,
+            });
+        }
+    });
+}
+
 /// Per-step callback; errors propagate to the caller like Julia exceptions.
 /// Arguments are zero-based step, post-sync parameters, measured energy and status.
 pub type StepCallback<'a> =
@@ -401,15 +505,23 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
         if use_fsz && !all_complex {
             sync_real_fsz_shadow(state);
         }
+        PHYSCAL_GREEN_OBSERVER.with(|slot| {
+            let observer = slot.borrow().clone();
+            if let Some(observer) = observer {
+                observer.sample_completed(data, sample, state, rng);
+            }
+        });
         clear_phys_quantity(state);
-        accumulate_observables(
-            data,
-            state,
-            all_complex,
-            use_fsz,
-            &mut CTimer::<false>::new(),
-            reducer,
-        );
+        with_physcal_green_sample(sample, || {
+            accumulate_observables(
+                data,
+                state,
+                all_complex,
+                use_fsz,
+                &mut CTimer::<false>::new(),
+                reducer,
+            );
+        });
         reduce_accumulators(state, reducer, all_complex);
         weight_average_we(state);
         average_physcal_rank_contributions(state, reducer);
@@ -2408,6 +2520,7 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
         }
         timer.stop(43);
     }
+    observe_physcal_green(data, state, use_fsz);
     if let Some(phys) = state.phys_quantities.as_mut() {
         let count = state.energy.wc.re;
         if count != 0.0 {
@@ -2575,7 +2688,12 @@ mod callback_tests {
             } else {
                 julia_fixture::fixture_path(fixtures, relative)
             };
-            fs::read_to_string(path).unwrap()
+            julia_fixture::read_text(&path).unwrap_or_else(|error| {
+                panic!(
+                    "{case} history prefix{step} {suffix} at {}: {error}",
+                    path.display()
+                )
+            })
         };
         // Independent prefix records contain DH slots omitted by the old
         // history observer. They are not reconstructed from the Rust run.
@@ -4019,6 +4137,63 @@ mod callback_tests {
         check_sr_prefixes("rbm_reference_cmp", true, 0);
     }
 
+    #[derive(Default)]
+    struct RunnerCgDiagnostics(std::cell::RefCell<String>);
+
+    impl RunnerCgDiagnostics {
+        fn values(&self, label: &str, values: &[f64]) {
+            use std::fmt::Write;
+            let mut text = self.0.borrow_mut();
+            writeln!(text, "{label} {}", values.len()).unwrap();
+            for value in values {
+                write!(text, "{value:.17e} ").unwrap();
+            }
+            text.push('\n');
+        }
+    }
+
+    impl crate::sr_cg::CgObserver for RunnerCgDiagnostics {
+        fn prepared(
+            &self,
+            mapping: &[usize],
+            op: &crate::sr_cg::SampledSrOperator,
+            gradient: &[f64],
+        ) {
+            self.0
+                .borrow_mut()
+                .push_str(&format!("mapping {mapping:?}\n"));
+            for (name, values) in [
+                ("mean", &op.mean),
+                ("diagonal", &op.diagonal),
+                ("real_samples", &op.real_samples),
+                ("imag_samples", &op.imag_samples),
+            ] {
+                self.values(name, values);
+            }
+            self.values("gradient", gradient);
+        }
+        fn product(&self, phase: crate::sr_cg::CgProductPhase, search: &[f64], product: &[f64]) {
+            self.values(&format!("{phase:?}-search"), search);
+            self.values(&format!("{phase:?}-product"), product);
+        }
+        fn iteration(&self, state: crate::sr_cg::CgIterationView<'_>) {
+            self.0.borrow_mut().push_str(&format!(
+                "iteration={} delta={:.17e} alpha={:?}\n",
+                state.iteration, state.delta, state.alpha
+            ));
+            self.values("solution", state.solution);
+            self.values("residual", state.residual);
+            self.values("direction", state.direction);
+        }
+        fn finished(&self, result: &crate::sr_cg::CgSolution) {
+            self.0
+                .borrow_mut()
+                .push_str(&format!("finished iterations={}\n", result.iterations));
+            self.values("final-solution", &result.solution);
+            self.values("final-residual", &result.residual);
+        }
+    }
+
     fn assert_sampling_checkpoint(
         case: &str,
         steps: i64,
@@ -4290,6 +4465,14 @@ mod callback_tests {
                 rbm_before_sr.push(data.rbm_params.clone());
                 Ok(())
             };
+            // Optional diagnostics retain ACTUAL operands/events before a
+            // failing forward assertion. Never used as regenerated expectations.
+            let diagnostic =
+                (cg && steps == 1 && std::env::var_os("MVMC_CG_DIAGNOSTICS").is_some())
+                    .then(|| std::rc::Rc::new(RunnerCgDiagnostics::default()));
+            let diagnostic_guard = diagnostic
+                .as_ref()
+                .map(|observer| crate::sr_cg::install_cg_observer(observer.clone()).unwrap());
             let result = vmc_para_opt(
                 &mut data,
                 &mut state,
@@ -4301,6 +4484,15 @@ mod callback_tests {
                     ..OptimizationOptions::default()
                 },
             );
+            drop(diagnostic_guard);
+            if let Some(diagnostic) = diagnostic {
+                let path = dir.with_extension("cg-diagnostics.txt");
+                let mut text = format!("case={case} steps={steps} store={store} seed={} flags={:?}\ninitial_rng={initial_rng:?}\nfinal_rng={rng:?}\nweight={:?} result={result:?}\n",
+                    initial_data.modpara.rnd_seed, initial_data.optimization_flags, state.energy.wc);
+                text.push_str(&diagnostic.0.borrow());
+                fs::write(&path, text).unwrap();
+                eprintln!("ACTUAL CG diagnostic: {}", path.display());
+            }
             if steps > 10 {
                 if case != "rbm_fsz" && !case.starts_with("opt_") {
                     assert!(result.is_ok(), "{case} {steps}: {result:?}");
@@ -5227,5 +5419,179 @@ mod callback_tests {
             fs::remove_dir_all(direct_dir).unwrap();
             fs::remove_dir_all(stored_dir).unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod physcal_green_observer_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct RawFrame {
+        sample: usize,
+        weight: Complex64,
+        one_body: Vec<Complex64>,
+    }
+    #[derive(Default)]
+    struct Capture(RefCell<Vec<RawFrame>>);
+    impl PhysCalGreenObserver for Capture {
+        fn accumulated(&self, view: PhysCalGreenView<'_>) {
+            assert_eq!(view.data.modpara.vmc_calc_mode, 1);
+            self.0.borrow_mut().push(RawFrame {
+                sample: view.sample,
+                weight: view.weight,
+                one_body: view.one_body.to_vec(),
+            });
+        }
+    }
+
+    #[test]
+    fn physcal_green_observer_nested_scope_and_unwind_cleanup() {
+        let outer = install_physcal_green_observer(Rc::new(Capture::default())).unwrap();
+        assert!(install_physcal_green_observer(Rc::new(Capture::default())).is_err());
+        std::thread::spawn(|| {
+            let _guard = install_physcal_green_observer(Rc::new(Capture::default())).unwrap();
+        })
+        .join()
+        .unwrap();
+        drop(outer);
+        let result = std::panic::catch_unwind(|| {
+            let _guard = install_physcal_green_observer(Rc::new(Capture::default())).unwrap();
+            with_physcal_green_sample(9, || panic!("intentional observer scope unwind"));
+        });
+        assert!(result.is_err());
+        assert_eq!(PHYSCAL_GREEN_SAMPLE.with(std::cell::Cell::get), None);
+        let _guard = install_physcal_green_observer(Rc::new(Capture::default())).unwrap();
+    }
+
+    #[test]
+    fn physcal_green_observer_actual_runner_identity_and_raw_boundary() {
+        check_runner_identity("heisenberg_chain_real");
+    }
+
+    #[test]
+    fn physcal_green_observer_fsz_runner_identity_and_raw_boundary() {
+        check_runner_identity("heisenberg_chain_fsz");
+    }
+
+    fn check_runner_identity(case: &str) {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "../../extern/Julia-mVMC/test/integration/reference/{case}/physcal_ref/inputs/namelist.def"));
+        let prepare = || {
+            let mut prepared = prepare_phys_cal_from_namelist(
+                &path,
+                path.parent().unwrap().parent().unwrap().join("zqp_opt.dat"),
+                "real",
+                Some(1),
+            )
+            .unwrap();
+            prepared.data.modpara.n_data_qty_smp = 2;
+            prepared
+        };
+        let baseline_dir = fresh_output_directory().unwrap();
+        let observed_dir = fresh_output_directory().unwrap();
+        let before = std::time::Instant::now();
+        let baseline = vmc_phys_cal_to_dir(prepare(), &baseline_dir).unwrap();
+        let disabled_elapsed = before.elapsed();
+        let capture = Rc::new(Capture::default());
+        let guard = install_physcal_green_observer(capture.clone()).unwrap();
+        let before = std::time::Instant::now();
+        let observed = vmc_phys_cal_to_dir(prepare(), &observed_dir).unwrap();
+        let enabled_elapsed = before.elapsed();
+        drop(guard);
+        eprintln!("PhysCal observational timing only: disabled={disabled_elapsed:?} enabled={enabled_elapsed:?}");
+        assert_eq!(baseline.data.slater_params, observed.data.slater_params);
+        assert_eq!(baseline.state.energy, observed.state.energy);
+        assert_eq!(
+            baseline.state.phys_quantities,
+            observed.state.phys_quantities
+        );
+        assert_eq!(
+            baseline.state.electron_config,
+            observed.state.electron_config
+        );
+        assert_eq!(
+            observed.data.i_flg_orbital_general != 0,
+            case.ends_with("fsz")
+        );
+        let mut baseline_rng = baseline.final_rng;
+        let mut observed_rng = observed.final_rng;
+        assert_eq!(baseline_rng.words_consumed(), observed_rng.words_consumed());
+        // Debug includes all internal SFMT words, current index and draw count.
+        // Compare before peeking/consuming any future word.
+        assert_eq!(format!("{baseline_rng:?}"), format!("{observed_rng:?}"));
+        for word in 0..624 {
+            assert_eq!(
+                baseline_rng.gen_rand32(),
+                observed_rng.gen_rand32(),
+                "observer RNG word{word}"
+            );
+        }
+        let rows = capture.0.borrow();
+        assert_eq!(
+            rows.iter().map(|row| row.sample).collect::<Vec<_>>(),
+            [0, 1]
+        );
+        let weight = rows[1].weight;
+        let raw = &rows[1].one_body;
+        assert!(weight.re > 0.0);
+        let normalized = &observed
+            .state
+            .phys_quantities
+            .as_ref()
+            .unwrap()
+            .phys_cis_ajs;
+        assert_eq!(raw.len(), normalized.len());
+        assert!(!raw.is_empty());
+        for (raw, normalized) in raw.iter().zip(normalized) {
+            assert_eq!(*raw / Complex64::new(weight.re, 0.0), *normalized);
+        }
+        let files = |directory: &Path| {
+            let mut files: Vec<_> = fs::read_dir(directory)
+                .unwrap()
+                .map(|entry| {
+                    let entry = entry.unwrap();
+                    (entry.file_name(), fs::read(entry.path()).unwrap())
+                })
+                .collect();
+            files.sort();
+            files
+        };
+        assert_eq!(files(&baseline_dir), files(&observed_dir));
+        fs::remove_dir_all(baseline_dir).unwrap();
+        fs::remove_dir_all(observed_dir).unwrap();
+    }
+
+    #[test]
+    fn physcal_green_observer_does_not_attribute_optimization_to_outer_sample() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
+        let mut data = parse_expert_mode_files(&path).unwrap();
+        let mut rng = Sfmt19937Rng::new(1);
+        init_parameter(&mut data, &mut rng);
+        read_input_parameters(&mut data, &path).unwrap();
+        sync_modified_parameter(&mut data, true);
+        init_qp_weight(&mut data);
+        data.modpara.vmc_calc_mode = 1;
+        let mut state = state_from_data(&data);
+        assert!(state.phys_quantities.is_some());
+        data.modpara.vmc_calc_mode = 0;
+        data.modpara.nsr_opt_itr_step = 1;
+        data.modpara.nsr_opt_itr_smp = 1;
+        let capture = Rc::new(Capture::default());
+        let _guard = install_physcal_green_observer(capture.clone()).unwrap();
+        with_physcal_green_sample(7, || {
+            vmc_para_opt(
+                &mut data,
+                &mut state,
+                &mut rng,
+                None,
+                &SingleProcessReducer,
+                OptimizationOptions::default(),
+            )
+        })
+        .unwrap();
+        assert!(capture.0.borrow().is_empty());
     }
 }

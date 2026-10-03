@@ -5,6 +5,29 @@ mod julia_fixture;
 mod numerical_comparison;
 use mvmc_core::sr_cg::{sequential_dot, SampledSrOperator};
 
+#[derive(Default)]
+struct FixedCgDiagnostic(std::cell::RefCell<String>);
+impl mvmc_core::sr_cg::CgObserver for FixedCgDiagnostic {
+    fn product(&self, phase: mvmc_core::sr_cg::CgProductPhase, x: &[f64], z: &[f64]) {
+        use std::fmt::Write;
+        writeln!(self.0.borrow_mut(), "{phase:?} search={x:?} product={z:?}").unwrap();
+    }
+    fn iteration(&self, state: mvmc_core::sr_cg::CgIterationView<'_>) {
+        use std::fmt::Write;
+        writeln!(
+            self.0.borrow_mut(),
+            "iteration={} delta={:.17e} alpha={:?} solution={:?} residual={:?} direction={:?}",
+            state.iteration,
+            state.delta,
+            state.alpha,
+            state.solution,
+            state.residual,
+            state.direction
+        )
+        .unwrap();
+    }
+}
+
 #[test]
 fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
     use mvmc_core::{ExpertModeData, VmcOptimizationState};
@@ -337,7 +360,25 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
                 n,
                 "{name} limit {limit}: direction width"
             );
+            let diagnostic = std::env::var_os("MVMC_CG_DIAGNOSTICS")
+                .map(|_| std::rc::Rc::new(FixedCgDiagnostic::default()));
+            let guard = diagnostic
+                .as_ref()
+                .map(|observer| mvmc_core::sr_cg::install_cg_observer(observer.clone()).unwrap());
             let result = op.solve(&g, 1.0 / samples as f64, 1e-5, 0.0, limit);
+            drop(guard);
+            if let Some(diagnostic) = diagnostic {
+                let path = std::env::temp_dir().join(format!(
+                    "mvmc-cg-fixed-{}-{}-{limit}.txt",
+                    std::process::id(),
+                    name.replace(' ', "_")
+                ));
+                let mut text = format!("n={n} samples={samples} complex={complex} limit={limit} shift=1e-5 tolerance=0 inv_weight={:?}\nmean={:?}\ndiagonal={:?}\nreal_samples={:?}\nimag_samples={:?}\ngradient={g:?}\nexpected_solution={expected:?}\nexpected_residual={expected_residual:?}\nexpected_direction={expected_direction:?}\ncovariance={covariance:?}\n",
+                    1.0 / samples as f64, op.mean, op.diagonal, op.real_samples, op.imag_samples);
+                text.push_str(&diagnostic.0.borrow());
+                std::fs::write(&path, text).unwrap();
+                eprintln!("ACTUAL fixed CG diagnostic: {}", path.display());
+            }
             assert_eq!(
                 result.solution.len(),
                 n,

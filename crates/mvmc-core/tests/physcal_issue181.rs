@@ -1055,6 +1055,11 @@ fn assert_rng_at(fixture: &Path, label: &str, rng: &sfmt19937::Sfmt19937Rng) {
     let count = reference_integers(&fixture.join("draw-count.txt"));
     assert_eq!(count.len(), 1);
     assert!(count[0] >= 0);
+    assert_eq!(
+        rng.words_consumed(),
+        count[0] as u128,
+        "{label} actual primitive draw count"
+    );
     // Validate the independent reference's documented position from seed 1,
     // then check the actual sampler position without advancing its RNG.
     let mut position = sfmt19937::Sfmt19937Rng::new(1);
@@ -1518,8 +1523,183 @@ fn duplicate_one_body_with_gex_matches_native_c_canonical_layout_fixture() {
     }
 }
 
+// Optional failed-test stderr artifact. This is a measurement-only diagnostic
+// replay on private clones of the actual saved frame, NOT production observation
+// of individual additions, an independent oracle, or a second sampler.
+fn fsz_measurement_diagnostic(
+    data: &mvmc_expert_parsers::ExpertModeData,
+    actual: &mvmc_core::VmcOptimizationState,
+    rng: &sfmt19937::Sfmt19937Rng,
+    frame: usize,
+) {
+    use mvmc_core::observables::{calculate_ip_complex, calculate_local_energy_fsz};
+    use num_complex::Complex64;
+    let mut peek = rng.clone();
+    let next = (0..624).map(|_| peek.gen_rand32()).collect::<Vec<_>>();
+    eprintln!(
+        "FSZ181 frame={frame} scope=private-measurement-replay cfg={:?} count={} next624={next:?}",
+        actual.electron_config,
+        rng.words_consumed()
+    );
+    if !mvmc_core::get_all_complex_flag(data) || data.has_rbm_terms() {
+        eprintln!(
+            "FSZ181 unsupported replay mode: only native complex/no-RBM; no production changes"
+        );
+        return;
+    }
+    let ns = data.modpara.nsite as usize;
+    let ne = data.modpara.nelec as usize;
+    let nq = actual.slater_matrix.pf_m.len();
+    let mut state = mvmc_core::VmcOptimizationState::zeros(
+        ns,
+        ne,
+        data.projection_layout().n_proj,
+        data.count_variational_parameters(),
+        nq,
+        data.modpara.nvmc_sample as usize,
+        true,
+        true,
+    );
+    // Only the actual Slater input plane is needed; inverse/Pfaffian and
+    // observable scratch are independently allocated and rebuilt below.
+    state.slater_matrix.slater_elm = actual.slater_matrix.slater_elm.clone();
+    let pool = mvmc_core::state::ThreadedPfaPackWorkspace::new(2 * ne, 1);
+    let mut empty = data.clone();
+    empty.coulomb_intra_terms.clear();
+    empty.coulomb_inter_terms.clear();
+    empty.hund_terms.clear();
+    empty.transfer_terms.clear();
+    empty.pair_hop_terms.clear();
+    empty.exchange_terms.clear();
+    empty.inter_all_terms.clear();
+    let mut sum = Complex64::new(0.0, 0.0);
+    let mut sum_abs_im = 0.0;
+    for walker in 0..data.modpara.nvmc_sample as usize {
+        let cfg = &actual.electron_config;
+        let idx = cfg.ele_idx_slice(walker);
+        let spins = cfg.ele_spn_slice(walker);
+        if idx.iter().all(|&x| x == 0) || idx.iter().all(|&x| x < 0) {
+            eprintln!("FSZ181 frame={frame} walker={walker} skipped=empty-config");
+            continue;
+        }
+        let result = mvmc_core::pfaffian::calc_m_all_fsz_complex(
+            idx,
+            spins,
+            &state.slater_matrix.slater_elm,
+            &mut state.slater_matrix.inv_m,
+            &mut state.slater_matrix.pf_m,
+            0,
+            nq,
+            ns,
+            ne,
+            &pool,
+        );
+        if let Err(error) = result {
+            eprintln!("FSZ181 frame={frame} walker={walker} refresh-error={error:?}");
+            continue;
+        }
+        let ip = calculate_ip_complex(&state.slater_matrix.pf_m, 0, nq, data);
+        eprintln!(
+            "FSZ181 frame={frame} walker={walker} ip={ip:?} pf={:?} qp_weights={:?}",
+            state.slater_matrix.pf_m, data.qp_weights
+        );
+        for qp in 0..nq {
+            eprintln!(
+                "FSZ181 frame={frame} walker={walker} qp={qp} inverse={:?}",
+                state.slater_matrix.inv_m.qp_matrix_slice(qp)
+            );
+        }
+        if ip.norm() < 1e-100 {
+            eprintln!("FSZ181 frame={frame} walker={walker} skipped=tiny-ip");
+            continue;
+        }
+        let mut evaluate = |input: &mvmc_expert_parsers::ExpertModeData| {
+            calculate_local_energy_fsz(
+                ip,
+                input,
+                &mut state,
+                idx,
+                cfg.ele_cfg_slice(walker),
+                cfg.ele_num_slice(walker),
+                cfg.ele_proj_cnt_slice(walker),
+                spins,
+            )
+        };
+        let full = evaluate(data);
+        let mut reconstructed = Complex64::new(0.0, 0.0);
+        macro_rules! contributions {
+            ($field:ident) => {
+                for (term_index, term) in data.$field.iter().enumerate() {
+                    let mut isolated = empty.clone();
+                    isolated.$field.push(term.clone());
+                    let contribution = evaluate(&isolated);
+                    sum_abs_im += contribution.im.abs();
+                    reconstructed += contribution;
+                    eprintln!("FSZ181 frame={frame} walker={walker} family={} term={term_index} operands={term:?} isolated_contribution={contribution:?} reconstructed={reconstructed:?}", stringify!($field));
+                }
+            };
+        }
+        contributions!(coulomb_intra_terms);
+        contributions!(coulomb_inter_terms);
+        contributions!(hund_terms);
+        contributions!(transfer_terms);
+        contributions!(pair_hop_terms);
+        contributions!(exchange_terms);
+        contributions!(inter_all_terms);
+        sum += full;
+        eprintln!("FSZ181 frame={frame} walker={walker} full_local={full:?} isolated_sum={reconstructed:?} sum={sum:?} sum_abs_im={sum_abs_im:.17e}");
+    }
+    eprintln!("FSZ181 frame={frame} replay_sum={sum:?} sum_abs_im={sum_abs_im:.17e}; not an oracle or tolerance justification");
+}
+
 #[test]
 fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
+    struct RawGreenFrame {
+        sample: usize,
+        use_fsz: bool,
+        weight: num_complex::Complex64,
+        arrays: [Vec<num_complex::Complex64>; 3],
+    }
+    struct RawGreenCapture {
+        frames: std::cell::RefCell<Vec<RawGreenFrame>>,
+        completed: std::cell::RefCell<Vec<usize>>,
+        fixture: PathBuf,
+        label: &'static str,
+    }
+    impl mvmc_core::run::PhysCalGreenObserver for RawGreenCapture {
+        fn sample_completed(
+            &self,
+            data: &mvmc_expert_parsers::ExpertModeData,
+            sample: usize,
+            state: &mvmc_core::VmcOptimizationState,
+            rng: &sfmt19937::Sfmt19937Rng,
+        ) {
+            // Actual production sampler boundary; all discrete assertions
+            // precede measurement and therefore any numerical failure.
+            let stage = self.fixture.join(format!("sample-{sample}"));
+            let label = format!("{} sample {sample}", self.label);
+            assert_saved_trajectory_at(&stage, &label, state);
+            assert_rng_at(&stage, &label, rng);
+            if self.label == "heisenberg_chain_fsz"
+                && std::env::var("MVMC_PHYSCAL181_FSZ_DIAGNOSTIC").as_deref() == Ok("1")
+            {
+                fsz_measurement_diagnostic(data, state, rng, sample);
+            }
+            self.completed.borrow_mut().push(sample);
+        }
+        fn accumulated(&self, view: mvmc_core::run::PhysCalGreenView<'_>) {
+            self.frames.borrow_mut().push(RawGreenFrame {
+                sample: view.sample,
+                use_fsz: view.use_fsz,
+                weight: view.weight,
+                arrays: [
+                    view.one_body.to_vec(),
+                    view.factored_two_body.to_vec(),
+                    view.direct_two_body.to_vec(),
+                ],
+            });
+        }
+    }
     #[derive(Default)]
     struct RecordingReducer(std::cell::RefCell<Vec<Vec<num_complex::Complex64>>>);
     impl mvmc_core::Reducer for RecordingReducer {
@@ -1560,6 +1740,7 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
         let before = fixed_values(&preparation.data);
         let flags = preparation.data.optimization_flags.clone();
         let lanczos_mode = preparation.data.modpara.lanczos_mode;
+        let use_fsz = preparation.data.i_flg_orbital_general != 0;
         let complex_sr_calls = if mvmc_core::get_all_complex_flag(&preparation.data) {
             2
         } else {
@@ -1567,9 +1748,20 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
         };
         let out = output_dir("two-independent-frames", model.name);
         let reducer = RecordingReducer::default();
+        let raw_green = std::rc::Rc::new(RawGreenCapture {
+            frames: std::cell::RefCell::new(Vec::new()),
+            completed: std::cell::RefCell::new(Vec::new()),
+            fixture: fixture.clone(),
+            label: model.name,
+        });
+        let observer = mvmc_core::run::install_physcal_green_observer(raw_green.clone()).unwrap();
         let result =
             mvmc_core::vmc_phys_cal_with_reducer(preparation, Some(&out), &reducer).unwrap();
+        drop(observer);
         assert_eq!(result.iterations, 2);
+        assert_eq!(*raw_green.completed.borrow(), [0, 1]);
+        // Check discrete/fixed contracts before any numerical comparison, so a
+        // floating-point failure cannot hide a configuration or RNG mismatch.
         assert_eq!(
             fixed_values(&result.data),
             before,
@@ -1583,6 +1775,50 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
         );
         assert_saved_trajectory_at(&fixture.join("sample-1"), model.name, &result.state);
         assert_rng_at(&fixture.join("sample-1"), model.name, &result.final_rng);
+        // Observe the actual serial runner before normalization, not a replay
+        // sampler or a fixture-loaded averaging kernel. These independent
+        // Julia accumulators use the C-ordered accumulation contract; the
+        // native C kernel comparison below independently checks their means.
+        let raw_frames = raw_green.frames.borrow();
+        assert_eq!(raw_frames.len(), 2, "{} actual raw frames", model.name);
+        for (sample, frame) in raw_frames.iter().enumerate() {
+            assert_eq!(frame.sample, sample);
+            assert_eq!(frame.use_fsz, use_fsz);
+            let stage = fixture.join(format!("accumulated-{sample}"));
+            let energy = read_values(&stage.join("energy.txt"));
+            assert_eq!(energy.len(), 10, "complete independent energy record");
+            assert_eq!(
+                frame.weight,
+                num_complex::Complex64::new(energy[0], energy[1]),
+                "{} sample {sample} raw weight",
+                model.name
+            );
+            for (actual, file) in frame
+                .arrays
+                .iter()
+                .zip(["one.txt", "factored.txt", "direct.txt"])
+            {
+                let numbers = read_values(&stage.join(file));
+                let (pairs, remainder) = numbers.as_chunks::<2>();
+                assert!(remainder.is_empty(), "complete raw complex records");
+                assert_eq!(
+                    actual.len(),
+                    pairs.len(),
+                    "{} sample {sample} raw {file} shape",
+                    model.name
+                );
+                for (column, (actual, expected)) in actual.iter().zip(pairs).enumerate() {
+                    for (a, e) in [(actual.re, expected[0]), (actual.im, expected[1])] {
+                        assert!(a.is_finite() && e.is_finite());
+                        assert!(
+                            (a - e).abs() <= 1e-12_f64.max(1e-10 * a.abs().max(e.abs())),
+                            "{} sample {sample} raw {file} column {column}: {a} != {e}",
+                            model.name
+                        );
+                    }
+                }
+            }
+        }
         let calls = reducer.0.borrow();
         // reduce_accumulators: energy, active SR OO/HO (complex only for
         // AllComplexFlag; otherwise f64), three Green arrays, four LS arrays.

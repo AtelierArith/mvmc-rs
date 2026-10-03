@@ -154,7 +154,7 @@ fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_outp
             .collect::<Vec<_>>()
             .join("\n");
         let historical =
-            std::fs::read_to_string(native_fsz_fixture::resolve(julia_fixture::fixture_path(
+            julia_fixture::read_text(native_fsz_fixture::resolve(julia_fixture::fixture_path(
                 &root,
                 reference
                     .strip_prefix(&root)

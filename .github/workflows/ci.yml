@@ -76,8 +76,16 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Run default workspace tests
+        env:
+          MVMC_CG_DIAGNOSTICS: '1'
+          MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
+          TMPDIR: /tmp
         run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Run all-feature workspace tests
+        env:
+          MVMC_CG_DIAGNOSTICS: '1'
+          MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
+          TMPDIR: /tmp
         run: cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Run documentation tests
         run: cargo test --workspace --all-features --locked --doc --profile ci
@@ -85,6 +93,15 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features --locked --profile ci -- -D warnings
       - name: Build documentation
         run: cargo doc --workspace --all-features --locked --no-deps --profile ci
+      - name: Upload CG diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cg-diagnostics-${{ matrix.platform }}
+          path: |
+            /tmp/mvmc-run-*.cg-diagnostics.txt
+            /tmp/mvmc-cg-fixed-*.txt
+          if-no-files-found: ignore
       - name: Log target disk usage
         if: always()
         run: |
