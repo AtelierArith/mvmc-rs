@@ -66,6 +66,73 @@ fn collective_result<T, R: Reducer + ?Sized>(
 /// valid seed, and negative ModPara seeds request the current Unix time.
 pub const FALLBACK_SEED: i64 = 11272;
 
+/// Actual optimization walker immediately before its SR contribution is added.
+/// Values are local, unaveraged and borrowed; this is not a sampler replay.
+pub struct OptimizationMeasurementView<'a> {
+    /// Current parameters and ordered input descriptors.
+    pub data: &'a ExpertModeData,
+    /// Actual walker matrix scratch and derivative vector before accumulation.
+    pub state: &'a VmcOptimizationState,
+    /// Zero-based saved configuration index within the current frame.
+    pub sample: usize,
+    /// Actual projected Pfaffian overlap.
+    pub overlap: Complex64,
+    /// Actual Hamiltonian evaluation used in the following accumulation.
+    pub local_energy: Complex64,
+    /// Actual unaveraged walker weight.
+    pub weight: f64,
+}
+
+/// Read-only observation of overlap, energy, Pfaffians and `state.sr_opt.sr_opt_o`.
+pub trait OptimizationMeasurementObserver {
+    /// Borrow the production values without changing state or consuming RNG.
+    fn measured(&self, view: OptimizationMeasurementView<'_>);
+}
+
+thread_local! {
+    static OPTIMIZATION_MEASUREMENT_OBSERVER: std::cell::RefCell<Option<std::rc::Rc<dyn OptimizationMeasurementObserver>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Calling-thread scope; nested installations fail without replacing the owner.
+pub struct OptimizationMeasurementObserverGuard {
+    _thread_bound: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+/// Install on the calling thread; disabled observation allocates no buffers.
+pub fn install_optimization_measurement_observer(
+    observer: std::rc::Rc<dyn OptimizationMeasurementObserver>,
+) -> Result<OptimizationMeasurementObserverGuard, &'static str> {
+    OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_some() {
+            return Err("Optimization measurement observer already active on this thread");
+        }
+        *slot = Some(observer);
+        Ok(OptimizationMeasurementObserverGuard {
+            _thread_bound: std::marker::PhantomData,
+        })
+    })
+}
+
+impl Drop for OptimizationMeasurementObserverGuard {
+    fn drop(&mut self) {
+        OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+
+fn observe_optimization_measurement(view: OptimizationMeasurementView<'_>) {
+    if view.data.modpara.vmc_calc_mode != 0 {
+        return;
+    }
+    OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+        // No allocation/copy when disabled. Release TLS borrow before callback.
+        let observer = slot.borrow().clone();
+        if let Some(observer) = observer {
+            observer.measured(view);
+        }
+    });
+}
+
 /// Borrowed local PhysCal accumulation immediately before Green normalization.
 /// This is not a globally reduced mean; MPI callers observe each rank separately.
 pub struct PhysCalGreenView<'a> {
@@ -2473,6 +2540,14 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
             timer.stop_diag(949, diag);
             timer.stop_diag(940, diag);
         }
+        observe_optimization_measurement(OptimizationMeasurementView {
+            data,
+            state,
+            sample,
+            overlap: ip,
+            local_energy: e,
+            weight: w,
+        });
         timer.start(43);
         if all_complex && use_store {
             crate::observables::calculate_oo_store(
@@ -4913,6 +4988,57 @@ mod callback_tests {
     }
 
     #[test]
+    fn optimization_measurement_observer_rejects_nesting_and_cleans_up_unwind() {
+        use std::{cell::Cell, rc::Rc};
+        struct Counter(Cell<usize>);
+        impl OptimizationMeasurementObserver for Counter {
+            fn measured(&self, _: OptimizationMeasurementView<'_>) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let outer = Rc::new(Counter(Cell::new(0)));
+        let guard = install_optimization_measurement_observer(outer.clone()).unwrap();
+        assert!(install_optimization_measurement_observer(Rc::new(Counter(Cell::new(0)))).is_err());
+        std::thread::spawn(|| {
+            let guard =
+                install_optimization_measurement_observer(Rc::new(Counter(Cell::new(0)))).unwrap();
+            drop(guard);
+            assert!(OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| slot.borrow().is_none()));
+        })
+        .join()
+        .unwrap();
+        let (data, state, _) = prepared_case(1, "heisenberg_chain_real");
+        observe_optimization_measurement(OptimizationMeasurementView {
+            data: &data,
+            state: &state,
+            sample: 0,
+            overlap: Complex64::new(1.0, 0.0),
+            local_energy: Complex64::new(2.0, 0.0),
+            weight: 1.0,
+        });
+        assert_eq!(outer.0.get(), 1);
+        let mut physcal = data.clone();
+        physcal.modpara.vmc_calc_mode = 1;
+        observe_optimization_measurement(OptimizationMeasurementView {
+            data: &physcal,
+            state: &state,
+            sample: 0,
+            overlap: Complex64::new(1.0, 0.0),
+            local_energy: Complex64::new(2.0, 0.0),
+            weight: 1.0,
+        });
+        assert_eq!(outer.0.get(), 1);
+        drop(guard);
+        assert!(std::panic::catch_unwind(|| {
+            let _guard =
+                install_optimization_measurement_observer(Rc::new(Counter(Cell::new(0)))).unwrap();
+            panic!("observer scope unwinds");
+        })
+        .is_err());
+        assert!(OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| slot.borrow().is_none()));
+    }
+
+    #[test]
     fn actual_cg_sampling_observer_preserves_configs_rng_count_and_next624() {
         use crate::sr_cg::{CgObserver, CgProductPhase};
         use std::{cell::Cell, rc::Rc};
@@ -4923,110 +5049,141 @@ mod callback_tests {
                 self.0.set(self.0.get() + 1);
             }
         }
-        let (mut baseline, mut base_state, mut base_rng) =
-            prepared_case(3, "heisenberg_chain_real");
-        baseline.modpara.nsrcg = 1;
-        let (mut data, mut state, mut rng) = prepared_case(3, "heisenberg_chain_real");
-        data.modpara.nsrcg = 1;
-        let baseline_dir = fresh_output_directory().unwrap();
-        let observed_dir = fresh_output_directory().unwrap();
-        vmc_para_opt(
-            &mut baseline,
-            &mut base_state,
-            &mut base_rng,
-            Some(&baseline_dir),
-            &SingleProcessReducer,
-            OptimizationOptions::default(),
-        )
-        .unwrap();
-        let observer = Rc::new(CountProducts::default());
-        let guard = crate::sr_cg::install_cg_observer(observer.clone()).unwrap();
-        vmc_para_opt(
-            &mut data,
-            &mut state,
-            &mut rng,
-            Some(&observed_dir),
-            &SingleProcessReducer,
-            OptimizationOptions::default(),
-        )
-        .unwrap();
-        drop(guard);
-        assert!(observer.0.get() > 0);
-        // Exact Rust-to-Rust observer identity, not a floating reference policy.
-        let parameters = |data: &ExpertModeData| {
-            data.projection_parameters()
-                .into_iter()
-                .chain(data.rbm_parameters())
-                .chain(data.slater_params.iter().copied())
-                .chain(data.opt_trans.iter().copied())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(parameters(&data), parameters(&baseline));
-        assert_eq!(data.optimization_flags, baseline.optimization_flags);
-        assert_eq!(state.energy.wc, base_state.energy.wc);
-        assert_eq!(state.energy.etot, base_state.energy.etot);
-        assert_eq!(state.energy.etot2, base_state.energy.etot2);
-        assert_eq!(
-            state.sr_opt.sr_opt_oo_real,
-            base_state.sr_opt.sr_opt_oo_real
-        );
-        assert_eq!(
-            state.sr_opt.sr_opt_ho_real,
-            base_state.sr_opt.sr_opt_ho_real
-        );
-        assert_eq!(state.sr_opt.sr_opt_oo, base_state.sr_opt.sr_opt_oo);
-        assert_eq!(state.sr_opt.sr_opt_ho, base_state.sr_opt.sr_opt_ho);
-        assert_eq!(
-            state.sr_opt.sr_opt_o_store_real,
-            base_state.sr_opt.sr_opt_o_store_real
-        );
-        assert_eq!(
-            state.sr_opt.sr_opt_o_store,
-            base_state.sr_opt.sr_opt_o_store
-        );
-        let files = |directory: &Path| {
-            let mut files: Vec<_> = fs::read_dir(directory)
-                .unwrap()
-                .map(|entry| entry.unwrap().file_name())
-                .collect();
-            files.sort();
-            files
-        };
-        let expected_files = files(&baseline_dir);
-        assert_eq!(files(&observed_dir), expected_files);
-        for file in expected_files {
-            assert_eq!(
-                fs::read(observed_dir.join(&file)).unwrap(),
-                fs::read(baseline_dir.join(&file)).unwrap(),
-                "observer identity: {file:?}"
-            );
+        #[derive(Default)]
+        struct CountMeasurements(Cell<usize>);
+        impl OptimizationMeasurementObserver for CountMeasurements {
+            fn measured(&self, view: OptimizationMeasurementView<'_>) {
+                assert_eq!(view.data.modpara.vmc_calc_mode, 0);
+                assert!(view.sample < view.data.modpara.nvmc_sample as usize);
+                assert!(view.overlap.norm() > 0.0);
+                assert!(view.local_energy.re.is_finite());
+                assert!(!view.state.sr_opt.sr_opt_o.is_empty());
+                self.0.set(self.0.get() + 1);
+            }
         }
-        assert_eq!(
-            state.electron_config.ele_cfg,
-            base_state.electron_config.ele_cfg
-        );
-        assert_eq!(
-            state.electron_config.ele_idx,
-            base_state.electron_config.ele_idx
-        );
-        assert_eq!(
-            state.electron_config.ele_num,
-            base_state.electron_config.ele_num
-        );
-        assert_eq!(
-            state.electron_config.ele_spn,
-            base_state.electron_config.ele_spn
-        );
-        assert_eq!(
-            state.electron_config.counter,
-            base_state.electron_config.counter
-        );
-        assert_eq!(rng.words_consumed(), base_rng.words_consumed());
-        for _ in 0..624 {
-            assert_eq!(rng.gen_rand32(), base_rng.gen_rand32());
+        for case in [
+            "heisenberg_chain_real",
+            "heisenberg_chain_cmp",
+            "heisenberg_chain_fsz",
+        ] {
+            for (cg, store) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+                let (mut baseline, mut base_state, mut base_rng) = prepared_case(3, case);
+                baseline.modpara.nsrcg = cg;
+                baseline.modpara.nstore_o = store;
+                let (mut data, mut state, mut rng) = prepared_case(3, case);
+                data.modpara.nsrcg = cg;
+                data.modpara.nstore_o = store;
+                let baseline_dir = fresh_output_directory().unwrap();
+                let observed_dir = fresh_output_directory().unwrap();
+                vmc_para_opt(
+                    &mut baseline,
+                    &mut base_state,
+                    &mut base_rng,
+                    Some(&baseline_dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions::default(),
+                )
+                .unwrap();
+                let observer = Rc::new(CountProducts::default());
+                let guard = crate::sr_cg::install_cg_observer(observer.clone()).unwrap();
+                let measurements = Rc::new(CountMeasurements::default());
+                let measurement_guard =
+                    install_optimization_measurement_observer(measurements.clone()).unwrap();
+                vmc_para_opt(
+                    &mut data,
+                    &mut state,
+                    &mut rng,
+                    Some(&observed_dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions::default(),
+                )
+                .unwrap();
+                drop(guard);
+                drop(measurement_guard);
+                assert_eq!(
+                    observer.0.get() > 0,
+                    cg != 0,
+                    "{case} CG={cg} store={store}"
+                );
+                assert_eq!(measurements.0.get(), 3 * data.modpara.nvmc_sample as usize);
+                // Exact Rust-to-Rust observer identity, not a floating reference policy.
+                let parameters = |data: &ExpertModeData| {
+                    data.projection_parameters()
+                        .into_iter()
+                        .chain(data.rbm_parameters())
+                        .chain(data.slater_params.iter().copied())
+                        .chain(data.opt_trans.iter().copied())
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(parameters(&data), parameters(&baseline));
+                assert_eq!(data.optimization_flags, baseline.optimization_flags);
+                assert_eq!(state.energy.wc, base_state.energy.wc);
+                assert_eq!(state.energy.etot, base_state.energy.etot);
+                assert_eq!(state.energy.etot2, base_state.energy.etot2);
+                assert_eq!(
+                    state.sr_opt.sr_opt_oo_real,
+                    base_state.sr_opt.sr_opt_oo_real
+                );
+                assert_eq!(
+                    state.sr_opt.sr_opt_ho_real,
+                    base_state.sr_opt.sr_opt_ho_real
+                );
+                assert_eq!(state.sr_opt.sr_opt_oo, base_state.sr_opt.sr_opt_oo);
+                assert_eq!(state.sr_opt.sr_opt_ho, base_state.sr_opt.sr_opt_ho);
+                assert_eq!(
+                    state.sr_opt.sr_opt_o_store_real,
+                    base_state.sr_opt.sr_opt_o_store_real
+                );
+                assert_eq!(
+                    state.sr_opt.sr_opt_o_store,
+                    base_state.sr_opt.sr_opt_o_store
+                );
+                let files = |directory: &Path| {
+                    let mut files: Vec<_> = fs::read_dir(directory)
+                        .unwrap()
+                        .map(|entry| entry.unwrap().file_name())
+                        .collect();
+                    files.sort();
+                    files
+                };
+                let expected_files = files(&baseline_dir);
+                assert_eq!(files(&observed_dir), expected_files);
+                for file in expected_files {
+                    assert_eq!(
+                        fs::read(observed_dir.join(&file)).unwrap(),
+                        fs::read(baseline_dir.join(&file)).unwrap(),
+                        "observer identity: {file:?}"
+                    );
+                }
+                assert_eq!(
+                    state.electron_config.ele_cfg,
+                    base_state.electron_config.ele_cfg
+                );
+                assert_eq!(
+                    state.electron_config.ele_idx,
+                    base_state.electron_config.ele_idx
+                );
+                assert_eq!(
+                    state.electron_config.ele_num,
+                    base_state.electron_config.ele_num
+                );
+                assert_eq!(
+                    state.electron_config.ele_spn,
+                    base_state.electron_config.ele_spn
+                );
+                assert_eq!(
+                    state.electron_config.counter,
+                    base_state.electron_config.counter
+                );
+                assert_eq!(rng.words_consumed(), base_rng.words_consumed());
+                assert_eq!(format!("{rng:?}"), format!("{base_rng:?}"));
+                for _ in 0..624 {
+                    assert_eq!(rng.gen_rand32(), base_rng.gen_rand32());
+                }
+                fs::remove_dir_all(baseline_dir).unwrap();
+                fs::remove_dir_all(observed_dir).unwrap();
+            }
         }
-        fs::remove_dir_all(baseline_dir).unwrap();
-        fs::remove_dir_all(observed_dir).unwrap();
     }
 
     #[test]

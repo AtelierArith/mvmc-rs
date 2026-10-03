@@ -2,8 +2,8 @@
 //! Provenance: docs/reference/c-to-julia/verification/issue-179-literal-operator.md.
 #![cfg(feature = "mpi")]
 
-use mvmc_core::sr_cg::{install_cg_observer, CgObserver, CgProductPhase, SampledSrOperator};
 use mvmc_core::mpi::MpiContext;
+use mvmc_core::sr_cg::{install_cg_observer, CgObserver, CgProductPhase, SampledSrOperator};
 use std::{cell::RefCell, rc::Rc};
 
 type Product = (CgProductPhase, Vec<f64>, Vec<f64>);

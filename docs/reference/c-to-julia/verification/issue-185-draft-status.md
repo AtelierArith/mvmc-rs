@@ -1,60 +1,83 @@
-# Issue #185 draft milestone status
+# Issue #185 current milestone status
 
-Related to #185, #184, #183, #176, #177, #178, #175, #174, #181, #180, #179 and #182. No issue closure is claimed.
+Related to #185, #184, #183, #176, #177, #178, #175, #174, #181, #180, #179 and #182. No whole-goal closure.
 
-## Integration and acceptance
+## Current baseline and policy
 
-Parent integrated main `3e18cd5` at shared HEAD `52d025e`, restored the draft changes and retained the stash. Parent reports `cargo check --workspace --locked` exit0 and 15 SR tests PASS. Full-suite handle **7629 terminated100**, nextest ID `102b3eb0-a1e2-476b-8727-60a45a95be4f`: **749 run,748 PASS,1 FAIL,238.059s**. The failure was OptTrans-CG full-shape92 versus mapped89. Ramanujan's subsequent individual repair checkpoint `15253db9` PASS does not turn this failed full-suite run into PASS. Subsequent13-CG checkpoint `2c4dfaae` terminated100: **6 PASS,7 FAIL**, missing top-step `zvo_out` references; reference import is assigned Ramanujan, not a numerical-tolerance defect or authorization to loosen bounds. Parent formatting exit0, Clippy exit0 and doctests exit0 (**0 cases**, compile evidence only) preceded the latest patch and require final revalidation. No current full-workspace PASS is available here. Earlier full-suite failures remain historical evidence.
+Authoritative main: **60ce456f**, parent PR206 fast-forward integration,43 nonoverlapping paths; dirty/untracked work preserved. PR204 **MERGED**, squash200b29df5894a2c969cb6fd18e1e2a776d184e6c. Remaining work continues on feat/issue-185-post204. This editor does not stage/commit/push/merge.
 
-The **52/52 fresh ctest references were acquired externally**; this is acquisition, not 52 Rust comparisons or model acceptance. Cargo tests must remain independent of C/Julia/toolbox execution. InterAll is excluded from new #185 scope; repair of historical InterAll consumers does not expand acceptance.
+Recorded branch snapshot **78d62007**, based on main60ce,includes format correctione7f1aa11,truthful serial-benchmark MPI README correction8fd6d034 and finite DH tests. Main CI job111191738869 failed solely on import-order formatting diff,corrected in committede7f1aa11; cargo fmtall64910 terminal0 does not establish new remote all-PASS or retrospectively repair that failed job.
 
-Latest parent selected CG checkpoint `61e661c6`:terminal0,13/13 PASS,196 excluded,14.670s, compiled after the new preflight. This supersedes the selected13-test missing-reference failure after repair, not the terminal100 full-suite result. Goodall PhysCal checkpoint `ea2061c5-f99e-4ca8-8ef0-b1e6fa0df790`:terminal0,42/42 PASS,0skip,84.561s, six models/nine combinations/two frames/all-term gates. Its compiled binary is the tested artifact; run.rs source changed from `a4f586e9` at launch to `0c789661` at harvest, so this is **not source-frozen proof** and cannot validate later runner patches.
+Latest user allows milestone merge after actual latest-head Linux default/all-features/lint/docs success, superseding earlier all-platform merge prerequisite only. Mac failures remain disclosed for repair; no hiding/skipping/arbitrary tolerance. Whole#185 stays OPEN.
 
-Follow updated AGENTS and [numerical policy](../../../NUMERICAL_COMPARISONS.md): C algorithm/input authority, Julia architecture, explicit justified numeric bounds, exact primitive RNG on identical control paths, and 20-step same-input/seed/configuration repeatability. A located numerical acceptance divergence can explain later cross-implementation trajectories; it cannot excuse an RNG or algorithm defect.
+[Historical checkpoint appendix](issue-185-historical-checkpoints.md) preserves earlier commands/revisions/failures. Old LIVE,old-main,not-merged and superseded CG failure statements there are historical,not current. No old proof is reassigned to60ce456f.
 
-## Implemented scope, evidence and remaining work
+## Actual verification
 
-Results below are bounded parent-reviewed or owner-reported checkpoints, not reruns of all draft changes at `52d025e`. Mutable-tree results without a compilation hash must not be retrospectively attributed to this HEAD.
-
-| Issue | Implemented milestone / available evidence | Remaining acceptance |
+| Evidence | Actual result | Scope / remaining limitation |
 | --- | --- | --- |
-| #184 | Assertion/API/scenario/source inventories, C-versus-Julia distinctions and focused analytical contracts. Parent core contracts19 PASS (`bff4789e`), hop1 PASS (`da5c6f76`), DH2 literal1 PASS (`0a6d8024`); SFMT4 PASS and analytical Pfa6 PASS in each normal/SIMD/BLAS/combined profile. Tiny Pfa cases do not prove optimized-kernel activation. | Ledger:632 syntax-only unreviewed,596 settings-reviewed/proof-pending,184 focused contracts with differences,23 source-reviewed,6 loop expansions,3 excluded. Complete semantic review and exact public API/example/scenario mappings; no 1444-row coverage claim. |
-| #183 | Optional gates and explicit reporting are being migrated. Phase5 runtime20 normal reporting checkpoint `1d9a521c`:8 PASS,4 explicit SKIP. | Execute selected opt-in gates explicitly; missing fixtures/unsupported selection must fail or report incomplete. Nonfinite false-pass regression and provenance strengthening are assigned Banach; reporting PASS is not numerical model20 PASS. |
-| #176 | Real-FSZ layout/shadow authority reviewed. Latest REAL-g `722de57e`:1 PASS with explicit written/defined flag policy; standalone retained-input C direct-SR reproduction agrees for the matched operator/increment/post-sync scope. | Full supported real-FSZ sampling/SR/PhysCal scope and portability, not merely setup, ABI or standalone kernel agreement. Preserve historical flag failure and distinguish adapted C-real SR from unmodified Julia. |
-| #177 | Root-resolved seed implementation/verification belongs to MPI owner; strict primitive RNG contracts remain intact. | Supply current exact positive/zero/negative seed, root broadcast and rank-state evidence. No blanket #177 PASS is asserted by CLI launch tests. |
-| #178 | Current offline public rejection tests: parent `2b7a304c`10 PASS, retained data/state/RNG/output boundaries for matched settings. MPI CLI negative verifier `5b1143` exit0, worlds2/4: rejected launches, error once per rank, no output. | Complete collective/grouped failure matrix and accepted controls. Meaningful Rust diagnostic families need not copy Julia exception literals. Accepted S196/M0998 actual-reducer proof remains separately coordinated. |
-| #175 | Independent callback fixtures and tests observe actual in-place success/error state, draw counts, next624, callback indices/status/averaged energy and retained output boundaries; focused12/12 PASS reported before integration. | Fresh integrated verification and native MPI callback-failure evidence; no claim that an owned RNG replay substitutes for actual runner state. |
-| #174 | Positive public CLI reference comparisons implemented; parent historical full-suite callback/CLI selections passed. MPI CLI positive `e960ec` exit0, worlds2/4: one summary and one output row. | Integrated serial/CLI scope and indexed Green/Lanczos output checks; CLI process tests cannot claim unobservable internal RNG state. MPI process/output success is not numerical parity. |
-| #181 | IO134 synthetic contracts and C-indexed formatting/lifecycle checks: parent `990e6bf3`12 filtered tests PASS; owner mixed15 is a different selection. | Match remaining private-versus-public representative assertions explicitly; third-Hubbard19 is separate, not IO134 closure. Complete non-InterAll PhysCal/Lanczos scenario acceptance. |
-| #180 | Fresh reviewed-CG reference acquisition; selected complex/Hubbard/canonical, real, DH2 and pairhop short/20-prefix consumers have bounded PASS checkpoints. Provenance helper `55f833af`3 PASS includes implicit-Auto initial-file hash rejection and dependency closure. | Import/verify remaining consumers and full model/configuration coverage. 52 acquired references and three helper tests are not model numerical verification. Fresh20 windows/final parameters cannot be truncated historical50 results. |
-| #179 | Same-configuration MPI repeatability:108 CG pairs and corrected387 direct pairs have separate successful records; parent checked corrected388-line TSV/nonzero0. Literal MPI reducer/product and public CLI checks have narrow independent records. | Numeric correctness/residuals and full declared success/rejection scenario mapping remain distinct from 495 repeatability pairs. Record world/group/worker/storage/seed settings; no blanket cross-language trajectory or tolerance upgrade. |
-| #182 | Parent five one-step models/fullOOHO/final workers1/2/4 `821f94c3`1 PASS; selected long20 repeatability `1ba4d50b`1 PASS. Actual 14-site activation evidence belongs to threading owner and is separate from tiny/QP1 serial cases. | Complete all callsite/branch/configuration coverage and current integrated gates. Selected five models or one long20 model are not whole #182; preserve explicit ignored selections and independent activation evidence. |
+| Local full65826,nextest05376af9 | terminal0,781/781 PASS,33 outside,264.555s; final callback260.548s | Frozen HEAD9117+dirty fresh180/provenance/fixtures+unchanged ModPara laterad79dd58. Not committed-code-only/current60ce full proof or52 numerical PASS. |
+| Clippy/doc67233 | exit0,four crates,zero doctest cases | Frozen tree above; docs compile only. |
+| Committed runhook SHA3cb175056... | parent599697c5 two PASS,.789s/default-libClippy0; owner0c93eb25 allfeatures two PASS,.888s/216 outside; exactCI lint46595 exit0 | One test loops three real/complex/FSZ models × four (CG,store) pairs[(0,0),(0,1),(1,0),(1,1)]; unchangedcfg/fullRNG/count/next624/OOHO/parameters/filebytes. Serial Linux identity only,not MPI/Mac/independent numerical parity. Observer freeze released; whole185 incomplete. |
+| Exact CI lint30355 | workspace/alltargets/allfeatures/locked/profileci/-Dwarnings exit0; hashes2d383c10/a8d2e745 unchanged | Local scoped proof; old5379 failure remains historical. No current remote result invented. |
+| Mac0347 default111188179725 | terminal FAIL,744/760 PASS,16 FAIL,33 outside,230.715s | Not current local SR/main. |
+| Mac0347 allfeatures111188179757 | terminal FAIL,745/761 PASS,16 FAIL,43 outside,206.063s | Four DH reader failures fixed; numerical failures remain. |
+| Mac artifacts11271809583/11271714705 | Both retrieved,each5,443,002 bytes/21 files | Capture/metadata not numerical PASS. |
+| Mac PhysCal first assertion | Raw direct Green frame0/column13:−.07331601999933571 vs−.07331602002844077,delta≈2.9105e−11; sample discrete0/1 passed first | Energy delta is separate,not first assertion. First-cause/conditioning investigation,no new golden/tolerance. |
+| Mac fixed CG | row7/column13 delta1.94333e−12; first second-GEMV entry14 delta4.44e−16; operation-bound ratio.004548,condition estimate3.5979e9 | tol0/limit7 not converged,residual∞1.68644. Diagnostic bound not accepted forward tolerance/Mac PASS. |
+| Fresh180 |52 acquired/imported,1463 files,parent1462 listed hashes checked0;13 public namelist summariesab7d14f8 PASS | Detailed GeneralRBM2/3/20 FAIL/not ready. Earlierfcea6b6f49 complete,General2HO36 failed3.53362e−12 then3/20 unrun; newer failures supersede readiness. No52 numerical PASS. |
+| Julia PR54 | OPEN,published head3d0fd263; raw published production API command terminal0,SHAe8274c5d7bce99003ed205d9ea7a854832e2e498a9b85a3d0172759e484155a1. Earlier parent18711 Julia1.13.1/ILP64BLAS1,59/59 PASS belongs to SR headfdeee6e90c5f2be6ddd77e5d10269db1b2896976 | Focused SR proof is not reassigned to newhead. Existing62b fixtures retain62b lineage. |
+| Gen40 algorithm first cause | Parent90806 terminal0: patched Julia all40 hidden/80 components exact versus actual retained C; oldJulia48 components differ. C probe outputSHAab139ba7 matches retained input4ffdca87; MakeRBMCnt verbatimcmp0 | Rust counter side is recomputed,not actual Rust-local; physical2 excluded. PR54 published3d0fd263/APIproductionSHAe827... confirmed. No sampling/golden/HO tolerance claim; future patched model validation must retain new lineage. |
+| #182 retained-C failure boundary | Parentfcbc7e58 onePASS,2.777s/22 outside; two toolbox paths committeddf47a603; optional retained C INFO2 independently verified | Valid failed boundary,not45 successful steps/full C sampler or whole182 acceptance. |
+| Finite DH overlay leaves | Parent683853b5 twoPASS/Clippy0,original payload reviewed; recorded snapshot78d62007 |M341–342 finite valid overlays only,sixDH2 and tenDH4 rows; negativeM343–346 not covered,Cstrict-policy distinctions pending. Not fullinitial lifecycle/Cruntime. |
+| Security5 | fixed_at2026-10-03T06:11:47Z,no dismissal; PR19599e144b/#192 closed | Separate resolved scope,not185 closure. |
 
-Detailed commands, settings and historical limitations are in [the current #184 matrix](issue-184-evidence-matrix.md) and the domain-owned records. Final merge requires current full tests, separate doctests, formatting/lint and applicable platform/feature/optional gates; narrow results cannot substitute for these.
+Older Linux02 default754/allfeatures755 and failedCI lint,old14CG consumers remain revision-labelled historical records. Scoped repairs/local781 supersede old current-failure claims only within scope. No latest60ce full CI result is supplied.
 
-Goodall reports fresh post-restoration bounded **43 PASS**, with owned source hashes unchanged: core `9a449fa7-2cd6-4ac6-a1c7-dbb53e4c69ec`36 PASS,0.243s (5 Slater,10 public boundaries,6 output blocks,15 IO134/third-Hubbard selections); IO-library `fd275c50-1654-4e20-9a5f-9131f23dd9c4`6 PASS,0.025s; CLI `e8e4cd94-cb3c-4ac9-b7db-27f67d42fb89`1 PASS,0.057s, exercising four subprocess cases. These are owner-reported selections, not independent parent reruns or full #181/#185 acceptance. Original sixteen-site Slater lifecycle gap is covered; raw public-runner Green predivision and S196 actual-MPI control remain pending. Goodall's separate `issue-181-owned-paths.txt`/draft-packaging record owns its1157-path manifest; none of those paths is implicitly added to Chandra's allowlist below.
+## Assertion/API/scenario coverage
 
-## Exact Chandra-owned packaging manifest
+Actual TSV recount: **1444 rows,21 columns,0 malformed**.
 
-The aggregate review artifact is [issue-185-owned-paths.txt](issue-185-owned-paths.txt):8008 explicit sorted changed/new paths assembled from owner allowlists, SHA256 `08ffa9d427b0f6f39be8cca1bf38234d7dfca51eb8c3bb7f7aa7ea81531f674a`. No generation/build process is live for this manifest. Sort and diff checks passed; no staging was performed. Pending freshct20/phase5 namespaces are excluded. Ramanujan's packaging ACK adds shared `crates/mvmc-core/src/run_mpi_tests.rs`, `crates/mvmc-core/src/state.rs` (energy_squared schema/documentation jointly dependent on Goodall) and `crates/mvmc-core/tests/physcal_callback.rs`; this is not exclusive whole-file ownership or authorization to overwrite other contributions. Unclaimed `crates/mvmc-expert-parsers/src/types.rs` remains reported to parent and **excluded**. Owner-declared expected `zvo` fixture payloads are retained; generated runtime `crates/mvmc-core/zvo*` files are excluded. Parent review is required before staging; the manifest does not authorize completion or merge.
+**Packaging distinction:** counts1444/412/778/215/23/6/7/3 are a **working-tree ledger snapshot (uncommitted semantic review updates), not committed-ledger coverage**. That dirty assertion TSV is excluded from this four-document commit, so the checked-in ledger need not match these snapshot counts. The fresh52 imported reference namespace is also uncommitted diagnostic data,not part of this package and not accepted numerical coverage. The manifest is an ownership allowlist,not proof of file availability or completeness.
 
-Paths below are an ownership allowlist, **not** authorization to stage other agents' production dependencies. The fixture subtree includes its inputs, provenance and validation records. Other owners must provide their own manifests for the aggregate draft.
+| Classification | Rows |
+| --- | ---: |
+| Syntax-only unreviewed |412 |
+| Settings/proof pending |778 |
+| Focused contracts with differences |215 |
+| Source-reviewed |23 |
+| Loop expansions verified |6 |
+| Intentional API-difference audits |7 |
+| Excluded |3 |
 
-```text
-crates/mvmc-core/tests/issue184_assertion_contracts.rs
-crates/sfmt19937/tests/julia_sfmt_assertion_contracts.rs
-crates/pfapack/tests/julia_assertion_contracts.rs
-crates/mvmc-core/tests/physcal_callback_reference.rs
-crates/mvmc-cli/tests/physcal_reference.rs
-scripts/generate_physcal_callbacks_175.jl
-tests/fixtures/physcal_callbacks_175/**
-docs/reference/c-to-julia/verification/issue-184-evidence-matrix.md
-docs/reference/c-to-julia/verification/issue-184-public-apis.tsv
-docs/reference/c-to-julia/verification/issue-184-scenarios.tsv
-docs/reference/c-to-julia/verification/issue-184-sources.tsv
-docs/reference/c-to-julia/verification/issue-184-assertion-audit.tsv
-docs/reference/c-to-julia/verification/issue-184-io134-review-handoff.md
-docs/reference/c-to-julia/verification/issue-185-draft-status.md
-```
+Not cumulative executable PASS counts. InverseM0121–23/M0136–37/M0141 and optional-contextM1161 are intentional Rust representation/typed-reducer differences,not missing ordinary assertion proofs and not executable PASS. Full original public API/example/scenario per-cell settings/revision/command/result mapping is incomplete.
 
-Exclude unrelated `.cargo/**`, `.codegraph/**`, generated `crates/mvmc-core/zvo*` (including out/var files), any `__pycache__/**`, `wrapper.mod`, Cargo target/cache directories and external acquisition scratch artifacts. Do not stage by broad workspace glob or `git add .`. Security documents, other agents' tests/fixtures/toolbox/production changes and external reference modifications are not in this ownership allowlist. No commit or push was performed for this draft record.
+Parent independently validated all1444 classifications,bad0. Remaining412 syntax rows: parser167=orbital50+parsers72+initialization30+publicparse15,thread84,parallel74,MPI87. Earlier parser173 arithmetic was erroneous; no coverage promotion follows this correction.
+
+These counts describe the modified working-tree TSV. The ledger remains **uncommitted** and excluded from this four-document handoff; verified column/count integrity is not review/authorization of every row promotion.
+
+| Issue | Bounded evidence | Remaining acceptance |
+| --- | --- | --- |
+|184 | Focused analytical/SFMT/Pfa/parser/QP/overlay contracts. Parentd1ab45ce QP8+copy1; dbf62c77 overlays4,C-complete adaptations. |412 unreviewed+778 pending; full public API/examples/scenarios. CopyM838–842 only; M1161 runtime excluded. |
+|183 | ee22325218 copied helpers across3 binaries,fail-closed behavior. |Actual opt-in/model/MPI/reference executions,not helper count. |
+|176 | Real-FSZ layout/flag policy and scoped REAL-g worker/direct-SR checks. |Full real-FSZ sampling/numerical/portability scope. |
+|177 | Primitive RNG/root-seed and scoped MPI initializer worlds2/4. |Complete seed/broadcast/rank-state mappings. |
+|178 | Public rejection/actual retained state/RNG/output and scoped MPI negatives. |Complete collective/group failure matrix/accepted controls. |
+|175 | Independent callbacks12 tests,actual in-place RNG/count/error/output; normal suite callback ran. |Complete declared callback/MPI failure mapping/current provenance. |
+|174 | Serial CLI reference and scoped MPI process/output positives. |Full output/positive scenario coverage; no unobservable CLI RNG claims. |
+|181 | IO134 synthetic literal and nine-model/two-frame rawGreen hook checks. |Remaining private/public mappings,Lanczos scenarios,Mac cause; not full C sampler. |
+|180 |52 SHA-checked references,13 entry summaries. |General2/3/20 detailed failures,meaningful numeric diagnosis and all52 verification. |
+|179 |Same-config repeatability,scoped reducer/CLI and QP8 literals. |Complete MPI success/rejection/numerical scope,not495 repeats alone. |
+|182 |Selected worker/fullOOHO/long20 and explicit internal copy-child execution1/2/4. |All14 callsites/branches/configurations,not selected models/copy parent alone. |
+
+M331–340 optional overlays are no longer pending: parentdcb301bf-8c62-497e-84f7-4feae2d30be1 fourPASS,.007s/Clippy0,commit2ae79f6c. Leaf/C-complete adaptations and Julia missing-optional policy are explicit,not fullinit lifecycle or undefined-C missingfile parity.
+
+Next bounded handoffs: PauliM341–346 DHsuccess/strictnegative-contract distinctions; WegenerMPI/QP follow-on; BanachcopyM838–842 exact mapping; GoodallGreenCompareM1316–1334 afterMacdiagnostic; RaminitializationM161–190 after first-operator capture. Chandra soleTSV editor.
+
+## Documentation and packaging
+
+README correction is committed in8fd6d034: Rust supports MPI; benchmark scope is serialR1,distinct from reportR4,not full MPI-performance equivalence. This editor did not edit README. No new runtime or remoteCI proof follows from the documentation correction.
+
+[Explicit ownership manifest](issue-185-owned-paths.txt) count9547 includes the new historical appendix; it is review allowlist,not staging authority/completeness. Newly authorized focused files require exact owner reconciliation. Exclude unrelated .cargo/.codegraph,runtime zvo/var,__pycache__,wrapper.mod,targets/cache/scratch; expected fixture zvo payloads are distinct.
+
+Owned handoff: this file,new historical appendix,issue-184-evidence-matrix.md,issue-184-assertion-audit.tsv,manifest and existing source/API/scenario TSVs. [Numerical policy](../../../NUMERICAL_COMPARISONS.md) remains C algorithm/input authority,Julia architecture,justified bounds,strict primitive/discrete contracts.

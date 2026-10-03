@@ -13,9 +13,10 @@ and the roadmap `docs/reference/c-to-julia/roadmaps/2026-06-14-julia-mvmc-v0.4-s
 - `NSplitSize=1`, `NStore=1`, `NSRCG=0`, `RndSeed=1`
 - `NSROptItrStep=300`, `NVMCSample=300`
 
-The reports run `R=4` MPI ranks; the Rust port has no MPI support, so this
-benchmark uses `R=1` (serial) and one thread, which corresponds to the report's
-per-rank, one-thread condition. `NVMCSample` is not stated in the report, so it
+The reports run `R=4` MPI ranks; this benchmark measures only `R=1` (serial)
+and one thread. Rust supports MPI, but this benchmark does not measure its
+multi-rank execution or establish performance equivalence with the reports.
+`NVMCSample` is not stated in the report, so it
 is set equal to the 300 SR steps.
 
 ## Layout
@@ -65,8 +66,8 @@ cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1
 
 Warmup-excluded medians over 3 repetitions, internal
 `run_para_opt_from_namelist` wall clock, one thread (`Darwin arm64`, Julia
-1.13.1). `speedup = julia / rust`; the Rust port does not yet have an MPI path,
-so this compares the report's single-rank, one-thread condition.
+1.13.1). `speedup = julia / rust` for these single-rank, one-thread runs only;
+these timings are not an `R=4` MPI performance comparison.
 
 | model | Rust median (s) | Julia median (s) | speedup (julia/rust) | \|ΔE\| |
 |---|---:|---:|---:|---:|
@@ -79,4 +80,3 @@ Markdown reports to `target/bench/` for comparison. The section-timer
 breakdown that localizes the gap to `VMCMainCal`
 (`CalHamiltonian1` / `ReturnSlaterElmDiff`) is in
 `results/hubbard_chain_2026-10-03_sections.md` (tracked as issue #207).
-
