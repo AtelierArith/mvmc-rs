@@ -8,7 +8,7 @@ use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::{
     CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, ExchangeTerm, GutzwillerTerm,
-    HundTerm, InterAllTerm, JastrowTerm, PairHopTerm,
+    HundTerm, InterAllTerm, JastrowTerm, PairHopTerm, Spin, TransferTerm,
 };
 use num_complex::Complex64;
 
@@ -77,6 +77,78 @@ fn add_dh2_green_model(data: &mut ExpertModeData) {
         .collect();
 }
 
+// Archived Julia energies use complex historical Green ratios even when the
+// model header is real. Keep these independent Julia kernel expectations as
+// such; production C Hamiltonians have separate exact-bit oracle tests below.
+fn historical_fsz_energy(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ip: Complex64,
+    configuration: [&[i64]; 4],
+    spins: &[i64],
+) -> Complex64 {
+    let [idx, cfg, num, cnt] = configuration;
+    assert!(data.transfer_terms.is_empty());
+    let n = data.modpara.nsite as usize;
+    let valid = |i: i64| (0..n as i64).contains(&i);
+    let mut energy = Complex64::new(0.0, 0.0);
+    for t in &data.coulomb_intra_terms {
+        if valid(t.site) {
+            let i = t.site as usize;
+            energy += Complex64::new(t.value * (num[i] * num[i + n]) as f64, 0.0);
+        }
+    }
+    for t in &data.coulomb_inter_terms {
+        if valid(t.site1) && valid(t.site2) {
+            let (i, j) = (t.site1 as usize, t.site2 as usize);
+            energy += Complex64::new(
+                t.value * (num[i] + num[i + n]) as f64 * (num[j] + num[j + n]) as f64,
+                0.0,
+            );
+        }
+    }
+    for t in &data.hund_terms {
+        if valid(t.site1) && valid(t.site2) {
+            let (i, j) = (t.site1 as usize, t.site2 as usize);
+            energy -= Complex64::new(
+                t.value * (num[i] * num[j] + num[i + n] * num[j + n]) as f64,
+                0.0,
+            );
+        }
+    }
+    let mut green = |sites: [usize; 4], codes: [u8; 4]| {
+        let [i, j, k, l] = sites;
+        let [s, t, u, v] = codes;
+        green_func2_fsz(
+            i, j, k, l, s, t, u, v, ip, data, state, idx, cfg, num, cnt, spins,
+        )
+    };
+    for t in &data.pair_hop_terms {
+        if valid(t.site1) && valid(t.site2) {
+            let (i, j) = (t.site1 as usize, t.site2 as usize);
+            energy += t.value * green([i, j, i, j], [0, 0, 1, 1]);
+        }
+    }
+    for t in &data.exchange_terms {
+        if valid(t.site1) && valid(t.site2) {
+            let (i, j) = (t.site1 as usize, t.site2 as usize);
+            energy +=
+                t.value * (green([i, j, j, i], [0, 0, 1, 1]) + green([i, j, j, i], [1, 1, 0, 0]));
+        }
+    }
+    for t in &data.inter_all_terms {
+        let sites = [t.site0, t.site1, t.site2, t.site3];
+        if sites.iter().all(|&site| valid(site)) {
+            energy += t.value
+                * green(
+                    sites.map(|i| i as usize),
+                    [t.spin0, t.spin1, t.spin2, t.spin3].map(|s| s as u8),
+                );
+        }
+    }
+    energy
+}
+
 fn check_pairhop_energy(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
@@ -88,7 +160,7 @@ fn check_pairhop_energy(
     let [idx, cfg, num, cnt] = configuration;
     let local_energy = |data: &ExpertModeData, state: &mut VmcOptimizationState| {
         if let Some(spins) = spins {
-            calculate_local_energy_fsz(ip, data, state, idx, cfg, num, cnt, spins)
+            historical_fsz_energy(data, state, ip, [idx, cfg, num, cnt], spins)
         } else if mvmc_core::run::get_all_complex_flag(data) {
             // Keep the archived Julia PairHop energy bits as a historical
             // kernel check. Production complex PairHop now follows C's
@@ -866,6 +938,247 @@ fn check_native_fsz_green<const REAL: bool>() {
 }
 
 #[test]
+fn complete_fsz_hamiltonians_match_native_c_bits() {
+    check_native_fsz_hamiltonian::<false>();
+}
+
+#[test]
+fn complete_real_fsz_hamiltonians_match_native_c_bits() {
+    check_native_fsz_hamiltonian::<true>();
+}
+
+fn check_native_fsz_hamiltonian<const REAL: bool>() {
+    let fixture = if REAL {
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        let fixture =
+            include_str!("../../../tests/fixtures/interall/c_fsz_real_hamiltonian_linux_gnu.txt");
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_real_hamiltonian.txt");
+        fixture
+    } else {
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        let fixture =
+            include_str!("../../../tests/fixtures/interall/c_fsz_hamiltonian_linux_gnu.txt");
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        let fixture = include_str!("../../../tests/fixtures/interall/c_fsz_hamiltonian.txt");
+        fixture
+    };
+    let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
+    let mut failures = Vec::new();
+    for case in 0..if REAL { 6 } else { 12 } {
+        let _input_complex = lines.next().unwrap() == "1";
+        let idx = integers(lines.next().unwrap());
+        let spins = integers(lines.next().unwrap());
+        let cfg = integers(lines.next().unwrap());
+        let num = integers(lines.next().unwrap());
+        let cnt = integers(lines.next().unwrap());
+        let parameters = complex_bits(lines.next().unwrap());
+        let mut data = green_data(!REAL);
+        data.i_flg_orbital_general = 1;
+        data.gutzwiller_terms[0].value = parameters[0];
+        data.jastrow_terms[0].value = parameters[1];
+        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, !REAL, true);
+        let slater = complex_bits(lines.next().unwrap());
+        state
+            .slater_matrix
+            .slater_elm
+            .as_mut_slice()
+            .copy_from_slice(&slater);
+        let pf = complex_bits(lines.next().unwrap());
+        state.slater_matrix.pf_m.copy_from_slice(&pf);
+        let inv = complex_bits(lines.next().unwrap());
+        for qp in 0..2 {
+            state.slater_matrix.inv_m.as_mut_slice()[qp * 17..qp * 17 + 16]
+                .copy_from_slice(&inv[qp * 16..qp * 16 + 16]);
+        }
+        if REAL {
+            for (target, source) in state
+                .slater_matrix
+                .slater_elm_real
+                .as_mut_slice()
+                .iter_mut()
+                .zip(&slater)
+            {
+                *target = source.re;
+            }
+            for (target, source) in state.slater_matrix.pf_m_real.iter_mut().zip(&pf) {
+                *target = source.re;
+            }
+            for qp in 0..2 {
+                for (target, source) in state.slater_matrix.inv_m_real.as_mut_slice()
+                    [qp * 17..qp * 17 + 16]
+                    .iter_mut()
+                    .zip(&inv[qp * 16..qp * 16 + 16])
+                {
+                    *target = source.re;
+                }
+            }
+        }
+        let ip = complex_bits(lines.next().unwrap())[0];
+        let energies = complex_bits(lines.next().unwrap());
+        assert_eq!(energies.len(), 6);
+        // Header mode determines the storage family, independently of the
+        // imaginary Hamiltonian couplings. Poison the unused family so this
+        // gate also detects accidental reads of the other matrix buffers.
+        if REAL {
+            state
+                .slater_matrix
+                .slater_elm
+                .as_mut_slice()
+                .fill(Complex64::new(13.0, -7.0));
+            state
+                .slater_matrix
+                .inv_m
+                .as_mut_slice()
+                .fill(Complex64::new(-11.0, 19.0));
+            state.slater_matrix.pf_m.fill(Complex64::new(17.0, -5.0));
+        } else {
+            state
+                .slater_matrix
+                .slater_elm_real
+                .as_mut_slice()
+                .fill(13.0);
+            state.slater_matrix.inv_m_real.as_mut_slice().fill(-11.0);
+            state.slater_matrix.pf_m_real.fill(17.0);
+        }
+        let before = state.slater_matrix.clone();
+        for (group, expected) in energies.into_iter().enumerate() {
+            data.coulomb_intra_terms.clear();
+            data.coulomb_inter_terms.clear();
+            data.hund_terms.clear();
+            data.transfer_terms.clear();
+            data.pair_hop_terms.clear();
+            data.exchange_terms.clear();
+            data.inter_all_terms.clear();
+            for i in 0..4 {
+                if group == 0 || group == 5 {
+                    data.coulomb_intra_terms.push(CoulombIntraTerm {
+                        site: i,
+                        value: (i - 1) as f64 / 8.0,
+                    });
+                }
+                for j in 0..4 {
+                    let k = i * 4 + j;
+                    if group == 0 || group == 5 {
+                        data.coulomb_inter_terms.push(CoulombInterTerm {
+                            site1: i,
+                            site2: j,
+                            value: (k % 5 - 2) as f64 / 16.0,
+                        });
+                        data.hund_terms.push(HundTerm {
+                            site1: i,
+                            site2: j,
+                            value: (k % 7 - 3) as f64 / 32.0,
+                        });
+                    }
+                    if group == 2 || group == 5 {
+                        data.pair_hop_terms.push(PairHopTerm {
+                            site1: i,
+                            site2: j,
+                            value: (k % 11 - 5) as f64 / 16.0,
+                        });
+                    }
+                    if group == 3 || group == 5 {
+                        data.exchange_terms.push(ExchangeTerm {
+                            site1: i,
+                            site2: j,
+                            value: (k % 13 - 6) as f64 / 32.0,
+                        });
+                    }
+                }
+            }
+            if group == 1 || group == 5 {
+                for s in [Spin::Up, Spin::Down] {
+                    for t in [Spin::Up, Spin::Down] {
+                        for i in 0..4 {
+                            for j in 0..4 {
+                                let k = data.transfer_terms.len() as i64;
+                                data.transfer_terms.push(TransferTerm {
+                                    site1: i,
+                                    spin1: s,
+                                    site2: j,
+                                    spin2: t,
+                                    value: Complex64::new(
+                                        (k % 7 - 3) as f64 / 16.0,
+                                        (k % 11 - 5) as f64 / 32.0,
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+                data.transfer_terms.push(data.transfer_terms[19]);
+            }
+            if !data.pair_hop_terms.is_empty() {
+                for k in [0, 7] {
+                    data.pair_hop_terms.push(data.pair_hop_terms[k]);
+                }
+            }
+            if !data.exchange_terms.is_empty() {
+                for k in [0, 11] {
+                    data.exchange_terms.push(data.exchange_terms[k]);
+                }
+            }
+            if group == 4 || group == 5 {
+                for s in 0..2 {
+                    for t in 0..2 {
+                        for u in 0..2 {
+                            for v in 0..2 {
+                                for i in 0..4 {
+                                    for j in 0..4 {
+                                        for k in 0..4 {
+                                            for l in 0..4 {
+                                                let n = data.inter_all_terms.len() as i64;
+                                                data.inter_all_terms.push(InterAllTerm {
+                                                    site0: i,
+                                                    spin0: s,
+                                                    site1: j,
+                                                    spin1: t,
+                                                    site2: k,
+                                                    spin2: u,
+                                                    site3: l,
+                                                    spin3: v,
+                                                    is_complex: n % 11 != 5,
+                                                    value: Complex64::new(
+                                                        (n % 7 - 3) as f64 / 16.0,
+                                                        (n % 11 - 5) as f64 / 32.0,
+                                                    ),
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for k in [73, 3072] {
+                    data.inter_all_terms.push(data.inter_all_terms[k]);
+                }
+            }
+            assert_eq!(mvmc_core::get_all_complex_flag(&data), !REAL);
+            let actual =
+                calculate_local_energy_fsz(ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins);
+            if [actual.re.to_bits(), actual.im.to_bits()]
+                != [expected.re.to_bits(), expected.im.to_bits()]
+            {
+                failures.push(format!(
+                    "case={case} group={group}: actual={actual:?} C={expected:?}"
+                ));
+            }
+            assert_eq!(state.slater_matrix, before);
+        }
+    }
+    assert!(lines.next().is_none());
+    assert!(
+        failures.is_empty(),
+        "{} native Hamiltonian differences: {:?}",
+        failures.len(),
+        failures.first()
+    );
+}
+
+#[test]
 fn exhaustive_fsz_one_and_two_body_spin_changes_match_original_julia_bits() {
     check_fsz_green("");
 }
@@ -1000,8 +1313,7 @@ fn check_fsz_green(factor: &str) {
                 value: 0.15,
             },
         ];
-        let energy =
-            calculate_local_energy_fsz(ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins);
+        let energy = historical_fsz_energy(&data, &mut state, ip, [&idx, &cfg, &num, &cnt], &spins);
         assert_eq!(
             [energy.re.to_bits(), energy.im.to_bits()],
             [expected[0].re.to_bits(), expected[0].im.to_bits()]
@@ -1020,8 +1332,7 @@ fn check_fsz_green(factor: &str) {
         data.inter_all_terms = historical_interall_model::parse_interall_content(
             "0 0 0 0 3 1 3 1 -0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n0 0 0 1 2 0 2 1 0.125 -0.25\n1 1 2 0 2 0 0 1 -0.25 -0.375\n1 1 0 0 2 0 3 1 0.5 0.125\n0 0 0 1 3 1 3 0 -0.375 0.1875\n-1 0 0 1 3 1 3 0 0.25 0.125\n"
         );
-        let energy =
-            calculate_local_energy_fsz(ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins);
+        let energy = historical_fsz_energy(&data, &mut state, ip, [&idx, &cfg, &num, &cnt], &spins);
         assert_eq!(
             [energy.re.to_bits(), energy.im.to_bits()],
             [expected[1].re.to_bits(), expected[1].im.to_bits()],

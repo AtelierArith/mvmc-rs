@@ -3,6 +3,8 @@
 mod historical_orbital_model;
 #[path = "../../../tests/support/julia_fixture.rs"]
 mod julia_fixture;
+#[path = "../../../tests/support/native_fsz_fixture.rs"]
+mod native_fsz_fixture;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -80,7 +82,13 @@ fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_outp
             },
         )
         .unwrap();
-        let reference = root.join(format!("sr_direct/dh2_{mode}_store_runner"));
+        let reference = if native_fsz_fixture::directory(&root).is_some() && mode == "fsz" {
+            native_fsz_fixture::directory(&root)
+                .unwrap()
+                .join("sr_direct/dh2_fsz_store_runner")
+        } else {
+            root.join(format!("sr_direct/dh2_{mode}_store_runner"))
+        };
         for name in [
             "zvo_out.dat",
             "zvo_var.dat",
@@ -94,12 +102,14 @@ fn public_dh2_runners_load_nonzero_overlays_and_match_original_direct_store_outp
                 declared_output(
                     &data,
                     name,
-                    std::fs::read_to_string(julia_fixture::fixture_path(
-                        &root,
-                        reference
-                            .strip_prefix(&root)
-                            .unwrap()
-                            .join(format!("step-3-{name}"))
+                    std::fs::read_to_string(native_fsz_fixture::resolve(
+                        julia_fixture::fixture_path(
+                            &root,
+                            reference
+                                .strip_prefix(&root)
+                                .unwrap()
+                                .join(format!("step-3-{name}"))
+                        ),
                     ))
                     .unwrap()
                 ),

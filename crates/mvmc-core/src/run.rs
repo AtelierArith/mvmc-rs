@@ -16,6 +16,10 @@
 mod reference_slater;
 
 #[cfg(test)]
+#[path = "../../../tests/support/native_fsz_fixture.rs"]
+mod native_fsz_fixture;
+
+#[cfg(test)]
 use std::fs;
 use std::path::Path;
 
@@ -1630,78 +1634,53 @@ fn accumulate_observables<const TIMED: bool>(
             }
         }
 
-        if state.phys_quantities.is_some() {
+        if state.phys_quantities.is_some() && use_fsz {
+            crate::observables::calculate_green_func_fsz_timed(
+                data,
+                state,
+                w,
+                ip,
+                &ele_idx,
+                &ele_cfg,
+                &ele_num,
+                &ele_proj_cnt,
+                &ele_spn,
+                timer,
+            );
+        } else if state.phys_quantities.is_some() {
             let mut one_body = vec![Complex64::new(0.0, 0.0); data.green_one_terms.len()];
             for (index, term) in data.green_one_terms.iter().enumerate() {
-                one_body[index] = if use_fsz {
-                    crate::observables::green_func1_fsz(
-                        term.site1 as usize,
-                        term.site2 as usize,
-                        crate::observables::spin_code(term.spin1),
-                        crate::observables::spin_code(term.spin2),
-                        ip,
-                        data,
-                        state,
-                        &ele_idx,
-                        &ele_cfg,
-                        &ele_num,
-                        &ele_proj_cnt,
-                        &ele_spn,
-                    )
-                } else {
-                    crate::observables::green_func1(
-                        term.site1 as usize,
-                        term.site2 as usize,
-                        crate::observables::spin_code(term.spin1),
-                        crate::observables::spin_code(term.spin2),
-                        ip,
-                        data,
-                        state,
-                        &ele_idx,
-                        &ele_cfg,
-                        &ele_num,
-                        &ele_proj_cnt,
-                    )
-                };
+                one_body[index] = crate::observables::green_func1(
+                    term.site1 as usize,
+                    term.site2 as usize,
+                    crate::observables::spin_code(term.spin1),
+                    crate::observables::spin_code(term.spin2),
+                    ip,
+                    data,
+                    state,
+                    &ele_idx,
+                    &ele_cfg,
+                    &ele_num,
+                    &ele_proj_cnt,
+                );
             }
             let mut direct = vec![Complex64::new(0.0, 0.0); data.green_two_terms.len()];
             for (index, term) in data.green_two_terms.iter().enumerate() {
-                direct[index] = if use_fsz {
-                    crate::observables::green_func2_fsz(
-                        term.site1 as usize,
-                        term.site2 as usize,
-                        term.site3 as usize,
-                        term.site4 as usize,
-                        crate::observables::spin_code(term.spin1),
-                        crate::observables::spin_code(term.spin2),
-                        crate::observables::spin_code(term.spin3),
-                        crate::observables::spin_code(term.spin4),
-                        ip,
-                        data,
-                        state,
-                        &ele_idx,
-                        &ele_cfg,
-                        &ele_num,
-                        &ele_proj_cnt,
-                        &ele_spn,
-                    )
-                } else {
-                    crate::observables::green_func2(
-                        term.site1 as usize,
-                        term.site2 as usize,
-                        term.site3 as usize,
-                        term.site4 as usize,
-                        crate::observables::spin_code(term.spin1),
-                        crate::observables::spin_code(term.spin3),
-                        ip,
-                        data,
-                        state,
-                        &ele_idx,
-                        &ele_cfg,
-                        &ele_num,
-                        &ele_proj_cnt,
-                    )
-                };
+                direct[index] = crate::observables::green_func2(
+                    term.site1 as usize,
+                    term.site2 as usize,
+                    term.site3 as usize,
+                    term.site4 as usize,
+                    crate::observables::spin_code(term.spin1),
+                    crate::observables::spin_code(term.spin3),
+                    ip,
+                    data,
+                    state,
+                    &ele_idx,
+                    &ele_cfg,
+                    &ele_num,
+                    &ele_proj_cnt,
+                );
             }
             let lanczos_green = if data.modpara.lanczos_mode > 1 {
                 Some(crate::observables::calculate_lanczos_green(
@@ -1889,16 +1868,21 @@ fn accumulate_observables<const TIMED: bool>(
             for value in &mut phys.phys_lanczos_qcisajscktaltq_dc {
                 *value /= denominator;
             }
-            for value in &mut phys.phys_cis_ajs {
-                *value /= denominator;
-            }
-            for value in &mut phys.phys_cis_ajs_ckt_alt {
-                *value /= denominator;
-            }
-            for value in &mut phys.phys_cis_ajs_ckt_alt_dc {
-                *value /= denominator;
+            if !use_fsz {
+                for value in &mut phys.phys_cis_ajs {
+                    *value /= denominator;
+                }
+                for value in &mut phys.phys_cis_ajs_ckt_alt {
+                    *value /= denominator;
+                }
+                for value in &mut phys.phys_cis_ajs_ckt_alt_dc {
+                    *value /= denominator;
+                }
             }
         }
+    }
+    if use_fsz {
+        crate::observables::weight_average_green_func_fsz(state);
     }
     if use_store {
         timer.start(45);
@@ -2124,6 +2108,120 @@ mod callback_tests {
         init_qp_weight(&mut data);
         let state = state_from_data(&data);
         (data, state, rng)
+    }
+
+    #[test]
+    fn fsz_measurements_preserve_real_and_complex_optimization_sampling_and_rng() {
+        use mvmc_expert_parsers::{GreenOneTerm, GreenTwoTerm, Spin};
+        for complex in [false, true] {
+            let (mut baseline, _, base_rng) = prepared_case(3, "heisenberg_chain_fsz");
+            baseline.complex_flags = vec![i64::from(complex)];
+            if !complex {
+                for value in &mut baseline.slater_params {
+                    value.im = 0.0;
+                }
+                sync_modified_parameter(&mut baseline, true);
+            }
+            assert_eq!(get_all_complex_flag(&baseline), complex);
+            baseline.green_one_terms = vec![
+                GreenOneTerm {
+                    site1: 0,
+                    spin1: Spin::Up,
+                    site2: 0,
+                    spin2: Spin::Up,
+                },
+                GreenOneTerm {
+                    site1: 0,
+                    spin1: Spin::Up,
+                    site2: 1,
+                    spin2: Spin::Down,
+                },
+                GreenOneTerm {
+                    site1: 1,
+                    spin1: Spin::Down,
+                    site2: 0,
+                    spin2: Spin::Up,
+                },
+            ];
+            baseline.green_two_terms = vec![
+                GreenTwoTerm {
+                    site1: 0,
+                    spin1: Spin::Up,
+                    site2: 1,
+                    spin2: Spin::Up,
+                    site3: 1,
+                    spin3: Spin::Down,
+                    site4: 0,
+                    spin4: Spin::Down,
+                },
+                GreenTwoTerm {
+                    site1: 0,
+                    spin1: Spin::Up,
+                    site2: 0,
+                    spin2: Spin::Up,
+                    site3: 1,
+                    spin3: Spin::Down,
+                    site4: 1,
+                    spin4: Spin::Down,
+                },
+            ];
+            baseline.green_two_terms.push(baseline.green_two_terms[0]);
+            baseline.green_two_ex_indices = vec![(0, 0), (1, 2), (1, 2)];
+            let mut observed = baseline.clone();
+            let mut base_state = state_from_data(&baseline);
+            let mut state = state_from_data(&observed);
+            state.phys_quantities = Some(crate::state::PhysicalQuantities::zeros(3, 3, 3));
+            let mut base_rng = base_rng;
+            let mut rng = base_rng.clone();
+            let base_dir = fresh_output_directory().unwrap();
+            let dir = fresh_output_directory().unwrap();
+            for step in 0..3 {
+                baseline.modpara.nsr_opt_itr_step = 1;
+                observed.modpara.nsr_opt_itr_step = 1;
+                vmc_para_opt(
+                    &mut baseline,
+                    &mut base_state,
+                    &mut base_rng,
+                    Some(&base_dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions::default(),
+                )
+                .unwrap();
+                vmc_para_opt(
+                    &mut observed,
+                    &mut state,
+                    &mut rng,
+                    Some(&dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions::default(),
+                )
+                .unwrap();
+                assert_eq!(
+                    observed.slater_params, baseline.slater_params,
+                    "complex={complex}, step={step}"
+                );
+                assert_eq!(state.electron_config, base_state.electron_config);
+                assert_eq!(state.slater_matrix, base_state.slater_matrix);
+                assert_eq!(state.energy, base_state.energy);
+                assert_eq!(state.sr_opt, base_state.sr_opt);
+                assert_eq!(state.opt_data, base_state.opt_data);
+                let phys = state.phys_quantities.as_ref().unwrap();
+                assert!(phys.phys_cis_ajs[0].norm() > 0.0);
+                // Compare a full SFMT block after each SR step without advancing
+                // either live generator, so the next chain continues unchanged.
+                let mut actual = rng.clone();
+                let mut expected = base_rng.clone();
+                for word in 0..624 {
+                    assert_eq!(
+                        actual.gen_rand32(),
+                        expected.gen_rand32(),
+                        "complex={complex}, step={step}, RNG word={word}"
+                    );
+                }
+            }
+            fs::remove_dir_all(base_dir).unwrap();
+            fs::remove_dir_all(dir).unwrap();
+        }
     }
 
     #[test]
@@ -2541,19 +2639,40 @@ mod callback_tests {
             let fixtures = root.parent().unwrap();
             let case = format!("dh2_{mode}");
             let read_checkpoint = |kind: &str| {
-                fs::read_to_string(julia_fixture::fixture_path(
-                    fixtures,
-                    format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
-                ))
+                fs::read_to_string(
+                    if mode.ends_with("fsz") && native_fsz_fixture::directory(fixtures).is_some() {
+                        native_fsz_fixture::resolve(
+                            native_fsz_fixture::directory(fixtures)
+                                .unwrap()
+                                .join(format!("sr_direct/{case}_runner/step-3-{kind}.txt")),
+                        )
+                    } else {
+                        julia_fixture::fixture_path(
+                            fixtures,
+                            format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
+                        )
+                    },
+                )
                 .unwrap()
             };
             assert_sampling_checkpoint(&case, 3, &state, &mut rng, &read_checkpoint);
-            let text = fs::read_to_string(julia_fixture::fixture_path(
-                fixtures,
-                format!("dh2/history-{mode}.txt"),
-            ))
-            .unwrap();
-            let mut lines = text.lines().skip(1);
+            let history =
+                if mode.ends_with("fsz") && native_fsz_fixture::directory(fixtures).is_some() {
+                    native_fsz_fixture::directory(fixtures)
+                        .unwrap()
+                        .join(root.file_name().unwrap())
+                        .join(format!("history-{mode}.txt"))
+                } else {
+                    julia_fixture::fixture_path(
+                        fixtures,
+                        format!(
+                            "{}/history-{mode}.txt",
+                            root.file_name().unwrap().to_str().unwrap()
+                        ),
+                    )
+                };
+            let text = fs::read_to_string(history).unwrap();
+            let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
                 assert_eq!(
@@ -2649,19 +2768,40 @@ mod callback_tests {
             let fixtures = root.parent().unwrap();
             let case = mode.to_owned();
             let read_checkpoint = |kind: &str| {
-                fs::read_to_string(julia_fixture::fixture_path(
-                    fixtures,
-                    format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
-                ))
+                fs::read_to_string(
+                    if mode.ends_with("fsz") && native_fsz_fixture::directory(fixtures).is_some() {
+                        native_fsz_fixture::resolve(
+                            native_fsz_fixture::directory(fixtures)
+                                .unwrap()
+                                .join(format!("sr_direct/{case}_runner/step-3-{kind}.txt")),
+                        )
+                    } else {
+                        julia_fixture::fixture_path(
+                            fixtures,
+                            format!("sr_direct/{case}_runner/step-3-{kind}.txt"),
+                        )
+                    },
+                )
                 .unwrap()
             };
             assert_sampling_checkpoint(&case, 3, &state, &mut rng, &read_checkpoint);
-            let text = fs::read_to_string(julia_fixture::fixture_path(
-                fixtures,
-                format!("dh4/history-{mode}.txt"),
-            ))
-            .unwrap();
-            let mut lines = text.lines().skip(1);
+            let history =
+                if mode.ends_with("fsz") && native_fsz_fixture::directory(fixtures).is_some() {
+                    native_fsz_fixture::directory(fixtures)
+                        .unwrap()
+                        .join(root.file_name().unwrap())
+                        .join(format!("history-{mode}.txt"))
+                } else {
+                    julia_fixture::fixture_path(
+                        fixtures,
+                        format!(
+                            "{}/history-{mode}.txt",
+                            root.file_name().unwrap().to_str().unwrap()
+                        ),
+                    )
+                };
+            let text = fs::read_to_string(history).unwrap();
+            let mut lines = text.lines().filter(|line| !line.starts_with('#'));
             assert_eq!(state.opt_data.len(), 3);
             for point in &state.opt_data {
                 assert_eq!(
@@ -3182,8 +3322,39 @@ mod callback_tests {
                     "_store_runner"
                 }
             ));
-        let fixture_file = |name: &str| {
-            julia_fixture::fixture_path(&fixtures, root.strip_prefix(&fixtures).unwrap().join(name))
+        // The production FSZ Hamiltonian now follows the actual C callees.
+        // Independently generated mixed references retain Julia's sampler/SR
+        // while calling those C bodies; archived Julia-only expectations stay
+        // unchanged in their original directories.
+        let native_fsz = matches!(
+            reference_case,
+            "fsz" | "interall" | "pairhop_fsz" | "opt_fsz" | "dh2_fsz" | "dh4_fsz" | "dh24_fsz"
+        ) && native_fsz_fixture::directory(&fixtures).is_some();
+        let root = if native_fsz {
+            native_fsz_fixture::directory(&fixtures)
+                .unwrap()
+                .join(if cg { "sr_cg" } else { "sr_direct" })
+                .join(format!(
+                    "{reference_case}{}",
+                    if store == 0 {
+                        "_runner"
+                    } else {
+                        "_store_runner"
+                    }
+                ))
+        } else {
+            root
+        };
+        let read_fixture = |name: &str| {
+            fs::read_to_string(if native_fsz {
+                native_fsz_fixture::resolve(root.join(name))
+            } else {
+                julia_fixture::fixture_path(
+                    &fixtures,
+                    root.strip_prefix(&fixtures).unwrap().join(name),
+                )
+            })
+            .unwrap()
         };
         let prefixes = if !cg && case == "hubbard" {
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 50]
@@ -3284,8 +3455,7 @@ mod callback_tests {
                 },
             );
             let failed = if case == "rbm_fsz" || case.starts_with("opt_") {
-                let status =
-                    fs::read_to_string(fixture_file(&format!("step-{steps}-status.txt"))).unwrap();
+                let status = read_fixture(&format!("step-{steps}-status.txt"));
                 let mut status = status.split_whitespace();
                 let info: i32 = status.next().unwrap().parse().unwrap();
                 let step: i32 = status.next().unwrap().parse().unwrap();
@@ -3300,9 +3470,7 @@ mod callback_tests {
                 result.unwrap();
                 false
             };
-            let read = |kind: &str| {
-                fs::read_to_string(fixture_file(&format!("step-{steps}-{kind}.txt"))).unwrap()
-            };
+            let read = |kind: &str| read_fixture(&format!("step-{steps}-{kind}.txt"));
             assert_sampling_checkpoint(case, steps, &state, &mut rng, &read);
             let bits = |text: &str| -> Vec<u64> {
                 text.split_whitespace()
@@ -3310,7 +3478,7 @@ mod callback_tests {
                     .collect()
             };
             if (case.starts_with("rbm_") || case.starts_with("opt_")) && steps == 1 && !cg {
-                let fixture = fs::read_to_string(fixture_file("fixed-input.txt")).unwrap();
+                let fixture = read_fixture("fixed-input.txt");
                 let lines: Vec<&str> = fixture.lines().filter(|l| !l.starts_with('#')).collect();
                 let complex_bits = |values: &[Complex64]| -> Vec<u64> {
                     values
@@ -3342,7 +3510,7 @@ mod callback_tests {
                 assert_eq!(oo, bits(lines[2]), "{case} sampled SR OO");
                 assert_eq!(ho, bits(lines[3]), "{case} sampled SR HO");
                 if store == 1 {
-                    let fixture = fs::read_to_string(fixture_file("gram.txt")).unwrap();
+                    let fixture = read_fixture("gram.txt");
                     let expected = bits(fixture.lines().nth(1).unwrap());
                     let actual = if get_all_complex_flag(&data) {
                         complex_bits(&state.sr_opt.sr_opt_o_store)
@@ -3412,8 +3580,7 @@ mod callback_tests {
                     if failed && name.starts_with("zqp_") {
                         assert!(!dir.join(name).exists(), "{case} {steps} {name}");
                         assert_eq!(
-                            fs::read_to_string(fixture_file(&format!("step-{steps}-{name}")))
-                                .unwrap(),
+                            read_fixture(&format!("step-{steps}-{name}")),
                             "# absent after source SR failure\n"
                         );
                     } else {
@@ -3422,8 +3589,7 @@ mod callback_tests {
                             declared_runner_output(
                                 &data,
                                 name,
-                                fs::read_to_string(fixture_file(&format!("step-{steps}-{name}")))
-                                    .unwrap(),
+                                read_fixture(&format!("step-{steps}-{name}")),
                                 &rbm_before_sr,
                             ),
                             "{case} {steps} {name}"

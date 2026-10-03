@@ -64,6 +64,9 @@ c-interall-real          Normal real Green kernels
 c-interall-complex       Normal complex Green kernels
 c-fsz-real               FSZ real Green kernels
 c-fsz-complex            FSZ complex Green kernels
+c-fsz-energy-real        Complete scalar FSZ Hamiltonian
+c-fsz-energy-complex     Complete complex FSZ Hamiltonian
+c-fsz-measurements       Weighted/factored FSZ Green measurements
 julia-fsz-setup          Small real FSZ setup/failure/RNG cases
 julia-fsz-moves          Small real FSZ proposals/inverse/bilinear cases
 julia-fsz-real-sampling  Small real FSZ sampling/RNG cases (explicit selection)
@@ -102,6 +105,9 @@ suite_script() {
         c-interall-complex) suite_file=check_interall_complex_c_parity.py ;;
         c-fsz-real) suite_file=check_fsz_green_c_parity.py; suite_flags=(--real) ;;
         c-fsz-complex) suite_file=check_fsz_green_c_parity.py ;;
+        c-fsz-energy-real) suite_file=check_fsz_green_c_parity.py; suite_flags=(--real --hamiltonian) ;;
+        c-fsz-energy-complex) suite_file=check_fsz_green_c_parity.py; suite_flags=(--hamiltonian) ;;
+        c-fsz-measurements) suite_file=check_fsz_green_c_parity.py; suite_flags=(--measurements) ;;
         julia-linux-*) suite_file=generate_linux_julia_references.jl ;;
         julia-fsz-setup) suite_file=check_real_fsz_setup_parity.jl ;;
         julia-fsz-moves) suite_file=check_real_fsz_moves_parity.jl ;;
@@ -218,7 +224,7 @@ for suite in "${selected[@]}"; do
         c-*) command_args=(uv run --no-project python "scripts/$suite_file") ;;
         julia-*) command_args=("${julia_command[@]}" --startup-file=no --project=extern/Julia-mVMC "scripts/$suite_file") ;;
     esac
-    if [[ $suite == c-fsz-real ]]; then command_args+=(--real); fi
+    command_args+=("${suite_flags[@]}")
     if ! $check; then command_args+=(--write); fi
     printf '%s\t' "$suite" >> "$output/commands.txt"
     printf '%q ' "${command_args[@]}" >> "$output/commands.txt"

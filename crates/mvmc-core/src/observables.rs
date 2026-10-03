@@ -31,8 +31,13 @@ use crate::sampling::updates::{
 use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 
+mod fsz_energy;
 mod fsz_green;
 pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex, green_func2_fsz_real};
+mod fsz_measurements;
+pub use fsz_measurements::{
+    calculate_green_func_fsz, calculate_green_func_fsz_timed, weight_average_green_func_fsz,
+};
 
 /// Complete Julia's projection ratio with the RBM ratio for an operator move.
 /// Counters are rebuilt from occupations and current parameters, including saved walkers.
@@ -1171,6 +1176,34 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
     ele_spn: &[i64],
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
+    if !data.has_rbm_terms() {
+        return if crate::run::get_all_complex_flag(data) {
+            fsz_energy::native_energy::<false, TIMED>(
+                ip,
+                data,
+                state,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+                ele_spn,
+                timer,
+            )
+        } else {
+            fsz_energy::native_energy::<true, TIMED>(
+                ip,
+                data,
+                state,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+                ele_spn,
+                timer,
+            )
+        };
+    }
+    // Preserve the Julia RBM extension separately: upstream C FSZ has no RBM.
     timer.start(70);
     let mut e = calculate_hamiltonian_diagonal(ele_num, data);
     timer.stop(70);

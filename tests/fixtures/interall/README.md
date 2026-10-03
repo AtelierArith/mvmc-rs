@@ -399,3 +399,78 @@ non-NaN bits exactly. Real normal/FSZ numerical bodies agree across these two
 verified environments. See [Linux numerical contracts](../../../docs/LINUX_NUMERICAL_CONTRACTS.md)
 for reproduction, source/licensing provenance, scope and the separately
 classified reader/derivative/normalization differences.
+## Complete native C FSZ Hamiltonians (Issue #186)
+
+`c_fsz_hamiltonian.txt` and `c_fsz_real_hamiltonian.txt` contain 72 complex-family
+and 36 scalar-family evaluations of the complete `CalculateHamiltonian_fsz`
+and `CalculateHamiltonian_fsz_real` bodies. Each input covers diagonal terms,
+Transfer, PairHop, Exchange, InterAll separately and their combined accumulation.
+Transfer includes all 64 one-body operators and a duplicate; PairHop and Exchange
+include all 16 site pairs and two duplicates; InterAll includes 4,096 operators
+and two duplicates. Source extraction preserves the complete native bodies.
+Workspace and timer plumbing are supplied by the optional driver, and OpenMP
+pragmas are inactive so the comparison fixes a single serial accumulation order.
+
+Historical Julia arrays supply only input buffers. C supplies the independent
+energy expectations, with source hashes and Apple clang 17 recorded. The
+`*_linux_gnu.txt` counterparts record their actual Linux compiler, glibc and
+libgcc archive separately. Builds use `-O0 -ffp-contract=off`. Scalar Hamiltonians deliberately include imaginary Transfer/InterAll
+coefficients without changing the real variational-header mode. The initial
+production tests found 22 scalar and 42 complex discrepancies, including a
+scalar result incorrectly retaining its imaginary part.
+
+```sh
+uv run --no-project python scripts/check_fsz_green_c_parity.py --hamiltonian
+uv run --no-project python scripts/check_fsz_green_c_parity.py --real --hamiltonian
+cargo nextest run -p mvmc-core --test two_body_green -E 'test(complete_fsz) | test(complete_real_fsz)'
+```
+
+These checks cover the complete serial local-energy callee on supplied buffers
+with Gutzwiller/Jastrow projection. They do not establish native C buffer setup,
+DH/RBM, full sampling/SR or distributed MPI execution. Measurement callees
+have their own native expectations below; full regression validation is separate.
+
+
+## Native serial FSZ Green measurements (Issue #186)
+
+`c_fsz_measurements.txt` records native macOS results; its
+`c_fsz_measurements_linux_gnu.txt` counterpart records native Linux GNU results.
+Each contains 12 four-site models and three
+successive weights per model (`0.375`, `1.25`, `0.125`). The optional probe
+extracts the complete `calgrn_fsz.c:CalculateGreenFunc_fsz` and
+`average.c:weightAverageReduce_fcmp` bodies verbatim. Each model covers 64
+one-body operators, 4,098 direct four-fermion operators (including two ordered
+duplicates), and eight canonical factored pairs (also including a duplicate).
+The 26 lines per model contain 11 input rows, weights, raw one/direct vectors,
+three cumulative weighted one/direct/factored frames, and the final normalized
+one/direct/factored vectors. Complex components are IEEE hexadecimal bits.
+
+C measures the complex Green family even for real wavefunctions. This shadow
+is defined: `setmemory.c` places `PfM_real` immediately after `InvM_real`, and
+`vmccal_fsz.c` copies `NQPFull*(Nsize*Nsize+1)` doubles into complex storage,
+including that Pfaffian tail. Rust's runner refreshes both inverse and Pfaffian
+shadows before measurement. The fixture tests poison the independent scalar
+storage to catch accidental real-kernel measurement dispatch.
+
+Scalar weights multiply the one/direct values in C order. Factored values use
+`weight * one[first] * conj(one[second])` from the same walker. C's `Wc` is
+`double complex`, as declared in `include/global.h`: normalization computes
+one native complex reciprocal, then multiplies the accumulated vectors. It
+must not divide each element independently. The first Linux normalization test
+found 2,012 bit differences with per-element division; reciprocal multiplication
+passes the independent native expectations without a tolerance.
+
+```sh
+# Run in the platform being verified: native macOS, or the Linux Dev Container.
+uv run --no-project python scripts/check_fsz_green_c_parity.py --measurements --write
+uv run --no-project python scripts/check_fsz_green_c_parity.py --measurements
+cargo nextest run -p mvmc-core --cargo-profile test-fast --test fsz_measurements
+```
+
+The C and Rust gates check restoration of input/configuration and Slater buffers.
+A separate production-runner test compares measurement-enabled and disabled
+real/complex optimization chains after each of three SR steps, including saved
+configurations and a full 624-word SFMT block. These are serial callee and
+non-interference checks; they do not establish complete native C initialization,
+sampling/SR, distributed MPI reduction or RBM parity. Normal Cargo tests use
+only checked-in fixtures, without reading or running `c_toolbox`.
