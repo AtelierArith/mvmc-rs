@@ -154,6 +154,17 @@ pub struct PhysCalGreenView<'a> {
 
 /// Read-only diagnostic observation of the actual production accumulation.
 pub trait PhysCalGreenObserver {
+    /// Actual initialization boundary; diagnostic only, with a borrowed RNG.
+    /// Fixed-loaded/overlaid/synchronized precede seeding; initialized-clone
+    /// describes the real initialization scratch copy, not the fixed parameters.
+    fn lifecycle(
+        &self,
+        _stage: &'static str,
+        _data: &ExpertModeData,
+        _rng: Option<&Sfmt19937Rng>,
+        _n_para_consumed: Option<usize>,
+    ) {
+    }
     /// Actual saved chain and nonconsuming RNG immediately after sampling,
     /// before measurement changes matrix/configuration scratch. No replay.
     fn sample_completed(
@@ -210,6 +221,20 @@ fn with_physcal_green_sample<T>(sample: usize, operation: impl FnOnce() -> T) ->
     }
     let _restore = Restore(PHYSCAL_GREEN_SAMPLE.with(|slot| slot.replace(Some(sample))));
     operation()
+}
+
+fn observe_physcal_lifecycle(
+    stage: &'static str,
+    data: &ExpertModeData,
+    rng: Option<&Sfmt19937Rng>,
+    n_para_consumed: Option<usize>,
+) {
+    PHYSCAL_GREEN_OBSERVER.with(|slot| {
+        let observer = slot.borrow().clone();
+        if let Some(observer) = observer {
+            observer.lifecycle(stage, data, rng, n_para_consumed);
+        }
+    });
 }
 
 fn observe_physcal_green(data: &ExpertModeData, state: &VmcOptimizationState, use_fsz: bool) {
@@ -364,8 +389,11 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
         )
         .map_err(|error| error.to_string())?;
         let n_para_consumed = read_opt_para_file(&mut data, opt_para_path)?;
+        observe_physcal_lifecycle("fixed-loaded", &data, None, Some(n_para_consumed));
         read_input_parameters(&mut data, namelist_path)?;
+        observe_physcal_lifecycle("overlaid", &data, None, Some(n_para_consumed));
         sync_modified_parameter(&mut data, false);
+        observe_physcal_lifecycle("synchronized", &data, None, Some(n_para_consumed));
         crate::validation::validate_phys_cal(&data)?;
         crate::validation::validate_reducer_rank(&data, reducer)?;
         Ok((data, n_para_consumed))
@@ -383,6 +411,7 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
                 })
         })?;
     let rng = seeded_rng_with_reducer(actual_seed, reducer)?;
+    observe_physcal_lifecycle("seeded", &data, Some(&rng), Some(n_para_consumed));
     Ok(PhysCalPreparation {
         data,
         rng,
@@ -510,6 +539,7 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
     collective_result(output_setup, reducer, "PhysCal output directory")?;
     let mut init_data = data.clone();
     init_parameter(&mut init_data, rng);
+    observe_physcal_lifecycle("initialized-clone", &init_data, Some(rng), None);
     if data.modpara.nmp_trans == 0 {
         data.modpara.nmp_trans = 1;
     } else if data.modpara.nmp_trans < 0 {
