@@ -423,7 +423,7 @@ mod tests {
             config.2.clone(),
             config.3.clone(),
             config.4.clone(),
-            config.5.clone(),
+            *config.5,
         );
         let mut guard = capture_with_normalized().unwrap();
         normalized(0, &state, false);
