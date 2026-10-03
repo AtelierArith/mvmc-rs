@@ -1,3 +1,9 @@
+mod historical_overlay_stage {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/support/historical_overlay_stage.rs"
+    ));
+}
 #[path = "../../../tests/support/c_orbital_rng.rs"]
 mod c_orbital_rng;
 #[path = "../../../tests/support/numerical_comparison.rs"]
@@ -5,8 +11,8 @@ mod numerical_comparison;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
+use historical_overlay_stage::read_input_parameters;
 use mvmc_core::initial_params::{read_initial_def, read_opt_para_file};
-use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
 use num_complex::Complex64;
 use reference_slater::declared_output;
 use std::path::{Path, PathBuf};

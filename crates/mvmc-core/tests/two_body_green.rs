@@ -1,4 +1,10 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
+mod historical_overlay_stage {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/support/historical_overlay_stage.rs"
+    ));
+}
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 use mvmc_core::observables::{
@@ -1455,8 +1461,7 @@ fn add_rbm_green_model(data: &mut ExpertModeData) {
     // tables.  Use the historical test model, which restores those tables
     // after validating the complete C-compatible controls.
     let mut parsed = crate::historical_orbital_model::historical_kernel_model(&file).unwrap();
-    mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut parsed, &file)
-        .unwrap();
+    historical_overlay_stage::read_input_parameters(&mut parsed, &file).unwrap();
     data.rbm_section_widths = parsed.rbm_section_widths;
     data.rbm_params = parsed.rbm_params.clone();
     data.charge_rbm_phys_layer_terms = parsed.charge_rbm_phys_layer_terms;

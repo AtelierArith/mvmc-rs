@@ -2944,6 +2944,12 @@ use crate::julia_fixture;
 
 #[cfg(test)]
 mod callback_tests {
+    mod historical_overlay_stage {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/support/historical_overlay_stage.rs"
+        ));
+    }
     use super::julia_fixture;
     use super::*;
 
@@ -3181,7 +3187,7 @@ mod callback_tests {
             || !data.doublon_holon_4site_indices.is_empty()
             || data.has_rbm_terms()
         {
-            read_input_parameters(&mut data, path).unwrap();
+            historical_overlay_stage::read_input_parameters(&mut data, path).unwrap();
         }
         sync_modified_parameter(&mut data, true);
         init_qp_weight(&mut data);

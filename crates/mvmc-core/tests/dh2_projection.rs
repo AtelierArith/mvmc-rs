@@ -297,10 +297,25 @@ fn strict_indh2_overlay_uses_definition_count_and_commits_each_record_atomically
             .map(|i| Complex64::new(i as f64 / 8.0, -(i as f64) / 16.0))
             .collect::<Vec<_>>()
     );
+    // Native ReadInputParameters scatters sequentially: the duplicated first
+    // row writes index10, then its later original row wins. Index11 is never
+    // written and must retain its independent initialized sentinel.
+    d.doublon_holon_2site_params[11] = Complex64::new(900.0, 901.0);
+    fs::write(&path, text.replace("11 1.375 -0.6875", "10 1.375 -0.6875")).unwrap();
+    read_input_parameters(&mut d, &nml).unwrap();
+    assert_eq!(
+        d.doublon_holon_2site_params[10],
+        Complex64::new(1.25, -0.625)
+    );
+    assert_eq!(
+        d.doublon_holon_2site_params[11],
+        Complex64::new(900.0, 901.0)
+    );
+    fs::write(&path, &text).unwrap();
+    read_input_parameters(&mut d, &nml).unwrap();
     let before = d.projection_parameters();
     for bad in [
         text.replace("Idx 2", "Idx 12"),
-        text.replace("11 1.375 -0.6875", "10 1.375 -0.6875"),
         text.replace("11 1.375 -0.6875", "12 1.375 -0.6875"),
         text.replace("1.375", "NaN"),
         text.replace("11 1.375 -0.6875\n", ""),
