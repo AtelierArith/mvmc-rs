@@ -111,6 +111,19 @@ copy. It verifies their selected fixture contracts and records failures:
 scripts/generate-numerical-references.sh --suite c-projection --check
 ```
 
+The complete FSZ production kernels added for #186 are available explicitly:
+
+```sh
+scripts/generate-numerical-references.sh --suite c-fsz-energy-real \
+  --suite c-fsz-energy-complex --suite c-fsz-measurements --check
+```
+
+These independent serial C probes cover 108 complete Hamiltonian evaluations
+and 12 weighted/factored measurement models, using platform-specific expected
+values. They do not execute C sampling or SR. For the separately labelled
+C-energy/original-Julia runner references and exact RNG/configuration checks,
+see [FSZ runner reference](../c_toolbox/FSZ_RUNNER_REFERENCE.md).
+
 To use generators from another checkout, including a reviewed branch containing
 newer suites, select its source tree explicitly. Existing files in the caller's
 checkout are not overwritten:
