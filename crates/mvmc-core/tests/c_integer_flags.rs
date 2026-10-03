@@ -14,7 +14,7 @@ fn direct_and_cg_sr_update_exactly_the_components_selected_by_c() {
     assert_eq!(rows.len(), 70 * 7);
     let dir = std::env::temp_dir().join(format!("mvmc-c-integer-sr-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
-    for record in rows.chunks_exact(7) {
+    for record in rows.as_chunks::<7>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let complex = header[5] != "0";
         fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\nNMPTrans -1\n").unwrap();
@@ -38,7 +38,7 @@ fn direct_and_cg_sr_update_exactly_the_components_selected_by_c() {
         let mut expected = data.slater_params.clone();
         for field in record[6].split_whitespace() {
             let component: usize = field.parse().unwrap();
-            if component % 2 == 0 {
+            if component.is_multiple_of(2) {
                 expected[component / 2].re -= 1.0;
             } else {
                 assert!(complex);

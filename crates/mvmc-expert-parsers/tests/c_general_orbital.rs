@@ -15,7 +15,7 @@ fn complete_six_column_general_rows_flags_and_matrices_match_c() {
     fs::create_dir_all(&dir).unwrap();
     let mut failures = Vec::new();
     let mut accepted = 0;
-    for record in records.chunks_exact(5) {
+    for record in records.as_chunks::<5>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let nsite: usize = header[1].parse().unwrap();
         let expected = header[3] == "1" && header[6] == "0";

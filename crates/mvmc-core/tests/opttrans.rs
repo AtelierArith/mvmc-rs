@@ -159,7 +159,9 @@ fn loader_contracts_use_c_numeric_conversion_and_compatible_julia_regressions() 
                     .collect();
             let key = format!("legacy_opt_{}_{}", fields[0], fields[1]);
             let record = c_rows
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .find(|record| record[0].starts_with(&format!("{key} ")))
                 .unwrap();
             let dims: Vec<usize> = record[0]

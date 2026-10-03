@@ -72,7 +72,9 @@ fn check_native_counters(update: bool) {
         let values = bits(lines.next().unwrap());
         data.set_rbm_parameters(
             values
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|v| Complex64::new(f64::from_bits(v[0]), f64::from_bits(v[1])))
                 .collect::<Vec<_>>(),
         );
@@ -93,7 +95,9 @@ fn check_native_counters(update: bool) {
                 // Start from the actual C counter to isolate incremental
                 // arithmetic from the separate full-counter check.
                 let old: Vec<Complex64> = old
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|v| Complex64::new(f64::from_bits(v[0]), f64::from_bits(v[1])))
                     .collect();
                 let mut actual = vec![Complex64::new(99.0, 123.0); old.len()];

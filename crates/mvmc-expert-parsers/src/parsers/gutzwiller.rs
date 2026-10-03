@@ -67,7 +67,7 @@ pub fn parse_gutzwiller_content(content: &str, nsite: i64) -> io::Result<Gutzwil
             .map(i64::from)
             .map_err(|_| invalid("invalid integer in Gutzwiller definition"))
     };
-    for pair in fields[..2 * nsite].chunks_exact(2) {
+    for pair in fields[..2 * nsite].as_chunks::<2>().0.iter() {
         let site = integer(pair[0])?;
         let idx = integer(pair[1])?;
         if site < 0 || site >= nsite as i64 {
@@ -81,7 +81,7 @@ pub fn parse_gutzwiller_content(content: &str, nsite: i64) -> io::Result<Gutzwil
         indices[site as usize] = idx;
     }
     let mut opt_flags = BTreeMap::new();
-    for (index, pair) in fields[2 * nsite..].chunks_exact(2).enumerate() {
+    for (index, pair) in fields[2 * nsite..].as_chunks::<2>().0.iter().enumerate() {
         let _printed_index = integer(pair[0])?;
         opt_flags.insert(index as i64, integer(pair[1])?);
     }

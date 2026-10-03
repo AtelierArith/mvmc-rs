@@ -70,7 +70,7 @@ fn check_parameter_bits(data: &ExpertModeData, line: &str, label: &str) {
 fn c_initialization_consumes_every_declared_active_slot_before_sampling() {
     let rows = records();
     assert_eq!(rows.len(), 8 * 4);
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
         init_parameter(&mut data, &mut rng);
         check_parameter_bits(&data, record[1], record[0]);
@@ -94,7 +94,7 @@ fn c_initialization_consumes_every_declared_active_slot_before_sampling() {
 fn c_normalization_includes_initialized_declared_slots_without_spatial_mappings() {
     let rows = records();
     assert_eq!(rows.len(), 8 * 4);
-    for record in rows.chunks_exact(4) {
+    for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
         init_parameter(&mut data, &mut rng);
         check_parameter_bits(&data, record[1], record[0]);

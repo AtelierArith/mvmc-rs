@@ -218,6 +218,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::excessive_precision)] // Retain the C fixture's decimal literals.
     fn c_calculate_ene_reference_is_preserved() {
         // Values from the C mVMC physcal_lanczos.c reference fixture
         // (hubbard_chain_lanczos/physcal_ref).  Keep all five moments as

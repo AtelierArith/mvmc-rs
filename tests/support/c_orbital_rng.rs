@@ -30,10 +30,12 @@ pub fn declared_slater_record(data: &ExpertModeData) -> [&'static str; 4] {
         .filter(|line| !line.starts_with('#'))
         .collect();
     let record = rows
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .find(|record| record[0] == key)
         .unwrap_or_else(|| panic!("missing C InitParameter kernel case {key}"));
-    record.try_into().unwrap()
+    *record
 }
 
 pub fn declared_slater_rng(data: &ExpertModeData) -> Vec<u32> {

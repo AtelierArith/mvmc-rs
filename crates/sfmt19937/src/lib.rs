@@ -130,7 +130,7 @@ impl Sfmt19937Rng {
     #[inline]
     pub fn gen_rand64(&mut self) -> u64 {
         debug_assert!(
-            self.inner.idx % 2 == 0,
+            self.inner.idx.is_multiple_of(2),
             "gen_rand64 requires idx % 2 == 0 (C SFMT contract); \
              did you interleave gen_rand32 and gen_rand64?"
         );
@@ -243,7 +243,10 @@ impl Sfmt19937Rng {
             self.inner.idx == N32,
             "fill_array32 requires the buffer to be empty"
         );
-        debug_assert!(size % 4 == 0, "fill_array32 size must be a multiple of 4");
+        debug_assert!(
+            size.is_multiple_of(4),
+            "fill_array32 size must be a multiple of 4"
+        );
         debug_assert!(size >= N32, "fill_array32 size must be >= N32 ({N32})");
 
         // The C version casts `array` to `w128_t *` and calls
@@ -270,7 +273,10 @@ impl Sfmt19937Rng {
             self.inner.idx == N32,
             "fill_array64 requires the buffer to be empty"
         );
-        debug_assert!(size % 2 == 0, "fill_array64 size must be a multiple of 2");
+        debug_assert!(
+            size.is_multiple_of(2),
+            "fill_array64 size must be a multiple of 2"
+        );
         debug_assert!(size >= N64, "fill_array64 size must be >= N64 ({N64})");
 
         // C: gen_rand_array((w128_t*) array, size / 2) treats `array`

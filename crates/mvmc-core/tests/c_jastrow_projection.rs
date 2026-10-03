@@ -11,7 +11,7 @@ fn parsed_directional_jastrow_counts_and_every_supplied_hop_match_c() {
         .collect();
     assert_eq!(rows.len(), 60 * 3);
     let mut checked = 0;
-    for record in rows.chunks_exact(3) {
+    for record in rows.as_chunks::<3>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let nsite: usize = header[1].parse().unwrap();
         let width: usize = header[2].parse().unwrap();

@@ -25,7 +25,9 @@ fn complex_bits(line: &str) -> Vec<Complex64> {
         .split_whitespace()
         .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
         .collect();
-    bits.chunks_exact(2)
+    bits.as_chunks::<2>()
+        .0
+        .iter()
         .map(|v| Complex64::new(v[0], v[1]))
         .collect()
 }

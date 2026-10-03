@@ -36,12 +36,12 @@ fn load_para_triples(data: &mut ExpertModeData, text: &str) -> Result<usize, Str
     }
     let extra = values.len() % expected;
     if extra > 0 {
-        return Err(if n_opt_trans == 0 && extra % 3 == 0 {
+        return Err(if n_opt_trans == 0 && extra.is_multiple_of(3) {
             format!(
                 "OptTrans-style block of {} triples but OptTrans is not active",
                 extra / 3
             )
-        } else if extra % 3 == 0 {
+        } else if extra.is_multiple_of(3) {
             format!("{extra} trailing floats (file likely malformed)")
         } else {
             format!(

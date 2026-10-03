@@ -22,11 +22,13 @@ fn six_column_general_slater_and_derivatives_match_actual_c_fsz_kernels() {
             .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
             .collect();
         values
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|z| Complex64::new(z[0], z[1]))
             .collect::<Vec<_>>()
     };
-    for record in rows.chunks_exact(8) {
+    for record in rows.as_chunks::<8>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let nsite: usize = header[1].parse().unwrap();
         let anti = header[2] == "1";

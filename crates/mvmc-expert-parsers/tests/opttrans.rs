@@ -154,7 +154,7 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
         .collect();
     assert_eq!(records.len() % 10, 0);
     let mut cases = 0;
-    for record in records.chunks_exact(10) {
+    for record in records.as_chunks::<10>().0.iter() {
         let header = record[0];
         let fields: Vec<_> = header.split_whitespace().collect();
         // C reads ModPara before OptTrans regardless of namelist order.
@@ -162,7 +162,9 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
         // compare these reordered inputs to the equivalent valid layout.
         let expected = if fields[0] == "before_modpara" {
             records
-                .chunks_exact(10)
+                .as_chunks::<10>()
+                .0
+                .iter()
                 .find(|row| row[0] == format!("layout {}", fields[1]))
                 .unwrap()
         } else {

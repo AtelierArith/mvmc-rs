@@ -284,7 +284,9 @@ mod tests {
                 .split_whitespace()
                 .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
                 .collect();
-            vals.chunks_exact(2)
+            vals.as_chunks::<2>()
+                .0
+                .iter()
                 .map(|z| Complex64::new(z[0], z[1]))
                 .collect()
         };
@@ -440,7 +442,9 @@ mod tests {
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 13, 1, 1, true, false);
         update_slater_elm(&mut data, &mut state);
         let matrix = expected(rows[1])
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| Complex64::new(f64::from_bits(pair[0]), f64::from_bits(pair[1])))
             .collect::<Vec<_>>();
         // Exact numeric equality checks coefficient sharing. C multiplies
