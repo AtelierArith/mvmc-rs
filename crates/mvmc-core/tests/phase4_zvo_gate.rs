@@ -7,11 +7,12 @@ mod support;
 use support::julia_mvmc_root;
 
 #[test]
+#[ignore = "optional parity gate: MVMC_RS_PHASE4_REAL_ZVO required"]
 fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
-    let Some(julia) = julia_mvmc_root() else {
-        eprintln!("skipping Phase 4 gate: Julia-mVMC checkout not found");
-        return;
-    };
+    support::require_gate("phase4-real", "MVMC_RS_PHASE4_REAL_ZVO");
+    let julia = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("phase4-real", "Julia-mVMC checkout not found")
+    });
     let namelist = julia
         .join("examples")
         .join("inputs")
@@ -24,8 +25,14 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
         .join("heisenberg_chain_real")
         .join("zvo_out_first10.dat");
     if !namelist.is_file() || !reference.is_file() {
-        eprintln!("skipping Phase 4 gate: missing fixture/reference");
-        return;
+        support::missing_fixture(
+            "phase4-real",
+            format!(
+                "required input {} or reference {} is missing",
+                namelist.display(),
+                reference.display()
+            ),
+        );
     }
 
     let tmp = tempdir_in_target();

@@ -16,11 +16,12 @@ mod support;
 use support::julia_mvmc_root;
 
 #[test]
+#[ignore = "optional parity gate: MVMC_RS_PHASE5_HUBBARD_ZVO required"]
 fn hubbard_chain_real_zvo_out_first10_matches_reference() {
-    let Some(julia) = julia_mvmc_root() else {
-        eprintln!("skipping Phase 5 Hubbard gate: Julia-mVMC checkout not found");
-        return;
-    };
+    support::require_gate("phase5-hubbard", "MVMC_RS_PHASE5_HUBBARD_ZVO");
+    let julia = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("phase5-hubbard", "Julia-mVMC checkout not found")
+    });
     let namelist = julia
         .join("examples")
         .join("inputs")
@@ -33,8 +34,14 @@ fn hubbard_chain_real_zvo_out_first10_matches_reference() {
         .join("hubbard_chain_real")
         .join("zvo_out_first10.dat");
     if !namelist.is_file() || !reference.is_file() {
-        eprintln!("skipping Phase 5 Hubbard gate: missing fixture/reference");
-        return;
+        support::missing_fixture(
+            "phase5-hubbard",
+            format!(
+                "required input {} or reference {} is missing",
+                namelist.display(),
+                reference.display()
+            ),
+        );
     }
 
     let out_dir = tempdir_in_target();

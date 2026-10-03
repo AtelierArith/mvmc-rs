@@ -1,5 +1,7 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+mod support;
 
 fn values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)
@@ -10,14 +12,28 @@ fn values(path: &Path) -> Vec<f64> {
 }
 
 #[test]
+#[ignore = "optional Lanczos gate: MVMC_RS_LANCZOS_PHYSICAL required"]
 fn serial_lanczos_matches_hubbard_and_exchange_references() {
-    if std::env::var_os("MVMC_RS_LANCZOS_PHYSICAL").is_none() {
-        eprintln!("set MVMC_RS_LANCZOS_PHYSICAL=1 to run the Julia/C Lanczos PhysCal gate");
-        return;
-    }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC");
+    support::require_gate("lanczos-physcal", "MVMC_RS_LANCZOS_PHYSICAL");
+    let root = support::julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("lanczos-physcal", "Julia-mVMC checkout not found")
+    });
     let mode = std::env::var("MVMC_RS_LANCZOS_MODE").unwrap_or_else(|_| "real".into());
     let requested_model = std::env::var("MVMC_RS_LANCZOS_MODEL").ok();
+    if !matches!(mode.as_str(), "real" | "cmp") {
+        support::unsupported("lanczos-physcal", format!("unknown mode {mode:?}"));
+    }
+    if requested_model.as_deref().is_some_and(|model| {
+        !matches!(
+            model,
+            "hubbard_chain_real" | "hubbard_chain_lanczos" | "spin_chain_lanczos"
+        )
+    }) {
+        support::unsupported(
+            "lanczos-physcal",
+            format!("unknown model {requested_model:?}"),
+        );
+    }
     for model in [
         "hubbard_chain_real",
         "hubbard_chain_lanczos",
@@ -32,9 +48,15 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
-        if !namelist.is_file() || !opt_para.is_file() {
-            eprintln!("Julia-mVMC reference submodule is unavailable; skipping {model}");
-            continue;
+        for path in [
+            &namelist,
+            &opt_para,
+            &fixture.join("expected/zvo_ls_qqqq_001.dat"),
+            &fixture.join("expected/zvo_ls_out_001.dat"),
+        ] {
+            if !path.is_file() {
+                support::missing_fixture("lanczos-physcal", path.display().to_string());
+            }
         }
 
         let output =
