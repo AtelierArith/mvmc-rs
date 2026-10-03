@@ -1,5 +1,12 @@
 [workspace]
 
+# This standalone workspace must repeat the root's security patches (#192).
+[patch.crates-io]
+tenferro-ad = { path = "../../third_party/tenferro-ad" }
+tenferro-cpu = { path = "../../third_party/tenferro-cpu" }
+tenferro-einsum = { path = "../../third_party/tenferro-einsum" }
+tenferro-runtime = { path = "../../third_party/tenferro-runtime" }
+
 [package]
 name = "pfapack_compare"
 version = "0.0.0"

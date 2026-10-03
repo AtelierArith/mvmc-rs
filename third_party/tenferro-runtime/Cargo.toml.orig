@@ -1,0 +1,71 @@
+[package]
+name = "tenferro-runtime"
+autotests = false
+version.workspace = true
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Concrete tensor helpers, traced tensors, graph execution, and extension runtime support for tenferro."
+rust-version.workspace = true
+keywords = ["tensor", "runtime", "graph", "numerical"]
+categories = ["science", "mathematics", "data-structures"]
+documentation = "https://docs.rs/tenferro-runtime"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+features = ["cpu-faer"]
+
+[lib]
+name = "tenferro_runtime"
+
+[features]
+default = ["cpu-faer"]
+cpu-faer = ["tenferro-cpu/cpu-faer"]
+cpu-blas = ["tenferro-cpu/cpu-blas"]
+blas-openblas = ["tenferro-cpu/blas-openblas"]
+blas-accelerate = ["tenferro-cpu/blas-accelerate"]
+blas-mkl = ["tenferro-cpu/blas-mkl"]
+
+[dependencies]
+tenferro-core-ops = { path = "../tenferro-core-ops", version = "0.7.1" }
+tenferro-internal-extension-macros = { path = "../tenferro-internal-extension-macros", version = "0.7.1" }
+tenferro-internal-ops = { path = "../tenferro-internal-ops", version = "0.7.1", default-features = false }
+tenferro-tensor = { path = "../tenferro-tensor", version = "0.7.1", default-features = false }
+computegraph.workspace = true
+lru.workspace = true
+num-complex.workspace = true
+num-traits.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+# Path-only (unversioned): the versioned form resolves against crates.io during
+# `cargo package` and would fail because tenferro-cpu publishes after
+# tenferro-runtime, forming a publish cycle. Dev-dependencies are stripped from
+# the published manifest, so an unversioned path dev-dependency is sufficient.
+tenferro-cpu = { path = "../tenferro-cpu", default-features = false }
+
+[[bench]]
+name = "elementwise_fusion"
+harness = false
+
+[[bench]]
+name = "session_chain"
+harness = false
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "prelude"
+path = "tests/prelude.rs"
+
+[[test]]
+name = "binary_allocations"
+path = "tests/binary_allocations.rs"
