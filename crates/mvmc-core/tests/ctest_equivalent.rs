@@ -165,12 +165,7 @@ fn rust_ctest_equivalent_selected_models() {
             .iter()
             .find(|model| model.fixture == name)
             .unwrap_or_else(|| {
-                report_gate(
-                    "ctest-equivalent",
-                    GateStatus::Failure,
-                    &format!("unknown ctest model {name:?}"),
-                );
-                panic!("unknown ctest model {name:?}");
+                support::unsupported("ctest-equivalent", format!("unknown ctest model {name:?}"));
             });
         report_gate(name, GateStatus::NotRun,
             &format!("independent prefix gate is separate, not executed by long summary: {}; fixture_available={}",

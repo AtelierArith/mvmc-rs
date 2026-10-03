@@ -2,7 +2,6 @@ use std::fs;
 use std::path::Path;
 
 mod support;
-use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
 fn values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)
@@ -13,10 +12,10 @@ fn values(path: &Path) -> Vec<f64> {
 }
 
 #[test]
-#[ignore = "optional parity gate; set MVMC_RS_LANCZOS_PHYSICAL=1 and explicitly run ignored tests"]
+#[ignore = "optional Lanczos gate: MVMC_RS_LANCZOS_PHYSICAL required"]
 fn serial_lanczos_matches_hubbard_and_exchange_references() {
-    require_gate("lanczos-physcal", "MVMC_RS_LANCZOS_PHYSICAL");
-    let root = julia_mvmc_root().unwrap_or_else(|| {
+    support::require_gate("lanczos-physcal", "MVMC_RS_LANCZOS_PHYSICAL");
+    let root = support::julia_mvmc_root().unwrap_or_else(|| {
         support::missing_fixture("lanczos-physcal", "Julia-mVMC checkout not found")
     });
     let mode = std::env::var("MVMC_RS_LANCZOS_MODE").unwrap_or_else(|_| "real".into());
@@ -24,13 +23,16 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
     if !matches!(mode.as_str(), "real" | "cmp") {
         support::unsupported("lanczos-physcal", format!("unknown mode {mode:?}"));
     }
-    if let Some(model) = requested_model.as_deref() {
-        if !matches!(
+    if requested_model.as_deref().is_some_and(|model| {
+        !matches!(
             model,
             "hubbard_chain_real" | "hubbard_chain_lanczos" | "spin_chain_lanczos"
-        ) {
-            support::unsupported("lanczos-physcal", format!("unknown model {model:?}"));
-        }
+        )
+    }) {
+        support::unsupported(
+            "lanczos-physcal",
+            format!("unknown model {requested_model:?}"),
+        );
     }
     for model in [
         "hubbard_chain_real",
@@ -46,11 +48,15 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
-        if !namelist.is_file() || !opt_para.is_file() {
-            support::missing_fixture(
-                "lanczos-physcal",
-                format!("{model}: namelist or zqp_opt.dat is missing"),
-            );
+        for path in [
+            &namelist,
+            &opt_para,
+            &fixture.join("expected/zvo_ls_qqqq_001.dat"),
+            &fixture.join("expected/zvo_ls_out_001.dat"),
+        ] {
+            if !path.is_file() {
+                support::missing_fixture("lanczos-physcal", path.display().to_string());
+            }
         }
 
         let output =

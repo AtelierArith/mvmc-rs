@@ -16,12 +16,12 @@ mod support;
 use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
 #[test]
-#[ignore = "optional parity gate; set MVMC_RS_PHASE5_HUBBARD_ZVO=1 and explicitly run ignored tests"]
+#[ignore = "optional parity gate: MVMC_RS_PHASE5_HUBBARD_ZVO required"]
 fn hubbard_chain_real_zvo_out_first10_matches_reference() {
-    require_gate("phase5-hubbard-zvo", "MVMC_RS_PHASE5_HUBBARD_ZVO");
-    let Some(julia) = julia_mvmc_root() else {
-        support::missing_fixture("phase5-hubbard-zvo", "Julia-mVMC checkout not found");
-    };
+    support::require_gate("phase5-hubbard", "MVMC_RS_PHASE5_HUBBARD_ZVO");
+    let julia = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("phase5-hubbard", "Julia-mVMC checkout not found")
+    });
     let namelist = julia
         .join("examples")
         .join("inputs")
@@ -34,7 +34,14 @@ fn hubbard_chain_real_zvo_out_first10_matches_reference() {
         .join("hubbard_chain_real")
         .join("zvo_out_first10.dat");
     if !namelist.is_file() || !reference.is_file() {
-        support::missing_fixture("phase5-hubbard-zvo", "namelist or reference is missing");
+        support::missing_fixture(
+            "phase5-hubbard",
+            format!(
+                "required input {} or reference {} is missing",
+                namelist.display(),
+                reference.display()
+            ),
+        );
     }
 
     let out_dir = tempdir_in_target();

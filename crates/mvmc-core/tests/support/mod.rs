@@ -121,4 +121,14 @@ mod tests {
     fn any_other_value_selects_gate() {
         assert_eq!(selection(Some("1")), GateSelection::Run);
     }
+
+    #[test]
+    fn missing_fixture_cannot_return_success() {
+        assert!(std::panic::catch_unwind(|| super::missing_fixture("probe", "absent")).is_err());
+    }
+
+    #[test]
+    fn unsupported_gate_cannot_return_success() {
+        assert!(std::panic::catch_unwind(|| super::unsupported("probe", "disabled")).is_err());
+    }
 }

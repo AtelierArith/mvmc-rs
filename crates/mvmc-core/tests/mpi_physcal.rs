@@ -11,11 +11,31 @@ use support::{report_gate, require_gate, GateStatus};
 fn mpi_physcal_reduces_fixed_parameter_samples() {
     require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
 
+    let root = support::julia_mvmc_root()
+        .unwrap_or_else(|| support::missing_fixture("mpi-physcal", "Julia-mVMC checkout not found"))
+        .join("test/integration/reference/heisenberg_chain_real/physcal_ref");
+    for path in [root.join("inputs/namelist.def"), root.join("zqp_opt.dat")] {
+        if !path.is_file() {
+            support::missing_fixture("mpi-physcal", path.display().to_string());
+        }
+    }
+    // This gate requires a multi-rank launch, unlike the library's valid
+    // singleton use. Reject missing/singleton launcher metadata before MPI
+    // initialization, which may itself be unavailable on the current host.
+    let launch = mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok());
+    if launch.is_none_or(|launch| launch.world_size < 2) {
+        support::unsupported(
+            "mpi-physcal",
+            "recognized MPI launcher metadata with at least two ranks is required",
+        );
+    }
     let context = mvmc_core::mpi::MpiContext::initialize().expect("MPI initialization");
-    assert!(context.world_size() >= 2);
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-        "../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/physcal_ref",
-    );
+    if context.world_size() < 2 {
+        support::unsupported(
+            "mpi-physcal",
+            "actual MPI world must contain at least two ranks",
+        );
+    }
     let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer(
         root.join("inputs/namelist.def"),
         root.join("zqp_opt.dat"),
