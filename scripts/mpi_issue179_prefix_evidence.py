@@ -2,6 +2,8 @@
 import argparse
 import hashlib
 import json
+import math
+import re
 from pathlib import Path
 
 from compare_mpi_issue179 import read, validate_trace
@@ -128,9 +130,75 @@ def validate_rank(rows, rank, ranks, width, steps):
     return events
 
 
-def validate(cell, ranks, width):
+def validate_direct_store1(rows, directory, rank, steps):
+    """Read actual SR observer settings; declared inventory flags are insufficient."""
+    # Recording::complex emits two scalar fields per actual parameter, including
+    # real-mode imaginary slots. Do not infer the count from the active SR size.
+    initial_parameters = [float(value) for value in rows.get("n:initial-parameters", [])]
+    final_parameters = [float(value) for value in rows.get("n:parameters", [])]
+    parameter_components = len(initial_parameters)
+    if (not parameter_components or parameter_components % 2 or
+            len(final_parameters) != parameter_components or
+            any(not math.isfinite(value) for value in initial_parameters + final_parameters)):
+        raise ValueError("missing/malformed actual parameter count records")
+    if scalar(rows, "sr-kind") != 0 or scalar(rows, "sr-systems") != steps:
+        raise ValueError("direct/store1 requires one actual direct SR observation per step")
+    observed = {int(match[1]) for key in rows
+                if (match := re.fullmatch(r"d:sr-system-(\d{6})-settings", key))}
+    indices = {int(match[1]) for key in rows
+               if (match := re.fullmatch(r"[dn]:sr-system-(\d{6})-.+", key))}
+    if observed != set(range(steps)) or indices != set(range(steps)):
+        raise ValueError("missing/extra actual SR settings")
+    base = scalar(rows, "seed") - int(rows["d:group"][0])
+    for step in range(steps):
+        stem = f"sr-system-{step:06}"
+        settings = [int(value) for value in rows.get(f"d:{stem}-settings", [])]
+        if settings != [base, steps, steps, 0, 1]:
+            raise ValueError("actual SR solver/store/seed/prefix settings mismatch")
+        if (scalar(rows, stem + "-triangle") != ord("U") or
+                scalar(rows, stem + "-nrhs") != 1 or scalar(rows, stem + "-status") != 0):
+            raise ValueError("unsuccessful/malformed direct SR invocation")
+        dimension = scalar(rows, stem + "-dimension")
+        not_solved = scalar(rows, stem + "-not-solved")
+        if dimension < 0 or not_solved not in (0, 1, 2):
+            raise ValueError("invalid direct SR dimension/not-solved metadata")
+        if not_solved == 1:
+            raise ValueError("NoParameters contradicts nonempty actual parameter records")
+        flags = [int(value) for value in rows.get(f"d:{stem}-flags", [])]
+        if len(flags) != parameter_components:
+            raise ValueError("missing/malformed actual SR flags shape")
+        regularization = [float(value) for value in rows.get(f"n:{stem}-regularization", [])]
+        if len(regularization) != 3 or any(not math.isfinite(value) for value in regularization):
+            raise ValueError("missing/malformed actual SR regularization")
+        active = [int(value) for value in rows.get(f"d:{stem}-active", [])]
+        if (len(active) != dimension or len(set(active)) != dimension or
+                any(value < 0 or value >= len(flags) or flags[value] != 1 for value in active)):
+            raise ValueError("invalid actual SR active components")
+        if not_solved:
+            if dimension != 0 or any(f"d:{stem}-{key}" in rows for key in ("factor-info", "solve-info")):
+                raise ValueError("not-solved SR record claims a factor/solve invocation")
+        elif dimension == 0 or scalar(rows, stem + "-factor-info") != 0 or scalar(rows, stem + "-solve-info") != 0:
+            raise ValueError("missing/failed actual direct SR factor/solve INFO")
+        for name, size in (("matrix", dimension**2), ("rhs", dimension), ("increment", dimension)):
+            values = [float(value) for value in rows.get(f"n:{stem}-{name}", [])]
+            if len(values) != size or any(not math.isfinite(value) for value in values):
+                raise ValueError("missing/malformed actual direct SR operands/increment")
+        update = [float(value) for value in rows.get(f"n:sr-step-{step}", [])]
+        if len(update) != parameter_components or any(not math.isfinite(value) for value in update):
+            raise ValueError("missing actual per-step parameter update record")
+    # The harness always writes this diagnostic sidecar, even without CG.
+    sidecar = read(Path(directory) / f"cg-rank-{rank}.txt")
+    if sidecar != {"d:events": ["0"]}:
+        raise ValueError("direct SR sidecar contains CG events or malformed evidence")
+    if (Path(directory) / "zvo_SRinfo.dat").exists():
+        raise ValueError("direct SR unexpectedly produced CG SRinfo output")
+
+
+def validate(cell, ranks, width, stage="direct-store0"):
     if ranks not in (2, 4) or width not in (1, 2):
         raise ValueError("unsupported bounded axes")
+    if stage not in ("direct-store0", "direct-store1"):
+        raise ValueError("unsupported bounded stage")
     cell = Path(cell)
     histories = {}
     initial_states = {}
@@ -144,6 +212,8 @@ def validate(cell, ranks, width):
             for rank in range(ranks):
                 rows = read(root / f"repeat{repeat}" / f"rank-{rank}.txt")
                 events = validate_rank(rows, rank, ranks, width, steps)
+                if stage == "direct-store1":
+                    validate_direct_store1(rows, root / f"repeat{repeat}", rank, steps)
                 initial = {key: rows[key] for key in (
                     "d:seed", "d:before-init-raw-rng", "d:before-init-rng-cursor",
                     "d:initial-raw-rng", "d:initial-rng-cursor", "d:initial-draw-count", "d:initial-rng")}
@@ -165,7 +235,8 @@ def validate(cell, ranks, width):
                 histories[repeat, rank] = events
             if len(bases) != 1:
                 raise ValueError("base seed/offset mismatch")
-    return f"PREFIX_GROUP_EVIDENCE ranks={ranks} width={width} prefixes=1,2,3 repeats=2 workers=1"
+    result = f"PREFIX_GROUP_EVIDENCE ranks={ranks} width={width} prefixes=1,2,3 repeats=2 workers=1"
+    return result if stage == "direct-store0" else result + " stage=direct-store1 actual_sr_settings=verified"
 
 
 if __name__ == "__main__":
@@ -179,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--commit")
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--input-closure", type=Path)
+    parser.add_argument("--stage", choices=("direct-store0", "direct-store1"), default="direct-store0")
     args = parser.parse_args()
     try:
         if args.input_closure is not None:
@@ -188,6 +260,6 @@ if __name__ == "__main__":
         elif args.backend_binary is not None:
             record_backend(args.backend_binary, args.cell)
         else:
-            print(validate(args.cell, args.ranks, args.width))
+            print(validate(args.cell, args.ranks, args.width, args.stage))
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.exit(1, f"PREFIX_FAILURE: {error}\n")
