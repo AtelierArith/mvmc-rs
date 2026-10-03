@@ -20,6 +20,86 @@ impl Drop for TestDir {
     }
 }
 
+fn copy_physcal_fixture(dir: &TestDir) -> (PathBuf, PathBuf) {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/physcal_ref",
+    );
+    let inputs = dir.0.join("inputs");
+    fs::create_dir_all(&inputs).unwrap();
+    for entry in fs::read_dir(source.join("inputs")).unwrap().flatten() {
+        if entry.path().is_file() {
+            fs::copy(entry.path(), inputs.join(entry.file_name())).unwrap();
+        }
+    }
+    let fixed = dir.0.join("zqp_opt.dat");
+    fs::copy(source.join("zqp_opt.dat"), &fixed).unwrap();
+    (inputs.join("namelist.def"), fixed)
+}
+
+#[test]
+fn physcal_cli_runs_fixed_parameters_and_writes_green_outputs() {
+    let dir = TestDir::new("physcal-positive");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let out_dir = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .args(["--physcal", fixed.to_str().unwrap()])
+        .arg(namelist)
+        .args(["--seed", "1", "--mode", "real", "--opt-trans", "--out-dir"])
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Completed 1 PhysCal samples"));
+    for file in [
+        "zvo_cisajs_001.dat",
+        "zvo_cisajscktalt_001.dat",
+        "zvo_cisajscktaltex_001.dat",
+    ] {
+        assert!(out_dir.join(file).is_file(), "missing {file}");
+    }
+}
+
+#[test]
+fn physcal_cli_rejects_missing_fixed_parameter_file_before_output() {
+    let dir = TestDir::new("physcal-missing-fixed");
+    let (namelist, _) = copy_physcal_fixture(&dir);
+    let out_dir = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(namelist)
+        .args(["--physcal", dir.0.join("missing.dat").to_str().unwrap()])
+        .args(["--out-dir", out_dir.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("fixed parameter file not found"));
+    assert!(!out_dir.exists());
+}
+
+#[test]
+fn physcal_cli_rejects_grouped_execution_before_output() {
+    let dir = TestDir::new("physcal-grouped");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let modpara = dir.0.join("inputs/modpara.def");
+    let text = fs::read_to_string(&modpara)
+        .unwrap()
+        .replace("NSplitSize     1", "NSplitSize     2");
+    fs::write(modpara, text).unwrap();
+    let out_dir = dir.0.join("out");
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(namelist)
+        .args(["--physcal", fixed.to_str().unwrap(), "--out-dir"])
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("NSplitSize > 1"));
+    assert!(!out_dir.exists());
+}
+
 #[test]
 fn unsupported_projection_fails_before_creating_output_directory() {
     let dir = TestDir::new("spin-jastrow");

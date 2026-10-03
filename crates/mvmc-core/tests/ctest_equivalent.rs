@@ -5,9 +5,12 @@
 //! `MVMC_RS_CTEST_MODELS=heisenberg_chain_real,hubbard_chain_real`.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use mvmc_core::{run_para_opt_from_namelist, RunConfig};
+
+mod support;
+use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
 const ABSOLUTE_FLOOR: f64 = 1.0e-8;
 
@@ -15,7 +18,7 @@ const ABSOLUTE_FLOOR: f64 = 1.0e-8;
 struct Model {
     fixture: &'static str,
     mode: &'static str,
-    supported: bool,
+    prefix_reference_available: bool,
     reason: &'static str,
 }
 
@@ -23,90 +26,82 @@ const MODELS: &[Model] = &[
     Model {
         fixture: "heisenberg_chain_real",
         mode: "real",
-        supported: true,
+        prefix_reference_available: true,
         reason: "",
     },
     Model {
         fixture: "hubbard_chain_real",
         mode: "real",
-        supported: true,
+        prefix_reference_available: true,
         reason: "",
     },
     Model {
         fixture: "heisenberg_chain_cmp",
         mode: "cmp",
-        supported: true,
+        prefix_reference_available: true,
         reason: "",
     },
     Model {
         fixture: "heisenberg_chain_fsz",
         mode: "fsz",
-        supported: true,
+        prefix_reference_available: true,
         reason: "",
     },
     Model {
         fixture: "hubbard_chain_cmp",
         mode: "cmp",
-        supported: false,
+        prefix_reference_available: false,
         reason: "no committed deterministic 50-step gate for this model",
     },
     Model {
         fixture: "hubbard_chain_fsz",
         mode: "fsz",
-        supported: false,
+        prefix_reference_available: false,
         reason: "no committed deterministic 50-step gate for this model",
     },
     Model {
         fixture: "kondo_chain_real",
         mode: "real",
-        supported: false,
-        reason: "Kondo Hamiltonian parity is not implemented",
+        prefix_reference_available: false,
+        reason: "canonical Kondo optimization configs/RNG/SR prefix oracle is missing",
     },
     Model {
         fixture: "kondo_chain_cmp",
         mode: "cmp",
-        supported: false,
-        reason: "Kondo Hamiltonian parity is not implemented",
+        prefix_reference_available: false,
+        reason: "canonical complex Kondo optimization configs/RNG/SR prefix oracle is missing",
     },
     Model {
         fixture: "kondo_chain_stot1_cmp",
         mode: "cmp",
-        supported: false,
-        reason: "Kondo Hamiltonian parity is not implemented",
+        prefix_reference_available: false,
+        reason: "canonical Stot=1 Kondo optimization configs/RNG/SR prefix oracle is missing",
     },
     Model {
         fixture: "general_rbm_cmp",
         mode: "cmp",
-        supported: false,
-        reason: "GeneralRBM ctest parity is not yet enabled",
+        prefix_reference_available: true,
+        reason: "mixed C-counter/Julia SR reference, not full C executable parity",
     },
     Model {
         fixture: "hubbard_tetragonal_real",
         mode: "real",
-        supported: false,
+        prefix_reference_available: false,
         reason: "tetragonal fixture has no deterministic Rust gate",
     },
     Model {
         fixture: "hubbard_tetragonal_momentum_projection_real",
         mode: "real",
-        supported: false,
+        prefix_reference_available: false,
         reason: "momentum-projection fixture has no deterministic Rust gate",
     },
     Model {
         fixture: "kondo_chain_fsz",
         mode: "fsz",
-        supported: false,
-        reason: "Kondo Hamiltonian parity is not implemented",
+        prefix_reference_available: false,
+        reason: "canonical FSZ Kondo optimization configs/spins/RNG/SR prefix oracle is missing",
     },
 ];
-
-fn root() -> PathBuf {
-    std::env::var_os("JULIA_MVMC_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC")
-        })
-}
 
 fn read_values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)
@@ -121,68 +116,127 @@ fn read_values(path: &Path) -> Vec<f64> {
 }
 
 fn passes(calculated: f64, expected: f64, sigma: f64) -> bool {
+    if !calculated.is_finite() || !expected.is_finite() || !sigma.is_finite() || sigma < 0.0 {
+        return false;
+    }
     let difference = (calculated - expected).abs();
     !(difference >= 3.0 * sigma && difference >= ABSOLUTE_FLOOR)
 }
 
 #[test]
+#[ignore = "long reference gate: select MVMC_RS_CTEST_MODELS and use --run-ignored only"]
 fn rust_ctest_equivalent_selected_models() {
-    let Ok(filter) = std::env::var("MVMC_RS_CTEST_MODELS") else {
-        eprintln!("skipping Rust ctest-equivalent harness; set MVMC_RS_CTEST_MODELS");
-        return;
+    require_gate("ctest-equivalent", "MVMC_RS_CTEST_MODELS");
+    let filter = std::env::var("MVMC_RS_CTEST_MODELS").expect("selection was present");
+    let requested: Vec<_> = if filter.trim() == "all" {
+        MODELS.iter().map(|model| model.fixture).collect()
+    } else {
+        filter
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect()
     };
-    let requested: Vec<_> = filter
-        .split(',')
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .collect();
-    assert!(
-        !requested.is_empty(),
-        "MVMC_RS_CTEST_MODELS selected no models"
-    );
+    if requested.is_empty() {
+        report_gate(
+            "ctest-equivalent",
+            GateStatus::Failure,
+            "selection listed no models",
+        );
+        panic!("MVMC_RS_CTEST_MODELS selected no models");
+    }
 
-    let root = root();
+    let root = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("ctest-equivalent", "Julia-mVMC checkout not found")
+    });
+    for model in MODELS {
+        if !requested.contains(&model.fixture) {
+            report_gate(
+                model.fixture,
+                GateStatus::NotRun,
+                "long ctest not selected; unverified",
+            );
+        }
+    }
+    let mut failures = Vec::new();
     for name in requested {
         let model = MODELS
             .iter()
             .find(|model| model.fixture == name)
-            .unwrap_or_else(|| panic!("unknown ctest model {name:?}"));
-        if !model.supported {
-            eprintln!("ctest model {name} unsupported: {}", model.reason);
-            continue;
-        }
-        let fixture = root.join("test/integration/reference").join(model.fixture);
-        let namelist = fixture.join("inputs/namelist.def");
-        let ref_mean = read_values(&fixture.join("ctest_ref/ref_mean.dat"));
-        let ref_std = read_values(&fixture.join("ctest_ref/ref_std.dat"));
-        assert!(
-            ref_mean.len() >= 2 && ref_std.len() >= 2,
-            "{name}: C refs need two values"
-        );
-        let output =
-            std::env::temp_dir().join(format!("mvmc-rs-ctest-{name}-{}", std::process::id()));
-        let parsed = mvmc_expert_parsers::parse_expert_mode_files(&namelist)
-            .unwrap_or_else(|error| panic!("{name}: parse failed: {error}"));
-        let config = RunConfig {
-            nsmp: Some(parsed.modpara.nsr_opt_itr_smp),
-            seed: Some(1),
-            output_dir: Some(output.clone()),
-            ..RunConfig::new(parsed.modpara.nsr_opt_itr_step, model.mode)
-        };
-        let result = run_para_opt_from_namelist(&namelist, config)
-            .unwrap_or_else(|error| panic!("{name}: Rust run failed: {error}"));
-        assert_eq!(result.status, 0, "{name}: status");
-        for index in 0..2 {
-            assert!(
-                passes(result.ctest_values[index], ref_mean[index], ref_std[index]),
-                "{name}: ctest column {index}: calculated={} expected={} std={}",
-                result.ctest_values[index],
-                ref_mean[index],
-                ref_std[index]
+            .unwrap_or_else(|| {
+                report_gate(
+                    "ctest-equivalent",
+                    GateStatus::Failure,
+                    &format!("unknown ctest model {name:?}"),
+                );
+                panic!("unknown ctest model {name:?}");
+            });
+        if !model.prefix_reference_available {
+            report_gate(
+                name,
+                GateStatus::NotRun,
+                &format!("deterministic prefix unverified: {}", model.reason),
             );
         }
-        let _ = fs::remove_dir_all(output);
+        let outcome = std::panic::catch_unwind(|| {
+            let fixture = root.join("test/integration/reference").join(model.fixture);
+            let namelist = fixture.join("inputs/namelist.def");
+            let mean_path = fixture.join("ctest_ref/ref_mean.dat");
+            let std_path = fixture.join("ctest_ref/ref_std.dat");
+            if !namelist.is_file() || !mean_path.is_file() || !std_path.is_file() {
+                support::missing_fixture(
+                    "ctest-equivalent",
+                    format!("{name}: namelist or ctest reference is missing"),
+                );
+            }
+            let ref_mean = read_values(&mean_path);
+            let ref_std = read_values(&std_path);
+            assert!(
+                ref_mean.len() >= 2 && ref_std.len() >= 2,
+                "{name}: C refs need two values"
+            );
+            let output =
+                std::env::temp_dir().join(format!("mvmc-rs-ctest-{name}-{}", std::process::id()));
+            let parsed = mvmc_expert_parsers::parse_expert_mode_files(&namelist)
+                .unwrap_or_else(|error| panic!("{name}: parse failed: {error}"));
+            let config = RunConfig {
+                nsmp: Some(parsed.modpara.nsr_opt_itr_smp),
+                seed: None,
+                output_dir: Some(output.clone()),
+                ..RunConfig::new(parsed.modpara.nsr_opt_itr_step, model.mode)
+            };
+            let result = run_para_opt_from_namelist(&namelist, config)
+                .unwrap_or_else(|error| panic!("{name}: Rust run failed: {error}"));
+            assert_eq!(result.status, 0, "{name}: status");
+            for index in 0..2 {
+                assert!(
+                    passes(result.ctest_values[index], ref_mean[index], ref_std[index]),
+                    "{name}: ctest column {index}: calculated={} expected={} std={}",
+                    result.ctest_values[index],
+                    ref_mean[index],
+                    ref_std[index]
+                );
+            }
+            let _ = fs::remove_dir_all(output);
+            report_gate(
+                "ctest-equivalent",
+                GateStatus::Pass,
+                &format!("{name}: native long statistical summary only"),
+            );
+        });
+        if outcome.is_err() {
+            report_gate(
+                name,
+                GateStatus::Failure,
+                "native long ctest failed; see error above",
+            );
+            failures.push(name);
+        }
     }
+    assert!(
+        failures.is_empty(),
+        "failed long ctest models: {failures:?}"
+    );
 }
 
 #[test]
@@ -190,4 +244,59 @@ fn ctest_failure_requires_both_thresholds() {
     assert!(passes(1.0, 1.0 + 0.9e-8, 0.0));
     assert!(passes(1.0, 1.0 + 2.0e-8, 1.0e-8));
     assert!(!passes(1.0, 1.0 + 3.1e-8, 1.0e-8));
+    assert!(!passes(f64::NAN, 1.0, 1.0));
+    assert!(!passes(1.0, f64::INFINITY, 1.0));
+    assert!(!passes(1.0, 1.0, -1.0));
+}
+
+#[test]
+#[ignore = "reference inventory: requires the Julia reference checkout"]
+fn inventory_all_thirteen_ctest_input_contracts() {
+    let root = julia_mvmc_root().expect("Julia reference checkout required");
+    assert_eq!(MODELS.len(), 13);
+    let mut names = std::collections::BTreeSet::new();
+    for model in MODELS {
+        assert!(names.insert(model.fixture), "duplicate model");
+        let fixture = root.join("test/integration/reference").join(model.fixture);
+        let namelist = fixture.join("inputs/namelist.def");
+        let data = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
+        let contract = mvmc_core::validation::validate_para_opt(&data);
+        eprintln!("inventory {}: {:?}; steps={} nsmp={} orbital_rows={} declared_slater={}; deterministic coverage: {}",
+            model.fixture, contract, data.modpara.nsr_opt_itr_step,
+            data.modpara.nsr_opt_itr_smp, data.orbital_terms.len(),
+            mvmc_expert_parsers::utils::parameter_init::n_slater(&data),
+            if model.prefix_reference_available { "existing model gate; not executed by inventory" } else { model.reason });
+        for file in ["ctest_ref/ref_mean.dat", "ctest_ref/ref_std.dat"] {
+            let values = read_values(&fixture.join(file));
+            assert!(values.len() >= 2 && values.iter().all(|v| v.is_finite()));
+        }
+    }
+}
+
+#[test]
+#[ignore = "execution audit, not parity: runs one step for all 13 historical inputs"]
+fn audit_thirteen_ctest_one_step_execution_paths() {
+    let root = julia_mvmc_root().expect("Julia reference checkout required");
+    for model in MODELS {
+        let namelist = root
+            .join("test/integration/reference")
+            .join(model.fixture)
+            .join("inputs/namelist.def");
+        let config = RunConfig {
+            nsmp: Some(1),
+            seed: None,
+            ..RunConfig::new(1, model.mode)
+        };
+        match run_para_opt_from_namelist(&namelist, config) {
+            Ok(result) => {
+                assert_eq!(result.status, 0, "{}", model.fixture);
+                assert!(result.ctest_values.iter().all(|value| value.is_finite()));
+                eprintln!("execution audit {}: one step executed; deterministic and long parity UNVERIFIED", model.fixture);
+            }
+            Err(error) => eprintln!(
+                "execution audit {}: REJECTED: {error}; parity UNVERIFIED",
+                model.fixture
+            ),
+        }
+    }
 }

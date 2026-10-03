@@ -6,6 +6,73 @@
 
 use mvmc_expert_parsers::{ExpertModeData, ModParaParameters};
 
+/// Runtime entry point whose grouped support rules are being checked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeEntryPoint {
+    /// Parameter optimization (`VMCParaOpt`).
+    ParaOpt,
+    /// Fixed-parameter physical-quantity calculation (`VMCPhysCal`).
+    PhysCal,
+}
+
+/// Validate the combinations that depend on grouped execution.
+///
+/// Keep this separate from the reducer check: the input contract must be
+/// rejected before initialization, while reducer availability is checked by
+/// the caller that owns the communicator.
+pub fn validate_grouped_runtime(
+    data: &ExpertModeData,
+    entry_point: RuntimeEntryPoint,
+) -> Result<(), String> {
+    if data.modpara.nsplit_size <= 1 {
+        return Ok(());
+    }
+
+    if entry_point == RuntimeEntryPoint::PhysCal && data.i_flg_orbital_general != 0 {
+        return Err("NSplitSize > 1 is not supported for FSZ / general-orbital PhysCal".into());
+    }
+    if entry_point == RuntimeEntryPoint::ParaOpt && data.modpara.nsrcg != 0 {
+        return Err("NSplitSize > 1 with SR-CG is not supported by Julia-mVMC".into());
+    }
+    if entry_point == RuntimeEntryPoint::ParaOpt
+        && data.i_flg_orbital_general != 0
+        && (data.modpara.nsp_gauss_leg > 1 || data.modpara.nmp_trans.unsigned_abs() > 1)
+    {
+        return Err(
+            "NSplitSize > 1 with FSZ standard-projection NQPFull > 1 is unsupported".into(),
+        );
+    }
+    if data.modpara.lanczos_mode > 0 {
+        return Err("NSplitSize > 1 with NLanczosMode > 0 is unsupported (issue #31)".into());
+    }
+    if data.n_qp_opt_trans.max(1) > 1 || data.opt_trans.len() > 1 || data.qp_opt_trans.len() > 1 {
+        return Err(format!(
+            "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
+            data.modpara.nsplit_size, data.n_qp_opt_trans
+        ));
+    }
+    Ok(())
+}
+
+/// Validate a reducer before entering a path that may issue collectives.
+pub fn validate_reducer_rank<R: crate::reducer::Reducer + ?Sized>(
+    data: &ExpertModeData,
+    reducer: &R,
+) -> Result<(), String> {
+    if data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
+        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
+    }
+    let world_size = reducer.world_size();
+    if world_size == 0 || reducer.rank() >= world_size {
+        return Err(format!(
+            "MPI rank {} is outside world size {}",
+            reducer.rank(),
+            world_size
+        ));
+    }
+    Ok(())
+}
+
 /// Validate globally unsupported ModPara settings without mutating data.
 pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
     if p.nsplit_size < 1 {
@@ -33,29 +100,17 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
 pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     let p = &data.modpara;
     validate_supported_modpara(p)?;
+    validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
     if p.lanczos_mode > 0 {
         return Err(
             "NLanczosMode > 0 is not supported for parameter optimization; use PhysCal".into(),
         );
-    }
-    if p.nsplit_size > 1 && p.nsrcg != 0 {
-        return Err("NSplitSize > 1 with SR-CG is not supported by Julia-mVMC".into());
     }
     if p.vmc_calc_mode != 0 {
         return Err(format!(
             "NVMCCalMode={} cannot run parameter optimization; PhysCal is not implemented yet (issue #29)",
             p.vmc_calc_mode
         ));
-    }
-    if p.nsplit_size > 1
-        && (data.n_qp_opt_trans.max(1) > 1
-            || data.opt_trans.len() > 1
-            || data.qp_opt_trans.len() > 1)
-    {
-        return Err(format!(
-                "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
-                p.nsplit_size, data.n_qp_opt_trans
-            ));
     }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
@@ -187,14 +242,15 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
 /// Validate PhysCal input combinations that are independent of the reducer.
 pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     let p = &data.modpara;
+    if !data.input_errors.is_empty() {
+        return Err(format!(
+            "incomplete Expert input: {}",
+            data.input_errors.join("; ")
+        ));
+    }
     validate_supported_modpara(p)?;
+    validate_grouped_runtime(data, RuntimeEntryPoint::PhysCal)?;
     if p.lanczos_mode > 0 {
-        if p.nsplit_size > 1 {
-            return Err(
-                "NSplitSize > 1 with NLanczosMode > 0 is unsupported for PhysCal (issue #31)"
-                    .into(),
-            );
-        }
         if data.i_flg_orbital_general != 0 {
             return Err(
                 "Lanczos PhysCal for FSZ/general orbitals is not implemented yet (issue #31)"
@@ -250,6 +306,31 @@ fn mpi_requested(get: impl Fn(&str) -> Option<String>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::mpi_requested;
+
+    #[test]
+    fn grouped_matrix_allows_normal_physcal_and_rejects_fsz_multi_qp() {
+        use super::{validate_grouped_runtime, RuntimeEntryPoint};
+        let mut data = mvmc_expert_parsers::ExpertModeData::new();
+        data.modpara.nsplit_size = 2;
+        data.modpara.nmp_trans = 1;
+        data.modpara.nsrcg = 1; // SR controls do not affect PhysCal.
+        validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).unwrap();
+        assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).is_err());
+        data.modpara.nsrcg = 0;
+        data.i_flg_orbital_general = 1;
+        assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).is_err());
+        validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).unwrap();
+        for (gauss, trans) in [(2, 1), (1, 2), (1, -2)] {
+            data.modpara.nsp_gauss_leg = gauss;
+            data.modpara.nmp_trans = trans;
+            assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt)
+                .unwrap_err()
+                .contains("FSZ standard-projection NQPFull"));
+        }
+        data.i_flg_orbital_general = 0;
+        validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).unwrap();
+        validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).unwrap();
+    }
 
     #[test]
     fn parsed_and_programmatic_rbm_terms_pass_runtime_validation() {

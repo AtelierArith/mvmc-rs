@@ -15,6 +15,7 @@
 //!   --mode <MODE>     Sanity label: real/cmp/fsz [default: inferred]
 //!   --initial-def <auto|none|PATH> Starting parameter file [default: auto]
 //!   -o / --opt-trans  Enable C optimized-translation mode [default: disabled]
+//!   --physcal <PATH>  Run fixed-parameter PhysCal with this parameter file
 //!   --help / -h       Print this help text
 //!
 //! Environment:
@@ -37,6 +38,7 @@ fn print_usage(program: &str) {
     eprintln!("  --mode <MODE>   Sanity label: real, cmp or fsz [default: inferred]");
     eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
     eprintln!("  -o, --opt-trans Enable C OptTrans mode [default: disabled]");
+    eprintln!("  --physcal <PATH> Run fixed-parameter PhysCal using PATH");
     eprintln!("  --help, -h      Print this help");
     eprintln!();
     eprintln!("Environment:");
@@ -56,6 +58,7 @@ fn main() {
     let mut mode_arg: Option<String> = None;
     let mut initial_def = mvmc_core::InitialDef::Auto;
     let mut opt_trans_arg = false;
+    let mut physcal_params: Option<PathBuf> = None;
 
     let mut idx = 1;
     while idx < args.len() {
@@ -124,6 +127,13 @@ fn main() {
             "-o" | "--opt-trans" => {
                 opt_trans_arg = true;
             }
+            "--physcal" => {
+                idx += 1;
+                physcal_params = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
+                    eprintln!("error: --physcal requires a fixed parameter file");
+                    process::exit(2)
+                }));
+            }
             flag if flag.starts_with('-') => {
                 eprintln!("error: unknown flag `{flag}`");
                 print_usage(program);
@@ -165,24 +175,19 @@ fn main() {
     let out_dir: PathBuf =
         out_dir_arg.unwrap_or_else(|| namelist.parent().unwrap_or(Path::new(".")).join("output"));
 
-    // ── banner ────────────────────────────────────────────────────────────────
-    println!("=== mvmc — Julia-mVMC Rust port ===");
-    println!("namelist : {}", namelist.display());
-    println!("out-dir  : {}", out_dir.display());
-    if let Some(n) = nsteps_override {
-        println!("nsteps   : {n} (override)");
-    }
-    if let Some(s) = seed_arg {
-        println!("seed     : {s} (override)");
-    }
-    println!();
-
     // ── peek at modpara to determine defaults and show model info ─────────────
     let (nsteps, inferred_mode) =
-        match mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, opt_trans_arg)
-        {
+        match mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+            &namelist,
+            opt_trans_arg,
+        ) {
             Ok(data) => {
-                if let Err(e) = mvmc_core::validation::validate_para_opt(&data) {
+                let validation = if physcal_params.is_some() {
+                    mvmc_core::validation::validate_phys_cal(&data)
+                } else {
+                    mvmc_core::validation::validate_para_opt(&data)
+                };
+                if let Err(e) = validation {
                     eprintln!("error: {e}");
                     process::exit(1);
                 }
@@ -214,45 +219,150 @@ fn main() {
             }
         };
 
-    if nsteps <= 0 {
+    // ── banner ────────────────────────────────────────────────────────────────
+    println!("=== mvmc — Julia-mVMC Rust port ===");
+    println!("namelist : {}", namelist.display());
+    println!("out-dir  : {}", out_dir.display());
+    if let Some(path) = &physcal_params {
+        println!("physcal  : {}", path.display());
+    }
+    if let Some(n) = nsteps_override {
+        println!("nsteps   : {n} (override)");
+    }
+    if let Some(s) = seed_arg {
+        println!("seed     : {s} (override)");
+    }
+    println!();
+
+    if physcal_params.is_none() && nsteps <= 0 {
         eprintln!("error: NSROptItrStep is 0 — nothing to run. Use --nsteps <N>.");
         process::exit(1);
     }
 
     // ── run ───────────────────────────────────────────────────────────────────
     let t0 = Instant::now();
-    let config = mvmc_core::RunConfig {
-        nsmp: nsmp_arg,
-        seed: seed_arg,
-        output_dir: Some(out_dir),
-        initial_def,
-        enable_opt_trans: Some(opt_trans_arg),
-        ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
-    };
-    let result = run_with_selected_backend(&namelist, config);
-    let elapsed = t0.elapsed();
 
-    // ── result ────────────────────────────────────────────────────────────────
-    match result {
-        Ok(summary) => {
-            println!();
-            println!(
-                "=== Completed {} SR steps in {:.2}s ===",
-                summary.effective_nsteps,
-                elapsed.as_secs_f64()
-            );
-            println!("Output files written to: {}", summary.output_dir.display());
-            println!("Final energy / site: {:.10}", summary.final_energy_per_site);
-            println!(
-                "Final-window means ({} steps): {:?}",
-                summary.effective_nsmp, summary.ctest_values
-            );
+    if let Some(fixed_params) = physcal_params {
+        match run_physcal_with_selected_backend(
+            &namelist,
+            &fixed_params,
+            seed_arg,
+            &out_dir,
+            mode_arg.as_deref().unwrap_or(inferred_mode),
+            opt_trans_arg,
+        ) {
+            Ok(result) => {
+                println!();
+                println!(
+                    "=== Completed {} PhysCal samples in {:.2}s ===",
+                    result.iterations,
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("Output files written to: {}", out_dir.display());
+            }
+            Err(e) => {
+                eprintln!("error: PhysCal failed: {e}");
+                process::exit(1);
+            }
         }
-        Err(e) => {
-            eprintln!("error: run failed: {e}");
-            process::exit(1);
+    } else {
+        let config = mvmc_core::RunConfig {
+            nsmp: nsmp_arg,
+            seed: seed_arg,
+            output_dir: Some(out_dir),
+            initial_def,
+            enable_opt_trans: Some(opt_trans_arg),
+            ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
+        };
+        match run_with_selected_backend(&namelist, config) {
+            Ok(summary) => {
+                println!();
+                println!(
+                    "=== Completed {} SR steps in {:.2}s ===",
+                    summary.effective_nsteps,
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("Output files written to: {}", summary.output_dir.display());
+                println!("Final energy / site: {:.10}", summary.final_energy_per_site);
+                println!(
+                    "Final-window means ({} steps): {:?}",
+                    summary.effective_nsmp, summary.ctest_values
+                );
+            }
+            Err(e) => {
+                eprintln!("error: run failed: {e}");
+                process::exit(1);
+            }
         }
     }
+}
+
+fn run_physcal_with_selected_backend(
+    namelist: &Path,
+    fixed_params: &Path,
+    seed: Option<i64>,
+    output_dir: &Path,
+    mode: &str,
+    enable_opt_trans: bool,
+) -> Result<mvmc_core::PhysCalResult, String> {
+    let parsed =
+        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(namelist, enable_opt_trans)
+            .map_err(|error| error.to_string())?;
+    mvmc_core::validation::validate_phys_cal(&parsed)?;
+    if !fixed_params.is_file() {
+        return Err(format!(
+            "fixed parameter file not found: {}",
+            fixed_params.display()
+        ));
+    }
+
+    let launched = mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok());
+    if launched.is_some_and(|context| context.world_size > 1) {
+        #[cfg(feature = "mpi")]
+        {
+            let context = mvmc_core::mpi::MpiContext::initialize()?;
+            let reducer: &dyn mvmc_core::Reducer = if parsed.modpara.nsplit_size > 1 {
+                return Err("NSplitSize > 1 is not supported for PhysCal (issue #178)".into());
+            } else {
+                &context
+            };
+            let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
+                namelist,
+                fixed_params,
+                mode,
+                seed,
+                reducer,
+                enable_opt_trans,
+            )?;
+            std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
+            return mvmc_core::vmc_phys_cal_with_reducer(preparation, Some(output_dir), reducer);
+        }
+        #[cfg(not(feature = "mpi"))]
+        {
+            return Err(
+                "MPI launcher detected; rebuild mvmc-cli with --features mpi to enable MPI execution"
+                    .into(),
+            );
+        }
+    }
+
+    if parsed.modpara.nsplit_size > 1 {
+        return Err("NSplitSize > 1 is not supported for PhysCal (issue #178)".into());
+    }
+    let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
+        namelist,
+        fixed_params,
+        mode,
+        seed,
+        &mvmc_core::SingleProcessReducer,
+        enable_opt_trans,
+    )?;
+    std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
+    mvmc_core::vmc_phys_cal_with_reducer(
+        preparation,
+        Some(output_dir),
+        &mvmc_core::SingleProcessReducer,
+    )
 }
 
 fn run_with_selected_backend(

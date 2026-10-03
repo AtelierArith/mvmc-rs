@@ -11,6 +11,19 @@ members = [
     "crates/mvmc-cli",
     "xtask",
 ]
+exclude = [
+    "third_party/tenferro-ad",
+    "third_party/tenferro-cpu",
+    "third_party/tenferro-einsum",
+    "third_party/tenferro-runtime",
+]
+
+# Temporary security patches for #192; see docs/security/dependabot-alert-5.md.
+[patch.crates-io]
+tenferro-ad = { path = "third_party/tenferro-ad" }
+tenferro-cpu = { path = "third_party/tenferro-cpu" }
+tenferro-einsum = { path = "third_party/tenferro-einsum" }
+tenferro-runtime = { path = "third_party/tenferro-runtime" }
 
 [workspace.package]
 edition = "2021"

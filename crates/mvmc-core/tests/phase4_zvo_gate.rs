@@ -4,13 +4,14 @@ use std::fs;
 use std::path::PathBuf;
 
 mod support;
-use support::julia_mvmc_root;
+use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
 #[test]
+#[ignore = "optional parity gate; set MVMC_RS_PHASE4_REAL_ZVO=1 and explicitly run ignored tests"]
 fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
+    require_gate("phase4-real-zvo", "MVMC_RS_PHASE4_REAL_ZVO");
     let Some(julia) = julia_mvmc_root() else {
-        eprintln!("skipping Phase 4 gate: Julia-mVMC checkout not found");
-        return;
+        support::missing_fixture("phase4-real-zvo", "Julia-mVMC checkout not found");
     };
     let namelist = julia
         .join("examples")
@@ -24,8 +25,7 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
         .join("heisenberg_chain_real")
         .join("zvo_out_first10.dat");
     if !namelist.is_file() || !reference.is_file() {
-        eprintln!("skipping Phase 4 gate: missing fixture/reference");
-        return;
+        support::missing_fixture("phase4-real-zvo", "namelist or reference is missing");
     }
 
     let tmp = tempdir_in_target();
@@ -57,6 +57,11 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
             );
         }
     }
+    report_gate(
+        "phase4-real-zvo",
+        GateStatus::Pass,
+        "10-step reference matched",
+    );
 }
 
 fn parse_rows(content: &str) -> Vec<Vec<f64>> {

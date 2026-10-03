@@ -1,5 +1,8 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+mod support;
+use support::{julia_mvmc_root, report_gate, require_gate, GateStatus};
 
 fn values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)
@@ -10,14 +13,25 @@ fn values(path: &Path) -> Vec<f64> {
 }
 
 #[test]
+#[ignore = "optional parity gate; set MVMC_RS_LANCZOS_PHYSICAL=1 and explicitly run ignored tests"]
 fn serial_lanczos_matches_hubbard_and_exchange_references() {
-    if std::env::var_os("MVMC_RS_LANCZOS_PHYSICAL").is_none() {
-        eprintln!("set MVMC_RS_LANCZOS_PHYSICAL=1 to run the Julia/C Lanczos PhysCal gate");
-        return;
-    }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC");
+    require_gate("lanczos-physcal", "MVMC_RS_LANCZOS_PHYSICAL");
+    let root = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("lanczos-physcal", "Julia-mVMC checkout not found")
+    });
     let mode = std::env::var("MVMC_RS_LANCZOS_MODE").unwrap_or_else(|_| "real".into());
     let requested_model = std::env::var("MVMC_RS_LANCZOS_MODEL").ok();
+    if !matches!(mode.as_str(), "real" | "cmp") {
+        support::unsupported("lanczos-physcal", format!("unknown mode {mode:?}"));
+    }
+    if let Some(model) = requested_model.as_deref() {
+        if !matches!(
+            model,
+            "hubbard_chain_real" | "hubbard_chain_lanczos" | "spin_chain_lanczos"
+        ) {
+            support::unsupported("lanczos-physcal", format!("unknown model {model:?}"));
+        }
+    }
     for model in [
         "hubbard_chain_real",
         "hubbard_chain_lanczos",
@@ -33,8 +47,10 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
         if !namelist.is_file() || !opt_para.is_file() {
-            eprintln!("Julia-mVMC reference submodule is unavailable; skipping {model}");
-            continue;
+            support::missing_fixture(
+                "lanczos-physcal",
+                format!("{model}: namelist or zqp_opt.dat is missing"),
+            );
         }
 
         let output =
@@ -88,5 +104,6 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
             }
         }
         let _ = fs::remove_dir_all(output);
+        report_gate("lanczos-physcal", GateStatus::Pass, model);
     }
 }

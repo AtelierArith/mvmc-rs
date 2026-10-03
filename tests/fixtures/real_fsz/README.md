@@ -38,6 +38,38 @@ only nonfinite Pfaffians. A zero Pfaffian and nonfinite inverse therefore
 return success at this kernel boundary; the regression explicitly records
 that upstream behavior. Normal real/complex kernels keep their own guards.
 
+## Issue #176 audit (HEAD `30d8d69`)
+
+The historical failure is resolved on the recorded Linux reference path; no
+algorithm or tolerance change is needed. The current Rust gate passes all 96
+matrix cases, the later-QP publication transaction, and the retry, 101-attempt
+failure, zero, local-spin, and fixed-magnetization cases. Each initialization
+case also checks the complete next 624-word SFMT block.
+
+The first historical numerical divergence is reproducible by comparing the
+preserved macOS fixture with the independently generated Linux fixture. It is
+setup case `ns=2, ne=1, polarized=1, complex_input=0`, inverse QP 1, matrix
+element `(row=1, col=0)` in column-major storage: macOS
+`bffce739ce739ce6`, Linux `bffce739ce739ce7`; the conjugate entry differs in
+the same one-ULP direction. This is the tridiagonal solve's complex division,
+not an RNG, indexing, or control-flow divergence: the macOS/LLVM path uses
+the exponent-scaled norm-squared quotient while Linux GNU uses the
+Smith-scaled quotient. The Linux fixture is therefore the platform-specific
+exact-bit expectation; no cross-platform bit requirement is inferred for this
+computed value.
+
+Recorded Linux audit environment: Ubuntu 24.04 x86_64, kernel 6.8,
+`rustc 1.99.0`/Cargo 1.99.0, GCC/G++ 13.3.0, OpenBLAS 0.3.26 LP64 for
+Rust, Julia 1.13.1 with OpenBLAS 0.3.30 ILP64 and one BLAS thread, Julia
+source checkout `8bb1b9e8`, and manifest SHA-256
+`09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc`.
+Rust uses the default `mvmc-core` BLAS/LAPACK features and
+`pfapack/blas-backend`; the setup fixture SHA-256 is
+`5d1c0bb40fd89796252c3b91e11b641d827cf66d25755a4249a3c8a5eefa47d1`.
+The checked-out Julia executable reports 1.13.1, but juliaup does not have an
+explicit `+1.13.1` channel installed; invoking `julia --project=...` produced
+the recorded fixture exactly.
+
 This milestone supplies full real FSZ setup and initialization. Issue #43
 remains open until the real sampler, observation/derivative dispatch, and
 multi-step deterministic trajectories (including spin flips) are verified.

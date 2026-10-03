@@ -1,7 +1,9 @@
 //! Runtime rejection must precede initialization, RNG consumption, and output.
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
-use mvmc_core::{vmc_para_opt, ExpertModeData, SingleProcessReducer, VmcOptimizationState};
+use mvmc_core::{
+    vmc_para_opt, ExpertModeData, Reducer, SingleProcessReducer, VmcOptimizationState,
+};
 use mvmc_expert_parsers::parsers::modpara::parse_modpara_content;
 use sfmt19937::Sfmt19937Rng;
 
@@ -414,5 +416,73 @@ fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use()
         for _ in 0..624 {
             assert_eq!(rng.gen_rand32(), probe.gen_rand32());
         }
+    }
+}
+
+#[test]
+fn grouped_runtime_matrix_rejects_physcal_cg_and_lanczos_before_rng_use() {
+    let mut data = ExpertModeData::new();
+    data.modpara.nsplit_size = 2;
+    data.modpara.nmp_trans = 1;
+
+    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+    assert!(
+        error.contains("NSplitSize") && error.contains("PhysCal"),
+        "{error}"
+    );
+
+    data.modpara.nsrcg = 1;
+    let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+    assert!(error.contains("SR-CG"), "{error}");
+
+    data.modpara.nsrcg = 0;
+    data.modpara.lanczos_mode = 1;
+    let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+    assert!(
+        error.contains("Lanczos") || error.contains("NLanczosMode"),
+        "{error}"
+    );
+}
+
+#[test]
+fn grouped_invalid_rank_rejects_before_rng_use() {
+    #[derive(Debug)]
+    struct InvalidRankReducer;
+    impl Reducer for InvalidRankReducer {
+        fn allreduce_sum_f64(&self, _: &mut [f64]) {}
+        fn allreduce_sum_c64(&self, _: &mut [num_complex::Complex64]) {}
+        fn allreduce_sum_i64(&self, _: &mut [i64]) {}
+        fn world_size(&self) -> usize {
+            2
+        }
+        fn rank(&self) -> usize {
+            2
+        }
+        fn supports_grouped_sampling(&self) -> bool {
+            true
+        }
+    }
+
+    let mut data = ExpertModeData::new();
+    data.modpara.nsplit_size = 2;
+    data.modpara.nmp_trans = 1;
+    let mut rng = Sfmt19937Rng::new(1);
+    let mut probe = rng.clone();
+    let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
+    let error = vmc_para_opt(
+        &mut data,
+        &mut state,
+        &mut rng,
+        None,
+        &InvalidRankReducer,
+        mvmc_core::OptimizationOptions::default(),
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("rank 2") && error.contains("world size 2"),
+        "{error}"
+    );
+    for _ in 0..624 {
+        assert_eq!(rng.gen_rand32(), probe.gen_rand32());
     }
 }

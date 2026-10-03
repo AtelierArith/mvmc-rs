@@ -24,6 +24,21 @@ pub trait Reducer {
     /// on non-root ranks and leave the root values unchanged.
     fn broadcast_c64(&self, _root: usize, _buf: &mut [Complex64]) {}
 
+    /// Broadcast an integer buffer from `root`.
+    ///
+    /// Seed resolution uses this separately from parameter broadcasts so the
+    /// root-resolved base seed is shared before each rank adds its group
+    /// offset. Default output-directory selection also uses this broadcast.
+    /// Grouped implementations must distribute the global root's payload to
+    /// every local rank in every group. Only the serial default is a no-op.
+    fn broadcast_i64(&self, _root: usize, _buf: &mut [i64]) -> Result<(), String> {
+        if self.reduction_size() > 1 {
+            Err("multi-rank reducer must implement integer seed broadcast".into())
+        } else {
+            Ok(())
+        }
+    }
+
     /// In-place sum-reduction across all ranks.
     fn allreduce_sum_f64(&self, buf: &mut [f64]);
     /// In-place sum-reduction across all ranks (complex variant).

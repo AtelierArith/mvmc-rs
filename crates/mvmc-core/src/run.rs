@@ -44,6 +44,20 @@ use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use crate::sync::sync_modified_parameter as sync_modified;
 use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
 
+// Every rank must reach this boundary even when its local operation failed.
+fn collective_result<T, R: Reducer + ?Sized>(
+    result: Result<T, String>,
+    reducer: &R,
+    operation: &str,
+) -> Result<T, String> {
+    if reducer.any_failure(result.is_err()) {
+        return Err(result
+            .err()
+            .unwrap_or_else(|| format!("{operation} failed on another MPI rank")));
+    }
+    result
+}
+
 /// C-compatible parser default when `RndSeed` is omitted. Zero is a
 /// valid seed, and negative ModPara seeds request the current Unix time.
 pub const FALLBACK_SEED: i64 = 11272;
@@ -52,6 +66,16 @@ pub const FALLBACK_SEED: i64 = 11272;
 /// Arguments are zero-based step, post-sync parameters, measured energy and status.
 pub type StepCallback<'a> =
     dyn FnMut(usize, &mut ExpertModeData, Complex64, i32) -> Result<(), String> + 'a;
+
+/// Per-sample PhysCal callback.
+///
+/// The callback receives the zero-based sample index, the fixed parameter data,
+/// the post-average total energy, and a zero status. PhysCal invokes it on
+/// every rank after that sample's reductions and output have completed. The
+/// data is shared read-only so observation cannot change the fixed parameters,
+/// QP weights, RNG trajectory, or subsequent output.
+pub type PhysCalCallback<'a> =
+    dyn FnMut(usize, &ExpertModeData, Complex64, i32) -> Result<(), String> + 'a;
 
 /// Fixed-parameter PhysCal preparation, before the sampling loop owns the
 /// internal initialization and QP-weight setup.
@@ -88,7 +112,15 @@ pub fn prepare_phys_cal_from_namelist(
     mode: &str,
     seed: Option<i64>,
 ) -> Result<PhysCalPreparation, String> {
-    prepare_phys_cal_from_namelist_with_seed_offset(namelist_path, opt_para_path, mode, seed, 0)
+    prepare_phys_cal_from_namelist_with_seed_offset(
+        namelist_path,
+        opt_para_path,
+        mode,
+        seed,
+        true,
+        0,
+        &SingleProcessReducer,
+    )
 }
 
 /// Prepare PhysCal with an explicit MPI group seed offset.
@@ -108,36 +140,71 @@ pub fn prepare_phys_cal_from_namelist_with_reducer<R: Reducer + ?Sized>(
         opt_para_path,
         mode,
         seed,
+        true,
         reducer.seed_offset(),
+        reducer,
     )
 }
 
-fn prepare_phys_cal_from_namelist_with_seed_offset(
+/// Prepare PhysCal with an explicit C-compatible OptTrans selection.
+pub fn prepare_phys_cal_from_namelist_with_reducer_and_opt_trans<R: Reducer + ?Sized>(
     namelist_path: impl AsRef<Path>,
     opt_para_path: impl AsRef<Path>,
     mode: &str,
     seed: Option<i64>,
-    seed_offset: usize,
+    reducer: &R,
+    enable_opt_trans: bool,
 ) -> Result<PhysCalPreparation, String> {
-    if !matches!(mode, "real" | "cmp" | "fsz") {
-        return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
-    }
-    let namelist_path = namelist_path.as_ref();
-    let mut data = mvmc_expert_parsers::parse_expert_mode_files(namelist_path)
+    prepare_phys_cal_from_namelist_with_seed_offset(
+        namelist_path,
+        opt_para_path,
+        mode,
+        seed,
+        enable_opt_trans,
+        reducer.seed_offset(),
+        reducer,
+    )
+}
+
+fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
+    namelist_path: impl AsRef<Path>,
+    opt_para_path: impl AsRef<Path>,
+    mode: &str,
+    seed: Option<i64>,
+    enable_opt_trans: bool,
+    seed_offset: usize,
+    reducer: &R,
+) -> Result<PhysCalPreparation, String> {
+    let loaded = (|| {
+        if !matches!(mode, "real" | "cmp" | "fsz") {
+            return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
+        }
+        let namelist_path = namelist_path.as_ref();
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+            namelist_path,
+            enable_opt_trans,
+        )
         .map_err(|error| error.to_string())?;
-    let seed_offset = i64::try_from(seed_offset)
-        .map_err(|_| format!("MPI seed offset {seed_offset} does not fit in the seed offset"))?;
-    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, seed, seed_offset, || {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_secs() as i64)
-            .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
-    })?;
-    let rng = seeded_rng(actual_seed)?;
-    let n_para_consumed = read_opt_para_file(&mut data, opt_para_path)?;
-    read_input_parameters(&mut data, namelist_path)?;
-    sync_modified_parameter(&mut data, false);
-    crate::validation::validate_phys_cal(&data)?;
+        let n_para_consumed = read_opt_para_file(&mut data, opt_para_path)?;
+        read_input_parameters(&mut data, namelist_path)?;
+        sync_modified_parameter(&mut data, false);
+        crate::validation::validate_phys_cal(&data)?;
+        crate::validation::validate_reducer_rank(&data, reducer)?;
+        Ok((data, n_para_consumed))
+    })();
+    let (data, n_para_consumed) =
+        collective_result(loaded, reducer, "PhysCal parse/load/validation")?;
+    let actual_seed =
+        resolve_seed_with_reducer(data.modpara.rnd_seed, seed, seed_offset, reducer, || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
+                .and_then(|duration| {
+                    i64::try_from(duration.as_secs())
+                        .map_err(|error| format!("cannot convert time-based RndSeed: {error}"))
+                })
+        })?;
+    let rng = seeded_rng_with_reducer(actual_seed, reducer)?;
     Ok(PhysCalPreparation {
         data,
         rng,
@@ -154,14 +221,37 @@ pub fn vmc_phys_cal(preparation: PhysCalPreparation) -> Result<PhysCalResult, St
     vmc_phys_cal_with_reducer(preparation, None, &SingleProcessReducer)
 }
 
+/// Run serial PhysCal and invoke `callback` once per completed sample.
+pub fn vmc_phys_cal_with_callback(
+    preparation: PhysCalPreparation,
+    callback: &mut PhysCalCallback<'_>,
+) -> Result<PhysCalResult, String> {
+    vmc_phys_cal_with_reducer_and_callback(preparation, None, &SingleProcessReducer, Some(callback))
+}
+
 /// Run PhysCal and write indexed Green files under `output_dir`.
 pub fn vmc_phys_cal_to_dir(
     preparation: PhysCalPreparation,
     output_dir: impl AsRef<Path>,
 ) -> Result<PhysCalResult, String> {
     let output_dir = output_dir.as_ref();
-    std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
     vmc_phys_cal_with_reducer(preparation, Some(output_dir), &SingleProcessReducer)
+}
+
+/// Run serial PhysCal, write indexed Green files, and invoke `callback` once
+/// per completed sample.
+pub fn vmc_phys_cal_to_dir_with_callback(
+    preparation: PhysCalPreparation,
+    output_dir: impl AsRef<Path>,
+    callback: &mut PhysCalCallback<'_>,
+) -> Result<PhysCalResult, String> {
+    let output_dir = output_dir.as_ref();
+    vmc_phys_cal_with_reducer_and_callback(
+        preparation,
+        Some(output_dir),
+        &SingleProcessReducer,
+        Some(callback),
+    )
 }
 
 /// Run PhysCal with a caller-provided reducer.
@@ -172,26 +262,39 @@ pub fn vmc_phys_cal_to_dir(
 /// while making MPI PhysCal use the same comm0/group reduction contract as
 /// parameter optimization.
 pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
-    mut preparation: PhysCalPreparation,
+    preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
 ) -> Result<PhysCalResult, String> {
-    if preparation.data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
-        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
-    }
-    if preparation.data.modpara.nsplit_size > 1 && preparation.data.modpara.lanczos_mode > 0 {
-        return Err("NSplitSize > 1 with Lanczos PhysCal is unsupported (issue #31)".into());
-    }
-    if preparation.data.modpara.nsplit_size > 1 && preparation.data.i_flg_orbital_general != 0 {
-        return Err("NSplitSize > 1 with FSZ PhysCal is unsupported (issue #36)".into());
-    }
-    if reducer.world_size() > 1 && reducer.rank() >= reducer.world_size() {
-        return Err(format!(
-            "MPI rank {} is outside world size {}",
-            reducer.rank(),
-            reducer.world_size()
-        ));
-    }
+    vmc_phys_cal_with_reducer_and_callback(preparation, output_dir, reducer, None)
+}
+
+/// Run PhysCal with a caller-provided reducer and per-sample callback.
+///
+/// The callback runs on every rank, after reductions and rank-root output for
+/// the sample. Every rank participates in the callback-failure agreement,
+/// including ranks whose callback succeeded, so a rank-local error is returned
+/// consistently without leaving MPI peers in different loop states.
+pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
+    mut preparation: PhysCalPreparation,
+    output_dir: Option<&Path>,
+    reducer: &R,
+    mut callback: Option<&mut PhysCalCallback<'_>>,
+) -> Result<PhysCalResult, String> {
+    collective_result(
+        crate::validation::validate_phys_cal(&preparation.data)
+            .and_then(|()| crate::validation::validate_reducer_rank(&preparation.data, reducer)),
+        reducer,
+        "PhysCal validation",
+    )?;
+    let output_setup = if reducer.is_output_root() {
+        output_dir.map_or(Ok(()), |path| {
+            std::fs::create_dir_all(path).map_err(|error| error.to_string())
+        })
+    } else {
+        Ok(())
+    };
+    collective_result(output_setup, reducer, "PhysCal output directory")?;
     let mut init_data = preparation.data.clone();
     init_parameter(&mut init_data, &mut preparation.rng);
     if preparation.data.modpara.nmp_trans == 0 {
@@ -211,21 +314,22 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
     }
     let iterations = preparation.data.modpara.n_data_qty_smp.max(0) as usize;
     for sample in 0..iterations {
-        if use_fsz {
+        let sample_result = if use_fsz {
             if all_complex {
                 crate::sampling::driver::vmc_make_sample_fsz(
                     &preparation.data,
                     &mut state,
                     &mut preparation.rng,
                 );
+                Ok(())
             } else {
                 crate::sampling::vmc_make_sample_fsz_real(
                     &preparation.data,
                     &mut state,
                     &mut preparation.rng,
                 )
-                .map_err(|error| error.to_string())?;
-                sync_real_fsz_shadow(&mut state);
+                .map(|_| ())
+                .map_err(|error| error.to_string())
             }
         } else if all_complex {
             crate::sampling::driver::vmc_make_sample(
@@ -233,12 +337,23 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
                 &mut state,
                 &mut preparation.rng,
             );
+            Ok(())
         } else {
             crate::sampling::driver::vmc_make_sample_real(
                 &preparation.data,
                 &mut state,
                 &mut preparation.rng,
             );
+            Ok(())
+        };
+        let sample_error = sample_result.as_ref().err().cloned();
+        if reducer.any_failure(sample_error.is_some()) {
+            return Err(sample_error
+                .unwrap_or_else(|| format!("sample {sample} failed on another MPI rank")));
+        }
+        sample_result?;
+        if use_fsz && !all_complex {
+            sync_real_fsz_shadow(&mut state);
         }
         clear_phys_quantity(&mut state);
         accumulate_observables(
@@ -252,10 +367,30 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
         weight_average_we(&mut state);
         average_physcal_rank_contributions(&mut state, reducer);
         reduce_counter(&mut state, reducer);
-        if reducer.is_output_root() {
+        let output_error = if reducer.is_output_root() {
             if let Some(output_dir) = output_dir {
                 crate::io::output_phys_data(&preparation.data, &state, sample, Some(output_dir))
-                    .map_err(|error| error.to_string())?;
+                    .err()
+                    .map(|error| error.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if reducer.any_failure(output_error.is_some()) {
+            return Err(output_error
+                .unwrap_or_else(|| format!("output sample {sample} failed on another MPI rank")));
+        }
+
+        {
+            let callback_error = callback.as_deref_mut().and_then(|callback| {
+                callback(sample, &preparation.data, state.energy.etot, 0).err()
+            });
+            let any_callback_error = reducer.any_failure(callback_error.is_some());
+            if any_callback_error {
+                return Err(callback_error
+                    .unwrap_or_else(|| "PhysCal callback failed on another rank".into()));
             }
         }
     }
@@ -338,27 +473,18 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     mut options: OptimizationOptions<'_>,
     timer: &mut CTimer<TIMED>,
 ) -> Result<(), String> {
-    if data.modpara.nsplit_size > 1
-        && (data.n_qp_opt_trans.max(1) > 1
-            || data.opt_trans.len() > 1
-            || data.qp_opt_trans.len() > 1)
-    {
-        return Err(format!(
-            "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
-            data.modpara.nsplit_size, data.n_qp_opt_trans
-        ));
-    }
-    if data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
-        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
-    }
-    crate::validation::validate_para_opt(data)?;
+    collective_result(
+        crate::validation::validate_grouped_runtime(
+            data,
+            crate::validation::RuntimeEntryPoint::ParaOpt,
+        )
+        .and_then(|()| crate::validation::validate_reducer_rank(data, reducer))
+        .and_then(|()| crate::validation::validate_para_opt(data)),
+        reducer,
+        "optimization validation",
+    )?;
     let world_size = reducer.world_size();
     let rank = reducer.rank();
-    if rank >= world_size {
-        return Err(format!(
-            "MPI rank {rank} is outside world size {world_size}"
-        ));
-    }
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     let window_start = n_steps as i64 - data.modpara.nsr_opt_itr_smp;
     let n_para = data.count_variational_parameters();
@@ -391,12 +517,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 ))
             } else {
                 crate::sampling::vmc_make_sample_fsz_real(data, state, rng)
-                    .map_err(|error| error.to_string())?;
-                sync_real_fsz_shadow(state);
-                Ok(crate::sampling::SampleStats {
-                    accepted: state.electron_config.counter[1] as usize,
-                    saved: data.modpara.nvmc_sample.max(0) as usize,
-                })
+                    .map_err(|error| error.to_string())
             }
         } else if !all_complex {
             Ok(crate::sampling::driver::vmc_make_sample_real_timed(
@@ -413,6 +534,9 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 .unwrap_or_else(|| format!("sample step {step} failed on another MPI rank")));
         }
         let _sample_stats = sample_result?;
+        if use_fsz && !all_complex {
+            sync_real_fsz_shadow(state);
+        }
         timer.stop(3);
 
         // Julia proceeds after a void sampler early return, retaining the saved
@@ -449,37 +573,61 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
 
         // 5. Output.
         timer.start(22);
-        if reducer.is_output_root() {
-            output_data(data, state, step, output_dir).map_err(|e| e.to_string())?;
+        let output_error = if reducer.is_output_root() {
+            output_data(data, state, step, output_dir)
+                .err()
+                .map(|error| error.to_string())
+        } else {
+            None
+        };
+        if reducer.any_failure(output_error.is_some()) {
+            return Err(output_error
+                .unwrap_or_else(|| format!("output step {step} failed on another MPI rank")));
         }
         timer.stop(22);
 
         if options.skip_sr {
             timer.stop(2);
-            if let Some(callback) = options.callback.as_mut() {
-                callback(step, data, state.energy.etot, 0)?;
-            }
+            let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
+                callback(step, data, state.energy.etot, 0)
+            });
+            collective_result(callback_result, reducer, "optimization callback")?;
             return Ok(());
         }
 
         // 6. SR update.
         timer.start(5);
-        let info = if data.modpara.nsrcg != 0 {
-            crate::sr_cg::stochastic_opt_cg(data, state, output_dir).map_err(|e| e.to_string())?
+        // SR kernels apply their update locally. Restore successful ranks too
+        // when a peer fails, before synchronization can publish that update.
+        let before_sr = (reducer.reduction_size() > 1).then(|| data.clone());
+        let sr_result = if data.modpara.nsrcg != 0 {
+            let sr_output = if reducer.is_output_root() {
+                output_dir
+            } else {
+                None
+            };
+            crate::sr_cg::stochastic_opt_cg(data, state, sr_output).map_err(|e| e.to_string())
         } else if all_complex {
-            crate::sr::stochastic_opt_complex_timed(data, state, timer)
+            Ok(crate::sr::stochastic_opt_complex_timed(data, state, timer))
         } else {
-            crate::sr::stochastic_opt_real_timed(data, state, timer)
+            Ok(crate::sr::stochastic_opt_real_timed(data, state, timer))
         };
+        let sr_error = sr_result.as_ref().err().cloned();
+        let info = sr_result.unwrap_or(1);
         timer.stop(5);
-        let mut sr_failure = [i64::from(info != 0)];
+        let mut sr_failure = [i64::from(sr_error.is_some() || info != 0)];
         reducer.allreduce_sum_i64(&mut sr_failure);
         if sr_failure[0] != 0 {
+            if let Some(before_sr) = before_sr {
+                *data = before_sr;
+            }
             timer.stop(2);
-            return Err(format!(
-                "vmc_para_opt: {} SR failed at step {step} (local status {info}); parameters were not updated",
-                if data.modpara.nsrcg != 0 { "CG" } else { "direct" }
-            ));
+            return Err(sr_error.unwrap_or_else(|| {
+                format!(
+                    "vmc_para_opt: {} SR failed at step {step} (local status {info}); parameters were not updated",
+                    if data.modpara.nsrcg != 0 { "CG" } else { "direct" }
+                )
+            }));
         }
 
         // 7. Sync modified parameters.
@@ -489,13 +637,23 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         if step as i64 >= window_start {
             store_opt_data(data, state, (step as i64 - window_start) as usize);
         }
-        if let Some(callback) = options.callback.as_mut() {
-            callback(step, data, state.energy.etot, info)?;
-        }
+        let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
+            callback(step, data, state.energy.etot, info)
+        });
+        collective_result(callback_result, reducer, "optimization callback")?;
     }
 
-    if reducer.is_output_root() {
-        output_opt_data(data, output_dir).map_err(|e| e.to_string())?;
+    let output_error = if reducer.is_output_root() {
+        output_opt_data(data, output_dir)
+            .err()
+            .map(|error| error.to_string())
+    } else {
+        None
+    };
+    if reducer.any_failure(output_error.is_some()) {
+        return Err(
+            output_error.unwrap_or_else(|| "final output failed on another MPI rank".into())
+        );
     }
     timer.stop(2);
     Ok(())
@@ -622,43 +780,53 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     timer.start(0);
     timer.start(1);
     timer.start(11);
-    let mut data = match config.enable_opt_trans {
-        Some(enabled) => {
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, enabled)
+    let parsed = (|| {
+        let data = match config.enable_opt_trans {
+            Some(enabled) => mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+                &namelist_path,
+                enabled,
+            ),
+            // The production runner follows C's FlagOptTrans contract: a
+            // definition file alone does not activate optimized translation.
+            None => {
+                mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, false)
+            }
         }
-        // The production runner follows C's FlagOptTrans contract: a
-        // definition file alone does not activate optimized translation.
-        None => {
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, false)
+        .map_err(|e| e.to_string())?;
+        timer.stop(11);
+        crate::validation::validate_para_opt(&data)?;
+        crate::validation::validate_reducer_rank(&data, reducer)?;
+        let effective_nsmp = config.nsmp.unwrap_or(data.modpara.nsr_opt_itr_smp);
+        if effective_nsmp <= 0 {
+            return Err(format!(
+                "effective nsmp must be positive; got {effective_nsmp}"
+            ));
         }
-    }
-    .map_err(|e| e.to_string())?;
-    timer.stop(11);
-    crate::validation::validate_para_opt(&data)?;
-    let effective_nsmp = config.nsmp.unwrap_or(data.modpara.nsr_opt_itr_smp);
-    if effective_nsmp <= 0 {
-        return Err(format!(
-            "effective nsmp must be positive; got {effective_nsmp}"
-        ));
-    }
-    if config.nsteps < effective_nsmp {
-        return Err(format!("nsteps ({}) must be >= nsmp ({effective_nsmp}); smaller nsteps would zero-pad optimisation averages", config.nsteps));
-    }
+        if config.nsteps < effective_nsmp {
+            return Err(format!("nsteps ({}) must be >= nsmp ({effective_nsmp}); smaller nsteps would zero-pad optimisation averages", config.nsteps));
+        }
+        Ok((data, effective_nsmp))
+    })();
+    let (mut data, effective_nsmp) =
+        collective_result(parsed, reducer, "optimization parse/validation")?;
 
     // Preserve Julia's init -> initial.def -> In*.def -> sync -> QP phase order.
-    let group1 = i64::try_from(reducer.seed_offset()).map_err(|_| {
-        format!(
-            "MPI seed offset {} does not fit in the seed offset",
-            reducer.seed_offset()
-        )
-    })?;
-    let actual_seed = resolve_seed_with_clock(data.modpara.rnd_seed, config.seed, group1, || {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_secs() as i64)
-            .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
-    })?;
-    let mut rng = seeded_rng(actual_seed)?;
+    let actual_seed = resolve_seed_with_reducer(
+        data.modpara.rnd_seed,
+        config.seed,
+        reducer.seed_offset(),
+        reducer,
+        || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
+                .and_then(|duration| {
+                    i64::try_from(duration.as_secs())
+                        .map_err(|error| format!("cannot convert time-based RndSeed: {error}"))
+                })
+        },
+    )?;
+    let mut rng = seeded_rng_with_reducer(actual_seed, reducer)?;
     timer.start(13);
     init_parameter(&mut data, &mut rng);
     let (initial_path, auto) = match config.initial_def {
@@ -673,19 +841,23 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         InitialDef::None => (None, false),
         InitialDef::Path(path) => (Some(path), false),
     };
-    if let Some(path) = initial_path {
-        if !read_initial_def(&mut data, &path).map_err(|error| error.to_string())? {
-            return Err(if auto {
-                format!("read_initial_def! failed on auto-detected initial.def at {}; pass initial_def=None to skip explicitly", path.display())
-            } else {
-                format!(
-                    "read_initial_def! failed for explicitly requested path: {}",
-                    path.display()
-                )
-            });
+    let loaded = (|| {
+        if let Some(path) = initial_path {
+            if !read_initial_def(&mut data, &path).map_err(|error| error.to_string())? {
+                return Err(if auto {
+                    format!("read_initial_def! failed on auto-detected initial.def at {}; pass initial_def=None to skip explicitly", path.display())
+                } else {
+                    format!(
+                        "read_initial_def! failed for explicitly requested path: {}",
+                        path.display()
+                    )
+                });
+            }
         }
-    }
-    read_input_parameters(&mut data, &namelist_path)?;
+        read_input_parameters(&mut data, &namelist_path)?;
+        Ok(())
+    })();
+    collective_result(loaded, reducer, "optimization parameter load")?;
     sync_modified_parameter(&mut data, true);
     timer.stop(13);
     init_qp_weight(&mut data);
@@ -693,13 +865,48 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     data.modpara.nsr_opt_itr_step = config.nsteps;
     data.modpara.nsr_opt_itr_smp = effective_nsmp;
     let mut state = state_from_data(&data);
-    let output_dir = match config.output_dir {
-        Some(path) => {
-            std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-            path
-        }
-        None => fresh_output_directory()?,
-    };
+    let output_result = (|| {
+        let output_dir = match config.output_dir {
+            Some(path) => {
+                std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+                path
+            }
+            None => {
+                let path = if reducer.is_output_root() {
+                    fresh_output_directory().and_then(|path| {
+                        path.into_os_string()
+                            .into_string()
+                            .map(Some)
+                            .map_err(|_| "generated output path is not UTF-8".into())
+                    })
+                } else {
+                    Ok(None)
+                };
+                let path = collective_result(path, reducer, "default output directory")?;
+                let mut bytes: Vec<i64> = path
+                    .as_ref()
+                    .map_or_else(Vec::new, |path| path.bytes().map(i64::from).collect());
+                let mut length = [bytes.len() as i64];
+                collective_result(
+                    reducer.broadcast_i64(0, &mut length),
+                    reducer,
+                    "output path length broadcast",
+                )?;
+                bytes.resize(length[0] as usize, 0);
+                collective_result(
+                    reducer.broadcast_i64(0, &mut bytes),
+                    reducer,
+                    "output path broadcast",
+                )?;
+                let path = String::from_utf8(bytes.into_iter().map(|value| value as u8).collect())
+                    .map(std::path::PathBuf::from)
+                    .map_err(|error| error.to_string());
+                collective_result(path, reducer, "output path decode")?
+            }
+        };
+        Ok(output_dir)
+    })();
+    let output_dir = collective_result(output_result, reducer, "optimization output directory")?;
     vmc_para_opt_timed(
         &mut data,
         &mut state,
@@ -710,17 +917,20 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer,
     )?;
     timer.stop(0);
-    if TIMED {
-        timer
-            .write_para_opt(&output_dir, "zvo")
-            .map_err(|error| error.to_string())?;
-        if flags.any_diag() {
+    let final_result = (|| {
+        if TIMED && reducer.is_output_root() {
             timer
-                .write_diag(&output_dir, "zvo")
+                .write_para_opt(&output_dir, "zvo")
                 .map_err(|error| error.to_string())?;
+            if flags.any_diag() {
+                timer
+                    .write_diag(&output_dir, "zvo")
+                    .map_err(|error| error.to_string())?;
+            }
         }
-    }
-    read_run_summary(&data, &output_dir)
+        read_run_summary(&data, &output_dir)
+    })();
+    collective_result(final_result, reducer, "optimization final output/summary")
 }
 
 fn fresh_output_directory() -> Result<std::path::PathBuf, String> {
@@ -893,16 +1103,43 @@ pub fn get_all_complex_flag(data: &ExpertModeData) -> bool {
     mvmc_expert_parsers::utils::parameter_init::all_complex_flag(data)
 }
 
-fn resolve_seed_with_clock(
+fn resolve_seed_with_reducer<R: Reducer + ?Sized>(
     rnd_seed: i64,
     seed_override: Option<i64>,
-    group1: i64,
+    group1: usize,
+    reducer: &R,
     unix_seconds: impl FnOnce() -> Result<i64, String>,
 ) -> Result<i64, String> {
+    let group1_result = i64::try_from(group1)
+        .map_err(|_| format!("MPI seed offset {group1} does not fit in the seed offset"));
+    if reducer.any_failure(group1_result.is_err()) {
+        return Err(group1_result
+            .err()
+            .unwrap_or_else(|| "MPI seed offset conversion failed collectively".into()));
+    }
+    let group1 = group1_result.expect("seed offset conversion succeeded collectively");
     let base = if let Some(seed) = seed_override {
         seed
     } else if rnd_seed < 0 {
-        unix_seconds()?
+        // Keep every rank in the collective even when the root clock fails.
+        // [status, base], with status 0 for success and 1 for a clock error.
+        let mut payload = if reducer.is_output_root() {
+            match unix_seconds() {
+                Ok(seed) => [0, seed],
+                Err(_) => [1, 0],
+            }
+        } else {
+            [0, 0]
+        };
+        collective_result(
+            reducer.broadcast_i64(0, &mut payload),
+            reducer,
+            "seed broadcast",
+        )?;
+        if payload[0] != 0 {
+            return Err("cannot resolve time-based RndSeed collectively".into());
+        }
+        payload[1]
     } else {
         rnd_seed
     };
@@ -915,9 +1152,46 @@ fn seeded_rng(seed: i64) -> Result<Sfmt19937Rng, String> {
     Ok(Sfmt19937Rng::new(seed))
 }
 
+fn seeded_rng_with_reducer<R: Reducer + ?Sized>(
+    seed: i64,
+    reducer: &R,
+) -> Result<Sfmt19937Rng, String> {
+    let result = seeded_rng(seed);
+    if reducer.any_failure(result.is_err()) {
+        return Err(result
+            .err()
+            .unwrap_or_else(|| "resolved SFMT seed conversion failed collectively".into()));
+    }
+    result
+}
+
 #[cfg(test)]
 mod seed_tests {
+    use std::cell::RefCell;
+
     use super::*;
+
+    #[derive(Debug)]
+    struct MockSeedReducer {
+        root: bool,
+        broadcast: RefCell<Result<[i64; 2], String>>,
+    }
+
+    impl Reducer for MockSeedReducer {
+        fn broadcast_i64(&self, _root: usize, values: &mut [i64]) -> Result<(), String> {
+            let broadcast = self.broadcast.borrow().clone()?;
+            values.copy_from_slice(&broadcast);
+            Ok(())
+        }
+
+        fn allreduce_sum_f64(&self, _buf: &mut [f64]) {}
+        fn allreduce_sum_c64(&self, _buf: &mut [Complex64]) {}
+        fn allreduce_sum_i64(&self, _buf: &mut [i64]) {}
+
+        fn is_output_root(&self) -> bool {
+            self.root
+        }
+    }
 
     #[test]
     fn seed_conversion_rejects_values_outside_julia_uint32_range() {
@@ -942,7 +1216,10 @@ mod seed_tests {
             (-1, None, 3, 1700000003),
         ] {
             assert_eq!(
-                resolve_seed_with_clock(input, explicit, group, || Ok(1700000000)).unwrap(),
+                resolve_seed_with_reducer(input, explicit, group, &SingleProcessReducer, || {
+                    Ok(1700000000)
+                })
+                .unwrap(),
                 expected
             );
         }
@@ -951,14 +1228,87 @@ mod seed_tests {
     #[test]
     fn clock_is_only_read_for_negative_modpara_without_override() {
         assert_eq!(
-            resolve_seed_with_clock(0, None, 0, || panic!("unneeded clock read")).unwrap(),
+            resolve_seed_with_reducer(0, None, 0, &SingleProcessReducer, || {
+                panic!("unneeded clock read")
+            })
+            .unwrap(),
             0
         );
         assert_eq!(
-            resolve_seed_with_clock(-1, Some(7), 0, || panic!("override reads clock")).unwrap(),
+            resolve_seed_with_reducer(-1, Some(7), 0, &SingleProcessReducer, || {
+                panic!("override reads clock")
+            })
+            .unwrap(),
             7
         );
-        assert!(resolve_seed_with_clock(-1, None, 0, || Err("clock failed".into())).is_err());
+        assert!(
+            resolve_seed_with_reducer(-1, None, 0, &SingleProcessReducer, || {
+                Err("clock failed".into())
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn negative_seed_uses_one_root_clock_even_when_ranks_start_late() {
+        let root = MockSeedReducer {
+            root: true,
+            broadcast: RefCell::new(Ok([0, 1_700_000_000])),
+        };
+        let non_root = MockSeedReducer {
+            root: false,
+            broadcast: RefCell::new(Ok([0, 1_700_000_000])),
+        };
+        assert_eq!(
+            resolve_seed_with_reducer(-1, None, 0, &root, || Ok(1_700_000_000)).unwrap(),
+            1_700_000_000
+        );
+        assert_eq!(
+            resolve_seed_with_reducer(-1, None, 0, &non_root, || {
+                panic!("a late rank must not read its local clock")
+            })
+            .unwrap(),
+            1_700_000_000
+        );
+    }
+
+    #[test]
+    fn broadcast_base_seed_precedes_group_offset() {
+        let reducer = MockSeedReducer {
+            root: false,
+            broadcast: RefCell::new(Ok([0, 1_700_000_000])),
+        };
+        assert_eq!(
+            resolve_seed_with_reducer(-1, None, 3, &reducer, || unreachable!()).unwrap(),
+            1_700_000_003
+        );
+    }
+
+    #[test]
+    fn clock_and_broadcast_failures_are_returned_before_rng_initialization() {
+        let clock_failure = MockSeedReducer {
+            root: false,
+            broadcast: RefCell::new(Ok([1, 0])),
+        };
+        assert_eq!(
+            resolve_seed_with_reducer(-1, None, 0, &clock_failure, || unreachable!()).unwrap_err(),
+            "cannot resolve time-based RndSeed collectively"
+        );
+
+        let broadcast_failure = MockSeedReducer {
+            root: true,
+            broadcast: RefCell::new(Err("collective conversion failed".into())),
+        };
+        assert_eq!(
+            resolve_seed_with_reducer(-1, None, 0, &broadcast_failure, || Ok(1)).unwrap_err(),
+            "collective conversion failed"
+        );
+    }
+
+    #[test]
+    fn invalid_seed_conversion_is_checked_collectively() {
+        assert!(seeded_rng_with_reducer(-1, &SingleProcessReducer).is_err());
+        assert!(seeded_rng_with_reducer(i64::from(u32::MAX) + 1, &SingleProcessReducer).is_err());
     }
 
     #[test]
@@ -974,7 +1324,11 @@ mod seed_tests {
             (100, None, 3, 8720158099669028788),
             (-1, None, 3, 8638024564356521936),
         ] {
-            let seed = resolve_seed_with_clock(input, explicit, group, || Ok(1700000000)).unwrap();
+            let seed =
+                resolve_seed_with_reducer(input, explicit, group, &SingleProcessReducer, || {
+                    Ok(1700000000)
+                })
+                .unwrap();
             let mut rng = seeded_rng(seed).unwrap();
             let mut hash = 0xcbf29ce484222325_u64;
             for _ in 0..624 {
@@ -2043,6 +2397,43 @@ mod callback_tests {
 
     fn prepared(steps: i64) -> (ExpertModeData, VmcOptimizationState, Sfmt19937Rng) {
         prepared_case(steps, "heisenberg_chain_real")
+    }
+
+    #[test]
+    fn remote_sr_failure_restores_successful_local_parameter_update() {
+        struct RemoteSrFailure;
+        impl Reducer for RemoteSrFailure {
+            fn allreduce_sum_f64(&self, _: &mut [f64]) {}
+            fn allreduce_sum_c64(&self, _: &mut [Complex64]) {}
+            fn allreduce_sum_i64(&self, values: &mut [i64]) {
+                if values.len() == 1 {
+                    assert_eq!(values[0], 0, "local SR must succeed before peer failure");
+                    values[0] = 1;
+                }
+            }
+            fn any_failure(&self, failed: bool) -> bool {
+                failed
+            }
+            fn reduction_size(&self) -> usize {
+                2
+            }
+        }
+        let (mut data, mut state, mut rng) = prepared(1);
+        let before = data.clone();
+        let error = vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            None,
+            &RemoteSrFailure,
+            OptimizationOptions::default(),
+        )
+        .unwrap_err();
+        assert!(error.contains("local status 0"), "{error}");
+        assert_eq!(data.slater_params, before.slater_params);
+        assert_eq!(data.projection_parameters(), before.projection_parameters());
+        assert_eq!(data.qp_weights, before.qp_weights);
+        assert_eq!(data.optimization_flags, before.optimization_flags);
     }
 
     fn prepared_case(

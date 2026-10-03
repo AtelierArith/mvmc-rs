@@ -27,8 +27,8 @@ pub struct MpiContext {
 /// MPI communicator for one Julia-compatible `NSplitSize` group.
 ///
 /// The parent [`MpiContext`] must outlive this value because MPI finalization
-/// is owned by the parent `Universe`. All reductions performed by this type
-/// are confined to the group communicator (`comm1` in the Julia runner).
+/// is owned by the parent `Universe`. Reductions combine the group communicator
+/// (`comm1`) and the cross-group communicator (`comm2`).
 pub struct MpiGroupContext {
     communicator: ::mpi::topology::SimpleCommunicator,
     /// Cross-group communicator (`comm2` in Julia/C), connecting equal local
@@ -170,6 +170,10 @@ impl MpiContext {
 }
 
 impl Reducer for MpiContext {
+    fn broadcast_i64(&self, root: usize, values: &mut [i64]) -> Result<(), String> {
+        Self::broadcast_i64(self, root, values)
+    }
+
     fn broadcast_c64(&self, root: usize, values: &mut [Complex64]) {
         let root = i32::try_from(root).expect("MPI root rank is too large");
         let mut real: Vec<_> = values.iter().map(|value| value.re).collect();
@@ -248,6 +252,20 @@ impl MpiGroupContext {
 }
 
 impl Reducer for MpiGroupContext {
+    fn broadcast_i64(&self, root: usize, values: &mut [i64]) -> Result<(), String> {
+        let root =
+            i32::try_from(root).map_err(|_| "MPI seed root rank is too large".to_string())?;
+        // Seed payload originates at global rank zero. First share it with
+        // group zero's local ranks, then with the matching ranks of all groups.
+        self.communicator
+            .process_at_rank(root)
+            .broadcast_into(values);
+        self.cross_communicator
+            .process_at_rank(root)
+            .broadcast_into(values);
+        Ok(())
+    }
+
     fn broadcast_c64(&self, root: usize, values: &mut [Complex64]) {
         let root = i32::try_from(root).expect("MPI group root rank is too large");
         let mut real: Vec<_> = values.iter().map(|value| value.re).collect();

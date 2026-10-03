@@ -1,0 +1,33 @@
+generator=scripts/generate_physcal_181.jl
+julia=1.13.1
+reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
+architecture=x86_64-linux-gnu
+blas=LBTConfig([ILP64] libopenblas64_.so)
+blas_threads=1
+julia_threads=1
+seed=1
+mode=real
+manifest_sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+physcal_source_sha256=6dd6136057f1ed93a9e7d0b33518cd1b1d434b1595e3fb324b307a9bbebe03bf
+stages=seeded; initialized (single InitParameter, before fixed restoration); sample-0 (after all saved samples, before measurement)
+rng=next 624 UInt32 outputs, non-consuming C SFMT peek; draw-count=primitive UInt32 words since seed
+input_contract=explicit zqp; no automatic initial.def; unchanged sampling counts; serial; correlation shifts disabled
+trajectory_authority=Julia independently generated; C compatibility of trajectory requires a separate C trace
+C_output_check=zvo_cisajs_001.dat: ok=true, max_abs=0.0, exact
+C_output_check=zvo_cisajscktalt_001.dat: ok=true, max_abs=1.6653345369377348e-16, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=1.6653345369377348e-16)
+C_output_check=zvo_cisajscktaltex_001.dat: ok=true, max_abs=0.0, exact
+input_sha256=df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814 inputs/coulombinter.def
+input_sha256=29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e inputs/exchange.def
+input_sha256=79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6 inputs/greenone.def
+input_sha256=691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b inputs/greentwo.def
+input_sha256=8d02240044852e341d9bdd83166c4947eaa4630fc32fa3ee7717d940b502a3ba inputs/greentwoex.def
+input_sha256=c1362e2dcf537556dc4db465322ff4126962c77e28dc52e18c0ac363f4e82ae4 inputs/gutzwilleridx.def
+input_sha256=645c5873dfd9377a1a5ce90259055d00891d540b64f7e62179b3a600fbdf60e4 inputs/hund.def
+input_sha256=cc5206fe01738c353efdbbcbf1bb6f6730a532c04466a39efd9307c04c7f9fe0 inputs/jastrowidx.def
+input_sha256=f43dccfbc58d7f6c3716644b86c2a8277723d3c4fb706da4e93a0f846b0367a6 inputs/locspn.def
+input_sha256=96d5aee8c5d317cfb7d2fe747bac314ed59cff0020a16aaedcbc9bb8aefc885b inputs/modpara.def
+input_sha256=3df55df5d3e65cf3f31846bb69f2e16f6c2cdd410d241f87596a489ca1440116 inputs/namelist.def
+input_sha256=c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6 inputs/orbitalidx.def
+input_sha256=c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d inputs/qptransidx.def
+input_sha256=bfadd2c5fee83496acda945324dec4dd2620c7295d1cc94a631e47a8efef24a5 inputs/trans.def
+input_sha256=943def3230d2d545284862d7e7570c4e564c78864cfe07de6ed51c1cc3156a78 zqp_opt.dat
