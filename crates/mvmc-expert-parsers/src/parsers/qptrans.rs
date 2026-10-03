@@ -73,8 +73,11 @@ pub fn parse_qptrans_content(content: &str, nsite: i64) -> QPTransSection {
         }
         let idx = safe_parse_int(tokens[0], -1);
         let weight = safe_parse_float(tokens[1], 0.0);
+        let imaginary = tokens
+            .get(2)
+            .map_or(0.0, |token| safe_parse_float(token, 0.0));
         if idx >= 0 && (idx as usize) < section.entries.len() {
-            section.entries[idx as usize].weight = Complex64::new(weight, 0.0);
+            section.entries[idx as usize].weight = Complex64::new(weight, imaginary);
             consumed_weight += 1;
         }
     }
