@@ -8,27 +8,25 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod support;
 use support::julia_mvmc_root;
 
 #[test]
 fn heisenberg_chain_real_runs_one_sr_step() {
-    let Some(julia) = julia_mvmc_root() else {
-        eprintln!("skipping run_smoke: Julia-mVMC checkout not found");
-        return;
-    };
+    let julia = julia_mvmc_root()
+        .unwrap_or_else(|| support::missing_fixture("run-smoke", "Julia-mVMC checkout not found"));
     let namelist = julia
         .join("examples")
         .join("inputs")
         .join("heisenberg_chain_real")
         .join("namelist.def");
     if !namelist.is_file() {
-        eprintln!(
-            "skipping run_smoke test: fixture missing at {}",
-            namelist.display()
+        support::missing_fixture(
+            "run-smoke",
+            format!("namelist missing at {}", namelist.display()),
         );
-        return;
     }
 
     let tmp = tempdir_in_target();
@@ -55,10 +53,40 @@ fn heisenberg_chain_real_runs_one_sr_step() {
     assert_eq!(summary.effective_nsteps, 1);
 }
 
+#[test]
+fn mandatory_smoke_missing_checkout_or_namelist_fails_before_running() {
+    let empty_checkout = tempdir_in_target();
+    for root in [
+        empty_checkout.join("absent-checkout"),
+        empty_checkout.clone(),
+    ] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "heisenberg_chain_real_runs_one_sr_step",
+                "--nocapture",
+            ])
+            .env("JULIA_MVMC_ROOT", root)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "missing fixture must not pass");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("MissingFixture"));
+    }
+    fs::remove_dir(empty_checkout).unwrap();
+}
+
 fn tempdir_in_target() -> PathBuf {
-    let mut path = std::env::temp_dir();
-    path.push(format!("mvmc-core-run-smoke-{}", std::process::id(),));
-    let _ = fs::remove_dir_all(&path);
-    fs::create_dir_all(&path).expect("create temp dir");
-    path
+    static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
+    loop {
+        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "mvmc-core-run-smoke-{}-{sequence}",
+            std::process::id(),
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => return path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("cannot create {}: {error}", path.display()),
+        }
+    }
 }
