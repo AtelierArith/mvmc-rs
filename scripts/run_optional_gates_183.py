@@ -24,6 +24,69 @@ THREAD = "runner_workers_preserve_rng_configurations_direct_store_cg_and_physcal
 MPI = "mpi_physcal_reduces_fixed_parameter_samples"
 
 
+class MissingFixtureError(ValueError):
+    """A required independent input/reference is absent."""
+
+
+class UnsupportedError(ValueError):
+    """The explicit requested input or platform is unsupported."""
+
+
+def failure_status(error):
+    if isinstance(error, MissingFixtureError):
+        return "MissingFixture"
+    if isinstance(error, UnsupportedError):
+        return "Unsupported"
+    return "Failure"
+
+
+def family_ledger(selected, excluded=()):
+    if selected not in FAMILIES or any(name not in FAMILIES for name in excluded):
+        raise UnsupportedError("unknown or empty family selection/exclusion")
+    if len(set(excluded)) != len(excluded) or selected in excluded:
+        raise UnsupportedError("duplicate exclusion or selected family excluded")
+    return {name: {"selected": name == selected,
+                   "status": "ExplicitSkip" if name in excluded else "NotRun",
+                   "started_driver_invocations": 0, "completed_selection_identities": [],
+                   "selected_test_identities": [], "numeric_reference_comparisons": None,
+                   "empty_contracts": 0, "comparison_evidence": "Unverified", "helper_tests": 0}
+            for name in FAMILIES}
+
+
+def validate_completion(family, completed, before, after):
+    expected = {"general": list(GENERAL),
+                "lanczos": [f"{model}-{mode}" for model in MODELS for mode in ("real", "cmp")],
+                "mpi": ["world2", "world4"], "thread": [THREAD]}[family]
+    if sorted(completed) != sorted(expected):
+        raise ValueError("incomplete/duplicate/wrong bounded execution identities")
+    if not before or before != after:
+        raise ValueError("empty or changed source/fixture/binary closure")
+
+
+def selected_failure_status(family, identities, diagnostic):
+    """Require actual selected-suite failure layout AND its gate status marker."""
+    target = {"general": "ctest_general_reference", "lanczos": "lanczos_transfer_physcal",
+              "thread": "threaded_issue182"}.get(family)
+    for identity in identities:
+        if family == "mpi":
+            pattern = rf"^\s*test {re.escape(identity)} \.\.\. FAILED\s*$"
+        else:
+            pattern = (rf"^\s*FAIL \[\s*\d+(?:\.\d+)?s\] \(\d+/\d+\) "
+                       rf"mvmc-core::{target} {re.escape(identity)}\s*$")
+        if re.search(pattern, diagnostic, re.MULTILINE):
+            gate_name = {"general": "ctest-general", "lanczos": "lanczos-physcal",
+                         "mpi": "mpi-physcal", "thread": "threaded-issue182"}[family]
+            for category in ("MissingFixture", "Unsupported"):
+                if re.search(rf"^\s*parity gate {gate_name}: {category}:", diagnostic, re.MULTILINE):
+                    return category
+    return "Failure"
+
+
+def invalidate_comparison_counts(row):
+    row.update(numeric_reference_comparisons=None, empty_contracts=0,
+               comparison_evidence="Unverified")
+
+
 def selected_binary(listing, expected):
     """Reject helpers, omitted names, duplicate suites, nonignored and zero selection."""
     matches = []
@@ -56,9 +119,9 @@ def validate_namelist(path):
         if not fields:
             continue
         if len(fields) != 2 or fields[0].lower() == "interall":
-            raise ValueError(f"unsupported/malformed/InterAll namelist: {path}")
+            raise UnsupportedError(f"unsupported/malformed/InterAll namelist: {path}")
         if not (path.parent / fields[1]).is_file():
-            raise ValueError(f"missing referenced input: {path.parent / fields[1]}")
+            raise MissingFixtureError(f"missing referenced input: {path.parent / fields[1]}")
         references.append(path.parent / fields[1])
     return references
 
@@ -102,11 +165,11 @@ def fixture_files(family):
     files = []
     manifest = ROOT / "extern/Julia-mVMC/Manifest-v1.13.toml"
     if not manifest.is_file():
-        raise ValueError("missing pinned reference Manifest-v1.13.toml")
+        raise MissingFixtureError("missing pinned reference Manifest-v1.13.toml")
     files.append(manifest)
     for directory in directories:
         if not directory.is_dir():
-            raise ValueError(f"missing fixture directory: {directory}")
+            raise MissingFixtureError(f"missing fixture directory: {directory}")
         contents = list(directory.rglob("*"))
         files.extend(p for p in contents if p.is_file())
         for path in contents:
@@ -133,10 +196,13 @@ def backend(binary, linkage):
                 function.restype = restype
                 return function()
         raise ValueError("linked backend lacks runtime version/configuration API")
-    config = call(("openblas_get_config", "openblas_get_config64_"), ctypes.c_char_p).decode()
-    core = call(("openblas_get_corename", "openblas_get_corename64_"), ctypes.c_char_p).decode()
+    raw_config = call(("openblas_get_config", "openblas_get_config64_"), ctypes.c_char_p)
+    raw_core = call(("openblas_get_corename", "openblas_get_corename64_"), ctypes.c_char_p)
+    if not isinstance(raw_config, bytes) or not isinstance(raw_core, bytes):
+        raise ValueError("backend configuration/core API returned no string")
+    config, core = raw_config.decode(), raw_core.decode()
     threads = call(("openblas_get_num_threads", "openblas_get_num_threads64_"), ctypes.c_int)
-    if not config.startswith("OpenBLAS ") or threads != 1:
+    if not re.match(r"^OpenBLAS \d+\.\d+\.\d+(?:\s|$)", config) or not core.strip() or threads != 1:
         raise ValueError("actual backend version or single-thread configuration unverified")
     return {"library": path, "library_sha256": digest_files([Path(path)])[path],
             "actual_config": config, "actual_core": core, "actual_threads": threads}
@@ -151,6 +217,17 @@ def validate_artifacts(root, required):
         path = root / name
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"missing/empty required artifact: {name}")
+
+
+def verify_artifact_hashes(root, manifest):
+    if not manifest:
+        raise ValueError("empty artifact hash manifest")
+    for name, expected in manifest.items():
+        path = Path(name)
+        if not path.is_absolute() or not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError("artifact outside exclusive evidence root")
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError("missing or changed hashed artifact")
 
 
 def validate_mpi_run(text, ranks):
@@ -184,12 +261,10 @@ def validate_dc_run(text, model, mode):
     return [{"model": m, "mode": c, "file": f, "status": s} for m, c, f, s in records]
 
 
-def run(family, output):
-    if family not in FAMILIES:
-        raise ValueError("unknown or empty optional gate family")
-    if platform.system() != "Linux":
-        raise ValueError("bounded dispatch supports Linux only")
+def run(family, output, excluded=()):
+    ledger = family_ledger(family, excluded)
     output.mkdir(parents=False, exist_ok=False)
+    write_json(output / "family-ledger.json", {"scope": "driver invocation only; NOT workflow aggregate", "families": ledger})
     env = os.environ.copy()
     env.update({key: "1" for key in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS",
                                     "MKL_NUM_THREADS", "BLIS_NUM_THREADS")})
@@ -203,14 +278,13 @@ def run(family, output):
     for key in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
         os.environ[key] = env[key]
     # A dedicated CI target is mandatory; never silently reuse another checkout.
-    if not env.get("CARGO_TARGET_DIR"):
-        raise ValueError("explicit checkout-specific CARGO_TARGET_DIR required")
     commands = []
     completed = []
     required = ["metadata.json", "commands.json", "source.before.json", "source.after.json",
-                "fixtures.before.json", "fixtures.after.json", "backend.json", "terminal.json"]
+                "fixtures.before.json", "fixtures.after.json", "backend.json", "terminal.json", "family-ledger.json"]
     status = 1
-    def execute(args, name, extra=None):
+    outcome = "Failure"
+    def execute(args, name, extra=None, selected_gate=False):
         call_env = env | (extra or {})
         commands.append({"argv": list(map(str, args)), "env": {
             k: v for k, v in call_env.items() if k.startswith(("MVMC_", "MPI179_"))
@@ -218,12 +292,25 @@ def run(family, output):
                      "MKL_NUM_THREADS", "BLIS_NUM_THREADS", "TMPDIR")}})
         write_json(output / "commands.json", commands)
         with (output / f"{name}.stdout").open("w") as stdout, (output / f"{name}.stderr").open("w") as stderr:
+            if selected_gate:
+                ledger[family]["started_driver_invocations"] += 1
             result = subprocess.run(list(map(str, args)), cwd=ROOT, env=call_env,
                                     stdout=stdout, stderr=stderr, timeout=2400)
         if result.returncode:
+            diagnostic = (output / f"{name}.stderr").read_text() + (output / f"{name}.stdout").read_text()
+            if selected_gate:
+                category = selected_failure_status(family, ledger[family]["selected_test_identities"], diagnostic)
+                if category == "MissingFixture":
+                    raise MissingFixtureError(f"{name} selected gate reported {category}")
+                if category == "Unsupported":
+                    raise UnsupportedError(f"{name} selected gate reported {category}")
             raise RuntimeError(f"{name} failed with exit {result.returncode}")
         return (output / f"{name}.stdout").read_text()
     try:
+        if platform.system() != "Linux":
+            raise UnsupportedError("bounded dispatch supports Linux only")
+        if not env.get("CARGO_TARGET_DIR"):
+            raise ValueError("explicit checkout-specific CARGO_TARGET_DIR required")
         metadata = {
             "family": family, "scope": {
                 "general": "one General model, independent prefixes1/2/3/20 plus public20 repeat",
@@ -274,6 +361,7 @@ def run(family, output):
             if listing.splitlines().count(f"{MPI}: test") != 1:
                 raise ValueError("exact MPI gate absent/duplicated")
             write_json(output / "selection.json", {"selected": [MPI], "count": 1})
+            ledger[family]["selected_test_identities"] = [MPI]
             write_json(output / "backend.json", backend(binary, output / "linkage.txt"))
             write_json(output / "binary.before.json", digest_files([binary]))
             execute(["mpiexec", "--version"], "mpi-version")
@@ -281,7 +369,7 @@ def run(family, output):
                 text = execute(["mpiexec", "-n", ranks, binary, "--ignored", "--exact", MPI,
                          "--nocapture"], f"mpi-{ranks}", {
                              "MVMC_RS_MPI_PHYSICAL": "1",
-                             "MPI179_PHYSCAL_OUTPUT": str(output / f"world-{ranks}")})
+                             "MPI179_PHYSCAL_OUTPUT": str(output / f"world-{ranks}")}, selected_gate=True)
                 text += (output / f"mpi-{ranks}.stderr").read_text()
                 validate_mpi_run(text, ranks)
                 completed.append(f"world{ranks}")
@@ -294,20 +382,21 @@ def run(family, output):
                       "--test", target, "--run-ignored", "only", "-E", filter_expr]
             text = execute(["cargo", "nextest", "list", *common, "--message-format", "json"], "selection")
             binary = selected_binary(json.loads(text), names)
+            ledger[family]["selected_test_identities"] = list(names)
             write_json(output / "selection.json", json.loads(text))
             write_json(output / "backend.json", backend(binary, output / "linkage.txt"))
             write_json(output / "binary.before.json", digest_files([binary]))
             gate = ["cargo", "nextest", "run", *common, "--no-fail-fast", "--retries", "0",
                     "--success-output", "immediate", "--failure-output", "immediate"]
             if family == "general":
-                execute(gate, "general", {"MVMC_RS_CTEST_GENERAL": "1"})
+                execute(gate, "general", {"MVMC_RS_CTEST_GENERAL": "1"}, selected_gate=True)
                 completed.extend(names)
             elif family == "lanczos":
                 dc_records = []
                 for model in MODELS:
                     for mode in ("real", "cmp"):
                         text = execute(gate, f"{model}-{mode}", {"MVMC_RS_LANCZOS_PHYSICAL": "1",
-                                "MVMC_RS_LANCZOS_MODEL": model, "MVMC_RS_LANCZOS_MODE": mode})
+                                "MVMC_RS_LANCZOS_MODEL": model, "MVMC_RS_LANCZOS_MODE": mode}, selected_gate=True)
                         # Nextest's successful test output is recorded on stderr.
                         # Read only the matching selected call; do not scan helper logs.
                         text += "\n" + (output / f"{model}-{mode}.stderr").read_text()
@@ -324,7 +413,7 @@ def run(family, output):
                 nested = output / "thread-artifacts"
                 nested.mkdir()
                 text = execute(["bash", "scripts/verify_threaded_issue182.sh"], "thread", {
-                    "TMPDIR": str(nested), "MVMC_RS_THREADED_TARGET_DIR": env["CARGO_TARGET_DIR"]})
+                    "TMPDIR": str(nested), "MVMC_RS_THREADED_TARGET_DIR": env["CARGO_TARGET_DIR"]}, selected_gate=True)
                 if "Passed: complete Rust-only matrix and actual worker observations" not in text:
                     raise ValueError("thread wrapper completion evidence absent")
                 wrappers = [p for p in nested.iterdir() if p.is_dir() and (p / "tests.tar.zst").is_file()]
@@ -365,32 +454,52 @@ def run(family, output):
         write_json(output / "fixtures.after.json", fixture_after)
         if source != source_after or fixtures != fixture_after:
             raise ValueError("source or fixture closure changed during validation")
-        if len(completed) != {"general": 2, "lanczos": 6, "mpi": 2, "thread": 1}[family]:
-            raise ValueError("incomplete bounded execution count")
+        validate_completion(family, completed, source, source_after)
+        validate_completion(family, completed, fixtures, fixture_after)
         status = 0
     except Exception as error:
+        outcome = failure_status(error)
         (output / "failure.txt").write_text(f"{type(error).__name__}: {error}\n")
         raise
     finally:
         write_json(output / "terminal.json", {"exit_status": status, "completed": completed,
+                                               "status": "Pass" if status == 0 else outcome,
                                                "finished_unix": time.time()})
+        ledger[family]["completed_selection_identities"] = list(completed)
+        ledger[family]["status"] = outcome
         if status == 0:
             try:
                 validate_artifacts(output, required)
-                write_json(output / "artifacts.json", digest_files(p for p in output.rglob("*") if p.is_file()))
+                ledger[family]["status"] = "Pass"
+                if family == "lanczos":
+                    ledger[family]["numeric_reference_comparisons"] = 8
+                    ledger[family]["empty_contracts"] = 4
+                    ledger[family]["comparison_evidence"] = "Verified"
+                write_json(output / "family-ledger.json", {"scope": "driver invocation only; NOT workflow aggregate", "families": ledger})
+                hashes = digest_files(p for p in output.rglob("*") if p.is_file())
+                verify_artifact_hashes(output, hashes)
+                write_json(output / "artifacts.json", hashes)
             except Exception:
+                ledger[family]["status"] = "Failure"
+                invalidate_comparison_counts(ledger[family])
                 write_json(output / "terminal.json", {"exit_status": 1, "completed": completed,
+                                                       "status": "Failure",
                                                        "artifact_validation": "failed"})
+                write_json(output / "family-ledger.json", {"scope": "driver invocation only; NOT workflow aggregate", "families": ledger})
                 raise
+        else:
+            write_json(output / "family-ledger.json", {"scope": "driver invocation only; NOT workflow aggregate", "families": ledger})
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("family", choices=FAMILIES)
     parser.add_argument("output", type=Path, help="exclusive NEW artifact directory")
+    parser.add_argument("--exclude", action="append", default=[], choices=FAMILIES,
+                        help="record another family as ExplicitSkip; does not run or change workflow jobs")
     args = parser.parse_args()
     try:
-        run(args.family, args.output.resolve())
+        run(args.family, args.output.resolve(), args.exclude)
     except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
         print(f"optional gate failed: {error}", file=sys.stderr)
         return 1

@@ -99,6 +99,71 @@ Rust1.99, default features, locked test-fast. Infrastructure10PASS and focused
 Rust negative2PASS are separate from numerical coverage. No external dispatch,
 full13 matrix, fullJulia features, native macOS or InterAll proof is claimed;
 issue183 remains open for its remaining reporting/backend-negative audit.
+
+## Driver-only reporting follow-up (not workflow aggregation)
+
+The reporting follow-up adds `family-ledger.json` for **one driver invocation**.
+All four bounded families are listed. Unselected families are `NotRun`; an
+explicit `--exclude mpi` records `ExplicitSkip` without executing that family.
+Duplicate/unknown exclusions and excluding the selected family are rejected.
+Selected work starts as `NotRun` (unfinished, not PASS), then finishes as `Pass`,
+`MissingFixture`, `Unsupported` or `Failure`. Missing required independent inputs
+and explicit selected-gate MissingFixture diagnostics are classified separately
+from unsupported inputs/platforms. Rust diagnostic classification requires an
+actual selected invocation, an exact nextest `FAIL [duration] (index/count)`
+record with the selected crate/test binary and identity, and the matching gate's
+line-anchored status marker. The retained real nextest layout is covered by a
+regression without depending on its captured inner libtest output. Direct MPI
+libtest launches instead require the exact selected `test identity ... FAILED`
+record. Build/version/listing failures,
+unrelated helper markers or compile-error words cannot acquire a fixture or
+unsupported classification through text matching. Execution errors, changed hashes, unfinished
+identities and absent/empty completion artifacts are Failure, never PASS.
+Preflight-invalid selectors are rejected before creating/reusing evidence roots;
+this is a failed request, not a persisted coverage result.
+
+`started_driver_invocations` increments immediately before launching a selected
+driver call, including a call that then fails: General1, Lanczos6, MPI2, or
+Thread1 for complete runs. Thread is explicitly **outer-wrapper-only**; inner
+test/worker executions are not counted. Builds, listings, version queries and
+helpers are excluded. `completed_selection_identities` separately lists only
+successful verified selections (General two test identities, Lanczos six
+model/mode identities, MPI world2/world4, Thread one primary identity).
+`selected_test_identities` lists distinct identities actually accepted by
+selection preflight (General2, each other family1), not executed model counts.
+These fields are not numerical coverage. `helper_tests` is zero for this driver's exact ignored selection;
+the separately run infrastructure suite is not included. For a completed
+Lanczos family, `numeric_reference_comparisons` records eight **DC** reference
+comparisons and `empty_contracts` records four exact C one-LF contracts. These
+fields do not count all QQ/energy elements or other families' numerical
+assertions. Unknown/uninstrumented numerical comparison counts are JSON null,
+not invented zero or inferred PASS counts. Incomplete runs do not claim the
+completed-family DC totals. Required artifacts are checked and rehashed before
+publishing a successful final ledger; artifact validation failure downgrades
+terminal and selected status to Failure.
+On artifact/hash failure, the published numerical count becomes null and the
+empty-contract count resets to zero with `comparison_evidence=Unverified`.
+Started-invocation and completed-selection facts remain available; reset counts
+do not claim that no comparisons ran, only that their evidence is not validated.
+`comparison_evidence=Verified` is published for the completed, artifact-validated
+Lanczos eight-DC/four-empty totals; uninstrumented families remain Unverified.
+
+Backend negative tests use mock libraries/API results, not new numerical gates:
+zero/multiple OpenBLAS paths, loader failure, each missing runtime API, null or
+invalid config/core strings and non-single-thread runtime reports are rejected.
+Runtime config must contain an actual OpenBLAS semantic version, not just the
+provider name. Reporting tests cover nonrunning failure terminals, incomplete
+or duplicate identities, tampered/missing/out-of-root hash artifacts, and a
+simulated completed run downgraded by artifact failure. Simulations are NOT
+executed numerical/reference evidence.
+
+The actual handle22750 proof above predates this reporting change and remains
+historical source-specific evidence. No numerical gate was rerun for this
+follow-up; workflow YAML and ordinary Cargo behavior are unchanged. A future
+separately reviewed workflow plan could emit a selected/excluded/not-selected
+four-family planning ledger and aggregate per-job terminal artifacts. That
+workflow aggregate is **not implemented or claimed here**, nor is this a ledger
+of every optional test identity in the workspace. No external dispatch occurs.
 Unknown/empty family, missing inputs, source/fixture changes, missing/empty
 required artifacts and nonzero gate exits fail. Artifact roots are exclusively
 new; output roots are never deleted/reused. MPI additionally receives its
