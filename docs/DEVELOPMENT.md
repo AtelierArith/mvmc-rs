@@ -57,7 +57,17 @@ all-feature Clippy) and one documentation job (doctests and API
 documentation), with lint and documentation checks running on Linux x86_64.
 These job families have no dependencies on one another.
 The shared [setup action](../.github/actions/setup-rust-ci/action.yml) installs
-numerical libraries and MPI; cache keys distinguish each check configuration.
+numerical libraries and MPI. It restores the Cargo registry/git/bin homes with
+`Swatinem/rust-cache` (registry only) and runs the content-addressed
+`kunobi-ninja/kache-action` for compilation, so unchanged workspace crates are
+restored instead of rebuilt. The configuration discriminator is carried in
+rust-cache's `shared-key` and in kache's `cache-key-prefix`: rust-cache ignores
+its `key` input whenever `shared-key` is set, so using `key` silently merged the
+parallel jobs onto one cache key. kache stores stay bounded (`max-size: 2GiB`)
+and only the default branch repopulates them, keeping the 10 GB repository cache
+budget for `main` runs. Rust 1.99 also disables incremental compilation whenever
+the `CI` variable is set, consistent with the `ci` profile's explicit
+`incremental = false`; local development without `CI` keeps incremental builds.
 Explicitly ignored reference/MPI developer gates retain
 their documented opt-in selectors and launch requirements.
 
