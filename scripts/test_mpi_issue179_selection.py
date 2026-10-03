@@ -28,6 +28,14 @@ class SelectionTests(unittest.TestCase):
         for scope in ("states", "workers", "rust"):
             self.assertEqual(self.select(self.rows(), scope), 0)
 
+    def test_long20_is_explicit_and_coverage_counts_remain_exact(self):
+        self.assertEqual(self.select(self.rows(), MPI179_STEPS_LIST="20",
+                                     MPI179_EXPECTED_CELLS="2", MPI179_EXPECTED_TOTAL="6"), 0)
+        self.assertEqual(self.select(self.rows(), MPI179_STEPS_LIST="1 2 3 20",
+                                     MPI179_EXPECTED_CELLS="2", MPI179_EXPECTED_TOTAL="24"), 0)
+        for steps in ("20 20", "50", "4", "120", "20 x", "020", ""):
+            self.assertNotEqual(self.select(self.rows(), MPI179_STEPS_LIST=steps), 0, steps)
+
     def test_empty_and_ineligible_matrix_fail(self):
         for scope in ("states", "workers", "rust"):
             self.assertNotEqual(self.select("", scope), 0)
