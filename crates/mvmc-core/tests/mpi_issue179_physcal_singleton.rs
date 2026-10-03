@@ -133,7 +133,7 @@ fn issue179_grouped_physcal_singleton_is_accepted_and_repeatable() {
         let actual = (
             result.state.electron_config.ele_idx.clone(),
             result.state.electron_config.ele_cfg.clone(),
-            result.state.electron_config.counter.clone(),
+            result.state.electron_config.counter,
             result.final_rng.words_consumed(),
             next624(&result.final_rng),
         );

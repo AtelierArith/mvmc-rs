@@ -3,7 +3,7 @@
 #![cfg(feature = "mpi")]
 
 use mvmc_core::sr_cg::{install_cg_observer, CgObserver, CgProductPhase, SampledSrOperator};
-use mvmc_core::{mpi::MpiContext, Reducer};
+use mvmc_core::mpi::MpiContext;
 use std::{cell::RefCell, rc::Rc};
 
 type Product = (CgProductPhase, Vec<f64>, Vec<f64>);
