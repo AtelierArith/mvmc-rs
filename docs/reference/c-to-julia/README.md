@@ -93,6 +93,7 @@ Julia-mVMC v0.5.0 までに蓄積された C-reference parity の設計・検証
 
 | 収録ファイル | 原典 | 対象 | 原典更新日 | 用途 |
 |---|---|---|---|---|
+| `verification/issue-184-evidence-matrix.md` | #184/#185 GitHub API and current repository inventory | Issue #184 Julia exports/tests/examples and Rust caller evidence foundation | 2026-10-03 | #174–#182 owners; independent executed-evidence criteria; reference/settings/command/result ledger; partial/unrun runner/CLI/callback and #181 oracle gaps |
 | `verification/15_model_ctest_integration_plan.md` | `Shin-mVMC/private_docs/15_model_ctest_integration_plan.md` | C v1.3 15-model ctest / Julia integration | 2026-05-14（mtime） | C ctestと同じ統計判定、対象model、fixture移植、段階gateの計画 |
 | `verification/15_model_ctest_integration_implementation_summary.md` | `Shin-mVMC/private_docs/15_model_ctest_integration_implementation_summary.md` | C v1.3 15-model ctest / Julia integration | 2026-05-14（mtime） | 12 standard modelの実装結果とRBM/Lanczosの保留条件 |
 | `verification/testing-plan-julia-mvmc.md` | `Shin-mVMC/docs/testing_plan_julia_mvmc.md` | Julia unit/contract/integration | 2026-02-13 | test階層と、差分を最小再現へ落とす運用 |
