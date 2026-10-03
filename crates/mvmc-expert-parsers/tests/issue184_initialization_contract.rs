@@ -4,7 +4,7 @@
 use mvmc_expert_parsers::utils::parameter_init::{
     init_parameter, initialize_parameters, sync_modified_parameter,
 };
-use mvmc_expert_parsers::{ExpertModeData, OrbitalTerm};
+use mvmc_expert_parsers::{ExpertModeData, GutzwillerTerm, JastrowTerm, OrbitalTerm};
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 
@@ -122,4 +122,53 @@ fn empty_initialization_and_normalization_consume_zero_words() {
     sync_modified_parameter(&mut data, false);
     assert!(data.slater_params.is_empty());
     same_rng(&rng, &expected, 0);
+}
+
+#[test]
+fn literal_basic_and_ten_slot_workflow_zero_both_projections() {
+    // M0161–0166 and M0178–0181: same two projection values and seed as Julia.
+    // Only dense Slater storage is adapted to the C-declared Rust representation.
+    for (n, normalize) in [(5, false), (10, true)] {
+        let mut data = orbitals(n, false, n);
+        data.gutzwiller_terms.push(GutzwillerTerm {
+            site: 0,
+            value: Complex64::new(0.5, 0.0),
+            is_complex: false,
+        });
+        data.jastrow_terms.push(JastrowTerm {
+            site1: 0,
+            site2: 1,
+            value: Complex64::new(0.1, 0.0),
+            is_complex: false,
+        });
+        data.optimization_flags.splice(0..0, [1, 0, 1, 0]);
+        let mut rng = Sfmt19937Rng::new(SEED);
+        let mut expected_rng = Sfmt19937Rng::new(SEED);
+        let mut expected: Vec<f64> = (0..n)
+            .map(|_| 2.0 * (expected_rng.genrand_real2() - 0.5))
+            .collect();
+        if normalize {
+            initialize_parameters(&mut data, &mut rng);
+            let max = expected.iter().map(|v| v.abs()).fold(0.0, f64::max);
+            for value in &mut expected {
+                *value *= 4.0 / max;
+            }
+        } else {
+            init_parameter(&mut data, &mut rng);
+        }
+        assert_eq!(data.gutzwiller_terms[0].value, Complex64::new(0.0, 0.0));
+        assert_eq!(data.jastrow_terms[0].value, Complex64::new(0.0, 0.0));
+        assert_eq!(data.slater_params.len(), n);
+        assert!(data.slater_params.iter().any(|v| v.norm() > 1e-10));
+        for (actual, expected) in data.slater_params.iter().zip(expected) {
+            assert!((actual.re - expected).abs() <= 8.0 * f64::EPSILON);
+            assert_eq!(actual.im, 0.0);
+            if normalize {
+                assert!(actual.norm() <= 4.0 + 1e-10);
+            } else {
+                assert!(actual.re >= -1.0 && actual.re < 1.0);
+            }
+        }
+        same_rng(&rng, &expected_rng, n as u128);
+    }
 }
