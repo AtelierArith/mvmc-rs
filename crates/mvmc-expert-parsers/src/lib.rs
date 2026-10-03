@@ -25,8 +25,8 @@ pub use types::{
     GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm, GreenOneTerm,
     GreenTwoExTerm, GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
     ModParaParameters, OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry,
-    QuantumProjectionWeights, RbmParameter, Spin, SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm,
-    SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
+    QPTransInverseError, QuantumProjectionWeights, RbmParameter, Spin, SpinRBMHiddenLayerTerm,
+    SpinRBMPhysHiddenTerm, SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
 };
 
 pub use utils::validation::{

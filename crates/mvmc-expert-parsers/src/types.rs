@@ -461,7 +461,86 @@ pub struct QPTransEntry {
     pub site_sign: Vec<i64>,
 }
 
+/// A failure to derive an inverse from the current forward translation map.
+/// This query contract does not add rejection rules to the C-compatible reader.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum QPTransInverseError {
+    /// The forward map contains no sites.
+    #[error("cannot invert an empty translation map")]
+    EmptyMapping,
+    /// An original site maps to a negative translated-site index.
+    #[error("translation origin {origin} has negative target {target}")]
+    NegativeTarget {
+        /// Zero-based original site.
+        origin: usize,
+        /// Signed translated-site index from the current forward map.
+        target: i64,
+    },
+    /// A translated-site index cannot index the current forward map.
+    #[error("translation origin {origin} has target {target} outside 0..{nsite}")]
+    OutOfRangeTarget {
+        /// Zero-based original site.
+        origin: usize,
+        /// Signed translated-site index from the current forward map.
+        target: i64,
+        /// Number of sites in the current forward map.
+        nsite: usize,
+    },
+    /// Two original sites map to the same translated site.
+    #[error("translation target {target} is shared by origins {first_origin} and {origin}")]
+    DuplicateTarget {
+        /// Zero-based translated site shared by both origins.
+        target: usize,
+        /// Zero-based origin first encountered for this target.
+        first_origin: usize,
+        /// Zero-based origin that repeats this target.
+        origin: usize,
+    },
+}
+
 impl QPTransEntry {
+    /// Derive `inverse[site_map[origin]] = origin` from the current forward map.
+    ///
+    /// The map must be a nonempty permutation of `0..site_map.len()`. Empty,
+    /// negative, out-of-range and repeated targets return a specific error;
+    /// no identity fallback or partial inverse is returned. With `n` entries,
+    /// unique in-range targets also guarantee that no target is missing.
+    ///
+    /// This allocates in O(n) time and space on every query, so mutations of the
+    /// public forward map cannot leave a cached inverse stale. Weights and signs
+    /// are neither read nor changed. This does not validate the input reader or
+    /// implement BackFlow; it exposes the inverse relation used by C/Julia.
+    pub fn inverse_site_map(&self) -> Result<Vec<usize>, QPTransInverseError> {
+        let nsite = self.site_map.len();
+        if nsite == 0 {
+            return Err(QPTransInverseError::EmptyMapping);
+        }
+        let mut inverse = vec![usize::MAX; nsite];
+        for (origin, &target) in self.site_map.iter().enumerate() {
+            if target < 0 {
+                return Err(QPTransInverseError::NegativeTarget { origin, target });
+            }
+            let translated = usize::try_from(target)
+                .ok()
+                .filter(|&site| site < nsite)
+                .ok_or(QPTransInverseError::OutOfRangeTarget {
+                    origin,
+                    target,
+                    nsite,
+                })?;
+            let first_origin = inverse[translated];
+            if first_origin != usize::MAX {
+                return Err(QPTransInverseError::DuplicateTarget {
+                    target: translated,
+                    first_origin,
+                    origin,
+                });
+            }
+            inverse[translated] = origin;
+        }
+        Ok(inverse)
+    }
+
     /// Translation signs are active only for antiperiodic boundaries.
     pub fn boundary_sign(&self, site: usize, antiperiodic: bool) -> i64 {
         if antiperiodic {
