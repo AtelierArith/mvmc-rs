@@ -53,7 +53,7 @@ cargo test --workspace --all-features --locked --doc --profile ci
 The [CI workflow](../.github/workflows/ci.yml) runs these commands on Ubuntu
 24.04 x86_64 and macOS 15 ARM64 in six independent jobs: four test jobs
 (default features and all features on each platform), one lint job (rustfmt,
-all-feature Clippy and actionlint) and one documentation job (doctests and API
+all-feature Clippy) and one documentation job (doctests and API
 documentation), with lint and documentation checks running on Linux x86_64.
 These job families have no dependencies on one another.
 The shared [setup action](../.github/actions/setup-rust-ci/action.yml) installs
