@@ -26,6 +26,9 @@ The focused security branch starts from origin/main `515a89b38dc49ead3f526c40664
 | Reverse lru trees for both roots | Passed | Exit 0; lru 0.18.5 through local patches |
 | Retained file comparison | Passed | Exit 0; 381 files, only documented differences |
 | Targeted einsum and gram nextest tests | Passed | Exit 0; 9 passed, 327 skipped, 11.867 seconds; run 4e977fef-bf03-46e2-8603-7f7cd8f8bbac |
+| Initial full workspace nextest before submodule setup | Failed | Exit 100; 415 passed, 82 failed, 8 skipped; run 99ee796c-b369-40dc-aba8-24ebf9087363; missing Julia-mVMC fixture inputs |
+| Full workspace nextest after pinned submodule setup | Passed | Exit 0; 497 passed, 8 skipped, 101.482 seconds; run 11924f84-b010-4da0-b224-d9e93e71cc28; tested commit 05e56be |
+| Workspace doctests, separately | Passed | Exit 0; 0 doctests across four library crates; test-fast profile, same isolated target directory |
 | Workspace all-target Clippy with -D warnings | Passed | Exit 0; vendored warning remained a warning |
 | Root Cargo audit | Failed overall | Exit 1; crossbeam-epoch finding, no lru finding |
 | Benchmark Cargo audit | Failed overall | Exit 1; crossbeam-epoch finding, no lru finding |
@@ -36,16 +39,21 @@ The focused security branch starts from origin/main `515a89b38dc49ead3f526c40664
 Reproduction commands from the repository root (use isolated CARGO_TARGET_DIR values for builds in another checkout):
 
 ```sh
+git submodule update --init -- extern/Julia-mVMC
 cargo check --workspace --locked
 cargo check --workspace --locked --features tenferro-einsum/autodiff
 cargo check --manifest-path benchmark/pfapack_compare/Cargo.toml --locked
 cargo tree --locked -i lru
 cargo tree --manifest-path benchmark/pfapack_compare/Cargo.toml --locked -i lru
 cargo nextest run -p mvmc-core --cargo-profile test-fast --locked -E 'test(einsum) | test(gram)' --no-fail-fast --retries 0
+cargo nextest run --workspace --cargo-profile test-fast --locked --no-fail-fast --retries 0
+cargo test --workspace --doc --profile test-fast --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo audit --json
 cargo audit --file benchmark/pfapack_compare/Cargo.lock --json
 ```
+
+The first full-suite run in the fresh worktree failed on absent fixture inputs under extern/Julia-mVMC. The repository-pinned submodule was then initialized at `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`, without changing its gitlink or source. The full suite was rerun with the same profile, lock, no-fail-fast and retry settings, reusing the compiled target. The submodule supplies checked-in fixture data; no Julia runtime, C oracle, fixture regeneration or test modification is involved.
 
 Both audits using advisory database commit `f8dee89e1b2f2f1eaf548312df7655fe5202a302` report no lru advisory. Full audit exit status remains 1 because both locks retain pre-existing crossbeam-epoch 0.9.18 / RUSTSEC-2026-0204. Additional warnings concern paste, and in the root lock custom_derive and anyhow. These findings were not ignored or changed as part of the lru remediation.
 
