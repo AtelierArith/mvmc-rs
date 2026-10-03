@@ -708,9 +708,9 @@ pub(crate) fn update_parameter_value(
 /// agreement also requires matching input construction and BLAS kernels;
 /// fixed sampled-input and end-to-end gates check those separately.
 ///
-/// Returns `Err(())` on an illegal LAPACK argument or nonfinite solved update,
-/// before parameter mutation. Julia's `potrf!` returns positive INFO without
-/// throwing, and canonical SR discards that status before calling `potrs!`.
+/// Returns `Err(())` on failed factorization/substitution or nonfinite update,
+/// before parameter mutation. C's stcopt_dposv.c uses DPOSV, which does not
+/// substitute when POTRF returns positive INFO (a non-positive-definite matrix).
 fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     if n == 0 {
         return Ok(());
@@ -724,7 +724,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
         dpotrf_(b"U".as_ptr(), &n_i32, s.as_mut_ptr(), &lda, &mut info);
     }
     observer::lapack_status(true, info);
-    if info < 0 {
+    if info != 0 {
         return Err(());
     }
     let nrhs = 1_i32;
@@ -1234,7 +1234,7 @@ mod tests {
     }
 
     #[test]
-    fn positive_potrf_status_and_finite_check_match_canonical_julia() {
+    fn c_positive_factor_status_rejects_historical_julia_finite_bad_updates() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/sr_failure/potrf_status.txt");
         let text = std::fs::read_to_string(path).unwrap();
@@ -1261,11 +1261,15 @@ mod tests {
             } else {
                 stochastic_opt_real
             };
-            assert_eq!(
-                solve(&mut data, &mut state),
-                fields[2].parse::<i32>().unwrap(),
-                "{header}"
-            );
+            let before = data.slater_params.clone();
+            let guard = observer::capture().unwrap();
+            assert_eq!(solve(&mut data, &mut state), 1, "{header}");
+            let records = guard.finish();
+            assert_eq!(records.len(), 1);
+            assert!(records[0].factor_info.unwrap() > 0);
+            assert_eq!(records[0].solve_info, None);
+            assert_eq!(records[0].increment, records[0].rhs);
+            assert_eq!(data.slater_params, before);
             let actual: Vec<_> = data
                 .slater_params
                 .iter()
@@ -1277,7 +1281,16 @@ mod tests {
                 .split_whitespace()
                 .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect();
-            assert_eq!(actual, expected, "{header}");
+            // Preserve and inspect the archived unsafe Julia behavior, rather
+            // than adopting its finite substitution as a C-compatible oracle.
+            if fields[1] == "indefinite" {
+                assert_eq!(fields[2], "0");
+                assert!(expected.iter().all(|value| value.is_finite()));
+                assert_ne!(actual, expected, "historical bad update {header}");
+            } else {
+                assert_eq!(fields[2], "1");
+                assert_eq!(actual, expected, "historical unchanged parameters {header}");
+            }
             cases += 1;
         }
         assert_eq!(cases, 4);
@@ -1335,5 +1348,89 @@ mod tests {
         // A * x = [4 1; 1 3] * x = [5; 6] -> x = [9/11; 19/11].
         assert!((b[0] - 9.0 / 11.0).abs() < 1e-12);
         assert!((b[1] - 19.0 / 11.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn non_positive_definite_factorization_preserves_nonzero_rhs() {
+        // diag(1,-1): the second leading principal minor is not positive.
+        // Independent DPOSV contract: INFO=2, with no substitution of b.
+        let mut matrix = [1.0, 0.0, 0.0, -1.0];
+        let mut rhs = [3.25_f64, -7.5_f64];
+        let before = rhs.map(f64::to_bits);
+        assert_eq!(cholesky_solve(&mut matrix, &mut rhs, 2), Err(()));
+        assert_eq!(rhs.map(f64::to_bits), before);
+    }
+
+    #[test]
+    fn complex_indefinite_direct_sr_rejects_finite_bad_update() {
+        // Independent symmetric system [[1,2],[2,1]], with eigenvalues 3,-1.
+        // Historical Julia could substitute through the incomplete factor and
+        // accept a finite but invalid update; C DPOSV stops with INFO=2.
+        let mut data = ExpertModeData::new();
+        data.modpara.n_orbital_idx = 2;
+        data.modpara.dsr_opt_red_cut = 0.0;
+        data.modpara.dsr_opt_sta_del = 0.0;
+        data.modpara.dsr_opt_step_dt = 0.5;
+        data.slater_params = vec![Complex64::new(3.0, 0.25); 2];
+        data.optimization_flags = vec![1, 0, 1, 0];
+        let before = data.slater_params.clone();
+        let mut state = VmcOptimizationState::zeros(1, 1, 0, 2, 1, 2, true, false);
+        let lda = 2 * state.sr_opt.sr_opt_size;
+        for (row, col, value) in [(2, 2, 1.0), (2, 4, 2.0), (4, 2, 2.0), (4, 4, 1.0)] {
+            state.sr_opt.sr_opt_oo[col * lda + row] = Complex64::new(value, 0.0);
+        }
+        state.sr_opt.sr_opt_ho[2] = Complex64::new(1.0, 0.0);
+        state.sr_opt.sr_opt_ho[4] = Complex64::new(2.0, 0.0);
+        let guard = observer::capture().unwrap();
+        assert_eq!(stochastic_opt_complex(&mut data, &mut state), 1);
+        assert_eq!(data.slater_params, before);
+        let records = guard.finish();
+        assert_eq!(records.len(), 1);
+        let record = &records[0];
+        assert_eq!(record.matrix, [1.0, 2.0, 2.0, 1.0]);
+        assert_eq!(record.rhs, [-1.0, -2.0]);
+        assert_eq!(record.factor_info, Some(2));
+        assert_eq!(record.solve_info, None);
+        assert_eq!(record.status, Some(1));
+        assert_eq!(
+            record
+                .increment
+                .iter()
+                .map(|v| v.to_bits())
+                .collect::<Vec<_>>(),
+            record.rhs.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn singular_direct_sr_stops_before_substitution_and_parameter_mutation() {
+        // Independent singular system: zero covariance and zero gradient.
+        // DPOSV's positive POTRF INFO must bypass POTRS, not produce NaNs.
+        for complex in [false, true] {
+            let mut data = ExpertModeData::new();
+            data.modpara.n_orbital_idx = 2;
+            data.modpara.dsr_opt_red_cut = 0.0;
+            data.slater_params = vec![Complex64::new(3.0, 0.0); 2];
+            data.optimization_flags = vec![1, 0, 1, 0];
+            let before = data.slater_params.clone();
+            let mut state = VmcOptimizationState::zeros(1, 1, 0, 2, 1, 2, complex, false);
+            let guard = observer::capture().unwrap();
+            let status = if complex {
+                stochastic_opt_complex(&mut data, &mut state)
+            } else {
+                stochastic_opt_real(&mut data, &mut state)
+            };
+            let records = guard.finish();
+            assert_eq!(status, 1);
+            assert_eq!(data.slater_params, before);
+            assert_eq!(records.len(), 1);
+            let record = &records[0];
+            assert_eq!(record.dimension, 2);
+            assert_eq!(record.factor_info, Some(1));
+            assert_eq!(record.solve_info, None);
+            assert_eq!(record.status, Some(1));
+            assert_eq!(record.increment, record.rhs);
+            assert!(record.increment.iter().all(|value| value.is_finite()));
+        }
     }
 }

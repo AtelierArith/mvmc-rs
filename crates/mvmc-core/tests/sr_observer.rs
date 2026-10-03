@@ -113,7 +113,7 @@ fn direct_capture_preserves_original_success_and_failure_outputs() {
 }
 
 #[test]
-fn original_factor_failure_and_nonfinite_substitution_remain_observable_without_repair() {
+fn c_factor_failure_bypasses_substitution_and_preserves_parameters() {
     for complex in [false, true] {
         let run = |enabled: bool| {
             let (mut data, mut state) = problem(complex, false);
@@ -124,9 +124,10 @@ fn original_factor_failure_and_nonfinite_substitution_remain_observable_without_
                 let size = state.sr_opt.sr_opt_size;
                 state.sr_opt.sr_opt_oo_real[size + 1] = 0.0;
             }
-            // Zero cutoff retains the singular component. The ORIGINAL solver
-            // discards positive POTRF INFO, invokes POTRS and rejects its
-            // nonfinite increment. The observer must not "fix" this sequence.
+            // Zero cutoff retains the singular component. C's DPOSV bypasses
+            // substitution on positive factor INFO. Historical Julia discarded
+            // that status and produced a nonfinite increment; that defect is
+            // not the authoritative failure contract.
             let guard = enabled.then(|| observer::capture().unwrap());
             let status = solve(complex, &mut data, &mut state);
             let records = guard
@@ -140,9 +141,10 @@ fn original_factor_failure_and_nonfinite_substitution_remain_observable_without_
         assert_eq!(status, 1);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].factor_info, Some(1));
-        assert_eq!(records[0].solve_info, Some(0));
+        assert_eq!(records[0].solve_info, None);
         assert_eq!(records[0].status, Some(1));
-        assert!(records[0].increment.iter().any(|value| !value.is_finite()));
+        assert_eq!(records[0].increment, records[0].rhs);
+        assert!(records[0].increment.iter().all(|value| value.is_finite()));
         numerical_comparison::assert_values_close(
             observed
                 .slater_params
