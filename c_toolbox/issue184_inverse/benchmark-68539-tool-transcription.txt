@@ -1,0 +1,43 @@
+Provenance: transcription of exec/write_stdin tool output, NOT a native
+stdout/stderr capture file. Tool session 68539; final chunk 969b4c; exit_code=0.
+Exact command:
+OPENBLAS_NUM_THREADS=1 cargo run --release --manifest-path benchmark/pfapack_compare/Cargo.toml --offline
+Earlier compilation output is not reproduced here. Final tool output follows:
+
+   Compiling pfapack_compare v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/benchmark/pfapack_compare)
+    Finished `release` profile [optimized] target(s) in 4m 23s
+     Running `benchmark/pfapack_compare/target/release/pfapack_compare`
+impl,kind,n,op,median_ms
+rust,real,32,pfaffian_ltl,0.024638
+rust,real,32,ltl,0.016969
+rust,real,32,ltl_utu2pfa,0.017005
+rust,real,32,ltl_utu2inv,0.041786
+rust,complex,32,pfaffian_ltl,0.038440
+rust,complex,32,ltl,0.036996
+rust,complex,32,ltl_utu2pfa,0.032755
+rust,complex,32,ltl_utu2inv,0.059674
+rust,real,64,pfaffian_ltl,0.060696
+rust,real,64,ltl,0.049389
+rust,real,64,ltl_utu2pfa,0.049220
+rust,real,64,ltl_utu2inv,0.128092
+rust,complex,64,pfaffian_ltl,0.129893
+rust,complex,64,ltl,0.200438
+rust,complex,64,ltl_utu2pfa,0.201772
+rust,complex,64,ltl_utu2inv,0.387000
+rust,real,128,pfaffian_ltl,0.398841
+rust,real,128,ltl,0.329058
+rust,real,128,ltl_utu2pfa,0.330445
+rust,real,128,ltl_utu2inv,0.848494
+rust,complex,128,pfaffian_ltl,0.850110
+rust,complex,128,ltl,1.077407
+rust,complex,128,ltl_utu2pfa,1.067762
+rust,complex,128,ltl_utu2inv,1.964286
+rust,real,256,pfaffian_ltl,2.714602
+rust,real,256,ltl,2.117237
+rust,real,256,ltl_utu2pfa,2.124116
+rust,real,256,ltl_utu2inv,4.982521
+rust,complex,256,pfaffian_ltl,6.082031
+rust,complex,256,ltl,8.448023
+rust,complex,256,ltl_utu2pfa,8.559216
+rust,complex,256,ltl_utu2inv,14.371287
+transfer_green,iterations=10000,generic_median_ms=2.520895,fast_median_ms=2.341042,speedup=1.077

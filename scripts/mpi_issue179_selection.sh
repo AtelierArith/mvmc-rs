@@ -3,8 +3,8 @@ mpi179_validate_selection() {
     local file=$1 scope=$2 steps step regex selected ranks2=0 ranks4=0
     [[ -s $file ]] || { echo 'missing/empty matrix' >&2; return 2; }
     steps=${MPI179_STEPS_LIST-1 2 3}
-    [[ $steps =~ ^[123]([[:space:]]+[123])*$ ]] || {
-        echo 'MPI179_STEPS_LIST must be a nonempty list of prefixes 1/2/3' >&2; return 2;
+    [[ $steps =~ ^(1|2|3|20)([[:space:]]+(1|2|3|20))*$ ]] || {
+        echo 'MPI179_STEPS_LIST must be a nonempty list of prefixes 1/2/3 or long baseline 20' >&2; return 2;
     }
     local seen=' '
     for step in $steps; do

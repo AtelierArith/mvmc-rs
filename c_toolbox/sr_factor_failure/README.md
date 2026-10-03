@@ -1,6 +1,8 @@
 # Optional fixed-operand SR factorization-failure probes
 
-Owned new directory for issues 179/190. These original standalone C drivers
+Owned new directory for open issues 179/185. Closed issue 190 supplies numerical
+policy history, not authorization for new implementation under a closed issue.
+These original standalone C drivers
 exercise LAPACK's DPOSV failure contract independently of the Rust implementation.
 They are not extracted upstream helpers, full native C executable/MPI/sampler
 validation, a Julia repair, a successful optimization oracle, or a tolerance
@@ -149,3 +151,59 @@ the old sampling trace prefix before the first failure; two 15-row output files
 and no final optimized parameter file. Computed repeat values use explicit
 absolute/relative `1e-12` bounds. It does not require reproducing the old invalid
 post-factorization continuation or call a failed 20-step optimization successful.
+
+## Grouped20 retained failures: original and exact-INFO replay
+
+`grouped_step4_boundary.c` is an original, non-extracted driver using actual
+dimension-two step4 operands. It requires INFO2 and numeric RHS equality (not
+a signed-zero bitwise assertion). `recorded_operand_boundary.c` reads complete
+dimension/matrix/RHS input, rejects missing/nonfinite operands and trailing junk,
+requires supplied dimension/INFO, prints `UPLO=U NRHS=1`, and tests RHS bits.
+Neither assembles SR or invokes POTRS separately. The reference boundaries and
+origin/license distinction above apply; no extracted C bodies or Cargo coupling.
+
+All following roots are inside container `73c57e563c61`.
+Original records are under
+`/home/vscode/.cache/mvmc/issue179-grouped20-current.QXcDew/repeats/`, suffix
+`CELL/prefix20/wWORKERS/repeatREPEAT/rank-RANK.txt`. Read unchanged matrix/RHS
+keys `sr-system-000004` or `sr-system-000014`.
+
+| CELL | zero-based step | dimension | exact INFO | rank records |
+|---|---:|---:|---:|---:|
+| r2-real-s2-cg0-store0 | 4 | 2 | 2 | 12 |
+| r2-real-s2-cg0-store1 | 4 | 4 | 3 | 12 |
+| r4-real-s2-cg0-store1 | 14 | 11 | 1 | 24 |
+
+Counts include every rank, workers1/2/4 and both runs. The original matrix ended1:
+27 successful pairs, nine failed expected-success pairs. The ordinary verifier
+still rejects101. These kernel replays do not reclassify failed optimizations or
+prove native C sampling, assembly accuracy, or matching C sampling trajectories.
+
+Historical root `/home/vscode/.cache/mvmc/issue179-allfailed-C.VtRqHY` retains
+48 operand files, stdout/results, original-record hashes and compiler/linkage.
+Its driver SHA `84f2867d90e4da87a9b8227a66dca9e631eff1d6a65eff92561a7d093fafb3b9`
+required only positive INFO. Observed INFOs match this table; its weaker assertion
+scope is retained, not retrospectively upgraded.
+
+New root `/home/vscode/.cache/mvmc/issue179-allfailed-C-exact.RNTLUT` uses source
+SHA `9c534dc4779e9ffa625f3d35461886916458182ad850e6638096d525977eb964`.
+All48 dedicated exact-INFO launches returned0. `negative-results.tsv` records
+wrong INFO→1, wrong dimension→2, trailing junk→2 and missing RHS→2. Each operand
+was copied unchanged from the historical replay. See `original-records.sha256`,
+`provenance.sha256`, `compiler.txt`, `blas.txt`, `ldd.txt`, `library.sha256`.
+Actual environment: GCC13.3.0, OpenBLAS0.3.26 LP64, BLAS threads1.
+
+Explicit developer compilation and one-case reproduction:
+
+```sh
+cc -std=c11 -O0 -ffp-contract=off -Wall -Wextra -Werror \
+  c_toolbox/sr_factor_failure/recorded_operand_boundary.c \
+  $(pkg-config --cflags --libs openblas) -o /tmp/sr-recorded-probe
+OPENBLAS_NUM_THREADS=1 timeout --kill-after=2s 10s /tmp/sr-recorded-probe 2 2 \
+  < /home/vscode/.cache/mvmc/issue179-allfailed-C-exact.RNTLUT/r2-real-s2-cg0-store0-w1-repeat1-rank0.operands
+```
+
+Use arguments `4 3` and `11 1` for the other two cells. Do not replace operands
+from these exact original records with a zero matrix or newer source data.
+`run.sh` remains the original two-probe command and does not silently include
+these additional record-specific diagnostics.

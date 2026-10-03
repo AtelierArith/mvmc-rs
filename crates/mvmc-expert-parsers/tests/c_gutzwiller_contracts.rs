@@ -129,3 +129,20 @@ fn unsafe_gutzwiller_indices_and_malformed_scans_have_bounded_diagnostics() {
     assert!(parse_gutzwiller_content("0 0\n0 1\n", 1).is_err());
     assert!(parse_gutzwiller_content("===\nWidth 1\nComplex 0\n===\n===\n0 0 0 1\n", 0).is_err());
 }
+
+#[test]
+fn original_julia_bare_gutzwiller_values_are_not_indexed_definitions() {
+    // M0257–0260: original test_parsers.jl:156–164, source SHA256
+    // 8336b21bca7627749e27c588e537e30c20ea4a6383733bae3e93a44461980185.
+    // Julia accepts these coefficient values; Rust's public definition parser
+    // requires C-style headers, integer site mappings and declared flags.
+    // This intentional supported-input difference is not equivalent Julia
+    // success, native C malformed-scanf parity, or a numerical assertion.
+    let original = "    0 0.5\n    1 0.3\n";
+    let error = parse_gutzwiller_content(original, 2).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert_eq!(
+        error.to_string(),
+        "Gutzwiller definition requires five header lines"
+    );
+}

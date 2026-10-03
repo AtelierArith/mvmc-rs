@@ -23,8 +23,9 @@ The 16 matrix cases cover 2–8 electrons, interleaved explicit spins and
 full polarization, real and complex Slater inputs, interior QP ranges,
 untouched outside planes, and empty ranges. Complex inputs test that the
 real wrapper still uses the authoritative complex table before extracting
-real parts. Pfaffians and inverses match bit for bit, including signed
-zero. Rust's per-plane inverse scratch pad is excluded from Julia's
+real parts. Current computed Pfaffian/inverse comparisons use explicit absolute
+and relative budgets of `512 * f64::EPSILON`, not bitwise equality. Rust's
+per-plane inverse scratch pad is excluded from Julia's
 contiguous matrices and must remain untouched.
 
 Initial-sample cases cover successful retries, the 101-attempt failure
@@ -38,13 +39,14 @@ only nonfinite Pfaffians. A zero Pfaffian and nonfinite inverse therefore
 return success at this kernel boundary; the regression explicitly records
 that upstream behavior. Normal real/complex kernels keep their own guards.
 
-## Issue #176 audit (HEAD `30d8d69`)
+## Historical issue #176 audit (HEAD `30d8d69`)
 
 The historical failure is resolved on the recorded Linux reference path; no
-algorithm or tolerance change is needed. The current Rust gate passes all 96
-matrix cases, the later-QP publication transaction, and the retry, 101-attempt
-failure, zero, local-spin, and fixed-magnetization cases. Each initialization
-case also checks the complete next 624-word SFMT block.
+algorithm or tolerance change was recorded then. That report claimed 96 matrix
+cases; the current inspected test actually loops over 16 matrix cases. The
+current selected test also verifies the later-QP publication transaction and
+retry, 101-attempt failure, zero, local-spin, and fixed-magnetization cases.
+Each initialization case checks the complete next 624-word SFMT block.
 
 The first historical numerical divergence is reproducible by comparing the
 preserved macOS fixture with the independently generated Linux fixture. It is
@@ -80,7 +82,7 @@ multi-step deterministic trajectories (including spin flips) are verified.
 and conduction electrons, and fixed magnetization, each through 1, 2, 3,
 and 50 sampling calls. Inputs include Gutzwiller/Jastrow factors and two
 QP planes. It compares all saved configurations/spins/projection counts,
-burn buffers, attempt/accept counters, real Pfaffians/inverses (exact bits),
+burn buffers, attempt/accept counters, real Pfaffians/inverses (computed values),
 and the next 624 SFMT words. Rust's counter representation omits Julia's
 reserved slot 10 and puts Julia's counter[11] burn marker in Rust slot 9.
 
@@ -117,4 +119,46 @@ The reference `vmc_main_cal_fsz!` also sets `all_complex = true`
 unconditionally and accumulates complex SR buffers even when the outer
 optimizer selects real mode. Real optimization dispatch and multi-step
 energies still require resolution of these reference behaviors. The Rust
-runner continues to reject real FSZ, and #43 remains open.
+runner rejection described that historical checkpoint, not current support.
+Current selected runner tests execute real FSZ.
+
+## Current #176 criterion audit (2026-10-03)
+
+This source review and selected-test run is not closure or a fresh C/Julia
+acquisition. Shared source was mutable; no before/after frozen snapshot was
+captured. Observed HEAD was `822c35e221a2ccac0b12ea9215473bf7e90709fb`.
+Host Rust was 1.99.0, LLVM23.1.1, x86_64-unknown-linux-gnu. Historical reference
+environment above remains labelled historical; it was not re-acquired here.
+The historical division diagnosis and exact-bit language above are provenance,
+not a current computed-float acceptance requirement.
+
+| Criterion | Current evidence | Remaining gap |
+| --- | --- | --- |
+| First differing QP/element/operation/environment | Historical QP1 `(1,0)` division report retained | Independent retained-operand C replay and current reference environment closure |
+| C contract/fixture/environment distinction | Primary `matrix.c:182–278`: spin-indexed assembly, DSKTRF, finite Pfaffian guard, `utu2inv_d`, sign reversal | This real C path alone does not establish the historical complex-division diagnosis |
+| Independent fix without weakened expectations | No kernel, fixture, or tolerance changed in this audit | C replay needed before closure proposal |
+| Setup/retry/failure/zero/localspin/magnetized | 16 matrix cases, later-QP transaction, five initialization cases with exact next624 passed | No fresh reference runtime execution |
+| Sampling/SR/PhysCal rerun | Selected runs below passed | Serial Linux only; PhysCal observer identity is not independent numerical parity; native Mac FSZ failure remains separate |
+
+```sh
+cargo nextest run -p mvmc-core --test real_fsz_setup --test real_fsz_sampling --test fsz_measurements --cargo-profile test-fast --locked --no-fail-fast --retries 0
+cargo nextest run -p mvmc-core --lib --cargo-profile test-fast --locked --no-fail-fast --retries 0 -E 'test(fsz_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng) | test(fsz_measurements_preserve_real_and_complex_optimization_sampling_and_rng) | test(physcal_green_observer_fsz_runner_identity_and_raw_boundary)'
+```
+
+Run `4e115108-f9bb-49e4-8977-0b76f21cf24d`: 7/7 PASS, 0 skipped,
+exit0, 0.252s. Run `862fbbbf-9f37-4ca0-8459-6fc7a3ac2bbd`: 3/3 PASS,
+214 filter-excluded, exit0, 1.030s. Excluded tests are not coverage. #176 remains
+open; these diagnostics are not full C executable, MPI, or native-Mac proof.
+
+Independent parent reruns used the same two commands: integration run
+`bc35a0c9` passed 7/7, exit0, 0.215s; library run
+`5c20bf0d-bceb-4053-937d-e4cd0b19e90f` passed 3/3, exit0, 0.980s,
+214 filter-excluded. Observed HEAD was `380c8110` in the mutable shared
+workspace, not a frozen-snapshot assertion. These fresh parent results are
+separate from the original owner runs above.
+
+Original owner terminal output was not captured with tee. Its retained tool
+output transcription is `/tmp/mvmc-issue176-selected-runs-retained-tool-output.txt`,
+SHA-256 `2fbe0ee2286cce0528518841e2da9c2d8c7c6d5963cabebe723a812d968dc4f0`.
+It identifies both commands, run IDs, terminal sessions/chunks and captured
+post-run source hashes; it is not a native logfile or before/after source freeze.

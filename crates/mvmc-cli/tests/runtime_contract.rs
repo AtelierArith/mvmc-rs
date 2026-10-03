@@ -50,6 +50,32 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(feature = "mpi")]
+fn mpi_cli_command() -> Command {
+    let version = Command::new("mpirun").arg("--version").output().unwrap();
+    assert!(version.status.success(), "cannot identify MPI launcher");
+    let metadata = format!(
+        "{}{}",
+        String::from_utf8_lossy(&version.stdout),
+        String::from_utf8_lossy(&version.stderr)
+    );
+    let mut command = Command::new("timeout");
+    command.args(["--kill-after=5s", "45s", "mpirun"]);
+    if metadata.contains("Open MPI") || metadata.contains("OpenRTE") {
+        command.arg("--oversubscribe");
+    } else {
+        assert!(
+            metadata.contains("HYDRA build details"),
+            "unsupported MPI launcher metadata: {metadata}"
+        );
+        // Wait for each rank's own exit status after collective CLI errors,
+        // rather than requesting Hydra's automatic peer cleanup.
+        // The outer timeout still detects deadlocks and forces termination.
+        command.arg("-disable-auto-cleanup");
+    }
+    command
+}
+
 struct TestDir(PathBuf);
 
 impl TestDir {
@@ -213,8 +239,8 @@ fn grouped_normal_physcal_cli_succeeds_on_two_and_four_ranks() {
     fs::write(modpara, text).unwrap();
     for ranks in [2, 4] {
         let out_dir = dir.0.join(format!("out-{ranks}"));
-        let output = Command::new("timeout")
-            .args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe", "-n"])
+        let output = mpi_cli_command()
+            .arg("-n")
             .arg(ranks.to_string())
             .arg(env!("CARGO_BIN_EXE_mvmc"))
             .arg(&namelist)
@@ -299,8 +325,7 @@ fn asymmetric_physcal_cli_errors_are_collective_before_output() {
         if fault == "setup" {
             fs::write(&blocked, "not a directory").unwrap();
         }
-        let mut command = Command::new("timeout");
-        command.args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe"]);
+        let mut command = mpi_cli_command();
         for rank in 0..2 {
             if rank != 0 {
                 command.arg(":");
@@ -333,7 +358,12 @@ fn asymmetric_physcal_cli_errors_are_collective_before_output() {
             .env("OMP_NUM_THREADS", "1")
             .output()
             .unwrap();
-        assert!(!output.status.success(), "{fault} unexpectedly succeeded");
+        assert!(
+            !output.status.success(),
+            "{fault} unexpectedly succeeded: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert_ne!(
             output.status.code(),
             Some(124),
@@ -376,8 +406,7 @@ fn mismatched_valid_cli_controls_fail_collectively_before_output() {
         .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
     for fault in ["nsteps", "run-kind", "mode", "sample-count"] {
         let output_dir = dir.0.join(format!("out-{fault}"));
-        let mut command = Command::new("timeout");
-        command.args(["--kill-after=5s", "45s", "mpirun", "--oversubscribe"]);
+        let mut command = mpi_cli_command();
         for rank in 0..2 {
             if rank != 0 {
                 command.arg(":");
@@ -418,7 +447,12 @@ fn mismatched_valid_cli_controls_fail_collectively_before_output() {
             .env("OMP_NUM_THREADS", "1")
             .output()
             .unwrap();
-        assert!(!output.status.success(), "{fault} unexpectedly succeeded");
+        assert!(
+            !output.status.success(),
+            "{fault} unexpectedly succeeded: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert_ne!(output.status.code(), Some(124), "{fault} deadlocked");
         assert_ne!(
             output.status.code(),

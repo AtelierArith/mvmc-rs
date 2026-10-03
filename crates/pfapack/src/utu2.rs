@@ -396,23 +396,13 @@ fn utu2inv_generic<T>(
 
     // Step 1: M <- I.
     //
-    // Step 3 overwrites every strict-upper entry that is used later, so
-    // only the diagonal and lower triangle need to be reset here. This
-    // avoids writing roughly half of the workspace on every inverse.
+    // Match the authoritative C workspace contract: every entry is reset.
+    // Step 3 only copies into columns 1..n-2; the final strict-upper column
+    // must also be zero before the skew-tridiagonal solve reads M.
     let m_data = m.as_mut_slice();
-    if n <= 2 {
-        m_data.fill(T::pfaf_zero());
-        for i in 0..n {
-            m_data[i * n + i] = T::pfaf_one();
-        }
-    } else {
-        for j in 0..n {
-            let col = j * n;
-            m_data[col + j] = T::pfaf_one();
-            for i in (j + 1)..n {
-                m_data[col + i] = T::pfaf_zero();
-            }
-        }
+    m_data.fill(T::pfaf_zero());
+    for i in 0..n {
+        m_data[i * n + i] = T::pfaf_one();
     }
 
     // Step 2: trtri on the unit upper-triangular submatrix A[0..n-1, 1..n].

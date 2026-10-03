@@ -98,8 +98,18 @@ struct Recording<'a> {
     real_call: RefCell<usize>,
     sr_complex: bool,
     step: Cell<usize>,
+    initiating_thread: std::thread::ThreadId,
+    collective_calls: Cell<usize>,
 }
 impl Recording<'_> {
+    fn assert_funneled(&self) {
+        assert_eq!(std::thread::current().id(), self.initiating_thread);
+        assert!(
+            rayon::current_thread_index().is_none(),
+            "MPI entered from Rayon pool"
+        );
+        self.collective_calls.set(self.collective_calls.get() + 1);
+    }
     fn step_key(&self, key: &str) -> String {
         if self.step.get() == 0 {
             key.to_string()
@@ -143,23 +153,28 @@ impl Recording<'_> {
 }
 impl Reducer for Recording<'_> {
     fn sampling_any_failure(&self, failed: bool) -> bool {
+        self.assert_funneled();
         self.inner.sampling_any_failure(failed)
     }
     fn sampling_qp_range(&self, length: usize) -> std::ops::Range<usize> {
         self.inner.sampling_qp_range(length)
     }
     fn sampling_sum_f64(&self, buf: &mut [f64]) {
+        self.assert_funneled();
         self.inner.sampling_sum_f64(buf);
     }
     fn sampling_sum_c64(&self, buf: &mut [Complex64]) {
+        self.assert_funneled();
         self.inner.sampling_sum_c64(buf);
     }
     fn reduce_counters(&self, buf: &mut [i64]) {
+        self.assert_funneled();
         self.discrete(&self.step_key("local-counter"), buf);
         self.inner.reduce_counters(buf);
         self.discrete(&self.step_key("reduced-counter"), buf);
     }
     fn allreduce_sum_c64(&self, buf: &mut [Complex64]) {
+        self.assert_funneled();
         let mut call = self.complex_call.borrow_mut();
         let key = match *call {
             0 => "energy",
@@ -173,6 +188,7 @@ impl Reducer for Recording<'_> {
         *call += 1;
     }
     fn allreduce_sum_f64(&self, buf: &mut [f64]) {
+        self.assert_funneled();
         let mut call = self.real_call.borrow_mut();
         let key = if !self.sr_complex && *call < 2 {
             if *call == 0 { "oo-real" } else { "ho-real" }.to_string()
@@ -186,6 +202,7 @@ impl Reducer for Recording<'_> {
         *call += 1;
     }
     fn allreduce_sum_i64(&self, buf: &mut [i64]) {
+        self.assert_funneled();
         if buf.len() == 10 {
             self.discrete(&self.step_key("local-counter"), buf);
         }
@@ -195,15 +212,19 @@ impl Reducer for Recording<'_> {
         }
     }
     fn broadcast_i64(&self, root: usize, buf: &mut [i64]) -> Result<(), String> {
+        self.assert_funneled();
         self.inner.broadcast_i64(root, buf)
     }
     fn broadcast_f64(&self, root: usize, buf: &mut [f64]) -> Result<(), String> {
+        self.assert_funneled();
         self.inner.broadcast_f64(root, buf)
     }
     fn barrier(&self) {
+        self.assert_funneled();
         self.inner.barrier();
     }
     fn broadcast_c64(&self, root: usize, buf: &mut [Complex64]) {
+        self.assert_funneled();
         self.inner.broadcast_c64(root, buf);
     }
     fn world_size(&self) -> usize {
@@ -225,6 +246,7 @@ impl Reducer for Recording<'_> {
         self.inner.is_output_root()
     }
     fn any_failure(&self, failed: bool) -> bool {
+        self.assert_funneled();
         self.inner.any_failure(failed)
     }
 }
@@ -271,6 +293,8 @@ fn issue179_state() {
         real_call: RefCell::new(0),
         sr_complex: mvmc_core::get_all_complex_flag(&data),
         step: Cell::new(0),
+        initiating_thread: std::thread::current().id(),
+        collective_calls: Cell::new(0),
     };
     let seed = data.modpara.rnd_seed + recording.seed_offset() as i64;
     recording.discrete("seed", &[seed]);
@@ -293,6 +317,9 @@ fn issue179_state() {
     recording.discrete("configured-samples", &[data.modpara.nvmc_sample]);
     recording.discrete("requested-width", &[data.modpara.nsplit_size]);
     let mut rng = sfmt19937::Sfmt19937Rng::new(seed as u32);
+    let (seeded_words, seeded_cursor) = rng.state_snapshot();
+    recording.discrete("before-init-raw-rng", &seeded_words.map(i64::from));
+    recording.discrete("before-init-rng-cursor", &[seeded_cursor as i64]);
     init_parameter(&mut data, &mut rng);
     let initial = input.parent().unwrap().join("initial.def");
     if initial.is_file() && !enable_opt_trans {
@@ -314,11 +341,17 @@ fn issue179_state() {
             .collect::<Vec<_>>(),
     );
     recording.complex("initial-parameters", &parameters(&data));
+    let (initial_state, initial_cursor) = rng.state_snapshot();
+    recording.discrete("initial-raw-rng", &initial_state.map(i64::from));
+    recording.discrete("initial-rng-cursor", &[initial_cursor as i64]);
     let steps = std::env::var("MPI179_STEPS")
         .unwrap_or_else(|_| "1".into())
         .parse::<i64>()
         .unwrap();
-    assert!((1..=3).contains(&steps));
+    assert!(
+        matches!(steps, 1..=3 | 20),
+        "prefix1/2/3 or long baseline20 required"
+    );
     data.modpara.nsr_opt_itr_step = steps;
     data.modpara.nsr_opt_itr_smp = steps;
     recording.discrete("steps", &[steps]);
@@ -343,9 +376,11 @@ fn issue179_state() {
     }
     let callback_calls = Cell::new(0_i64);
     let callback_errors = Cell::new(0_i64);
+    let last_synchronized_parameters = RefCell::new(parameters(&data));
     let mut callback = |step, data: &mut mvmc_core::ExpertModeData, _, _| {
         callback_calls.set(callback_calls.get() + 1);
         recording.complex(&format!("sr-step-{step}"), &parameters(data));
+        *last_synchronized_parameters.borrow_mut() = parameters(data);
         recording.step.set(step + 1);
         *recording.complex_call.borrow_mut() = 0;
         *recording.real_call.borrow_mut() = 0;
@@ -376,6 +411,26 @@ fn issue179_state() {
         },
     );
     let trace = mvmc_core::sampling::driver::trace::finish();
+    if result
+        .as_ref()
+        .is_err_and(|reason| reason.contains("direct SR failed"))
+    {
+        let bits = |values: &[Complex64]| {
+            values
+                .iter()
+                .map(|z| (z.re.to_bits(), z.im.to_bits()))
+                .collect::<Vec<_>>()
+        };
+        recording.complex(
+            "failed-last-synchronized-parameters",
+            &last_synchronized_parameters.borrow(),
+        );
+        recording.complex("failed-return-parameters", &parameters(&data));
+        assert_eq!(
+            bits(&parameters(&data)),
+            bits(&last_synchronized_parameters.borrow())
+        );
+    }
     drop(cg_guard);
     let mut cg_file = File::create(dir.join(format!("cg-rank-{}.txt", world.rank()))).unwrap();
     writeln!(cg_file, "d:events {}", cg_recording.events.borrow().len()).unwrap();
@@ -427,6 +482,26 @@ fn issue179_state() {
     for (index, system) in sr_systems.iter().enumerate() {
         let key = format!("sr-system-{index:06}");
         recording.discrete(&format!("{key}-dimension"), &[system.dimension as i64]);
+        recording.discrete(&format!("{key}-triangle"), &[system.triangle as i64]);
+        // Direct SR solves a single RHS. Presence flags distinguish an absent
+        // POTRS invocation from a successful invocation returning INFO=0.
+        recording.discrete(&format!("{key}-nrhs"), &[1]);
+        recording.discrete(
+            &format!("{key}-factor-info"),
+            &system
+                .factor_info
+                .map(i64::from)
+                .into_iter()
+                .collect::<Vec<_>>(),
+        );
+        recording.discrete(
+            &format!("{key}-solve-info"),
+            &system
+                .solve_info
+                .map(i64::from)
+                .into_iter()
+                .collect::<Vec<_>>(),
+        );
         recording.discrete(
             &format!("{key}-not-solved"),
             &[match system.not_solved {
@@ -522,6 +597,10 @@ fn issue179_state() {
         worker_execution.worker_entries, worker_execution.distinct_workers, worker_execution.worker_ids,
     ).unwrap();
     recording.discrete("status", &[i64::from(result.is_err())]);
+    recording.discrete(
+        "main-thread-collective-calls",
+        &[recording.collective_calls.get() as i64],
+    );
     recording.discrete("chain-samples", &[data.modpara.nvmc_sample]);
     recording.discrete("ele_idx", &state.electron_config.ele_idx);
     recording.discrete("ele_cfg", &state.electron_config.ele_cfg);
@@ -541,7 +620,11 @@ fn issue179_state() {
         ],
     );
     let mut final_words = [0; 624];
+    let (raw_state, cursor) = rng.state_snapshot();
+    recording.discrete("raw-rng", &raw_state.map(i64::from));
+    recording.discrete("rng-cursor", &[cursor as i64]);
     rng.dump_rand32(&mut final_words);
+    assert_eq!(rng.state_snapshot(), (raw_state, cursor));
     recording.discrete("rng", &final_words.map(i64::from));
     if failure_rank.is_some() {
         assert!(result.unwrap_err().contains("callback"));

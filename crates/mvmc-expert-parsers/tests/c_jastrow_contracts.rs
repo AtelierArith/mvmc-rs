@@ -194,3 +194,20 @@ fn malformed_jastrow_scans_and_unsafe_indices_have_bounded_rust_errors() {
     }
     assert!(parse_jastrow_content("0 1 0\n1 0 0\n0 1\n", 2).is_err());
 }
+
+#[test]
+fn original_julia_bare_jastrow_values_are_not_indexed_definitions() {
+    // M0265–0268: original test_parsers.jl:177–184, source SHA256
+    // 8336b21bca7627749e27c588e537e30c20ea4a6383733bae3e93a44461980185.
+    // Julia accepts two coefficient-value rows; Rust requires C-style headers,
+    // complete directed integer mappings and declared flags for Nsite=3.
+    // This intentional supported-input difference does not prove the original
+    // Julia success assertions or native C behavior for malformed integer scans.
+    let original = "    0 1 0.1\n    1 2 0.1\n";
+    let error = parse_jastrow_content(original, 3).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert_eq!(
+        error.to_string(),
+        "Jastrow definition requires five header lines"
+    );
+}

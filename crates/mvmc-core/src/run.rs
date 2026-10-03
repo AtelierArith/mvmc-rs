@@ -960,7 +960,11 @@ pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ?Sized>(
     config: RunConfig,
     reducer: &R,
 ) -> Result<RunSummary, String> {
-    validate_run_options(&config)?;
+    collective_result(
+        validate_run_options(&config),
+        reducer,
+        "optimization configuration",
+    )?;
     let flags = TimerEnv::from_env();
     if flags.legacy_warning() {
         eprintln!("warning: MVMC_TIMER is deprecated; use MVMC_C_TIMER=1 for the C-compatible zvo_CalcTimer.dat timer.");
