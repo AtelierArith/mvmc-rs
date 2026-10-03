@@ -31,12 +31,26 @@ finite value. Signed zeros are numerically equivalent. Literal parsing and
 copy/restoration contracts can retain exact representations independently of
 arithmetic comparisons.
 
-The following remain exact: seed resolution, SFMT state and full 624-word
-blocks, RNG float conversion, draw order/count, proposals, acceptance,
-configurations/spins/occupancy, projection counters, parameter indices,
-flags, dimensions and status codes. Runner checkpoints check saved state and
-RNG before numerical values. Numerical bounds never authorize reseeding,
-averaging trajectories or substituting Rust-generated expectations.
+Seed resolution, RNG initialization/state, full 624-word generator blocks,
+float conversion and generation order/count for a fixed control path remain
+exact and are tested independently. Indices, flags, dimensions and discrete
+input contracts remain exact.
+
+General mathematical functions and changes in addition order may introduce
+small, justified numerical differences. If such a difference changes a Monte
+Carlo acceptance branch, subsequent proposals, saved configurations, solver
+termination and final RNG state may differ across implementations/platforms.
+These long-run differences are permitted after locating the first numerical
+divergence; they do not permit a different RNG algorithm or missing draws on
+an otherwise identical control path. Do not reseed or average runs to hide a
+kernel defect.
+
+Short controlled runner prefixes retain independent reference checkpoints.
+Long prefixes (20 SR steps) instead verify repeatability with the
+same input and seed within the implementation: discrete saved state and the
+next complete RNG block agree exactly, output shapes and files agree, and
+computed output fields use explicit numerical bounds. Independent fixed-input
+kernel, solver residual and RNG tests remain the numerical correctness gates.
 
 ## Inventory and budgets
 
@@ -59,7 +73,7 @@ range reduction, scaling and cache fingerprints is unchanged.
 | Sampled SR OO/HO and derivative stores | `1e-12` absolute and relative; Gram reductions also use sample-count-dependent epsilon budgets |
 | Fixed direct SR | Matrix/factor/solution regression budgets depend on dimension; independently check the solution against the original unfactored covariance/gradient |
 | Fixed CG prefixes | Iteration/GEMV-length epsilon budgets, plus an independently materialized covariance backward-residual check; forced prefix limits and tested termination controls remain exact |
-| Up to 50 SR runner updates/history | `1e-11` absolute and relative for computed parameters/energy; independent platform checkpoints preserve exact RNG and configurations |
+| Short SR prefixes / long-run repeatability | `1e-11` absolute and relative for computed parameters/energy; short independent checkpoints and long same-implementation discrete/RNG repeatability |
 | CLI numerical output | `1e-12` absolute and relative, exact indexed coordinates and parameter headers |
 
 These are regression envelopes for the supplied inputs, not forward-error

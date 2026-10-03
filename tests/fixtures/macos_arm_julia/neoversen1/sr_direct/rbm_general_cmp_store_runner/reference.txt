@@ -1,0 +1,5 @@
+# Mixed reference: Julia 1.13.1 runner/solver, archived Julia AVX2 bilinear reduction and system LP64 OpenBLAS via an ABI adapter; not unmodified Julia or full C executable/MPI parity.
+# macOS 27.0.1; arch=aarch64; Julia CPU=apple-m4; Manifest-v1.13.toml sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+# Independent Julia solver with ABI-only LP64 system BLAS adapter; OpenBLAS 0.3.34 DYNAMIC_ARCH NO_AFFINITY USE_OPENMP neoversen1 MAX_THREADS=56; core=neoversen1; threads=1; bridge sha256=c9d895c0719804602c58bb94e88ebb68094821e425ef5746bd17635bdd1e8586
+# Julia 1.13.1; LBTConfig([ILP64] libopenblas64_.0.3.30.dylib); threads=1; seed=1
+# Julia-mVMC 8bb1b9e; numerical sources c2ea432; nonzero InRBM overlays; rbm_general_cmp

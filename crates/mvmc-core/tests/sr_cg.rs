@@ -1,4 +1,6 @@
 //! Sampled SR operator contracts from Julia test_unit_stochastic_opt.jl.
+#[path = "../../../tests/support/julia_fixture.rs"]
+mod julia_fixture;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 use mvmc_core::sr_cg::{sequential_dot, SampledSrOperator};
@@ -203,20 +205,17 @@ fn cg_preserves_julia_zero_gradient_and_breakdown_iteration_counts() {
 // Iteration counts and refresh limits remain exact.
 #[test]
 fn cg_fixed_input_matches_julia_through_residual_refresh() {
-    for (name, fixture) in [
-        (
-            "real",
-            include_str!("../../../tests/fixtures/sr_cg/real.txt"),
-        ),
-        (
-            "complex",
-            include_str!("../../../tests/fixtures/sr_cg/complex.txt"),
-        ),
-        (
-            "sampled complex",
-            include_str!("../../../tests/fixtures/sr_cg/sampled_complex.txt"),
-        ),
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    for (name, file) in [
+        ("real", "real.txt"),
+        ("complex", "complex.txt"),
+        ("sampled complex", "sampled_complex.txt"),
     ] {
+        let fixture = julia_fixture::read_text(julia_fixture::fixture_path(
+            &fixtures,
+            format!("sr_cg/{file}"),
+        ))
+        .unwrap();
         let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
         let shape: Vec<usize> = lines
             .next()

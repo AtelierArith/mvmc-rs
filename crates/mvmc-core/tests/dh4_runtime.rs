@@ -120,7 +120,7 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
                 &(declared_output(
                     &data,
                     name,
-                    std::fs::read_to_string(native_fsz_fixture::resolve(
+                    julia_fixture::read_text(native_fsz_fixture::resolve(
                         julia_fixture::fixture_path(
                             &root,
                             reference

@@ -2,6 +2,7 @@
 """Optional native clang complex division; pure-Rust Cargo tests use fixtures."""
 import argparse
 import hashlib
+import platform
 from pathlib import Path
 import random
 import subprocess
@@ -51,7 +52,15 @@ def main():
                                   else 'llvm_divdc3.c')
     provenance = '; '.join(f'{path.name} sha256={hashlib.sha256(path.read_bytes()).hexdigest()}'
                            for path in (source, runtime))
+    arm = kind == 'apple' and platform.machine() == 'arm64'
     inputs = list(cases())
+    if arm:
+        # Self quotients expose fused numerator cancellation in native ARM
+        # compiler-rt, which differs from the historical Intel runtime.
+        inputs += [
+            '3fd3333333333333 3fe6666666666666 3fd3333333333333 3fe6666666666666',
+            '3ff3c0ca428c59fb 3fd41b2f769cf0e0 3ff3c0ca428c59fb 3fd41b2f769cf0e0',
+        ]
     with tempfile.TemporaryDirectory(prefix='mvmc-c-division-') as directory:
         exe = Path(directory)/'probe'
         subprocess.run(native_compiler() + ['-O0','-ffp-contract=off',str(source),'-o',str(exe)],check=True)
@@ -64,6 +73,17 @@ def main():
         output = '# Native GNU complex quotient; ' + native_provenance(kind) + '; normal/subnormal/range/nonfinite inputs; NaN classification, all other bits exact; ' + provenance + '\n'
     output += '\n'.join(row+' '+value for row,value in zip(inputs,actual))+'\n'
     target = native_target(root, 'c_complex_division', kind)
+    if arm:
+        compiler = native_compiler()
+        version = subprocess.check_output(compiler + ['--version'], text=True).splitlines()[0]
+        runtime_dir = subprocess.check_output(compiler + ['--print-runtime-dir'], text=True).strip()
+        archive = Path(runtime_dir) / 'libclang_rt.osx.a'
+        output = ('# Native macOS ARM64 C division; ' + version +
+                  '; caller -O0 -ffp-contract=off; compiler-rt contracts numerator/denominator.\n' +
+                  '# libclang_rt.osx.a SHA-256 ' + hashlib.sha256(archive.read_bytes()).hexdigest() + '\n' +
+                  '# complex_division.c SHA-256 ' + hashlib.sha256(source.read_bytes()).hexdigest() + '\n' +
+                  '\n'.join(row+' '+value for row,value in zip(inputs,actual))+'\n')
+        target = root / 'tests/fixtures/interall/c_complex_division_macos_arm.txt'
     if args.write:
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
