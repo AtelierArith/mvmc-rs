@@ -25,23 +25,41 @@ jobs:
   plan:
     name: Validate explicit dispatch scope (no numerical execution)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.scope.outputs.matrix }}
     steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
       - id: scope
         env:
           SCOPE: ${{ inputs.family }}
+          PLAN: ${{ runner.temp }}/optional-plan.json
+          EXPECTED_HEAD: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_ID: ${{ github.workflow_ref }}
         run: |
-          case "$SCOPE" in
-            general|lanczos|mpi|thread) printf 'matrix={"family":["%s"]}\n' "$SCOPE" >> "$GITHUB_OUTPUT" ;;
-            all) printf 'matrix={"family":["general","lanczos","mpi","thread"]}\n' >> "$GITHUB_OUTPUT" ;;
-            *) exit 1 ;;
-          esac
+          uv run --no-project python scripts/aggregate_optional_gates_183.py plan \
+            --scope "$SCOPE" --head "$EXPECTED_HEAD" --run-id "$RUN_ID" \
+            --attempt "$ATTEMPT" --workflow "$WORKFLOW_ID" --output "$PLAN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: optional-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/optional-plan.json
+          if-no-files-found: error
   bounded:
     needs: plan
     name: Explicit ${{ matrix.family }} (Linux x86_64)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: never
+      FAMILY: ${{ matrix.family }}
+      EXPECTED_HEAD: ${{ github.sha }}
+      RUN_ID: ${{ github.run_id }}
+      ATTEMPT: ${{ github.run_attempt }}
+      WORKFLOW_ID: ${{ github.workflow_ref }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -49,6 +67,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
+      - name: Initialize exclusive evidence paths
+        run: |
+          printf 'EVIDENCE=%s/optional-%s-%s-%s\n' "$RUNNER_TEMP" "$FAMILY" "$RUN_ID" "$ATTEMPT" >> "$GITHUB_ENV"
+          printf 'PACKAGE=%s/optional-package-%s-%s-%s\n' "$RUNNER_TEMP" "$FAMILY" "$RUN_ID" "$ATTEMPT" >> "$GITHUB_ENV"
+          printf 'PLAN=%s/dispatch-plan/optional-plan.json\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: optional-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dispatch-plan
       - uses: ./.github/actions/setup-rust-ci
         with:
           arch: X64
@@ -57,17 +84,76 @@ jobs:
           tools: nextest
       - uses: astral-sh/setup-uv@v6
       - name: Infrastructure tests (not model execution)
-        run: uv run --no-project python scripts/test_optional_gates_183.py
+        run: |
+          uv run --no-project python scripts/test_optional_gates_183.py
+          uv run --no-project python scripts/test_optional_gate_aggregation_183.py
       - name: Execute ONLY requested bounded gates
         env:
-          FAMILY: ${{ matrix.family }}
+          CARGO_TERM_COLOR: never
           CARGO_TARGET_DIR: ${{ github.workspace }}/target/optional-${{ matrix.family }}
-          EVIDENCE: ${{ runner.temp }}/optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: uv run --no-project python scripts/run_optional_gates_183.py "$FAMILY" "$EVIDENCE"
+      - name: Seal job context even on failure (not a numerical PASS)
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          uv run --no-project python scripts/aggregate_optional_gates_183.py seal \
+            --plan "$PLAN" --family "$FAMILY" --head "$EXPECTED_HEAD" \
+            --run-id "$RUN_ID" --attempt "$ATTEMPT" --workflow "$WORKFLOW_ID" \
+            --evidence "$EVIDENCE" --job-status "$JOB_STATUS" --output "$PACKAGE"
       - name: Retain evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/optional-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: optional-family-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/optional-package-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+
+  aggregate:
+    name: Validate bounded evidence ledger (not full coverage)
+    needs: [plan, bounded]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_HEAD: ${{ github.sha }}
+      RUN_ID: ${{ github.run_id }}
+      ATTEMPT: ${{ github.run_attempt }}
+      WORKFLOW_ID: ${{ github.workflow_ref }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Download this attempt's plan
+        id: download-plan
+        uses: actions/download-artifact@v4
+        with:
+          name: optional-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aggregate-plan
+      - name: Download only this run/attempt's family packages
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          pattern: optional-family-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aggregate-packages
+          merge-multiple: false
+      - name: Fail closed on absent/failed/inconsistent evidence
+        if: always()
+        env:
+          PLAN: ${{ runner.temp }}/aggregate-plan/optional-plan.json
+          PACKAGES: ${{ runner.temp }}/aggregate-packages
+          RESULT: ${{ runner.temp }}/optional-aggregate.json
+        run: |
+          uv run --no-project python scripts/aggregate_optional_gates_183.py aggregate \
+            --plan "$PLAN" --head "$EXPECTED_HEAD" --run-id "$RUN_ID" \
+            --attempt "$ATTEMPT" --workflow "$WORKFLOW_ID" \
+            --packages "$PACKAGES" --output "$RESULT"
+      - name: Retain aggregation failures too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-aggregate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/optional-aggregate.json
           if-no-files-found: error
