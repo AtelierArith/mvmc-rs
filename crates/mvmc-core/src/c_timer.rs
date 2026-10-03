@@ -28,6 +28,11 @@ impl<const ENABLED: bool> Default for CTimer<ENABLED> {
     }
 }
 impl<const ENABLED: bool> CTimer<ENABLED> {
+    /// Query the type-level switch, matching Julia's enabled/disabled timer dispatch.
+    pub const fn enabled(&self) -> bool {
+        ENABLED
+    }
+
     /// Construct zeroed timer storage and a monotonic clock origin.
     pub fn new() -> Self {
         Self {
@@ -66,6 +71,8 @@ impl<const ENABLED: bool> CTimer<ENABLED> {
         }
     }
     /// Start a diagnostic section only when its family is enabled.
+    /// Passing a resolved environment predicate selects the parent timer or a no-op,
+    /// corresponding to Julia's `ctimer_if_env` without a disabled singleton borrow.
     #[inline(always)]
     pub fn start_diag(&mut self, id: usize, enabled: bool) {
         if ENABLED && enabled {
@@ -112,10 +119,12 @@ impl<const ENABLED: bool> CTimer<ENABLED> {
         }
     }
     /// Write the upstream optimization report. The directory must already exist.
+    /// Pass `"zvo"` for the original Julia default prefix.
     pub fn write_para_opt(&self, dir: &Path, prefix: &str) -> io::Result<PathBuf> {
         self.write_lines(dir, prefix, "CalcTimer", PARA_OPT_LINES)
     }
     /// Write the upstream diagnostic report, including uninstrumented zero slots.
+    /// Pass `"zvo"` for the original Julia default prefix.
     pub fn write_diag(&self, dir: &Path, prefix: &str) -> io::Result<PathBuf> {
         self.write_lines(dir, prefix, "CalcTimerDiag", DIAG_LINES)
     }
