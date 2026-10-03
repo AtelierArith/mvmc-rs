@@ -4,7 +4,7 @@ use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 
-use super::{calculate_ip_complex, green_func1_fsz};
+use super::{calculate_ip_complex, green_func1_fsz_impl};
 use crate::sampling::projection::{log_proj_ratio, update_proj_cnt};
 use crate::sampling::updates::calculate_new_pf_m_two_fsz_complex_flat;
 use crate::state::VmcOptimizationState;
@@ -33,6 +33,94 @@ pub fn green_func2_fsz(
     ele_proj_cnt: &[i64],
     ele_spn: &[i64],
 ) -> Complex64 {
+    green_func2_fsz_impl::<false>(
+        ri,
+        rj,
+        rk,
+        rl,
+        s,
+        t,
+        u,
+        v,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+    )
+}
+
+/// Native C complex FSZ four-fermion kernel with independent spin labels.
+///
+/// Dispatches `GreenFunc2_fsz` when each pair conserves spin and
+/// `GreenFunc2_fsz2` otherwise. C projection and quotient arithmetic are used.
+/// No RBM factor exists in this upstream kernel.
+/// Panics if RBM terms are supplied, before evaluating any operator.
+#[allow(clippy::too_many_arguments)]
+pub fn green_func2_fsz_complex(
+    ri: usize,
+    rj: usize,
+    rk: usize,
+    rl: usize,
+    s: u8,
+    t: u8,
+    u: u8,
+    v: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+) -> Complex64 {
+    assert!(
+        !data.has_rbm_terms(),
+        "native C FSZ Green kernel does not support RBM"
+    );
+    green_func2_fsz_impl::<true>(
+        ri,
+        rj,
+        rk,
+        rl,
+        s,
+        t,
+        u,
+        v,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn green_func2_fsz_impl<const C_KERNEL: bool>(
+    ri: usize,
+    rj: usize,
+    rk: usize,
+    rl: usize,
+    s: u8,
+    t: u8,
+    u: u8,
+    v: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+) -> Complex64 {
     let ns = data.modpara.nsite as usize;
     let ne = data.modpara.nelec as usize;
     let nq = state.slater_matrix.pf_m.len();
@@ -42,7 +130,7 @@ pub fn green_func2_fsz(
     let xl = rl + v as usize * ns;
     let zero = Complex64::new(0.0, 0.0);
     let one = |i, j, a, b, state: &mut VmcOptimizationState| {
-        green_func1_fsz(
+        green_func1_fsz_impl::<C_KERNEL>(
             i,
             j,
             a,
@@ -57,6 +145,57 @@ pub fn green_func2_fsz(
             ele_spn,
         )
     };
+    if C_KERNEL && s == t && u == v {
+        // GreenFunc2_fsz has its own reductions. Their order also preserves
+        // the native signs of zero for blocked coincident-index branches.
+        if s == u {
+            if rk == rl {
+                return if ele_num[xk] == 0 {
+                    zero
+                } else {
+                    one(ri, rj, s, s, state)
+                };
+            } else if rj == rl {
+                return zero;
+            } else if ri == rl {
+                return if ele_num[xi] == 0 {
+                    zero
+                } else if rj == rk {
+                    Complex64::new((1 - ele_num[xj]) as f64, 0.0)
+                } else {
+                    -one(rk, rj, s, s, state)
+                };
+            } else if rj == rk {
+                return if ele_num[xj] == 1 {
+                    zero
+                } else {
+                    one(ri, rl, s, s, state)
+                };
+            } else if ri == rk {
+                return zero;
+            } else if ri == rj {
+                return if ele_num[xi] == 0 {
+                    zero
+                } else {
+                    one(rk, rl, s, s, state)
+                };
+            }
+        } else if rk == rl {
+            return if ele_num[xk] == 0 {
+                zero
+            } else if ri == rj {
+                Complex64::new(ele_num[xi] as f64, 0.0)
+            } else {
+                one(ri, rj, s, s, state)
+            };
+        } else if ri == rj {
+            return if ele_num[xi] == 0 {
+                zero
+            } else {
+                one(rk, rl, u, u, state)
+            };
+        }
+    }
     if xi == xj {
         if xj == xk {
             return if xk == xl {
@@ -136,12 +275,12 @@ pub fn green_func2_fsz(
     num[xj] = 0;
     num[xi] = 1;
     update_proj_cnt(rj as i64, ri as i64, s, &mut final_cnt, &mid, &num, data);
-    let ratio = super::with_rbm_ratio(
-        julia_exp(log_proj_ratio(&final_cnt, ele_proj_cnt, data)),
-        &num,
-        ele_num,
-        data,
-    );
+    let log_ratio = log_proj_ratio(&final_cnt, ele_proj_cnt, data);
+    let ratio = if C_KERNEL {
+        Complex64::new(log_ratio.exp(), 0.0)
+    } else {
+        super::with_rbm_ratio(julia_exp(log_ratio), &num, ele_num, data)
+    };
     let mut pf = vec![zero; nq];
     calculate_new_pf_m_two_fsz_complex_flat(
         ml,
@@ -161,5 +300,9 @@ pub fn green_func2_fsz(
         ne,
     );
     let numerator = ratio * calculate_ip_complex(&pf, 0, nq, data);
-    crate::julia_complex::divide(numerator, ip).conj()
+    if C_KERNEL {
+        crate::c_complex::divide(numerator, ip).conj()
+    } else {
+        crate::julia_complex::divide(numerator, ip).conj()
+    }
 }

@@ -1,7 +1,7 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
 use mvmc_core::observables::{
-    calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func2,
-    green_func2_complex, green_func2_fsz, green_func2_real,
+    calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func1_fsz_complex,
+    green_func2, green_func2_complex, green_func2_fsz, green_func2_fsz_complex, green_func2_real,
 };
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
@@ -588,6 +588,166 @@ fn check_normal_green(factor: &str) {
     if factor.is_empty() {
         assert!(pairhop.next().is_none());
     }
+}
+
+#[test]
+fn native_fsz_green_rejects_rbm_before_density_reductions() {
+    let mut data = green_data(true);
+    add_rbm_green_model(&mut data);
+    data.i_flg_orbital_general = 1;
+    let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, true, true);
+    let idx = [0, 2, 1, 3];
+    let cfg = [0, -1, 1, -1, -1, 2, -1, 3];
+    let num = [1, 0, 1, 0, 0, 1, 0, 1];
+    let cnt = [0, 0];
+    let spins = [0, 0, 1, 1];
+    let ip = Complex64::new(1.0, 0.0);
+    // Even a density shortcut must not silently discard a requested RBM.
+    for two_body in [false, true] {
+        let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if two_body {
+                green_func2_fsz_complex(
+                    0, 0, 0, 0, 0, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                )
+            } else {
+                green_func1_fsz_complex(
+                    0, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                )
+            }
+        }))
+        .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<&str>(),
+            Some(&"native C FSZ Green kernel does not support RBM")
+        );
+    }
+}
+
+#[test]
+fn exhaustive_fsz_green_kernels_match_native_c_bits() {
+    let mut lines = include_str!("../../../tests/fixtures/interall/c_fsz_green.txt")
+        .lines()
+        .filter(|line| !line.starts_with('#'));
+    let mut mismatches = 0;
+    let mut first = None;
+    for case in 0..12 {
+        let complex = lines.next().unwrap() == "1";
+        let idx = integers(lines.next().unwrap());
+        let spins = integers(lines.next().unwrap());
+        let cfg = integers(lines.next().unwrap());
+        let num = integers(lines.next().unwrap());
+        let cnt = integers(lines.next().unwrap());
+        let parameters = complex_bits(lines.next().unwrap());
+        let mut data = green_data(complex);
+        data.gutzwiller_terms[0].value = parameters[0];
+        data.jastrow_terms[0].value = parameters[1];
+        data.i_flg_orbital_general = 1;
+        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, complex, true);
+        let slater = complex_bits(lines.next().unwrap());
+        state
+            .slater_matrix
+            .slater_elm
+            .as_mut_slice()
+            .copy_from_slice(&slater);
+        let pf = complex_bits(lines.next().unwrap());
+        state.slater_matrix.pf_m.copy_from_slice(&pf);
+        let inv = complex_bits(lines.next().unwrap());
+        for qp in 0..2 {
+            state.slater_matrix.inv_m.as_mut_slice()[qp * 17..qp * 17 + 16]
+                .copy_from_slice(&inv[qp * 16..qp * 16 + 16]);
+        }
+        let ip = complex_bits(lines.next().unwrap())[0];
+        let before = state.slater_matrix.inv_m.as_slice().to_vec();
+        let expected_one = complex_bits(lines.next().unwrap());
+        let expected_two = complex_bits(lines.next().unwrap());
+        assert_eq!(expected_one.len(), 64);
+        assert_eq!(expected_two.len(), 4096);
+        let mut check = |actual: Complex64, expected: Complex64, operator: Vec<usize>| {
+            let actual_bits = [actual.re.to_bits(), actual.im.to_bits()];
+            let expected_bits = [expected.re.to_bits(), expected.im.to_bits()];
+            if actual_bits != expected_bits {
+                mismatches += 1;
+                first.get_or_insert_with(|| format!(
+                    "case={case}, operator={operator:?}, actual={actual_bits:x?}, C={expected_bits:x?}"
+                ));
+            }
+        };
+        let mut index = 0;
+        for s in 0..2 {
+            for t in 0..2 {
+                for ri in 0..4 {
+                    for rj in 0..4 {
+                        check(
+                            green_func1_fsz_complex(
+                                ri, rj, s, t, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                            ),
+                            expected_one[index],
+                            vec![ri, rj, s as usize, t as usize],
+                        );
+                        index += 1;
+                    }
+                }
+            }
+        }
+        let mut index = 0;
+        let mut interall_energy = Complex64::new(0.0, 0.0);
+        let mut duplicate_contributions = [Complex64::new(0.0, 0.0); 2];
+        for s in 0..2 {
+            for t in 0..2 {
+                for u in 0..2 {
+                    for v in 0..2 {
+                        for ri in 0..4 {
+                            for rj in 0..4 {
+                                for rk in 0..4 {
+                                    for rl in 0..4 {
+                                        let actual = green_func2_fsz_complex(
+                                            ri, rj, rk, rl, s, t, u, v, ip, &data, &mut state,
+                                            &idx, &cfg, &num, &cnt, &spins,
+                                        );
+                                        check(
+                                            actual,
+                                            expected_two[index],
+                                            vec![
+                                                ri, rj, rk, rl, s as usize, t as usize, u as usize,
+                                                v as usize,
+                                            ],
+                                        );
+                                        let coefficient = Complex64::new(
+                                            (index % 7) as f64 / 16.0 - 3.0 / 16.0,
+                                            (index % 11) as f64 / 32.0 - 5.0 / 32.0,
+                                        );
+                                        let contribution = coefficient * actual;
+                                        interall_energy += contribution;
+                                        if index == 73 {
+                                            duplicate_contributions[0] = contribution;
+                                        }
+                                        if index == 3072 {
+                                            duplicate_contributions[1] = contribution;
+                                        }
+                                        index += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for contribution in duplicate_contributions {
+            interall_energy += contribution;
+        }
+        let expected_energy = complex_bits(lines.next().unwrap())[0];
+        assert_eq!(
+            [interall_energy.re.to_bits(), interall_energy.im.to_bits()],
+            [expected_energy.re.to_bits(), expected_energy.im.to_bits()],
+            "case={case} native C serial InterAll sum",
+        );
+        assert_eq!(state.slater_matrix.inv_m.as_slice(), before);
+        assert_eq!(state.slater_matrix.pf_m, pf);
+        assert_eq!(state.slater_matrix.slater_elm.as_slice(), slater);
+    }
+    assert!(lines.next().is_none());
+    assert_eq!(mismatches, 0, "first native C mismatch: {first:?}");
 }
 
 #[test]

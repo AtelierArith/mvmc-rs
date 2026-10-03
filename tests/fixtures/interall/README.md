@@ -314,3 +314,42 @@ These probes run Apple clang 17 with `-O0 -ffp-contract=off`, supply one-process
 operators and ordered energy contributions, not complete C initialization,
 FSZ kernels, general Lanczos moments, actual MPI execution or full sampling/SR
 trajectories. Those broader numerical checks remain separate under #23/#56.
+
+## Native C complex FSZ Green kernels
+
+`c_fsz_green.txt` contains 768 one-body and 49,152 four-fermion results from
+the actual `GreenFunc1_fsz`, `GreenFunc1_fsz2`, `GreenFunc2_fsz` and
+`GreenFunc2_fsz2` bodies, plus 12 input-order InterAll sums from the actual
+`calham_fsz.c` loop. Each sum includes 4,096 distinct operators and two
+duplicate terms. Source hashes and extraction boundaries are recorded in the
+optional toolbox excerpts; the probe uses clang 17, `-O0 -ffp-contract=off`,
+and single-process `MPI_COMM_SELF` overlap plumbing.
+
+The archived Julia fixture supplies only the Slater, Pfaffian, inverse and
+overlap input arrays. C supplies every expected Green and energy bit. Cases
+cover real and complex Slater inputs, unequal QP weights, three electron
+configurations (including imbalanced spins, reordered labels and double
+occupancy), and zero/nonzero real Gutzwiller/Jastrow parameters. Every native
+call must restore electron indices, spin labels and occupations. Rust checks
+every output bit, including signed zero, and preserves the Pfaffian/inverse
+and Slater inputs. The initial TDD test found 3,647 differences from the
+historical Julia kernels; the first was a complex quotient with no projection.
+
+The pure Rust `green_func1_fsz_complex` and `green_func2_fsz_complex` ports
+preserve C's distinct spin-conserving and spin-changing reduction order,
+platform projection exponential, Pfaffian update and scaled complex quotient.
+They reject RBM terms before any density shortcut because these native FSZ
+bodies have no RBM factor. The existing historical Julia helpers and fixtures
+remain available for their original regression checks.
+
+```sh
+uv run --no-project python scripts/check_fsz_green_c_parity.py
+cargo nextest run -p mvmc-core --test two_body_green -E 'test(native_fsz) | test(match_native_c_bits)'
+```
+
+This milestone ports and verifies the complex FSZ helper kernels. It does
+not yet route the FSZ production local-energy/measurement runner through
+them. That integration, the separate `locgrn_fsz_real.c` family, DH/RBM
+extensions and independent full C sampling/SR/MPI comparisons remain under
+#23/#56. Real Slater inputs here still use complex inverse/Pfaffian buffers;
+they are not proof of the C real FSZ family.

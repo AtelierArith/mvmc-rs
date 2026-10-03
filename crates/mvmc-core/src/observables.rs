@@ -32,7 +32,7 @@ use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
 
 mod fsz_green;
-pub use fsz_green::green_func2_fsz;
+pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex};
 
 /// Complete Julia's projection ratio with the RBM ratio for an operator move.
 /// Counters are rebuilt from occupations and current parameters, including saved walkers.
@@ -920,10 +920,81 @@ pub fn green_func1_fsz(
     ele_proj_cnt: &[i64],
     ele_spn: &[i64],
 ) -> Complex64 {
+    green_func1_fsz_impl::<false>(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+    )
+}
+
+/// Native C complex FSZ one-body kernel, including spin-changing hops.
+///
+/// Uses the supplied complex Pfaffians and inverses even for real Slater input.
+/// The C FSZ source has no RBM factor; its supported projection uses real parts.
+/// Panics if RBM terms are supplied, before evaluating any operator.
+#[allow(clippy::too_many_arguments)]
+pub fn green_func1_fsz_complex(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+) -> Complex64 {
+    assert!(
+        !data.has_rbm_terms(),
+        "native C FSZ Green kernel does not support RBM"
+    );
+    green_func1_fsz_impl::<true>(
+        ri,
+        rj,
+        spin_create,
+        spin_annihilate,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+        ele_spn,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn green_func1_fsz_impl<const C_KERNEL: bool>(
+    ri: usize,
+    rj: usize,
+    spin_create: u8,
+    spin_annihilate: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+    ele_spn: &[i64],
+) -> Complex64 {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     let n_qp_full = state.slater_matrix.pf_m.len();
-    if ip.norm() == 0.0 {
+    if !C_KERNEL && ip.norm() == 0.0 {
         return Complex64::new(0.0, 0.0);
     }
     let dst = ri + spin_create as usize * n_site;
@@ -948,7 +1019,7 @@ pub fn green_func1_fsz(
     my_ele_num[src] = 0;
     my_ele_num[dst] = 1;
 
-    let proj_ratio = if ri == rj {
+    let proj_ratio = if !C_KERNEL && ri == rj {
         1.0
     } else {
         update_proj_cnt(
@@ -960,14 +1031,19 @@ pub fn green_func1_fsz(
             &my_ele_num,
             data,
         );
-        julia_exp(crate::sampling::projection::log_proj_ratio(
-            &proj_new,
-            ele_proj_cnt,
-            data,
-        ))
+        let log_ratio = crate::sampling::projection::log_proj_ratio(&proj_new, ele_proj_cnt, data);
+        if C_KERNEL {
+            log_ratio.exp()
+        } else {
+            julia_exp(log_ratio)
+        }
     };
 
-    let proj_ratio = with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data);
+    let proj_ratio = if C_KERNEL {
+        Complex64::new(proj_ratio, 0.0)
+    } else {
+        with_rbm_ratio(proj_ratio, &my_ele_num, ele_num, data)
+    };
     let n_size = 2 * n_elec;
     let mut new_pf = vec![Complex64::new(0.0, 0.0); n_qp_full];
     calculate_new_pf_m2_fsz_complex_flat(
@@ -986,7 +1062,11 @@ pub fn green_func1_fsz(
         n_elec,
     );
     let numerator = proj_ratio * calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    crate::julia_complex::divide(numerator, ip).conj()
+    if C_KERNEL {
+        crate::c_complex::divide(numerator, ip).conj()
+    } else {
+        crate::julia_complex::divide(numerator, ip).conj()
+    }
 }
 
 /// FSZ local Hamiltonian, including general four-spin InterAll contributions.

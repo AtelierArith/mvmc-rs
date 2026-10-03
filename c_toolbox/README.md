@@ -22,6 +22,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
 | `interall_complex.c` | Actual complex Green/Pfaffian/projection/overlap kernels, 4,096 operators, four ordered InterAll sums and four PairHop sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_complex_c_parity.py` |
+| `fsz_green.c` | Actual complex FSZ Green/Pfaffian/projection/overlap kernels, 768 one-body and 49,152 two-body operators, 12 ordered InterAll sums with duplicates; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_fsz_green_c_parity.py` |
 | `complex_division.c` | Actual compiler complex division: 373 normal/subnormal/range/nonfinite cases; pure Rust scaled quotient port | `uv run --no-project python scripts/check_complex_division_c_parity.py` |
 | `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
@@ -50,7 +51,13 @@ Both complex probes use `-O0 -ffp-contract=off`. The Green probe supplies only
 single-process overlap plumbing and disabled RBM stubs that must never execute.
 It checks restoration of the electron buffers and preserves the actual C
 accumulator order, but does not establish full C initialization, sampling/SR,
-FSZ, Lanczos or MPI execution. Details: `tests/fixtures/interall/README.md`.
+FSZ runner, Lanczos or MPI execution. The separate FSZ probe extracts all four
+complex Green bodies and the actual serial `calham_fsz.c` InterAll loop. It uses
+three explicit-spin electron configurations with real/complex Slater inputs,
+two unequal QP weights and zero/nonzero real Gutzwiller/Jastrow parameters.
+Each call must restore electron indices, spins and occupations. The comparison
+does not invoke `locgrn_fsz_real.c`, RBM, DH or a complete sampling/SR runner.
+Details: `tests/fixtures/interall/README.md`.
 
 The InterAll reader driver overallocates bounded comparison storage to observe
 extra-row count errors without overrunning the declared production allocation.
