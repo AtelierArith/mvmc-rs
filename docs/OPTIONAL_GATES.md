@@ -196,3 +196,12 @@ Container `cargo clippy --locked -p mvmc-core --profile test-fast --features mpi
 (handle 41998, exit 0). Formatting and whitespace checks also passed.
 The full-workspace results above precede this MPI-only guard amendment;
 the amendment's feature-enabled branch was compiled and linted in the container.
+
+Final milestone validation reran
+`cargo nextest run --workspace --locked --cargo-profile test-fast --no-fail-fast --retries 0`
+on exact HEAD `7c90becd09b1e4cd620ac5102d9cf651bb06ba92`, reusing the isolated
+worktree target. Handle 18158, run `cc9e0718-ce92-40d9-b5a3-571c4582ed28`,
+exited 0: **550 passed, 15 skipped** (105.193 seconds, three slow tests).
+This final result includes the current gate implementation; the subsequent
+validation-record commit changes documentation only. MPI protocol validation
+is still not claimed.
