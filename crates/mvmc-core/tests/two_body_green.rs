@@ -1,7 +1,7 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
 use mvmc_core::observables::{
     calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func2,
-    green_func2_fsz,
+    green_func2_fsz, green_func2_real,
 };
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
@@ -135,9 +135,11 @@ fn check_pairhop_energy(
             is_complex: false,
         })
         .collect();
-    let actual = if spins.is_some() {
+    let actual = if spins.is_some() || mvmc_core::run::get_all_complex_flag(data) {
         local_energy(&equivalent, state)
     } else {
+        // Historical Julia real quotients differ from C's real Green kernel.
+        // Native C fixtures separately exercise the production InterAll path.
         let mut energy = local_energy(data, state);
         for t in &equivalent.inter_all_terms {
             energy += t.value
@@ -169,6 +171,98 @@ fn check_pairhop_energy(
 #[test]
 fn exhaustive_four_site_two_body_ratios_match_original_julia() {
     check_normal_green("");
+}
+
+#[test]
+fn normal_real_interall_matches_native_c_green_kernels_and_ordered_sums() {
+    let mut lines = include_str!("../../../tests/fixtures/interall/c_real_green.txt")
+        .lines()
+        .filter(|line| !line.starts_with('#'));
+    for case in 0..4 {
+        assert_eq!(lines.next().unwrap(), "0");
+        let idx = integers(lines.next().unwrap());
+        let cfg = integers(lines.next().unwrap());
+        let num = integers(lines.next().unwrap());
+        let cnt = integers(lines.next().unwrap());
+        let projection = complex_bits(lines.next().unwrap())[0];
+        let mut data = green_data(false);
+        data.gutzwiller_terms[0].value.re = projection.re;
+        data.jastrow_terms[0].value.re = projection.im;
+        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, false, false);
+        let slater = complex_bits(lines.next().unwrap());
+        let pf = complex_bits(lines.next().unwrap());
+        let inverse = complex_bits(lines.next().unwrap());
+        for (dst, src) in state
+            .slater_matrix
+            .slater_elm_real
+            .as_mut_slice()
+            .iter_mut()
+            .zip(slater)
+        {
+            *dst = src.re;
+        }
+        for (dst, src) in state.slater_matrix.pf_m_real.iter_mut().zip(&pf) {
+            *dst = src.re;
+        }
+        state.slater_matrix.pf_m.copy_from_slice(&pf);
+        for qp in 0..2 {
+            for i in 0..16 {
+                state.slater_matrix.inv_m_real.as_mut_slice()[qp * 17 + i] =
+                    inverse[qp * 16 + i].re;
+            }
+        }
+        let ip = complex_bits(lines.next().unwrap())[0];
+        let before_inverse = state.slater_matrix.inv_m_real.as_slice().to_vec();
+        for operator in 0..1024 {
+            let row: Vec<_> = lines.next().unwrap().split_whitespace().collect();
+            let ops: Vec<usize> = row[..6].iter().map(|v| v.parse().unwrap()).collect();
+            let value = complex_bits(&row[6..8].join(" "))[0];
+            let expected = u64::from_str_radix(row[8], 16).unwrap();
+            let actual = green_func2_real(
+                ops[0],
+                ops[1],
+                ops[2],
+                ops[3],
+                ops[4] as u8,
+                ops[5] as u8,
+                ip.re,
+                &data,
+                &mut state,
+                &idx,
+                &cfg,
+                &num,
+                &cnt,
+            );
+            assert_eq!(
+                actual.to_bits(),
+                expected,
+                "C case {case}, operator {operator}: {ops:?}"
+            );
+            data.inter_all_terms.push(InterAllTerm {
+                site0: ops[0] as i64,
+                spin0: ops[4] as i64,
+                site1: ops[1] as i64,
+                spin1: ops[4] as i64,
+                site2: ops[2] as i64,
+                spin2: ops[5] as i64,
+                site3: ops[3] as i64,
+                spin3: ops[5] as i64,
+                value,
+                is_complex: value.im != 0.0,
+            });
+        }
+        let expected_energy = u64::from_str_radix(lines.next().unwrap(), 16).unwrap();
+        let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
+        assert_eq!(
+            energy.re.to_bits(),
+            expected_energy,
+            "C ordered energy case {case}"
+        );
+        assert_eq!(energy.im.to_bits(), 0);
+        assert_eq!(state.slater_matrix.inv_m_real.as_slice(), before_inverse);
+        assert_eq!(state.slater_matrix.pf_m, pf);
+    }
+    assert!(lines.next().is_none());
 }
 #[test]
 fn exhaustive_dh2_normal_two_body_ratios_match_original_julia() {

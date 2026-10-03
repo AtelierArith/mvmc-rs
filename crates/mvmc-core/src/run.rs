@@ -2723,6 +2723,138 @@ mod callback_tests {
     }
 
     #[test]
+    fn normal_interall_equivalents_preserve_sr_parameters_samples_energy_and_rng() {
+        for complex in [false, true] {
+            for (cg, store) in [(0, 0), (0, 1), (1, 0)] {
+                let mut runs = Vec::new();
+                for interall in [false, true] {
+                    let (mut data, _, mut rng) = prepared_case(3, "hubbard_chain_real");
+                    data.modpara.nsrcg = cg;
+                    data.modpara.nstore_o = store;
+                    data.exchange_terms.clear();
+                    if complex {
+                        data.complex_flags = vec![1];
+                        for (i, value) in data.slater_params.iter_mut().enumerate() {
+                            value.im = (i + 1) as f64 / 32.0;
+                        }
+                        // PairHop and InterAll evaluate the same complex
+                        // operators in the same position after Transfer.
+                        data.pair_hop_terms = [
+                            (0, 1, 0.3),
+                            (1, 0, 0.3),
+                            (2, 3, -0.125),
+                            (3, 2, -0.125),
+                            (0, 1, 0.0625),
+                        ]
+                        .into_iter()
+                        .map(|(site1, site2, value)| mvmc_expert_parsers::PairHopTerm {
+                            site1,
+                            site2,
+                            value,
+                        })
+                        .collect();
+                        if interall {
+                            data.inter_all_terms = data
+                                .pair_hop_terms
+                                .iter()
+                                .map(|term| mvmc_expert_parsers::InterAllTerm {
+                                    site0: term.site1,
+                                    spin0: 0,
+                                    site1: term.site2,
+                                    spin1: 0,
+                                    site2: term.site1,
+                                    spin2: 1,
+                                    site3: term.site2,
+                                    spin3: 1,
+                                    value: Complex64::new(term.value, 0.0),
+                                    is_complex: false,
+                                })
+                                .collect();
+                            data.pair_hop_terms.clear();
+                        }
+                    } else {
+                        // Density reductions give an exact real identity
+                        // independently of historical Julia quotient order.
+                        data.transfer_terms.clear();
+                        data.coulomb_inter_terms.clear();
+                        data.hund_terms.clear();
+                        data.coulomb_intra_terms = [(0, 0.375), (1, -0.25), (2, 0.125)]
+                            .into_iter()
+                            .map(|(site, value)| mvmc_expert_parsers::CoulombIntraTerm {
+                                site,
+                                value,
+                            })
+                            .collect();
+                        if interall {
+                            data.inter_all_terms = data
+                                .coulomb_intra_terms
+                                .iter()
+                                .map(|term| mvmc_expert_parsers::InterAllTerm {
+                                    site0: term.site,
+                                    spin0: 0,
+                                    site1: term.site,
+                                    spin1: 0,
+                                    site2: term.site,
+                                    spin2: 1,
+                                    site3: term.site,
+                                    spin3: 1,
+                                    value: Complex64::new(term.value, 0.0),
+                                    is_complex: false,
+                                })
+                                .collect();
+                            data.coulomb_intra_terms.clear();
+                        }
+                    }
+                    sync_modified_parameter(&mut data, true);
+                    let mut state = state_from_data(&data);
+                    let mut records = Vec::new();
+                    let directory = fresh_output_directory().unwrap();
+                    let mut callback =
+                        |step, data: &mut ExpertModeData, energy: Complex64, info| {
+                            let parameters: Vec<_> = data
+                                .projection_parameters()
+                                .iter()
+                                .chain(&data.slater_params)
+                                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+                                .collect();
+                            records.push((
+                                step,
+                                energy.re.to_bits(),
+                                energy.im.to_bits(),
+                                info,
+                                parameters,
+                            ));
+                            Ok(())
+                        };
+                    vmc_para_opt(
+                        &mut data,
+                        &mut state,
+                        &mut rng,
+                        Some(&directory),
+                        &SingleProcessReducer,
+                        OptimizationOptions {
+                            callback: Some(&mut callback),
+                            skip_sr: false,
+                        },
+                    )
+                    .unwrap();
+                    assert_eq!(records.len(), 3);
+                    assert!(records
+                        .iter()
+                        .any(|record| f64::from_bits(record.1).abs() > 1e-6));
+                    let rng_words: Vec<_> = (0..624).map(|_| rng.gen_rand32()).collect();
+                    runs.push((records, state.electron_config, rng_words));
+                    fs::remove_dir_all(directory).unwrap();
+                }
+                assert_eq!(
+                    runs[0], runs[1],
+                    "complex={complex}, NSRCG={cg}, NStore={store}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn interall_fsz_direct_prefixes_match_julia_parameters_spins_samples_energy_and_rng() {
         for store in [0, 1] {
             check_sr_prefixes("interall", false, store);

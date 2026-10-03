@@ -46,8 +46,11 @@ identities; source energy, sampling and RNG comparisons are exact.
 The canonical normal InterAll accumulator accesses nonexistent `term.sites`
 fields. Its equivalence check therefore evaluates the parsed InterAll operators
 through the original `green_func2`, as documented in the script. FSZ equivalence
-uses the original InterAll Hamiltonian directly. Normal InterAll production
-remains gated under #23; the general real FSZ runner remains gated under #43.
+uses the original InterAll Hamiltonian directly. Rust now tests complex normal
+equivalence through its production InterAll accumulator. The historical real
+equivalence retains Julia's Green quotient; native real InterAll has separate
+C bitwise fixtures documented in `../interall/README.md`. Both real and complex
+normal/general-orbital optimization are enabled.
 
 Canonical `hubbard_chain_pairhop_real` and `hubbard_chain_pairhop_fsz` inputs
 run through the library and CLI. The original Julia `pairhop_equivalent.jl`

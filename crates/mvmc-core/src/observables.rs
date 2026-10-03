@@ -8,9 +8,8 @@
 //! CoulombInter, Hund (cheap density-density), Exchange (uses the 2-body
 //! Green function), plus the `(set_projection_diff, calculate_oo_real,
 //! calculate_oo, finalize_oo_store)` accumulators that feed the SR step.
-//! Transfer and general fixed-Sz/FSZ Green ratios are implemented. FSZ local
-//! energy includes InterAll; its runner support remains gated by validation.
-//! Fixed-Sz InterAll production contributions are pending.
+//! Transfer and general fixed-Sz/FSZ Green ratios and InterAll local energy are
+//! implemented. The normal real InterAll path preserves C's scalar arithmetic.
 
 #![allow(
     clippy::too_many_arguments,
@@ -532,6 +531,76 @@ pub fn green_func2(
     ele_num: &[i64],
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
+    green_func2_impl::<false>(
+        ri,
+        rj,
+        rk,
+        rl,
+        spin,
+        spin_other,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+    )
+}
+
+/// C's `GreenFunc2_real`: scalar Pfaffian reduction and real quotient.
+/// Like the native real kernel, this excludes RBM factors. The historical
+/// Julia helper remains separate for existing Julia kernel comparisons.
+#[allow(clippy::too_many_arguments)]
+pub fn green_func2_real(
+    ri: usize,
+    rj: usize,
+    rk: usize,
+    rl: usize,
+    spin: u8,
+    spin_other: u8,
+    ip: f64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+) -> f64 {
+    green_func2_impl::<true>(
+        ri,
+        rj,
+        rk,
+        rl,
+        spin,
+        spin_other,
+        Complex64::new(ip, 0.0),
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+    )
+    .re
+}
+
+#[allow(clippy::too_many_arguments)]
+fn green_func2_impl<const C_REAL: bool>(
+    ri: usize,
+    rj: usize,
+    rk: usize,
+    rl: usize,
+    spin: u8,
+    spin_other: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+) -> Complex64 {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     let n_qp_full = state.slater_matrix.pf_m.len();
@@ -539,7 +608,7 @@ pub fn green_func2(
         return Complex64::new(0.0, 0.0);
     }
     let one = |ri, rj, s, state: &mut VmcOptimizationState| {
-        green_func1(
+        green_func1_impl::<false, false, C_REAL>(
             ri,
             rj,
             s,
@@ -551,6 +620,8 @@ pub fn green_func2(
             ele_cfg,
             ele_num,
             ele_proj_cnt,
+            &mut GreenScratch::default(),
+            &mut CTimer::<false>::new(),
         )
     };
     let zero = Complex64::new(0.0, 0.0);
@@ -656,7 +727,11 @@ pub fn green_func2(
 
     let log_proj_delta =
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
-    let proj_ratio = with_rbm_ratio(julia_exp(log_proj_delta), &my_ele_num, ele_num, data);
+    let proj_ratio = if C_REAL {
+        Complex64::new(log_proj_delta.exp(), 0.0)
+    } else {
+        with_rbm_ratio(julia_exp(log_proj_delta), &my_ele_num, ele_num, data)
+    };
 
     // Fast path: rank-2 Woodbury Pfaffian update for real mode.
     //
@@ -673,7 +748,7 @@ pub fn green_func2(
         let n_size = 2 * n_elec;
         let inv_stride = n_size * n_size + 1;
         let mut pf_m_new_real = vec![0.0_f64; n_qp_full];
-        calculate_new_pf_m_two2_real_flat(
+        calculate_new_pf_m_two2_real_flat::<C_REAL>(
             mi,
             spin_other,
             mj,
@@ -690,6 +765,9 @@ pub fn green_func2(
             n_elec,
         );
         let new_ip_real = calculate_ip_real(&pf_m_new_real, 0, n_qp_full, data);
+        if C_REAL {
+            return Complex64::new(proj_ratio.re * new_ip_real / ip.re, 0.0);
+        }
         // In real mode all quantities are real, so conj is a no-op.
         // Return as Complex64 to match the function signature.
         return crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip_real, 0.0), ip)
@@ -1070,7 +1148,7 @@ pub fn green_func1(
     ele_proj_cnt: &[i64],
 ) -> Complex64 {
     let mut scratch = GreenScratch::default();
-    green_func1_impl::<false, false>(
+    green_func1_impl::<false, false, false>(
         ri,
         rj,
         spin_create,
@@ -1315,7 +1393,7 @@ pub(crate) fn green_func1_timed_with_scratch<const TIMED: bool>(
     scratch: &mut GreenScratch,
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
-    green_func1_impl::<TIMED, true>(
+    green_func1_impl::<TIMED, true, false>(
         ri,
         rj,
         spin_create,
@@ -1335,7 +1413,7 @@ pub(crate) fn green_func1_timed_with_scratch<const TIMED: bool>(
 // Transfer's real main-calculation path uses direct projection arithmetic and
 // a real quotient. General Green operators use Julia's projection-count ratio
 // and complex quotient, including one-body reductions of two-body operators.
-fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
+fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>(
     ri: usize,
     rj: usize,
     spin_create: u8,
@@ -1428,6 +1506,8 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
     };
     let proj_ratio = if let Some(ratio) = direct_ratio {
         ratio
+    } else if C_REAL {
+        crate::sampling::projection::log_proj_ratio(&scratch.proj_new, ele_proj_cnt, data).exp()
     } else if n_proj > 0 {
         julia_exp(crate::sampling::projection::log_proj_ratio(
             &scratch.proj_new,
@@ -1438,7 +1518,11 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         1.0
     };
 
-    let proj_ratio = with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data);
+    let proj_ratio = if C_REAL {
+        Complex64::new(proj_ratio, 0.0)
+    } else {
+        with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data)
+    };
     timer.stop_diag(922, diag);
     // The main-calculation state keeps one pad slot per QP; Julia's
     // wrapper compacts the same inverse planes before its Green helper.
@@ -1465,7 +1549,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
         timer.start_diag(924, diag);
         let new_ip = calculate_ip_real(&scratch.new_pf_real, 0, n_qp_full, data);
         timer.stop_diag(924, diag);
-        return if TRANSFER && !data.has_rbm_terms() {
+        return if C_REAL || (TRANSFER && !data.has_rbm_terms()) {
             Complex64::new(proj_ratio.re * new_ip / ip.re, 0.0)
         } else {
             crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip, 0.0), ip).conj()
@@ -1496,7 +1580,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool>(
 /// Compute the local energy for a given sample. Non-FSZ path:
 /// diagonal contributions (CoulombIntra / CoulombInter / Hund),
 /// 1-body Transfer (kinetic hopping via `green_func1`),
-/// and 2-body Exchange (via `green_func_exchange`).
+/// and PairHop, Exchange and InterAll via general two-body Green ratios.
 pub fn calculate_local_energy(
     ip: Complex64,
     data: &ExpertModeData,
@@ -2156,7 +2240,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         {
             continue;
         }
-        let green = green_func1_impl::<false, true>(
+        let green = green_func1_impl::<false, true, false>(
             ri as usize,
             rj as usize,
             spin_create,
@@ -2522,6 +2606,60 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 ele_proj_cnt,
             );
             e += term.value * (g01 + g10);
+        }
+    }
+
+    // C accumulates InterAll after PairHop and Exchange in input order.
+    for term in &data.inter_all_terms {
+        if [term.site0, term.site1, term.site2, term.site3]
+            .iter()
+            .any(|&site| !(0..data.modpara.nsite).contains(&site))
+        {
+            continue;
+        }
+        let (ri, rj, rk, rl) = (
+            term.site0 as usize,
+            term.site1 as usize,
+            term.site2 as usize,
+            term.site3 as usize,
+        );
+        let (s, t) = (term.spin1 as u8, term.spin3 as u8);
+        if !state.slater_matrix.pf_m_real.is_empty() {
+            // Native CalculateHamiltonian_real stores its accumulator in a
+            // double, so the imaginary coupling does not enter the energy.
+            e.re += term.value.re
+                * green_func2_real(
+                    ri,
+                    rj,
+                    rk,
+                    rl,
+                    s,
+                    t,
+                    ip.re,
+                    data,
+                    state,
+                    ele_idx,
+                    ele_cfg,
+                    ele_num,
+                    ele_proj_cnt,
+                );
+        } else {
+            e += term.value
+                * green_func2(
+                    ri,
+                    rj,
+                    rk,
+                    rl,
+                    s,
+                    t,
+                    ip,
+                    data,
+                    state,
+                    ele_idx,
+                    ele_cfg,
+                    ele_num,
+                    ele_proj_cnt,
+                );
         }
     }
 

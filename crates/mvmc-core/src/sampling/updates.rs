@@ -208,8 +208,9 @@ pub fn calculate_new_pf_m_two2_complex_flat(
     }
 }
 
-/// Real normal-mode `calculate_new_pf_m_two2_real!`.
-pub fn calculate_new_pf_m_two2_real_flat(
+/// Real normal-mode two-electron Pfaffian update.
+/// `SCALAR` selects C's nested sum; otherwise preserve Julia's vector reduction.
+pub fn calculate_new_pf_m_two2_real_flat<const SCALAR: bool>(
     ma: usize,
     spin: u8,
     mb: usize,
@@ -249,7 +250,8 @@ pub fn calculate_new_pf_m_two2_real_flat(
         fill_vecs_normal_real(
             qp, rsa, rsb, ele_idx, slater_elm, &mut vec_a, &mut vec_b, n_site, n_elec,
         );
-        let ratio = two_ratio_real::<false>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
+        let ratio =
+            two_ratio_real::<SCALAR>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
         pf_m_new[qp] = ratio * pf_m[qp];
     }
 }

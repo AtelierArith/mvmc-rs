@@ -101,7 +101,7 @@ fn rejects_duplicate_mode2_one_body_entries_without_factored_green() {
 
 #[test]
 fn unported_sections_cannot_silently_change_the_model() {
-    for kind in ["InterAll", "TwoBodyGEx", "SpinJastrow"] {
+    for kind in ["TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
         data.namelist.push((kind.into(), "missing.def".into()));
         let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
@@ -125,7 +125,7 @@ fn active_serial_opttrans_passes_validation_including_single_sector_payloads() {
 }
 
 #[test]
-fn retained_interall_payload_is_rejected_before_initialization_with_or_without_namelist() {
+fn normal_spin_changing_interall_is_rejected_before_initialization_with_or_without_namelist() {
     let root =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/interall");
     for has_namelist in [true, false] {
@@ -149,7 +149,7 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         )
         .unwrap_err();
         assert!(
-            error.contains("InterAll") && error.contains("non-FSZ"),
+            error.contains("InterAll") && error.contains("spin-conserving"),
             "{error}"
         );
         assert_eq!(data.modpara, before.modpara);
@@ -160,6 +160,78 @@ fn retained_interall_payload_is_rejected_before_initialization_with_or_without_n
         for _ in 0..624 {
             assert_eq!(rng.gen_rand32(), probe.gen_rand32());
         }
+    }
+}
+
+#[test]
+fn normal_interall_passes_runtime_validation_in_real_and_complex_modes() {
+    for complex in [false, true] {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.modpara.nvmc_sample = 1;
+        data.modpara.nvmc_interval = 1;
+        data.modpara.nmp_trans = 1;
+        data.complex_flags = vec![i64::from(complex)];
+        data.inter_all_terms
+            .push(mvmc_expert_parsers::InterAllTerm {
+                site0: 0,
+                spin0: 1,
+                site1: 1,
+                spin1: 1,
+                site2: 1,
+                spin2: 0,
+                site3: 0,
+                spin3: 0,
+                value: num_complex::Complex64::new(0.25, -0.375),
+                is_complex: true,
+            });
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+    }
+}
+
+#[test]
+fn interall_rejects_invalid_sites_and_fixed_twosz_spin_changes_as_in_c() {
+    for general in [0, 1] {
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = 2;
+        data.modpara.nelec = 1;
+        data.modpara.nvmc_sample = 1;
+        data.modpara.nvmc_interval = 1;
+        data.modpara.nmp_trans = 1;
+        data.i_flg_orbital_general = general;
+        data.inter_all_terms
+            .push(mvmc_expert_parsers::InterAllTerm {
+                site0: 0,
+                spin0: 0,
+                site1: 1,
+                spin1: 0,
+                site2: 1,
+                spin2: 1,
+                site3: 0,
+                spin3: 1,
+                value: num_complex::Complex64::new(0.25, 0.0),
+                is_complex: false,
+            });
+        for site in [-1, 2] {
+            data.inter_all_terms[0].site0 = site;
+            let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+            assert!(
+                error.contains("InterAll") && error.contains("site"),
+                "{error}"
+            );
+        }
+        data.inter_all_terms[0].site0 = 0;
+        data.inter_all_terms[0].spin1 = 1;
+        data.inter_all_terms[0].spin3 = 0;
+        data.modpara.two_sz = 0;
+        let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+        assert!(error.contains("spin-conserving"), "{error}");
+        data.modpara.two_sz = -1;
+        assert_eq!(
+            mvmc_core::validation::validate_para_opt(&data).is_ok(),
+            general != 0
+        );
     }
 }
 

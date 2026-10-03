@@ -371,7 +371,7 @@ fn pf_m2_helpers_match_julia() {
     }
 
     let mut out_rt = vec![0.0; f.n_qp];
-    calculate_new_pf_m_two2_real_flat(
+    calculate_new_pf_m_two2_real_flat::<false>(
         f.ma_spin.0,
         f.ma_spin.1,
         f.mb_spin.0,

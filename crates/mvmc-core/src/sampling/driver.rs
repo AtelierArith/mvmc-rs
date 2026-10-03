@@ -387,7 +387,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                     );
                     timer.stop(65);
                     timer.start(66);
-                    calculate_new_pf_m_two2_real_flat(
+                    calculate_new_pf_m_two2_real_flat::<false>(
                         candidate.mi,
                         candidate.spin,
                         candidate.mj,
