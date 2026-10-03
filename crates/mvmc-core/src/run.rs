@@ -237,6 +237,206 @@ fn observe_physcal_lifecycle(
     });
 }
 
+fn scale_physcal_lanczos(value: &mut Complex64, inverse_weight: Complex64, all_complex: bool) {
+    if all_complex {
+        *value *= inverse_weight;
+    } else {
+        // C uses a double array; the complex shadow has no imaginary observable.
+        *value = Complex64::new(value.re * inverse_weight.re, 0.0);
+    }
+}
+
+fn normalize_physcal_green(state: &mut VmcOptimizationState, use_fsz: bool, all_complex: bool) {
+    if state.energy.wc.re != 0.0 {
+        let inverse = crate::c_complex::divide(Complex64::new(1.0, 0.0), state.energy.wc);
+        if let Some(phys) = state.phys_quantities.as_mut() {
+            for values in [
+                &mut phys.phys_lanczos_qqqq,
+                &mut phys.phys_lanczos_qcisajsq,
+                &mut phys.phys_lanczos_qcisajscktaltq,
+                &mut phys.phys_lanczos_qcisajscktaltq_dc,
+            ] {
+                for value in values {
+                    scale_physcal_lanczos(value, inverse, all_complex);
+                }
+            }
+            if !use_fsz {
+                for values in [
+                    &mut phys.phys_cis_ajs,
+                    &mut phys.phys_cis_ajs_ckt_alt,
+                    &mut phys.phys_cis_ajs_ckt_alt_dc,
+                ] {
+                    for value in values {
+                        *value *= inverse;
+                    }
+                }
+            }
+        }
+    }
+    if use_fsz {
+        crate::observables::weight_average_green_func_fsz(state);
+    }
+}
+
+#[cfg(test)]
+mod physcal_normalization_literal_tests {
+    use super::*;
+    fn close(actual: f64, expected: f64) {
+        assert!(actual.is_finite() && expected.is_finite());
+        if expected == 0.0 {
+            assert_eq!(actual, 0.0);
+            return;
+        }
+        // For these nine positive-real-weight literals only, quotient scales,
+        // squares/sums and numerator are exact; reciprocal division and final
+        // component product are the two rounding operations. Not generic complex
+        // division. |R-C| <= 2gamma2/(1-gamma2)*|C|, since C itself is rounded.
+        // Evaluate a conservative upper endpoint rather than rounding it inward.
+        fn up(x: f64) -> f64 {
+            assert!(x > 0.0 && x.is_finite());
+            f64::from_bits(x.to_bits() + 1)
+        }
+        fn down(x: f64) -> f64 {
+            assert!(x > 0.0 && x.is_finite());
+            f64::from_bits(x.to_bits() - 1)
+        }
+        let u = f64::EPSILON / 2.0;
+        let gamma2 = up(2.0 * u / (1.0 - 2.0 * u));
+        let factor = up((2.0 * gamma2) / down(1.0 - gamma2));
+        let bound = up(factor * expected.abs());
+        assert!((actual - expected).abs() <= bound);
+    }
+    #[test]
+    fn native_literals_cover_production_all_seven_planes_and_zero_guard() {
+        let literals = include_str!("../tests/fixtures/normalization_c_literals.tsv");
+        let mut lines = literals.lines();
+        assert_eq!(
+            lines.next(),
+            Some("weight_index\tvalue_index\treal_bits\tcomplex_re_bits\tcomplex_im_bits")
+        );
+        let rows: Vec<_> = lines.collect();
+        assert_eq!(rows.len(), 9, "exact Cartesian fixture required");
+        let mut seen = [[false; 3]; 3];
+        let weights = [3.0, 10.0, 100.0];
+        let inputs = [
+            Complex64::new(0.3, -0.7),
+            Complex64::new(-0.7, 0.3),
+            Complex64::new(13.486979846002933, 0.0),
+        ];
+        for line in rows {
+            let cols: Vec<_> = line.split('\t').collect();
+            assert_eq!(cols.len(), 5);
+            let wi: usize = cols[0].parse().unwrap();
+            let vi: usize = cols[1].parse().unwrap();
+            assert!(wi < 3 && vi < 3, "fixture index out of range");
+            assert!(!seen[wi][vi], "duplicate fixture key");
+            seen[wi][vi] = true;
+            for text in &cols[2..] {
+                assert_eq!(text.len(), 16, "exact binary64 hex width");
+                assert!(text.bytes().all(|c| c.is_ascii_hexdigit()));
+            }
+            let real = f64::from_bits(u64::from_str_radix(cols[2], 16).unwrap());
+            let expected = Complex64::new(
+                f64::from_bits(u64::from_str_radix(cols[3], 16).unwrap()),
+                f64::from_bits(u64::from_str_radix(cols[4], 16).unwrap()),
+            );
+            assert!(real.is_finite() && expected.re.is_finite() && expected.im.is_finite());
+            for fsz in [false, true] {
+                for complex in [false, true] {
+                    for mode in 0..=2 {
+                        let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, complex, fsz);
+                        let mut p = crate::state::PhysicalQuantities::zeros(1, 1, 1);
+                        for values in [
+                            &mut p.phys_lanczos_qqqq,
+                            &mut p.phys_lanczos_qcisajsq,
+                            &mut p.phys_lanczos_qcisajscktaltq,
+                            &mut p.phys_lanczos_qcisajscktaltq_dc,
+                        ] {
+                            values.fill(if mode == 0 {
+                                Complex64::new(0.0, 0.0)
+                            } else {
+                                Complex64::new(
+                                    inputs[vi].re,
+                                    if complex { inputs[vi].im } else { 0.0 },
+                                )
+                            });
+                        }
+                        for values in [
+                            &mut p.phys_cis_ajs,
+                            &mut p.phys_cis_ajs_ckt_alt,
+                            &mut p.phys_cis_ajs_ckt_alt_dc,
+                        ] {
+                            values.fill(inputs[vi]);
+                        }
+                        state.phys_quantities = Some(p);
+                        state.energy.wc = Complex64::new(weights[wi], 0.0);
+                        normalize_physcal_green(&mut state, fsz, complex);
+                        let p = state.phys_quantities.as_ref().unwrap();
+                        for values in [
+                            &p.phys_lanczos_qqqq,
+                            &p.phys_lanczos_qcisajsq,
+                            &p.phys_lanczos_qcisajscktaltq,
+                            &p.phys_lanczos_qcisajscktaltq_dc,
+                        ] {
+                            for v in values {
+                                close(v.re, if mode == 0 { 0.0 } else { real });
+                                close(
+                                    v.im,
+                                    if mode == 0 || !complex {
+                                        0.0
+                                    } else {
+                                        expected.im
+                                    },
+                                );
+                            }
+                        }
+                        for values in [
+                            &p.phys_cis_ajs,
+                            &p.phys_cis_ajs_ckt_alt,
+                            &p.phys_cis_ajs_ckt_alt_dc,
+                        ] {
+                            for v in values {
+                                close(v.re, expected.re);
+                                close(v.im, expected.im);
+                            }
+                        }
+                        let before = state.phys_quantities.clone();
+                        state.energy.wc = Complex64::new(0.0, 0.0);
+                        normalize_physcal_green(&mut state, fsz, complex);
+                        assert_eq!(before, state.phys_quantities);
+                    }
+                }
+            }
+        }
+        assert!(seen.into_iter().flatten().all(|value| value));
+    }
+    #[test]
+    fn production_real_scaling_preserves_reciprocal_then_multiply_order() {
+        // Structural SAME-implementation operation-order contract, NOT
+        // cross-language computed-bit acceptance nor independent golden.
+        let mut distinct = false;
+        for weight in [3.0, 10.0, 100.0] {
+            for raw in [0.3, -0.7, 13.486979846002933] {
+                let inverse =
+                    crate::c_complex::divide(Complex64::new(1.0, 0.0), Complex64::new(weight, 0.0));
+                let multiplied = raw * inverse.re;
+                let divided = raw / weight;
+                if multiplied != divided {
+                    distinct = true;
+                    let mut value = Complex64::new(raw, 0.0);
+                    scale_physcal_lanczos(&mut value, inverse, false);
+                    assert_eq!(value.re, multiplied);
+                    assert_ne!(value.re, divided);
+                }
+            }
+        }
+        assert!(
+            distinct,
+            "fixed literal suite must distinguish operation orders"
+        );
+    }
+}
+
 fn observe_physcal_green(data: &ExpertModeData, state: &VmcOptimizationState, use_fsz: bool) {
     if data.modpara.vmc_calc_mode != 1 {
         return;
@@ -2631,38 +2831,7 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
         timer.stop(43);
     }
     observe_physcal_green(data, state, use_fsz);
-    if let Some(phys) = state.phys_quantities.as_mut() {
-        let count = state.energy.wc.re;
-        if count != 0.0 {
-            let denominator = Complex64::new(count, 0.0);
-            for value in &mut phys.phys_lanczos_qqqq {
-                *value /= denominator;
-            }
-            for value in &mut phys.phys_lanczos_qcisajsq {
-                *value /= denominator;
-            }
-            for value in &mut phys.phys_lanczos_qcisajscktaltq {
-                *value /= denominator;
-            }
-            for value in &mut phys.phys_lanczos_qcisajscktaltq_dc {
-                *value /= denominator;
-            }
-            if !use_fsz {
-                for value in &mut phys.phys_cis_ajs {
-                    *value /= denominator;
-                }
-                for value in &mut phys.phys_cis_ajs_ckt_alt {
-                    *value /= denominator;
-                }
-                for value in &mut phys.phys_cis_ajs_ckt_alt_dc {
-                    *value /= denominator;
-                }
-            }
-        }
-    }
-    if use_fsz {
-        crate::observables::weight_average_green_func_fsz(state);
-    }
+    normalize_physcal_green(state, use_fsz, all_complex);
     if use_store {
         timer.start(45);
         let options = crate::observables::StoreFinalization {
@@ -5751,8 +5920,12 @@ mod physcal_green_observer_tests {
             .phys_cis_ajs;
         assert_eq!(raw.len(), normalized.len());
         assert!(!raw.is_empty());
+        // SAME-implementation raw-boundary operation-order assertion, not an
+        // independent golden: C averages by reciprocal once then multiplication.
+        // Independent numerical authority is the separate nine-native-literal test.
+        let inverse_weight = crate::c_complex::divide(Complex64::new(1.0, 0.0), weight);
         for (raw, normalized) in raw.iter().zip(normalized) {
-            assert_eq!(*raw / Complex64::new(weight.re, 0.0), *normalized);
+            assert_eq!(*raw * inverse_weight, *normalized);
         }
         let files = |directory: &Path| {
             let mut files: Vec<_> = fs::read_dir(directory)
