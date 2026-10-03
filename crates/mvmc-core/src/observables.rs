@@ -585,8 +585,43 @@ pub fn green_func2_real(
     .re
 }
 
+/// C's complex `GreenFunc2`, including its scaled complex quotient.
+/// Projection count and Pfaffian operation order match the native kernel.
 #[allow(clippy::too_many_arguments)]
-fn green_func2_impl<const C_REAL: bool>(
+pub fn green_func2_complex(
+    ri: usize,
+    rj: usize,
+    rk: usize,
+    rl: usize,
+    spin: u8,
+    spin_other: u8,
+    ip: Complex64,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+) -> Complex64 {
+    green_func2_impl::<true>(
+        ri,
+        rj,
+        rk,
+        rl,
+        spin,
+        spin_other,
+        ip,
+        data,
+        state,
+        ele_idx,
+        ele_cfg,
+        ele_num,
+        ele_proj_cnt,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn green_func2_impl<const C_KERNEL: bool>(
     ri: usize,
     rj: usize,
     rk: usize,
@@ -608,7 +643,7 @@ fn green_func2_impl<const C_REAL: bool>(
         return Complex64::new(0.0, 0.0);
     }
     let one = |ri, rj, s, state: &mut VmcOptimizationState| {
-        green_func1_impl::<false, false, C_REAL>(
+        green_func1_impl::<false, false, C_KERNEL>(
             ri,
             rj,
             s,
@@ -727,8 +762,12 @@ fn green_func2_impl<const C_REAL: bool>(
 
     let log_proj_delta =
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
-    let proj_ratio = if C_REAL {
-        Complex64::new(log_proj_delta.exp(), 0.0)
+    let proj_ratio = if C_KERNEL {
+        if state.slater_matrix.pf_m_real.is_empty() {
+            with_rbm_ratio(log_proj_delta.exp(), &my_ele_num, ele_num, data)
+        } else {
+            Complex64::new(log_proj_delta.exp(), 0.0)
+        }
     } else {
         with_rbm_ratio(julia_exp(log_proj_delta), &my_ele_num, ele_num, data)
     };
@@ -748,7 +787,7 @@ fn green_func2_impl<const C_REAL: bool>(
         let n_size = 2 * n_elec;
         let inv_stride = n_size * n_size + 1;
         let mut pf_m_new_real = vec![0.0_f64; n_qp_full];
-        calculate_new_pf_m_two2_real_flat::<C_REAL>(
+        calculate_new_pf_m_two2_real_flat::<C_KERNEL>(
             mi,
             spin_other,
             mj,
@@ -765,7 +804,7 @@ fn green_func2_impl<const C_REAL: bool>(
             n_elec,
         );
         let new_ip_real = calculate_ip_real(&pf_m_new_real, 0, n_qp_full, data);
-        if C_REAL {
+        if C_KERNEL {
             return Complex64::new(proj_ratio.re * new_ip_real / ip.re, 0.0);
         }
         // In real mode all quantities are real, so conj is a no-op.
@@ -793,7 +832,11 @@ fn green_func2_impl<const C_REAL: bool>(
         n_elec,
     );
     let new_ip = calculate_ip_complex(&new_pf, 0, n_qp_full, data);
-    crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
+    if C_KERNEL {
+        crate::c_complex::divide(proj_ratio * new_ip, ip).conj()
+    } else {
+        crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
+    }
 }
 
 /// Non-FSZ Slater-parameter derivative block (`SlaterElmDiff_fcmp!`).
@@ -1413,7 +1456,7 @@ pub(crate) fn green_func1_timed_with_scratch<const TIMED: bool>(
 // Transfer's real main-calculation path uses direct projection arithmetic and
 // a real quotient. General Green operators use Julia's projection-count ratio
 // and complex quotient, including one-body reductions of two-body operators.
-fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>(
+fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: bool>(
     ri: usize,
     rj: usize,
     spin_create: u8,
@@ -1506,7 +1549,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>
     };
     let proj_ratio = if let Some(ratio) = direct_ratio {
         ratio
-    } else if C_REAL {
+    } else if C_KERNEL {
         crate::sampling::projection::log_proj_ratio(&scratch.proj_new, ele_proj_cnt, data).exp()
     } else if n_proj > 0 {
         julia_exp(crate::sampling::projection::log_proj_ratio(
@@ -1518,7 +1561,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>
         1.0
     };
 
-    let proj_ratio = if C_REAL {
+    let proj_ratio = if C_KERNEL && !state.slater_matrix.pf_m_real.is_empty() {
         Complex64::new(proj_ratio, 0.0)
     } else {
         with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data)
@@ -1549,7 +1592,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>
         timer.start_diag(924, diag);
         let new_ip = calculate_ip_real(&scratch.new_pf_real, 0, n_qp_full, data);
         timer.stop_diag(924, diag);
-        return if C_REAL || (TRANSFER && !data.has_rbm_terms()) {
+        return if C_KERNEL || (TRANSFER && !data.has_rbm_terms()) {
             Complex64::new(proj_ratio.re * new_ip / ip.re, 0.0)
         } else {
             crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip, 0.0), ip).conj()
@@ -1574,7 +1617,11 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_REAL: bool>
         n_elec,
     );
     let new_ip = calculate_ip_complex(&scratch.new_pf_complex, 0, n_qp_full, data);
-    crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
+    if C_KERNEL {
+        crate::c_complex::divide(proj_ratio * new_ip, ip).conj()
+    } else {
+        crate::julia_complex::divide(proj_ratio * new_ip, ip).conj()
+    }
 }
 
 /// Compute the local energy for a given sample. Non-FSZ path:
@@ -2339,7 +2386,12 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         ) else {
             continue;
         };
-        let green = green_func2(
+        let pairhop_green = if all_complex {
+            green_func2_complex
+        } else {
+            green_func2
+        };
+        let green = pairhop_green(
             destination,
             source,
             destination,
@@ -2543,6 +2595,11 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     // Julia accumulates PairHop before Exchange in the two-body section.
     timer.stop(71);
     timer.start(72);
+    let pairhop_green = if state.slater_matrix.pf_m_real.is_empty() {
+        green_func2_complex
+    } else {
+        green_func2
+    };
     for term in &data.pair_hop_terms {
         if !(0..data.modpara.nsite).contains(&term.site1)
             || !(0..data.modpara.nsite).contains(&term.site2)
@@ -2552,7 +2609,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         let ri = term.site1 as usize;
         let rj = term.site2 as usize;
         e += term.value
-            * green_func2(
+            * pairhop_green(
                 ri,
                 rj,
                 ri,
@@ -2645,7 +2702,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 );
         } else {
             e += term.value
-                * green_func2(
+                * green_func2_complex(
                     ri,
                     rj,
                     rk,

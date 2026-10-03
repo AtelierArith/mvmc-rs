@@ -1,7 +1,7 @@
 //! General operator ratios against original Julia kernels and analytic Fock tests.
 use mvmc_core::observables::{
     calculate_local_energy, calculate_local_energy_fsz, green_func1_fsz, green_func2,
-    green_func2_fsz, green_func2_real,
+    green_func2_complex, green_func2_fsz, green_func2_real,
 };
 use mvmc_core::{ExpertModeData, VmcOptimizationState};
 use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
@@ -88,6 +88,44 @@ fn check_pairhop_energy(
     let local_energy = |data: &ExpertModeData, state: &mut VmcOptimizationState| {
         if let Some(spins) = spins {
             calculate_local_energy_fsz(ip, data, state, idx, cfg, num, cnt, spins)
+        } else if mvmc_core::run::get_all_complex_flag(data) {
+            // Keep the archived Julia PairHop energy bits as a historical
+            // kernel check. Production complex PairHop now follows C's
+            // different quotient, independently checked below against C.
+            let mut baseline = data.clone();
+            baseline.pair_hop_terms.clear();
+            baseline.exchange_terms.clear();
+            let mut energy = calculate_local_energy(ip, &baseline, state, idx, cfg, num, cnt);
+            for term in &data.pair_hop_terms {
+                if !(0..4).contains(&term.site1) || !(0..4).contains(&term.site2) {
+                    continue;
+                }
+                energy += term.value
+                    * green_func2(
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        term.site1 as usize,
+                        term.site2 as usize,
+                        0,
+                        1,
+                        ip,
+                        data,
+                        state,
+                        idx,
+                        cfg,
+                        num,
+                        cnt,
+                    );
+            }
+            // Julia adds Exchange after PairHop. Preserve the archived
+            // addition order as well as its Green quotient bits.
+            for term in &data.exchange_terms {
+                let (ri, rj) = (term.site1 as usize, term.site2 as usize);
+                let first = green_func2(ri, rj, rj, ri, 0, 1, ip, data, state, idx, cfg, num, cnt);
+                let second = green_func2(ri, rj, rj, ri, 1, 0, ip, data, state, idx, cfg, num, cnt);
+                energy += term.value * (first + second);
+            }
+            energy
         } else {
             calculate_local_energy(ip, data, state, idx, cfg, num, cnt)
         }
@@ -136,11 +174,11 @@ fn check_pairhop_energy(
             is_complex: false,
         })
         .collect();
-    let actual = if spins.is_some() || mvmc_core::run::get_all_complex_flag(data) {
+    let actual = if spins.is_some() {
         local_energy(&equivalent, state)
     } else {
-        // Historical Julia real quotients differ from C's real Green kernel.
-        // Native C fixtures separately exercise the production InterAll path.
+        // Historical Julia normal quotients differ from the native C Green
+        // kernels. Native fixtures check the production InterAll path.
         let mut energy = local_energy(data, state);
         for t in &equivalent.inter_all_terms {
             energy += t.value
@@ -172,6 +210,130 @@ fn check_pairhop_energy(
 #[test]
 fn exhaustive_four_site_two_body_ratios_match_original_julia() {
     check_normal_green("");
+}
+
+#[test]
+fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
+    let mut lines = include_str!("../../../tests/fixtures/interall/c_complex_green.txt")
+        .lines()
+        .filter(|line| !line.starts_with('#'));
+    let mut failures = Vec::new();
+    for case in 0..4 {
+        assert_eq!(lines.next().unwrap(), "1");
+        let idx = integers(lines.next().unwrap());
+        let cfg = integers(lines.next().unwrap());
+        let num = integers(lines.next().unwrap());
+        let cnt = integers(lines.next().unwrap());
+        let projection = complex_bits(lines.next().unwrap());
+        let mut data = green_data(true);
+        data.gutzwiller_terms[0].value = projection[0];
+        data.jastrow_terms[0].value = projection[1];
+        let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, true, false);
+        let slater = complex_bits(lines.next().unwrap());
+        let pf = complex_bits(lines.next().unwrap());
+        let inverse = complex_bits(lines.next().unwrap());
+        state
+            .slater_matrix
+            .slater_elm
+            .as_mut_slice()
+            .copy_from_slice(&slater);
+        state.slater_matrix.pf_m.copy_from_slice(&pf);
+        for qp in 0..2 {
+            state.slater_matrix.inv_m.as_mut_slice()[qp * 17..qp * 17 + 16]
+                .copy_from_slice(&inverse[qp * 16..qp * 16 + 16]);
+        }
+        let ip = complex_bits(lines.next().unwrap())[0];
+        let before_inverse = state.slater_matrix.inv_m.as_slice().to_vec();
+        for operator in 0..1024 {
+            let row: Vec<_> = lines.next().unwrap().split_whitespace().collect();
+            let ops: Vec<usize> = row[..6].iter().map(|v| v.parse().unwrap()).collect();
+            let value = complex_bits(&row[6..8].join(" "))[0];
+            let expected = complex_bits(&row[8..10].join(" "))[0];
+            let actual = green_func2_complex(
+                ops[0],
+                ops[1],
+                ops[2],
+                ops[3],
+                ops[4] as u8,
+                ops[5] as u8,
+                ip,
+                &data,
+                &mut state,
+                &idx,
+                &cfg,
+                &num,
+                &cnt,
+            );
+            if [actual.re.to_bits(), actual.im.to_bits()]
+                != [expected.re.to_bits(), expected.im.to_bits()]
+            {
+                failures.push(format!(
+                    "case {case} operator {operator} {ops:?}: Rust={:016x} {:016x}, C={:016x} {:016x}",
+                    actual.re.to_bits(), actual.im.to_bits(), expected.re.to_bits(), expected.im.to_bits(),
+                ));
+            }
+            data.inter_all_terms.push(InterAllTerm {
+                site0: ops[0] as i64,
+                spin0: ops[4] as i64,
+                site1: ops[1] as i64,
+                spin1: ops[4] as i64,
+                site2: ops[2] as i64,
+                spin2: ops[5] as i64,
+                site3: ops[3] as i64,
+                spin3: ops[5] as i64,
+                value,
+                is_complex: value.im != 0.0,
+            });
+        }
+        let expected_energy = complex_bits(lines.next().unwrap())[0];
+        let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
+        if [energy.re.to_bits(), energy.im.to_bits()]
+            != [expected_energy.re.to_bits(), expected_energy.im.to_bits()]
+        {
+            failures.push(format!(
+                "case {case} ordered energy: Rust={energy:?}, C={expected_energy:?}"
+            ));
+        }
+        let expected_pairhop = complex_bits(lines.next().unwrap())[0];
+        data.inter_all_terms.clear();
+        data.pair_hop_terms = [
+            (0, 3, 0.7),
+            (3, 0, -0.2),
+            (0, 0, -0.125),
+            (0, 1, 0.375),
+            (1, 2, -0.35),
+            (0, 3, 0.0625),
+        ]
+        .into_iter()
+        .map(|(site1, site2, value)| PairHopTerm {
+            site1,
+            site2,
+            value,
+        })
+        .collect();
+        let pairhop = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &cnt);
+        if [pairhop.re.to_bits(), pairhop.im.to_bits()]
+            != [expected_pairhop.re.to_bits(), expected_pairhop.im.to_bits()]
+        {
+            failures.push(format!(
+                "case {case} PairHop: Rust={pairhop:?}, C={expected_pairhop:?}"
+            ));
+        }
+        assert_eq!(state.slater_matrix.inv_m.as_slice(), before_inverse);
+        assert_eq!(state.slater_matrix.pf_m, pf);
+    }
+    assert!(lines.next().is_none());
+    assert!(
+        failures.is_empty(),
+        "{} mismatches:\n{}",
+        failures.len(),
+        failures
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }
 
 #[test]
