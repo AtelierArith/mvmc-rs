@@ -51,11 +51,13 @@ fn issue179_group_width_endpoints() {
         for qp_len in [1, 5] {
             use mvmc_expert_parsers::{ExpertModeData, QuantumProjectionWeights};
             use num_complex::Complex64;
-            let mut data = ExpertModeData::default();
-            data.qp_weights = Some(QuantumProjectionWeights {
-                qp_full_weight: vec![Complex64::new(1.0, 0.0); qp_len],
+            let data = ExpertModeData {
+                qp_weights: Some(QuantumProjectionWeights {
+                    qp_full_weight: vec![Complex64::new(1.0, 0.0); qp_len],
+                    ..Default::default()
+                }),
                 ..Default::default()
-            });
+            };
             let owned = group.sampling_qp_range(qp_len);
             let mut real_pf = vec![f64::NAN; qp_len];
             let mut complex_pf = vec![Complex64::new(f64::NAN, f64::NAN); qp_len];
