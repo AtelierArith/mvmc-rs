@@ -11,6 +11,73 @@ C is the numerical authority. Julia provides port/design comparisons and
 historical references. The script never runs Rust to produce expected values,
 and normal Cargo tests never invoke the script or a reference runtime.
 
+After issue #186, reference numerical execution uses Linux. On macOS, run the
+numerical generators in the DevContainer. Rust tests continue to run natively
+on both operating systems. Compiler, libm and BLAS differences are recorded;
+computed floating-point values are compared with explicit numerical bounds,
+while deterministic controls and independently stored artifact hashes remain
+exact. A hexadecimal binary64 fixture is lossless storage, not a requirement
+to reproduce every computational bit.
+
+The optional check helpers are `scripts/numerical_comparison.py` and
+`scripts/reference_numerical_comparison.jl`. They preserve row/column counts,
+input encodings, integer indices, flags, source identifiers and SHA tokens.
+Julia BLAS provider names are informational; Julia version, thread counts,
+seeds and the remaining source provenance are checked. NaN must remain NaN,
+infinity must retain its sign, and computed signed zeros compare numerically.
+Literal parser/load contracts still check their input conversion and signed
+zero encodings exactly.
+
+| Computation | Absolute and relative bounds |
+| --- | --- |
+| Individual Green, short Slater/derivative and Pfaffian kernels | `1e-13`, `1e-13` |
+| Exhaustive Hamiltonian/InterAll reductions | `1e-12`, `1e-12` |
+| Three weighted measurement frames and normalization | `2e-13`, `2e-13` |
+| Scalar division/libm | four minimum subnormal ulps absolute, `64*EPS` relative |
+| Parameter initialization | `32*EPS`, `32*EPS` |
+| Sampled Direct OO/HO/system snapshots | `1e-12`, `1e-12` |
+| Runner parameters/energies through 50 updates, Direct factor/solution | `1e-11`, `1e-11` |
+| Printed SRinfo numerical fields | `1e-12`, `1e-5` (one last printed quantum) |
+| Fixed CG vectors after iteration `k` | `8*(n+samples)*k*EPS` absolute/relative |
+
+`EPS` denotes binary64 machine epsilon. The kernel bounds cover short explicit
+arithmetic and the longer exhaustive sums; runner bounds account for repeated
+updates and must be considered together with exact sampling controls. CG also
+materializes the covariance independently and checks the recurrent residual
+against `g-S*x`, with a `16*(n+samples)*k*EPS*(abs(g)+abs(S)*abs(x))`
+componentwise budget. Direct snapshots check condition diagnostics, Cholesky
+reconstruction and normalized backward residual against `128*n*EPS`; matrix
+conditioning never grants a blanket forward allowance. Gram reductions use
+`64*sample_count*EPS` and an explicitly measured reference magnitude.
+OptTrans coefficient/weight range probes tighten nonzero values smaller than
+`sqrt(MIN_POSITIVE)` to four minimum subnormal ulps absolute and `64*EPS`
+relative. A normal-scale absolute floor must not accept erasing `1e-300`.
+Cutoff zero/nonzero decisions and untouched derivative sentinels remain exact.
+
+RNG draws/states, proposed moves, acceptance decisions, configurations, status
+and iteration counts are never covered by a floating-point tolerance. Borrowed
+input buffers and inactive workspace sentinels remain unchanged exactly.
+SRinfo dimensions, cuts, index and iteration columns (1–4, 8 and 9) are exact
+regardless of decimal formatting; indexed parameter output keeps its index
+column exact, and `zvo_var` keeps its literal third-column placeholders exact.
+
+The 30 unused Direct matrix/Gram snapshots are stored as independent `.txt.gz`
+payloads beside their former paths. Optional Julia checks require the `gzip`
+command to decompress them. `unused-output-sha256.tsv` validates the complete
+**decompressed stored reference**, then checks the new computation numerically.
+It never hashes a rebuilt numerical output as an equality gate. The archive
+whitelist excludes RNG, configurations, status, RBM and consumed OptTrans
+Direct snapshots. Historical inheritance SHA checks protect stored artifacts
+and remain exact. Neither archive handling nor the reference runtimes are
+dependencies of normal Cargo tests.
+
+Run focused comparator safeguards without invoking an oracle:
+
+```sh
+uv run --no-project python scripts/test_numerical_comparison.py
+julia +1.13.1 scripts/test_reference_numerical_comparison.jl
+```
+
 By default the script runs the listed C suites. Select individual suites with
 repeatable `--suite NAME`, or select `--reference julia` for the two small FSZ
 setup/move suites. Sampling subsets require explicit suite selection; no full

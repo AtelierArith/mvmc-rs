@@ -1,4 +1,6 @@
-# End-to-end exact-bit SR-CG fixtures. Prefix runs record complete RNG
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
+# End-to-end numerical SR-CG fixtures. Prefix runs record complete RNG
 # blocks without copying SFMT.jl's process-global C RNG or perturbing a run.
 using Test, Random, SFMT, MVMCOptimizers, MVMCExpertModeParsers, LinearAlgebra
 VERSION == v"1.13.1" || error("CG runner fixtures require Julia 1.13.1")
@@ -61,7 +63,7 @@ function verify(name, actual)
     if "--write" in ARGS
         mkpath(FIXTURE_ROOT); write(path, actual)
     else
-        @test actual == read(path, String)
+        @test compare_runner(name, actual, read(path, String); sample_count=2000)
     end
 end
 if CASE == "interall" || startswith(CASE,"pairhop_") || OPT_CASE

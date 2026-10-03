@@ -1,4 +1,7 @@
 //! Julia test_unit_vmc_main_cal_sr.jl storage/finalization contracts.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+// At most two samples: sqrt plus short real/complex weighted products.
 use mvmc_core::observables::{
     calculate_oo_store, calculate_oo_store_real, finalize_oo_store, finalize_oo_store_real,
     StoreFinalization,
@@ -10,11 +13,24 @@ fn stored_samples_use_sqrt_weight_and_accumulate_weighted_ho() {
     let mut ho = [0.0; 3];
     let mut store = [123.0; 9];
     calculate_oo_store_real(&mut ho, &mut store, &[1.0, 2.0, -3.0], 9.0, 2.0, 1, 3);
-    assert_eq!(
-        store,
-        [123.0, 123.0, 123.0, 3.0, 6.0, -9.0, 123.0, 123.0, 123.0]
+    numerical_comparison::assert_values_close(
+        store.iter().copied(),
+        ([123.0, 123.0, 123.0, 3.0, 6.0, -9.0, 123.0, 123.0, 123.0])
+            .iter()
+            .copied(),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
     );
-    assert_eq!(ho, [18.0, 36.0, -54.0]);
+    assert_eq!(&store[..3], &[123.0; 3]);
+    assert_eq!(&store[6..], &[123.0; 3]);
+    numerical_comparison::assert_values_close(
+        ho.iter().copied(),
+        ([18.0, 36.0, -54.0]).iter().copied(),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
+    );
     let mut ho = [C::new(0.0, 0.0); 2];
     let mut store = [C::new(123.0, 0.0); 6];
     calculate_oo_store(
@@ -26,10 +42,26 @@ fn stored_samples_use_sqrt_weight_and_accumulate_weighted_ho() {
         1,
         1,
     );
-    assert_eq!(store[2..4], [C::new(2.0, 0.0), C::new(4.0, 2.0)]);
+    numerical_comparison::assert_values_close(
+        store[2..4].iter().flat_map(|z| [z.re, z.im]),
+        ([C::new(2.0, 0.0), C::new(4.0, 2.0)])
+            .iter()
+            .flat_map(|z| [z.re, z.im]),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
+    );
     assert_eq!(store[0], C::new(123.0, 0.0));
     assert_eq!(store[5], C::new(123.0, 0.0));
-    assert_eq!(ho, [C::new(4.0, -8.0), C::new(16.0, -12.0)]);
+    numerical_comparison::assert_values_close(
+        ho.iter().flat_map(|z| [z.re, z.im]),
+        ([C::new(4.0, -8.0), C::new(16.0, -12.0)])
+            .iter()
+            .flat_map(|z| [z.re, z.im]),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
+    );
 }
 
 #[test]
@@ -48,7 +80,15 @@ fn real_gram_uses_active_sample_range_and_preserves_extra_slots() {
             diagonal_only: false,
         },
     );
-    assert_eq!(&oo[..9], &[2.0, 6.0, 1.0, 6.0, 20.0, 6.0, 1.0, 6.0, 5.0]);
+    numerical_comparison::assert_values_close(
+        oo[..9].iter().copied(),
+        ([2.0, 6.0, 1.0, 6.0, 20.0, 6.0, 1.0, 6.0, 5.0])
+            .iter()
+            .copied(),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
+    );
     assert_eq!(&oo[9..], &[777.0; 6]);
     finalize_oo_store_real(
         &mut oo,
@@ -85,14 +125,19 @@ fn complex_gram_honors_sample_start_and_legacy_flat_order() {
             diagonal_only: false,
         },
     );
-    assert_eq!(
-        &oo[..4],
-        &[
+    numerical_comparison::assert_values_close(
+        oo[..4].iter().flat_map(|z| [z.re, z.im]),
+        ([
             C::new(5.0, 0.0),
             C::new(5.0, -10.0),
             C::new(5.0, 10.0),
-            C::new(25.0, 0.0)
-        ]
+            C::new(25.0, 0.0),
+        ])
+        .iter()
+        .flat_map(|z| [z.re, z.im]),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
     );
     assert_eq!(&oo[4..], &[C::new(777.0, 0.0); 4]);
     finalize_oo_store(
@@ -122,7 +167,13 @@ fn cg_finalization_materializes_only_mean_and_diagonal_blocks() {
             diagonal_only: true,
         },
     );
-    assert_eq!(&oo[..6], &[2.0, 6.0, 1.0, 2.0, 20.0, 5.0]);
+    numerical_comparison::assert_values_close(
+        oo[..6].iter().copied(),
+        ([2.0, 6.0, 1.0, 2.0, 20.0, 5.0]).iter().copied(),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
+    );
     assert_eq!(&oo[6..], &[777.0; 9]);
     let complex = [
         C::new(1.0, 0.0),
@@ -145,9 +196,9 @@ fn cg_finalization_materializes_only_mean_and_diagonal_blocks() {
             diagonal_only: true,
         },
     );
-    assert_eq!(
-        &oo[..8],
-        &[
+    numerical_comparison::assert_values_close(
+        oo[..8].iter().flat_map(|z| [z.re, z.im]),
+        ([
             C::new(2.0, 0.0),
             C::new(1.0, 3.0),
             C::new(3.0, 1.0),
@@ -155,8 +206,13 @@ fn cg_finalization_materializes_only_mean_and_diagonal_blocks() {
             C::new(2.0, 0.0),
             C::new(10.0, 0.0),
             C::new(10.0, 0.0),
-            C::new(6.0, 0.0)
-        ]
+            C::new(6.0, 0.0),
+        ])
+        .iter()
+        .flat_map(|z| [z.re, z.im]),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "short weighted sample/Gram accumulation",
     );
     assert_eq!(&oo[8..], &[C::new(777.0, 0.0); 16]);
 }

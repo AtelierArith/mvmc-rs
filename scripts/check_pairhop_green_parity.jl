@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Reuse the original-source Green input states, including supplied inverse bits.
 # Check PairHop accumulation and its explicit InterAll operator representation.
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
@@ -107,6 +109,6 @@ end
         @test cursor == length(input)+1
         path = joinpath(root,"pairhop",fsz ? "energy_fsz.txt" : "energy_normal.txt")
         actual = String(take!(io))
-        if "--write" in ARGS; write(path,actual); else; @test actual == read(path,String); end
+        if "--write" in ARGS; write(path,actual); else; @test compare_hex_text(actual,read(path,String),(r,c,t)->(1e-12,1e-12)); end
     end
 end

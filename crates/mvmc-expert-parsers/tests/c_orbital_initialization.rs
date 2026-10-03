@@ -1,4 +1,6 @@
 //! C preserves declared Slater slots even when no spatial mapping uses them.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_expert_parsers::utils::parameter_init::{init_parameter, sync_modified_parameter};
 use mvmc_expert_parsers::{ExpertModeData, OrbitalTerm};
 use sfmt19937::Sfmt19937Rng;
@@ -49,7 +51,7 @@ fn data(header: &str) -> (ExpertModeData, Sfmt19937Rng) {
     (data, Sfmt19937Rng::new(fields[0]))
 }
 
-fn check_parameter_bits(data: &ExpertModeData, line: &str, label: &str) {
+fn check_parameter_values(data: &ExpertModeData, line: &str, label: &str) {
     let bits: Vec<u64> = line
         .split_whitespace()
         .map(|s| u64::from_str_radix(s, 16).unwrap())
@@ -58,10 +60,14 @@ fn check_parameter_bits(data: &ExpertModeData, line: &str, label: &str) {
     assert_eq!(data.slater_params.len(), 13);
     for (index, value) in data.slater_params.iter().enumerate() {
         let i = 2 * index;
-        assert_eq!(
-            [value.re.to_bits(), value.im.to_bits()],
-            [bits[i], bits[i + 1]],
-            "{label}, declared index {index}"
+        // Initialization plus gauge rescaling includes sqrt, division and
+        // complex magnitude correction. This bounds rounding, not RNG drift.
+        numerical_comparison::assert_values_close(
+            [value.re, value.im],
+            [f64::from_bits(bits[i]), f64::from_bits(bits[i + 1])],
+            1e-14,
+            1e-14,
+            format!("{label}, declared index {index}"),
         );
     }
 }
@@ -73,7 +79,7 @@ fn c_initialization_consumes_every_declared_active_slot_before_sampling() {
     for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
         init_parameter(&mut data, &mut rng);
-        check_parameter_bits(&data, record[1], record[0]);
+        check_parameter_values(&data, record[1], record[0]);
         let expected: Vec<u32> = record[3]
             .split_whitespace()
             .map(|s| s.parse().unwrap())
@@ -97,8 +103,8 @@ fn c_normalization_includes_initialized_declared_slots_without_spatial_mappings(
     for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
         init_parameter(&mut data, &mut rng);
-        check_parameter_bits(&data, record[1], record[0]);
+        check_parameter_values(&data, record[1], record[0]);
         sync_modified_parameter(&mut data, false);
-        check_parameter_bits(&data, record[2], record[0]);
+        check_parameter_values(&data, record[2], record[0]);
     }
 }

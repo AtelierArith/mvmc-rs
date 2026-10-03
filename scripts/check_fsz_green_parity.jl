@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Original FSZ Green kernels versus independent Fock-basis operators.
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("FSZ Green fixtures require Julia 1.13.1")
@@ -135,5 +137,5 @@ println(io,"# Original green_func1_fsz/2 and green_func2_fsz/2; independent Fock
         println(io,hex(ComplexF64[base,full]))
     end
     actual = String(take!(io)); path = joinpath(@__DIR__,"..","tests","fixtures",RBM ? "rbm/production" : COMBINED ? "dh4/combined" : DH4 ? "dh4/kernels" : DH2 ? "dh2" : "interall","green_fsz.txt")
-    if "--write" in ARGS; write(path,actual); else; @test actual == read(path,String); end
+    if "--write" in ARGS; write(path,actual); else; @test compare_hex_text(actual,read(path,String),(r,c,t)->begin o=mod1(r,13); o<=7 ? nothing : o==13 ? (1e-12,1e-12) : (1e-13,1e-13) end); end
 end

@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 using Test
 VERSION == v"1.13.1" || error("exp fixture requires Julia 1.13.1")
 path = joinpath(@__DIR__, "..", "tests", "fixtures", "exp.txt")
@@ -16,5 +18,5 @@ actual = String(take!(io))
 if "--write" in ARGS
     write(path, actual)
 else
-    @test actual == read(path, String)
+    @test compare_hex_text(actual, read(path,String), (row,col,fields)->col>=2 ? (4*nextfloat(0.0),64*eps(Float64)) : nothing)
 end

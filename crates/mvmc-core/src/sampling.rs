@@ -2,8 +2,8 @@
 //!
 //! Port targets: `MVMCOptimizers.jl/src/{slater_update.jl,vmc_sampling.jl}`
 //! (~7.7k LOC combined). The largest single file in the upstream codebase.
-//! BIT-PARITY CRITICAL: preserve the upstream BLAS call sequence so
-//! floating-point summation order matches Julia.
+//! Preserve the authoritative operation order and BLAS call sequence.
+//! Numerical bounds allow backend roundoff; RNG and sampling controls stay exact.
 //!
 //! Phase 4.3 is broken into substeps so each lands with its own golden
 //! parity test:

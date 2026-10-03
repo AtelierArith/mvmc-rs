@@ -1,4 +1,6 @@
 //! Complete C RBM initialization/loading arrays and next 624 native SFMT words.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
 use mvmc_expert_parsers::{parse_expert_mode_files, parsers::rbm::SECTION_NAMES};
 use sfmt19937::Sfmt19937Rng;
@@ -88,14 +90,14 @@ fn all_declared_rbm_slots_and_following_slater_values_match_native_c_and_rng() {
             .split_whitespace()
             .map(|v| u64::from_str_radix(v, 16).unwrap())
             .collect();
-        let actual: Vec<u64> = data
+        let actual: Vec<f64> = data
             .projection_parameters()
             .into_iter()
             .chain(data.rbm_parameters())
             .chain(data.slater_params.iter().copied())
-            .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+            .flat_map(|v| [v.re, v.im])
             .collect();
-        assert_eq!(actual, expected, "{} complete parameter array", header[0]);
+        let expected_parameters = expected;
         let expected: Vec<u32> = record[5]
             .split_whitespace()
             .map(|v| v.parse().unwrap())
@@ -105,6 +107,15 @@ fn all_declared_rbm_slots_and_following_slater_values_match_native_c_and_rng() {
             expected,
             "{} RNG",
             header[0]
+        );
+        // Exact RNG block above protects draw order; initialization scales
+        // converted draws with a few operations (16 epsilon, including libm).
+        numerical_comparison::assert_values_close(
+            actual,
+            expected_parameters.into_iter().map(f64::from_bits),
+            16.0 * f64::EPSILON,
+            16.0 * f64::EPSILON,
+            format!("{} complete parameter array", header[0]),
         );
     }
 }

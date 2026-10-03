@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 
 from check_interall_real_c_parity import bits
+from numerical_comparison import compare_text, SCALAR
 from c_toolbox import add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 
 
@@ -67,7 +68,7 @@ def main():
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
     else:
-        assert target.read_text() == output, 'Native complex division fixture changed'
+        compare_text(output, target.read_text(), lambda row, col, fields: SCALAR if col >= 4 else None)
     print(f'{len(inputs)} native C complex quotient cases passed')
 
 

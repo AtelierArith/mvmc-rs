@@ -1,4 +1,6 @@
 //! C-derived component selection exercised through both Rust SR solvers.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::{sr, sr_cg, VmcOptimizationState};
 use mvmc_expert_parsers::parse_expert_mode_files;
 use num_complex::Complex64;
@@ -80,7 +82,14 @@ fn direct_and_cg_sr_update_exactly_the_components_selected_by_c() {
                 sr::stochastic_opt_real(&mut actual, &mut state)
             };
             assert_eq!(info, 0, "{} cg={cg}", header[0]);
-            assert_eq!(actual.slater_params, expected, "{} cg={cg}", header[0]);
+            // Identity covariance: condition one, with a single step/update.
+            numerical_comparison::assert_values_close(
+                actual.slater_params.iter().flat_map(|z| [z.re, z.im]),
+                expected.iter().flat_map(|z| [z.re, z.im]),
+                16.0 * f64::EPSILON,
+                16.0 * f64::EPSILON,
+                format!("{} cg={cg}", header[0]),
+            );
             assert_eq!(actual.optimization_flags, data.optimization_flags);
         }
     }

@@ -10,7 +10,8 @@ fn main() {
     // wrappers use LP64; argument widths must match their linked backend.
     // ABI width alone does not determine floating-point parity. Backend
     // version, CPU kernels, reduction order, and solver inputs all matter.
-    // The fixed-input CG fixtures compare numerical bits against Julia 1.13.1.
+    // Fixed-input CG fixtures use explicit numerical bounds and independently
+    // materialized backward residuals against Julia 1.13.1 references.
     //
     // Linux: a system `libopenblas-dev` / `liblapack-dev` package satisfies
     // `-l openblas` just the same.

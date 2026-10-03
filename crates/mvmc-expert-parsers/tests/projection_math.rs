@@ -1,10 +1,12 @@
-//! Exact numerical inputs to the Pfaffian and SR-CG kernels.
+//! Numerical inputs to the Pfaffian and SR-CG kernels.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_expert_parsers::utils::qp_weight::{gauss_legendre, init_qp_weight_inplace};
 use mvmc_expert_parsers::QuantumProjectionWeights;
 use num_complex::Complex64;
 
 #[test]
-fn projection_coefficients_match_julia_113_numerical_bits() {
+fn projection_coefficients_match_julia_113_with_roundoff_bounds() {
     let mut rows = include_str!("../../../tests/fixtures/projection_math.txt")
         .lines()
         .filter(|s| !s.starts_with('#'));
@@ -26,10 +28,22 @@ fn projection_coefficients_match_julia_113_numerical_bits() {
                 ("sin_sin", w.spgl_sin_sin[i].re, fields[8]),
                 ("qp_weight", w.qp_full_weight[i].re, fields[9]),
             ] {
-                assert_eq!(
-                    value.to_bits(),
-                    u64::from_str_radix(expected, 16).unwrap(),
-                    "n={n} i={i} {name}"
+                // Each root uses an n-term recurrence and Newton refinement.
+                // Quadrature/QP weights additionally divide by (1-z*z): its
+                // endpoint cancellation amplifies a root's rounding error.
+                // Near-zero trigonometric coefficients need an absolute floor.
+                let z = 2.0 * beta[i] / std::f64::consts::PI - 1.0;
+                let weight_condition = if matches!(name, "quadrature" | "qp_weight") {
+                    8.0 / (1.0 - z * z)
+                } else {
+                    0.0
+                };
+                numerical_comparison::assert_close(
+                    value,
+                    f64::from_bits(u64::from_str_radix(expected, 16).unwrap()),
+                    16.0 * f64::EPSILON,
+                    (32.0 * n as f64 + weight_condition) * f64::EPSILON,
+                    format!("n={n} i={i} {name}"),
                 );
             }
         }
@@ -38,7 +52,7 @@ fn projection_coefficients_match_julia_113_numerical_bits() {
 }
 
 #[test]
-fn legendre_recurrence_matches_julia_operation_order() {
+fn legendre_recurrence_matches_julia_with_roundoff_bounds() {
     for line in include_str!("../../../tests/fixtures/legendre_poly.txt")
         .lines()
         .filter(|l| !l.starts_with('#'))
@@ -48,6 +62,14 @@ fn legendre_recurrence_matches_julia_operation_order() {
         let x = f64::from_bits(u64::from_str_radix(v[1], 16).unwrap());
         let expected = u64::from_str_radix(v[2], 16).unwrap();
         let actual = mvmc_expert_parsers::utils::qp_weight::legendre_poly(x, n);
-        assert_eq!(actual.to_bits(), expected, "n={n} x={x}");
+        // Recurrence roundoff grows with the number of polynomial steps.
+        let bound = 16.0 * (n + 1) as f64 * f64::EPSILON;
+        numerical_comparison::assert_close(
+            actual,
+            f64::from_bits(expected),
+            bound,
+            bound,
+            format!("n={n} x={x}"),
+        );
     }
 }

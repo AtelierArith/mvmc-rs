@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text, GREEN, ENERGY
 from c_toolbox import materialize, add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 from check_general_orbital_c_parity import function
 from check_interall_real_c_parity import bits
@@ -88,7 +89,12 @@ def main():
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
     else:
-        assert target.read_text() == output, "Native C complex Green/InterAll fixture changed"
+        def computed(row, column, fields):
+            offset = row % 1036
+            if 10 <= offset < 1034:
+                return GREEN if column >= 8 else None
+            return ENERGY if offset >= 1034 else None
+        assert compare_text(output, target.read_text(), computed) == models * 1036
     print(f"{checked} native C complex Green operators, {models} ordered InterAll sums and {models} PairHop sums passed")
 
 

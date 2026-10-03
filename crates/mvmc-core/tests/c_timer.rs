@@ -1,4 +1,6 @@
 //! CTimer contracts from Julia c_timer.jl, with an injected deterministic clock.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::c_timer::{CTimer, TimerEnv, CTIMER_N};
 use std::fs;
 
@@ -14,7 +16,13 @@ fn inclusive_sections_accumulate_and_reset_both_arrays() {
     timer.start_at(3, 1500);
     timer.stop_at(3, 2000);
     assert_eq!(timer.elapsed_ns[3], 1000);
-    assert_eq!(timer.seconds(3), 0.000001);
+    numerical_comparison::assert_close(
+        timer.seconds(3),
+        0.000001,
+        0.0,
+        4.0 * f64::EPSILON,
+        "nanoseconds to seconds",
+    );
     timer.reset();
     assert!(timer.elapsed_ns.iter().all(|&value| value == 0));
     assert!(timer.start_ns.iter().all(|&value| value == 0));

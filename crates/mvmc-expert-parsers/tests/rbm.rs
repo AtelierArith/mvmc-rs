@@ -1,6 +1,8 @@
 mod common;
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
 use std::path::PathBuf;
@@ -129,11 +131,15 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
             .split_whitespace()
             .map(|s| u64::from_str_radix(s, 16).unwrap())
             .collect();
-        let actual: Vec<u64> = values
-            .iter()
-            .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-            .collect();
-        assert_eq!(actual, bits, "{header}");
+        // Radius/phase/trig initialization uses a small sequence of operations;
+        // exact SFMT block below independently verifies the draw trajectory.
+        numerical_comparison::assert_values_close(
+            values.iter().flat_map(|v| [v.re, v.im]),
+            bits.into_iter().map(f64::from_bits),
+            1e-14,
+            1e-14,
+            header,
+        );
         let state: Vec<u32> = lines
             .next()
             .unwrap()

@@ -3,6 +3,8 @@
 mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use std::path::{Path, PathBuf};
 
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -61,6 +63,18 @@ fn integers(line: &str) -> Vec<i64> {
     line.split_whitespace()
         .map(|s| s.parse().unwrap())
         .collect()
+}
+
+// Initial coefficients use only a few scale/divide/trig operations;
+// 1e-14 covers their rounding while SFMT words and layout stay exact.
+fn check_computed_values(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
+    numerical_comparison::assert_values_close(
+        values.into_iter().flat_map(|v| [v.re, v.im]),
+        numerical_comparison::hex_values(expected),
+        1e-14,
+        1e-14,
+        label,
+    );
 }
 
 fn check_bits(values: impl IntoIterator<Item = Complex64>, line: &str, label: &str) {
@@ -183,7 +197,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
                 .iter()
                 .map(|t| data.slater_params[t.idx as usize]),
         );
-        check_bits(values, lines.next().unwrap(), name);
+        check_computed_values(values, lines.next().unwrap(), name);
         let historical_words = integers(lines.next().unwrap());
         assert_eq!(historical_words.len(), 624);
         // Historical sparse Julia records omit declared slot 3. Compare RNG

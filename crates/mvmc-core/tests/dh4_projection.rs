@@ -1,4 +1,6 @@
 //! Canonical DH4 combinatorial kernels, with exhaustive original-source fixtures.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::observables::set_projection_diff;
 use mvmc_core::sampling::projection::{
     log_proj_ratio, log_proj_val, make_proj_cnt, update_proj_cnt,
@@ -111,18 +113,22 @@ fn check_every_occupation_matches_julia_dense_dh_counts_and_derivatives(combined
         let mut actual = vec![99; d.projection_layout().n_proj];
         make_proj_cnt(&mut actual, &occupancy(mask), &d);
         assert_eq!(actual, expected[mask], "mask {mask}");
-        assert_eq!(
-            log_proj_val(&actual, &d).to_bits(),
-            logs[mask],
-            "mask {mask} log"
+        // A projection log is a short parameter/count dot product.
+        numerical_comparison::assert_close(
+            log_proj_val(&actual, &d),
+            f64::from_bits(logs[mask]),
+            64.0 * f64::EPSILON,
+            64.0 * f64::EPSILON,
+            format!("mask {mask} log"),
         );
         let mut diff = vec![Complex64::new(99.0, 99.0); 2 * (actual.len() + 1)];
         set_projection_diff(&mut diff, &actual, actual.len());
-        assert_eq!(
-            diff.iter()
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect::<Vec<_>>(),
-            derivatives[mask]
+        numerical_comparison::assert_values_close(
+            diff.iter().flat_map(|z| [z.re, z.im]),
+            derivatives[mask].iter().copied().map(f64::from_bits),
+            4.0 * f64::EPSILON,
+            4.0 * f64::EPSILON,
+            format!("mask {mask} derivatives"),
         );
     }
 }
@@ -145,9 +151,12 @@ fn check_every_allowed_normal_and_spin_changing_hop_matches_julia_fresh_counts(c
             &d,
         );
         assert_eq!(actual, counts[next], "move {line}");
-        assert_eq!(
-            log_proj_ratio(&actual, &counts[mask], &d).to_bits(),
-            u64::from_str_radix(row[6], 16).unwrap()
+        numerical_comparison::assert_close(
+            log_proj_ratio(&actual, &counts[mask], &d),
+            f64::from_bits(u64::from_str_radix(row[6], 16).unwrap()),
+            64.0 * f64::EPSILON,
+            64.0 * f64::EPSILON,
+            format!("move {line} log ratio"),
         );
     }
 }
@@ -223,12 +232,13 @@ fn check_dh_gauge_matches_julia_declared_flags_compensation_and_shift_order(comb
                     .iter()
                     .map(|t| d.slater_params[t.idx as usize]),
             );
-        assert_eq!(
-            values
-                .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-                .collect::<Vec<_>>(),
-            bits(lines.next().unwrap()),
-            "{name}"
+        // Gauge shift/normalization includes short reductions, exp and sqrt.
+        numerical_comparison::assert_values_close(
+            values.flat_map(|z| [z.re, z.im]),
+            bits(lines.next().unwrap()).into_iter().map(f64::from_bits),
+            128.0 * f64::EPSILON,
+            128.0 * f64::EPSILON,
+            name,
         );
     }
 }
@@ -392,14 +402,18 @@ fn check_direct_sr_updates_each_dh_component_without_writing_other_projection_sl
                     format!("{} {local} {imaginary}", usize::from(complex))
                 );
                 let expected = bits(reference.next().unwrap());
-                let actual: Vec<u64> = d
+                let actual: Vec<f64> = d
                     .projection_parameters()
                     .iter()
-                    .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
+                    .flat_map(|v| [v.re, v.im])
                     .collect();
-                assert_eq!(
-                    actual, expected,
-                    "complex={complex} DH slot {local} component {imaginary}"
+                // This SR input is diagonal with one active component (condition 1).
+                numerical_comparison::assert_values_close(
+                    actual,
+                    expected.into_iter().map(f64::from_bits),
+                    16.0 * f64::EPSILON,
+                    16.0 * f64::EPSILON,
+                    format!("complex={complex} DH slot {local} component {imaginary}"),
                 );
                 for (i, (old, new)) in before.iter().zip(d.projection_parameters()).enumerate() {
                     if i != target {

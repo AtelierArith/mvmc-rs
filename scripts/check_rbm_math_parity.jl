@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # RBM numerical primitives from Julia 1.13.1 Base, without source modifications.
 using Test, Random, SFMT, LinearAlgebra
 VERSION == v"1.13.1" || error("RBM math fixtures require Julia 1.13.1")
@@ -19,5 +21,5 @@ end
 path=joinpath(@__DIR__,"..","tests","fixtures","rbm","production","math.txt")
 actual=String(take!(io))
 @testset "Original RBM complex primitives" begin
-    if "--write" in ARGS;write(path,actual);else;@test actual==read(path,String);end
+    if "--write" in ARGS;write(path,actual);else;@test compare_hex_text(actual,read(path,String),(r,c,t)->c>=3 ? (4*nextfloat(0.0),64*eps(Float64)) : nothing);end
 end

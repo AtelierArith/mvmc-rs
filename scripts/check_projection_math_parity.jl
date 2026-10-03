@@ -1,5 +1,7 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Julia 1.13.1 projection coefficients, including the trig kernels in Base.
-# Run with --write to regenerate the exact-bit fixture.
+# Run with --write to regenerate the losslessly encoded fixture.
 using MVMCExpertModeParsers, Test, LinearAlgebra
 VERSION == v"1.13.1" || error("Projection fixture requires Julia 1.13.1")
 path = joinpath(@__DIR__, "..", "tests", "fixtures", "projection_math.txt")
@@ -25,7 +27,7 @@ if "--write" in ARGS
     write(path, actual)
 else
     numerical(s) = join(filter(l -> !startswith(l, "#"), split(s, '\n')), '\n')
-    @test numerical(actual) == numerical(read(path, String))
+    @test compare_hex_text(actual,read(path,String),(r,c,t)->c>=3 ? (1e-13,1e-13) : nothing)
 end
 
 # Reciprocal-then-multiply in the upstream Legendre recurrence is observable.
@@ -41,5 +43,5 @@ if "--write" in ARGS
     write(path, actual)
 else
     numerical(s) = join(filter(l -> !startswith(l, "#"), split(s, '\n')), '\n')
-    @test numerical(actual) == numerical(read(path, String))
+    @test compare_hex_text(actual,read(path,String),(r,c,t)->c>=3 ? (1e-13,1e-13) : nothing)
 end

@@ -170,3 +170,15 @@ mpirun -n 2 cargo nextest run -p mvmc-core --features mpi
 The ordinary build does not enable this feature. On hosts without an MPI
 installation, the feature check fails during `mpi-sys` discovery; the default
 single-process build and tests remain independent of that system dependency.
+
+
+## Portable numerical comparisons
+
+After #186, computed floating-point parity uses explicit absolute and relative
+bounds on native Linux and macOS. C remains the numerical algorithm authority,
+Julia the design reference; Linux is the reference-generation environment.
+RNG words, draw counts, proposals, acceptance and saved configurations remain
+exact gates. See [NUMERICAL_COMPARISONS.md](NUMERICAL_COMPARISONS.md) for the
+comparison inventory, operation budgets, residual checks and nonfinite rules.
+Use `cargo nextest run --workspace --locked --cargo-profile test-fast` for
+full checks; include `--all-features --run-ignored all` for optional coverage.

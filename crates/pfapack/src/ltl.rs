@@ -152,7 +152,7 @@ where
             let alpha = T::ltl_alpha(pivot, turbo);
 
             // Skew-symmetric rank-2 update of the **upper-triangular** part
-            // of A[0..kk0, 0..kk0], byte-for-byte equivalent to Julia
+            // of A[0..kk0, 0..kk0], following the operation order of Julia
             // `julia_dsktf2!` (ltl_decomposition.jl:124-150). Julia
             // deliberately uses a hand-rolled upper-triangle-only DSKR2
             // here ("Optimized skew-symmetric rank-2 update") instead of
@@ -164,7 +164,7 @@ where
             //
             // We mirror that here: a single `dger` would touch the lower
             // triangle, which `utu2pfa` doesn't care about but the golden
-            // diff does, so the scalar form is the bit-parity-correct
+            // diff does, so the scalar form preserves this storage contract
             // backend even when `--features blas-backend` is on.
             let lda = a.lda();
             T::update_rank2_mode(a.as_mut_slice(), lda, kk0, k0, alpha, turbo, c_order);

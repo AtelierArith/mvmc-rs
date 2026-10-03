@@ -2,9 +2,9 @@
 use mvmc_expert_parsers::ExpertModeData;
 
 // Historical Julia snapshots duplicate shared mapping values. Convert their
-// rows to C's declared-index order, checking every duplicate bit/string and
+// rows to C's declared-index order, checking every duplicate stored value/string and
 // requiring every declared slot to be present in the historical fixture.
-pub(super) fn declared_slater_rows<T: Clone + Eq + std::fmt::Debug>(
+pub(super) fn declared_slater_rows<T: Clone + PartialEq + std::fmt::Debug>(
     data: &ExpertModeData,
     mapped: &[T],
 ) -> Vec<T> {

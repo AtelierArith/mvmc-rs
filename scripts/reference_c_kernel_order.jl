@@ -101,11 +101,10 @@ function verify_c_counter_translation!()
             ele_num = [(occupation >> bit) & 1 for bit in 0:2*nsite-1]
             expected = parse.(UInt64, split(lines[at]); base=16); at += 1
             actual = MVMCOptimizers.make_rbm_cnt(ele_num, data)
-            actual_bits = collect(reinterpret(UInt64, actual))
-            @assert length(actual_bits) == length(expected) "C counter width $name"
-            for i in eachindex(expected)
-                @assert actual_bits[i] == expected[i] "C MakeRBMCnt $name occupation=$occupation component=$i actual=$(actual_bits[i]) expected=$(expected[i])"
-            end
+            actual_values = collect(reinterpret(Float64,actual))
+            expected_values = reinterpret.(Float64,expected)
+            @assert length(actual_values) == length(expected) "C counter width $name"
+            @assert all(isapprox(a,e;atol=1e-13,rtol=1e-13,nans=true) for (a,e) in zip(actual_values,expected_values)) "C MakeRBMCnt $name occupation=$occupation"
             at += 1 # Incremental-hop expectations are tested independently in Rust.
             checked += 1
         end

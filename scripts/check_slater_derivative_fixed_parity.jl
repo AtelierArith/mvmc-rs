@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Fixed first-sample QP buffer from the real Heisenberg chain, Julia 1.13.1.
 using Test, MVMCOptimizers
 VERSION == v"1.13.1" || error("Slater derivative fixture requires Julia 1.13.1")
@@ -9,4 +11,4 @@ buffer, weights, ip = parse_complex(lines[2]), parse_complex(lines[3]), only(par
 actual = zeros(ComplexF64,2n)
 MVMCOptimizers._store_slater_sr_opt_o_fast!(actual,buffer,weights,1.0/ip,nqp,n)
 expected = parse_complex(lines[5])
-@test reinterpret(UInt64,actual) == reinterpret(UInt64,expected)
+@test ReferenceNumericalComparison.close_values(reinterpret(Float64,actual),reinterpret(Float64,expected),1e-13,1e-13;context="Slater derivative")

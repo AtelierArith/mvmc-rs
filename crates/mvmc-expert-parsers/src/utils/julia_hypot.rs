@@ -1,5 +1,7 @@
 //! Julia 1.13.1 Base/math.jl Float64 hypot for parameter normalization.
 //! MIT Julia contributors; full notice in ../../LICENSE-julia-math.
+#[cfg(test)]
+use crate::numerical_comparison;
 
 /// Compute the complex amplitude with Julia's rounding and scaling order.
 pub fn hypot(x: f64, y: f64) -> f64 {
@@ -37,19 +39,20 @@ pub fn hypot(x: f64, y: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn normalization_magnitude_matches_julia_numerical_bits() {
+    fn normalization_magnitude_matches_julia_with_roundoff_bound() {
         for line in include_str!("../../../../tests/fixtures/hypot.txt").lines() {
             let values: Vec<f64> = line
                 .split_whitespace()
                 .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
                 .collect();
             let actual = super::hypot(values[0], values[1]);
-            assert_eq!(
-                actual.to_bits(),
-                values[2].to_bits(),
-                "hypot({}, {})",
-                values[0],
-                values[1]
+            // Scaled squares, square root and correction: eight rounding units.
+            super::numerical_comparison::assert_close(
+                actual,
+                values[2],
+                2.0 * f64::from_bits(1),
+                8.0 * f64::EPSILON,
+                format!("hypot({}, {})", values[0], values[1]),
             );
         }
     }

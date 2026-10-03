@@ -7,6 +7,9 @@ import subprocess
 import tempfile
 
 from check_projection_count_c_parity import function
+from numerical_comparison import compare_text
+import math
+import re
 from c_toolbox import materialize
 
 
@@ -56,7 +59,7 @@ def main():
         if not target.exists() or target.read_text() != actual:
             target.write_text(actual)
     else:
-        assert actual == target.read_text(), "C orbital initialization contract changed"
+        compare_text(actual,target.read_text(),lambda r,c,t: (32*math.ulp(1.0),32*math.ulp(1.0)) if r%4 in (1,2) else None)
     for name, body in (("c_declared_flags.txt", flag_cases), ("c_loaded.txt", loaded_cases),
                        ("c_rbm_prefix.txt", prefix_cases), ("c_shared_matrix.txt", shared_case)):
         result = f"# mVMC-1.3.0 actual InitParameter/ReadInitParameter/SyncModifiedParameter/SFMT; {checksums}\n" + "\n".join(line.rstrip() for line in body.splitlines()) + "\n"
@@ -65,7 +68,16 @@ def main():
             if not path.exists() or path.read_text() != result:
                 path.write_text(result)
         else:
-            assert result == path.read_text(), f"C {name} contract changed"
+            def computed(row,column,fields):
+                if name == "c_shared_matrix.txt":
+                    return (1e-13,1e-13)
+                offset=row%4
+                if offset not in (1,2): return None
+                # Last two declared-flag blocks read/copy supplied values
+                # before SyncModifiedParameter; loaded initial values are inputs.
+                literal=(name=="c_loaded.txt" or (name=="c_declared_flags.txt" and row//4>=6)) and offset==1
+                return None if literal else (32*math.ulp(1.0),32*math.ulp(1.0))
+            compare_text(result,path.read_text(),computed)
     print("8 C initialization + 8 declared-flag/sync + 2 full-loading + 30 RBM prefix + 1 shared matrix cases passed")
 
 

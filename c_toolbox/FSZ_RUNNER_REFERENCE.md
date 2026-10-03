@@ -18,7 +18,10 @@ only the serial MPI branch runs, and a collective call aborts.
 The `.inc` files retain upstream GPL notices, full source SHA-256 values and
 function boundaries. `check_native_fsz_runner_bridge.py` reextracts and checks
 their exact contents before building. It verifies 72 complex and 36 scalar
-native energy fixtures bitwise and checks every borrowed operand for mutation.
+native energy fixtures with explicit absolute/relative numerical bounds and
+checks every borrowed operand for mutation exactly. The original #186 gate was
+bitwise; the current #190 policy is in
+[NUMERICAL_COMPARISONS.md](../docs/NUMERICAL_COMPARISONS.md).
 The scalar library supports these kernel checks; runner generation uses the
 complex library. Recorded provenance includes compiler, platform, source
 hashes and `-O0 -ffp-contract=off -fPIC -fvisibility=hidden`; linkage is

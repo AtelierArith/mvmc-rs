@@ -1,3 +1,5 @@
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::{qp, read_initial_def, read_opt_para_file, ExpertModeData};
 use num_complex::Complex64;
 use std::path::PathBuf;
@@ -32,9 +34,13 @@ fn data_weight_initialization_and_refresh_include_opttrans_sectors() {
     assert_eq!(data.qp_weights.as_ref().unwrap().qp_full_weight.len(), 4);
     data.opt_trans[1] = Complex64::new(0.5, -0.25);
     qp::update_qp_weight_for(&mut data);
-    assert_eq!(
-        data.qp_weights.unwrap().qp_full_weight[2],
-        data.opt_trans[1]
+    let weight = data.qp_weights.unwrap().qp_full_weight[2];
+    numerical_comparison::assert_values_close(
+        [weight.re, weight.im],
+        [data.opt_trans[1].re, data.opt_trans[1].im],
+        4.0 * f64::EPSILON,
+        4.0 * f64::EPSILON,
+        "sector weight product",
     );
 }
 
@@ -57,28 +63,15 @@ fn model(name: &str) -> ExpertModeData {
     data
 }
 
-fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
-    let actual: Vec<_> = values
-        .into_iter()
-        .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-        .collect();
-    let expected: Vec<_> = expected
-        .split_whitespace()
-        .map(|v| u64::from_str_radix(v, 16).unwrap())
-        .collect();
-    assert_eq!(actual.len(), expected.len(), "{label}: component count");
-    for (index, (actual, expected)) in actual.into_iter().zip(expected).enumerate() {
-        if actual != expected {
-            // Julia's historical real fixture and C differ only in signed-zero
-            // representation; nonzero bits remain an exact comparison.
-            let actual_zero = f64::from_bits(actual) == 0.0;
-            let expected_zero = f64::from_bits(expected) == 0.0;
-            assert!(
-                actual_zero && expected_zero,
-                "{label}: component {index}: actual={actual:016x} expected={expected:016x}"
-            );
-        }
-    }
+fn check_values(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
+    // At most a small QP reduction and libm projection factors in these fixtures.
+    numerical_comparison::assert_values_close(
+        values.into_iter().flat_map(|z| [z.re, z.im]),
+        numerical_comparison::hex_values(expected),
+        128.0 * f64::EPSILON,
+        128.0 * f64::EPSILON,
+        label,
+    );
 }
 
 fn values(data: &mut ExpertModeData) -> Vec<Complex64> {
@@ -109,7 +102,7 @@ fn c_loader_values(data: &mut ExpertModeData, raw: &str) -> String {
         result.extend_from_slice(&raw[start..start + 2]);
     });
     let slater_start = 2 * (n_proj + n_rbm);
-    bits(
+    check_values(
         data.slater_params.iter().copied(),
         &raw[slater_start..slater_start + 2 * n_slater].join(" "),
         "full C Slater load",
@@ -184,20 +177,20 @@ fn loader_contracts_use_c_numeric_conversion_and_compatible_julia_regressions() 
             );
             assert!(error.is_empty(), "{error}");
             let expected = c_loader_values(&mut data, record[2]);
-            bits(values(&mut data), &expected, header);
+            check_values(values(&mut data), &expected, header);
         } else {
             assert_eq!(result, fields[3].parse::<i64>().unwrap(), "{header}");
             assert_eq!(error, historical_error, "{header}");
-            bits(values(&mut data), historical_values, header);
+            check_values(values(&mut data), historical_values, header);
         }
-        bits(data.para_qp_opt_trans, lines.next().unwrap(), header);
+        check_values(data.para_qp_opt_trans, lines.next().unwrap(), header);
         cases += 1;
     }
     assert_eq!(cases, 132);
 }
 
 #[test]
-fn initialized_updated_and_resized_sector_weights_match_julia_bits() {
+fn initialized_updated_and_resized_sector_weights_match_julia_values() {
     let text = std::fs::read_to_string(root().join("weights.txt")).unwrap();
     let mut lines = text.lines().filter(|line| !line.starts_with('#'));
     let mut data = ExpertModeData::new();
@@ -242,7 +235,7 @@ fn initialized_updated_and_resized_sector_weights_match_julia_bits() {
             &weights.spgl_cos_cos,
             &weights.spgl_sin_sin,
         ] {
-            bits(values.iter().copied(), lines.next().unwrap(), header);
+            check_values(values.iter().copied(), lines.next().unwrap(), header);
         }
         cases += 1;
     }
@@ -383,7 +376,7 @@ fn nonidentity_slater_matrices_and_derivatives_match_canonical_julia() {
         } else {
             mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
         }
-        bits(
+        check_values(
             state.slater_matrix.slater_elm.as_slice().iter().copied(),
             lines.next().unwrap(),
             header,
@@ -411,10 +404,10 @@ fn nonidentity_slater_matrices_and_derivatives_match_canonical_julia() {
         } else {
             mvmc_core::observables::slater_elm_diff(&mut sr, ip, &[0, 3], &data, &state);
         }
-        bits(sr, lines.next().unwrap(), header);
+        check_values(sr, lines.next().unwrap(), header);
         let mut opt = vec![Complex64::new(7.0, -9.0); 6];
         mvmc_core::observables::opt_trans_diff(&mut opt, ip, &data, &state.slater_matrix.pf_m);
-        bits(opt, lines.next().unwrap(), header);
+        check_values(opt, lines.next().unwrap(), header);
         cases += 1;
     }
     assert_eq!(cases, 120);
@@ -451,7 +444,7 @@ fn opttrans_derivative_bounds_empty_inputs_and_partial_pfaffians_match_julia() {
             &data,
             &state.slater_matrix.pf_m,
         );
-        bits(opt, lines.next().unwrap(), header);
+        check_values(opt, lines.next().unwrap(), header);
         cases += 1;
     }
     assert_eq!(cases, 162);

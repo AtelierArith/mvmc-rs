@@ -1,4 +1,6 @@
 //! Actual C readers, MakeRBMCnt and UpdateRBMCnt; no native tools at test time.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::sampling::rbm::{make_rbm_cnt, update_rbm_cnt_hopping, RbmConfig};
 use mvmc_expert_parsers::{parse_expert_mode_files, parsers::rbm::SECTION_NAMES};
 use num_complex::Complex64;
@@ -17,11 +19,15 @@ fn bits(line: &str) -> Vec<u64> {
         .collect()
 }
 
-fn value_bits(values: &[Complex64]) -> Vec<u64> {
-    values
-        .iter()
-        .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-        .collect()
+fn check_counter(values: &[Complex64], expected: Vec<u64>, context: &str) {
+    // <=12 sites with additions and incremental subtraction: 64 epsilon.
+    numerical_comparison::assert_values_close(
+        values.iter().flat_map(|z| [z.re, z.im]),
+        expected.into_iter().map(f64::from_bits),
+        64.0 * f64::EPSILON,
+        64.0 * f64::EPSILON,
+        context,
+    );
 }
 
 fn check_native_counters(update: bool) {
@@ -109,12 +115,12 @@ fn check_native_counters(update: bool) {
                     movement[3] as u8,
                     &cfg,
                 );
-                assert_eq!(value_bits(&actual), new, "{name} hop {case}: {movement:?}");
+                check_counter(&actual, new, &format!("{name} hop {case}: {movement:?}"));
             } else {
-                assert_eq!(
-                    value_bits(&make_rbm_cnt(&occupation, &cfg)),
+                check_counter(
+                    &make_rbm_cnt(&occupation, &cfg),
                     old,
-                    "{name} counter {case}: {movement:?}"
+                    &format!("{name} counter {case}: {movement:?}"),
                 );
             }
             cases += 1;

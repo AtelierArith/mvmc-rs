@@ -1,5 +1,7 @@
 //! Julia 1.13.1 real FSZ setup fixtures, including full post-retry RNG blocks.
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::pfaffian::{calc_m_all_fsz_real, CalcMAllError};
 use mvmc_core::sampling::initial::make_initial_sample_fsz_real;
 use mvmc_core::{ExpertModeData, SlaterMatrixData, ThreadedPfaPackWorkspace, VmcOptimizationState};
@@ -34,10 +36,16 @@ fn sentinels(s: &mut SlaterMatrixData) {
     s.inv_m_real.as_mut_slice().fill(23.0);
 }
 
-fn assert_bits(actual: impl IntoIterator<Item = f64>, expected: &[f64]) {
-    let actual: Vec<_> = actual.into_iter().map(f64::to_bits).collect();
-    let expected: Vec<_> = expected.iter().map(|v| v.to_bits()).collect();
-    assert_eq!(actual, expected);
+fn assert_matrix_values(actual: impl IntoIterator<Item = f64>, expected: &[f64]) {
+    // Small (<=8) native inverse kernels: allow roundoff amplified by inversion;
+    // sentinel planes and scratch slots are checked exactly below.
+    numerical_comparison::assert_values_close(
+        actual,
+        expected.iter().copied(),
+        512.0 * f64::EPSILON,
+        512.0 * f64::EPSILON,
+        "FSZ setup matrix",
+    );
 }
 
 #[test]
@@ -68,8 +76,8 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
         s.slater_elm.as_mut_slice().copy_from_slice(&slater);
         let pool = ThreadedPfaPackWorkspace::new(2 * ne, 1);
         calc_m_all_fsz_real(&idx, &spins, &mut s, 1, 3, ns, ne, &pool).unwrap();
-        assert_bits(s.pf_m.iter().flat_map(|z| [z.re, z.im]), &pf);
-        assert_bits(s.pf_m_real.iter().copied(), &real_pf);
+        assert_matrix_values(s.pf_m.iter().flat_map(|z| [z.re, z.im]), &pf);
+        assert_matrix_values(s.pf_m_real.iter().copied(), &real_pf);
         // Published inverse values use native-library arithmetic; unchanged
         // QP planes remain an exact state-preservation gate.
         for qp in [0, 3] {
@@ -80,7 +88,7 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
                 .all(|&z| z == Complex64::new(37.0, 11.0)));
             assert!(s.inv_m_real.qp_matrix_slice(qp).iter().all(|&v| v == 23.0));
         }
-        assert_bits(
+        assert_matrix_values(
             (0..4).flat_map(|qp| {
                 s.inv_m
                     .qp_matrix_slice(qp)
@@ -89,7 +97,7 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
             }),
             &inverse,
         );
-        assert_bits(
+        assert_matrix_values(
             (0..4).flat_map(|qp| s.inv_m_real.qp_matrix_slice(qp).iter().copied()),
             &real_inverse,
         );
@@ -199,7 +207,16 @@ fn real_fsz_calculation_and_initial_retries_match_julia() {
         } else {
             result.unwrap();
             if kind == "zero" {
-                assert_eq!(state.slater_matrix.pf_m_real, [0.0]);
+                // The zero matrix has an algebraically zero Pfaffian: a zero
+                // absolute budget rejects spurious nonzero results while the
+                // numerical helper treats signed zeros as equivalent.
+                numerical_comparison::assert_values_close(
+                    state.slater_matrix.pf_m_real.iter().copied(),
+                    [0.0],
+                    0.0,
+                    4.0 * f64::EPSILON,
+                    "zero-matrix Pfaffian",
+                );
                 assert!(state
                     .slater_matrix
                     .inv_m_real

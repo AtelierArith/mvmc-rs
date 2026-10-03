@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Canonical declared orbital layout, boundary caches, initialization and loading.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("Orbital contract fixtures require Julia 1.13.1")
@@ -54,5 +56,5 @@ end
         end
     end
     actual=String(take!(io));path=joinpath(root,"contracts.txt")
-    "--write" in ARGS ? write(path,actual) : @test(actual==read(path,String))
+    "--write" in ARGS ? write(path,actual) : @test(compare_initialization_text(actual,read(path,String)))
 end

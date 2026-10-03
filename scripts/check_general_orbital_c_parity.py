@@ -7,6 +7,7 @@ import re
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text, GREEN
 from c_toolbox import materialize
 from check_orbital_contracts_c_parity import definition
 
@@ -117,7 +118,11 @@ def main():
             if not path.exists() or path.read_text() != content:
                 path.write_text(content)
         else:
-            assert path.read_text() == content, f"C General fixture changed: {name}"
+            if name == "c_general_reader.txt":
+                assert path.read_text() == content, f"C General reader contract changed: {name}"
+            else:
+                compare_text(content, path.read_text(),
+                             lambda row, col, fields: GREEN if row % 8 in (4, 7) else None)
     print(f"{count} C General reader cases ({accepted} accepted), {accepted} FSZ kernel cases passed")
 
 

@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Canonical strict DH2 definition/layout tests plus exact initialization boundaries.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("DH2 fixtures require Julia 1.13.1")
@@ -8,7 +10,7 @@ hex(v) = join(string.(reinterpret(UInt64,collect(reinterpret(Float64,v)));base=1
 function verify(name, actual)
     path = joinpath(root,name)
     if "--write" in ARGS; write(path,actual)
-    else; @test actual == read(path,String); end
+    else; @test name=="initial.txt" ? compare_initialization_text(actual,read(path,String)) : compare_hex_text(actual,read(path,String),(r,c,t)->nothing); end
 end
 @testset "Strict DH2 original parser and initialization" begin
     io = IOBuffer()

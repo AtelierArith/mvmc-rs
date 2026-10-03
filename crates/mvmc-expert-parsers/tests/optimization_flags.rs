@@ -1,4 +1,6 @@
 //! Definition flags must control initialization draws and gauge shifts.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_expert_parsers::parse_expert_mode_files;
 use mvmc_expert_parsers::utils::parameter_init::{init_parameter, sync_modified_parameter};
 use num_complex::Complex64;
@@ -105,8 +107,15 @@ fn fixed_slater_slots_skip_rng_draws_including_shared_and_reserved_slots() {
         (0.0, 0.0),
         (0.0, 0.0),
     ]) {
-        assert_eq!(data.slater_params[idx].re.to_bits(), re.to_bits());
-        assert_eq!(data.slater_params[idx].im.to_bits(), im.to_bits());
+        // sqrt/divide initialization roundoff; fixed zeros and RNG checks
+        // below preserve the exact flag-controlled behavior.
+        numerical_comparison::assert_values_close(
+            [data.slater_params[idx].re, data.slater_params[idx].im],
+            [re, im],
+            1e-14,
+            1e-14,
+            format!("Slater index {idx}"),
+        );
     }
     for term in &data.orbital_terms {
         if [0, 9, 10].contains(&term.idx) {
