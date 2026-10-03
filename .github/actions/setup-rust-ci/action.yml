@@ -1,0 +1,56 @@
+name: Set up Rust numerical CI
+description: Verify architecture, install numerical dependencies, and restore Cargo artifacts.
+inputs:
+  arch:
+    description: Expected GitHub runner architecture.
+    required: true
+  platform:
+    description: Platform identifier for the shared Cargo cache.
+    required: true
+  cache-key:
+    description: Check configuration to keep parallel cache writes separate.
+    required: true
+  tools:
+    description: Optional tools to install with taiki-e/install-action.
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Verify runner architecture
+      env:
+        EXPECTED_ARCH: ${{ inputs.arch }}
+      shell: bash
+      run: test "$RUNNER_ARCH" = "$EXPECTED_ARCH"
+    - name: Install Linux numerical libraries and MPI
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenblas-dev liblapack-dev libclang-dev libmpich-dev mpich pkg-config
+    - name: Install macOS numerical libraries and MPI
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install openblas mpich
+        echo "PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+        echo "LIBCLANG_PATH=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib" >> "$GITHUB_ENV"
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ inputs.platform }}
+        key: ${{ inputs.cache-key }}
+    - uses: taiki-e/install-action@v2
+      if: inputs.tools != ''
+      with:
+        tool: ${{ inputs.tools }}
+    - name: Record tool and backend versions
+      shell: bash
+      run: |
+        uname -a
+        rustc -Vv
+        if command -v cargo-nextest >/dev/null; then cargo nextest --version; fi
+        pkg-config --modversion openblas
+        echo "Requested OpenBLAS core: $OPENBLAS_CORETYPE"
+        mpicc -show
