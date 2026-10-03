@@ -1,7 +1,7 @@
 //! Selected-gate diagnostics; classification never substitutes for verification.
 use std::{fmt, fs, io, path::Path};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
     MissingFixture,
     Failure,
@@ -102,7 +102,11 @@ fn read_failure(path: &Path, error: io::Error) -> GateError {
 /// Preserve the existing independent verifier unchanged, after missing-file preflight.
 pub fn require_bundle(root: &Path, manifest: &str) -> Result<(), GateError> {
     let bytes = read_required(&bundle_file(root, manifest)?)?;
-    let text = std::str::from_utf8(&bytes).map_err(|error| GateError {
+    require_manifest_members(&bytes, root)
+}
+
+pub fn require_manifest_members(bytes: &[u8], root: &Path) -> Result<(), GateError> {
+    let text = std::str::from_utf8(bytes).map_err(|error| GateError {
         status: Status::Failure,
         detail: format!("invalid manifest UTF8: {error}"),
     })?;
@@ -160,12 +164,113 @@ pub fn verify_selected(
     })
 }
 
+pub fn selection<'a>(value: &'a str, supported: &'a [&'a str]) -> Result<Vec<&'a str>, GateError> {
+    if value.trim() == "all" {
+        return Ok(supported.to_vec());
+    }
+    let mut selected = Vec::new();
+    for name in value.split(',').map(str::trim) {
+        if !supported.contains(&name) || selected.contains(&name) {
+            return Err(GateError {
+                status: Status::Unsupported,
+                detail: format!("unknown/empty/duplicate selected model: {name:?}"),
+            });
+        }
+        selected.push(name);
+    }
+    Ok(selected)
+}
+
+pub fn require_files(root: &Path, files: &[&str]) -> Result<(), GateError> {
+    for file in files {
+        bundle_file(root, file)?;
+    }
+    Ok(())
+}
+
+pub fn read_member(root: &Path, file: &str) -> Result<Vec<u8>, GateError> {
+    read_required(&bundle_file(root, file)?)
+}
+
+pub fn raise(error: GateError) -> ! {
+    std::panic::panic_any(error)
+}
+
+pub fn caught_error(payload: &(dyn std::any::Any + Send)) -> GateError {
+    if let Some(error) = payload.downcast_ref::<GateError>() {
+        GateError {
+            status: match error.status {
+                Status::MissingFixture => Status::MissingFixture,
+                Status::Failure => Status::Failure,
+                Status::Unsupported => Status::Unsupported,
+            },
+            detail: error.detail.clone(),
+        }
+    } else {
+        GateError {
+            status: Status::Failure,
+            detail: "independent verifier or numerical assertion failed".into(),
+        }
+    }
+}
+
+pub fn oracle_root(
+    value: Result<String, std::env::VarError>,
+    default: std::path::PathBuf,
+) -> Result<std::path::PathBuf, GateError> {
+    match value {
+        Ok(value) if !value.trim().is_empty() => Ok(value.into()),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        _ => Err(GateError {
+            status: Status::Unsupported,
+            detail: "empty/nonUnicode explicit oracle root".into(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn selection_is_fail_closed() {
+        let default = std::path::PathBuf::from("default");
+        assert_eq!(
+            oracle_root(Err(std::env::VarError::NotPresent), default.clone()).unwrap(),
+            default
+        );
+        assert_eq!(
+            oracle_root(Ok(String::new()), default.clone())
+                .unwrap_err()
+                .status,
+            Status::Unsupported
+        );
+        assert_eq!(
+            oracle_root(
+                Err(std::env::VarError::NotUnicode(std::ffi::OsString::from(
+                    "nonUnicode diagnostic"
+                ))),
+                default.clone()
+            )
+            .unwrap_err()
+            .status,
+            Status::Unsupported
+        );
+        let unknown = selection("unknown", &["real"]).unwrap_err();
+        let payload = std::panic::catch_unwind(|| raise(unknown)).unwrap_err();
+        assert_eq!(caught_error(payload.as_ref()).status, Status::Unsupported);
+        let supported = ["real", "cmp"];
+        assert_eq!(selection("all", &supported).unwrap(), supported);
+        assert_eq!(
+            selection(" cmp , real ", &supported).unwrap(),
+            ["cmp", "real"]
+        );
+        for invalid in ["", "real,", ",cmp", "real,real", "real,unknown", "skip"] {
+            assert_eq!(
+                selection(invalid, &supported).unwrap_err().status,
+                Status::Unsupported
+            );
+        }
         for kind in [
             io::ErrorKind::PermissionDenied,
             io::ErrorKind::NotFound,
@@ -205,6 +310,15 @@ mod tests {
             }
         }
         let owned = Owned(dir);
+        fs::write(owned.0.join("readable.txt"), b"actual fixed byte control").unwrap();
+        assert_eq!(
+            read_member(&owned.0, "readable.txt").unwrap(),
+            b"actual fixed byte control"
+        );
+        assert_eq!(
+            read_member(&owned.0, "absent.txt").unwrap_err().status,
+            Status::MissingFixture
+        );
         assert_eq!(
             read_required(&owned.0.join("absent")).unwrap_err().status,
             Status::MissingFixture
@@ -351,6 +465,49 @@ mod tests {
             require_bundle(&owned.0, "archive.sha256")
                 .unwrap_err()
                 .status,
+            Status::Failure
+        );
+    }
+
+    #[test]
+    fn selected_metadata_missing_is_not_changed_content_failure() {
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("selected-metadata-{}-{id}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        struct Owned(std::path::PathBuf);
+        impl Drop for Owned {
+            fn drop(&mut self) {
+                fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+        let owned = Owned(dir);
+        let files = ["status.txt", "model-settings.txt", "inputs.sha256"];
+        assert_eq!(
+            require_files(&owned.0, &files).unwrap_err().status,
+            Status::MissingFixture
+        );
+        for name in files {
+            fs::write(owned.0.join(name), b"0").unwrap();
+        }
+        require_files(&owned.0, &files).unwrap();
+        fs::write(owned.0.join("status.txt"), b"1").unwrap();
+        // Preflight does not promote changed content to verified PASS.
+        require_files(&owned.0, &files).unwrap();
+        let error = std::panic::catch_unwind(|| {
+            assert_eq!(fs::read(owned.0.join("status.txt")).unwrap(), b"0");
+        });
+        assert!(
+            error.is_err(),
+            "unchanged independent content check must reject changed status"
+        );
+        fs::remove_file(owned.0.join("model-settings.txt")).unwrap();
+        fs::create_dir(owned.0.join("model-settings.txt")).unwrap();
+        assert_eq!(
+            require_files(&owned.0, &files).unwrap_err().status,
             Status::Failure
         );
     }

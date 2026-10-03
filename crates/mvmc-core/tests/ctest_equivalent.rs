@@ -11,6 +11,8 @@ use mvmc_core::{run_para_opt_from_namelist, RunConfig};
 
 #[path = "support/ctest_provenance.rs"]
 mod ctest_provenance;
+#[path = "support/fixture_status.rs"]
+mod fixture_status;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 mod support;
@@ -128,28 +130,58 @@ fn passes(calculated: f64, expected: f64, sigma: f64) -> bool {
     !(difference >= 3.0 * sigma && difference >= ABSOLUTE_FLOOR)
 }
 
+fn report_classified(name: &str, error: &fixture_status::GateError) {
+    let status = match error.status {
+        fixture_status::Status::MissingFixture => GateStatus::MissingFixture,
+        fixture_status::Status::Unsupported => GateStatus::Unsupported,
+        fixture_status::Status::Failure => GateStatus::Failure,
+    };
+    report_gate(name, status, &error.detail);
+}
+
+fn record_failed_case<'a>(
+    name: &'a str,
+    payload: &(dyn std::any::Any + Send),
+    failures: &mut Vec<&'a str>,
+) -> fixture_status::Status {
+    let error = fixture_status::caught_error(payload);
+    report_classified(name, &error);
+    failures.push(name);
+    error.status
+}
+
+fn preflight_input_closure(expected: &Path, input_root: &Path) {
+    let manifest = fixture_status::read_member(expected, "inputs.sha256")
+        .unwrap_or_else(|error| fixture_status::raise(error));
+    fixture_status::require_manifest_members(&manifest, input_root)
+        .unwrap_or_else(|error| fixture_status::raise(error));
+    let namelist = fixture_status::read_member(input_root, "namelist.def")
+        .unwrap_or_else(|error| fixture_status::raise(error));
+    let namelist = std::str::from_utf8(&namelist).expect("independent namelist UTF8");
+    for (_, file) in mvmc_expert_parsers::utils::file::parse_namelist_content(namelist) {
+        fixture_status::require_files(input_root, &[file.as_str()])
+            .unwrap_or_else(|error| fixture_status::raise(error));
+    }
+}
+
 #[test]
 #[ignore = "20-step reference gate: select MVMC_RS_CTEST_MODELS and use --run-ignored only"]
 fn rust_ctest_equivalent_selected_models() {
+    if let Err(std::env::VarError::NotUnicode(_)) = std::env::var("MVMC_RS_CTEST_MODELS") {
+        let error = fixture_status::GateError {
+            status: fixture_status::Status::Unsupported,
+            detail: "nonUnicode explicit MVMC_RS_CTEST_MODELS selector".into(),
+        };
+        report_classified("ctest-equivalent", &error);
+        fixture_status::raise(error);
+    }
     require_gate("ctest-equivalent", "MVMC_RS_CTEST_MODELS");
     let filter = std::env::var("MVMC_RS_CTEST_MODELS").expect("selection was present");
-    let requested: Vec<_> = if filter.trim() == "all" {
-        MODELS.iter().map(|model| model.fixture).collect()
-    } else {
-        filter
-            .split(',')
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .collect()
-    };
-    if requested.is_empty() {
-        report_gate(
-            "ctest-equivalent",
-            GateStatus::Failure,
-            "selection listed no models",
-        );
-        panic!("MVMC_RS_CTEST_MODELS selected no models");
-    }
+    let supported: Vec<_> = MODELS.iter().map(|model| model.fixture).collect();
+    let requested = fixture_status::selection(&filter, &supported).unwrap_or_else(|error| {
+        report_classified("ctest-equivalent", &error);
+        fixture_status::raise(error)
+    });
 
     let root = julia_mvmc_root().unwrap_or_else(|| {
         support::missing_fixture("ctest-equivalent", "Julia-mVMC checkout not found")
@@ -177,24 +209,37 @@ fn rust_ctest_equivalent_selected_models() {
         let outcome = std::panic::catch_unwind(|| {
             let fixture = root.join("test/integration/reference").join(model.fixture);
             let namelist = fixture.join("inputs/namelist.def");
-            let references = std::env::var("MVMC_RS_CTEST_ORACLE_ROOT")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| {
-                    Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("../../tests/fixtures/ctest_model_prefixes")
-                });
+            let references = fixture_status::oracle_root(
+                std::env::var("MVMC_RS_CTEST_ORACLE_ROOT"),
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../tests/fixtures/ctest_model_prefixes"),
+            )
+            .unwrap_or_else(|error| fixture_status::raise(error));
             let expected = references.join(name).join("step-20");
             let expected_output = expected.join("zvo_out.dat");
-            if !namelist.is_file() || !expected_output.is_file() {
-                support::missing_fixture(
-                    "ctest-equivalent",
-                    format!("{name}: fresh independent 20-step reference missing; historical long/50-step output cannot substitute"),
-                );
-            }
-            assert!(
-                references.join("provenance.txt").is_file(),
-                "independent provenance required"
-            );
+            fixture_status::require_files(
+                &root,
+                &[format!(
+                    "test/integration/reference/{}/inputs/namelist.def",
+                    model.fixture
+                )
+                .as_str()],
+            )
+            .unwrap_or_else(|error| fixture_status::raise(error));
+            fixture_status::require_files(&references, &["provenance.txt"])
+                .unwrap_or_else(|error| fixture_status::raise(error));
+            let required: Vec<_> = [
+                "inputs.sha256",
+                "status.txt",
+                "model-settings.txt",
+                "zvo_out.dat",
+            ]
+            .iter()
+            .map(|file| format!("{name}/step-20/{file}"))
+            .collect();
+            let required: Vec<_> = required.iter().map(String::as_str).collect();
+            fixture_status::require_files(&references, &required)
+                .unwrap_or_else(|error| fixture_status::raise(error));
             let provenance = fs::read_to_string(references.join("provenance.txt")).unwrap();
             assert!(provenance.split_whitespace().any(|v| v == "Julia=1.13.1"));
             assert!(
@@ -202,6 +247,8 @@ fn rust_ctest_equivalent_selected_models() {
                 "reviewed reference source identity required for fresh20"
             );
             assert!(provenance.contains("Manifest-v1.13.toml") && provenance.contains("sha256="));
+            let input_root = namelist.parent().unwrap();
+            preflight_input_closure(&expected, input_root);
             ctest_provenance::verify_inputs(
                 &expected.join("inputs.sha256"),
                 namelist.parent().unwrap(),
@@ -276,13 +323,8 @@ fn rust_ctest_equivalent_selected_models() {
                 &format!("{name}: native 20-step/window20 independent summary only"),
             );
         });
-        if outcome.is_err() {
-            report_gate(
-                name,
-                GateStatus::Failure,
-                "native long ctest failed; see error above",
-            );
-            failures.push(name);
+        if let Err(payload) = outcome {
+            record_failed_case(name, payload.as_ref(), &mut failures);
         }
     }
     assert!(
@@ -299,6 +341,144 @@ fn ctest_failure_requires_both_thresholds() {
     assert!(!passes(f64::NAN, 1.0, 1.0));
     assert!(!passes(1.0, f64::INFINITY, 1.0));
     assert!(!passes(1.0, 1.0, -1.0));
+}
+
+#[test]
+fn classified_reporting_keeps_terminal_aggregate_failure() {
+    let mut failures = Vec::new();
+    let id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("gate-reporting-{}-{id}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    struct Owned(std::path::PathBuf);
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+    let owned = Owned(dir);
+    let missing = fixture_status::require_files(&owned.0, &["status.txt"]).unwrap_err();
+    let unsupported = fixture_status::selection("unknown", &["real"]).unwrap_err();
+    fs::create_dir(owned.0.join("status.txt")).unwrap();
+    let corrupt = fixture_status::require_files(&owned.0, &["status.txt"]).unwrap_err();
+    for (name, expected) in [
+        ("missing", missing),
+        ("unsupported", unsupported),
+        ("corrupt", corrupt),
+    ] {
+        let expected_status = expected.status;
+        let payload = std::panic::catch_unwind(|| fixture_status::raise(expected)).unwrap_err();
+        assert_eq!(
+            record_failed_case(name, payload.as_ref(), &mut failures),
+            expected_status
+        );
+    }
+    fs::remove_dir(owned.0.join("status.txt")).unwrap();
+    fs::write(owned.0.join("status.txt"), b"1").unwrap();
+    let payload = std::panic::catch_unwind(|| {
+        assert_eq!(fs::read(owned.0.join("status.txt")).unwrap(), b"0")
+    })
+    .unwrap_err();
+    assert_eq!(
+        record_failed_case("changed", payload.as_ref(), &mut failures),
+        fixture_status::Status::Failure
+    );
+    assert_eq!(failures, ["missing", "unsupported", "corrupt", "changed"]);
+    assert!(
+        !failures.is_empty(),
+        "classified errors must not authorize selected gate success"
+    );
+}
+
+#[test]
+fn transitive_inputs_preserve_missing_and_changed_hash_classification() {
+    let id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("ctest-transitive-{}-{id}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    struct Owned(std::path::PathBuf);
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+    let owned = Owned(dir);
+    let input = owned.0.join("inputs");
+    let expected = owned.0.join("expected");
+    fs::create_dir(&input).unwrap();
+    fs::create_dir(&expected).unwrap();
+    fs::write(
+        input.join("namelist.def"),
+        b"ModPara modpara.def\nOrbital orbital.def\n",
+    )
+    .unwrap();
+    fs::write(input.join("modpara.def"), b"abc").unwrap();
+    fs::write(input.join("orbital.def"), b"").unwrap();
+    // Fixed metadata hashes: standard abc/empty vectors and independent host
+    // sha256sum of the literal two-line namelist. No numerical expected values.
+    let manifest = b"028f1f7130456e9fcac5b923116c6fd2a1b1c8c1b281f19a18ab5de012eaf23d namelist.def\nba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad modpara.def\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 orbital.def\n";
+    fs::write(expected.join("inputs.sha256"), manifest).unwrap();
+    preflight_input_closure(&expected, &input);
+    ctest_provenance::verify_inputs(&expected.join("inputs.sha256"), &input);
+    let mut failures = Vec::new();
+    fs::remove_file(input.join("orbital.def")).unwrap();
+    let payload =
+        std::panic::catch_unwind(|| preflight_input_closure(&expected, &input)).unwrap_err();
+    assert_eq!(
+        record_failed_case("missing-member", payload.as_ref(), &mut failures),
+        fixture_status::Status::MissingFixture
+    );
+    fs::write(input.join("orbital.def"), b"changed").unwrap();
+    preflight_input_closure(&expected, &input);
+    let payload = std::panic::catch_unwind(|| {
+        ctest_provenance::verify_inputs(&expected.join("inputs.sha256"), &input)
+    })
+    .unwrap_err();
+    assert_eq!(
+        record_failed_case("changed-hash", payload.as_ref(), &mut failures),
+        fixture_status::Status::Failure
+    );
+    // Referenced, existing input omitted from hash manifest remains verifier Failure.
+    fs::write(input.join("orbital.def"), b"").unwrap();
+    let manifest = std::str::from_utf8(manifest)
+        .unwrap()
+        .lines()
+        .take(2)
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(expected.join("inputs.sha256"), manifest).unwrap();
+    preflight_input_closure(&expected, &input);
+    let payload = std::panic::catch_unwind(|| {
+        ctest_provenance::verify_inputs(&expected.join("inputs.sha256"), &input)
+    })
+    .unwrap_err();
+    assert_eq!(
+        record_failed_case("unhashed-reference", payload.as_ref(), &mut failures),
+        fixture_status::Status::Failure
+    );
+    fs::remove_file(input.join("orbital.def")).unwrap();
+    let payload =
+        std::panic::catch_unwind(|| preflight_input_closure(&expected, &input)).unwrap_err();
+    assert_eq!(
+        record_failed_case(
+            "missing-namelist-reference",
+            payload.as_ref(),
+            &mut failures
+        ),
+        fixture_status::Status::MissingFixture
+    );
+    fs::remove_file(expected.join("inputs.sha256")).unwrap();
+    let payload =
+        std::panic::catch_unwind(|| preflight_input_closure(&expected, &input)).unwrap_err();
+    assert_eq!(
+        record_failed_case("missing-metadata", payload.as_ref(), &mut failures),
+        fixture_status::Status::MissingFixture
+    );
+    assert_eq!(failures.len(), 5);
 }
 
 #[test]
