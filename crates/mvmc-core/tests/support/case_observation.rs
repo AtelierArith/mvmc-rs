@@ -525,6 +525,74 @@ pub fn retain_launch_seed(label: &str, seed: u32) {
     });
 }
 
+/// Borrow an actual early-stage RNG without constructing a VMC state.
+/// Next words are read from a clone only after observation is enabled.
+fn initial_stage_shape(
+    label: &str,
+    stage: &str,
+    parameters: Option<&[num_complex::Complex64]>,
+    weights: Option<&[num_complex::Complex64]>,
+) {
+    match stage {
+        "seeded" => {
+            assert_eq!(label, "real-fsz-seeded");
+            assert!(parameters.is_none() && weights.is_none());
+        }
+        "initialized" => {
+            assert_eq!(label, "real-fsz-initialized");
+            for array in [parameters, weights] {
+                let values = array.expect("initialized actual array");
+                assert!(!values.is_empty(), "zero active initial array");
+                assert!(values.iter().all(|v| v.re.is_finite() && v.im.is_finite()));
+            }
+        }
+        _ => panic!("unknown initial stage"),
+    }
+}
+
+pub fn retain_initial_stage(
+    label: &str,
+    stage: &str,
+    rng: &sfmt19937::Sfmt19937Rng,
+    parameters: Option<&[num_complex::Complex64]>,
+    weights: Option<&[num_complex::Complex64]>,
+) {
+    if root().is_none() {
+        return;
+    }
+    assert!(label
+        .bytes()
+        .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)));
+    assert!(!label.is_empty());
+    initial_stage_shape(label, stage, parameters, weights);
+    let seed = JOB_MEMORY.with(|cell| {
+        let memory = cell.borrow();
+        memory.assert_binding(&current_binding());
+        assert!(!memory.layouts.contains(label), "duplicate initial stage");
+        *memory.seeds.get(label).expect("explicit launch seed")
+    });
+    let id = decimal(&std::env::var("ISSUE182_CASE_INVOCATION").unwrap(), false);
+    let run = std::env::var("ISSUE182_CASE_RUN_UUID").unwrap();
+    run_uuid(&run);
+    let (raw, index) = rng.state_snapshot();
+    let count = rng.words_consumed();
+    let mut shadow = rng.clone();
+    let next: Vec<u32> = (0..624).map(|_| shadow.gen_rand32()).collect();
+    write(
+        &format!("child-{id}.initial-stage-{label}.json"),
+        format!("{{\"run_uuid\":\"{run}\",\"invocation\":{id},\"label\":\"{label}\",\"stage\":\"{stage}\",\"launch_seed\":{seed},\"raw624\":{raw:?},\"index\":{index},\"draw_count\":{count},\"next624\":{next:?},\"npara\":{},\"nqp\":{}}}\n", parameters.map_or(0, |v| v.len()), weights.map_or(0, |v| v.len())).as_bytes(),
+    );
+    super::discrete(&format!("{label}-raw624"), raw);
+    super::discrete(&format!("{label}-rng-index"), index);
+    super::discrete(&format!("{label}-draw-count"), count);
+    super::discrete(&format!("{label}-rng"), next);
+    if let (Some(parameters), Some(weights)) = (parameters, weights) {
+        super::complex(&format!("{label}-parameters"), parameters);
+        super::complex(&format!("{label}-qpweights"), weights);
+    }
+    JOB_MEMORY.with(|cell| cell.borrow_mut().layout(label));
+}
+
 pub fn retain_sr_dimension(label: &str, dimension: usize) {
     if root().is_none() {
         return;
@@ -687,6 +755,78 @@ mod tests {
             repeat: 1,
             directory: PathBuf::from("synthetic-exclusive-directory"),
         }
+    }
+
+    #[test]
+    fn initial_stage_missing_wrong_stage_and_zero_active_rejected() {
+        let values = [num_complex::Complex64::new(1.0, 0.0)];
+        initial_stage_shape("real-fsz-seeded", "seeded", None, None);
+        initial_stage_shape(
+            "real-fsz-initialized",
+            "initialized",
+            Some(&values),
+            Some(&values),
+        );
+        for (label, stage, parameters, weights) in [
+            (
+                "real-fsz-initialized",
+                "initialized",
+                None,
+                Some(values.as_slice()),
+            ),
+            (
+                "real-fsz-initialized",
+                "initialized",
+                Some(values.as_slice()),
+                None,
+            ),
+            (
+                "real-fsz-initialized",
+                "initialized",
+                Some([].as_slice()),
+                Some(values.as_slice()),
+            ),
+            (
+                "real-fsz-seeded",
+                "initialized",
+                Some(values.as_slice()),
+                Some(values.as_slice()),
+            ),
+            ("real-fsz-seeded", "seeded", Some(values.as_slice()), None),
+            ("real-fsz-seeded", "final", None, None),
+        ] {
+            assert!(
+                catch_unwind(|| initial_stage_shape(label, stage, parameters, weights)).is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn initial_stage_duplicate_and_missing_seed_memory_rejected() {
+        let mut memory = JobMemory::default();
+        let binding = binding();
+        memory.enter(binding.clone());
+        assert!(catch_unwind(AssertUnwindSafe(|| memory.layout("real-fsz-seeded"))).is_err());
+        memory.seed("real-fsz-seeded", 1);
+        assert!(catch_unwind(AssertUnwindSafe(|| memory.finish(&binding))).is_err());
+        memory.layout("real-fsz-seeded");
+        assert!(catch_unwind(AssertUnwindSafe(|| memory.layout("real-fsz-seeded"))).is_err());
+        memory.seed("real-fsz-initialized", 1);
+        memory.layout("real-fsz-initialized");
+        memory.finish(&binding);
+    }
+
+    #[test]
+    fn initial_stage_rng_snapshot_clone_is_nonconsuming() {
+        let rng = sfmt19937::Sfmt19937Rng::new(1);
+        let before = rng.state_snapshot();
+        let count = rng.words_consumed();
+        let mut shadow = rng.clone();
+        for _ in 0..624 {
+            shadow.gen_rand32();
+        }
+        assert_eq!(rng.state_snapshot(), before);
+        assert_eq!(rng.words_consumed(), count);
     }
 
     #[test]

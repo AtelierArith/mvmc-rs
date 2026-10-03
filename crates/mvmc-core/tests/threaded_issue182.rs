@@ -2802,6 +2802,10 @@ fn independent_real_fsz(output_root: &Path) {
     assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 0));
     let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
     assert_independent_rng(&root.join("seeded"), &rng);
+    if case_observation::enabled() {
+        case_observation::retain_launch_seed("real-fsz-seeded", data.modpara.rnd_seed as u32);
+        case_observation::retain_initial_stage("real-fsz-seeded", "seeded", &rng, None, None);
+    }
     case_observation::complete("real-fsz/seeded", "independent-seeded-rng");
     case_observation::begin("real-fsz/initialized", "independent-assertions");
     init_parameter(&mut data, &mut rng);
@@ -2890,6 +2894,17 @@ fn independent_real_fsz(output_root: &Path) {
         data.qp_weights.as_ref().unwrap().qp_full_weight.clone(),
         INITIAL_MATH_ABS_REL,
     );
+    if case_observation::enabled() {
+        case_observation::retain_launch_seed("real-fsz-initialized", data.modpara.rnd_seed as u32);
+        let observed_parameters = parameters(&data);
+        case_observation::retain_initial_stage(
+            "real-fsz-initialized",
+            "initialized",
+            &rng,
+            Some(&observed_parameters),
+            Some(&data.qp_weights.as_ref().unwrap().qp_full_weight),
+        );
+    }
     case_observation::complete("real-fsz/initialized", "independent-assertions");
     data.modpara.nsr_opt_itr_step = 1;
     data.modpara.nsr_opt_itr_smp = 1;

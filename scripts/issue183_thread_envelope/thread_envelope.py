@@ -13,6 +13,7 @@ import re
 import uuid
 from exact_record_schema import validate as validate_numeric_schema
 import exact_record_schema
+import initial_stage_schema
 
 BASE = "2a8e6cd33e7b2840a4935ca40bb7792621f9080a"
 GATES = {
@@ -236,6 +237,22 @@ def validate(root, workspace, envelope, reviewed):
             and type(reviewed.get("layout_bindings")) is dict,
             "complete independently reviewed numeric schema/layout bindings required")
     numeric_schema = reviewed["numeric_schema"]
+    initial = reviewed.get("initial_stage_bindings", {})
+    require(type(initial) is dict, "initial stage bindings")
+    initial_ids = set(initial)
+    permitted_initial = {"real-fsz/seeded", "real-fsz/initialized"}
+    require(not initial_ids or (reviewed["gate"] == "real-fsz" and initial_ids == permitted_initial),
+            "exact initial stage cases required")
+    if initial:
+        require(reviewed.get("initial_stage_adapter_sha256") ==
+                digest(Path(initial_stage_schema.__file__).read_bytes()), "unreviewed initial-stage adapter")
+        for case_id, binding in initial.items():
+            require(type(binding) is dict and set(binding) == {"label", "contract", "source", "inputs"},
+                    "initial stage binding fields")
+            require(binding["source"] == reviewed["source"] and binding["inputs"] == reviewed["fixtures"],
+                    "initial stage source/input closure")
+            require(binding["label"] == "real-fsz-" + case_id.split("/")[1]
+                    and binding["contract"].get("stage") == case_id.split("/")[1], "exact initial stage identity")
     require(set(reviewed["layout_bindings"]) == {c["id"] for c in cases}, "exact case/layout binding")
     layout_artifacts = set()
     for index in range(count):
@@ -261,9 +278,16 @@ def validate(root, workspace, envelope, reviewed):
             require(start == [str(offset), reviewed["run_uuid"], "START", *tail]
                     and complete == [str(offset + 1), reviewed["run_uuid"], "COMPLETE", *tail], "wrong event/run/assertion boundary")
         actual_layouts = {}
+        stage_observations = []
         for case in cases:
             label = reviewed["layout_bindings"][case["id"]]
             require(type(label) is str and re.fullmatch(r"[A-Za-z0-9_-]+", label), "exact layout label")
+            if case["id"] in initial:
+                require(label == initial[case["id"]]["label"], "initial layout identity")
+                name = prefix + f".initial-stage-{label}.json"
+                layout_artifacts.add(name)
+                stage_observations.append(load_json(checked(root, hashes, name)))
+                continue
             name = prefix + f".layout-{label}.json"
             layout_artifacts.add(name)
             layout = load_json(checked(root, hashes, name))
@@ -276,9 +300,25 @@ def validate(root, workspace, envelope, reviewed):
                         for record in case.get("records", []) if type(record.get("dimension")) is int
                         and record["dimension"] == 0}
         value = records(checked(root, hashes, prefix + ".stdout"), empty_labels)
+        stage_numeric_labels = {binding["label"] + suffix for binding in initial.values()
+                                if binding["contract"]["stage"] == "initialized"
+                                for suffix in ("-parameters", "-qpweights")}
+        if initial:
+            stage_discrete_labels = {binding["label"] + suffix for binding in initial.values()
+                                     for suffix in ("-raw624", "-rng-index", "-draw-count", "-rng")}
+            require(stage_discrete_labels <= value.keys() and stage_numeric_labels <= value.keys(),
+                    "missing initial stage operands")
+            require(all(value[label][0] == "D" for label in stage_discrete_labels)
+                    and all(value[label][0] == "N" for label in stage_numeric_labels), "initial operand kind")
+            initial_stage_schema.validate(
+                stage_observations, {binding["label"]: binding["contract"] for binding in initial.values()},
+                reviewed["run_uuid"], index,
+                {label: load_json(value[label][1]) for label in stage_discrete_labels},
+                {label: [float(v) for v in value[label][1].split()] for label in stage_numeric_labels})
         validate_numeric_schema(numeric_schema, actual_layouts,
-                                {label: payload for label, (kind, payload) in value.items() if kind == "N"},
-                                reviewed["source"], reviewed["fixtures"], {c["id"] for c in cases})
+                                {label: payload for label, (kind, payload) in value.items()
+                                 if kind == "N" and label not in stage_numeric_labels},
+                                reviewed["source"], reviewed["fixtures"], {c["id"] for c in cases} - initial_ids)
         checked(root, hashes, prefix + ".stderr")
         for case in cases:
             require(case["required_record_labels"] and set(case["required_record_labels"]) <= value.keys(), "missing per-case operands")
