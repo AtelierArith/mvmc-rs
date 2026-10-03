@@ -60,16 +60,16 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
-        if data.i_flg_orbital_general == 0 {
-            return Err("InterAll requires the general-orbital fixed-Sz path; non-FSZ InterAll is unsupported".into());
-        }
         for (index, term) in data.inter_all_terms.iter().enumerate() {
-            // Julia skips out-of-range sites before using any spin indices.
+            // C GetInfoInterAll rejects invalid sites before execution.
             if [term.site0, term.site1, term.site2, term.site3]
                 .iter()
                 .any(|&site| site < 0 || site >= p.nsite)
             {
-                continue;
+                return Err(format!(
+                    "InterAll term {index}: site must be in 0..{}",
+                    p.nsite
+                ));
             }
             for (name, spin) in [
                 ("spin0", term.spin0),
@@ -82,6 +82,16 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
                         "InterAll term {index}: {name} must be 0 or 1; got {spin}"
                     ));
                 }
+            }
+            // C GetInfoInterAll requires each pair to conserve spin when
+            // TwoSz is fixed. The normal Slater layout also requires this
+            // when the input leaves TwoSz at its -1 default.
+            if (data.i_flg_orbital_general == 0 || p.two_sz != -1)
+                && (term.spin0 != term.spin1 || term.spin2 != term.spin3)
+            {
+                return Err(format!(
+                    "InterAll term {index}: normal/fixed TwoSz mode requires spin-conserving pairs"
+                ));
             }
         }
     }

@@ -41,17 +41,21 @@ BLAS configuration; parsing and initialization here perform no BLAS operations.
 SFMT.jl wraps a global stream, so the script snapshots each initialization before
 reseeding for the independent comparison.
 
-The input-contract milestone initially rejected both parsed requests and
-programmatically supplied nonempty `inter_all_terms` before initialization or
-RNG consumption. The Green and production comparisons below now enable complex
-FSZ InterAll; issue #23 remains open for the normal-mode production path.
+The input-contract milestone initially rejected normal InterAll before RNG
+consumption. Normal real and complex optimization now accept spin-conserving
+pairs; general-orbital mode also accepts spin-changing pairs when TwoSz=-1.
+As in C's `GetInfoInterAll`, a fixed TwoSz requires each pair to conserve spin,
+and invalid sites are rejected before initialization. The historical permissive
+Julia parser fixtures above do not establish C reader parity: strict header
+counts, scientific notation and malformed-record handling remain under #23.
 
 The canonical normal-mode `calculate_hamiltonian` currently accesses
 `term.sites`, while its `InterAllTerm` type contains `site0` through `site3`
 instead. That reference path raises a missing-field error. The FSZ Hamiltonian
 uses the four explicit pairs and the `green_func2_fsz` / `green_func2_fsz2`
-dispatch. The normal-mode reference discrepancy must be resolved explicitly
-before claiming a normal-mode production comparison.
+dispatch. Rust follows the explicit indices and input-order loop in C's
+`calham.c` and `calham_real.c`. The original Julia discrepancy is preserved as
+reference provenance; the vendored source is unchanged.
 
 ## General fixed-Sz Green ratios
 
@@ -86,8 +90,9 @@ reductions use Julia's projection-count ratio and complex quotient. The real
 Transfer calculation retains its specialized direct projection/real quotient
 arithmetic; applying that fast arithmetic to a general one-body reduction
 produced a one-ULP mismatch in the new exhaustive test. The test was kept exact
-and the call-site dispatch was corrected. The normal-mode calculation retains
-its InterAll restriction pending the reference accumulator correction.
+and the call-site dispatch was corrected. These historical helper fixtures
+continue to preserve Julia arithmetic. Production real InterAll uses the
+separately tested C kernel below.
 Same-site Exchange now reduces to `2 * J * n_up * n_down`, matching Julia,
 instead of being discarded by the previous exchange-only call site.
 
@@ -161,9 +166,52 @@ are reset and updated at the same proposal/acceptance points, including rejected
 proposals. Existing real FSZ fixtures now compare the actual combined buffer
 directly, strengthening the previous semantic comparison.
 
-Complex FSZ InterAll is enabled in library and CLI validation. Invalid spins
-for a term with valid sites fail before initialization/RNG consumption;
-out-of-range sites retain Julia's skip rule. Normal fixed-Sz InterAll remains
-rejected under #23 because of the documented reference accumulator discrepancy.
-Real FSZ InterAll remains rejected under #43 pending its complete calculation/SR
-path. A parsed payload or kernel fixture does not override those restrictions.
+Normal and general-orbital InterAll are enabled in library and CLI validation
+for real and complex optimization. Invalid spins and sites fail before
+initialization/RNG consumption. The low-level historical Green fixtures retain
+Julia's skipped-site cases; they do not override the production C input checks.
+InterAll Lanczos is still rejected under #31 until its Hamiltonian-overlap path
+is implemented.
+
+## Native C normal real InterAll
+
+`c_real_green.txt` contains 4,096 expected `GreenFunc2_real` results and four
+ordered InterAll energy sums from actual extracted C function bodies. It uses
+the two historical real wavefunction states above with zero and nonzero
+Gutzwiller/Jastrow parameters. Projection count updates and ratios, one- and
+two-electron Pfaffian updates, and the overlap sum all execute their native C
+bodies. All coincident indices, both spins, unequal QP weights and both
+configurations are covered. Couplings include imaginary parts, repeated
+operators and cancellation-sensitive nonbinary real values. The extracted
+`calham_real.c` loop uses a double accumulator and discards the imaginary
+coupling contribution as in C. The driver verifies that electron buffers are
+restored after every call.
+
+Rust compares every real output bit and the complete ordered energy sum.
+The real InterAll kernel uses C's scalar nested reduction, platform `exp`, and
+real multiplication followed by division. Historical Julia PairHop, Exchange,
+sampling and Green helpers retain their separately labelled reduction and
+quotient paths, so their original regression gates are not rewritten.
+
+The optional probe runs Apple clang 17 with `-O0 -ffp-contract=off`, and stores
+SHA-256 hashes and verbatim extraction boundaries in `c_toolbox/`. Its MPI
+plumbing models only `MPI_COMM_SELF`; it excludes RBM and does not establish
+full C initialization, sampling, complex Green or SR trajectory parity. Cargo
+reads only the checked-in expected fixture and never invokes or reads the
+toolbox.
+
+```sh
+uv run --no-project python scripts/check_interall_real_c_parity.py --write
+uv run --no-project python scripts/check_interall_real_c_parity.py
+cargo nextest run -p mvmc-core --test two_body_green -E 'test(normal_real_interall)'
+cargo nextest run -p mvmc-core --cargo-profile test-fast -E 'test(normal_interall_equivalents)'
+```
+
+The optimizer equivalence gate runs three steps in real and complex normal
+mode for direct SR with NStore=0/1 and SR-CG with NStore=0. Real density
+InterAll terms are compared to CoulombIntra; complex pair transfers are
+compared to PairHop on an itinerant Hubbard configuration. It compares every
+callback's energy/parameter bits, saved and scratch configurations, projections,
+combined burn buffers, move counters and all 624 following SFMT words. This is
+an algebraic production-path check, alongside independent kernel fixtures;
+it is not an independently generated full C trajectory.

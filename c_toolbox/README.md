@@ -20,6 +20,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `gutzwiller_contracts.c` | Physical headers, complete site mappings and raw ordered flags, 144 cases | `python3 scripts/check_gutzwiller_contracts_c_parity.py` |
 | `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
+| `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
 | `orbital_flags.c` | Function-level row-order flags with supplied complex argument 2 (production normalizes orbital headers to 1) | `python3 scripts/check_c_reader_audits.py` |
