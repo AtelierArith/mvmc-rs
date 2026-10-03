@@ -7,6 +7,11 @@ const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
 CASE in ("real", "cmp", "fsz", "hubbard", "interall", "pairhop_real", "pairhop_fsz", "dh2_real", "dh2_cmp", "dh2_fsz", "dh4_real", "dh4_cmp", "dh4_fsz", "dh24_real", "dh24_cmp", "dh24_fsz", "rbm_real", "rbm_cmp", "rbm_general_cmp", "rbm_dh24_cmp", "rbm_fsz", "rbm_reference_cmp", "opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp") || error("Unknown case: $CASE")
+const C_KERNEL_ORDER = "--c-kernel-order" in ARGS
+if C_KERNEL_ORDER
+    include("reference_c_kernel_order.jl")
+    install_c_kernel_order!()
+end
 pairhop_namelist() = joinpath(@__DIR__,"..","extern","Julia-mVMC","test","integration","reference","hubbard_chain_"*CASE,"inputs","namelist.def")
 const DH_CASE = startswith(CASE,"dh2_") || startswith(CASE,"dh4_") || startswith(CASE,"dh24_")
 const RBM_CASE = startswith(CASE,"rbm_")
@@ -28,7 +33,7 @@ end
 const PREFIXES = let opts = filter(a -> startswith(a, "--steps="), ARGS)
     isempty(opts) ? [1, 2, 3, 50] : parse.(Int,split(split(only(opts), "="; limit=2)[2],","))
 end
-const FIXTURE_ROOT = joinpath(@__DIR__, "..", "tests", "fixtures", "sr_cg", CASE * "_runner")
+const FIXTURE_ROOT = joinpath(@__DIR__, "..", "tests", "fixtures", C_KERNEL_ORDER ? "c_kernel_order/sr_cg" : "sr_cg", CASE * "_runner")
 const SNAPSHOTS = Ref{Any}()
 const FAILURE_STEP = Ref(-1)
 function capture_source_step!(step, data, state; failed=false)
@@ -49,6 +54,9 @@ body = replace(body, "        if info != 0" => "        if info != 0\n          
 Base.include_string(MVMCOptimizers, body)
 hex(v) = join(string.(reinterpret.(UInt64, v); base=16, pad=16), " ")
 function verify(name, actual)
+    if C_KERNEL_ORDER && name == "reference.txt"
+        actual = C_KERNEL_PROVENANCE * actual
+    end
     path = joinpath(FIXTURE_ROOT, name)
     if "--write" in ARGS
         mkpath(FIXTURE_ROOT); write(path, actual)
@@ -60,6 +68,7 @@ if CASE == "interall" || startswith(CASE,"pairhop_") || OPT_CASE
     @testset "$CASE input and initialization boundary" begin
         namelist = OPT_CASE ? opt_namelist() : CASE == "interall" ? joinpath(@__DIR__, "..", "tests", "fixtures", "interall", "spin_chain", "namelist.def") : pairhop_namelist()
         data = parse_expert_mode_files(namelist)
+        C_KERNEL_ORDER && c_kernel_input_order!(data)
         if CASE == "interall"
             @test length(data.inter_all_terms) == 26
             @test data.i_flg_orbital_general == 1 && MVMCOptimizers.get_all_complex_flag(data)
@@ -113,6 +122,7 @@ end
         end
         OPT_CASE && (namelist = opt_namelist())
         data = parse_expert_mode_files(namelist)
+        C_KERNEL_ORDER && c_kernel_input_order!(data)
         data.modpara.nsr_opt_itr_step = steps
         data.modpara.nsr_opt_itr_smp = steps
         data.modpara.nsrcg = 1; data.modpara.nstore_o = 0

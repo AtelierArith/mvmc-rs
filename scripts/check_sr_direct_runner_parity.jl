@@ -7,6 +7,11 @@ const CASE = let opts = filter(a -> startswith(a, "--case="), ARGS)
     isempty(opts) ? "real" : split(only(opts), "="; limit=2)[2]
 end
 CASE in ("real", "cmp", "fsz", "hubbard", "interall", "pairhop_real", "pairhop_fsz", "dh2_real", "dh2_cmp", "dh2_fsz", "dh4_real", "dh4_cmp", "dh4_fsz", "dh24_real", "dh24_cmp", "dh24_fsz", "rbm_real", "rbm_cmp", "rbm_general_cmp", "rbm_dh24_cmp", "rbm_fsz", "rbm_reference_cmp", "opt_real", "opt_cmp", "opt_fsz", "opt_dh24_rbm_cmp") || error("Unknown case: $CASE")
+const C_KERNEL_ORDER = "--c-kernel-order" in ARGS
+if C_KERNEL_ORDER
+    include("reference_c_kernel_order.jl")
+    install_c_kernel_order!()
+end
 const DH_CASE = startswith(CASE,"dh2_") || startswith(CASE,"dh4_") || startswith(CASE,"dh24_")
 const RBM_CASE = startswith(CASE,"rbm_")
 const OPT_CASE = startswith(CASE,"opt_")
@@ -31,7 +36,7 @@ const STORE = let opts = filter(a -> startswith(a, "--store="), ARGS)
     isempty(opts) ? 0 : parse(Int, split(only(opts), "="; limit=2)[2])
 end
 STORE in (0, 1) || error("Unsupported NStore: $STORE")
-const FIXTURE_ROOT = joinpath(@__DIR__, "..", "tests", "fixtures", "sr_direct", CASE * (STORE == 0 ? "_runner" : "_store_runner"))
+const FIXTURE_ROOT = joinpath(@__DIR__, "..", "tests", "fixtures", C_KERNEL_ORDER ? "c_kernel_order/sr_direct" : "sr_direct", CASE * (STORE == 0 ? "_runner" : "_store_runner"))
 const SNAPSHOTS = Ref{Any}()
 const FAILURE_STEP = Ref(-1)
 const INPUTS = Ref{Any}()
@@ -61,8 +66,9 @@ function capture_source_step!(step, data, state; failed=false)
                   [t.value for t in data.jastrow_terms], data.doublon_holon_2site_params, data.doublon_holon_4site_params, rbm_values(data), [t.value for t in data.orbital_terms], data.opt_trans)
     SNAPSHOTS[] = (copy(params), state.energy.etot, deepcopy(state.electron_config))
 end
-# Add only an observation hook to a copy of the authoritative optimizer.
-# All numerical kernels, sampling, SR, synchronization, and output are original.
+# Observe a copy of the Julia optimizer without changing its runner arithmetic.
+# Default mode keeps all original kernels; --c-kernel-order substitutes only
+# the explicitly documented kernels installed above.
 src = read(joinpath(@__DIR__, "..", "extern", "Julia-mVMC", "MVMCOptimizers.jl", "src", "vmc_para_opt.jl"), String)
 a = first(findfirst("function vmc_para_opt!(", src))
 b = last(findnext("\nend\n", src, a))
@@ -74,6 +80,9 @@ body = replace(body, "        if info != 0" => "        if info != 0\n          
 Base.include_string(MVMCOptimizers, body)
 hex(v) = join(string.(reinterpret.(UInt64, v); base=16, pad=16), " ")
 function verify(name, actual)
+    if C_KERNEL_ORDER && name in ("reference.txt", "fixed-input.txt")
+        actual = C_KERNEL_PROVENANCE * actual
+    end
     path = joinpath(FIXTURE_ROOT, name)
     if "--write" in ARGS
         mkpath(FIXTURE_ROOT); write(path, actual)
@@ -101,6 +110,7 @@ end
         end
         OPT_CASE && (namelist = opt_namelist())
         data = parse_expert_mode_files(namelist)
+        C_KERNEL_ORDER && c_kernel_input_order!(data)
         data.modpara.nsr_opt_itr_step = steps
         data.modpara.nsr_opt_itr_smp = steps
         data.modpara.nsrcg = 0; data.modpara.nstore_o = STORE
