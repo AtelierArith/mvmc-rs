@@ -12,9 +12,11 @@ Before patching, online and offline `cargo update -p lru --precise 0.16.3` faile
 
 ## API compatibility and verification
 
-The original caches use LruCache constructors, get/get_mut, put/push, pop/pop_lru, iteration, clear and length operations. The selected lru source retains those APIs. The successful compilation checks below validate the concrete calls and trait bounds. Targeted tensor tests are pending and are not yet behavior evidence. The default feature graph activates cpu, einsum and runtime; the optional ad crate was compiled by enabling tenferro-einsum/autodiff.
+The original caches use LruCache constructors, get/get_mut, put/push, pop/pop_lru, iteration, clear and length operations. The selected lru source retains those APIs. Compilation checks validate the concrete calls and trait bounds. The default feature graph activates cpu, einsum and runtime; the optional ad crate is checked by enabling tenferro-einsum/autodiff.
 
-Results captured on native Linux x86_64, rustc 1.99.0 (`b940084d7`, 2026-09-28), Cargo 1.99.0 (`5f94df478`, 2026-08-27):
+The initial shared-checkout nextest run `cccaee13-a77f-4e54-be45-5370d5ca7e48` completed with exit 0: 9 passed, 390 skipped, 6.337 seconds of test execution. Its handle is closed. That result predates isolation from the unrelated runtime changes and is not the isolated branch's test result.
+
+The focused security branch starts from origin/main `515a89b38dc49ead3f526c406643523e979c8e02` and restores only Cargo roots, locks, third_party and docs/security from checkpoint `9e58590`. The parent checkout's integration was left untouched. Verification uses separate target directories outside both checkouts: `/tmp/mvmc-security-192.rDsAn7/target` for the root and `/tmp/mvmc-security-192.rDsAn7/target-benchmark` for the standalone benchmark. Results below are for this isolated branch on native Linux x86_64, rustc 1.99.0 (`b940084d7`, 2026-09-28), Cargo 1.99.0 (`5f94df478`, 2026-08-27):
 
 | Check | Status | Captured result |
 | --- | --- | --- |
@@ -23,33 +25,42 @@ Results captured on native Linux x86_64, rustc 1.99.0 (`b940084d7`, 2026-09-28),
 | Standalone benchmark locked check | Passed | Exit 0 |
 | Reverse lru trees for both roots | Passed | Exit 0; lru 0.18.5 through local patches |
 | Retained file comparison | Passed | Exit 0; 381 files, only documented differences |
-| Targeted einsum and gram nextest tests | Pending | Process still running; no exit captured |
-| Workspace all-target Clippy with -D warnings | Failed | Exit 101; chunks_exact_to_as_chunks in existing crates/mvmc-core/tests/physcal_issue181.rs:202 |
-| Workspace library and binary Clippy with -D warnings | Passed | Exit 0; vendored warning did not become an error |
+| Targeted einsum and gram nextest tests | Passed | Exit 0; 9 passed, 327 skipped, 11.867 seconds; run 4e977fef-bf03-46e2-8603-7f7cd8f8bbac |
+| Initial full workspace nextest before submodule setup | Failed | Exit 100; 415 passed, 82 failed, 8 skipped; run 99ee796c-b369-40dc-aba8-24ebf9087363; missing Julia-mVMC fixture inputs |
+| Full workspace nextest after pinned submodule setup | Passed | Exit 0; 497 passed, 8 skipped, 101.482 seconds; run 11924f84-b010-4da0-b224-d9e93e71cc28; tested commit 05e56be |
+| Workspace doctests, separately | Passed | Exit 0; 0 doctests across four library crates; test-fast profile, same isolated target directory |
+| Workspace all-target Clippy with -D warnings | Passed | Exit 0; vendored warning remained a warning |
 | Root Cargo audit | Failed overall | Exit 1; crossbeam-epoch finding, no lru finding |
 | Benchmark Cargo audit | Failed overall | Exit 1; crossbeam-epoch finding, no lru finding |
 | Git diff whitespace check | Passed | Exit 0 |
+| Workspace formatting check | Passed | Exit 0 |
 | GitHub alert closure | Pending | API state open; fixed_at and dismissed_at null |
 
-Reproduction commands from the repository root:
+Reproduction commands from the repository root (use isolated CARGO_TARGET_DIR values for builds in another checkout):
 
 ```sh
+git submodule update --init -- extern/Julia-mVMC
 cargo check --workspace --locked
 cargo check --workspace --locked --features tenferro-einsum/autodiff
 cargo check --manifest-path benchmark/pfapack_compare/Cargo.toml --locked
 cargo tree --locked -i lru
 cargo tree --manifest-path benchmark/pfapack_compare/Cargo.toml --locked -i lru
-cargo nextest run -p mvmc-core --cargo-profile test-fast --locked -E 'test(einsum) | test(gram)'
+cargo nextest run -p mvmc-core --cargo-profile test-fast --locked -E 'test(einsum) | test(gram)' --no-fail-fast --retries 0
+cargo nextest run --workspace --cargo-profile test-fast --locked --no-fail-fast --retries 0
+cargo test --workspace --doc --profile test-fast --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo clippy --workspace --lib --bins --locked -- -D warnings
 cargo audit --json
 cargo audit --file benchmark/pfapack_compare/Cargo.lock --json
 ```
 
+The first full-suite run in the fresh worktree failed on absent fixture inputs under extern/Julia-mVMC. The repository-pinned submodule was then initialized at `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`, without changing its gitlink or source. The full suite was rerun with the same profile, lock, no-fail-fast and retry settings, reusing the compiled target. The submodule supplies checked-in fixture data; no Julia runtime, C oracle, fixture regeneration or test modification is involved.
+
 Both audits using advisory database commit `f8dee89e1b2f2f1eaf548312df7655fe5202a302` report no lru advisory. Full audit exit status remains 1 because both locks retain pre-existing crossbeam-epoch 0.9.18 / RUSTSEC-2026-0204. Additional warnings concern paste, and in the root lock custom_derive and anyhow. These findings were not ignored or changed as part of the lru remediation.
 
-The original registry archives were SHA-256 verified. All 381 retained package files were compared against cached registry contents, allowing only the four lru requirement changes and final newlines on VCS metadata. No runner or project test files were edited, and the pre-existing benchmark lockfile rayon change was preserved. Upstream's existing deprecated fetch_update usage emits a warning when compiled as a local dependency; it is unchanged. In the captured all-target Clippy run, this dependency warning remained a warning despite -D warnings on workspace targets. The command failed on the unrelated project test lint listed above, not on the vendored warning. Excluding vendor packages from workspace membership preserves the boundary between project lint targets and upstream dependency code; no global lint suppression or kernel change was added.
+The original registry archives were SHA-256 verified. All 381 retained package files were compared against cached registry contents, allowing only the four lru requirement changes and final newlines on VCS metadata. No runner or project test files were edited. The benchmark lockfile's rayon entry was a pre-existing change in checkpoint 9e58590; origin/main already declares rayon in mvmc-core/Cargo.toml. The focused PR retains this necessary lock synchronization without introducing a new dependency declaration or threading change.
+
+Upstream's existing deprecated fetch_update usage emits a warning when compiled as a local dependency; it is unchanged. The initial shared-checkout library/bin Clippy run passed, while all-target Clippy failed on an unrelated physcal_issue181 test lint. The isolated origin/main-based branch's all-target Clippy run passed with -D warnings; the upstream warning remained a dependency warning. Excluding vendor packages from workspace membership preserves the boundary between project lint targets and upstream dependency code; no global lint suppression or kernel change was added.
 
 ## Lifecycle
 
-This is an uncommitted local patch. Issue #192 and the GitHub security alert remain open; local resolution does not establish that GitHub has rescanned a published change. No dismissal, upstream write, commit or merge was performed. Replace these snapshots with a supported fixed tenferro release when available, validate both locks again, and verify the GitHub alert's fixed state before claiming closure.
+The initial implementation was recorded in checkpoint 9e58590. This validated focused milestone is recorded separately on security/192-lru-remediation for review; its PR must not be merged before parent review. Issue #192 and the GitHub security alert remain open; local resolution does not establish that GitHub has rescanned a merged change. No alert dismissal or write to the dependency's upstream repository was performed. Replace these snapshots with a supported fixed tenferro release when available, validate both locks again, and verify the GitHub alert's fixed state before claiming closure.
