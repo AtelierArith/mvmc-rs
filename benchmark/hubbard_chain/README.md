@@ -75,5 +75,8 @@ so this compares the report's single-rank, one-thread condition.
 | hubbard_chain_L32 | 16.190 | 11.966 | 0.74x | 0.00e0 |
 
 Initial baselines are archived under `results/`; the task writes new CSV and
-Markdown reports to `target/bench/` for comparison.
+Markdown reports to `target/bench/` for comparison. The section-timer
+breakdown that localizes the gap to `VMCMainCal`
+(`CalHamiltonian1` / `ReturnSlaterElmDiff`) is in
+`results/hubbard_chain_2026-10-03_sections.md` (tracked as issue #207).
 
