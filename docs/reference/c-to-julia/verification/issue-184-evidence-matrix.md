@@ -2,6 +2,31 @@
 
 ## CURRENT snapshot
 
+Authoritative main is **3b953a5099a500b1566f0e06107ca0d7a02e685b** (PR238). This standalone SOURCE reconciliation preserves all historical records below and does not import the dirty 1444-row assertion audit. #184/#185 remain OPEN. A source pointer, infrastructure control or passing whole-crate gate is not verification of every original assertion/API/scenario.
+
+| Scope | Actual evidence and revision | Explicit remaining scope |
+| --- | --- | --- |
+| Main PR238 | Parent verified all six jobs (four Linux, two Mac) at exact a50e head | Output-root summary repair only; not whole #234/native SR/CLI or MPI scenario acceptance. |
+| Published reader PR237 | Exact423e head four Linux jobs PASS; bounded public-reader/ASCII metadata utility tests | Direct UTF8/I/O/token controls do not make permissive duplicate metadata a valid C filename-list contract. |
+| Published timer PR236 | Exact286019d four Linux plus both Mac jobs PASS; owned const enabled-query/conditions tests | Historical732 full930 PASS and nine focused timer conditions are revision-bound; not performance, all182 activation or every environment process branch. |
+| CLI lifecycle PR227 | Exacte994 Linux4 plus Mac2 PASS; scoped public observation hooks, independent initialization/input controls | Historical35CLI+4core proof remains061 source; no full native six-model CLI/Lanczos/RNG trajectory completion. |
+| #183 infrastructure PR228/231 | Exact reviewed heads merged; source-bound envelope/initial-stage contracts and synthetic controls | 24Rust/58Python controls and static79/4Missing do not prove full83 model execution, 14call-site/worker matrix or four independent realFSZ fixtures. |
+| Inventory PR233 | Six metadata scripts; strict source/revision/package/anchor controls; source-only125 Julia files,300API rows,456scenario rows | Dynamic exports/aliases, each overload's conditions and every executable API/scenario remain individually mapped/verified or MissingEvidence. |
+| Duplicate candidate, not main | Frozen e865+nine files: owner51289, focused6/table1/migrated5 PASS; full177/177 no skips; Clippy/fmt/source/tools/binaries/runtime/postlist0 | Main3b+nine full943 run59887 is terminal1:941 PASS,2 duplicate-dependent core metadata tests FAIL. No fixtures/bounds changed. Historical Kc172/177 five parser failures and launcher mutation remain retained. Two additional constructor migrations are approved SOURCE, unrun at this checkpoint. |
+| Whole workspace | Main3b+nine run cedce317-ca27-4a45-85f1-592bf34b52fb:943 run,941 PASS,2 FAIL,40 ignored,237.998s; docs/strict workspace Clippy/fmt/source/tool/binary/runtime/postlist0; aggregate1 | Failed candidate is not accepted main or full coverage. Historical timer732 full930/930 remains its own snapshot. Eleven-path repair still awaits fresh verification; do not retroassign older UUIDs. |
+| Paired realFSZ prefix | Bounded five-checkpoint diagnostic28028: exact RAW624/cursor/count/config and parameter/QP/OO/HO checks; original C-math bridge plus Julia sampler/SR | One prefix only, not full native C sampler; earlier capture outer ASLR-check failure and missing runtime-before evidence remain disclosed. No fixture promotion/full83 acceptance. |
+| Pending numerical source | Historical176 candidate14fail897883 and17995088 runtime0/assembly gap retain their actual uncommitted source identities | Neither is an accepted-main failure count nor proof full176/179 complete. Independent quantities, controls and retained settings remain owner obligations. |
+
+The reviewed [17-document condition pointers](issue-184-doc-condition-pointers.md), [original source/hash/owner index](issue-184-doc-source-index.tsv) and [exact main Rust pointer bindings](issue-184-doc-test-bindings.tsv) now supplement, rather than replace, the [public API](issue-184-public-apis.tsv), [scenario](issue-184-scenarios.tsv) and [Julia source](issue-184-sources.tsv) inventories. They preserve original8bb source lineage and distinguish missing runtime evidence from source-only correspondence. All eleven named Rust files (nine issue184 plus two reference harnesses) exist on main3b; this is not an unpublished-candidate classification or independent per-condition execution proof. Every document is included even when an individual InterAll section is excluded. The 300API inventory includes three individually excluded InterAll rows; the other297 are not automatically verified. The456 scenario rows and1444 original assertions remain full-scope obligations, not new execution counts.
+
+Bounded semantic work: parser A001 (public loading), A130 (UTF8 reader), A132 (existence), A137 (ASCII metadata tokens) and timer methods have concrete supported/rejected condition pointers. Passing reader/timer/duplicate controls do not cover every keyword/overlay/model/lifecycle/MPI branch. Chandra's302-line document audit maps all17 sources to per-section settings, APIs/tests and explicit owner/runtime gaps; it does not assert new execution. Original125-file source and17-document hashes are retained separately; SOURCE classifications are not model accuracy proof.
+
+#178 is closed at its accepted milestone; remaining SR/native CLI obligations are tracked by **#234**, preserving historical #178 references. PhysCal/#181, CLI/#174, MPI/#179, threading/#182, gates/#183, models/#180 and full#184/#185 remain distinct acceptance scopes. No statistical/RNG exemption, new tolerance, oracle dependency or performance claim is introduced by this reconciliation.
+
+The old CURRENT paragraphs below are now explicitly historical. Historical Mac0347 failures and old CI failures are not asserted as the latest accepted-main portability baseline; later exact-head CI milestones above are separate evidence.
+
+## Historical CURRENT snapshot (main60ce456f; preserved verbatim)
+
 Authoritative baseline main60ce456f; recorded branch snapshot78d62007 includes committede7f1aa11fmt,8fd6d034serialbenchmarkMPItruthfulREADME and finiteDHtests. PR204 merged200b29df; whole185 remains OPEN. Latest user milestone merge policy uses actual latest-head Linux default/allfeatures/lint/docs success; disclose/fix Mac failures without hiding/skipping/arbitrary bounds.
 
 | Scope | Actual current evidence | Remaining limitation |
