@@ -5,8 +5,10 @@ mod historical_optimization_flags;
 mod historical_orbital_model;
 use std::path::{Path, PathBuf};
 
+use historical_orbital_model::historical_interall_model::{
+    parse_interall_content, parse_interall_def,
+};
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
-use mvmc_expert_parsers::parsers::interall::{parse_interall_content, parse_interall_def};
 use mvmc_expert_parsers::utils::parameter_init::{all_complex_flag, init_parameter};
 use mvmc_expert_parsers::InterAllTerm;
 use sfmt19937::Sfmt19937Rng;

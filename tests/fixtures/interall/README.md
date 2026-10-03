@@ -1,6 +1,6 @@
 # InterAll input parity
 
-These fixtures extend Julia's `test_parsers.jl` term/parser tests and
+The historical fixtures extend Julia's `test_parsers.jl` term/parser tests and
 `test_parse_expert_mode_files.jl` orchestration tests for the general interaction
 parser. They exercise all four independent site/spin pairs, asymmetric complex
 coefficients, coincident indices, duplicates, input order, signed zeros, and the
@@ -8,7 +8,7 @@ strict `abs(imag(value)) > 1e-14` coefficient classification.
 
 `parser_cases.def` covers comments, extra numeric columns, malformed indices
 and coefficients, Unicode whitespace, and a declared header count different
-from the actual payload. The canonical parser silently skips rows containing
+from the actual payload. The historical Julia parser silently skips rows containing
 ASCII letters, **including scientific notation**, and retains raw negative or
 out-of-range site/spin integers. These are parser semantics, not valid runtime
 inputs. `raw.def` verifies that files without headers retain their first five
@@ -46,8 +46,53 @@ consumption. Normal real and complex optimization now accept spin-conserving
 pairs; general-orbital mode also accepts spin-changing pairs when TwoSz=-1.
 As in C's `GetInfoInterAll`, a fixed TwoSz requires each pair to conserve spin,
 and invalid sites are rejected before initialization. The historical permissive
-Julia parser fixtures above do not establish C reader parity: strict header
-counts, scientific notation and malformed-record handling remain under #23.
+Julia parser fixtures above do not establish C reader parity. They are now
+constructed by `tests/support/historical_interall_model.rs` in tests only;
+production uses the native C contract documented below. Their independent
+Julia parser, initialization, Green and SR expectations remain unchanged.
+
+## Native C input reader and pure Rust number conversion
+
+`c_reader.txt` records 463 actual C reader cases (411 accepted, 52 rejected).
+The optional probe extracts `ReadBuffInt`, `GetInfoInterAll` and their error/site
+checks verbatim from `readdef.c`, with source hashes in the stored excerpt.
+Rust compares acceptance, input order, all eight indices and both coefficient
+bits using checked-in data only. No toolbox or reference runtime is required.
+
+The second physical `fgets` chunk supplies the declared count, independent of
+its printed label. Positive counts skip five header chunks and require exactly
+the declared number of body chunks; zero counts ignore the body. Each chunk
+holds at most 255 bytes. Comments and blank lines are rows, and unsuccessful
+`sscanf` conversions retain values from the preceding row, starting from zero.
+The tests cover short scans, integer prefixes, extra fields, C whitespace,
+fixed/free TwoSz, long rows and missing final newlines. Invalid spin ranges and
+integer overflow have separate bounded Rust diagnostics rather than unsafe
+native executions.
+
+Numeric conversion is pure Rust, including scientific/hexadecimal notation,
+signed zero, infinities, NaN payloads and prefix consumption. Hexadecimal
+rounding covers ties, subnormals, overflow and 128 deterministic random inputs.
+The former `strtod` FFI used by parameter-record loading is removed; existing
+native C record expectations also remain exact. CLI and library regression
+tests compare complete output files in real and complex normal mode using
+scientific InterAll coefficients, and verify count errors before output.
+
+`c_spin_chain.def` retains all 26 original couplings and their order from
+`spin_chain/interall.def`, omitting only five body comment rows that C counts
+as extra terms. The complete production namelist uses this C-valid control;
+the original Julia input and its 50-step trajectory goldens remain intact.
+
+```sh
+uv run --no-project python scripts/check_interall_reader_c_parity.py
+cargo nextest run -p mvmc-expert-parsers --test c_interall_reader
+cargo nextest run -p mvmc-cli --test runtime_contract -E 'test(normal_interall)'
+```
+
+The probe uses Apple clang 17 with `-O0 -ffp-contract=off` and overallocates
+comparison storage so extra-row count errors can be observed safely. This
+does not establish safe native production allocation, full C initialization,
+complex Green arithmetic or sampling/SR parity. Those broader numerical
+checks remain under #23; this reader comparison is not a full C runner claim.
 
 The canonical normal-mode `calculate_hamiltonian` currently accesses
 `term.sites`, while its `InterAllTerm` type contains `site0` through `site3`

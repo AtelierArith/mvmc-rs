@@ -7,6 +7,10 @@
 //! always uses the strict reader; this helper is confined to test code.
 //! RBM blocks from archived Julia inputs are explicitly constructed as sparse
 //! internal models; their invalid headers are never passed to production RBM parsing.
+//! Archived permissive InterAll bodies likewise remain test-only models, with
+//! their original Julia parser and numerical expectations preserved.
+#[path = "historical_interall_model.rs"]
+pub(crate) mod historical_interall_model;
 #[path = "historical_rbm_model.rs"]
 mod historical_rbm_model;
 use mvmc_expert_parsers::{ExpertModeData, OrbitalTerm};
@@ -41,6 +45,7 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
     let mut metadata = Vec::new();
     let mut original_orbitals = Vec::new();
     let mut original_rbm = Vec::new();
+    let mut original_interall = Vec::new();
     let mut rewritten = String::new();
     let mut changed = false;
     let mut changed_orbitals = false;
@@ -52,6 +57,21 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         metadata.push((fields[0].to_owned(), fields[1].to_owned()));
         let original = path.parent().unwrap().join(fields[1]);
         let absolute = original.canonicalize().unwrap_or(original);
+        if fields[0] == "InterAll"
+            && absolute.starts_with(root.join("interall"))
+            && absolute.is_file()
+            && !absolute
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("c_")
+        {
+            // Archived Julia bodies include skipped comment/malformed rows
+            // and raw invalid sites. Construct them only for historical tests.
+            original_interall.push(std::fs::read_to_string(&absolute).map_err(|e| e.to_string())?);
+            changed = true;
+            continue;
+        }
         if let Some(section) = mvmc_expert_parsers::parsers::rbm::SECTION_NAMES
             .iter()
             .position(|&name| fields[0] == name)
@@ -129,6 +149,9 @@ pub fn historical_kernel_model(path: impl AsRef<Path>) -> Result<ExpertModeData,
         return Err(data.input_errors.join("; "));
     }
     data.namelist = metadata;
+    for content in original_interall {
+        data.inter_all_terms = historical_interall_model::parse_interall_content(&content);
+    }
     if !original_rbm.is_empty() {
         historical_rbm_model::restore(&mut data, &original_rbm);
     }
