@@ -1,5 +1,34 @@
 # Optional parity gates (#183)
 
+## Legacy smoke and 50-step follow-up
+
+`run_smoke::heisenberg_chain_real_runs_one_sr_step` remains a normal mandatory
+one-step Rust test. An absent reference checkout or required namelist fails
+`MissingFixture`; it cannot report a pass without executing the runner.
+Initialize the pinned submodules below before ordinary workspace testing.
+Fixtures are read-only; no C, Julia or toolbox executable is invoked.
+
+The four `phase5_regression_50step` comparisons are long historical fixture
+gates. They are explicitly ignored by default, not removed or weakened:
+
+```sh
+MVMC_RS_PHASE5_50STEP=1 cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase5_regression_50step --run-ignored only --no-fail-fast --retries 0
+env -u MVMC_RS_PHASE5_50STEP cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase5_regression_50step --run-ignored only --no-fail-fast --retries 0
+```
+
+The second command deliberately fails all four gates with `NotRun`. Empty
+selectors also fail `NotRun`, while `skip` fails `ExplicitSkip`. Selected gates
+require the checkout, model namelist and `reference/<model>/zvo_out_first50.dat`;
+absence fails `MissingFixture` before sampling. Numerical bodies, seed 1,
+50-step counts and existing tolerance budgets are unchanged. These historical
+expectations are not newly generated Julia 1.13 or full C parity evidence.
+
+Three new default reporting regressions use isolated subprocess environments
+and fresh empty temporary directories, never deleting or replacing real
+fixtures. They check the smoke's missing checkout/namelist, all four gates'
+unset/empty/skip selectors and missing checkout/namelist, and missing expected
+50-step output preflight. Other unit and integration tests remain normal.
+
 The four phase4/5 fixture gates, Lanczos PhysCal, MPI PhysCal and existing
 ctest-equivalent gate are ignored opt-in tests. Default nextest runs report
 them as skipped, not passed. Environment variables alone do not enable them:

@@ -16,6 +16,9 @@
 //!   reference/<model>/zvo_out_first50.dat
 //! and were produced by `tools/dump_zvo_50step_reference.jl` against the same
 //! RNG seed (RndSeed=1) to guarantee a deterministic comparison.
+//!
+//! Historical fixture gate, not fresh Julia/C verification. Run explicitly with
+//! `MVMC_RS_PHASE5_50STEP=1` and `--run-ignored only`; no oracle is invoked.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -66,15 +69,7 @@ fn run_and_compare(julia: &Path, model: &Model) -> Result<(), String> {
         .join(model.input_subdir)
         .join("zvo_out_first50.dat");
 
-    if !namelist.is_file() {
-        return Err(format!("namelist missing: {}", namelist.display()));
-    }
-    if !reference.is_file() {
-        return Err(format!(
-            "50-step reference missing: {} — regenerate it and place it under reference/<model>/",
-            reference.display()
-        ));
-    }
+    require_fixtures(&namelist, &reference);
 
     let out_dir = tempdir(model.name);
     mvmc_core::run_para_opt_from_namelist(
@@ -143,30 +138,34 @@ fn run_and_compare(julia: &Path, model: &Model) -> Result<(), String> {
 }
 
 #[test]
+#[ignore = "long historical fixture gate: MVMC_RS_PHASE5_50STEP required"]
 fn heisenberg_chain_real_50step() {
     run_model_test("heisenberg_chain_real");
 }
 
 #[test]
+#[ignore = "long historical fixture gate: MVMC_RS_PHASE5_50STEP required"]
 fn heisenberg_chain_cmp_50step() {
     run_model_test("heisenberg_chain_cmp");
 }
 
 #[test]
+#[ignore = "long historical fixture gate: MVMC_RS_PHASE5_50STEP required"]
 fn heisenberg_chain_fsz_50step() {
     run_model_test("heisenberg_chain_fsz");
 }
 
 #[test]
+#[ignore = "long historical fixture gate: MVMC_RS_PHASE5_50STEP required"]
 fn hubbard_chain_real_50step() {
     run_model_test("hubbard_chain_real");
 }
 
 fn run_model_test(model_name: &str) {
-    let Some(julia) = julia_mvmc_root() else {
-        eprintln!("skipping {model_name} 50-step: Julia-mVMC checkout not found");
-        return;
-    };
+    support::require_gate("phase5-50step", "MVMC_RS_PHASE5_50STEP");
+    let julia = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("phase5-50step", "Julia-mVMC checkout not found")
+    });
     let model = all_models()
         .iter()
         .find(|m| m.name == model_name)
@@ -174,6 +173,67 @@ fn run_model_test(model_name: &str) {
     if let Err(e) = run_and_compare(&julia, model) {
         panic!("{e}");
     }
+}
+
+fn require_fixtures(namelist: &Path, reference: &Path) {
+    for path in [namelist, reference] {
+        if !path.is_file() {
+            support::missing_fixture("phase5-50step", path.display().to_string());
+        }
+    }
+}
+
+#[test]
+fn selected_long_gates_fail_on_missing_selector_checkout_or_namelist() {
+    let empty_checkout = tempdir("reporting-negative");
+    for model in all_models() {
+        for (selector, root, status) in [
+            (None, empty_checkout.clone(), "NotRun"),
+            (Some(""), empty_checkout.clone(), "NotRun"),
+            (Some("skip"), empty_checkout.clone(), "ExplicitSkip"),
+            (
+                Some("1"),
+                empty_checkout.join("absent-checkout"),
+                "MissingFixture",
+            ),
+            (Some("1"), empty_checkout.clone(), "MissingFixture"),
+        ] {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--ignored",
+                    "--exact",
+                    &format!("{}_50step", model.name),
+                    "--nocapture",
+                ])
+                .env_remove("MVMC_RS_PHASE5_50STEP")
+                .env("JULIA_MVMC_ROOT", root);
+            if let Some(selector) = selector {
+                command.env("MVMC_RS_PHASE5_50STEP", selector);
+            }
+            let output = command.output().unwrap();
+            assert!(
+                !output.status.success(),
+                "{} must fail with {status}",
+                model.name
+            );
+            assert!(String::from_utf8_lossy(&output.stderr).contains(status));
+        }
+    }
+    fs::remove_dir(empty_checkout).unwrap();
+}
+
+#[test]
+fn selected_long_gate_missing_expected_reference_cannot_pass() {
+    // Use this source file as an existing namelist stand-in: preflight must
+    // reject the absent expectation before parsing or numerical work.
+    let existing = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/phase5_regression_50step.rs");
+    let empty = tempdir("missing-reference");
+    let missing = empty.join("zvo_out_first50.dat");
+    let error = std::panic::catch_unwind(|| require_fixtures(&existing, &missing)).unwrap_err();
+    let message = error.downcast_ref::<String>().unwrap();
+    assert!(message.contains("missing fixture") && message.contains("zvo_out_first50.dat"));
+    fs::remove_dir(empty).unwrap();
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
