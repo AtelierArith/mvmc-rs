@@ -112,7 +112,24 @@ fn opttrans_cli_matches_labelled_phase_order_outputs() {
     check("hubbard_chain_dh_opttrans", "real", true);
 }
 
-fn check_lanczos(model: &str, mode: i32) {
+fn is_c_empty_lanczos_gex(bytes: &[u8]) -> bool {
+    // Original C PhysCalLanczos_real/fcmp always writes one LF after the
+    // zero-length GEx loop; this is not a generic whitespace-empty contract.
+    bytes == b"\n"
+}
+
+#[test]
+fn empty_lanczos_gex_requires_exact_c_lf() {
+    assert!(is_c_empty_lanczos_gex(b"\n"));
+    for invalid in [b"".as_slice(), b" ", b"\r\n", b"\n\n", b"0\n"] {
+        assert!(
+            !is_c_empty_lanczos_gex(invalid),
+            "invalid bytes: {invalid:?}"
+        );
+    }
+}
+
+fn check_lanczos(model: &str, mode: i32, arithmetic: &str) {
     // Historical checked-in native C reference, revision and known numerical
     // divergence documented in its metadata.txt. No Julia/C runtime invocation.
     let reference = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -155,7 +172,7 @@ fn check_lanczos(model: &str, mode: i32) {
         .arg(namelist)
         .arg("--physcal")
         .arg(reference.join("zqp_opt.dat"))
-        .args(["--seed", "1", "--mode", "real", "--out-dir"])
+        .args(["--seed", "1", "--mode", arithmetic, "--out-dir"])
         .arg(&output.0)
         .env("OMP_NUM_THREADS", "1")
         .env("OPENBLAS_NUM_THREADS", "1")
@@ -171,6 +188,16 @@ fn check_lanczos(model: &str, mode: i32) {
         let entry = entry.unwrap();
         let name = entry.file_name().into_string().unwrap();
         if !name.starts_with("zvo_ls_") || (mode == 1 && name.contains("cisajs")) {
+            continue;
+        }
+        if name == "zvo_ls_cisajscktaltex_001.dat"
+            && parsed.green_two_ex_terms.is_empty()
+            && parsed.green_two_ex_indices.is_empty()
+        {
+            assert!(entry.file_type().unwrap().is_file());
+            assert!(is_c_empty_lanczos_gex(&fs::read(entry.path()).unwrap()));
+            // Runtime bytes are checked below independently of reference presence.
+            expected_names.push(name);
             continue;
         }
         let actual = fs::read_to_string(output.0.join(&name)).unwrap();
@@ -199,11 +226,17 @@ fn check_lanczos(model: &str, mode: i32) {
     if mode == 2 {
         assert!(parsed.green_two_ex_terms.is_empty());
         let name = "zvo_ls_cisajscktaltex_001.dat";
-        assert!(fs::read_to_string(output.0.join(name))
+        assert!(fs::symlink_metadata(output.0.join(name))
             .unwrap()
-            .trim()
-            .is_empty());
-        expected_names.push(name.to_owned());
+            .file_type()
+            .is_file());
+        assert!(parsed.green_two_ex_indices.is_empty());
+        assert!(is_c_empty_lanczos_gex(
+            &fs::read(output.0.join(name)).unwrap()
+        ));
+        if !expected_names.iter().any(|expected| expected == name) {
+            expected_names.push(name.to_owned());
+        }
     }
     let mut actual_names = fs::read_dir(&output.0)
         .unwrap()
@@ -218,19 +251,39 @@ fn check_lanczos(model: &str, mode: i32) {
 #[test]
 fn hopping_intra_cli_lanczos_modes_match_native_c_reference() {
     for mode in [1, 2] {
-        check_lanczos("hubbard_chain_lanczos", mode);
+        check_lanczos("hubbard_chain_lanczos", mode, "real");
     }
 }
 #[test]
 fn exchange_spin_cli_lanczos_modes_match_native_c_reference() {
     for mode in [1, 2] {
-        check_lanczos("spin_chain_lanczos", mode);
+        check_lanczos("spin_chain_lanczos", mode, "real");
+    }
+}
+
+#[test]
+fn complex_hopping_intra_cli_lanczos_modes_match_native_c_reference() {
+    // Same historical C operands/results, exercised through the complex
+    // arithmetic path. Not newly generated complex C trajectory evidence.
+    for mode in [1, 2] {
+        check_lanczos("hubbard_chain_lanczos", mode, "cmp");
+    }
+}
+
+#[test]
+fn complex_exchange_spin_cli_lanczos_modes_match_native_c_reference() {
+    // Real fixture inputs/fixed parameters through --mode cmp, not an
+    // independent native-C run with genuinely complex fixed weights.
+    for mode in [1, 2] {
+        check_lanczos("spin_chain_lanczos", mode, "cmp");
     }
 }
 
 #[test]
 fn all_hamiltonian_terms_cli_lanczos_matches_independent_base_and_corrected_outputs() {
-    for mode in [1, 2] {
+    // The cmp cases reuse the same real-valued fixture operands and independent
+    // outputs to check complex-path routing, not genuinely complex weights.
+    for (mode, arithmetic) in [(1, "real"), (2, "real"), (1, "cmp"), (2, "cmp")] {
         // Existing Julia 1.13.1 values with C indexed layout; provenance.txt
         // records the source, seed and BLAS. Not a full native-C trajectory.
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -251,7 +304,7 @@ fn all_hamiltonian_terms_cli_lanczos_matches_independent_base_and_corrected_outp
             .arg(root.join("inputs/namelist.def"))
             .arg("--physcal")
             .arg(root.join("zqp_opt.dat"))
-            .args(["--seed", "1", "--mode", "real", "--out-dir"])
+            .args(["--seed", "1", "--mode", arithmetic, "--out-dir"])
             .arg(&out.0)
             .env("OMP_NUM_THREADS", "1")
             .env("OPENBLAS_NUM_THREADS", "1")
