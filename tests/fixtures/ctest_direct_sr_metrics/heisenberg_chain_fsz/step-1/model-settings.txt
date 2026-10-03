@@ -1,0 +1,7 @@
+model=heisenberg_chain_fsz mode=fsz seed=1
+steps=1 window=1 NSRCG=0 NStore=1
+canonical_NSROptItrStep=5000 canonical_NSROptItrSmp=500
+effective_NSROptItrStep=1 effective_NSROptItrSmp=1 override=both_no_clamp
+initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
+initial.def sha256=5005575b8819a78796d11d94ec95bfb464d5aa501ba1128b8f65b15bfd5d378a
+In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256

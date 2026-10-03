@@ -1,0 +1,7 @@
+generator_sha256=6e1508487024be9a5466a6c1cc22a12bfcd2da56e20934bb52eca7838411b53f
+julia=1.13.1
+reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
+blas_version=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+scope=standalone weighted-average kernels, exact binary-rational synthetic inputs; not a full sampling/measurement trace
+layout=wc,etot,etot2,sztot,sztot2; three one-body; two factored; two direct complex values
+C_authority=src/mVMC/average.c WeightAverageWE/WeightAverageGreenFunc: reciprocal Wc then ordered multiplication

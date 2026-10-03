@@ -147,7 +147,9 @@ test -n "$mpi_gate_binary" && test -x "$mpi_gate_binary" &&
   --ignored --exact mpi_physcal_reduces_fixed_parameter_samples --nocapture
 ```
 
-The existing MPI numerical body is unchanged. A feature-disabled default run
+The shared MPI scenario body retains its grouped PhysCal rejection assertion;
+the isolated milestone checks above do not validate that shared numerical body.
+A feature-disabled default run
 reports the gate skipped. Explicit execution without its selector fails
 `NotRun`; with its selector set it fails `Unsupported`:
 
@@ -291,3 +293,146 @@ exited 0: **550 passed, 15 skipped** (105.193 seconds, three slow tests).
 This final result includes the current gate implementation; the subsequent
 validation-record commit changes documentation only. MPI protocol validation
 is still not claimed.
+
+## Preserved shared draft checkpoint (historical evidence)
+
+The following pre-merge draft is retained verbatim for provenance. Its helper
+counts and implementation-scope statements describe the earlier checkpoint,
+not the merged tree or the validated PR #197 milestone above. In particular,
+current shared #180 declarations cover the full matrix; the shared MPI body
+checks grouped PhysCal rejection, not grouped numerical parity. The six-helper
+support contract and both MPI preflight guards from #197 are retained.
+
+<details>
+<summary>Earlier shared draft, including #181 invocation and process evidence</summary>
+
+# Optional parity gates (#183)
+
+Phase 4/5, Lanczos, issue #181 PhysCal and MPI gates are `#[ignore]` tests. A normal nextest run
+reports them as skipped/ignored, never as passed. Setting an environment variable
+alone does not enable an ignored test: select it with `--run-ignored only` too.
+Normal tests do not launch C, Julia or toolbox programs. These optional tests
+read existing reference files and run Rust; they do not generate references.
+
+From the repository root, list the declared gates (including ignored tests):
+
+```sh
+cargo nextest list -p mvmc-core --cargo-profile test-fast \
+  -E 'binary(/phase4_zvo_gate/) | binary(phase5_zvo_gate_hubbard) | binary(lanczos_transfer_physcal) | binary(physcal_issue181) | binary(mpi_physcal)'
+```
+
+Run an individual historical 10-step fixture comparison (seed 1):
+
+```sh
+MVMC_RS_PHASE4_REAL_ZVO=1 cargo nextest run -p mvmc-core --cargo-profile test-fast --test phase4_zvo_gate --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+MVMC_RS_PHASE4_CMP_ZVO=1 cargo nextest run -p mvmc-core --cargo-profile test-fast --test phase4_zvo_gate_cmp --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+MVMC_RS_PHASE4_FSZ_ZVO=1 cargo nextest run -p mvmc-core --cargo-profile test-fast --test phase4_zvo_gate_fsz --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+MVMC_RS_PHASE5_HUBBARD_ZVO=1 cargo nextest run -p mvmc-core --cargo-profile test-fast --test phase5_zvo_gate_hubbard --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+```
+
+Set `JULIA_MVMC_ROOT` to a reference checkout when needed. An explicitly supplied
+invalid root fails rather than falling back to another checkout.
+
+Run all three issue #181 PhysCal scenarios (six-model fixed-parameter/output
+matrix, deterministic multiple samples, and non-InterAll Lanczos file contracts):
+
+```sh
+MVMC_RS_PHYSCAL_181=1 cargo nextest run -p mvmc-core --locked --cargo-profile test-fast --test physcal_issue181 --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+```
+
+Run the Lanczos gate, optionally selecting one model:
+
+```sh
+MVMC_RS_LANCZOS_PHYSICAL=1 MVMC_RS_LANCZOS_MODEL=hubbard_chain_real MVMC_RS_LANCZOS_MODE=real \
+  cargo nextest run -p mvmc-core --cargo-profile test-fast --test lanczos_transfer_physcal \
+  --run-ignored only --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+```
+
+Models are `hubbard_chain_real`, `hubbard_chain_lanczos`, `spin_chain_lanczos`;
+omitting the model requests all three. Modes are `real` (default) and `cmp`.
+Unknown model/mode selections fail. Inputs and the QQQQ/energy references for
+the selected model must exist. The existing comparison checks observable
+references that are present; historical fixtures omit the DC reference when
+there are no DC terms. A pass does not establish DC observable comparison
+coverage when that reference is absent. The issue #181 scenario separately
+checks the empty-output contract.
+
+MPI needs the `mpi` feature and at least two ranks. Build and resolve exactly
+one executable using Cargo's JSON output; do not launch a wildcard that could
+include stale binaries or `.d` files. This example requires `jq`:
+
+```sh
+mpi_gate_binary=$(cargo test -p mvmc-core --profile test-fast --features mpi --test mpi_physcal --no-run --message-format=json | jq -r 'select(.reason == "compiler-artifact" and .target.name == "mpi_physcal" and .executable != null) | .executable')
+test -n "$mpi_gate_binary" && test -x "$mpi_gate_binary" && \
+  MVMC_RS_MPI_PHYSICAL=1 mpiexec -n 2 "$mpi_gate_binary" \
+  --ignored --exact mpi_physcal_reduces_fixed_parameter_samples --nocapture
+```
+
+The MPI gate checks completion of serial PhysCal reduction and rejection of unsupported
+grouped PhysCal. It does not establish numerical parity for grouped PhysCal.
+Explicitly selecting the MPI gate without the feature fails as `Unsupported`:
+
+```sh
+MVMC_RS_MPI_PHYSICAL=1 cargo nextest run -p mvmc-core --cargo-profile test-fast --test mpi_physcal --run-ignored only --no-fail-fast --retries 0
+```
+
+## Interpreting reports
+
+The harness is authoritative: ignored/skipped means coverage was not run;
+`PASS` requires the comparison to finish; assertion/runner errors are failures.
+Selecting an ignored gate with its selector absent or empty emits `NotRun` and
+fails. A selector of `skip` emits `ExplicitSkip` and fails if executed: to skip,
+omit that ignored test from selection. Missing required inputs/expected outputs
+fail (fixture preflight emits `MissingFixture`; file reads/runner errors may
+report a normal harness failure); unsupported selections emit `Unsupported` and fail.
+Thus an explicit request cannot succeed by returning without doing the work.
+Keep nextest summaries, exit codes and captured output together. Do not count
+support-helper unit tests as parity coverage.
+
+`ctest_equivalent` is owned by #180 and its optional declarations use the same
+`#[ignore]`/`support::require_gate` contract through that coordinated change.
+This #183 change leaves that file untouched. The legacy `select_gate` helper
+was removed after all callers migrated, so new gates must use `require_gate`.
+
+Historical fixture passes cover only the named model, mode and outputs. They
+are not newly verified Julia 1.13 results or complete Julia feature coverage.
+For reference-generation evidence record OS/architecture, compiler and Rust
+versions, Rust features/profile, Julia version and Manifest hash, actual BLAS
+provider/version, seed, model/steps, ranks/groups/threads, reference revision and
+file hashes, command, exit status and artifact paths. New Julia comparisons use
+`julia +1.13.1 --project=extern/Julia-mVMC` and `Manifest-v1.13.toml`.
+Reference generation is a separate optional developer action. Thread matrices
+must be requested and reported explicitly; these gates do not imply they ran.
+
+## Reporting validation checkpoint (2026-10-03)
+
+The following captured processes were started before integration of #190.
+Treat their results as gate selection/reporting evidence; they do not
+establish numerical parity or validate the integrated numerical implementation:
+
+| Process handle | Selection | Result |
+| --- | --- | --- |
+| 15826 | Default phase4/5, Lanczos and MPI declarations, `test-fast` | Exit 0: 24 helper tests passed, 6 parity gates skipped |
+| 34718 | Default `physcal_issue181`, `--locked`, `test-fast` | Exit 0: 4 helper tests passed, 3 scenarios skipped |
+| 28608 | All nine ignored gates explicitly requested with selectors unset, `--locked`, `test-fast` | Expected exit 100: 0 passed, 9 failed at `require_gate`, 28 helper tests skipped |
+
+The missing-selector run used `--run-ignored only --no-fail-fast --retries 0`
+and explicitly unset `MVMC_RS_PHASE4_REAL_ZVO`, `MVMC_RS_PHASE4_CMP_ZVO`,
+`MVMC_RS_PHASE4_FSZ_ZVO`, `MVMC_RS_PHASE5_HUBBARD_ZVO`,
+`MVMC_RS_LANCZOS_PHYSICAL`, `MVMC_RS_MPI_PHYSICAL`, and
+`MVMC_RS_PHYSCAL_181`. Every executed gate reported `NotRun` and failed before
+entering its scenario body. No C/Julia program, reference generation, MPI
+launcher, or numerical parity workload was run by these checks.
+
+After resuming on the integrated tree, focused support-helper verification
+(handle 54822) exited 0: 4 helper tests passed, 1 parity gate skipped:
+
+```sh
+cargo nextest run -p mvmc-core --locked --cargo-profile test-fast --test phase4_zvo_gate -E 'test(support::tests::)' --no-fail-fast --retries 0
+```
+
+Targeted `rustfmt --edition 2021 --check` on the owned Rust files and
+`git diff --check` on the owned paths also passed. These checks cover gate
+infrastructure and formatting, not numerical comparisons.
+
+</details>

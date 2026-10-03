@@ -6,7 +6,7 @@
 use std::fs;
 
 mod support;
-use support::julia_mvmc_root;
+use support::{julia_mvmc_root, report_gate, GateStatus};
 
 #[test]
 #[ignore = "optional parity gate: MVMC_RS_PHASE4_CMP_ZVO required"]
@@ -67,6 +67,11 @@ fn heisenberg_chain_cmp_zvo_out_first10_matches_reference() {
             );
         }
     }
+    report_gate(
+        "phase4-cmp-zvo",
+        GateStatus::Pass,
+        "10-step reference matched",
+    );
 }
 
 fn parse_rows(content: &str) -> Vec<Vec<f64>> {

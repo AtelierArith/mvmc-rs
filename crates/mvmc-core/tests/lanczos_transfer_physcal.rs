@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 mod support;
+use support::{report_gate, GateStatus};
 
 fn values(path: &Path) -> Vec<f64> {
     fs::read_to_string(path)
@@ -110,5 +111,6 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
             }
         }
         let _ = fs::remove_dir_all(output);
+        report_gate("lanczos-physcal", GateStatus::Pass, model);
     }
 }

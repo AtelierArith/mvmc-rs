@@ -13,12 +13,61 @@
     clippy::items_after_test_module
 )]
 
+use crate::reducer::{Reducer, SingleProcessReducer};
 use mvmc_expert_parsers::ExpertModeData;
 use sfmt19937::Sfmt19937Rng;
 
 use crate::pfaffian::{calc_m_all_fsz_complex, calc_m_all_fsz_real, CalcMAllError};
 use crate::sampling::projection::{init_loc_spn, make_proj_cnt};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
+
+/// A local kernel failure or a comm1 peer failure, without inventing a local
+/// numerical defect on ranks whose owned QP slice succeeded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SamplingInitializationError {
+    /// This rank's owned QP kernel failed.
+    Local(CalcMAllError),
+    /// This rank succeeded but another comm1 rank failed.
+    PeerFailure,
+}
+
+impl From<CalcMAllError> for SamplingInitializationError {
+    fn from(error: CalcMAllError) -> Self {
+        Self::Local(error)
+    }
+}
+
+impl std::fmt::Display for SamplingInitializationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Local(error) => error.fmt(f),
+            Self::PeerFailure => write!(f, "sampling initialization failed on another comm1 rank"),
+        }
+    }
+}
+
+impl std::error::Error for SamplingInitializationError {}
+
+pub(super) fn coordinate_initialization_result<R: Reducer + ?Sized>(
+    result: Result<(), CalcMAllError>,
+    reducer: &R,
+) -> Result<(), SamplingInitializationError> {
+    if reducer.sampling_any_failure(result.is_err()) {
+        Err(result
+            .err()
+            .map(SamplingInitializationError::Local)
+            .unwrap_or(SamplingInitializationError::PeerFailure))
+    } else {
+        Ok(())
+    }
+}
+
+fn serial_error(error: SamplingInitializationError) -> CalcMAllError {
+    match error {
+        SamplingInitializationError::Local(error) => error,
+        SamplingInitializationError::PeerFailure => unreachable!("serial reducer has no peers"),
+    }
+}
 
 /// Result of [`make_initial_sample`]. `Ok(())` matches upstream's
 /// `info = 0`; `Err(())` matches `info != 0` (too many retries).
@@ -48,8 +97,8 @@ pub fn make_initial_sample(
             continue;
         }
         loop {
-            let mi = rng.gen_rand_mod(n_elec as u32) as usize;
-            let r = rng.genrand_real2();
+            let mi = crate::sampling::driver::trace::draw_mod(rng, n_elec as u32) as usize;
+            let r = crate::sampling::driver::trace::draw_real2(rng);
             let si = if r < 0.5 { 0 } else { 1 };
             if ele_idx[mi + si * n_elec] == -1 {
                 ele_cfg[ri + si * n_site] = mi as i64;
@@ -66,7 +115,7 @@ pub fn make_initial_sample(
                 continue;
             }
             loop {
-                let ri = rng.gen_rand_mod(n_site as u32) as usize;
+                let ri = crate::sampling::driver::trace::draw_mod(rng, n_site as u32) as usize;
                 if ele_cfg[ri + si * n_site] == -1 && loc_spn.get(ri).copied().unwrap_or(0) != 1 {
                     ele_cfg[ri + si * n_site] = mi as i64;
                     ele_idx[mi + si * n_elec] = ri as i64;
@@ -186,7 +235,7 @@ pub fn generate_initial_fsz_configuration(
     for ri in 0..n_site {
         if loc_spn.get(ri).copied().unwrap_or(0) == 1 {
             loop {
-                let mi = rng.gen_rand_mod(n_size as u32) as usize;
+                let mi = crate::sampling::driver::trace::draw_mod(rng, n_size as u32) as usize;
                 if ele_idx[mi] == -1 {
                     let si = ele_spn[mi] as usize;
                     ele_cfg[ri + si * n_site] = mi as i64;
@@ -201,7 +250,7 @@ pub fn generate_initial_fsz_configuration(
         if ele_idx[mi] == -1 {
             let si = ele_spn[mi] as usize;
             loop {
-                let ri = rng.gen_rand_mod(n_site as u32) as usize;
+                let ri = crate::sampling::driver::trace::draw_mod(rng, n_site as u32) as usize;
                 if ele_cfg[ri + si * n_site] == -1 && loc_spn.get(ri).copied().unwrap_or(0) == 0 {
                     ele_cfg[ri + si * n_site] = mi as i64;
                     ele_idx[mi] = ri as i64;
@@ -228,6 +277,28 @@ pub fn make_initial_sample_fsz(
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    make_initial_sample_fsz_with_reducer(
+        data,
+        state,
+        rng,
+        qp_start,
+        qp_end,
+        pool,
+        &SingleProcessReducer,
+    )
+    .map_err(serial_error)
+}
+
+/// FSZ initializer with comm1-coordinated retry status and owned QP range.
+pub fn make_initial_sample_fsz_with_reducer<R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    qp_start: usize,
+    qp_end: usize,
+    pool: &ThreadedPfaPackWorkspace,
+    reducer: &R,
+) -> Result<(), SamplingInitializationError> {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     init_loc_spn(&mut state.workspace.loc_spn, data);
@@ -245,7 +316,7 @@ pub fn make_initial_sample_fsz(
         )
         .expect("FSZ configuration generation does not fail");
         let mat = &mut state.slater_matrix;
-        match calc_m_all_fsz_complex(
+        let result = calc_m_all_fsz_complex(
             &c.tmp_ele_idx,
             &c.tmp_ele_spn,
             &mat.slater_elm,
@@ -256,10 +327,17 @@ pub fn make_initial_sample_fsz(
             n_site,
             n_elec,
             pool,
-        ) {
-            Ok(()) => return Ok(()),
-            Err(error) if attempt == 100 => return Err(error),
-            Err(_) => {}
+        );
+        if !reducer.sampling_any_failure(result.is_err()) {
+            return Ok(());
+        }
+        if attempt == 100 {
+            // A successful local slice can still have a failed peer. Report
+            // a distinct coordination error without inventing a local QP defect.
+            return Err(result
+                .err()
+                .map(SamplingInitializationError::Local)
+                .unwrap_or(SamplingInitializationError::PeerFailure));
         }
     }
     unreachable!("the last failed attempt returns its error")
@@ -276,6 +354,28 @@ pub fn make_initial_sample_fsz_real(
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    make_initial_sample_fsz_real_with_reducer(
+        data,
+        state,
+        rng,
+        qp_start,
+        qp_end,
+        pool,
+        &SingleProcessReducer,
+    )
+    .map_err(serial_error)
+}
+
+/// Real FSZ initializer with comm1-coordinated retry status.
+pub fn make_initial_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    qp_start: usize,
+    qp_end: usize,
+    pool: &ThreadedPfaPackWorkspace,
+    reducer: &R,
+) -> Result<(), SamplingInitializationError> {
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
     init_loc_spn(&mut state.workspace.loc_spn, data);
@@ -292,7 +392,7 @@ pub fn make_initial_sample_fsz_real(
             rng,
         )
         .expect("FSZ configuration generation does not fail");
-        match calc_m_all_fsz_real(
+        let result = calc_m_all_fsz_real(
             &c.tmp_ele_idx,
             &c.tmp_ele_spn,
             &mut state.slater_matrix,
@@ -301,10 +401,15 @@ pub fn make_initial_sample_fsz_real(
             n_site,
             n_elec,
             pool,
-        ) {
-            Ok(()) => return Ok(()),
-            Err(error) if attempt == 100 => return Err(error),
-            Err(_) => {}
+        );
+        if !reducer.sampling_any_failure(result.is_err()) {
+            return Ok(());
+        }
+        if attempt == 100 {
+            return Err(result
+                .err()
+                .map(SamplingInitializationError::Local)
+                .unwrap_or(SamplingInitializationError::PeerFailure));
         }
     }
     unreachable!("the last failed attempt returns its error")

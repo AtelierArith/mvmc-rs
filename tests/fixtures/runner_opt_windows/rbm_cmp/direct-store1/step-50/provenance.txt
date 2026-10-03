@@ -1,0 +1,26 @@
+Independent Julia observer; C declared slots and pre-SR Etot/Etot2, post-SR synchronized Para; not full C execution
+Julia=1.13.1 BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
+options=--case=rbm_cmp --store=1 --steps=1,2,3,50 --write prefix=50 SR_failed=false
+successful_steps=50 effective_window=50 selected_rows=50 aggregatable_final_output=true
+modpara=MVMCExpertModeParsers.ModParaParameters(6, 3, 0, 6, 0, 0, 50, 50, 0, 10, 1, 100, 1.0e-8, 0.01, 0.003, 1.0e-10, 0, 0, 1, 0, 0, 1, 1, 8, 0, 1, 0, 1, 1, "zvo", "zqp", 1, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 12)
+/tmp/mvmc-history-retained.HHdjE0/scripts/check_sr_direct_runner_parity.jl sha256=7c5efce881ef69b079fbf4d92e27e9f1a0c5a51154a476f88323e4b5a3f7c346
+/tmp/mvmc-history-retained.HHdjE0/c_toolbox/runner_opt_windows.jl sha256=e13f5e2fbbd2ab7250e64fdd4041444c89e18152968efd2f91a561c32e226037
+/tmp/mvmc-history-retained.HHdjE0/extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_para_opt.jl sha256=a17e7cab2e3ce7e1e1046d621aead2743acc0a84a080df772c9a396b6260a316
+/tmp/mvmc-runner-retained-rbm_cmp-direct-store1/step-50/c-window-input.txt sha256=a62c7ba8f828d2cfb9e1fc5018b6c588bd3104ff3fbfff84065f56bb81731f97
+namelist=/tmp/mvmc-history-retained.HHdjE0/tests/fixtures/rbm/run_rbm_cmp/namelist.def
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/ChargeRBM_HiddenLayer.def sha256=990b0ab480913fe3d0f61df7c83a451408f313e1712001cc45916a62fb976e9e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/ChargeRBM_PhysHidden.def sha256=98eefd10b71b92f9ef720393eb37b783bd642aeab78a5e584ecbcc77dad3b687
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/ChargeRBM_PhysLayer.def sha256=990b0ab480913fe3d0f61df7c83a451408f313e1712001cc45916a62fb976e9e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/GeneralRBM_HiddenLayer.def sha256=6b0fffb228d28de43c4785f38b6ed837e488bbdf02c5867d4a49df66533ef51c
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/GeneralRBM_PhysHidden.def sha256=aef6f4a52e50011e94216728a2a539d4c7ab96ce330b07f0271dfe295644bc82
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/GeneralRBM_PhysLayer.def sha256=a44f8d6af8ba750c7c5db609490c257d2586254a8da606086eef1d2f3890e6b3
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/SpinRBM_HiddenLayer.def sha256=990b0ab480913fe3d0f61df7c83a451408f313e1712001cc45916a62fb976e9e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/SpinRBM_PhysHidden.def sha256=98eefd10b71b92f9ef720393eb37b783bd642aeab78a5e584ecbcc77dad3b687
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/SpinRBM_PhysLayer.def sha256=990b0ab480913fe3d0f61df7c83a451408f313e1712001cc45916a62fb976e9e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/namelist.def sha256=b19f0405538e701e5f9167a2cde56ade1c5ec65daaae470a74e2d31f6f4bf937
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/orbital.def sha256=3d77dce00bdc1cc6e364862edc9e776e7a8b6cb0b894df55289701785bbd238d
+/tmp/mvmc-history-retained.HHdjE0/scripts/../tests/fixtures/rbm/run_rbm_cmp/rbm_input.def sha256=ef29429904fc680bc9780adf7972dffbcc23421261ac0979b7feae4e245f3503
+JuliaProject sha256=7b71e96b08818d5b949a2f750186b86cf27d7ecb47f65580779fedd18874a8e4
+JuliaManifest sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+C kernel shim sha256=44521dbe2243ebd2b2f1f23a0d98bb74e397e1cdb07fd5d69ec3ddabde13438a
+Independent observer bridge, not a Julia production repair; no Rust values. Snapshot digest=5ced54f40b7fc3be54aa29b15fb059e961650e2d2f8d2efc985488bb0d498cba. Actual C avevar aggregation via runner_opt_windows.c. Archived prefixes 1/2/3/50 next624 RNG and saved configurations match exactly. Failed SR prefixes intentionally have no final output aggregation.

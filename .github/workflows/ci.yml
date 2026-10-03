@@ -51,10 +51,22 @@ jobs:
       - name: Run unit and integration tests
         env:
           FEATURE_ARGS: ${{ matrix.configuration.args }}
+          MVMC_CG_DIAGNOSTICS: '1'
+          MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
+          TMPDIR: /tmp
         run: |
           feature_args=()
           if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
           cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Upload CG diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cg-diagnostics-${{ matrix.platform.cache }}-${{ matrix.configuration.cache }}
+          path: |
+            /tmp/mvmc-run-*.cg-diagnostics.txt
+            /tmp/mvmc-cg-fixed-*.txt
+          if-no-files-found: ignore
       - name: Log target disk usage
         if: always()
         run: |

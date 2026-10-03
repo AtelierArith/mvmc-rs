@@ -34,7 +34,7 @@ The focused security branch starts from origin/main `515a89b38dc49ead3f526c40664
 | Benchmark Cargo audit | Failed overall | Exit 1; crossbeam-epoch finding, no lru finding |
 | Git diff whitespace check | Passed | Exit 0 |
 | Workspace formatting check | Passed | Exit 0 |
-| GitHub alert closure | Pending | API state open; fixed_at and dismissed_at null |
+| GitHub alert closure | Passed | API state fixed; fixed_at `2026-10-03T06:11:47Z`; dismissed_at null |
 
 Reproduction commands from the repository root (use isolated CARGO_TARGET_DIR values for builds in another checkout):
 
@@ -63,4 +63,4 @@ Upstream's existing deprecated fetch_update usage emits a warning when compiled 
 
 ## Lifecycle
 
-The initial implementation was recorded in checkpoint 9e58590. This validated focused milestone is recorded separately on security/192-lru-remediation for review; its PR must not be merged before parent review. Issue #192 and the GitHub security alert remain open; local resolution does not establish that GitHub has rescanned a merged change. No alert dismissal or write to the dependency's upstream repository was performed. Replace these snapshots with a supported fixed tenferro release when available, validate both locks again, and verify the GitHub alert's fixed state before claiming closure.
+The initial implementation was recorded in checkpoint 9e58590. After parent review and the isolated full-workspace verification above, [PR #195](https://github.com/AtelierArith/mvmc-rs/pull/195) was merged into main as `99e144b5d2c406198a82a87029581455b5488f93` at `2026-10-03T06:11:40Z`. GitHub then marked alert #5 fixed at `2026-10-03T06:11:47Z`; `dismissed_at` remained null. Issue #192 was closed after that confirmation. No alert dismissal or write to the dependency's upstream repository was performed. Replace these snapshots with a supported fixed tenferro release when available and validate both lockfiles again. The unrelated crossbeam audit finding remains outside this completed lru remediation.

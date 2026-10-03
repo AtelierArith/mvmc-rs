@@ -1,0 +1,25 @@
+Independent Julia observer; C declared slots and pre-SR Etot/Etot2, post-SR synchronized Para; not full C execution
+Julia=1.13.1 BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
+options=--case=dh24_fsz --store=0 --steps=1,2,3,50 --write prefix=1 SR_failed=false
+successful_steps=1 effective_window=1 selected_rows=1 aggregatable_final_output=true
+modpara=MVMCExpertModeParsers.ModParaParameters(6, 3, 0, 6, 0, 0, 1, 1, 0, 10, 1, 2000, 1.0e-10, 0.01, 0.01, 1.0e-10, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, "zvo", "zqp", 1, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 66)
+# Mixed reference: original Julia 1.13.1 runner/RNG/sampling/SR with actual serial native C FSZ local energy including DH2/DH4; every saved projection counter verified by C MakeProjCnt; no RBM; not full C executable or MPI parity.
+# Linux x86_64 GNU; compiler=Ubuntu clang version 18.1.3 (1ubuntu1); libc=('glibc', '2.39'); libgcc_archive=/usr/lib/gcc/x86_64-linux-gnu/13/libgcc.a; libgcc_archive_sha256=d9376c55f97863a4e5fbb6c6beca2591b319bf786f3a7ca56da8964c5662171f; -O0 -ffp-contract=off; shared bridge -fPIC -fvisibility=hidden; native exact-input gates=108; fsz_runner_reference.c sha256=fcfdc2e196626b287c6bd783cc349f57365ac4e800de820ef186a552e53fdaf8; fsz_green_upstream.inc sha256=f8770ccc9c120e4d482d6e2996e94fed3ac9ada9da88a45198e0a0b7867f1e26; fsz_green_real_upstream.inc sha256=55983ff5652fb9ddedd8237b90bc4387f326a99241bfa3b22fb474ea5cbd4da5; fsz_hamiltonian_upstream.inc sha256=56ccd3899ce513168cfa98d89b58b8c9d7b57eae4a1cbb17b84b0239046f7388; fsz_hamiltonian_real_upstream.inc sha256=60576d36e3f51bef4e613e9e615aecdafc4b62cb5f1108cb48c0a45af6ea2d1c; fsz_runner_projection_upstream.inc sha256=a8e09e7783fa11a36a06cd29ebb41e75880b06c3b4a7276d0b68fee6e958af72;
+# reference_native_fsz_energy.jl sha256=65451402ef71ccdcae090fce7c258a4c6d400fcfc4604f1e62fa7225b59f4bed
+
+/tmp/mvmc-runner-native-fsz-bridge/libmvmc_fsz_reference.so sha256=5434e44ab1bb1eab95acae35a5d54e8c093f0b9ee7f1a0519dab947e3e74b235
+/tmp/mvmc-history-native.KXznOf/scripts/reference_native_fsz_energy.jl sha256=65451402ef71ccdcae090fce7c258a4c6d400fcfc4604f1e62fa7225b59f4bed
+/tmp/mvmc-history-native.KXznOf/scripts/check_sr_cg_runner_parity.jl sha256=41564f23b5f2f2d18b2ba85d069c66118e0ea7f705ccbe253bb3aa0944c41eef
+/tmp/mvmc-history-native.KXznOf/c_toolbox/runner_opt_windows.jl sha256=305934493f2e724cddfdd29274fad6c59eaa6e09b4bc37103d2dda8682286eed
+/tmp/mvmc-history-native.KXznOf/extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_para_opt.jl sha256=a17e7cab2e3ce7e1e1046d621aead2743acc0a84a080df772c9a396b6260a316
+/tmp/mvmc-runner-native-final-dh24_fsz-cg-store0/step-1/c-window-input.txt sha256=d6d4fb7c3b42271f616ac70b718715c9cb76e3be9a0909d16f9068b4a2e248a3
+namelist=/tmp/mvmc-history-native.KXznOf/tests/fixtures/dh4/production_dh24_fsz/namelist.def
+/tmp/mvmc-history-native.KXznOf/scripts/../tests/fixtures/dh4/production_dh24_fsz/dh2.def sha256=7c26f073757f01373d95422b35cb06a9181c5d8c1f8522a54689e138bd4e85d8
+/tmp/mvmc-history-native.KXznOf/scripts/../tests/fixtures/dh4/production_dh24_fsz/dh4.def sha256=574b95383ff14064106b0dfb9832dc4353f454e3f059076aeb044fd7dae227e4
+/tmp/mvmc-history-native.KXznOf/scripts/../tests/fixtures/dh4/production_dh24_fsz/indh2.def sha256=b6e7f13cd7ede6727648b585df9988a1fd7e29b5fe55bdc4a4a3f58fa229eec0
+/tmp/mvmc-history-native.KXznOf/scripts/../tests/fixtures/dh4/production_dh24_fsz/indh4.def sha256=934497349506b8a6e34b160f5f9832cdb734ef76ea373cda80adabef65177784
+/tmp/mvmc-history-native.KXznOf/scripts/../tests/fixtures/dh4/production_dh24_fsz/namelist.def sha256=b6521b7b33cb77fbdb3385e99490c763de6eb1dceb513ccb19a64325a34b6e2b
+JuliaProject sha256=7b71e96b08818d5b949a2f750186b86cf27d7ecb47f65580779fedd18874a8e4
+JuliaManifest sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+C kernel shim sha256=44521dbe2243ebd2b2f1f23a0d98bb74e397e1cdb07fd5d69ec3ddabde13438a
+Mixed native-C local energy/original Julia sampler-SR history with actual C output aggregation, not full C executable/MPI. No Rust values. Snapshot digest=71304a6d333eb061601af92a8c0c875eb631d2c78de2b87bf60065f66af7506b. Observer SHA=305934493f2e724cddfdd29274fad6c59eaa6e09b4bc37103d2dda8682286eed. Native library SHA=5434e44ab1bb1eab95acae35a5d54e8c093f0b9ee7f1a0519dab947e3e74b235. All4 next624/configs exact vs SHA-verified native fixture inheritance. Binding-world-age warnings during installation retained in external generation log; invokelatest applies to install only. No failed SR history aggregated as final output.

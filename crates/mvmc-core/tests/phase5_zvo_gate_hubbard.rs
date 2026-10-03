@@ -13,7 +13,7 @@ use std::fs;
 use std::path::PathBuf;
 
 mod support;
-use support::julia_mvmc_root;
+use support::{julia_mvmc_root, report_gate, GateStatus};
 
 #[test]
 #[ignore = "optional parity gate: MVMC_RS_PHASE5_HUBBARD_ZVO required"]
@@ -72,6 +72,11 @@ fn hubbard_chain_real_zvo_out_first10_matches_reference() {
             );
         }
     }
+    report_gate(
+        "phase5-hubbard-zvo",
+        GateStatus::Pass,
+        "10-step reference matched",
+    );
 }
 
 fn parse_rows(content: &str) -> Vec<Vec<f64>> {

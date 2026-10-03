@@ -996,10 +996,20 @@ impl Default for ExpertModeData {
 }
 
 impl ExpertModeData {
-    /// Append missing OneBodyG constituents in TwoBodyGEx order and retain
+    /// Stable-deduplicate OneBodyG when TwoBodyGEx enables C's indirect reader,
+    /// append missing constituents in TwoBodyGEx order, and retain
     /// references into the resulting canonical one-body list.
     pub fn canonicalize_green_two_ex(&mut self) {
         self.green_two_ex_indices.clear();
+        if !self.green_two_ex_terms.is_empty() {
+            let mut canonical = Vec::with_capacity(self.green_one_terms.len());
+            for term in &self.green_one_terms {
+                if !canonical.contains(term) {
+                    canonical.push(*term);
+                }
+            }
+            self.green_one_terms = canonical;
+        }
         for term in self.green_two_ex_terms.clone() {
             let first = GreenOneTerm {
                 site1: term.site1,

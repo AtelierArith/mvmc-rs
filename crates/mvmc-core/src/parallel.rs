@@ -50,20 +50,14 @@ pub struct GroupAssignment {
     pub group: usize,
     /// Rank within the group.
     pub local_rank: usize,
-    /// Number of ranks in each group.
+    /// Number of ranks in this group (the final group may be shorter).
     pub group_size: usize,
 }
 
 impl GroupAssignment {
-    /// Range assigned to this group when `length` work items are split across
-    /// `nsplit` groups.
-    pub fn group_range(self, length: usize, nsplit: usize) -> Range<usize> {
-        partition_range(length, nsplit, self.group)
-    }
-
     /// Range assigned to this rank within its group. The returned range is
-    /// relative to the group's start and is therefore suitable for indexing a
-    /// group-local QP/sample buffer.
+    /// relative to the full chain's QP/saved-sample buffer. Sampler draws and
+    /// saved configuration counts themselves are never partitioned.
     pub fn local_range(self, group_length: usize) -> Range<usize> {
         partition_range(group_length, self.group_size, self.local_rank)
     }
@@ -74,28 +68,35 @@ pub fn assign_group(context: LaunchContext, nsplit: usize) -> Result<GroupAssign
     if nsplit == 0 {
         return Err("NSplitSize must be positive".into());
     }
-    if !context.world_size.is_multiple_of(nsplit) {
-        return Err(format!(
-            "MPI world size {} must be divisible by NSplitSize {}",
-            context.world_size, nsplit
-        ));
+    if context.world_size == 0 || context.rank >= context.world_size {
+        return Err("MPI rank must belong to a nonempty world".into());
     }
-    let group_size = context.world_size / nsplit;
+    // C vmcmain.c:239 and Julia parallel.jl:210: NSplitSize is the
+    // communicator width, not the number of independent chains/groups.
+    // Nondivisible worlds are valid: C emits a load-imbalance warning, not
+    // an error. The last comm1 has only the remaining world ranks.
+    let group = context.rank / nsplit;
+    let group_size = nsplit.min(context.world_size - group * nsplit);
     Ok(GroupAssignment {
-        group: context.rank / group_size,
-        local_rank: context.rank % group_size,
+        group,
+        local_rank: context.rank % nsplit,
         group_size,
     })
 }
 
-/// Split a half-open range into balanced contiguous pieces.
+/// C `SplitLoop` / Julia `split_loop`: remainder work goes to the last ranks.
 pub fn partition_range(length: usize, parts: usize, index: usize) -> Range<usize> {
     assert!(parts > 0, "partition count must be positive");
     assert!(index < parts, "partition index must be in range");
+    // C has a separate small/empty-work branch, assigning one item to each
+    // first active rank and an empty tail when work does not fill all ranks.
+    if parts >= length {
+        return index.min(length)..(index + 1).min(length);
+    }
     let base = length / parts;
-    let remainder = length % parts;
-    let start = index * base + index.min(remainder);
-    let end = start + base + usize::from(index < remainder);
+    let first_extra = parts - length % parts;
+    let start = index * base + index.saturating_sub(first_extra);
+    let end = start + base + usize::from(index >= first_extra);
     start..end
 }
 
@@ -122,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn assigns_balanced_groups_and_rejects_incompatible_worlds() {
+    fn assigns_group_width_including_uneven_and_oversized_widths() {
         assert_eq!(
             assign_group(
                 LaunchContext {
@@ -132,17 +133,54 @@ mod tests {
                 2
             ),
             Ok(GroupAssignment {
-                group: 1,
+                group: 2,
                 local_rank: 1,
-                group_size: 4,
+                group_size: 2,
             })
         );
+        assert_eq!(
+            assign_group(
+                LaunchContext {
+                    rank: 3,
+                    world_size: 7
+                },
+                2
+            ),
+            Ok(GroupAssignment {
+                group: 1,
+                local_rank: 1,
+                group_size: 2
+            })
+        );
+        for (world_size, width, rank, group, local_rank, group_size) in [
+            (4, 3, 3, 1, 0, 1),
+            (7, 3, 6, 2, 0, 1),
+            (2, 3, 1, 0, 1, 2),
+            (4, 4, 3, 0, 3, 4),
+        ] {
+            assert_eq!(
+                assign_group(LaunchContext { rank, world_size }, width),
+                Ok(GroupAssignment {
+                    group,
+                    local_rank,
+                    group_size
+                })
+            );
+        }
         assert!(assign_group(
             LaunchContext {
-                rank: 3,
-                world_size: 7
+                rank: 0,
+                world_size: 2
             },
-            2
+            0
+        )
+        .is_err());
+        assert!(assign_group(
+            LaunchContext {
+                rank: 2,
+                world_size: 2
+            },
+            1
         )
         .is_err());
     }
@@ -150,11 +188,29 @@ mod tests {
     #[test]
     fn partitions_cover_range_without_overlap() {
         let ranges: Vec<_> = (0..3).map(|index| partition_range(8, 3, index)).collect();
-        assert_eq!(ranges, vec![0..3, 3..6, 6..8]);
+        assert_eq!(ranges, vec![0..2, 2..5, 5..8]);
     }
 
     #[test]
-    fn grouped_ranges_cover_sample_work_without_overlap_within_each_group() {
+    fn c_splitloop_remainder_small_and_zero_work_contracts() {
+        for (length, parts, expected) in [
+            (5, 2, vec![0..2, 2..5]),
+            (10, 4, vec![0..2, 2..4, 4..7, 7..10]),
+            (3, 4, vec![0..1, 1..2, 2..3, 3..3]),
+            (0, 4, vec![0..0, 0..0, 0..0, 0..0]),
+        ] {
+            assert_eq!(
+                (0..parts)
+                    .map(|rank| partition_range(length, parts, rank))
+                    .collect::<Vec<_>>(),
+                expected,
+                "C SplitLoop length={length}, size={parts}"
+            );
+        }
+    }
+
+    #[test]
+    fn grouped_ranges_cover_full_chain_measurements_not_sampler_draws() {
         let assignments: Vec<_> = (0..8)
             .map(|rank| {
                 assign_group(
@@ -169,15 +225,35 @@ mod tests {
             .collect();
         let sample_ranges: Vec<_> = assignments
             .iter()
-            .map(|assignment| {
-                let group = assignment.group_range(10, 2);
-                let local = assignment.local_range(group.len());
-                (group.start + local.start)..(group.start + local.end)
-            })
+            .map(|assignment| assignment.local_range(3))
             .collect();
         assert_eq!(
             sample_ranges,
-            vec![0..2, 2..3, 3..4, 4..5, 5..7, 7..8, 8..9, 9..10]
+            vec![0..1, 1..3, 0..1, 1..3, 0..1, 1..3, 0..1, 1..3]
         );
+    }
+
+    #[test]
+    fn nsplit_size_is_group_width_at_unambiguous_endpoints() {
+        for world_size in [2, 4] {
+            for rank in 0..world_size {
+                assert_eq!(
+                    assign_group(LaunchContext { rank, world_size }, world_size),
+                    Ok(GroupAssignment {
+                        group: 0,
+                        local_rank: rank,
+                        group_size: world_size,
+                    })
+                );
+                assert_eq!(
+                    assign_group(LaunchContext { rank, world_size }, 1),
+                    Ok(GroupAssignment {
+                        group: rank,
+                        local_rank: 0,
+                        group_size: 1,
+                    })
+                );
+            }
+        }
     }
 }

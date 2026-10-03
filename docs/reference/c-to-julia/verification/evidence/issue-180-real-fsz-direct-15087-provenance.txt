@@ -1,0 +1,43 @@
+reference_stage=/tmp/mvmc-threaded182-real-public-20261003-g
+command=`gcc -std=gnu11 -O0 -ffp-contract=off -I/tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC/include /home/terasaki/work/atelierarith/mvmc-rs/c_toolbox/real_fsz_direct_sr_audit.c -llapack -lblas -lm -o /tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d/real-sr`
+julia=1.13.1
+blas=LBTConfig([ILP64] libopenblas64_.so)
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
+	linux-vdso.so.1 (0x00007ffe789ee000)
+	liblapack.so.3 => /lib/x86_64-linux-gnu/liblapack.so.3 (0x0000738f03800000)
+	libblas.so.3 => /lib/x86_64-linux-gnu/libblas.so.3 (0x0000738f03fb4000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x0000738f03ecb000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x0000738f03400000)
+	libopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x0000738f01020000)
+	libgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x0000738f00c00000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000738f0403e000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000738f03e9b000)
+
+linked_library_sha256 1e82245607c58d13405580c71b9b0134b5a952686ac861f979fc7a886ebd4229 /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+linked_library_sha256 8ba4a98f44d763c2e648755ef452025919e28633339f23ff605044de3483a25d /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+linked_library_sha256 fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0 /usr/lib/x86_64-linux-gnu/libm.so.6
+linked_library_sha256 3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf /usr/lib/x86_64-linux-gnu/libc.so.6
+linked_library_sha256 bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so
+linked_library_sha256 342618ccfebe840446e4ef2b7893f4161b2084845e570f42d68a70bfde58a58d /usr/lib/x86_64-linux-gnu/libgfortran.so.5.0.0
+linked_library_sha256 d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+sha256 a3808d473d19e007848d2411522afdd7dfb350aa30729934db70b56e1e08e1e4 /home/terasaki/work/atelierarith/mvmc-rs/c_toolbox/real_fsz_direct_sr_audit.c
+sha256 2036c72e3532f8daf7a36669090fccffccea4e3a277d8d2f311dd1df5b2d32bb /home/terasaki/work/atelierarith/mvmc-rs/c_toolbox/run_real_fsz_direct_sr_audit.jl
+sha256 25c5e1d4eeefa5b2279140248a19af5f15cac3efd99c572d7d52e5a3875e65fc /tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d/input.txt
+sha256 bb2a8df8c47c3dad7a017873b7226b631a10487361f2c06664ee87de4807d9ff /tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d/real-sr
+sha256 aa25c6ed9a53a37c7faaa931dc7cd7ade6cb0ebf90322c8e7285a3851d5d1d61 /tmp/mvmc-pauli-real-fsz-direct-audit-20261003-d/real_fsz_sync_upstream.inc
+sha256 46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0 /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC/parameter.c
+sha256 43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2 /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC/stcopt.c
+sha256 2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c
+sha256 272a0407a4f1b821e228c336752315ebe8425e79f61c63e00e964557201ea08f /tmp/mvmc-threaded182-real-public-20261003-g/pre-sr/sr_oo.txt
+sha256 4c17014ecb7113b2d868ae5849a8cd37f1c95c2639c3fa5b6c8b345d64efec54 /tmp/mvmc-threaded182-real-public-20261003-g/pre-sr/sr_ho.txt
+sha256 273fa36c805dc54ccde15841cf746fc267aea28c85ba46b8062d2f6b00248179 /tmp/mvmc-threaded182-real-public-20261003-g/pre-sr/parameters.txt
+sha256 e16c58395dcad9adf90d3fee507cb0695724863175e865a28af0f06aa5a5cef7 /tmp/mvmc-threaded182-real-public-20261003-g/pre-sr/c-written-mask.txt
+sha256 b50fe132989a4366090dc637642eef12464b0d90293c50b74e85877c3c14ad63 /tmp/mvmc-threaded182-real-public-20261003-g/pre-sr/defined-flags.txt
+sha256 e27862b2d93ed92c081be0c740f6bec512bec8334f37639b45cae9e0d210615a /tmp/mvmc-threaded182-real-public-20261003-g/inputs/modpara.def
+sha256 bb919b746fff8c58a7f574ef8e7097ed0cee7074155c26e932ff6b37d09c1d6e /tmp/mvmc-threaded182-real-public-20261003-g/final/parameters.txt
+sha256 440cbcb61b58663775fb7e69c52f71464bdd7ee3f4fddce7ebdeb79fe43eb7c1 /home/terasaki/work/atelierarith/mvmc-rs/c_toolbox/ctest_direct_sr_capture.jl

@@ -12,13 +12,17 @@
 
 #![allow(clippy::too_many_arguments)]
 
+#[path = "trace.rs"]
+pub mod trace;
+
 use crate::c_timer::CTimer;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 
-use crate::observables::{calculate_log_ip_complex, calculate_log_ip_real};
+use crate::observables::{calculate_ip_complex, calculate_ip_real};
 use crate::pfaffian::{calc_m_all_complex, calc_m_all_real};
+use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::sampling::candidate::{
     get_update_type, make_candidate_exchange, make_candidate_exchange_fsz, make_candidate_hopping,
     make_candidate_hopping_fsz, make_candidate_local_spin_flip_conduction,
@@ -42,6 +46,40 @@ pub struct SampleStats {
     pub accepted: usize,
     /// Total saved samples (`n_vmc_sample` on success).
     pub saved: usize,
+}
+
+/// Real FSZ sampler with group-owned QP work and coordinated initialization.
+pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    reducer: &R,
+) -> Result<SampleStats, super::initial::SamplingInitializationError> {
+    super::fsz_real::vmc_make_sample_fsz_real_with_reducer(data, state, rng, reducer)
+}
+
+/// Range-owned sampling overlap, reduced on comm1 before taking its logarithm.
+pub fn sampling_log_ip_real<R: Reducer + ?Sized>(
+    pf: &[f64],
+    data: &ExpertModeData,
+    reducer: &R,
+) -> f64 {
+    let range = reducer.sampling_qp_range(pf.len());
+    let mut ip = [calculate_ip_real(pf, range.start, range.end, data)];
+    reducer.sampling_sum_f64(&mut ip);
+    mvmc_expert_parsers::utils::julia_log::log(ip[0].abs() + 1.0e-100)
+}
+
+/// Complex range-owned sampling overlap; measurement uses its separate full-QP path.
+pub fn sampling_log_ip_complex<R: Reducer + ?Sized>(
+    pf: &[Complex64],
+    data: &ExpertModeData,
+    reducer: &R,
+) -> Complex64 {
+    let range = reducer.sampling_qp_range(pf.len());
+    let mut ip = [calculate_ip_complex(pf, range.start, range.end, data)];
+    reducer.sampling_sum_c64(&mut ip);
+    Complex64::new(ip[0].norm().ln(), ip[0].arg())
 }
 
 /// Run one SR-step worth of normal-mode real-arithmetic sampling.
@@ -69,10 +107,24 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
 ) -> SampleStats {
+    vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
+}
+
+/// C comm1 sampling IP reductions; all ranks retain the full chain length.
+pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
     let n_qp_full = state.slater_matrix.pf_m.len();
+    let qp_range = reducer.sampling_qp_range(n_qp_full);
+    let qp_start = qp_range.start;
+    let qp_end = qp_range.end;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
     let n_vmc_interval = data.modpara.nvmc_interval.max(0) as usize;
@@ -135,19 +187,20 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     let mut initialized = false;
     for _ in 0..100 {
-        if calc_m_all_real(
-            &tmp_ele_idx,
-            &state.slater_matrix.slater_elm_real,
-            &mut state.slater_matrix.inv_m_real,
-            &mut state.slater_matrix.pf_m_real,
-            0,
-            n_qp_full,
-            n_site,
-            n_elec,
-            &pool,
-        )
-        .is_ok()
-        {
+        if !reducer.sampling_any_failure(
+            calc_m_all_real(
+                &tmp_ele_idx,
+                &state.slater_matrix.slater_elm_real,
+                &mut state.slater_matrix.inv_m_real,
+                &mut state.slater_matrix.pf_m_real,
+                qp_start,
+                qp_end,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .is_err(),
+        ) {
             initialized = true;
             break;
         }
@@ -172,7 +225,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
             saved: 0,
         };
     }
-    let mut log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+    let mut log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
     if !log_ip_old.is_finite() {
         if make_initial_sample(
             &mut tmp_ele_idx,
@@ -184,25 +237,27 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
             rng,
         )
         .is_err()
-            || calc_m_all_real(
-                &tmp_ele_idx,
-                &state.slater_matrix.slater_elm_real,
-                &mut state.slater_matrix.inv_m_real,
-                &mut state.slater_matrix.pf_m_real,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
+            || reducer.sampling_any_failure(
+                calc_m_all_real(
+                    &tmp_ele_idx,
+                    &state.slater_matrix.slater_elm_real,
+                    &mut state.slater_matrix.inv_m_real,
+                    &mut state.slater_matrix.pf_m_real,
+                    qp_start,
+                    qp_end,
+                    n_site,
+                    n_elec,
+                    &pool,
+                )
+                .is_err(),
             )
-            .is_err()
         {
             return SampleStats {
                 accepted: 0,
                 saved: 0,
             };
         }
-        log_ip_old = calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+        log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
     }
 
     let inv_stride = n_size * n_size + 1;
@@ -272,14 +327,14 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m_real.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m_real,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(61);
                     timer.start(62);
-                    let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
                     timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
@@ -299,8 +354,8 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m_real.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m_real,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -398,14 +453,14 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m_real.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m_real,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(66);
                     timer.start(67);
-                    let log_ip_new = calculate_log_ip_real(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
                     timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
@@ -429,8 +484,8 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m_real.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m_real,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -472,21 +527,22 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
             // check (mirrors the upstream `n_accept > n_site` guard).
             if n_accept_window > n_site {
                 timer.start(34);
-                if calc_m_all_real(
-                    &tmp_ele_idx,
-                    &state.slater_matrix.slater_elm_real,
-                    &mut state.slater_matrix.inv_m_real,
-                    &mut state.slater_matrix.pf_m_real,
-                    0,
-                    n_qp_full,
-                    n_site,
-                    n_elec,
-                    &pool,
-                )
-                .is_ok()
-                {
+                if !reducer.sampling_any_failure(
+                    calc_m_all_real(
+                        &tmp_ele_idx,
+                        &state.slater_matrix.slater_elm_real,
+                        &mut state.slater_matrix.inv_m_real,
+                        &mut state.slater_matrix.pf_m_real,
+                        qp_start,
+                        qp_end,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .is_err(),
+                ) {
                     log_ip_old =
-                        calculate_log_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data);
+                        sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
                 }
                 n_accept_window = 0;
                 timer.stop(34);
@@ -526,6 +582,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
     state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
+    trace::checkpoint(state, rng);
 
     SampleStats {
         accepted: accepted_total,
@@ -552,10 +609,24 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
 ) -> SampleStats {
+    vmc_make_sample_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
+}
+
+/// Normal complex sampler with group-only QP overlap reductions.
+pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
     let n_qp_full = state.slater_matrix.pf_m.len();
+    let qp_range = reducer.sampling_qp_range(n_qp_full);
+    let qp_start = qp_range.start;
+    let qp_end = qp_range.end;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
     let n_vmc_interval = data.modpara.nvmc_interval.max(0) as usize;
@@ -602,19 +673,20 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     let mut initial_ok = false;
     for _ in 0..100 {
-        if calc_m_all_complex(
-            &tmp_ele_idx,
-            &state.slater_matrix.slater_elm,
-            &mut state.slater_matrix.inv_m,
-            &mut state.slater_matrix.pf_m,
-            0,
-            n_qp_full,
-            n_site,
-            n_elec,
-            &pool,
-        )
-        .is_ok()
-        {
+        if !reducer.sampling_any_failure(
+            calc_m_all_complex(
+                &tmp_ele_idx,
+                &state.slater_matrix.slater_elm,
+                &mut state.slater_matrix.inv_m,
+                &mut state.slater_matrix.pf_m,
+                qp_start,
+                qp_end,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .is_err(),
+        ) {
             initial_ok = true;
             break;
         }
@@ -642,7 +714,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
             saved: 0,
         };
     }
-    let mut log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+    let mut log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
     let rbm_cfg = crate::sampling::rbm::RbmConfig::from(data);
     let use_rbm = data.has_rbm_terms();
     let mut rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
@@ -658,25 +730,27 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
             rng,
         )
         .is_err()
-            || calc_m_all_complex(
-                &tmp_ele_idx,
-                &state.slater_matrix.slater_elm,
-                &mut state.slater_matrix.inv_m,
-                &mut state.slater_matrix.pf_m,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
+            || reducer.sampling_any_failure(
+                calc_m_all_complex(
+                    &tmp_ele_idx,
+                    &state.slater_matrix.slater_elm,
+                    &mut state.slater_matrix.inv_m,
+                    &mut state.slater_matrix.pf_m,
+                    qp_start,
+                    qp_end,
+                    n_site,
+                    n_elec,
+                    &pool,
+                )
+                .is_err(),
             )
-            .is_err()
         {
             return SampleStats {
                 accepted: 0,
                 saved: 0,
             };
         }
-        log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+        log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
         rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
         rbm_cnt_new.resize(rbm_cnt_old.len(), Complex64::new(0.0, 0.0));
         burn_flag = false;
@@ -749,14 +823,14 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(61);
                     timer.start(62);
-                    let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let rbm_delta = if use_rbm {
@@ -784,8 +858,8 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -886,14 +960,14 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(66);
                     timer.start(67);
-                    let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let rbm_delta = if use_rbm {
@@ -934,8 +1008,8 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -978,21 +1052,21 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
 
             if n_accept_window > n_site {
                 timer.start(34);
-                if calc_m_all_complex(
-                    &tmp_ele_idx,
-                    &state.slater_matrix.slater_elm,
-                    &mut state.slater_matrix.inv_m,
-                    &mut state.slater_matrix.pf_m,
-                    0,
-                    n_qp_full,
-                    n_site,
-                    n_elec,
-                    &pool,
-                )
-                .is_ok()
-                {
-                    log_ip_old =
-                        calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+                if !reducer.sampling_any_failure(
+                    calc_m_all_complex(
+                        &tmp_ele_idx,
+                        &state.slater_matrix.slater_elm,
+                        &mut state.slater_matrix.inv_m,
+                        &mut state.slater_matrix.pf_m,
+                        qp_start,
+                        qp_end,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .is_err(),
+                ) {
+                    log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
                     if use_rbm {
                         rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
                         rbm_cnt_new.resize(rbm_cnt_old.len(), Complex64::new(0.0, 0.0));
@@ -1035,6 +1109,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
     state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
+    trace::checkpoint(state, rng);
 
     SampleStats {
         accepted: accepted_total,
@@ -1098,10 +1173,24 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
 ) -> SampleStats {
+    vmc_make_sample_fsz_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
+}
+
+/// Complex FSZ sampler with group-only QP overlap reductions.
+pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+) -> SampleStats {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
     let n_qp_full = state.slater_matrix.pf_m.len();
+    let qp_range = reducer.sampling_qp_range(n_qp_full);
+    let qp_start = qp_range.start;
+    let qp_end = qp_range.end;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
     let n_vmc_interval = data.modpara.nvmc_interval.max(0) as usize;
@@ -1120,8 +1209,8 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     if burn_flag {
         state.electron_config.restore_burn();
-    } else if crate::sampling::initial::make_initial_sample_fsz(
-        data, state, rng, 0, n_qp_full, &pool,
+    } else if crate::sampling::initial::make_initial_sample_fsz_with_reducer(
+        data, state, rng, qp_start, qp_end, &pool, reducer,
     )
     .is_err()
     {
@@ -1136,30 +1225,33 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
     let mut tmp_ele_spn = state.electron_config.tmp_ele_spn.clone();
 
-    if crate::pfaffian::calc_m_all_fsz_complex(
-        &tmp_ele_idx,
-        &tmp_ele_spn,
-        &state.slater_matrix.slater_elm,
-        &mut state.slater_matrix.inv_m,
-        &mut state.slater_matrix.pf_m,
-        0,
-        n_qp_full,
-        n_site,
-        n_elec,
-        &pool,
-    )
-    .is_err()
-    {
+    if reducer.sampling_any_failure(
+        crate::pfaffian::calc_m_all_fsz_complex(
+            &tmp_ele_idx,
+            &tmp_ele_spn,
+            &state.slater_matrix.slater_elm,
+            &mut state.slater_matrix.inv_m,
+            &mut state.slater_matrix.pf_m,
+            qp_start,
+            qp_end,
+            n_site,
+            n_elec,
+            &pool,
+        )
+        .is_err(),
+    ) {
         return SampleStats {
             accepted: 0,
             saved: 0,
         };
     }
-    let mut log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+    let mut log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
 
     if !log_ip_old.re.is_finite() || !log_ip_old.im.is_finite() {
-        if crate::sampling::initial::make_initial_sample_fsz(data, state, rng, 0, n_qp_full, &pool)
-            .is_err()
+        if crate::sampling::initial::make_initial_sample_fsz_with_reducer(
+            data, state, rng, qp_start, qp_end, &pool, reducer,
+        )
+        .is_err()
         {
             return SampleStats {
                 accepted: 0,
@@ -1172,26 +1264,27 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
         tmp_ele_num.copy_from_slice(&c.tmp_ele_num);
         tmp_ele_proj_cnt.copy_from_slice(&c.tmp_ele_proj_cnt);
         tmp_ele_spn.copy_from_slice(&c.tmp_ele_spn);
-        if crate::pfaffian::calc_m_all_fsz_complex(
-            &tmp_ele_idx,
-            &tmp_ele_spn,
-            &state.slater_matrix.slater_elm,
-            &mut state.slater_matrix.inv_m,
-            &mut state.slater_matrix.pf_m,
-            0,
-            n_qp_full,
-            n_site,
-            n_elec,
-            &pool,
-        )
-        .is_err()
-        {
+        if reducer.sampling_any_failure(
+            crate::pfaffian::calc_m_all_fsz_complex(
+                &tmp_ele_idx,
+                &tmp_ele_spn,
+                &state.slater_matrix.slater_elm,
+                &mut state.slater_matrix.inv_m,
+                &mut state.slater_matrix.pf_m,
+                qp_start,
+                qp_end,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .is_err(),
+        ) {
             return SampleStats {
                 accepted: 0,
                 saved: 0,
             };
         }
-        log_ip_old = calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+        log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
         burn_flag = false;
     }
 
@@ -1296,14 +1389,14 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(66);
                     timer.start(67);
-                    let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
@@ -1321,8 +1414,8 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                             &state.slater_matrix.slater_elm,
                             &mut state.slater_matrix.inv_m,
                             &mut state.slater_matrix.pf_m,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                             &pool,
@@ -1402,14 +1495,14 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(601);
                     timer.start(602);
-                    let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(602);
                     let decision = metropolis_decision(
                         0.0,
@@ -1429,8 +1522,8 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -1461,36 +1554,37 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     // The complex source counts both proposals as hopping and,
                     // unlike its real FSZ driver, flips conduction spins when
                     // TwoSz is fixed. Preserve the short-circuit draw order.
-                    let cand = if two_sz == -1 && rng.genrand_real2() < 0.5 {
-                        make_candidate_hopping_fsz(
-                            &tmp_ele_idx,
-                            &tmp_ele_cfg,
-                            &tmp_ele_spn,
-                            &loc_spn,
-                            n_site,
-                            n_size,
-                            two_sz,
-                            rng,
-                        )
-                    } else {
-                        let flip = make_candidate_local_spin_flip_conduction(
-                            &tmp_ele_idx,
-                            &tmp_ele_cfg,
-                            &tmp_ele_spn,
-                            &loc_spn,
-                            n_site,
-                            n_size,
-                            rng,
-                        );
-                        FszHoppingCandidate {
-                            mi: flip.mi,
-                            ri: flip.ri,
-                            rj: flip.rj,
-                            spin: flip.spin,
-                            spin_to: flip.spin_to,
-                            reject: flip.reject,
-                        }
-                    };
+                    let cand =
+                        if two_sz == -1 && crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
+                            make_candidate_hopping_fsz(
+                                &tmp_ele_idx,
+                                &tmp_ele_cfg,
+                                &tmp_ele_spn,
+                                &loc_spn,
+                                n_site,
+                                n_size,
+                                two_sz,
+                                rng,
+                            )
+                        } else {
+                            let flip = make_candidate_local_spin_flip_conduction(
+                                &tmp_ele_idx,
+                                &tmp_ele_cfg,
+                                &tmp_ele_spn,
+                                &loc_spn,
+                                n_site,
+                                n_size,
+                                rng,
+                            );
+                            FszHoppingCandidate {
+                                mi: flip.mi,
+                                ri: flip.ri,
+                                rj: flip.rj,
+                                spin: flip.spin,
+                                spin_to: flip.spin_to,
+                                reject: flip.reject,
+                            }
+                        };
                     timer.stop(31);
                     if cand.reject {
                         continue;
@@ -1530,14 +1624,14 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                         state.slater_matrix.inv_m.as_slice(),
                         inv_stride,
                         &state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
+                        qp_start,
+                        qp_end,
                         n_site,
                         n_elec,
                     );
                     timer.stop(61);
                     timer.start(62);
-                    let log_ip_new = calculate_log_ip_complex(&pf_m_new, 0, n_qp_full, data);
+                    let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
                     let decision = metropolis_decision(
@@ -1558,8 +1652,8 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                             state.slater_matrix.inv_m.as_mut_slice(),
                             inv_stride,
                             &mut state.slater_matrix.pf_m,
-                            0,
-                            n_qp_full,
+                            qp_start,
+                            qp_end,
                             n_site,
                             n_elec,
                         );
@@ -1595,14 +1689,13 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
                     &state.slater_matrix.slater_elm,
                     &mut state.slater_matrix.inv_m,
                     &mut state.slater_matrix.pf_m,
-                    0,
-                    n_qp_full,
+                    qp_start,
+                    qp_end,
                     n_site,
                     n_elec,
                     &pool,
                 );
-                log_ip_old =
-                    calculate_log_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data);
+                log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
                 n_accept_window = 0;
                 timer.stop(34);
             }
@@ -1643,6 +1736,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     state.electron_config.tmp_ele_spn = tmp_ele_spn;
     state.electron_config.save_burn();
     state.electron_config.counter[9] = 1;
+    trace::checkpoint(state, rng);
 
     SampleStats {
         accepted: accepted_total,

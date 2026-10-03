@@ -1,0 +1,51 @@
+Independent serial PhysCal callback references for issue #175
+
+Reproduce from repository root:
+JULIA_NUM_THREADS=1 JULIA_MVMC_MPI=0 julia +1.13.1 --project=extern/Julia-mVMC scripts/generate_physcal_callbacks_175.jl
+
+Julia 1.13.1 and Manifest-v1.13.toml are required. Per-workload provenance
+records reference/script/manifest/input hashes, architecture, Julia commit
+and actual BLAS version/threads. Normal Rust tests only read these files;
+they never invoke C/Julia or derive expectations from Rust sampler replay.
+
+Inputs and zqp originate in the historical native-C-derived HubbardChain
+and SpinChain Lanczos fixtures under extern/Julia-mVMC/test/integration/reference.
+Their metadata identifies C revision 622166afe33c6be3402d7c926db7e9c0003a47c4.
+The original 1000 saved configurations, warm-up, interval, fixed records and
+seed 1 are retained. Only NLanczosMode (1 or 2), NDataQtySmp (2) and
+NDataIdxStart (7) change. Hubbard covers hopping/intra-site Coulomb; spin
+covers exchange/spin-diagonal interactions. No InterAll/RBM/OptTrans extension.
+
+These NEW records are independently generated Julia actual callbacks and
+trajectories following the C numerical/input contract, NOT new native-C
+executable runs or C-confirmed full trajectories. Native macOS verification
+is not claimed. Copied inputs retain their upstream GPL-3.0 provenance;
+see extern/mVMC-1.3.0/COPYING and extern/Julia-mVMC/LICENSE. No upstream
+source is modified.
+
+C Hamiltonian basis has NLSHam=2, {I,H}, in include/global.h:303. Modes 1/2
+use this supported basis, mode 2 additionally accumulating corrected Green
+arrays; no configurable matrix-size extension is introduced. C VMCPhysCal
+orders sampling, main calculation, averaging, counter reduction and output
+(vmcmain.c:531 onward). Julia then invokes the actual callback with indexes
+0/1 and status 0. These are recorded Julia arguments, not invented C callbacks.
+
+Snapshots only observe; primitive SFMT wrappers delegate unchanged calls
+and conversions. next624 is a non-consuming SFMT peek, draw-count cumulative
+UInt32 words since seed 1. initialized is after the single InitParameter,
+before fixed restoration. sample-i is before measurement. averaged-i is
+after averaging/counter reduction/output. callback-i observes actual callback.
+Complex files store real/imaginary pairs, not bitwise computed-float contracts.
+RNG words, configurations, indexes, statuses and defined flags remain exact.
+
+fixed-parameters.txt comes from independent Julia fixed loading and C-order
+sync; consumed-count.txt records consumed slots. C-defined optimization flag
+writes are independently enumerated from real Gutzwiller/Jastrow/Orbital
+definitions in parameter order; optimization-flags-written.txt masks imaginary
+cells native C GetInfoOpt leaves unwritten. No allocation values are invented.
+
+Authoritative C files under extern/mVMC-1.3.0/src/mVMC, SHA-256:
+vmcmain.c fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63
+average.c 6fdabcfd13a85b50ad54dc75b79eeb77191608d859d090f442b40d85bcb222cb
+readdef.c 6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
+include/global.h a8834e9457e5b8345496087222e5f724c26896928f86fe1bf4ac7e8190b409e1

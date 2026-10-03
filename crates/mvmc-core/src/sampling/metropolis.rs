@@ -64,7 +64,13 @@ pub fn metropolis_decision(
     rng: &mut Sfmt19937Rng,
 ) -> MetropolisDecision {
     let weight = metropolis_weight(log_proj_delta, log_rbm_delta, log_ip_new, log_ip_old);
-    let draw = rng.genrand_real2();
+    let draw = crate::sampling::driver::trace::draw_real2(rng);
+    // genrand_real2 is an exact dyadic conversion of this consumed u32.
+    // Recording it does not draw again or infer a count from RNG snapshots.
+    crate::sampling::driver::trace::record(
+        7,
+        &[i64::from(weight > draw), (draw * 4294967296.0) as i64],
+    );
     MetropolisDecision {
         weight,
         draw,

@@ -5,6 +5,29 @@ mod julia_fixture;
 mod numerical_comparison;
 use mvmc_core::sr_cg::{sequential_dot, SampledSrOperator};
 
+#[derive(Default)]
+struct FixedCgDiagnostic(std::cell::RefCell<String>);
+impl mvmc_core::sr_cg::CgObserver for FixedCgDiagnostic {
+    fn product(&self, phase: mvmc_core::sr_cg::CgProductPhase, x: &[f64], z: &[f64]) {
+        use std::fmt::Write;
+        writeln!(self.0.borrow_mut(), "{phase:?} search={x:?} product={z:?}").unwrap();
+    }
+    fn iteration(&self, state: mvmc_core::sr_cg::CgIterationView<'_>) {
+        use std::fmt::Write;
+        writeln!(
+            self.0.borrow_mut(),
+            "iteration={} delta={:.17e} alpha={:?} solution={:?} residual={:?} direction={:?}",
+            state.iteration,
+            state.delta,
+            state.alpha,
+            state.solution,
+            state.residual,
+            state.direction
+        )
+        .unwrap();
+    }
+}
+
 #[test]
 fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
     use mvmc_core::{ExpertModeData, VmcOptimizationState};
@@ -186,25 +209,48 @@ fn standard_cg_solves_sampled_spd_matrix() {
 }
 
 #[test]
-fn cg_preserves_julia_zero_gradient_and_breakdown_iteration_counts() {
+fn cg_preserves_c_zero_gradient_and_ieee_breakdown_iteration_counts() {
     let mut op = SampledSrOperator::new(2, 2, false);
     let zero = op.solve(&[0.0, 0.0], 1.0, 0.0, 1e-6, 10);
     assert_eq!(zero.iterations, 0);
     assert_eq!(zero.solution, [0.0, 0.0]);
     let breakdown = op.solve(&[1.0, 0.0], 1.0, 0.0, 1e-6, 10);
-    assert_eq!(breakdown.iterations, 1);
-    assert_eq!(breakdown.solution, [0.0, 0.0]);
+    // stcopt_cg_impl.c:306-310 has only the residual-norm stop test,
+    // not Julia's abs(dq) < 1e-30 extension. With a zero operator and a
+    // nonzero gradient, alpha is infinite and the subsequent IEEE NaNs
+    // do not satisfy delta < threshold; C exhausts the iteration limit.
+    assert_eq!(breakdown.iterations, 10);
+    assert!(breakdown.solution.iter().all(|value| value.is_nan()));
+    assert!(breakdown.residual.iter().all(|value| value.is_nan()));
     let no_iterations = op.solve(&[1.0, 0.0], 1.0, 0.0, 1e-6, 0);
     assert_eq!(no_iterations.iterations, 0);
     assert_eq!(no_iterations.solution, [0.0, 0.0]);
 }
 
-// The Julia oracle restarts the upstream solver at every limit from 1 to 41.
+#[test]
+fn cg_solves_small_positive_operator_without_julia_denominator_guard() {
+    // Independent one-dimensional SPD system: S = (1e-16)^2,
+    // g = 1e-16, hence x = g/S = 1e16. The first d*S*d = 1e-64
+    // is nonzero and C:310 divides by it without a magnitude cutoff.
+    let mut op = SampledSrOperator::new(1, 1, false);
+    op.real_samples[0] = 1e-16;
+    let result = op.solve(&[1e-16], 1.0, 0.0, 1e-30, 1);
+    assert_eq!(result.iterations, 1);
+    // Four binary64 operations in the scalar Gram/alpha/update path give a
+    // conservative two-ULP forward allowance at 1e16 (ULP=2); residual
+    // cancellation is bounded by roughly 2*epsilon*|g| = 4.45e-32.
+    assert!((result.solution[0] - 1e16).abs() <= 4.0);
+    assert!(result.residual[0].abs() <= 5e-32);
+}
+
+// The optional C oracle restarts the verbatim upstream Main/operator at
+// every limit from 1 to 41. Historical Julia records remain in sr_cg/*.txt;
+// they assign delta_new directly and are not C recurrence expectations.
 // Compare each iterate's complete state, including both residual refreshes,
 // with roundoff budgets and an independent explicit Gram residual check.
 // Iteration counts and refresh limits remain exact.
 #[test]
-fn cg_fixed_input_matches_julia_through_residual_refresh() {
+fn cg_fixed_input_matches_c_through_residual_refresh() {
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     for (name, file) in [
         ("real", "real.txt"),
@@ -213,7 +259,7 @@ fn cg_fixed_input_matches_julia_through_residual_refresh() {
     ] {
         let fixture = julia_fixture::read_text(julia_fixture::fixture_path(
             &fixtures,
-            format!("sr_cg/{file}"),
+            format!("sr_cg/c_refresh/{file}"),
         ))
         .unwrap();
         let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
@@ -223,7 +269,10 @@ fn cg_fixed_input_matches_julia_through_residual_refresh() {
             .split_whitespace()
             .map(|v| v.parse().unwrap())
             .collect();
+        assert_eq!(shape.len(), 3, "{name}: shape must have three fields");
         let (n, samples, complex) = (shape[0], shape[1], shape[2] != 0);
+        assert!(n > 0 && samples > 0, "{name}: nonempty fixed operands");
+        assert!(shape[2] <= 1, "{name}: complex flag must be zero or one");
         let parse = |line: &str| -> Vec<f64> {
             line.split_whitespace()
                 .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
@@ -235,6 +284,15 @@ fn cg_fixed_input_matches_julia_through_residual_refresh() {
         op.real_samples = parse(lines.next().unwrap());
         op.imag_samples = parse(lines.next().unwrap());
         let g = parse(lines.next().unwrap());
+        assert_eq!(op.mean.len(), n, "{name}: mean width");
+        assert_eq!(op.diagonal.len(), n, "{name}: diagonal width");
+        assert_eq!(g.len(), n, "{name}: gradient width");
+        assert_eq!(op.real_samples.len(), n * samples, "{name}: real samples");
+        assert_eq!(
+            op.imag_samples.len(),
+            if complex { n * samples } else { 0 },
+            "{name}: imaginary samples"
+        );
         let expected = parse(lines.next().unwrap());
         assert_eq!(expected.len(), n);
         let mut z = vec![0.0; n];
@@ -284,10 +342,58 @@ fn cg_fixed_input_matches_julia_through_residual_refresh() {
             checked_limits += 1;
             assert_eq!(limit, checked_limits);
             let iter: usize = words.next().unwrap().parse().unwrap();
+            assert!(
+                iter <= limit,
+                "{name}: reference iterations exceed limit {limit}"
+            );
             let expected = parse(words.next().unwrap());
             let expected_residual = parse(lines.next().unwrap());
             let expected_direction = parse(lines.next().unwrap());
+            assert_eq!(expected.len(), n, "{name} limit {limit}: solution width");
+            assert_eq!(
+                expected_residual.len(),
+                n,
+                "{name} limit {limit}: residual width"
+            );
+            assert_eq!(
+                expected_direction.len(),
+                n,
+                "{name} limit {limit}: direction width"
+            );
+            let diagnostic = std::env::var_os("MVMC_CG_DIAGNOSTICS")
+                .map(|_| std::rc::Rc::new(FixedCgDiagnostic::default()));
+            let guard = diagnostic
+                .as_ref()
+                .map(|observer| mvmc_core::sr_cg::install_cg_observer(observer.clone()).unwrap());
             let result = op.solve(&g, 1.0 / samples as f64, 1e-5, 0.0, limit);
+            drop(guard);
+            if let Some(diagnostic) = diagnostic {
+                let path = std::env::temp_dir().join(format!(
+                    "mvmc-cg-fixed-{}-{}-{limit}.txt",
+                    std::process::id(),
+                    name.replace(' ', "_")
+                ));
+                let mut text = format!("n={n} samples={samples} complex={complex} limit={limit} shift=1e-5 tolerance=0 inv_weight={:?}\nmean={:?}\ndiagonal={:?}\nreal_samples={:?}\nimag_samples={:?}\ngradient={g:?}\nexpected_solution={expected:?}\nexpected_residual={expected_residual:?}\nexpected_direction={expected_direction:?}\ncovariance={covariance:?}\n",
+                    1.0 / samples as f64, op.mean, op.diagonal, op.real_samples, op.imag_samples);
+                text.push_str(&diagnostic.0.borrow());
+                std::fs::write(&path, text).unwrap();
+                eprintln!("ACTUAL fixed CG diagnostic: {}", path.display());
+            }
+            assert_eq!(
+                result.solution.len(),
+                n,
+                "{name} limit {limit}: actual solution width"
+            );
+            assert_eq!(
+                result.residual.len(),
+                n,
+                "{name} limit {limit}: actual residual width"
+            );
+            assert_eq!(
+                result.direction.len(),
+                n,
+                "{name} limit {limit}: actual direction width"
+            );
             assert_eq!(result.iterations, iter);
             for row in 0..n {
                 let terms = covariance[row * n..(row + 1) * n]

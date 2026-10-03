@@ -105,14 +105,8 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
         } else {
             root.join(format!("sr_direct/{case}_store_runner"))
         };
-        for name in [
-            "zvo_out.dat",
-            "zvo_var.dat",
-            "zqp_opt.dat",
-            "zqp_gutzwiller_opt.dat",
-            "zqp_jastrow_opt.dat",
-            "zqp_orbital_opt.dat",
-        ] {
+        {
+            let name = "zvo_out.dat";
             // Three SR steps: bounded accumulated solve/kernel roundoff. The
             // unit runner checkpoint gates still verify exact configurations/RNG.
             numerical_comparison::assert_numeric_text(
@@ -139,6 +133,87 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
                     &[]
                 },
                 format!("{case} {name}"),
+            );
+        }
+        let actual_var = std::fs::read_to_string(result.output_dir.join("zvo_var.dat")).unwrap();
+        numerical_comparison::assert_numeric_text(
+            &actual_var,
+            &std::fs::read_to_string(
+                root.join(format!("ctest_dh_windows/{case}/zvo_c_slots_var.dat")),
+            )
+            .unwrap(),
+            1e-12,
+            1e-12,
+            &[],
+            format!("{case} independent full C-declared pre-SR var"),
+        );
+        let layout = data.projection_layout();
+        let start = 6 + 3 * (layout.n_gutzwiller + layout.n_jastrow);
+        let end = start + 3 * (6 * layout.n_dh2 + 10 * layout.n_dh4);
+        let historical_subset = actual_var
+            .lines()
+            .map(|line| {
+                let fields: Vec<_> = line.split_whitespace().collect();
+                assert_eq!(fields.len(), 6 + 3 * data.count_variational_parameters());
+                assert!(end <= fields.len());
+                fields[..start]
+                    .iter()
+                    .chain(&fields[end..])
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let historical =
+            julia_fixture::read_text(native_fsz_fixture::resolve(julia_fixture::fixture_path(
+                &root,
+                reference
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .join("step-3-zvo_var.dat"),
+            )))
+            .unwrap();
+        numerical_comparison::assert_numeric_text(
+            &historical_subset,
+            &declared_output(&data, "zvo_var.dat", historical),
+            1e-12,
+            1e-12,
+            &[],
+            format!("{case} historical Julia var subsequence only"),
+        );
+        // Native C aggregation/formatting of independent Julia/C-contract
+        // histories; no mapped-row adaptation or Rust-generated expectation.
+        let mut window_outputs = vec![
+            "zqp_opt.dat",
+            "zqp_gutzwiller_opt.dat",
+            "zqp_jastrow_opt.dat",
+            "zqp_doublonHolon4site_opt.dat",
+        ];
+        if case.starts_with("dh24_") {
+            window_outputs.push("zqp_doublonHolon2site_opt.dat");
+        }
+        if data.i_flg_orbital_general == 0 {
+            window_outputs.push("zqp_orbital_opt.dat");
+        } else if data.i_flg_orbital_parallel != 0 {
+            window_outputs.extend([
+                "zqp_orbitalAntiParallel_opt.dat",
+                "zqp_orbitalParallel_opt.dat",
+            ]);
+        } else {
+            window_outputs.push("zqp_orbital_general_opt.dat");
+        }
+        for name in window_outputs {
+            numerical_comparison::assert_numeric_text(
+                &std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
+                &std::fs::read_to_string(
+                    root.join(format!("ctest_dh_windows/{case}/native_{name}")),
+                )
+                .unwrap(),
+                1e-12,
+                1e-12,
+                if name == "zqp_opt.dat" { &[] } else { &[0] },
+                format!("{case} independent C window {name}"),
             );
         }
         assert!(!result.output_dir.join("zqp_dh2_opt.dat").exists());

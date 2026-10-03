@@ -143,9 +143,14 @@ pub fn calc_m_all_real(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
+    let observed = crate::threading::observe_kernel(
+        crate::threading::ObservedWork::Qp,
+        crate::threading::inner_parallel_enabled(qp_end - qp_start),
+    );
     if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
+            let _entry = observed.enter_item();
             calc_m_all_child_real(
                 qp,
                 ele_idx,
@@ -169,13 +174,14 @@ pub fn calc_m_all_real(
         .map(|start| (start, (start + chunk).min(qp_end)))
         .collect();
     crate::threading::install(|| {
-        let chunks: Result<Vec<_>, CalcMAllError> = ranges
+        let chunks: Vec<Result<_, CalcMAllError>> = ranges
             .into_par_iter()
             .map(|(start, end)| {
                 let mut ws = pool.take();
                 let mut local_inv = InvMColMajor::zeros(end, n_elec);
                 let mut local_pf = vec![0.0_f64; end];
                 let result = (start..end).try_for_each(|qp| {
+                    let _entry = observed.enter_item();
                     calc_m_all_child_real(
                         qp,
                         ele_idx,
@@ -191,6 +197,7 @@ pub fn calc_m_all_real(
                 result.map(|()| (start, end, local_inv, local_pf))
             })
             .collect();
+        let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
         let chunks = chunks?;
         for (start, end, local_inv, local_pf) in chunks {
             pf_m[start..end].copy_from_slice(&local_pf[start..end]);
@@ -263,9 +270,14 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
+    let observed = crate::threading::observe_kernel(
+        crate::threading::ObservedWork::Qp,
+        crate::threading::inner_parallel_enabled(qp_end - qp_start),
+    );
     if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
+            let _entry = observed.enter_item();
             calc_m_all_child_complex::<C_COMPAT>(
                 qp,
                 ele_idx,
@@ -289,13 +301,14 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
         .map(|start| (start, (start + chunk).min(qp_end)))
         .collect();
     crate::threading::install(|| {
-        let chunks: Result<Vec<_>, CalcMAllError> = ranges
+        let chunks: Vec<Result<_, CalcMAllError>> = ranges
             .into_par_iter()
             .map(|(start, end)| {
                 let mut ws = pool.take();
                 let mut local_inv = InvMColMajor::zeros(end, n_elec);
                 let mut local_pf = vec![Complex64::default(); end];
                 let result = (start..end).try_for_each(|qp| {
+                    let _entry = observed.enter_item();
                     calc_m_all_child_complex::<C_COMPAT>(
                         qp,
                         ele_idx,
@@ -311,6 +324,7 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
                 result.map(|()| (start, end, local_inv, local_pf))
             })
             .collect();
+        let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
         let chunks = chunks?;
         for (start, end, local_inv, local_pf) in chunks {
             pf_m[start..end].copy_from_slice(&local_pf[start..end]);
@@ -357,22 +371,75 @@ pub fn calc_m_all_fsz_complex(
     }
     let mut inv_temp = InvMColMajor::zeros(qp_end, n_elec);
     let mut pf_temp = vec![Complex64::default(); qp_end];
-    let mut ws = pool.take();
-    let result = (qp_start..qp_end).try_for_each(|qp| {
-        calc_m_all_child_fsz_complex(
-            qp,
-            ele_idx,
-            ele_spn,
-            slater_elm,
-            &mut inv_temp,
-            &mut pf_temp[qp],
-            n_site,
-            n_elec,
-            &mut ws,
-        )
-    });
-    pool.release(ws);
-    result?;
+    let observed = crate::threading::observe_kernel(
+        crate::threading::ObservedWork::Qp,
+        crate::threading::inner_parallel_enabled(qp_end - qp_start),
+    );
+    if crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+        let workers = crate::threading::inner_worker_count(qp_end - qp_start);
+        pool.ensure_capacity(workers);
+        let chunk = (qp_end - qp_start).div_ceil(workers);
+        let ranges: Vec<_> = (qp_start..qp_end)
+            .step_by(chunk)
+            .map(|start| (start, (start + chunk).min(qp_end)))
+            .collect();
+        let chunks: Vec<Result<_, CalcMAllError>> = crate::threading::install(|| {
+            ranges
+                .into_par_iter()
+                .map(|(start, end)| {
+                    let mut ws = pool.take();
+                    let mut inverse = InvMColMajor::zeros(end, n_elec);
+                    let mut pf = vec![Complex64::default(); end];
+                    let result = (start..end).try_for_each(|qp| {
+                        let _entry = observed.enter_item();
+                        calc_m_all_child_fsz_complex(
+                            qp,
+                            ele_idx,
+                            ele_spn,
+                            slater_elm,
+                            &mut inverse,
+                            &mut pf[qp],
+                            n_site,
+                            n_elec,
+                            &mut ws,
+                        )
+                    });
+                    pool.release(ws);
+                    result.map(|()| (start, end, inverse, pf))
+                })
+                .collect()
+        });
+        // Collect every chunk in indexed order before selecting the first
+        // error serially. Rayon Result collection alone can choose any error.
+        let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
+        // Nothing is published if any worker fails.
+        for (start, end, inverse, pf) in chunks? {
+            pf_temp[start..end].copy_from_slice(&pf[start..end]);
+            for qp in start..end {
+                inv_temp
+                    .qp_matrix_slice_mut(qp)
+                    .copy_from_slice(inverse.qp_matrix_slice(qp));
+            }
+        }
+    } else {
+        let mut ws = pool.take();
+        let result = (qp_start..qp_end).try_for_each(|qp| {
+            let _entry = observed.enter_item();
+            calc_m_all_child_fsz_complex(
+                qp,
+                ele_idx,
+                ele_spn,
+                slater_elm,
+                &mut inv_temp,
+                &mut pf_temp[qp],
+                n_site,
+                n_elec,
+                &mut ws,
+            )
+        });
+        pool.release(ws);
+        result?;
+    }
     for qp in qp_start..qp_end {
         inv_m
             .qp_matrix_slice_mut(qp)
@@ -413,17 +480,21 @@ pub fn calc_m_all_fsz_real(
         n_elec,
         pool,
     )?;
-    for qp in qp_start..qp_end {
-        matrix.pf_m_real[qp] = matrix.pf_m[qp].re;
-        for (dst, src) in matrix
-            .inv_m_real
-            .qp_matrix_slice_mut(qp)
-            .iter_mut()
-            .zip(matrix.inv_m.qp_matrix_slice(qp))
-        {
-            *dst = src.re;
-        }
-    }
+    crate::threading::copy_complex_realpart(
+        &mut matrix.pf_m_real[qp_start..qp_end],
+        &matrix.pf_m[qp_start..qp_end],
+    );
+    let stride = (2 * n_elec).pow(2) + 1;
+    let src = matrix.inv_m.as_slice();
+    let start = qp_start * stride;
+    crate::threading::for_each_mut(
+        &mut matrix.inv_m_real.as_mut_slice()[start..qp_end * stride],
+        |i, dst| {
+            if i % stride != stride - 1 {
+                *dst = src[start + i].re;
+            }
+        },
+    );
     Ok(())
 }
 

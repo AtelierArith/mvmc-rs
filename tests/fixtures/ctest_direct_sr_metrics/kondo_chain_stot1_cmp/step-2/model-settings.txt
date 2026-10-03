@@ -1,0 +1,7 @@
+model=kondo_chain_stot1_cmp mode=cmp seed=123456789
+steps=2 window=2 NSRCG=0 NStore=1
+canonical_NSROptItrStep=200 canonical_NSROptItrSmp=20
+effective_NSROptItrStep=2 effective_NSROptItrSmp=2 override=both_no_clamp
+initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
+initial.def sha256=bbd5f4094312f00fe9be3796cc0cc1f78a39f9cbfa1c9e176ca07a488607c1e6
+In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256

@@ -1,9 +1,92 @@
 //! Sampled matrix operator for Julia's standard stochastic-reconfiguration CG.
 
-use crate::{ExpertModeData, VmcOptimizationState};
+use crate::{reducer::Reducer, ExpertModeData, VmcOptimizationState};
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
+use std::{cell::RefCell, rc::Rc};
+
+/// Actual sampled-product boundary within the production CG operator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CgProductPhase {
+    /// Root search vector after its in-place broadcast, before local BLAS.
+    RootSearch,
+    /// Local sampled Gram product before the global reduction.
+    Local,
+    /// Global raw product, before weight/mean/diagonal corrections.
+    Global,
+    /// Corrected covariance product used by the solver.
+    Corrected,
+}
+
+/// Borrowed actual CG iteration state; observers cannot mutate solver buffers.
+pub struct CgIterationView<'a> {
+    /// Zero for initialization, otherwise the actual iteration number.
+    pub iteration: usize,
+    /// Actual accumulated solution.
+    pub solution: &'a [f64],
+    /// Actual residual after initialization or the iteration update.
+    pub residual: &'a [f64],
+    /// Actual search direction.
+    pub direction: &'a [f64],
+    /// Sequential residual dot product used by the solver.
+    pub delta: f64,
+    /// Actual step length, absent at initialization.
+    pub alpha: Option<f64>,
+}
+
+/// Read-only diagnostics at actual production CG calculation boundaries.
+pub trait CgObserver {
+    /// Observe actual active mapping, saved samples, means, variances and gradient.
+    fn prepared(&self, _mapping: &[usize], _operator: &SampledSrOperator, _gradient: &[f64]) {}
+    /// Observe actual search vector and product at the named operator boundary.
+    fn product(&self, _phase: CgProductPhase, _search: &[f64], _product: &[f64]) {}
+    /// Observe actual initialization or completed iteration state.
+    fn iteration(&self, _state: CgIterationView<'_>) {}
+    /// Observe the actual returned solution, residual, direction and iteration count.
+    fn finished(&self, _result: &CgSolution) {}
+}
+
+thread_local! {
+    static CG_OBSERVER: RefCell<Option<Rc<dyn CgObserver>>> = const { RefCell::new(None) };
+}
+
+/// Clears its thread-local observer on drop, including panic unwinding.
+pub struct CgObserverGuard(Rc<dyn CgObserver>);
+
+impl Drop for CgObserverGuard {
+    fn drop(&mut self) {
+        CG_OBSERVER.with(|slot| {
+            let mut active = slot.borrow_mut();
+            if active
+                .as_ref()
+                .is_some_and(|observer| Rc::ptr_eq(observer, &self.0))
+            {
+                *active = None;
+            }
+        });
+    }
+}
+
+/// Install read-only diagnostics on the calling runner thread only.
+pub fn install_cg_observer(observer: Rc<dyn CgObserver>) -> Result<CgObserverGuard, String> {
+    CG_OBSERVER.with(|slot| {
+        let mut active = slot.borrow_mut();
+        if active.is_some() {
+            return Err("CG observer already installed on this thread".into());
+        }
+        *active = Some(observer.clone());
+        Ok(CgObserverGuard(observer))
+    })
+}
+
+fn observe(f: impl FnOnce(&dyn CgObserver)) {
+    CG_OBSERVER.with(|slot| {
+        if let Some(observer) = slot.borrow().clone() {
+            f(observer.as_ref());
+        }
+    });
+}
 
 /// Apply Julia's standard sampled SR-CG step, writing diagnostics before updates.
 /// Returns zero for finite increments, including iteration-limit/breakdown exits.
@@ -11,6 +94,21 @@ pub fn stochastic_opt_cg(
     data: &mut ExpertModeData,
     state: &VmcOptimizationState,
     output_dir: Option<&Path>,
+) -> io::Result<i32> {
+    stochastic_opt_cg_with_reducer(
+        data,
+        state,
+        output_dir,
+        &crate::reducer::SingleProcessReducer,
+    )
+}
+
+/// Apply sampled SR-CG with the global accumulator communicator.
+pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
+    data: &mut ExpertModeData,
+    state: &VmcOptimizationState,
+    output_dir: Option<&Path>,
+    reducer: &R,
 ) -> io::Result<i32> {
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
@@ -95,13 +193,17 @@ pub fn stochastic_opt_cg(
     } else {
         mapping.len()
     };
-    let result = operator.solve(
-        &gradient,
-        1.0 / state.energy.wc.re,
-        data.modpara.dsr_opt_sta_del,
-        data.modpara.dsr_opt_cg_tol,
-        max_iterations,
-    );
+    observe(|observer| observer.prepared(&mapping, &operator, &gradient));
+    let result = operator
+        .solve_with_reducer(
+            &gradient,
+            1.0 / state.energy.wc.re,
+            data.modpara.dsr_opt_sta_del,
+            data.modpara.dsr_opt_cg_tol,
+            max_iterations,
+            reducer,
+        )
+        .map_err(io::Error::other)?;
     let info = i32::from(result.solution.iter().any(|x| !x.is_finite()));
     if let Some(dir) = output_dir {
         let prefix = if data.modpara.c_data_file_head.is_empty() {
@@ -217,32 +319,61 @@ impl SampledSrOperator {
         tolerance: f64,
         max_iterations: usize,
     ) -> CgSolution {
+        self.solve_with_reducer(
+            gradient,
+            inv_weight,
+            shift,
+            tolerance,
+            max_iterations,
+            &crate::reducer::SingleProcessReducer,
+        )
+        .expect("serial CG communication cannot fail")
+    }
+
+    /// Solve using global sampled products, including periodic residual refresh.
+    pub fn solve_with_reducer<R: Reducer + ?Sized>(
+        &mut self,
+        gradient: &[f64],
+        inv_weight: f64,
+        shift: f64,
+        tolerance: f64,
+        max_iterations: usize,
+        reducer: &R,
+    ) -> Result<CgSolution, String> {
         let n = self.components;
         assert_eq!(gradient.len(), n);
-        let threshold = tolerance.powi(2) * (n as f64).powi(2);
+        // stcopt_cg_impl.c:265 evaluates these four factors left to right.
+        let threshold = tolerance * tolerance * n as f64 * n as f64;
         let mut solution = vec![0.0; n];
         let mut direction = gradient.to_vec();
         let mut residual = gradient.to_vec();
         let mut product = vec![0.0; n];
         let mut delta = sequential_dot(&residual, &residual);
         let mut iterations = 0;
+        observe(|observer| {
+            observer.iteration(CgIterationView {
+                iteration: 0,
+                solution: &solution,
+                residual: &residual,
+                direction: &direction,
+                delta,
+                alpha: None,
+            })
+        });
         for iteration in 1..=max_iterations {
             iterations = iteration;
             if delta < threshold {
                 iterations = iteration - 1;
                 break;
             }
-            self.apply(&mut product, &direction, inv_weight, shift);
+            self.apply_with_reducer(&mut product, &mut direction, inv_weight, shift, reducer)?;
             let dq = sequential_dot(&direction, &product);
-            if dq.abs() < 1e-30 {
-                break;
-            }
             let alpha = delta / dq;
             for i in 0..n {
                 solution[i] += alpha * direction[i];
             }
             if iteration % 20 == 0 {
-                self.apply(&mut residual, &solution, inv_weight, shift);
+                self.apply_with_reducer(&mut residual, &mut solution, inv_weight, shift, reducer)?;
                 for i in 0..n {
                     residual[i] = gradient[i] - residual[i];
                 }
@@ -253,17 +384,32 @@ impl SampledSrOperator {
             }
             let delta_new = sequential_dot(&residual, &residual);
             let beta = delta_new / delta;
-            delta = delta_new;
+            // C:336 rounds the quotient and then multiplies it by the old
+            // norm. Assigning delta_new changes subsequent alpha/stop tests.
+            let recurrent_norm = beta * delta;
+            delta = recurrent_norm;
             for i in 0..n {
                 direction[i] = residual[i] + beta * direction[i];
             }
+            observe(|observer| {
+                observer.iteration(CgIterationView {
+                    iteration,
+                    solution: &solution,
+                    residual: &residual,
+                    direction: &direction,
+                    delta,
+                    alpha: Some(alpha),
+                })
+            });
         }
-        CgSolution {
+        let result = CgSolution {
             solution,
             iterations,
             residual,
             direction,
-        }
+        };
+        observe(|observer| observer.finished(&result));
+        Ok(result)
     }
 
     /// Allocate the sampled operator and its reusable intermediate vectors.
@@ -285,6 +431,27 @@ impl SampledSrOperator {
     /// The sampled products use Julia's GEMV order; corrections use its
     /// sequential dot product. MPI reduction belongs before the corrections.
     pub fn apply(&mut self, z: &mut [f64], x: &[f64], inv_weight: f64, shift: f64) {
+        let mut search = x.to_vec();
+        self.apply_with_reducer(
+            z,
+            &mut search,
+            inv_weight,
+            shift,
+            &crate::reducer::SingleProcessReducer,
+        )
+        .expect("serial CG communication cannot fail");
+    }
+
+    /// Broadcast the root search vector and sum local sampled products before
+    /// applying global weight, mean and diagonal corrections (C operate_by_S).
+    pub fn apply_with_reducer<R: Reducer + ?Sized>(
+        &mut self,
+        z: &mut [f64],
+        x: &mut [f64],
+        inv_weight: f64,
+        shift: f64,
+        reducer: &R,
+    ) -> Result<(), String> {
         let n = self.components;
         assert_eq!(z.len(), n);
         assert_eq!(x.len(), n);
@@ -295,8 +462,10 @@ impl SampledSrOperator {
             assert_eq!(self.imag_samples.len(), n * self.samples);
         }
         if n == 0 {
-            return;
+            return Ok(());
         }
+        reducer.broadcast_f64(0, x)?;
+        observe(|observer| observer.product(CgProductPhase::RootSearch, x, &[]));
         if self.samples == 0 {
             z.fill(0.0);
         } else {
@@ -365,9 +534,225 @@ impl SampledSrOperator {
                 }
             }
         }
+        observe(|observer| observer.product(CgProductPhase::Local, x, z));
+        reducer.barrier();
+        reducer.allreduce_sum_f64(z);
+        observe(|observer| observer.product(CgProductPhase::Global, x, z));
         let coef = sequential_dot(&self.mean, x);
         for i in 0..n {
             z[i] = inv_weight * z[i] - coef * self.mean[i] + shift * self.diagonal[i] * x[i];
         }
+        observe(|observer| observer.product(CgProductPhase::Corrected, x, z));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod collective_tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    struct UnimplementedMultiRank;
+
+    impl Reducer for UnimplementedMultiRank {
+        fn world_size(&self) -> usize {
+            2
+        }
+        fn allreduce_sum_f64(&self, _: &mut [f64]) {
+            panic!("failed broadcast must not enter product reduction");
+        }
+        fn allreduce_sum_c64(&self, _: &mut [num_complex::Complex64]) {
+            panic!("unexpected complex reduction");
+        }
+        fn allreduce_sum_i64(&self, _: &mut [i64]) {
+            panic!("unexpected counter reduction");
+        }
+    }
+
+    #[test]
+    fn missing_multi_rank_broadcast_fails_before_search_product_or_sample_mutation() {
+        let mut operator = SampledSrOperator::new(2, 2, false);
+        operator.real_samples.copy_from_slice(&[1.0, 3.0, 2.0, 4.0]);
+        let samples = operator.real_samples.clone();
+        let mut search = [0.5, -1.0];
+        let mut product = [123.0, 456.0];
+        let error = operator
+            .apply_with_reducer(
+                &mut product,
+                &mut search,
+                0.25,
+                0.1,
+                &UnimplementedMultiRank,
+            )
+            .unwrap_err();
+        assert!(error.contains("real vector broadcast"));
+        assert_eq!(search, [0.5, -1.0]);
+        assert_eq!(product, [123.0, 456.0]);
+        assert_eq!(operator.real_samples, samples);
+    }
+
+    #[derive(Default)]
+    struct ActualObserver {
+        products: RefCell<Vec<(CgProductPhase, Vec<f64>)>>,
+        iterations: RefCell<Vec<usize>>,
+    }
+
+    impl CgObserver for ActualObserver {
+        fn product(&self, phase: CgProductPhase, _: &[f64], product: &[f64]) {
+            self.products.borrow_mut().push((phase, product.to_vec()));
+        }
+        fn iteration(&self, state: CgIterationView<'_>) {
+            assert_eq!(state.delta, sequential_dot(state.residual, state.residual));
+            self.iterations.borrow_mut().push(state.iteration);
+        }
+    }
+
+    #[test]
+    fn actual_cg_observer_records_boundaries_without_changing_the_solve() {
+        let mut operator = SampledSrOperator::new(2, 2, false);
+        operator.real_samples.copy_from_slice(&[2.0, 1.0, 0.0, 1.0]);
+        let baseline = operator.solve(&[6.0, 4.0], 1.0, 0.0, 1e-14, 10);
+        let observer = Rc::new(ActualObserver::default());
+        let guard = install_cg_observer(observer.clone()).unwrap();
+        let observed = operator.solve(&[6.0, 4.0], 1.0, 0.0, 1e-14, 10);
+        drop(guard);
+        assert_eq!(observed.solution, baseline.solution);
+        assert_eq!(observed.residual, baseline.residual);
+        assert_eq!(observed.direction, baseline.direction);
+        assert_eq!(observed.iterations, baseline.iterations);
+        assert_eq!(*observer.iterations.borrow(), [0, 1, 2]);
+        let products = observer.products.borrow();
+        assert_eq!(products[1], (CgProductPhase::Local, vec![32.0, 20.0]));
+        assert_eq!(products.len() % 4, 0);
+        for chunk in products.as_chunks::<4>().0 {
+            assert_eq!(
+                chunk.iter().map(|entry| entry.0).collect::<Vec<_>>(),
+                [
+                    CgProductPhase::RootSearch,
+                    CgProductPhase::Local,
+                    CgProductPhase::Global,
+                    CgProductPhase::Corrected
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn nested_observer_is_rejected_without_replacing_outer_and_threads_are_isolated() {
+        let outer = Rc::new(ActualObserver::default());
+        let guard = install_cg_observer(outer.clone()).unwrap();
+        assert!(install_cg_observer(Rc::new(ActualObserver::default()))
+            .err()
+            .unwrap()
+            .contains("already installed"));
+        std::thread::spawn(|| {
+            let inner = install_cg_observer(Rc::new(ActualObserver::default())).unwrap();
+            drop(inner);
+            assert!(CG_OBSERVER.with(|slot| slot.borrow().is_none()));
+        })
+        .join()
+        .unwrap();
+        let mut operator = SampledSrOperator::new(1, 1, false);
+        operator.real_samples[0] = 2.0;
+        operator.solve(&[4.0], 1.0, 0.0, 1e-14, 2);
+        assert_eq!(*outer.iterations.borrow(), [0, 1]);
+        drop(guard);
+        assert!(CG_OBSERVER.with(|slot| slot.borrow().is_none()));
+    }
+
+    #[test]
+    fn observer_guard_cleans_up_during_panic_unwind() {
+        let panic = std::panic::catch_unwind(|| {
+            let _guard = install_cg_observer(Rc::new(ActualObserver::default())).unwrap();
+            panic!("observer client panicked");
+        });
+        assert!(panic.is_err());
+        assert!(CG_OBSERVER.with(|slot| slot.borrow().is_none()));
+        let guard = install_cg_observer(Rc::new(ActualObserver::default())).unwrap();
+        drop(guard);
+    }
+
+    struct RemoteSamples {
+        events: RefCell<Vec<&'static str>>,
+        expected_local: Vec<f64>,
+        remote: Vec<f64>,
+    }
+
+    impl Reducer for RemoteSamples {
+        fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
+            assert_eq!(root, 0);
+            self.events.borrow_mut().push("root search vector");
+            for (value, root_value) in values.iter_mut().zip([0.5, -1.0]) {
+                *value = root_value;
+            }
+            Ok(())
+        }
+
+        fn barrier(&self) {
+            self.events.borrow_mut().push("global barrier");
+        }
+
+        fn allreduce_sum_f64(&self, values: &mut [f64]) {
+            self.events.borrow_mut().push("raw sampled product");
+            assert_eq!(values, self.expected_local);
+            for (value, remote) in values.iter_mut().zip(&self.remote) {
+                *value += remote;
+            }
+        }
+
+        fn allreduce_sum_c64(&self, _: &mut [num_complex::Complex64]) {
+            panic!("CG sampled product is real");
+        }
+
+        fn allreduce_sum_i64(&self, _: &mut [i64]) {
+            panic!("unexpected counter reduction");
+        }
+    }
+
+    #[test]
+    fn sampled_product_is_globally_summed_before_weight_mean_and_shift() {
+        let mut operator = SampledSrOperator::new(2, 2, false);
+        operator.real_samples.copy_from_slice(&[1.0, 3.0, 2.0, 4.0]);
+        operator.mean.copy_from_slice(&[0.25, -0.5]);
+        operator.diagonal.copy_from_slice(&[2.0, 3.0]);
+        let reducer = RemoteSamples {
+            events: RefCell::new(Vec::new()),
+            expected_local: vec![-8.5, -19.5],
+            // Independent other-rank sample [3,-1] has dot(x,O)=2.5.
+            remote: vec![7.5, -2.5],
+        };
+        let mut product = [0.0; 2];
+        let mut search = [99.0, 99.0];
+        operator
+            .apply_with_reducer(&mut product, &mut search, 0.25, 0.1, &reducer)
+            .unwrap();
+        assert_eq!(search, [0.5, -1.0]);
+        for (actual, expected) in product.into_iter().zip([-0.30625, -5.4875]) {
+            assert!((actual - expected).abs() < 1e-14);
+        }
+        assert_eq!(
+            *reducer.events.borrow(),
+            [
+                "root search vector",
+                "global barrier",
+                "raw sampled product"
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_local_sample_partition_still_contributes_to_global_operator() {
+        let mut operator = SampledSrOperator::new(2, 0, true);
+        let reducer = RemoteSamples {
+            events: RefCell::new(Vec::new()),
+            expected_local: vec![0.0, 0.0],
+            remote: vec![7.5, -2.5],
+        };
+        let mut product = [0.0; 2];
+        operator
+            .apply_with_reducer(&mut product, &mut [99.0, 99.0], 0.25, 0.0, &reducer)
+            .unwrap();
+        assert_eq!(product, [1.875, -0.625]);
+        assert_eq!(reducer.events.borrow().len(), 3);
     }
 }

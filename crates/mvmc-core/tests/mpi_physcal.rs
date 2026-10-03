@@ -1,15 +1,15 @@
 //! MPI PhysCal smoke gate. Run explicitly with an MPI launcher:
 //!
-//! Resolve the executable with Cargo JSON, then use `--ignored` under mpiexec.
-//! See docs/OPTIONAL_GATES.md for the exact invocation.
+//! See docs/OPTIONAL_GATES.md for building and selecting the exact MPI test binary.
 
 mod support;
+use support::{report_gate, require_gate, GateStatus};
 
 #[cfg(feature = "mpi")]
 #[test]
-#[ignore = "optional MPI gate: mpi feature and MVMC_RS_MPI_PHYSICAL required"]
+#[ignore = "optional MPI gate; requires MVMC_RS_MPI_PHYSICAL=1, mpi feature and MPI launcher"]
 fn mpi_physcal_reduces_fixed_parameter_samples() {
-    support::require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
+    require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
 
     let root = support::julia_mvmc_root()
         .unwrap_or_else(|| support::missing_fixture("mpi-physcal", "Julia-mVMC checkout not found"))
@@ -58,17 +58,29 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
     )
     .expect("prepare grouped PhysCal");
     // The committed fixture is serial by design; changing only this runtime
-    // control exercises the comm1/comm2 reducer path without modifying files.
+    // control verifies grouped PhysCal is rejected before sampling.
     grouped.data.modpara.nsplit_size = 2;
-    let result =
-        mvmc_core::vmc_phys_cal_with_reducer(grouped, None, &group).expect("grouped MPI PhysCal");
-    assert_eq!(result.iterations, 1);
+    let error = mvmc_core::vmc_phys_cal_with_reducer(grouped, None, &group).unwrap_err();
+    assert!(
+        error.contains("NSplitSize") && error.contains("PhysCal"),
+        "{error}"
+    );
+    report_gate(
+        "mpi-physcal",
+        GateStatus::Pass,
+        "serial PhysCal completed; unsupported grouped PhysCal rejected",
+    );
 }
 
 #[cfg(not(feature = "mpi"))]
 #[test]
-#[ignore = "optional MPI gate: mpi feature and MVMC_RS_MPI_PHYSICAL required"]
+#[ignore = "optional MPI gate; requires MVMC_RS_MPI_PHYSICAL=1 and mpi feature"]
 fn mpi_physcal_requires_feature() {
-    support::require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
-    support::unsupported("mpi-physcal", "mvmc-core mpi feature is disabled");
+    require_gate("mpi-physcal", "MVMC_RS_MPI_PHYSICAL");
+    report_gate(
+        "mpi-physcal",
+        GateStatus::Unsupported,
+        "mvmc-core mpi feature is disabled",
+    );
+    panic!("MPI PhysCal gate selected but the mpi feature is disabled");
 }
