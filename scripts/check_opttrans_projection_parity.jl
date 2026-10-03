@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # OptTrans mapping order and derivative contracts from canonical Julia sources.
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("OptTrans fixtures require Julia 1.13.1")
@@ -8,7 +10,7 @@ const root = normpath(joinpath(@__DIR__, "..", "tests", "fixtures", "opttrans"))
 hex(values) = join([string(reinterpret(UInt64, x); base=16, pad=16) for v in values for x in (real(v), imag(v))], " ")
 function verify(file, actual)
     path = joinpath(root, file)
-    "--write" in ARGS ? write(path, actual) : @test(actual == read(path, String))
+    "--write" in ARGS ? write(path, actual) : @test(file=="projection.txt" ? compare_record_blocks(actual,read(path,String),4,(2,3,4);preserve_sentinels=true) : file=="opt_derivatives.txt" ? compare_record_blocks(actual,read(path,String),2,(2,);preserve_sentinels=true) : compare_computed_text(actual,read(path,String);zero_pattern=true,selector=(r,c,t)->iseven(r)))
 end
 function model(mode, leg, boundary, mapping)
     d = P.ExpertModeData()

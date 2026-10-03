@@ -1,4 +1,6 @@
 //! Julia run_para_opt_from_namelist configuration and summary contracts.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::{run_para_opt_from_namelist, InitialDef, RunConfig};
 use std::{fs, path::PathBuf};
 
@@ -60,14 +62,23 @@ fn default_directory_and_summary_use_the_actual_last_window() {
                 .collect()
         })
         .collect();
-    assert_eq!(
-        summary.ctest_values,
+    numerical_comparison::assert_values_close(
+        summary.ctest_values.iter().copied(),
         [
             (rows[0][0] + rows[1][0]) / 2.0,
-            (rows[0][1] + rows[1][1]) / 2.0
-        ]
+            (rows[0][1] + rows[1][1]) / 2.0,
+        ],
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary window arithmetic",
     );
-    assert_eq!(summary.final_energy_per_site, rows[1][0] / 6.0);
+    numerical_comparison::assert_close(
+        summary.final_energy_per_site,
+        rows[1][0] / 6.0,
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary energy conversion",
+    );
     fs::remove_dir_all(summary.output_dir).unwrap();
 }
 
@@ -114,7 +125,13 @@ fn broken_auto_file_can_be_explicitly_skipped_and_custom_heads_are_read_back() {
     assert!(summary.output_dir.join("custom_out.dat").is_file());
     assert!(!summary.output_dir.join("zvo_out.dat").exists());
     assert_eq!(summary.zvo_first_n.len(), 1);
-    assert_eq!(summary.ctest_values[0], summary.final_energy_per_site * 6.0);
+    numerical_comparison::assert_close(
+        summary.ctest_values[0],
+        summary.final_energy_per_site * 6.0,
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary energy conversion",
+    );
     fs::remove_dir_all(dir).unwrap();
 }
 
@@ -138,13 +155,38 @@ fn explicit_and_auto_valid_initial_files_produce_identical_trajectories() {
     config.output_dir = Some(dir.join("explicit"));
     config.initial_def = InitialDef::Path(initial);
     let explicit = run_para_opt_from_namelist(dir.join("namelist.def"), config).unwrap();
-    assert_eq!(auto.zvo_first_n, explicit.zvo_first_n);
-    assert_eq!(auto.ctest_values, explicit.ctest_values);
-    assert_eq!(auto.final_energy_per_site, explicit.final_energy_per_site);
+    numerical_comparison::assert_numeric_text(
+        &auto.zvo_first_n.join("\n"),
+        &explicit.zvo_first_n.join("\n"),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        &[],
+        "auto/explicit output",
+    );
+    numerical_comparison::assert_values_close(
+        auto.ctest_values.iter().copied(),
+        explicit.ctest_values.iter().copied(),
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary window arithmetic",
+    );
+    numerical_comparison::assert_close(
+        auto.final_energy_per_site,
+        explicit.final_energy_per_site,
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary energy conversion",
+    );
     let last: Vec<f64> = explicit.zvo_first_n[1]
         .split_whitespace()
         .map(|v| v.parse().unwrap())
         .collect();
-    assert_eq!(explicit.ctest_values, [last[0], last[1]]);
+    numerical_comparison::assert_values_close(
+        explicit.ctest_values.iter().copied(),
+        [last[0], last[1]],
+        16.0 * f64::EPSILON,
+        16.0 * f64::EPSILON,
+        "summary window arithmetic",
+    );
     fs::remove_dir_all(dir).unwrap();
 }

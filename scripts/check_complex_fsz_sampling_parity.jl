@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Original complex FSZ sampler, including conduction-spin branch and burn reuse.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("Complex FSZ fixtures require Julia 1.13.1")
@@ -58,5 +60,5 @@ println(io,"# Original complex FSZ sampler; seed=11272; Julia-mVMC 8bb1b9e, nume
     end
     actual = String(take!(io)); root = joinpath(@__DIR__,"..","tests","fixtures","complex_fsz")
     if "--write" in ARGS; mkpath(root); write(joinpath(root,"sampling.txt"),actual)
-    else; @test actual == read(joinpath(root,"sampling.txt"),String); end
+    else; @test compare_sampling_text(actual,read(joinpath(root,"sampling.txt"),String)); end
 end

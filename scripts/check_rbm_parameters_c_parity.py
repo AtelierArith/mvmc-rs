@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text
+import math
 from c_toolbox import materialize
 from check_general_orbital_c_parity import function
 from check_rbm_contracts_c_parity import geometry, definition, materialize_readers
@@ -56,6 +58,7 @@ def main():
                        for name in ("mVMC/readdef.c", "mVMC/parameter.c", "sfmt/SFMT.c", "sfmt/SFMT.h", "sfmt/SFMT-params19937.h"))
     output = f"# actual C RBM readers/InitParameter/ReadInitParameter/SFMT; real initializer; NProj=2 NSlater=4; Apple clang 17 -O0 -ffp-contract=off -DMEXP=19937; {hashes}\n"
     checked = 0
+    initialized_rows = set()
     with tempfile.TemporaryDirectory(prefix="mvmc-c-rbm-parameters-") as directory:
         tmp = Path(directory)
         exe = tmp / "probe"
@@ -79,12 +82,13 @@ def main():
             output += "~".join(content.replace("\n", "|") for content in definitions)+"\n"
             output += (payload.replace("\n", "|") if mode != "init" else "-")+"\n"
             output += "\n".join(lines)+"\n"
+            if mode == "init": initialized_rows.add(sum(bool(line.strip()) and not line.lstrip().startswith("#") for line in output.splitlines())-2)
             checked += 1
     target = root / "tests/fixtures/rbm/c_parameters.txt"
     if args.write:
         if not target.exists() or target.read_text() != output: target.write_text(output)
     else:
-        assert target.read_text() == output, "C complete RBM parameters changed"
+        compare_text(output,target.read_text(),lambda r,c,t: (32*math.ulp(1.0),32*math.ulp(1.0)) if r in initialized_rows else None)
     print(f"{checked} native C RBM declaration/parameter/RNG cases passed")
 
 

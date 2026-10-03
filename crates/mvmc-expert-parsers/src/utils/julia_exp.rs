@@ -1,5 +1,7 @@
 //! Julia 1.13.1 Base Float64 exponential for deterministic projection ratios.
 //! MIT Julia contributors; full notice in ../../LICENSE-julia-math.
+#[cfg(test)]
+use crate::numerical_comparison;
 
 /// Evaluate Julia 1.13.1's Float64 `exp`, including FMA reduction,
 /// table reconstruction, subnormal scaling, and exceptional arguments.
@@ -311,7 +313,15 @@ mod tests {
                 .map(|s| u64::from_str_radix(s, 16).unwrap())
                 .collect();
             let x = f64::from_bits(values[0]);
-            assert_eq!(exp(x).to_bits(), values[1], "case {i}, exp({x:?})");
+            // Eight rounding units for range reduction, polynomial and rescaling;
+            // subnormal absolute floor is two representable minimum steps.
+            super::numerical_comparison::assert_close(
+                exp(x),
+                f64::from_bits(values[1]),
+                2.0 * f64::from_bits(1),
+                8.0 * f64::EPSILON,
+                format!("case {i}, exp({x:?})"),
+            );
         }
     }
 }

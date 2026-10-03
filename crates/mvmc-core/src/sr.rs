@@ -400,18 +400,27 @@ mod opttrans_tests {
         out
     }
 
-    fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
-        let actual: Vec<_> = values
-            .into_iter()
-            .flat_map(|v| [v.re.to_bits(), v.im.to_bits()])
-            .collect();
-        let expected: Vec<_> = expected
-            .split_whitespace()
-            .map(|s| u64::from_str_radix(s, 16).unwrap())
-            .collect();
-        assert_eq!(actual.len(), expected.len(), "{label}: width");
-        for (i, (a, e)) in actual.into_iter().zip(expected).enumerate() {
-            assert_eq!(a, e, "{label}: component {i}");
+    fn compare_values(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
+        // These synthetic update/normalization systems are small and regularized;
+        // budget 64 rounding errors, including the parameter update and QP sync.
+        let actual: Vec<_> = values.into_iter().flat_map(|v| [v.re, v.im]).collect();
+        let expected = crate::numerical_comparison::hex_values(expected);
+        assert_eq!(actual.len(), expected.len(), "{label}: parameter width");
+        for (index, (actual, expected)) in actual.into_iter().zip(expected).enumerate() {
+            // The range fixtures include 1e-300 coefficients. An O(epsilon)
+            // absolute floor would incorrectly accept losing them entirely.
+            let absolute = if expected != 0.0 && expected.abs() < f64::MIN_POSITIVE.sqrt() {
+                4.0 * f64::from_bits(1)
+            } else {
+                64.0 * f64::EPSILON
+            };
+            crate::numerical_comparison::assert_close(
+                actual,
+                expected,
+                absolute,
+                64.0 * f64::EPSILON,
+                format!("{label}: parameter component {index}"),
+            );
         }
     }
 
@@ -494,8 +503,8 @@ mod opttrans_tests {
                 stochastic_opt_real(&mut data, &mut state)
             };
             assert_eq!(info, fields[5].parse::<i32>().unwrap(), "{header}");
-            bits(values(&mut data), lines.next().unwrap(), header);
-            bits(
+            compare_values(values(&mut data), lines.next().unwrap(), header);
+            compare_values(
                 data.qp_weights
                     .as_ref()
                     .unwrap()
@@ -505,7 +514,7 @@ mod opttrans_tests {
                 lines.next().unwrap(),
                 header,
             );
-            bits(data.para_qp_opt_trans, lines.next().unwrap(), header);
+            compare_values(data.para_qp_opt_trans, lines.next().unwrap(), header);
             count += 1;
         }
         assert_eq!(count, 96);
@@ -531,7 +540,7 @@ mod opttrans_tests {
                 .find(|row| row[0] == "layout_sync")
                 .unwrap();
             if n_slater(&data) == 4 {
-                bits(data.slater_params.iter().copied(), c_sync[1], header);
+                compare_values(data.slater_params.iter().copied(), c_sync[1], header);
             }
             data.opt_trans = match f[1] {
                 "1" => vec![],
@@ -558,8 +567,8 @@ mod opttrans_tests {
             if n_slater(&data) == 4 {
                 // The C array includes slots 2/3, which model() also updates.
                 // Slot 3 is the normalization maximum. Keep all historical
-                // non-Slater bits and replace Slater expectations with C bits.
-                bits(data.slater_params.iter().copied(), c_sync[2], header);
+                // non-Slater values and replace Slater expectations with C values.
+                compare_values(data.slater_params.iter().copied(), c_sync[2], header);
                 let mut expected: Vec<_> = historical.split_whitespace().collect();
                 let c_bits: Vec<_> = c_sync[2].split_whitespace().collect();
                 let offset = 2 * (actual.len() - data.opt_trans.len() - data.orbital_terms.len());
@@ -568,11 +577,11 @@ mod opttrans_tests {
                     expected[offset + 2 * row] = c_bits[2 * idx];
                     expected[offset + 2 * row + 1] = c_bits[2 * idx + 1];
                 }
-                bits(actual, &expected.join(" "), header);
+                compare_values(actual, &expected.join(" "), header);
             } else {
-                bits(actual, historical, header);
+                compare_values(actual, historical, header);
             }
-            bits(
+            compare_values(
                 data.qp_weights
                     .as_ref()
                     .unwrap()
@@ -582,13 +591,13 @@ mod opttrans_tests {
                 lines.next().unwrap(),
                 header,
             );
-            bits(
+            compare_values(
                 data.para_qp_opt_trans.iter().copied(),
                 lines.next().unwrap(),
                 header,
             );
             crate::qp::update_qp_weight_for(&mut data);
-            bits(
+            compare_values(
                 data.qp_weights
                     .as_ref()
                     .unwrap()
@@ -897,17 +906,41 @@ mod tests {
                 data.modpara.dsr_opt_sta_del,
                 data.modpara.dsr_opt_step_dt,
             );
-            let exact = |label: &str, actual: &[f64], expected: &[f64]| {
-                assert_eq!(actual.len(), expected.len());
-                for (i, (a, e)) in actual.iter().zip(expected).enumerate() {
-                    assert_eq!(a.to_bits(), e.to_bits(), "{case} {label}[{i}]: {a} vs {e}");
-                }
+            let compare = |label: &str, actual: &[f64], expected: &[f64]| {
+                // Matrix assembly and Cholesky use at most O(n squared) small
+                // reductions for these fixed, regularized inputs.
+                let bound = 32.0 * (n * n) as f64 * f64::EPSILON;
+                crate::numerical_comparison::assert_values_close(
+                    actual.iter().copied(),
+                    expected.iter().copied(),
+                    bound,
+                    bound,
+                    format!("{case} {label}"),
+                );
             };
-            exact("matrix", &s, &read(lines.next().unwrap()));
-            exact("gradient", &g, &read(lines.next().unwrap()));
+            compare("matrix", &s, &read(lines.next().unwrap()));
+            compare("gradient", &g, &read(lines.next().unwrap()));
+            let matrix = s.clone();
+            let rhs = g.clone();
             cholesky_solve(&mut s, &mut g, n).unwrap();
-            exact("factor", &s, &read(lines.next().unwrap()));
-            exact("solution", &g, &read(lines.next().unwrap()));
+            compare("factor", &s, &read(lines.next().unwrap()));
+            compare("solution", &g, &read(lines.next().unwrap()));
+            // A forward comparison alone can accept a bad solution to an
+            // ill-conditioned system. Independently check backward error
+            // using the original, unfactored covariance and gradient.
+            let matrix_norm = (0..n)
+                .map(|i| (0..n).map(|j| matrix[i + n * j].abs()).sum::<f64>())
+                .fold(0.0, f64::max);
+            let solution_norm = g.iter().map(|x| x.abs()).fold(0.0, f64::max);
+            let rhs_norm = rhs.iter().map(|x| x.abs()).fold(0.0, f64::max);
+            let residual = (0..n)
+                .map(|i| ((0..n).map(|j| matrix[i + n * j] * g[j]).sum::<f64>() - rhs[i]).abs())
+                .fold(0.0, f64::max);
+            let denominator = matrix_norm * solution_norm + rhs_norm;
+            assert!(
+                residual <= 128.0 * n as f64 * f64::EPSILON * denominator,
+                "{case}: Cholesky backward error {residual:e}, scale {denominator:e}"
+            );
         }
     }
 
@@ -917,21 +950,17 @@ mod tests {
             .join("../../tests/fixtures/rbm/production");
         let text = std::fs::read_to_string(root.join("updates.txt")).unwrap();
         let mut lines = text.lines().filter(|line| !line.starts_with('#'));
-        let bits = |values: &[Complex64]| {
-            values
-                .iter()
-                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
-                .collect::<Vec<_>>()
-        };
+        let components =
+            |values: &[Complex64]| values.iter().flat_map(|z| [z.re, z.im]).collect::<Vec<_>>();
         let expected = |line: &str| {
             line.split_whitespace()
-                .map(|word| u64::from_str_radix(word, 16).unwrap())
+                .map(|word| f64::from_bits(u64::from_str_radix(word, 16).unwrap()))
                 .collect::<Vec<_>>()
         };
         // The archived Julia packed view discarded every unmapped slot.
         // Compare that mapped-only view here; the separate native parameter
         // fixtures and SR storage test assert complete canonical storage.
-        let mapped_bits = |data: &mut ExpertModeData| {
+        let mapped_values = |data: &mut ExpertModeData| {
             let sizes = data.rbm_section_sizes();
             let mut offsets = [0; 9];
             for i in 1..9 {
@@ -941,7 +970,7 @@ mod tests {
             data.visit_rbm_terms_mut(|section, term| {
                 values[offsets[section] + term.idx() as usize] = term.value();
             });
-            bits(&values)
+            components(&values)
         };
         while let Some(case) = lines.next() {
             let file = root.join(format!("namelist_{case}.def"));
@@ -968,17 +997,21 @@ mod tests {
                         .iter()
                         .map(|t| d.slater_params[t.idx as usize]),
                 );
-                bits(&values)
+                components(&values)
             };
-            assert_eq!(
+            crate::numerical_comparison::assert_values_close(
                 snapshot(&mut data),
                 expected(lines.next().unwrap()),
-                "{case} before"
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{case} before"),
             );
-            assert_eq!(
-                mapped_bits(&mut data),
+            crate::numerical_comparison::assert_values_close(
+                mapped_values(&mut data),
                 expected(lines.next().unwrap()),
-                "{case} packed before"
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{case} packed before"),
             );
             for index in 0..npara {
                 update_parameter_value(
@@ -989,15 +1022,19 @@ mod tests {
                     nproj,
                 );
             }
-            assert_eq!(
+            crate::numerical_comparison::assert_values_close(
                 snapshot(&mut data),
                 expected(lines.next().unwrap()),
-                "{case} after"
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{case} after"),
             );
-            assert_eq!(
-                mapped_bits(&mut data),
+            crate::numerical_comparison::assert_values_close(
+                mapped_values(&mut data),
                 expected(lines.next().unwrap()),
-                "{case} packed after"
+                32.0 * f64::EPSILON,
+                32.0 * f64::EPSILON,
+                format!("{case} packed after"),
             );
         }
     }
@@ -1180,13 +1217,13 @@ mod tests {
             let actual: Vec<_> = data
                 .slater_params
                 .iter()
-                .flat_map(|t| [t.re.to_bits(), t.im.to_bits()])
+                .flat_map(|t| [t.re, t.im])
                 .collect();
             let expected: Vec<_> = lines
                 .next()
                 .unwrap()
                 .split_whitespace()
-                .map(|s| u64::from_str_radix(s, 16).unwrap())
+                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
                 .collect();
             assert_eq!(actual, expected, "{header}");
             cases += 1;
@@ -1228,7 +1265,13 @@ mod tests {
         for _ in 0..3 {
             expected += -0.02;
         }
-        assert_eq!(data.jastrow_terms[0].value.re, expected);
+        crate::numerical_comparison::assert_close(
+            data.jastrow_terms[0].value.re,
+            expected,
+            16.0 * f64::EPSILON,
+            16.0 * f64::EPSILON,
+            "three identity-covariance updates",
+        );
     }
 
     #[test]

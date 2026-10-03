@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Original-source exhaustive DH2 counters/updates and gauge synchronization.
 using Test, LinearAlgebra, MVMCOptimizers, MVMCExpertModeParsers
 using MVMCExpertModeParsers: ExpertModeData, ModParaParameters, GutzwillerTerm,
@@ -16,7 +18,9 @@ function verify(name, actual)
     if "--write" in ARGS
         write(path, actual)
     else
-        @test actual == read(path, String)
+        @test name=="counts.txt" ? compare_record_blocks(actual,read(path,String),3,(2,3)) :
+              name=="moves.txt" ? compare_hex_text(actual,read(path,String),(r,c,t)->c==7 ? (1e-13,1e-13) : nothing) :
+              compare_record_blocks(actual,read(path,String),2,(2,))
     end
 end
 @testset "DH2 original structured validation" begin

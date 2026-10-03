@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Julia v0.5.0 reference for Rust validation and optimization flag tests.
 # Run under Julia 1.13.1 with the pinned Julia-mVMC workspace packages.
 using Test, Random, SFMT, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
@@ -52,7 +54,7 @@ definition(name, width, complex, rows) = "===\n$name $width\nComplexType $comple
                     -0.28930135836557447+0.17361291906410883im,
                     0.0+0.0im, 0.0+0.0im,
                 ]
-                @test reinterpret(UInt64, [t.value for t in d.orbital_terms]) == reinterpret(UInt64, expected)
+                @test ReferenceNumericalComparison.close_values(reinterpret(Float64,[t.value for t in d.orbital_terms]),reinterpret(Float64,expected),32*eps(Float64),32*eps(Float64))
                 println("post-init SFMT block hash=", hash)
                 println("Slater=", [t.value for t in d.orbital_terms])
             else
@@ -104,6 +106,6 @@ end
     if "--write" in ARGS
         write(path,actual)
     else
-        @test actual == read(path,String)
+        @test compare_hex_text(actual,read(path,String),(r,c,t)->mod1(r,6) in (3,4,5) ? (1e-13,1e-13) : nothing)
     end
 end

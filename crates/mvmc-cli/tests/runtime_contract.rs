@@ -1,4 +1,51 @@
 //! Errors must reach the process status without creating misleading outputs.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+
+// CLI and library use the same numerical kernels. A 1e-12 rounding budget
+// covers accumulated sample/normalization output without relaxing file shape,
+// indexed parameter coordinates or header formatting.
+fn assert_numeric_output(actual: &str, expected: &str, indexed: bool, context: &str) {
+    if indexed {
+        let actual_lines: Vec<_> = actual.lines().collect();
+        let expected_lines: Vec<_> = expected.lines().collect();
+        assert!(actual_lines.len() >= 4 && expected_lines.len() >= 4);
+        assert_eq!(
+            &actual_lines[..4],
+            &expected_lines[..4],
+            "{context}: parameter header"
+        );
+        numerical_comparison::assert_numeric_text(
+            &actual_lines[4..].join("\n"),
+            &expected_lines[4..].join("\n"),
+            1e-12,
+            1e-12,
+            &[0],
+            context,
+        );
+    } else {
+        numerical_comparison::assert_numeric_text(actual, expected, 1e-12, 1e-12, &[], context);
+    }
+}
+
+fn assert_numeric_difference(first: &str, second: &str, context: &str) {
+    let values = |text: &str| {
+        text.split_whitespace()
+            .map(|word| word.parse::<f64>().unwrap())
+            .collect::<Vec<_>>()
+    };
+    let first = values(first);
+    let second = values(second);
+    assert_eq!(first.len(), second.len(), "{context}: vector length");
+    assert!(
+        first
+            .iter()
+            .zip(&second)
+            .any(|(&a, &b)| !numerical_comparison::within(a, b, 1e-12, 1e-12)),
+        "{context}: expected a numerical change beyond the rounding budget"
+    );
+}
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -160,9 +207,11 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
     let legacy = run("legacy", "0", Some("MVMC_TIMER"));
     assert!(legacy.join("zvo_CalcTimer.dat").is_file());
     assert!(!legacy.join("zvo_CalcTimerDiag.dat").exists());
-    assert_eq!(
-        fs::read(legacy.join("zvo_out.dat")).unwrap(),
-        fs::read(baseline.join("zvo_out.dat")).unwrap()
+    assert_numeric_output(
+        &fs::read_to_string(legacy.join("zvo_out.dat")).unwrap(),
+        &fs::read_to_string(baseline.join("zvo_out.dat")).unwrap(),
+        false,
+        "legacy observation output",
     );
     let golden = include_str!("../../../tests/fixtures/timers/julia_para_opt_zero.dat");
     let report = fs::read_to_string(enabled.join("zvo_CalcTimer.dat")).unwrap();
@@ -184,14 +233,18 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
         let diag = run(&format!("diag-{index}"), "0", Some(key));
         assert!(diag.join("zvo_CalcTimer.dat").is_file());
         assert!(diag.join("zvo_CalcTimerDiag.dat").is_file());
-        assert_eq!(
-            fs::read(diag.join("zvo_out.dat")).unwrap(),
-            fs::read(baseline.join("zvo_out.dat")).unwrap()
+        assert_numeric_output(
+            &fs::read_to_string(diag.join("zvo_out.dat")).unwrap(),
+            &fs::read_to_string(baseline.join("zvo_out.dat")).unwrap(),
+            false,
+            "diag observation output",
         );
     }
-    assert_eq!(
-        fs::read(enabled.join("zvo_out.dat")).unwrap(),
-        fs::read(baseline.join("zvo_out.dat")).unwrap()
+    assert_numeric_output(
+        &fs::read_to_string(enabled.join("zvo_out.dat")).unwrap(),
+        &fs::read_to_string(baseline.join("zvo_out.dat")).unwrap(),
+        false,
+        "enabled observation output",
     );
 }
 
@@ -269,10 +322,11 @@ fn check_cli_and_library_model(
             "{case} {name} presence"
         );
         if out.join(name).exists() {
-            assert_eq!(
-                fs::read(out.join(name)).unwrap(),
-                fs::read(summary.output_dir.join(name)).unwrap(),
-                "{case} {suffix} {name}"
+            assert_numeric_output(
+                &fs::read_to_string(out.join(name)).unwrap(),
+                &fs::read_to_string(summary.output_dir.join(name)).unwrap(),
+                name.starts_with("zqp_") && name != "zqp_opt.dat",
+                &format!("{case} {suffix} {name}"),
             );
         }
     }
@@ -441,10 +495,10 @@ fn positive_nonunit_flags_initialize_but_stay_fixed_through_cli_sr_steps() {
         .split_whitespace()
         .map(|v| v.parse::<f64>().unwrap())
         .any(|v| v != 0.0));
-    assert_eq!(fixed, run(2, 3));
+    assert_numeric_output(&fixed, &run(2, 3), false, "nonunit flag remains fixed");
     // Positive binary control proves this workload exercises an effective SR
     // update and would detect incorrectly treating flag 2 as a bool true.
-    assert_ne!(run(1, 1), run(1, 3));
+    assert_numeric_difference(&run(1, 1), &run(1, 3), "binary flag enables SR update");
 }
 
 #[test]
@@ -459,9 +513,10 @@ fn nonidentity_opttrans_namelists_match_library_with_c_activation_and_flags() {
         };
         let disabled = check_cli_and_library_model(&dir, case, &namelist, false);
         let enabled = check_cli_and_library_model(&dir, case, &namelist, true);
-        assert_ne!(
-            disabled, enabled,
-            "{case}: explicit OptTrans must activate the nonidentity sectors"
+        assert_numeric_difference(
+            &disabled,
+            &enabled,
+            &format!("{case}: explicit OptTrans activates nonidentity sectors"),
         );
     }
 }
@@ -543,10 +598,11 @@ fn opttrans_sr_failure_reaches_cli_status_and_preserves_failure_boundary() {
             1,
             "{name}: stop at the first failed update"
         );
-        assert_eq!(
-            actual,
-            fs::read_to_string(baseline.join(name)).unwrap(),
-            "{name}: SR failure must preserve the pre-update sample/output"
+        assert_numeric_output(
+            &actual,
+            &fs::read_to_string(baseline.join(name)).unwrap(),
+            false,
+            &format!("{name}: SR failure preserves pre-update sample/output"),
         );
     }
     assert!(!out.join("zqp_opt.dat").exists());

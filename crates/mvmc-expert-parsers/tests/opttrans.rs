@@ -1,6 +1,8 @@
 mod common;
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
@@ -52,6 +54,18 @@ fn c_opttrans_flag_base_is_declared_projection_plus_slater_width() {
     assert_eq!(&data.optimization_flags[..7], &[0, 0, 0, 1, 1, 0, 0]);
 }
 
+// Initial coefficients use only a few scale/divide/trig operations;
+// 1e-14 covers their rounding while SFMT words and layout stay exact.
+fn computed_values(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
+    numerical_comparison::assert_values_close(
+        values.into_iter().flat_map(|v| [v.re, v.im]),
+        numerical_comparison::hex_values(expected),
+        1e-14,
+        1e-14,
+        label,
+    );
+}
+
 fn bits(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {
     let actual: Vec<_> = values
         .into_iter()
@@ -79,6 +93,7 @@ fn state<'a>(data: &ExpertModeData, lines: &mut impl Iterator<Item = &'a str>, l
         lines.next().unwrap().parse::<i64>().unwrap(),
         "{label}"
     );
+    // Initialization copies these parsed coefficients; it does not compute them.
     bits(
         data.para_qp_opt_trans.iter().copied(),
         lines.next().unwrap(),
@@ -210,7 +225,7 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
                 .iter()
                 .map(|t| data.slater_params[t.idx as usize]),
         );
-        bits(values, lines.next().unwrap(), header);
+        computed_values(values, lines.next().unwrap(), header);
         let historical_words = integers::<u32>(lines.next().unwrap());
         let expected_words = if data.modpara.n_orbital_idx == 4 {
             common::declared_slater_rng(&data)

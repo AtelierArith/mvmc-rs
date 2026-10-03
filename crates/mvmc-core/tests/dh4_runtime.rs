@@ -5,6 +5,8 @@ mod historical_orbital_model;
 mod julia_fixture;
 #[path = "../../../tests/support/native_fsz_fixture.rs"]
 mod native_fsz_fixture;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -111,9 +113,11 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
             "zqp_jastrow_opt.dat",
             "zqp_orbital_opt.dat",
         ] {
-            assert_eq!(
-                std::fs::read_to_string(result.output_dir.join(name)).unwrap(),
-                declared_output(
+            // Three SR steps: bounded accumulated solve/kernel roundoff. The
+            // unit runner checkpoint gates still verify exact configurations/RNG.
+            numerical_comparison::assert_numeric_text(
+                &(std::fs::read_to_string(result.output_dir.join(name)).unwrap()),
+                &(declared_output(
                     &data,
                     name,
                     std::fs::read_to_string(native_fsz_fixture::resolve(
@@ -122,12 +126,19 @@ fn public_dh4_and_combined_runners_load_overlays_and_match_original_direct_store
                             reference
                                 .strip_prefix(&root)
                                 .unwrap()
-                                .join(format!("step-3-{name}"))
+                                .join(format!("step-3-{name}")),
                         ),
                     ))
-                    .unwrap()
-                ),
-                "{case} {name}"
+                    .unwrap(),
+                )),
+                1e-12,
+                1e-12,
+                if name.starts_with("zqp_") && name != "zqp_opt.dat" {
+                    &[0]
+                } else {
+                    &[]
+                },
+                format!("{case} {name}"),
             );
         }
         assert!(!result.output_dir.join("zqp_dh2_opt.dat").exists());

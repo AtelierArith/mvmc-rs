@@ -672,3 +672,7 @@ pub mod c_const {
     /// Complex RBM initial-value scale (`RBM[i] = 1e-2 * genrand_real2() * cexp(...)`).
     pub const RBM_INIT_COMPLEX_SCALE: f64 = 1.0e-2;
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;

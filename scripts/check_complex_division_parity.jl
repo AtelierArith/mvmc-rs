@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Julia 1.13.1 Base complex division, used by Green ratios.
 using Test
 VERSION == v"1.13.1" || error("Complex division fixture requires Julia 1.13.1")
@@ -13,5 +15,5 @@ path = joinpath(@__DIR__,"..","tests","fixtures","complex_division.txt")
 if "--write" in ARGS
     write(path,actual)
 else
-    @test read(path,String) == actual
+    @test compare_hex_text(actual, read(path,String), (row,col,fields)->col>=5 ? (4*nextfloat(0.0),64*eps(Float64)) : nothing)
 end

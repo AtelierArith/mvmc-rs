@@ -4,7 +4,9 @@ Issue #187 separates historical macOS/Julia reference behavior from native
 Linux x86_64 C numerical authority. Existing macOS native fixtures remain
 byte-for-byte intact. New `tests/fixtures/interall/*_linux_gnu.txt` files contain
 independently compiled C results for the Linux GNU runtime; Cargo tests select
-those files on Linux GNU and continue exact bit comparisons.
+those files on Linux GNU. Since #186 completed, #190 compares computed
+floating-point values with explicit absolute/relative bounds on both Linux
+and macOS; see [NUMERICAL_COMPARISONS.md](NUMERICAL_COMPARISONS.md).
 
 ## Complex quotient and Green kernels
 
@@ -49,8 +51,9 @@ The red tests with the old LLVM quotient failed all three complex gates:
 quotient case 7 first, 341 normal operator/sum mismatches and 3,611 FSZ
 operator/sum mismatches. The GNU port passed all five native gates without
 changing tolerances. NaN arithmetic results retain the existing C-contract
-classification check; every non-NaN result, including signed zero and infinity,
-remains bit exact.
+classification check. These were the strict #187 verification results.
+Current comparisons use operation-specific numerical bounds, matching NaN
+classification and infinity sign; signed zeros are numerically equivalent.
 
 Separate native Clang 18 and GCC 13 runs produced identical numerical bodies
 for all five quotient/Green families, including every operator and ordered sum.
@@ -75,7 +78,7 @@ uv run --no-project python scripts/check_fsz_green_c_parity.py
 uv run --no-project python scripts/check_fsz_green_c_parity.py --real
 
 cargo nextest run -p mvmc-core --locked --cargo-profile test-fast \
-  -E 'test(scaled_complex_quotients_and_range_recovery_match_native_c) | test(native_c_green) | test(native_c_bits)'
+  -E 'test(scaled_complex_quotients_and_range_recovery_match_native_c) | test(native_c_green) | test(native_c_values)'
 ```
 
 The four generators detect native macOS versus Linux x86_64 glibc and select
@@ -83,8 +86,9 @@ platform-specific files. `--platform apple` or `--platform linux-gnu` asserts
 the intended native platform; cross-platform requests fail. `CC` is honored;
 the staging wrapper also records compiler invocations. Changing compiler or
 runtime metadata can change fixture headers even if all numerical bits agree.
-Use the same recorded environment for exact regeneration, and review new
-platform contracts before applying them.
+Use the recorded environment for regeneration and review numerical differences
+and provenance before applying new platform contracts. Source/input artifact
+hashes remain exact; computed numerical fields use the comparison policy above.
 
 ## Other staged C differences
 
@@ -108,7 +112,7 @@ classified separately and were not silently substituted into old expectations:
   agreement for these probes, without claiming full production normalization
   or sampling parity.
 
-## Exact historical Julia runner parity
+## Historical Julia runner verification
 
 The first FSZ inverse divergence was the tridiagonal solve's complex division.
 The Linux GNU callback now uses the tested GNU quotient without copying GPL
@@ -116,6 +120,8 @@ runtime code into the separately licensed PfaPack crate. The macOS callback
 retains its archived arithmetic. Independently generated Linux Julia overlays
 restore exact setup, sampling, history and SR runner comparisons, including
 CG iteration/status/residual outputs and full RNG/configuration controls.
-No historical tolerance was introduced. See
+No historical tolerance was introduced during #187. The subsequent #190
+policy changes computed-value comparisons, while retaining exact RNG and
+configuration controls. See
 [`linux_gnu_julia/README.md`](../tests/fixtures/linux_gnu_julia/README.md) for
 the source/BLAS manifest and preserved macOS fixture selection.

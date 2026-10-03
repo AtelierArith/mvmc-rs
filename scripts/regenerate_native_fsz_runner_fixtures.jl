@@ -39,8 +39,8 @@ for (index, (solver, case, store)) in enumerate(jobs)
     source = replace(source, root_line => "const FIXTURE_ROOT = " * repr(target); count=1)
     source = replace(source, "function verify(name, actual)\n" =>
         "function verify(name, actual)\n    if name in (\"reference.txt\", \"fixed-input.txt\")\n        actual = Main.NativeFSZEnergyReference.PROVENANCE[] * actual\n    end\n    if !(\"--write\" in ARGS) && Main.NativeFSZFixtureInheritance.verify_unused(FIXTURE_ROOT, name, actual)\n        return nothing\n    end\n"; count=1)
-    source = replace(source, "@test actual == read(path, String)" =>
-        "@test actual == read(Main.NativeFSZFixtureInheritance.resolve(FIXTURE_ROOT, name), String)"; count=1)
+    source = replace(source, "read(path, String)" =>
+        "read(Main.NativeFSZFixtureInheritance.resolve(FIXTURE_ROOT, name), String)"; count=1)
     empty!(ARGS)
     append!(ARGS, ["--case=$case", "--steps=$steps"])
     solver == "sr_direct" && push!(ARGS, "--store=$store")

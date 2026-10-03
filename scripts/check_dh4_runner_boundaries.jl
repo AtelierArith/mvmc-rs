@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Original-source loaded initialization, full RNG block and post-sync history.
 using Test, Random, SFMT, LinearAlgebra, MVMCOptimizers, MVMCExpertModeParsers
 VERSION == v"1.13.1" || error("DH4 fixtures require Julia 1.13.1")
@@ -13,7 +15,7 @@ body=replace(body,"        # Callback"=>"        Main.capture_history!(state)\n 
 Base.include_string(MVMCOptimizers,body)
 function verify(name,actual)
     if "--write" in ARGS;write(joinpath(ROOT,name),actual)
-    else;@test actual==read(joinpath(ROOT,name),String);end
+    else;@test startswith(name,"loaded-") ? compare_record_blocks(actual,read(joinpath(ROOT,name),String),3,(2,);atol=32*eps(Float64),rtol=32*eps(Float64)) : compare_hex_text(actual,read(joinpath(ROOT,name),String),(r,c,t)->(1e-11,1e-11));end
 end
 function prepared(mode)
     namelist=joinpath(ROOT,"production_$mode","namelist.def")

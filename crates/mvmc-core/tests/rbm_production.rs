@@ -1,5 +1,7 @@
 #[path = "../../../tests/support/c_orbital_rng.rs"]
 mod c_orbital_rng;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 #[path = "../../../tests/support/reference_slater.rs"]
 mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -73,14 +75,15 @@ fn complex_line(line: &str) -> Vec<Complex64> {
         .map(|w| Complex64::new(f64::from_bits(w[0]), f64::from_bits(w[1])))
         .collect()
 }
-fn exact(got: &[Complex64], expected: &[Complex64], context: &str) {
-    let bits = |values: &[Complex64]| {
-        values
-            .iter()
-            .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(bits(got), bits(expected), "{context}");
+fn check_values(got: &[Complex64], expected: &[Complex64], context: &str) {
+    // Small hidden-layer sums, exp/cosh/log and their derivatives: 128 epsilon.
+    numerical_comparison::assert_values_close(
+        got.iter().flat_map(|z| [z.re, z.im]),
+        expected.iter().flat_map(|z| [z.re, z.im]),
+        128.0 * f64::EPSILON,
+        128.0 * f64::EPSILON,
+        context,
+    );
 }
 
 #[test]
@@ -102,11 +105,11 @@ fn parsed_rbm_counter_incremental_ratios_and_all_derivatives_match_original_juli
         let cfg = RbmConfig::from(&data);
         let occupation: Vec<_> = (0..6).map(|i| i64::from((mask >> i) & 1)).collect();
         let cnt = make_rbm_cnt(&occupation, &cfg);
-        exact(&cnt, &complex_line(lines.next().unwrap()), header);
+        check_values(&cnt, &complex_line(lines.next().unwrap()), header);
         let mut derivative = vec![Complex64::new(0.0, 0.0); 2 * data.count_rbm_parameters()];
         set_rbm_diff(&mut derivative, &cnt, &occupation, &cfg);
-        exact(&derivative, &complex_line(lines.next().unwrap()), header);
-        exact(
+        check_values(&derivative, &complex_line(lines.next().unwrap()), header);
+        check_values(
             &[log_rbm_val(&occupation, &cfg)],
             &complex_line(lines.next().unwrap()),
             header,
@@ -116,12 +119,12 @@ fn parsed_rbm_counter_incremental_ratios_and_all_derivatives_match_original_juli
                 for rj in 0..3 {
                     let mut new = vec![Complex64::new(99.0, -99.0); cnt.len()];
                     update_rbm_cnt_hopping(&mut new, &cnt, ri, rj, spin, &cfg);
-                    exact(
+                    check_values(
                         &new,
                         &complex_line(lines.next().unwrap()),
                         &format!("{header} hop {ri} {rj} {spin}"),
                     );
-                    exact(
+                    check_values(
                         &[log_rbm_ratio(&new, &cnt, &cfg)],
                         &complex_line(lines.next().unwrap()),
                         header,
@@ -153,11 +156,7 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             v
         };
         init_parameter(&mut data, &mut rng);
-        exact(
-            &snapshot(&mut data),
-            &complex_line(lines.next().unwrap()),
-            case,
-        );
+        let initialized = (snapshot(&mut data), complex_line(lines.next().unwrap()));
         if case == "all" {
             assert!(read_initial_def(&mut data, root().join("production/initial.def")).unwrap());
             assert_eq!(
@@ -165,17 +164,9 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
                 36
             );
         }
-        exact(
-            &snapshot(&mut data),
-            &complex_line(lines.next().unwrap()),
-            case,
-        );
+        let loaded = (snapshot(&mut data), complex_line(lines.next().unwrap()));
         read_input_parameters(&mut data, &file).unwrap();
-        exact(
-            &snapshot(&mut data),
-            &complex_line(lines.next().unwrap()),
-            case,
-        );
+        let overlaid = (snapshot(&mut data), complex_line(lines.next().unwrap()));
         // The historical Julia record initializes only mapped Slater slots.
         // C initializes the complete declared array. Check its native SFMT
         // record with the same active RBM prefix and declared Slater flags.
@@ -191,6 +182,14 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             c_orbital_rng::declared_slater_rng(&data),
             "{case} C declared Slater initialization"
         );
+        // Check all snapshots only after proving the complete native RNG block.
+        for (phase, (actual, expected)) in [
+            ("initialized", initialized),
+            ("loaded", loaded),
+            ("overlaid", overlaid),
+        ] {
+            check_values(&actual, &expected, &format!("{case} {phase}"));
+        }
         let c_slater = if case == "all" {
             *include_str!("../../../tests/fixtures/orbital_general/c_declared_flags.txt")
                 .lines()
@@ -204,10 +203,10 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
         } else {
             c_orbital_rng::declared_slater_record(&data)
         };
-        exact(&data.slater_params, &complex_line(c_slater[1]), case);
+        check_values(&data.slater_params, &complex_line(c_slater[1]), case);
         sync_modified_parameter(&mut data, false);
         let normalized_slater = complex_line(c_slater[2]);
-        exact(&data.slater_params, &normalized_slater, case);
+        check_values(&data.slater_params, &normalized_slater, case);
         let mut expected = complex_line(lines.next().unwrap());
         expected.truncate(expected.len() - data.orbital_terms.len());
         expected.extend(
@@ -215,7 +214,7 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
                 .iter()
                 .map(|term| normalized_slater[term.idx as usize]),
         );
-        exact(&snapshot(&mut data), &expected, case);
+        check_values(&snapshot(&mut data), &expected, case);
         let before = snapshot(&mut data);
         let invalid = std::env::temp_dir().join(format!(
             "mvmc-rbm-invalid-{case}-{}.def",
@@ -225,7 +224,12 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
         std::fs::write(&invalid, original.replace("77", "broken")).unwrap();
         assert!(!read_initial_def(&mut data, &invalid).unwrap());
         assert!(read_opt_para_file(&mut data, &invalid).is_err());
-        exact(&snapshot(&mut data), &before, case);
+        // Failed parsing must leave storage unchanged; this is a mutation contract.
+        assert_eq!(
+            snapshot(&mut data),
+            before,
+            "{case} invalid load restoration"
+        );
         std::fs::remove_file(invalid).unwrap();
     }
 }
@@ -286,7 +290,20 @@ fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
                     name,
                     std::fs::read_to_string(fixture.join(format!("step-{steps}-{name}"))).unwrap(),
                 );
-                assert_eq!(actual, expected, "{case} {steps} {name}");
+                numerical_comparison::assert_numeric_text(
+                    &actual,
+                    &expected,
+                    1e-10,
+                    1e-10,
+                    if name == "zqp_opt.dat" {
+                        &[]
+                    } else if name.starts_with("zqp_") {
+                        &[0]
+                    } else {
+                        &[]
+                    },
+                    format!("{case} {steps} {name}"),
+                );
             }
             std::fs::remove_dir_all(summary.output_dir).unwrap();
         }

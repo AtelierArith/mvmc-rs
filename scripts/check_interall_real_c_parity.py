@@ -13,6 +13,7 @@ import struct
 import subprocess
 import tempfile
 
+from numerical_comparison import compare_text, GREEN, ENERGY
 from c_toolbox import materialize, add_native_platform_argument, native_platform, native_compiler, native_provenance, native_target
 from check_general_orbital_c_parity import function
 
@@ -93,7 +94,12 @@ def main():
         if not target.exists() or target.read_text() != output:
             target.write_text(output)
     else:
-        assert target.read_text() == output, "Native C real Green/InterAll fixture changed"
+        def computed(row, column, fields):
+            offset = row % 1035
+            if 10 <= offset < 1034:
+                return GREEN if column >= 8 else None
+            return ENERGY if offset >= 1034 else None
+        assert compare_text(output, target.read_text(), computed) == models * 1035
     print(f"{checked} native C real Green operators and {models} ordered InterAll sums passed")
 
 

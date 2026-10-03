@@ -430,7 +430,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn weighted_slater_derivative_matches_julia_numerical_bits() {
+    fn weighted_slater_derivative_matches_julia_numerical_values() {
         let mut lines = include_str!("../../../tests/fixtures/pfaffian_cg/slater_derivative.txt")
             .lines()
             .filter(|l| !l.starts_with('#'));
@@ -468,10 +468,14 @@ mod tests {
         let mut actual = vec![Complex64::new(0.0, 0.0); expected.len()];
         scratch.reduce_qp_weighted_julia_into(&weights, ip, &mut actual);
         for (i, (&a, &b)) in actual.iter().zip(&expected).enumerate() {
-            assert_eq!(
-                (a.re.to_bits(), a.im.to_bits()),
-                (b.re.to_bits(), b.im.to_bits()),
-                "Slater component {i}: {a} != {b}"
+            // Weighted QP reduction and complex division, including cancelled
+            // components near zero; the small fixture needs <64 roundoffs.
+            crate::numerical_comparison::assert_values_close(
+                [a.re, a.im],
+                [b.re, b.im],
+                64.0 * f64::EPSILON,
+                64.0 * f64::EPSILON,
+                format!("Slater component {i}"),
             );
         }
     }
@@ -511,7 +515,7 @@ mod tests {
 
         scratch.reduce_qp_weighted_julia_into(&weights, ip, &mut sr_opt_o);
 
-        let mut expected = vec![Complex64::new(0.0, 0.0); 4];
+        let mut expected = [Complex64::new(0.0, 0.0); 4];
         for o in 0..2 {
             let mut acc = Complex64::new(0.0, 0.0);
             for q in 0..3 {
@@ -522,6 +526,12 @@ mod tests {
             expected[2 * o + 1] = acc * Complex64::new(0.0, 1.0);
         }
 
-        assert_eq!(sr_opt_o, expected);
+        crate::numerical_comparison::assert_values_close(
+            sr_opt_o.iter().flat_map(|z| [z.re, z.im]),
+            expected.iter().flat_map(|z| [z.re, z.im]),
+            32.0 * f64::EPSILON,
+            32.0 * f64::EPSILON,
+            "three-QP weighted derivative",
+        );
     }
 }

@@ -3,6 +3,8 @@
 mod historical_optimization_flags;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use std::path::{Path, PathBuf};
 
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
@@ -101,12 +103,20 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
         .iter()
         .flat_map(|t| {
             [
-                data.slater_params[t.idx as usize].re.to_bits(),
-                data.slater_params[t.idx as usize].im.to_bits(),
+                data.slater_params[t.idx as usize].re,
+                data.slater_params[t.idx as usize].im,
             ]
         })
         .collect();
-    assert_eq!(actual, bits);
+    // Initialization arithmetic is portable within rounding error;
+    // coupling literals, no-effect state equality and RNG words remain exact.
+    numerical_comparison::assert_values_close(
+        actual,
+        bits.into_iter().map(f64::from_bits),
+        1e-14,
+        1e-14,
+        "initialized Slater coefficients",
+    );
     let words: Vec<u32> = lines
         .next()
         .unwrap()

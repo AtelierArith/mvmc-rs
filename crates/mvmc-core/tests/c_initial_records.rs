@@ -135,6 +135,8 @@ fn model(dims: &[usize]) -> ExpertModeData {
     data
 }
 
+// Reader-only scalar conversion/scattering: no floating-point calculation.
+// Exact storage also verifies unchanged reserved/sentinel slots.
 fn parameter_bits(data: &ExpertModeData) -> Vec<u64> {
     data.projection_parameters()
         .into_iter()

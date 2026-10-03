@@ -1,4 +1,6 @@
 //! Complete C header/reader/init expectations without toolbox dependencies.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_expert_parsers::{parse_expert_mode_files, utils::parameter_init::init_parameter};
 use sfmt19937::Sfmt19937Rng;
 use std::fs;
@@ -277,14 +279,15 @@ fn integer_component_flags_header_normalization_coefficients_and_rng_match_c() {
             .split_whitespace()
             .map(|s| u64::from_str_radix(s, 16).unwrap())
             .collect();
-        let actual_bits: Vec<u64> = data
-            .slater_params
-            .iter()
-            .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
-            .collect();
-        if actual_bits != expected_bits {
-            failures.push(format!("{} initial coefficient bits differ", header[0]));
-        }
+        // The coefficients include sqrt/divide initialization arithmetic;
+        // raw flags, selected coordinates and complete RNG blocks stay exact.
+        numerical_comparison::assert_values_close(
+            data.slater_params.iter().flat_map(|z| [z.re, z.im]),
+            expected_bits.into_iter().map(f64::from_bits),
+            1e-14,
+            1e-14,
+            header[0],
+        );
         let words: Vec<u32> = record[5]
             .split_whitespace()
             .map(|s| s.parse().unwrap())

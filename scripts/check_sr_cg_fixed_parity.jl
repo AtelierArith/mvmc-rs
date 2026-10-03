@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Run: julia +1.13.1 --project=extern/Julia-mVMC scripts/check_sr_cg_fixed_parity.jl
 # Pass --write to regenerate. Inputs use exact binary fractions and no RNG.
 # The upstream CG implementation (including its BLAS calls) is the oracle.
@@ -42,7 +44,7 @@ function fixture_workspace(all_complex)
     return ws, n, samples
 end
 
-@testset "Fixed-input SR-CG numerical bits (Julia 1.13.1)" begin
+@testset "Fixed-input SR-CG numerical values (Julia 1.13.1)" begin
     for all_complex in ("--sampled" in ARGS ? (true,) : (false,true))
         ws, n, samples = fixture_workspace(all_complex)
         io = IOBuffer()
@@ -74,8 +76,8 @@ end
             mkpath(FIXTURE_ROOT)
             write(path, actual)
         else
-            # Library names are informational; compare every numerical bit.
-            @test numerical(actual) == numerical(read(path, String))
+            # Library names are informational; numerical bounds and explicit residuals are checked.
+            @test compare_cg_fixed(actual,read(path,String))
         end
     end
 end

@@ -1,4 +1,4 @@
-# native-relative	independent-sha256
+# native-relative	independent-decompressed-artifact-sha256 (stored .txt.gz; computations compare numerically)
 sr_direct/dh24_fsz_runner/fixed-input.txt	7a7df55b4907b1161fa54bb89f0e5bcd0de8877bbbcae5fa513c834a65adf8f5
 sr_direct/dh24_fsz_store_runner/fixed-input.txt	87b23c1d65c615f647847172e5ced4cea4dc353e6593e30f6c1142dae20d9444
 sr_direct/dh2_fsz_runner/fixed-input.txt	ee6e017fd27ff4e460a7234125b15996a94de3f18fc06c6e5d547f7d270ae6b1

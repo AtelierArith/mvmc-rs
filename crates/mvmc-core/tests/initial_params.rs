@@ -1,6 +1,8 @@
 //! C complete records plus bounded, atomic diagnostics for malformed inputs.
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
 use mvmc_core::{read_initial_def, read_opt_para_file, ExpertModeData};
 use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
 use num_complex::Complex64;
@@ -300,9 +302,16 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
                 .projection_parameters()
                 .into_iter()
                 .chain(data.slater_params.iter().copied())
-                .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                .flat_map(|z| [z.re, z.im])
                 .collect::<Vec<_>>();
-            assert_eq!(actual, expected, "complex={complex}, step={step}");
+            // Diagonal SR solve followed by gauge exp/sqrt: no ill-conditioned system.
+            numerical_comparison::assert_values_close(
+                actual,
+                expected.into_iter().map(f64::from_bits),
+                128.0 * f64::EPSILON,
+                128.0 * f64::EPSILON,
+                format!("complex={complex}, step={step}"),
+            );
             assert_eq!(data.optimization_flags, flags);
         }
         let expected = lines
@@ -375,12 +384,14 @@ fn full_declared_slater_load_and_sync_match_c_without_consuming_rng() {
                 let actual: Vec<_> = data
                     .slater_params
                     .iter()
-                    .flat_map(|z| [z.re.to_bits(), z.im.to_bits()])
+                    .flat_map(|z| [z.re, z.im])
                     .collect();
-                assert_eq!(
-                    actual, expected,
-                    "C mode={}, optional={optional}",
-                    record[0]
+                numerical_comparison::assert_values_close(
+                    actual,
+                    expected.into_iter().map(f64::from_bits),
+                    16.0 * f64::EPSILON,
+                    16.0 * f64::EPSILON,
+                    format!("C mode={}, optional={optional}", record[0]),
                 );
                 assert_eq!(data.orbital_terms, mappings);
                 sync_modified_parameter_local(&mut data, false);

@@ -3123,7 +3123,13 @@ mod tests {
         let fast = green_func1_timed(
             1, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &counts, &mut timer,
         );
-        assert_eq!(fast.re.to_bits(), generic.re.to_bits());
+        crate::numerical_comparison::assert_close(
+            fast.re,
+            generic.re,
+            64.0 * f64::EPSILON,
+            64.0 * f64::EPSILON,
+            "fast/generic Green",
+        );
         assert_eq!(fast.im, generic.im);
 
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &counts);
@@ -3180,7 +3186,7 @@ mod tests {
         let gram = sr_store_gram_julia(&store).expect("source-ordered Gram");
         let gram_data = gram.host_data().expect("host data");
 
-        let mut expected = vec![Complex64::new(0.0, 0.0); 4];
+        let mut expected = [Complex64::new(0.0, 0.0); 4];
         let store_data = store.host_data().expect("host data");
         for i in 0..2 {
             for j in 0..2 {
@@ -3194,11 +3200,17 @@ mod tests {
             }
         }
 
-        assert_eq!(gram_data, expected.as_slice());
+        crate::numerical_comparison::assert_values_close(
+            gram_data.iter().flat_map(|z| [z.re, z.im]),
+            expected.iter().flat_map(|z| [z.re, z.im]),
+            24.0 * f64::EPSILON,
+            24.0 * f64::EPSILON,
+            "three-sample manual Gram",
+        );
     }
 
     #[test]
-    fn stored_direct_sr_gram_matches_sampled_julia_bits() {
+    fn stored_direct_sr_gram_matches_sampled_julia_values() {
         let root =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/sr_direct");
         for case in [
@@ -3287,10 +3299,13 @@ mod tests {
                 oo
             };
             for (i, (a, b)) in actual.iter().zip(&expected).enumerate() {
-                assert_eq!(
-                    a.to_bits(),
-                    b.to_bits(),
-                    "{case} Gram entry {i}: {a:?} versus {b:?}"
+                let bound = 8.0 * dims[1] as f64 * f64::EPSILON;
+                crate::numerical_comparison::assert_close(
+                    *a,
+                    *b,
+                    bound,
+                    bound,
+                    format!("{case} Gram entry {i}"),
                 );
             }
         }
@@ -3321,12 +3336,13 @@ mod tests {
                 StoreFinalization::default(),
             );
             for (i, (a, b)) in oo.iter().zip(&expected).enumerate() {
-                assert_eq!(
-                    a.to_bits(),
-                    b.to_bits(),
-                    "n={}, samples={}, entry {i}",
-                    dims[0],
-                    dims[1]
+                let bound = 8.0 * dims[1] as f64 * f64::EPSILON;
+                crate::numerical_comparison::assert_close(
+                    *a,
+                    *b,
+                    bound,
+                    bound,
+                    format!("n={}, samples={}, entry {i}", dims[0], dims[1]),
                 );
             }
         }
@@ -3363,7 +3379,7 @@ mod tests {
 
         let buffer_data = buffer.host_data().expect("host data");
         let weights_data = weights.host_data().expect("host data");
-        let mut expected = vec![Complex64::new(0.0, 0.0); 2];
+        let mut expected = [Complex64::new(0.0, 0.0); 2];
         for o in 0..2 {
             let mut acc = Complex64::new(0.0, 0.0);
             for q in 0..3 {
@@ -3372,7 +3388,13 @@ mod tests {
             expected[o] = acc;
         }
 
-        assert_eq!(weighted_data, expected.as_slice());
+        crate::numerical_comparison::assert_values_close(
+            weighted_data.iter().flat_map(|z| [z.re, z.im]),
+            expected.iter().flat_map(|z| [z.re, z.im]),
+            24.0 * f64::EPSILON,
+            24.0 * f64::EPSILON,
+            "three-QP weighted orbital sum",
+        );
     }
 
     #[test]

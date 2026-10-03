@@ -82,12 +82,8 @@ fn metropolis_decisions_match_julia_sfmt_sequence() {
             got.weight,
             c.weight
         );
-        assert!(
-            close(got.draw, c.draw),
-            "case {idx} draw rust={} julia={}",
-            got.draw,
-            c.draw
-        );
+        // SFMT conversion/draw order remains exact; only weight arithmetic has a tolerance.
+        assert_eq!(got.draw.to_bits(), c.draw.to_bits(), "case {idx} RNG draw");
         assert_eq!(got.accepted, c.accepted, "case {idx} accepted");
     }
 }

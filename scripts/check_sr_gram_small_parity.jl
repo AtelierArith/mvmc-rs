@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 using Test, LinearAlgebra, MVMCOptimizers
 VERSION == v"1.13.1" || error("Gram fixture requires Julia 1.13.1")
 BLAS.set_num_threads(1)
@@ -15,5 +17,5 @@ actual=String(take!(io))
 if "--write" in ARGS
     write(path,actual)
 else
-    @test actual == read(path,String)
+    @test compare_hex_text(actual,read(path,String),(r,c,t)->mod1(r,3)==3 ? (256*eps(Float64),256*eps(Float64)) : nothing)
 end

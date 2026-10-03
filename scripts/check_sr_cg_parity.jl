@@ -1,8 +1,9 @@
 # Julia source unit tests and three-step runner diagnostics.
-# Rust/Julia fixed-input CG bit parity is checked by check_sr_cg_fixed_parity.jl
+# Rust/Julia fixed-input CG numerical agreement and residuals are checked by check_sr_cg_fixed_parity.jl
 # and crates/mvmc-core/tests/sr_cg.rs. This source-only runner does not establish
 # end-to-end Rust numerical parity. check_sr_cg_runner_parity.jl and the
-# exact-bit Rust prefix tests cover parameters, samples, full RNG blocks,
+# Rust prefix tests use explicit numerical bounds for parameters/energies and
+# exact comparisons for samples, full RNG blocks and iteration controls,
 # energies, and SRinfo for the real, complex, and FSZ chains.
 using Test, MVMCOptimizers
 using Random, SFMT, MVMCExpertModeParsers

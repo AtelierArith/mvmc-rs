@@ -1,3 +1,5 @@
+include("reference_numerical_comparison.jl")
+using .ReferenceNumericalComparison
 # Exact OptTrans full-record loading and data-level QP-weight contracts.
 using Test, LinearAlgebra, MVMCExpertModeParsers, MVMCOptimizers
 VERSION == v"1.13.1" || error("OptTrans fixtures require Julia 1.13.1")
@@ -8,7 +10,7 @@ const root = normpath(joinpath(@__DIR__, "..", "tests", "fixtures", "opttrans"))
 hex(values) = join([string(reinterpret(UInt64, x); base=16, pad=16) for v in values for x in (real(v), imag(v))], " ")
 function verify(file, actual)
     path = joinpath(root, file)
-    "--write" in ARGS ? write(path, actual) : @test(actual == read(path, String))
+    "--write" in ARGS ? write(path, actual) : @test(file=="weights.txt" ? compare_record_blocks(actual,read(path,String),8,(2,3,4,5,6,7,8);preserve_tiny=true) : compare_hex_text(actual,read(path,String),(r,c,t)->nothing))
 end
 function model(name)
     base = name in ("short_opt", "long_opt", "empty_opt") ? "layout" : name

@@ -3,8 +3,8 @@
 //! Port target: `MVMCExpertModeParsers.jl/src/utils/parameter_init.jl`
 //!              + `mVMC/src/mVMC/parameter.c :: InitParameter()`.
 //!
-//! BIT-PARITY CRITICAL: preserves the upstream RNG draw order so the
-//! declared Slater values and subsequent RNG state match the C kernel. The
+//! Preserve the upstream RNG draw order and exact subsequent RNG state.
+//! Computed declared Slater values use explicit numerical bounds against C. The
 //! caller MUST seed the SFMT RNG before calling [`init_parameter`].
 //!
 //! Real/complex Slater initialization includes Gutzwiller/Jastrow/DH2/DH4 declarations.
