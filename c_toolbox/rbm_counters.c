@@ -1,5 +1,11 @@
 /* Optional actual-C reader/counter probe. Cargo consumes checked-in data. */
 #include <complex.h>
+#ifndef CMPLX
+/* glibc does not expose CMPLX with Clang's GNU compatibility version.
+ * Construct the input without arithmetic so signed zero is preserved.
+ * https://clang.llvm.org/docs/LanguageExtensions.html#initializer-lists-for-complex-numbers-in-c */
+#define CMPLX(re, im) __builtin_complex(re, im)
+#endif
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
