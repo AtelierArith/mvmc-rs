@@ -140,3 +140,41 @@ fn original_antiperiodic_cyclic_input_preserves_all_four_signs() {
     assert_eq!(data.qp_trans_entries[0].site_map, [1, 2, 3, 0]);
     assert_eq!(data.qp_trans_entries[0].site_sign, [-1, 1, -1, 1]);
 }
+
+#[test]
+fn original_heisenberg_sixteen_site_orbital_sample_has_periodic_signs() {
+    // M0106–108: exact original sample, not the distinct fresh20 model input.
+    // M0104–105 are Julia availability/skip branches, not semantic executions.
+    let definition =
+        include_str!("../../../tests/fixtures/issue184_heisenberg_parser/orbitalidx.def");
+    let bundle = Bundle::new(16, 4, "Orbital", definition);
+    let data = bundle.parse();
+    assert_eq!(data.orbital_terms.len(), 16 * 16);
+    assert_eq!(data.modpara.n_orbital_idx, 64);
+    let (_, signs) = data.build_orbital_matrices();
+    assert_eq!(signs.len(), 16);
+    assert!(signs.iter().all(|row| row.len() == 16));
+    assert!(signs.iter().flatten().all(|&sign| sign == 1));
+}
+
+#[test]
+fn original_heisenberg_sixteen_site_translation_sample_and_default_identity() {
+    // M0133–135, M0138–140 (four sign rows), M0142–144.
+    // M0131–132 are availability skips; M0136–137/M0141 assert Julia inverse
+    // arrays, absent from this Rust parser API and deliberately not claimed.
+    let definition =
+        include_str!("../../../tests/fixtures/issue184_heisenberg_parser/qptransidx.def");
+    let bundle = Bundle::new(16, 4, "TransSym", definition);
+    let data = bundle.parse();
+    assert_eq!(data.n_qp_trans, 4);
+    assert_eq!(data.qp_trans_entries.len(), 4);
+    for entry in &data.qp_trans_entries {
+        assert_eq!(entry.site_map.len(), 16);
+        assert_eq!(entry.site_sign.len(), 16);
+        assert!(entry.site_sign.iter().all(|&sign| sign == 1));
+        assert_eq!(entry.weight, num_complex::Complex64::new(1.0, 0.0));
+    }
+    assert_eq!(data.qp_opt_trans.len(), 1);
+    assert_eq!(data.qp_opt_trans[0], (0..16).collect::<Vec<_>>());
+    assert_eq!(data.qp_opt_trans_sgn[0], vec![1; 16]);
+}
