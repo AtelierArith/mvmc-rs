@@ -1,4 +1,6 @@
 mod common;
+#[path = "support/historical_component_sequence.rs"]
+mod historical_component_sequence;
 #[path = "../../../tests/support/historical_optimization_flags.rs"]
 mod historical_optimization_flags;
 #[path = "../../../tests/support/numerical_comparison.rs"]
@@ -186,8 +188,11 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
             record
         };
         let mut lines = expected[1..].iter().copied();
-        let mut data =
-            parse_expert_mode_files(root().join(format!("namelist_{}.def", fields[0]))).unwrap();
+        let mut data = historical_component_sequence::model(
+            &root().join(format!("namelist_{}.def", fields[0])),
+            "OptTrans",
+            |path| parse_expert_mode_files(path),
+        );
         match fields[1] {
             "complex" => data.modpara.complex_flag = 1,
             "inactive" => data.optimization_flags.fill(0),

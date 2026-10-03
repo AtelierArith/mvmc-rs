@@ -1,4 +1,6 @@
 //! DH4 production support and canonical runtime-mode selection.
+#[path = "../../mvmc-expert-parsers/tests/support/historical_component_sequence.rs"]
+mod historical_component_sequence;
 #[path = "../../../tests/support/historical_orbital_model.rs"]
 mod historical_orbital_model;
 #[path = "../../../tests/support/julia_fixture.rs"]
@@ -34,7 +36,21 @@ fn parsed_and_programmatic_dh4_sections_pass_runtime_validation() {
         "ap_parallel",
         "general",
     ] {
-        let mut data = parse_expert_mode_files(root.join(format!("namelist_{name}.def"))).unwrap();
+        // Runtime validity of the final historical model is separate from
+        // rejection of its archived repeated filename keywords.
+        let mut data = historical_component_sequence::model(
+            &root.join(format!("namelist_{name}.def")),
+            "DH4",
+            |path| parse_expert_mode_files(path),
+        );
+        let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH4");
+        data.namelist = data
+            .namelist
+            .iter()
+            .enumerate()
+            .filter(|(index, (kind, _))| kind != "DH4" || Some(*index) == final_definition)
+            .map(|(_, entry)| entry.clone())
+            .collect();
         mvmc_core::validation::validate_para_opt(&data).unwrap();
         data.namelist.clear();
         mvmc_core::validation::validate_para_opt(&data).unwrap();

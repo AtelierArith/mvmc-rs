@@ -120,12 +120,28 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
     })?;
     let file_list = parse_namelist_content(&namelist_content);
 
+    // C GetFileName checks keyword slots before opening any child definition,
+    // including inactive OptTrans entries. Preserve raw metadata separately.
+    let mut seen = std::collections::HashSet::new();
+    let mut canonical_files = Vec::with_capacity(file_list.len());
+    for (kind, filename) in &file_list {
+        let canonical = canonical_namelist_keyword(kind);
+        if let Some(keyword) = canonical {
+            if !seen.insert(keyword) {
+                return Err(ParseError::InvalidInput {
+                    message: format!("duplicate keyword {keyword} in {}", namelist_path.display()),
+                });
+            }
+        }
+        canonical_files.push((canonical.unwrap_or(kind).to_owned(), filename.clone()));
+    }
+
     let mut data = ExpertModeData::new();
     data.namelist = file_list.clone();
     let mut orbital_flags = BTreeMap::new();
     let mut rbm_flags = BTreeMap::new();
 
-    let mut definitions: Vec<_> = file_list.iter().collect();
+    let mut definitions: Vec<_> = canonical_files.iter().collect();
     definitions.sort_by_key(|(kind, _)| definition_order(kind));
     for (file_type, file_name) in definitions {
         if !enable_opt_trans && matches!(file_type.as_str(), "OptTrans" | "InOptTrans") {
@@ -255,72 +271,86 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
     Ok(data)
 }
 
-/// `readdef.h::KWIdxInt` / `cKWListOfFileNameList`. ModPara precedes all
-/// dimension-dependent readers; AP precedes P regardless of namelist order.
+/// C's filename-keyword slots in native enum order (readdef.h).
+const C_NAMELIST_KEYWORDS: &[&str] = &[
+    "ModPara",
+    "LocSpin",
+    "Trans",
+    "CoulombIntra",
+    "CoulombInter",
+    "Hund",
+    "PairHop",
+    "Exchange",
+    "Gutzwiller",
+    "Jastrow",
+    "DH2",
+    "DH4",
+    "ChargeRBM_HiddenLayer",
+    "ChargeRBM_PhysLayer",
+    "ChargeRBM_PhysHidden",
+    "SpinRBM_HiddenLayer",
+    "SpinRBM_PhysLayer",
+    "SpinRBM_PhysHidden",
+    "GeneralRBM_HiddenLayer",
+    "GeneralRBM_PhysLayer",
+    "GeneralRBM_PhysHidden",
+    "Orbital",
+    "OrbitalAntiParallel",
+    "OrbitalParallel",
+    "OrbitalGeneral",
+    "TransSym",
+    "InGutzwiller",
+    "InJastrow",
+    "InDH2",
+    "InDH4",
+    "InChargeRBM_HiddenLayer",
+    "InChargeRBM_PhysLayer",
+    "InChargeRBM_PhysHidden",
+    "InSpinRBM_HiddenLayer",
+    "InSpinRBM_PhysLayer",
+    "InSpinRBM_PhysHidden",
+    "InGeneralRBM_HiddenLayer",
+    "InGeneralRBM_PhysLayer",
+    "InGeneralRBM_PhysHidden",
+    "InOrbital",
+    "InOrbitalAntiParallel",
+    "InOrbitalParallel",
+    "InOrbitalGeneral",
+    "OneBodyG",
+    "TwoBodyG",
+    "TwoBodyGEx",
+    "InterAll",
+    "OptTrans",
+    "InOptTrans",
+    "BF",
+    "BFRange",
+];
+
+/// ModPara precedes dimensions; AP precedes P regardless of namelist order.
 fn definition_order(kind: &str) -> usize {
-    const KEYWORDS: &[&str] = &[
-        "ModPara",
-        "LocSpin",
-        "Trans",
-        "CoulombIntra",
-        "CoulombInter",
-        "Hund",
-        "PairHop",
-        "Exchange",
-        "Gutzwiller",
-        "Jastrow",
-        "DH2",
-        "DH4",
-        "ChargeRBM_HiddenLayer",
-        "ChargeRBM_PhysLayer",
-        "ChargeRBM_PhysHidden",
-        "SpinRBM_HiddenLayer",
-        "SpinRBM_PhysLayer",
-        "SpinRBM_PhysHidden",
-        "GeneralRBM_HiddenLayer",
-        "GeneralRBM_PhysLayer",
-        "GeneralRBM_PhysHidden",
-        "Orbital",
-        "OrbitalAntiParallel",
-        "OrbitalParallel",
-        "OrbitalGeneral",
-        "TransSym",
-        "InGutzwiller",
-        "InJastrow",
-        "InDH2",
-        "InDH4",
-        "InChargeRBM_HiddenLayer",
-        "InChargeRBM_PhysLayer",
-        "InChargeRBM_PhysHidden",
-        "InSpinRBM_HiddenLayer",
-        "InSpinRBM_PhysLayer",
-        "InSpinRBM_PhysHidden",
-        "InGeneralRBM_HiddenLayer",
-        "InGeneralRBM_PhysLayer",
-        "InGeneralRBM_PhysHidden",
-        "InOrbital",
-        "InOrbitalAntiParallel",
-        "InOrbitalParallel",
-        "InOrbitalGeneral",
-        "OneBodyG",
-        "TwoBodyG",
-        "TwoBodyGEx",
-        "InterAll",
-        "OptTrans",
-        "InOptTrans",
-        "BF",
-        "BFRange",
-    ];
-    let canonical = match kind {
-        "DoublonHolon2Site" => "DH2",
-        "DoublonHolon4Site" => "DH4",
-        "QPTrans" => "TransSym",
-        _ => kind,
-    };
-    KEYWORDS
+    let canonical = canonical_namelist_keyword(kind).unwrap_or(kind);
+    C_NAMELIST_KEYWORDS
         .iter()
         .position(|&keyword| keyword == canonical)
         .unwrap_or(usize::MAX)
+}
+
+// Native CheckWords is ASCII case-insensitive. Legacy aliases are architecture
+// extensions, not spellings accepted by the native C filename table.
+pub(crate) fn canonical_namelist_keyword(kind: &str) -> Option<&'static str> {
+    for (alias, canonical) in [
+        ("DoublonHolon2Site", "DH2"),
+        ("DoublonHolon4Site", "DH4"),
+        ("QPTrans", "TransSym"),
+    ] {
+        if kind.eq_ignore_ascii_case(alias) {
+            return Some(canonical);
+        }
+    }
+    C_NAMELIST_KEYWORDS
+        .iter()
+        .copied()
+        .find(|keyword| kind.eq_ignore_ascii_case(keyword))
 }
 
 // C readdef.c GetInfoOneBodyG/GetInfoTwoBodyG/GetInfoTwoBodyGEx check every
@@ -772,3 +802,46 @@ pub mod c_const {
 #[cfg(test)]
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
+
+#[cfg(test)]
+mod namelist_keyword_tests {
+    use super::{canonical_namelist_keyword, C_NAMELIST_KEYWORDS};
+
+    #[test]
+    fn native_slots_and_legacy_aliases_have_exact_case_insensitive_identity() {
+        assert_eq!(C_NAMELIST_KEYWORDS.len(), 51);
+        for keyword in C_NAMELIST_KEYWORDS {
+            assert_eq!(canonical_namelist_keyword(keyword), Some(*keyword));
+            assert_eq!(
+                canonical_namelist_keyword(&keyword.to_ascii_lowercase()),
+                Some(*keyword)
+            );
+            assert_eq!(
+                canonical_namelist_keyword(&keyword.to_ascii_uppercase()),
+                Some(*keyword)
+            );
+        }
+        for (alias, native) in [
+            ("DoublonHolon2Site", "DH2"),
+            ("DoublonHolon4Site", "DH4"),
+            ("QPTrans", "TransSym"),
+        ] {
+            assert_eq!(canonical_namelist_keyword(alias), Some(native));
+            assert_eq!(
+                canonical_namelist_keyword(&alias.to_ascii_lowercase()),
+                Some(native)
+            );
+            assert_eq!(
+                canonical_namelist_keyword(&alias.to_ascii_uppercase()),
+                Some(native)
+            );
+        }
+        for unknown in ["", "ModParaExtra", "NotACKeyword", "ＭodPara"] {
+            assert_eq!(canonical_namelist_keyword(unknown), None);
+        }
+        assert_ne!(
+            canonical_namelist_keyword("Orbital"),
+            canonical_namelist_keyword("OrbitalAntiParallel")
+        );
+    }
+}

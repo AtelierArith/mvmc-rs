@@ -144,7 +144,7 @@ fn unsafe_interall_indices_and_dimensions_have_bounded_rust_errors() {
 }
 
 #[test]
-fn failed_replacement_keeps_prior_interall_terms_and_records_required_input_error() {
+fn generic_loader_rejects_duplicate_keyword_and_reports_single_entry_errors() {
     let directory =
         std::env::temp_dir().join(format!("mvmc-interall-atomic-{}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
@@ -165,13 +165,31 @@ fn failed_replacement_keeps_prior_interall_terms_and_records_required_input_erro
         "InterAll good.def\nInterAll bad.def\nModPara modpara.def\n",
     )
     .unwrap();
+    let error = parse_expert_mode_files(directory.join("namelist.def")).unwrap_err();
+    let mvmc_expert_parsers::ParseError::InvalidInput { message } = error else {
+        panic!("duplicate keyword must be InvalidInput: {error:?}");
+    };
+    assert!(message.contains("duplicate keyword InterAll"));
+    fs::write(
+        directory.join("namelist.def"),
+        "InterAll good.def\nModPara modpara.def\n",
+    )
+    .unwrap();
     let data = parse_expert_mode_files(directory.join("namelist.def")).unwrap();
     assert_eq!(
         data.inter_all_terms,
         parse_interall_content(valid, 4, 0).unwrap()
     );
-    assert_eq!(data.input_errors.len(), 1);
-    assert!(data.input_errors[0].contains("InterAll"));
-    assert!(data.input_errors[0].contains("row count"));
+    assert!(data.input_errors.is_empty());
+    fs::write(
+        directory.join("namelist.def"),
+        "InterAll bad.def\nModPara modpara.def\n",
+    )
+    .unwrap();
+    let invalid = parse_expert_mode_files(directory.join("namelist.def")).unwrap();
+    assert!(invalid.inter_all_terms.is_empty());
+    assert_eq!(invalid.input_errors.len(), 1);
+    assert!(invalid.input_errors[0].contains("InterAll"));
+    assert!(invalid.input_errors[0].contains("row count"));
     fs::remove_dir_all(directory).unwrap();
 }

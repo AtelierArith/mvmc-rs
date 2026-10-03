@@ -146,6 +146,9 @@ pub fn read_input_parameters(
     let mut overlays = Vec::new();
     let mut seen = HashSet::new();
     for (kind, filename) in parse_namelist_content(&content) {
+        let kind = crate::canonical_namelist_keyword(&kind)
+            .unwrap_or(&kind)
+            .to_owned();
         if !kind.starts_with("In") {
             continue;
         }

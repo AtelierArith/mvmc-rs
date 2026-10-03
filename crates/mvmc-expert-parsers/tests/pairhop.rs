@@ -44,7 +44,7 @@ fn expands_each_input_row_in_order_and_retains_partial_results_and_julia_errors(
 }
 
 #[test]
-fn replaces_successful_sections_and_retains_previous_payload_when_a_later_section_fails() {
+fn archived_component_replacement_and_single_entry_loader_errors_are_separate() {
     let data = parse_expert_mode_files(root().join("namelist.def")).unwrap();
     assert!(data.input_errors.is_empty());
     assert_eq!(
@@ -54,11 +54,55 @@ fn replaces_successful_sections_and_retains_previous_payload_when_a_later_sectio
             .terms
     );
     let replacement = parse_pairhop_def(root().join("replace.def")).unwrap().terms;
-    let replaced = parse_expert_mode_files(root().join("namelist_replace.def")).unwrap();
+    // These archived multi-entry namelists describe Julia component sequences,
+    // not supported C filename lists. Preserve the original sources but reject
+    // them at the public loader; compose public component results explicitly.
+    for name in ["namelist_replace.def", "namelist_invalid.def"] {
+        let error = mvmc_expert_parsers::parse_expert_mode_files(root().join(name)).unwrap_err();
+        let mvmc_expert_parsers::ParseError::InvalidInput { message } = error else {
+            panic!("duplicate keyword must be InvalidInput: {error:?}");
+        };
+        assert!(message.contains("duplicate keyword PairHop"), "{message}");
+    }
+    let mut replaced = data.clone();
+    let replacement_section = parse_pairhop_def(root().join("replace.def")).unwrap();
+    assert!(replacement_section.is_success());
+    replaced.pair_hop_terms = replacement_section.terms;
     assert!(replaced.input_errors.is_empty());
     assert_eq!(replaced.pair_hop_terms, replacement);
-    let invalid = parse_expert_mode_files(root().join("namelist_invalid.def")).unwrap();
-    assert_eq!(invalid.pair_hop_terms, replacement);
+    let retained = replaced.clone();
+    let invalid_section = parse_pairhop_def(root().join("invalid.def")).unwrap();
+    assert!(!invalid_section.is_success());
+    // This is explicitly test-side composition, not mutation by the component
+    // API: an unsuccessful result is not assigned to the previous payload.
+    assert_eq!(retained.pair_hop_terms, replacement);
+    let directory = (0..)
+        .find_map(|attempt| {
+            let directory = std::env::temp_dir().join(format!(
+                "issue184-pairhop-invalid-{}-{attempt}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&directory) {
+                Ok(()) => Some(directory),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => None,
+                Err(error) => panic!("exclusive invalid PairHop input: {error}"),
+            }
+        })
+        .unwrap();
+    std::fs::write(
+        directory.join("namelist.def"),
+        format!(
+            "ModPara {}\nPairHop {}\nOrbital {}\n",
+            root().join("../interall/modpara.def").display(),
+            root().join("invalid.def").display(),
+            root().join("../interall/orbital.def").display()
+        ),
+    )
+    .unwrap();
+    // Actual loader diagnostics, from a valid single-keyword filename list.
+    let invalid = parse_expert_mode_files(directory.join("namelist.def")).unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    assert!(invalid.pair_hop_terms.is_empty());
     assert_eq!(invalid.input_errors.len(), 1);
     assert!(invalid.input_errors[0].contains("error parsing PairHop"));
     assert!(invalid.input_errors[0].contains("Line 6: Site1 number must be non-negative"));
