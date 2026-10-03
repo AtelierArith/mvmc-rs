@@ -46,7 +46,11 @@ existing unsupported model declarations now fail rather than continue to a
 passing summary. This milestone does not broaden model support or certify
 the long statistical reference workloads.
 
-MPI requires the `mpi` feature and at least two ranks. Resolve exactly one
+MPI requires the `mpi` feature, recognized multi-rank launcher metadata and
+an actual MPI world of at least two ranks. Fixture preflight precedes MPI
+initialization. Missing/singleton launcher metadata fails Unsupported without
+initializing MPI; this is a gate restriction, not a restriction on valid
+singleton library use. Resolve exactly one
 executable via Cargo JSON; never launch a wildcard including stale binaries
 or dependency files. This example uses jq:
 
