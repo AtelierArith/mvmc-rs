@@ -17,6 +17,39 @@ def listing(names=gate.GENERAL):
 
 
 class OptionalGateContract(unittest.TestCase):
+    def test_dc_exact_selected_identity_and_empty_not_numeric(self):
+        for model in gate.MODELS[1:]:
+            for mode in ("real", "cmp"):
+                lines = [f"OPTIONAL183_DC model={model} mode={mode} file={name} status={status}"
+                         for name, status in (
+                             ("zvo_ls_cisajs_001.dat", "REFERENCE_COMPARED"),
+                             ("zvo_ls_cisajscktalt_001.dat", "REFERENCE_COMPARED"),
+                             ("zvo_ls_cisajscktaltex_001.dat", "EMPTY_CONTRACT"))]
+                text = "\n".join(lines)
+                records = gate.validate_dc_run(text, model, mode)
+                # Actual nextest layout: empty stdout, markers on stderr.
+                self.assertEqual(gate.validate_dc_run("" + "\n" + text, model, mode), records)
+                # Split streams must retain exact identity/count checks.
+                self.assertEqual(gate.validate_dc_run(lines[0] + "\n" + "\n".join(lines[1:]), model, mode), records)
+                for stdout, stderr in ((text, lines[0]), ("", "\n".join(lines[:2])),
+                                       ("", text.replace(f"model={model}", "model=helper"))):
+                    with self.assertRaises(ValueError):
+                        gate.validate_dc_run(stdout + "\n" + stderr, model, mode)
+                self.assertEqual(sum(r["status"] == "REFERENCE_COMPARED" for r in records), 2)
+                self.assertEqual(sum(r["status"] == "EMPTY_CONTRACT" for r in records), 1)
+                for bad in ("", "\n".join(lines[:2]), text + "\n" + lines[0],
+                            text.replace("EMPTY_CONTRACT", "PASS"),
+                            text.replace(f"model={model}", "model=helper"),
+                            text.replace(f"mode={mode}", "mode=unknown")):
+                    with self.assertRaises(ValueError):
+                        gate.validate_dc_run(bad, model, mode)
+                with self.assertRaises(ValueError):
+                    gate.validate_dc_run(text, "hubbard_chain_real", mode)
+        self.assertEqual(gate.validate_dc_run("", "hubbard_chain_real", "real"), [])
+        for model, mode in (("interall", "real"), ("spin_chain_lanczos", "unknown")):
+            with self.assertRaises(ValueError):
+                gate.validate_dc_run("", model, mode)
+
     def test_exact_count_and_identities_not_helpers(self):
         self.assertEqual(gate.selected_binary(listing(), gate.GENERAL), Path("/tmp/not-executed"))
         for names in ((), gate.GENERAL[:1], (*gate.GENERAL, "support::helper")):

@@ -9,7 +9,7 @@ entries; unselected numerical jobs are not instantiated or reported green.
 | Job | Actual bounded selection | Not claimed |
 | --- | --- | --- |
 | general | Two exact ignored tests; General1/2/3/20 and public20 repeat | All13 models or fresh whole-matrix Julia validation |
-| lanczos | One ignored test six times, explicit three models x real/cmp | Missing optional DC comparisons, InterAll, full Lanczos coverage |
+| lanczos | One ignored test six times, explicit three models x real/cmp; eight DC references + four empty GEx contracts | Empty contracts are not numerical comparisons; InterAll, full Lanczos coverage |
 | mpi | One exact test executable, actual worlds2/4, groups1/2, fixed Heisenberg real PhysCal and grouped Lanczos rejection | Full MPI model/solver matrix or independent fullC sampling |
 | thread | Existing wrapper selects ONE primary runner test; workers1/2/4, steps2/samples200 | New long20/45-case outcome matrix or all threaded gates |
 
@@ -21,6 +21,84 @@ fixture provenance, not a newly executed Julia runtime: these jobs invoke no
 C, Julia or toolbox programs. Offline Cargo remains independent of this script.
 
 The script checks exact ignored identities/counts, never support-only passes.
+The DC follow-up requires exact selected-case markers: the six Lanczos calls
+must report eight independent `REFERENCE_COMPARED` records and four
+`EMPTY_CONTRACT` records, saved separately in `dc-comparisons.json`. The latter
+are NOT numerical comparisons: both parsed GEx arrays must be empty, the missing
+expectation must be specifically `zvo_ls_cisajscktaltex_001.dat`, and its actual
+output must exist as a regular file containing exactly one LF (`b"\n"`).
+Zero bytes, spaces, CRLF, multiple LF, nonempty values, missing files and symlinks
+are rejected. Other missing expectations fail. C provenance and the optional
+whole-function probe are in `c_toolbox/issue183_ls_empty/README.md`; Cargo never
+reads or invokes that probe.
+This follow-up's six-call validation completed separately (see the final DC
+evidence section). The earlier terminal evidence below belongs to the earlier
+committed driver and is not retroactively reassigned.
+The first DC follow-up attempt, handle79244, is retained at
+`/tmp/mvmc-183-dc-frozen.MEObep/lanczos-evidence`: terminal exit1, SHA256
+`e21576f08b97cc92c7c0f083d57fb8477bb198e715362604f6949e1d7db76fc8`.
+Hubbard real real/cmp completed, but Hubbard Lanczos real failed the erroneous
+zero-byte assumption (run `2d16f9fd-b3e3-458d-b5c3-52ed716331f5`). Its actual
+GEx file was one LF, which the original C writer requires; this was a test
+contract defect, not a production numerical defect. Remaining three selections
+were not run. The original source/artifacts remain unchanged. A separate driver
+fix reads both stdout and the same selected call's stderr, because nextest puts
+captured test output on stderr. Neither correction retroactively converts that
+terminal into a pass.
+
+## Final strict C-empty DC follow-up evidence
+
+Handle22750 completed terminal0 on Linux x86_64. Dedicated immutable checkout
+`/tmp/mvmc-183-dc-final.vxNlfJ/workspace` used committed production
+`c8db43bf461fe6fb426b5fee117319849c1b9c21` plus ONLY the six reviewed paths
+(Lanczos test, driver, infrastructure tests, this document, toolbox probe and
+README). Its own target is `/tmp/mvmc-183-dc-final.vxNlfJ/target`. The executed
+document was the pre-result frozen version; this result section was added only
+after terminal0. Reference checkout identity is historical
+`8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`, not a fresh Julia execution.
+
+Command from that checkout:
+
+```sh
+CARGO_TARGET_DIR=/tmp/mvmc-183-dc-final.vxNlfJ/target OPENBLAS_CORETYPE=HASWELL \
+  uv run --no-project python scripts/run_optional_gates_183.py lanczos \
+  /tmp/mvmc-183-dc-final.vxNlfJ/lanczos-evidence
+```
+
+| Selected model/mode | Actual nextest run | Result |
+|---|---|---|
+| Hubbard real / real | a180acc5-35ed-4569-98e2-b441278b370d | 1 PASS, 0.109s |
+| Hubbard real / cmp | 304c8765-367a-4dba-9241-de66434d3401 | 1 PASS, 0.108s |
+| Hubbard Lanczos / real | 3c519fd1-e940-4596-b743-66027c54b319 | 1 PASS, 3.640s |
+| Hubbard Lanczos / cmp | 6efdf45b-9242-44ed-80ae-1de0cdf5bfa1 | 1 PASS, 3.591s |
+| Spin Lanczos / real | 6966b356-835a-410a-88e9-c23f9b782db8 | 1 PASS, 55.558s |
+| Spin Lanczos / cmp | b9f31cd7-8abd-4051-89a7-f3d30540b6f5 | 1 PASS, 51.736s |
+
+Each call selected exactly one ignored numerical gate, with eight other tests
+unselected. Twelve distinct DC case/file records were verified: **eight
+REFERENCE_COMPARED and four EMPTY_CONTRACT**, not twelve numerical comparisons.
+The four empty GEx cases verified the original C's exact one-LF contract.
+Independent existing numerical expectations and tolerances were unchanged.
+
+Evidence root: `/tmp/mvmc-183-dc-final.vxNlfJ/lanczos-evidence`.
+All35 entries in `artifacts.json` were independently rehashed and matched.
+
+| Artifact | SHA256 |
+|---|---|
+| terminal.json (exit0, six completed cases) | 29a66818dcdc58907e95109dced643ff89a9b53b801126e4c5f24a72c0d37214 |
+| dc-comparisons.json | 99ae693730d185e665c788a9a97e35718411203b3b88213314c87e2e4105c3d1 |
+| source.before.json = source.after.json | 1b62cafd5335bb35649e1cf4a0cb535e83df46127c02d0e09cbbc889f7821f23 |
+| fixtures.before.json = fixtures.after.json | a1d9daed0dbfc389299860efc634893cf0453f86ca5c8b2499dbb2b9132ee2d5 |
+| backend.json | cb86986d76af09aa543db1fefb4ba83e844686e056ab2b4343f7d59ff1439ae1 |
+
+Executed binary `target/test-fast/deps/lanczos_transfer_physcal-02b7565035f61461`
+SHA256 `3ba873197c8cf2775a47072257acbd014ab1fffc670defaa7e35b6b049dd6e00`
+matched before/after. Actual linked OpenBLAS0.3.26 Haswell runtime threads1,
+library SHA256 `bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e`.
+Rust1.99, default features, locked test-fast. Infrastructure10PASS and focused
+Rust negative2PASS are separate from numerical coverage. No external dispatch,
+full13 matrix, fullJulia features, native macOS or InterAll proof is claimed;
+issue183 remains open for its remaining reporting/backend-negative audit.
 Unknown/empty family, missing inputs, source/fixture changes, missing/empty
 required artifacts and nonzero gate exits fail. Artifact roots are exclusively
 new; output roots are never deleted/reused. MPI additionally receives its

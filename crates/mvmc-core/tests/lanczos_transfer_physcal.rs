@@ -12,6 +12,34 @@ fn values(path: &Path) -> Vec<f64> {
         .collect()
 }
 
+fn require_empty_dc_contract(name: &str, parsed_gex_empty: bool, actual: &Path) {
+    // C's successful mode2 zero-count LS writer emits exactly one LF.
+    let regular_empty = fs::symlink_metadata(actual)
+        .is_ok_and(|metadata| metadata.file_type().is_file() && metadata.len() == 1)
+        && fs::read(actual).is_ok_and(|bytes| bytes == b"\n");
+    if name != "zvo_ls_cisajscktaltex_001.dat" || !parsed_gex_empty || !regular_empty {
+        support::missing_fixture(
+            "lanczos-physcal",
+            format!(
+                "missing independent {name} reference; defined empty GEx contract not satisfied"
+            ),
+        );
+    }
+}
+
+fn validate_selection(mode: &str, model: Option<&str>) {
+    if !matches!(mode, "real" | "cmp")
+        || model.is_some_and(|model| {
+            !matches!(
+                model,
+                "hubbard_chain_real" | "hubbard_chain_lanczos" | "spin_chain_lanczos"
+            )
+        })
+    {
+        support::unsupported("lanczos-physcal", format!("mode={mode:?} model={model:?}"));
+    }
+}
+
 #[test]
 #[ignore = "optional Lanczos gate: MVMC_RS_LANCZOS_PHYSICAL required"]
 fn serial_lanczos_matches_hubbard_and_exchange_references() {
@@ -21,20 +49,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
     });
     let mode = std::env::var("MVMC_RS_LANCZOS_MODE").unwrap_or_else(|_| "real".into());
     let requested_model = std::env::var("MVMC_RS_LANCZOS_MODEL").ok();
-    if !matches!(mode.as_str(), "real" | "cmp") {
-        support::unsupported("lanczos-physcal", format!("unknown mode {mode:?}"));
-    }
-    if requested_model.as_deref().is_some_and(|model| {
-        !matches!(
-            model,
-            "hubbard_chain_real" | "hubbard_chain_lanczos" | "spin_chain_lanczos"
-        )
-    }) {
-        support::unsupported(
-            "lanczos-physcal",
-            format!("unknown model {requested_model:?}"),
-        );
-    }
+    validate_selection(&mode, requested_model.as_deref());
     for model in [
         "hubbard_chain_real",
         "hubbard_chain_lanczos",
@@ -66,6 +81,8 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         let preparation =
             mvmc_core::prepare_phys_cal_from_namelist(&namelist, &opt_para, &mode, Some(1))
                 .unwrap();
+        let parsed_gex_empty = preparation.data.green_two_ex_terms.is_empty()
+            && preparation.data.green_two_ex_indices.is_empty();
         mvmc_core::vmc_phys_cal_to_dir(preparation, &output).unwrap();
 
         let actual_qqqq = values(&output.join("zvo_ls_qqqq_001.dat"));
@@ -97,6 +114,8 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
             ] {
                 let expected_path = fixture.join("expected").join(name);
                 if !expected_path.is_file() {
+                    require_empty_dc_contract(name, parsed_gex_empty, &output.join(name));
+                    println!("OPTIONAL183_DC model={model} mode={mode} file={name} status=EMPTY_CONTRACT");
                     continue;
                 }
                 let actual = values(&output.join(name));
@@ -108,9 +127,63 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
                         "{model} {name}: {actual} != {expected}"
                     );
                 }
+                println!("OPTIONAL183_DC model={model} mode={mode} file={name} status=REFERENCE_COMPARED");
             }
         }
         let _ = fs::remove_dir_all(output);
         report_gate("lanczos-physcal", GateStatus::Pass, model);
     }
+}
+
+#[test]
+fn missing_dc_reference_requires_regular_empty_parsed_gex_contract() {
+    let root = std::env::temp_dir().join(format!(
+        "mvmc-dc-negative-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&root).unwrap();
+    let actual = root.join("actual.dat");
+    let name = "zvo_ls_cisajscktaltex_001.dat";
+    assert!(std::panic::catch_unwind(|| require_empty_dc_contract(name, true, &actual)).is_err());
+    for bytes in [b"".as_slice(), b" ", b"\r\n", b"\n\n", b"1\n"] {
+        fs::write(&actual, bytes).unwrap();
+        assert!(
+            std::panic::catch_unwind(|| require_empty_dc_contract(name, true, &actual)).is_err()
+        );
+    }
+    fs::write(&actual, b"\n").unwrap();
+    require_empty_dc_contract(name, true, &actual);
+    assert!(std::panic::catch_unwind(|| require_empty_dc_contract(name, false, &actual)).is_err());
+    assert!(std::panic::catch_unwind(|| require_empty_dc_contract(
+        "zvo_ls_cisajs_001.dat",
+        true,
+        &actual
+    ))
+    .is_err());
+    assert!(std::panic::catch_unwind(|| require_empty_dc_contract(name, true, &root)).is_err());
+    #[cfg(unix)]
+    {
+        let link = root.join("linked.dat");
+        std::os::unix::fs::symlink(&actual, &link).unwrap();
+        assert!(std::panic::catch_unwind(|| require_empty_dc_contract(name, true, &link)).is_err());
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn unsupported_lanczos_selection_cannot_pass() {
+    for (mode, model) in [
+        ("", None),
+        ("unknown", None),
+        ("real", Some("interall")),
+        ("cmp", Some("")),
+    ] {
+        assert!(std::panic::catch_unwind(|| validate_selection(mode, model)).is_err());
+    }
+    validate_selection("real", Some("spin_chain_lanczos"));
+    validate_selection("cmp", Some("hubbard_chain_lanczos"));
 }
