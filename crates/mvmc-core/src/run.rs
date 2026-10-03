@@ -805,6 +805,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.stop_diag(960, timer.diagnostics.weightavg);
         timer.stop(21);
 
+        crate::sr::observer::normalized(step, state, all_complex);
         // 5. Output.
         timer.start(22);
         let output_error = if reducer.is_output_root() {

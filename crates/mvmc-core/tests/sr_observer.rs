@@ -248,7 +248,10 @@ fn actual_sampling_outputs_configurations_and_rng_are_unchanged_by_capture() {
             std::env::temp_dir().join(format!("mvmc-sr-observer-{}-{id}", std::process::id())),
         );
         std::fs::create_dir(&output.0).unwrap();
-        let guard = enabled.then(|| observer::capture().unwrap());
+        let mut guard = enabled.then(|| observer::capture_with_normalized().unwrap());
+        if enabled {
+            mvmc_core::sampling::driver::trace::start_with_raw_checkpoints();
+        }
         mvmc_core::vmc_para_opt(
             &mut data,
             &mut state,
@@ -258,6 +261,17 @@ fn actual_sampling_outputs_configurations_and_rng_are_unchanged_by_capture() {
             mvmc_core::OptimizationOptions::default(),
         )
         .unwrap();
+        let trace = if enabled {
+            mvmc_core::sampling::driver::trace::finish()
+        } else {
+            Vec::new()
+        };
+        let normalized = guard
+            .as_mut()
+            .map(|guard| guard.take_normalized())
+            .unwrap_or_default();
+        let raw = rng.state_snapshot();
+        let count = rng.words_consumed();
         let records = guard
             .map(observer::CaptureGuard::finish)
             .unwrap_or_default();
@@ -266,10 +280,68 @@ fn actual_sampling_outputs_configurations_and_rng_are_unchanged_by_capture() {
             .iter()
             .map(|name| std::fs::read_to_string(output.0.join(name)).unwrap())
             .collect();
-        (data, state, words, streams, records)
+        (
+            data, state, words, streams, records, normalized, raw, count, trace,
+        )
     };
-    let (baseline, baseline_state, baseline_rng, baseline_output, baseline_records) = run(false);
-    let (observed, observed_state, observed_rng, observed_output, records) = run(true);
+    let (
+        baseline,
+        baseline_state,
+        baseline_rng,
+        baseline_output,
+        baseline_records,
+        baseline_normalized,
+        baseline_raw,
+        baseline_count,
+        baseline_trace,
+    ) = run(false);
+    let (
+        observed,
+        observed_state,
+        observed_rng,
+        observed_output,
+        records,
+        normalized,
+        observed_raw,
+        observed_count,
+        trace,
+    ) = run(true);
+    assert!(baseline_trace.is_empty());
+    let raw_events: Vec<_> = trace
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| event[0] == 10)
+        .collect();
+    assert_eq!(raw_events.len(), 2);
+    for (index, event) in &raw_events {
+        assert!(*index > 0 && trace[index - 1][0] == 8);
+        assert_eq!(event.len(), 627);
+    }
+    let last_raw = raw_events.last().unwrap().1;
+    assert_eq!(last_raw[1], observed_raw.1 as i64);
+    assert_eq!(last_raw[2], observed_count as i64);
+    assert_eq!(last_raw[3..], observed_raw.0.map(i64::from));
+    assert!(baseline_normalized.is_empty());
+    assert_eq!(normalized.len(), 2);
+    assert_eq!(
+        normalized
+            .iter()
+            .map(|record| record.step)
+            .collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    assert!(normalized
+        .iter()
+        .all(|record| record.mode == observer::DirectMode::Real));
+    assert!(normalized
+        .iter()
+        .all(|record| record.energy.len() == 5 && !record.oo_real.is_empty()));
+    assert_eq!(baseline_raw, observed_raw);
+    assert_eq!(baseline_count, observed_count);
+    assert_eq!(
+        baseline_state.electron_config.ele_spn,
+        observed_state.electron_config.ele_spn
+    );
     assert!(baseline_records.is_empty());
     assert_eq!(records.len(), 2);
     assert!(records

@@ -12,6 +12,32 @@ use std::{
 
 type CgEvent = Vec<(String, Vec<f64>)>;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RecordSchema {
+    Legacy,
+    RawV2,
+}
+
+impl RecordSchema {
+    fn parse(value: Option<&str>) -> Result<Self, &'static str> {
+        match value {
+            None | Some("legacy") => Ok(Self::Legacy),
+            Some("raw-v2") => Ok(Self::RawV2),
+            _ => Err("MPI179_RECORD_SCHEMA must be legacy or raw-v2"),
+        }
+    }
+}
+
+#[test]
+fn record_schema_requires_explicit_typed_opt_in() {
+    assert!(RecordSchema::parse(None).unwrap() == RecordSchema::Legacy);
+    assert!(RecordSchema::parse(Some("legacy")).unwrap() == RecordSchema::Legacy);
+    assert!(RecordSchema::parse(Some("raw-v2")).unwrap() == RecordSchema::RawV2);
+    for invalid in ["", "2", "true", "RAW-V2", "raw-v2 "] {
+        assert!(RecordSchema::parse(Some(invalid)).is_err());
+    }
+}
+
 #[derive(Default)]
 struct CgRecording {
     events: RefCell<Vec<CgEvent>>,
@@ -258,6 +284,13 @@ fn issue179_state() {
         parameter_init::init_parameter, qp_weight::init_qp_weight,
         read_input_parameters::read_input_parameters,
     };
+    let requested_schema = std::env::var("MPI179_RECORD_SCHEMA");
+    let schema = match &requested_schema {
+        Ok(value) => RecordSchema::parse(Some(value)).unwrap(),
+        Err(std::env::VarError::NotPresent) => RecordSchema::Legacy,
+        Err(error) => panic!("MPI179_RECORD_SCHEMA invalid environment: {error}"),
+    };
+    let raw_v2 = schema == RecordSchema::RawV2;
     let world = MpiContext::initialize().unwrap();
     assert!(
         matches!(world.world_size(), 2 | 4),
@@ -397,8 +430,18 @@ fn issue179_state() {
     let worker_observer = mvmc_core::threading::start_observation();
     let cg_recording = Rc::new(CgRecording::default());
     let cg_guard = mvmc_core::sr_cg::install_cg_observer(cg_recording.clone()).unwrap();
-    let sr_observer = mvmc_core::sr::observer::capture().unwrap();
-    mvmc_core::sampling::driver::trace::start();
+    let mut sr_observer = if raw_v2 {
+        mvmc_core::sr::observer::capture_with_normalized().unwrap()
+    } else {
+        mvmc_core::sr::observer::capture().unwrap()
+    };
+    if raw_v2 {
+        recording.discrete("trace-schema", &[2]);
+        recording.discrete("requested-record-schema", &[2]);
+        mvmc_core::sampling::driver::trace::start_with_raw_checkpoints();
+    } else {
+        mvmc_core::sampling::driver::trace::start();
+    }
     let result = mvmc_core::vmc_para_opt(
         &mut data,
         &mut state,
@@ -411,6 +454,35 @@ fn issue179_state() {
         },
     );
     let trace = mvmc_core::sampling::driver::trace::finish();
+    if raw_v2 {
+        let mut checkpoint_ordinal = 0;
+        for (index, event) in trace.iter().enumerate() {
+            if event[0] != 10 {
+                continue;
+            }
+            assert_eq!(event.len(), 627);
+            assert!(index > 0 && trace[index - 1][0] == 8);
+            assert!((0..=624).contains(&event[1]));
+            assert!(event[2] >= 0);
+            assert!(event[3..]
+                .iter()
+                .all(|word| (0..=i64::from(u32::MAX)).contains(word)));
+            let key = format!("checkpoint-{checkpoint_ordinal:06}");
+            recording.discrete(&format!("{key}-raw624"), &event[3..]);
+            recording.discrete(&format!("{key}-cursor"), &event[1..2]);
+            recording.discrete(&format!("{key}-native-words-consumed"), &event[2..3]);
+            checkpoint_ordinal += 1;
+        }
+        assert_eq!(
+            checkpoint_ordinal,
+            trace.iter().filter(|event| event[0] == 8).count()
+        );
+        if result.is_ok() {
+            assert_eq!(checkpoint_ordinal, usize::try_from(steps).unwrap());
+        }
+    } else {
+        assert!(trace.iter().all(|event| event[0] != 10));
+    }
     if result
         .as_ref()
         .is_err_and(|reason| reason.contains("direct SR failed"))
@@ -476,6 +548,35 @@ fn issue179_state() {
         .unwrap();
     }
     let worker_execution = worker_observer.finish();
+    if raw_v2 {
+        let normalized = sr_observer.take_normalized();
+        recording.discrete("normalized-boundaries", &[normalized.len() as i64]);
+        for (ordinal, observation) in normalized.iter().enumerate() {
+            assert_eq!(observation.step, ordinal);
+            let key = format!("normalized-step-{ordinal:06}");
+            recording.discrete(&format!("{key}-ordinal"), &[ordinal as i64]);
+            recording.discrete(
+                &format!("{key}-complex"),
+                &[i64::from(
+                    observation.mode == mvmc_core::sr::observer::DirectMode::Complex,
+                )],
+            );
+            recording.complex(&format!("{key}-energy"), &observation.energy);
+            match observation.mode {
+                mvmc_core::sr::observer::DirectMode::Complex => {
+                    recording.complex(&format!("{key}-oo"), &observation.oo);
+                    recording.complex(&format!("{key}-ho"), &observation.ho);
+                }
+                mvmc_core::sr::observer::DirectMode::Real => {
+                    recording.real(&format!("{key}-oo"), &observation.oo_real);
+                    recording.real(&format!("{key}-ho"), &observation.ho_real);
+                }
+            }
+        }
+        if result.is_ok() {
+            assert_eq!(normalized.len(), usize::try_from(steps).unwrap());
+        }
+    }
     let sr_systems = sr_observer.finish();
     recording.discrete("sr-kind", &[data.modpara.nsrcg]);
     recording.discrete("sr-systems", &[sr_systems.len() as i64]);
