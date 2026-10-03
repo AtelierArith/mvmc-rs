@@ -4,6 +4,9 @@ use mvmc_expert_parsers::*;
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+
 fn model(dims: &[usize]) -> ExpertModeData {
     let mut data = ExpertModeData::new();
     let sentinel = Complex64::new(99.0, 99.0);
@@ -195,12 +198,15 @@ fn complete_c_records_and_scalar_conversions_preserve_final_values_and_rng() {
                     record[0]
                 );
             }
-            assert_eq!(
-                parameter_bits(&data),
-                expected,
-                "{} optional={optional}",
-                record[0]
-            );
+            let actual = parameter_bits(&data);
+            assert_eq!(actual.len(), expected.len());
+            for (index, (&actual, &expected)) in actual.iter().zip(&expected).enumerate() {
+                assert!(
+                    numerical_comparison::arithmetic_bits_match(actual, expected),
+                    "{} optional={optional} component {index}: {actual:016x} != {expected:016x}",
+                    record[0]
+                );
+            }
             assert_eq!(data.orbital_terms, mappings);
             assert_eq!(
                 (0..624).map(|_| rng.gen_rand32()).collect::<Vec<_>>(),

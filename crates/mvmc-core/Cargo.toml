@@ -30,6 +30,7 @@ mpi = { workspace = true, optional = true }
 
 [dev-dependencies]
 approx = { workspace = true }
+flate2 = "1"
 
 # Production Pfaffian/inverse and SR kernels use the BLAS/LAPACK backend,
 # matching the pure Julia implementation's LinearAlgebra calls. Scalar

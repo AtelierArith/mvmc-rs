@@ -13,6 +13,10 @@
 
 #![warn(missing_docs)]
 
+#[cfg(test)]
+#[path = "../../../tests/support/julia_fixture.rs"]
+mod julia_fixture;
+
 pub mod average;
 mod c_complex;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]

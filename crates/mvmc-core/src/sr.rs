@@ -719,6 +719,7 @@ fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::julia_fixture;
     use mvmc_expert_parsers::OrbitalTerm;
 
     #[test]
@@ -803,10 +804,9 @@ mod tests {
             } else {
                 "_store_runner"
             };
-            let fixture = std::fs::read_to_string(root.join(format!(
-                "tests/fixtures/sr_direct/{case}{suffix}/fixed-input.txt"
-            )))
-            .unwrap();
+            let fixtures = root.join("tests/fixtures");
+            let archived = format!("sr_direct/{case}{suffix}/fixed-input.txt");
+            let fixture = julia_fixture::read_text(fixtures.join(archived)).unwrap();
             let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
             let sizes: Vec<usize> = lines
                 .next()
@@ -923,8 +923,24 @@ mod tests {
             let matrix = s.clone();
             let rhs = g.clone();
             cholesky_solve(&mut s, &mut g, n).unwrap();
-            compare("factor", &s, &read(lines.next().unwrap()));
-            compare("solution", &g, &read(lines.next().unwrap()));
+            let mut expected_factor = read(lines.next().unwrap());
+            let mut expected_solution = read(lines.next().unwrap());
+            if let Some(replay) = julia_fixture::arm_directory(&fixtures)
+                .map(|dir| {
+                    dir.join(format!(
+                        "sr_direct_fixed/{case}{suffix}/factor-solution.txt"
+                    ))
+                })
+                .filter(|path| julia_fixture::exists(path))
+            {
+                let text = julia_fixture::read_text(replay).unwrap();
+                let mut rows = text.lines().filter(|line| !line.starts_with('#'));
+                expected_factor = read(rows.next().unwrap());
+                expected_solution = read(rows.next().unwrap());
+                assert!(rows.next().is_none());
+            }
+            compare("factor", &s, &expected_factor);
+            compare("solution", &g, &expected_solution);
             // A forward comparison alone can accept a bad solution to an
             // ill-conditioned system. Independently check backward error
             // using the original, unfactored covariance and gradient.

@@ -589,13 +589,20 @@ fn calc_m_all_child_fsz_complex(
 }
 
 // Julia's FSZ native C++ inverse uses the platform complex division runtime.
-// GNU/Linux uses libgcc's Smith ratio; retain the archived macOS arithmetic.
-#[cfg(all(target_os = "linux", target_env = "gnu"))]
+// GNU/Linux uses libgcc's Smith ratio; macOS ARM uses compiler-rt's FMA
+// quotient. Intel macOS retains the independently verified archived arithmetic.
+#[cfg(any(
+    all(target_os = "linux", target_env = "gnu"),
+    all(target_os = "macos", target_arch = "aarch64")
+))]
 fn fsz_inverse_divide(a: Complex64, b: Complex64) -> Complex64 {
     crate::c_complex::divide(a, b)
 }
 
-#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+#[cfg(not(any(
+    all(target_os = "linux", target_env = "gnu"),
+    all(target_os = "macos", target_arch = "aarch64")
+)))]
 fn fsz_inverse_divide(a: Complex64, b: Complex64) -> Complex64 {
     a / b
 }

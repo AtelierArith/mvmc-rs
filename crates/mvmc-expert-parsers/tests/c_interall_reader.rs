@@ -3,6 +3,9 @@ use mvmc_expert_parsers::parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::interall::parse_interall_content;
 use std::fs;
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+
 #[test]
 fn interall_headers_counts_sites_spins_and_scan_values_match_native_c() {
     let fixture = include_str!("../../../tests/fixtures/interall/c_reader.txt");
@@ -77,7 +80,12 @@ fn interall_headers_counts_sites_spins_and_scan_values_match_native_c() {
                 u64::from_str_radix(fields[9], 16).unwrap(),
             ];
             if indices.as_slice() != expected_indices
-                || [term.value.re.to_bits(), term.value.im.to_bits()] != expected_bits
+                || ![term.value.re.to_bits(), term.value.im.to_bits()]
+                    .into_iter()
+                    .zip(expected_bits)
+                    .all(|(actual, expected)| {
+                        numerical_comparison::arithmetic_bits_match(actual, expected)
+                    })
             {
                 failures.push(format!(
                     "{name} row {index}: Rust={indices:?} {:016x} {:016x}, C={row}",

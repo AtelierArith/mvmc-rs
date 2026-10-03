@@ -38,6 +38,23 @@ numerical kernels. Cargo stores it in `target/test-fast`, separately from
 normal development artifacts. The production `release` and `bench` profiles
 keep their existing optimization and LTO settings.
 
+GitHub Actions uses `ci`, derived from `test-fast`: optimization level 2,
+no LTO, debug assertions and overflow checks, `debug = 0`, stripped symbols,
+and `incremental = false`. Following tenferro-rs, hosted builds omit incremental
+state and debug artifacts; this workspace retains optimization for its long
+numerical regressions. Artifacts live in `target/ci`.
+
+```sh
+cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0
+cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0
+cargo test --workspace --all-features --locked --doc --profile ci
+```
+
+The [CI workflow](../.github/workflows/ci.yml) runs these commands on Ubuntu
+24.04 x86_64 and macOS 15 ARM64, and checks formatting, Clippy, documentation
+and workflow syntax. Explicitly ignored reference/MPI developer gates retain
+their documented opt-in selectors and launch requirements.
+
 Stripped development executables omit debugger symbols and source-level
 backtraces. Enable full symbols for a debugging session with environment
 overrides:
