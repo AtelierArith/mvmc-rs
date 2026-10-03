@@ -4,7 +4,73 @@ Related to #177/#179/#185; no issue closure or full numerical parity claim.
 New test: `crates/mvmc-core/tests/mpi_issue177_seed_lifecycle.rs`. No production
 API, clock, seed payload, RNG algorithm or numerical tolerance was changed.
 
-## Actual final proof
+## Fresh committed d9c0766c closure-verification evidence
+
+This later verification is separate from the overlay proofs below. Container
+`73c57e563c61`, retained root
+`/home/vscode/.cache/mvmc/issue177-closure-d9c0766c.BjzgLT`, contains a complete
+archive of `d9c0766ca1e5a42548556ac7559453079dbbe114`, with the same three pinned
+reference gitlinks listed below and **no overlays or code changes**.
+Handle28741 was harvested with terminal0; no observation timeout caused a restart.
+
+The locked test-fast MPI build returned0. The seed-unit selection ran **8 tests,
+8 passed** (210 other tests skipped), not a zero-test success. `results.tsv`
+contains exactly four launches: protocol/world2, protocol/world4,
+lifecycle/world2 and lifecycle/world4, all exit0. Every launched rank reports
+1 PASS/0 FAIL/0 ignored. Public lifecycle completion markers cover each rank
+at widths1/2; concurrent world4 stderr interleaves two width1 marker lines,
+but all rank/width markers and four rank test results are present.
+
+| #177 acceptance criterion | Focused source and actual d9 proof |
+| --- | --- |
+| Root base broadcast before group offset; preserve serial/default/override/zero/positive seeds | `run.rs::resolve_seed_with_reducer` and `seeded_rng_with_reducer`; eight `run::seed_tests` pass, including serial/group policy and broadcast-before-offset. Public lifecycle observes the actual base broadcast, global agreement and `rank / width` offset. |
+| Rank-specific clocks/delays; equal streams within each group | `run_mpi_tests.rs::negative_clock_and_asymmetric_runner_failures` passes under 2/4 ranks with root-only clock resolution, rank-specific clocks and delays. Public lifecycle verifies width2 group checkpoints; width1 equality is self-only, not world-wide chain equality. |
+| Public OPT and PhysCal, 2/4 ranks, width1/grouped, next624 | `mpi_issue177_seed_lifecycle.rs::enabled::public_negative_seed_opt_and_physcal_lifecycle` passes under both worlds and both widths, comparing actual negative-seed runs with separate positive-base runs, full OPT sampling traces/checkpoint next624 and PhysCal raw state/cursor/count/next624/configuration. |
+| Collective clock/conversion failures | Protocol launches exercise root-clock and peer-conversion errors; public lifecycle exercises all-rank UInt32 upper overflow, peer upper overflow and peer invalid offset, with the documented pre-sampling/output boundaries. |
+
+The contract/limits section below applies unchanged. This is bounded seed-lifecycle
+evidence, not #179 full numerical/model parity. Issue closure is reserved for the
+parent **after PR merge and evidence review**; neither this run nor this document
+closes #177 or reports the independently running full-workspace gate as passed.
+
+Reproduction commands are retained verbatim in `build-command.txt`,
+`unit-command.txt` and `mpi-commands.txt`; all MPI launches have timeout90s and
+kill grace5s. The unit command is:
+
+```sh
+cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi \
+  --lib -E 'test(/^run::seed_tests::/)' --no-fail-fast --retries 0
+```
+
+`environment.txt` records the isolated named-volume target
+`/home/vscode/.cache/mvmc/target/issue177-closure-d9c0766c`, inner workers1 and
+BLAS/OMP thread limits1. `rust.txt`, `c-compiler.txt`, `mpi-compiler.txt`,
+`mpi.txt`, `platform.txt`, `blas.txt` and both `*-ldd.txt` retain the actual
+Linux x86_64 environment: Rust1.99.0 b940084d7, MPICH4.2.0/internal Hydra PMI1,
+OpenBLAS0.3.26. Compiler and input records are not substituted with a later build.
+
+SHA-256 identifiers (relative paths refer to the retained root):
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `sources-before.sha256` | `b187c5d4eaf6bc29101be0cb9fc79b93c701968b25927275bfd270191aed45bf` |
+| `root-inputs-before.sha256` | `82265357a0a8e699124c34a149d063ad273a8228041893491eb873456367517d` |
+| `bin/mvmc_core` | `c5bc2fc320fbe1d19bc4ac13a34b625c60b5cf9f0b2c65b90b4e16e88e4b6b66` |
+| `bin/mpi_issue177_seed_lifecycle` | `5eaf29659ef8cd61027b3e615f48151b4c3e0c201b54a6f5002bbe482285d82b` |
+| `results.tsv` | `8400cb17574222092b7dba3ab6bf0bcae874847c7978173893ec89ec192b6d78` |
+| `unit.log` | `376a86476e724dcefd49f3bc51a15f3f8659f3b5f6ec6f18cf3b1f5da2219777` |
+| `protocol-world2.log` | `230d938b4f829518ae05332d8e8e34b9be613d4a9bcff208b51e4228ca49a7fd` |
+| `protocol-world4.log` | `a1d787a5300d83b7e98e4a25bd87ff4611bf35d0ea2d03337e1fb0897fafe1df` |
+| `lifecycle-world2.log` | `9858e2c80ed171fb3efedf7e40ee29aa771557c01da883e4271994fb908d2e57` |
+| `lifecycle-world4.log` | `19cd30f74a82ad2405c103b5efd6f99c8f1555c593a1b8e87bfb93557d944ba7` |
+
+`sources-after-check.txt`, `root-inputs-after-check.txt`,
+`binaries-after-check.txt` and `libraries-after-check.txt` contain only successful
+SHA checks. `build.exit`, `unit.exit`, `terminal.exit` are0. Per-rank lifecycle
+records and actual copied inputs remain under `lifecycle-world2/` and
+`lifecycle-world4/`; these are not replaced by the older captures below.
+
+## Earlier overlay lifecycle proof
 
 Container `73c57e563c61`, root
 `/home/vscode/.cache/mvmc/issue177-verified-outcome.mVfNw1`.

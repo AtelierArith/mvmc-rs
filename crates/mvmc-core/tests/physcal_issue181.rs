@@ -1326,6 +1326,7 @@ fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
     let mut data = ExpertModeData::new();
     data.modpara.nsite = 2;
     data.modpara.nelec = 1;
+    data.modpara.nmp_trans = 1; // Valid projection input for the mode2 duplicate guard.
     data.modpara.n_data_idx_start = 7;
     data.green_one_terms = vec![
         GreenOneTerm {

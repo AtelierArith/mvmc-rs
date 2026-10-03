@@ -319,6 +319,7 @@ fn global_lanczos_validator_expands_original_valid_and_invalid_modes() {
     // promise that every Hamiltonian or runner accepts these modes.
     for mode in [0, 1, 2] {
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1; // C no-projection input; isolate Lanczos validation.
         data.modpara.lanczos_mode = mode;
         assert_eq!(
             mvmc_core::validation::validate_supported_modpara(&data.modpara),
@@ -328,6 +329,7 @@ fn global_lanczos_validator_expands_original_valid_and_invalid_modes() {
     }
     for mode in [-1, 3] {
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
         data.modpara.lanczos_mode = mode;
         let error = mvmc_core::validation::validate_supported_modpara(&data.modpara).unwrap_err();
         assert_eq!(
@@ -344,6 +346,7 @@ fn original_cg_option_loop_rejects_each_nonzero_submode_independently() {
     // equivalence is implied by these unsupported-option diagnostics.
     for diagonal in [true, false] {
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1; // Isolate the intended unsupported solver option.
         let label = if diagonal {
             data.modpara.use_diag_scale = 1;
             "useDiagScale != 0"

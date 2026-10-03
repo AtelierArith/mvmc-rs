@@ -299,7 +299,10 @@ fn grouped_normal_physcal_cli_succeeds_on_two_and_four_ranks() {
 fn unsupported_projection_fails_before_creating_output_directory() {
     let dir = TestDir::new("spin-jastrow");
     let namelist = dir.0.join("namelist.def");
-    fs::write(&namelist, "SpinJastrow missing.def\n").unwrap();
+    // Do not let the unrelated zero-valued Rust ModPara default mask the
+    // unsupported-section boundary. C's no-projection setting is explicitly 1.
+    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(&namelist, "ModPara modpara.def\nSpinJastrow missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
         .arg(namelist)
@@ -308,7 +311,11 @@ fn unsupported_projection_fails_before_creating_output_directory() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("SpinJastrow"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("SpinJastrow"),
+        "actual stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!out_dir.exists());
 }
 
@@ -476,7 +483,10 @@ fn mismatched_valid_cli_controls_fail_collectively_before_output() {
 fn missing_hamiltonian_input_cannot_run_a_different_model() {
     let dir = TestDir::new("missing-transfer");
     let namelist = dir.0.join("namelist.def");
-    fs::write(&namelist, "Trans missing.def\n").unwrap();
+    // Explicit accepted projection setting, leaving only the intended missing
+    // Hamiltonian record as this negative fixture's diagnostic target.
+    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(&namelist, "ModPara modpara.def\nTrans missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
         .arg(namelist)
@@ -485,7 +495,11 @@ fn missing_hamiltonian_input_cannot_run_a_different_model() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Trans file not found"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Trans file not found"),
+        "actual stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!out_dir.exists());
 }
 
@@ -1033,4 +1047,163 @@ fn zero_translation_count_fails_before_creating_output_directory() {
     let err = String::from_utf8_lossy(&output.stderr);
     assert!(err.contains("NMPTrans"), "{err}");
     assert!(!out.exists());
+}
+
+#[test]
+fn paired_zero_translation_cli_rejects_and_signed_units_remain_valid() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    for (physcal, count) in [
+        (false, 0),
+        (true, 0),
+        (false, 1),
+        (false, -1),
+        (true, 1),
+        (true, -1),
+    ] {
+        // Exclusive ownership: never delete a pre-existing test directory.
+        let dir = loop {
+            let path = std::env::temp_dir().join(format!(
+                "mvmc-projection-boundary-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => break TestDir(path),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => panic!("{e}"),
+            }
+        };
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/physcal_181/heisenberg_chain_real");
+        let inputs = dir.0.join("inputs");
+        fs::create_dir(&inputs).unwrap();
+        for entry in fs::read_dir(source.join("inputs")).unwrap() {
+            let entry = entry.unwrap();
+            assert!(entry.path().is_file());
+            fs::copy(entry.path(), inputs.join(entry.file_name())).unwrap();
+        }
+        let fixed = dir.0.join("zqp_opt.dat");
+        fs::copy(source.join("zqp_opt.dat"), &fixed).unwrap();
+        let modpara = inputs.join("modpara.def");
+        let original = fs::read_to_string(&modpara).unwrap();
+        let mut replaced = 0;
+        let mut edited = String::new();
+        for line in original.lines() {
+            let value = match line.split_whitespace().next().unwrap_or("") {
+                "NMPTrans" => {
+                    replaced += 1;
+                    Some(count)
+                }
+                "NVMCCalMode" => Some(i32::from(physcal)),
+                "NVMCWarmUp" | "NVMCInterval" | "NSROptItrStep" | "NSROptItrSmp" => Some(1),
+                "NVMCSample" => Some(3),
+                _ => None,
+            };
+            if let Some(value) = value {
+                edited.push_str(&format!(
+                    "{} {value}\n",
+                    line.split_whitespace().next().unwrap()
+                ));
+            } else {
+                edited.push_str(line);
+                edited.push('\n');
+            }
+        }
+        assert_eq!(replaced, 1);
+        fs::write(&modpara, edited).unwrap();
+        if count < 0 {
+            // C GetInfoOrbitalAntiParallel requires the fourth sign column
+            // for negative NMPTrans. The archived fixture omits it; make this
+            // owned valid-input control explicit, not a parser-default test.
+            // TransSym already has all four columns, with explicit +1 signs.
+            let orbital = inputs.join("orbitalidx.def");
+            let text = fs::read_to_string(&orbital).unwrap();
+            let mut signed_rows = 0;
+            let text = text
+                .lines()
+                .map(|line| {
+                    let columns: Vec<_> = line.split_whitespace().collect();
+                    if columns.len() == 3 && columns.iter().all(|word| word.parse::<i64>().is_ok())
+                    {
+                        signed_rows += 1;
+                        format!("{line} 1\n")
+                    } else {
+                        format!("{line}\n")
+                    }
+                })
+                .collect::<String>();
+            assert_eq!(signed_rows, 36);
+            fs::write(orbital, text).unwrap();
+            let trans = fs::read_to_string(inputs.join("qptransidx.def")).unwrap();
+            let rows: Vec<_> = trans
+                .lines()
+                .filter(|line| line.split_whitespace().count() == 4)
+                .collect();
+            assert_eq!(rows.len(), 12);
+            assert!(rows
+                .iter()
+                .all(|line| line.split_whitespace().last() == Some("1")));
+        }
+        let namelist = inputs.join("namelist.def");
+        if !physcal {
+            let text = fs::read_to_string(&namelist).unwrap();
+            fs::write(
+                &namelist,
+                text.lines()
+                    .filter(|line| line.split_whitespace().next() != Some("TwoBodyGEx"))
+                    .map(|line| format!("{line}\n"))
+                    .collect::<String>(),
+            )
+            .unwrap();
+        }
+        let mut before: Vec<_> = fs::read_dir(&inputs)
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect();
+        before.push((fixed.clone(), fs::read(&fixed).unwrap()));
+        let out = dir.0.join("must-not-exist");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+        command
+            .arg(&namelist)
+            .args([
+                "--seed",
+                "11272",
+                "--mode",
+                "real",
+                "--nsteps",
+                "1",
+                "--nsmp",
+                "1",
+                "--out-dir",
+            ])
+            .arg(&out);
+        if physcal {
+            command.arg("--physcal").arg(&fixed);
+        }
+        let result = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        println!("ISSUE178_NMP_CLI physcal={physcal} count={count} status={} output_exists={} stdout={} stderr={stderr}", result.status, out.exists(), String::from_utf8_lossy(&result.stdout));
+        for (path, bytes) in before {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+        if count == 0 {
+            assert!(!result.status.success(), "{stderr}");
+            assert!(stderr.contains("NMPTrans must be nonzero; use 1 for no translation projection (mVMC C contract)"), "{stderr}");
+            assert!(!out.exists());
+        } else {
+            assert!(result.status.success(), "{stderr}");
+            assert!(out
+                .join(if physcal {
+                    "zvo_out_001.dat"
+                } else {
+                    "zvo_out.dat"
+                })
+                .is_file());
+        }
+    }
 }

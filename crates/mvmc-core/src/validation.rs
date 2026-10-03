@@ -75,6 +75,14 @@ pub fn validate_reducer_rank<R: crate::reducer::Reducer + ?Sized>(
 
 /// Validate globally unsupported ModPara settings without mutating data.
 pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
+    // C's Expert manual requires one for no projection. Zero is not an
+    // identity sector; reject it consistently before initialization or IO.
+    if p.nmp_trans == 0 {
+        return Err(
+            "NMPTrans must be nonzero; use 1 for no translation projection (mVMC C contract)"
+                .into(),
+        );
+    }
     if p.nsplit_size < 1 {
         return Err(format!("NSplitSize must be >= 1; got {}", p.nsplit_size));
     }
@@ -227,14 +235,6 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
         if value <= 0 {
             return Err(format!("{name} must be positive; got {value}"));
         }
-    }
-    // C does not turn zero into an identity sector. Its Expert manual requires
-    // one for no projection; reject zero before initialization or output.
-    if p.nmp_trans == 0 {
-        return Err(
-            "NMPTrans must be nonzero; use 1 for no translation projection (mVMC C contract)"
-                .into(),
-        );
     }
     Ok(())
 }

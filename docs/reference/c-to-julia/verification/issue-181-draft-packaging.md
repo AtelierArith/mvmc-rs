@@ -3,7 +3,37 @@
 Related to #181, #180 and #184; part of #185. Do not use `Closes` based on this
 focused handoff. Parent owns Rust staging/commit/push and final milestone audit.
 
-## Exact owned paths
+## Current bounded serial observation proof — committed source77ac9976
+
+Parent fresh run `a9efb626-781d-4783-b229-69d9dce6dd57` terminal0:
+**1 PASS,43 unselected,0.792s**. This ONE named test covers nine models and
+both measurement frames: actual serial public-runner pre-division weight and
+all three ordered raw Green arrays versus independent accumulated references,
+with saved-state/RNG/output assertions inside the same two-frame test.
+Parent reviewed the actual raw-observer source and these two-frame conditions.
+
+```sh
+cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test physcal_issue181 -E 'test(two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs)' --no-fail-fast --retries 0
+```
+
+Actual working-file and `git show 77ac9976:` SHA256 checks both agree:
+
+```text
+fc39e4901470b13650bf31e11cead4c821730d1c32b4affeb789c4a5e8798b60  crates/mvmc-core/tests/physcal_issue181.rs
+af5204754499721f75667ae20df8e802ef8c220f24a0a515a159d92131563a6e  crates/mvmc-core/src/run.rs
+```
+
+Selected production run.rs and test physcal_issue181.rs match the committed
+hashes above. The shared checkout includes dirty harness/support files,
+including support/ctest_provenance.rs; no complete compiler-input closure was
+captured or verified. It is not an immutable whole-checkout gate.
+No production, reference data or numerical bounds were changed by this
+documentation handoff. Historical runs below retain their actual source
+versions; they are NOT upgraded to77ac9976 or substituted for this fresh run.
+No globally reduced MPI raw-array, native macOS, full native C sampling,
+whole-workspace or complete #181/#185 acceptance claim follows.
+
+## Historical packaging manifest and owned scope
 
 `issue-181-owned-paths.txt` is the explicit sorted changed/new path list for this
 owner at restored HEAD `52d025e`. It includes this report and itself: 1157 paths.
@@ -58,7 +88,7 @@ upstream PR54 lineage through `62b0f97`. They are not Rust files to stage here;
 the shared pinned Julia reference was not moved. No new Rust commit/push is
 performed by this owner.
 
-## Fresh bounded verification after restoration
+## Historical bounded verification after restoration
 
 Updated `AGENTS.md` and `docs/NUMERICAL_COMPARISONS.md` were read completely.
 Computed cross-language floating-point fields use justified explicit bounds;
@@ -104,7 +134,41 @@ Those are parent evidence, not this owner's full-workspace validation. Focused
 builds emit the unrelated tenferro `Atomic::fetch_update` deprecation warning;
 this report does not claim all-target Clippy is clean.
 
-## Remaining acceptance / coordination
+## Historical domain records and remaining acceptance / coordination
+
+### Historical macOS CI failure record; no current native macOS proof
+
+Job `111184639828` (macOS 15.7.9 arm64, PR merge checkout
+`b103d4a84dc4c8cf3501d6f0121ad62489fbd16a`) failed the two-frame test at
+FSZ frame0 raw imaginary Etot: actual `0.42014850127977854`, independent
+Linux Julia reference `0.42014850133670045` (absolute difference about
+`5.69e-11`). Weight is 200; reference real Etot is `-144.78668505331453`.
+These aggregate magnitudes do **not** establish a cancellation bound or the
+first arithmetic divergence. No tolerance or independent expectation was
+changed. Native frame0 configuration/RNG and per-walker arithmetic evidence
+remain required before classifying this failure.
+
+The test version recorded in the following historical run used Ram's borrowed `sample_completed` hook immediately
+after the actual sampler: **both** frames' saved configuration planes,
+counters, actual primitive draw count and non-consuming next624 are checked
+against independent fixtures before measurement. Final fixed coefficients
+and flags are also checked before numerical comparisons. Linux targeted run
+`4443af1c-02c7-4d1c-aaa6-f32fb77dc431` (handle86802, terminal0) passed 1/1 in
+0.697s, 41 outside selection. Test SHA is
+`d0b0f8f78cb2c7514cb35f5cf413ca5d6c05b97045e67aa2a02dea647d5c0d1d`;
+runner SHA is
+`3fca9a51ea3c553181c20369ca4e481f042704014266cf6b680f0357b794052c`.
+This is not macOS proof or a first-arithmetic-divergence diagnosis. No extra
+sampler is used. Ram's separate current hook/DH-reader focused run
+`99421bd2-6b68-4019-be4c-e450852db987` passed 7/7 on Linux.
+
+The separate DH macOS `NotFound` failures use plain text reads after a resolver
+that accepts gzip-only candidates; confirmed candidates include
+`macos_arm_julia/neoversen1/sr_direct/dh2_real_store_runner/step-3-zvo_var.dat.gz`
+and corresponding DH4/DH24 files. Ram has fixed the gzip-aware reads; those
+runner/DH test paths are outside this owner's manifest. Native reference
+selection is preserved, rather than substituting Linux expectations. Native
+macOS revalidation remains pending.
 
 1. Following parent approval, **one** integrated #181 binary run completed:
    `ea2061c5-f99e-4ca8-8ef0-b1e6fa0df790`, handle `79674` terminal0, isolated TMPDIR
@@ -124,11 +188,22 @@ this report does not claim all-target Clippy is clean.
    latest-worktree proof or validation of that later patch/raw-Green hook. Do
    not assign a retroactive source SHA to the compiled binary; final integrated
    validation awaits the coordinated source freeze.
-2. Actual **raw Green before division inside the public runner** still awaits
-   the runner owner's observation hook. Current evidence has independent raw
-   Julia sums, actual C normalization, actual runner raw-energy recording and
-   normalized Green comparisons; the fixture-fed averaging test is not an
-   observed raw runner Green checkpoint. See native-c-weighted-green README.
+2. Historical raw-observer checkpoint: actual **serial raw Green before division inside the public runner** was
+   observed for nine models, both measurement frames, against independent
+   `two-samples/*/accumulated-{0,1}` weights and all three ordered arrays.
+   Normal targeted nextest run `9952eaee-2d94-4603-8033-41f3fa14df41`, handle
+   `93981` terminal0: **1/1 PASS**, 41 outside selection, 0.654s. Command:
+   `cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test physcal_issue181 -E 'test(two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs)' --no-fail-fast --retries 0`.
+   Test SHA `4ec1c1b0efeb8a31815a0bc862f08591cc84ef5188866679ed977a9d6a777bc1`;
+   runner SHA `efbaed4a7d369bc466bbf8a752a47c5afdbfd1f798336ac9a473566fa4bbfcdf`.
+   Existing numerical budgets and fixtures are unchanged. The observation
+   copies only actual borrowed buffers into test records, with no additional
+   sampler. Ram's separate normal/FSZ identity and guard run `7c842e83` passed
+   7/7, including configuration, raw RNG state/count and next624 identity.
+   This is not MPI globally reduced raw-buffer proof or full native C sampling;
+   the fixture-fed averaging test remains separately labelled. See
+   native-c-weighted-green README. The earlier full42 gate and parent's754
+   normal tests do not retroactively validate this new patch.
 3. Accepted S196/M0998 singleton OptTrans grouped PhysCal now has bounded actual
    MPI proof: parent reports Wegener's corrected frozen-external run `98d22d`
    terminal0, worlds2/4 × workers1/2/4 × two repeats, through public PhysCal.

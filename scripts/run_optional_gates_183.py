@@ -163,6 +163,27 @@ def validate_mpi_run(text, ranks):
         raise ValueError("missing/duplicate/wrong actual rank/world/group or per-rank PASS summaries")
 
 
+def validate_dc_run(text, model, mode):
+    """Only the exact selected gate emits these records; helpers are not selected."""
+    if model not in MODELS or mode not in ("real", "cmp"):
+        raise ValueError("unsupported Lanczos DC case")
+    lines = [line for line in text.splitlines() if "OPTIONAL183_DC" in line]
+    records = []
+    for line in lines:
+        match = re.fullmatch(r"OPTIONAL183_DC model=(\S+) mode=(\S+) file=(\S+) status=(\S+)", line.strip())
+        if match is None:
+            raise ValueError("malformed DC marker")
+        records.append(match.groups())
+    expected = [] if model == "hubbard_chain_real" else [
+        (model, mode, "zvo_ls_cisajs_001.dat", "REFERENCE_COMPARED"),
+        (model, mode, "zvo_ls_cisajscktalt_001.dat", "REFERENCE_COMPARED"),
+        (model, mode, "zvo_ls_cisajscktaltex_001.dat", "EMPTY_CONTRACT"),
+    ]
+    if sorted(records) != sorted(expected):
+        raise ValueError("missing/duplicate/wrong DC case identity or comparison status")
+    return [{"model": m, "mode": c, "file": f, "status": s} for m, c, f, s in records]
+
+
 def run(family, output):
     if family not in FAMILIES:
         raise ValueError("unknown or empty optional gate family")
@@ -206,7 +227,7 @@ def run(family, output):
         metadata = {
             "family": family, "scope": {
                 "general": "one General model, independent prefixes1/2/3/20 plus public20 repeat",
-                "lanczos": "three named historical models x real/cmp; optional missing DC not covered",
+                "lanczos": "three historical models x real/cmp; eight DC references and four empty GEx contracts (not numeric comparisons)",
                 "mpi": "one fixed Heisenberg real PhysCal, actual worlds2/4, groups1/2 and Lanczos rejection",
                 "thread": "ONE primary runner test; workers1/2/4, steps2/samples200; NOT long45",
             }[family], "oracle_execution": "none; checked-in fixtures only",
@@ -282,11 +303,23 @@ def run(family, output):
                 execute(gate, "general", {"MVMC_RS_CTEST_GENERAL": "1"})
                 completed.extend(names)
             elif family == "lanczos":
+                dc_records = []
                 for model in MODELS:
                     for mode in ("real", "cmp"):
-                        execute(gate, f"{model}-{mode}", {"MVMC_RS_LANCZOS_PHYSICAL": "1",
+                        text = execute(gate, f"{model}-{mode}", {"MVMC_RS_LANCZOS_PHYSICAL": "1",
                                 "MVMC_RS_LANCZOS_MODEL": model, "MVMC_RS_LANCZOS_MODE": mode})
+                        # Nextest's successful test output is recorded on stderr.
+                        # Read only the matching selected call; do not scan helper logs.
+                        text += "\n" + (output / f"{model}-{mode}.stderr").read_text()
+                        dc_records.extend(validate_dc_run(text, model, mode))
                         completed.append(f"{model}-{mode}")
+                if len(dc_records) != 12:
+                    raise ValueError("incomplete DC accounting")
+                write_json(output / "dc-comparisons.json", {
+                    "records": dc_records, "reference_comparisons": 8,
+                    "empty_contracts": 4, "empty_contracts_are_numeric_comparisons": False,
+                })
+                required.append("dc-comparisons.json")
             else:
                 nested = output / "thread-artifacts"
                 nested.mkdir()

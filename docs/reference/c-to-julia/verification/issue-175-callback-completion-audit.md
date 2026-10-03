@@ -1,11 +1,117 @@
 # Issue 175 callback completion audit
 
-Issue: <https://github.com/AtelierArith/mvmc-rs/issues/175> (OPEN).
-Audit baseline: `bff283dab667d7720291ba190546629dd68f44fb`.
-The source inventory and bounded new validation are distinguished below. This is
-not an issue-close request, current-main MPI proof or whole-issue-179 validation.
+Issue: <https://github.com/AtelierArith/mvmc-rs/issues/175> (**CLOSED**, reason
+`COMPLETED`, GitHub-confirmed at `2026-10-03T13:18:03Z`). Parent reviewed the full
+current source/evidence and the original five acceptance criteria, verified
+callback production/tests identical to `origin/main`, and committed this audit
+in `859d13e2` before closing the issue. Closure is limited to #175.
+Historical audit baseline: `bff283dab667d7720291ba190546629dd68f44fb`.
+Current focused verification is recorded below, separately from the historical
+runs. Historical no-closure statements below describe those earlier checkpoints;
+they are not current issue status. These are the original five
+#175 criteria, not whole-issue-185 or whole-issue-179 acceptance.
 
-## Acceptance mapping
+## Current focused verification
+
+Serial snapshot: immutable checkout `/tmp/mvmc-post212-verified.hbhcU3` at
+`69a53195a97d66aae0fa6cf55d7ee9c41b7557b4`, with its own target and no overlays.
+Parent session `30236`, nextest run
+`3abbf332-c07d-4f18-9b5b-26d066cf9bf9`, completed with **exit 0, 22/22 passed,
+0 skipped, 209.577s**. The exchange-spin callback test took 209.577s.
+This is the focused gate's terminal result, not a claim that the separate
+full-workspace run passed.
+
+```sh
+cargo nextest run -p mvmc-core --cargo-profile test-fast --locked \
+  --test physcal_callback --test physcal_callback_reference \
+  --test physcal_callback_exact_contract --no-fail-fast --retries 0
+```
+
+The binaries select 9 serial/error tests, 12 independent-reference tests and
+1 exact observation test. Their current source hashes are recorded below.
+The diff from `69a53195` to `c8db43bf461fe6fb426b5fee117319849c1b9c21`
+contains only three documentation files; production code, callback tests and
+fixtures are identical. The measured `run.rs` SHA-256 in both snapshots is
+`9e31787961860233c094d810043627e01d321045d6affa52bccf614a594f8968`.
+
+MPI snapshot: container `73c57e563c61`, root
+`/tmp/mvmc-175-c8-frozen.t9A8dB`, extracted only from the committed `c8db43bf`
+git archive. Reference hydration uses Julia commit
+`8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`, nested PfaPack
+`0dcf52c15caec63516d0703f36bfc8a4bc0e58d0` and SFMT
+`1526553009f318ae78338151460fda78beadddc2` git archives, not dirty files.
+No C/Julia oracle is run by this gate. The pinned `Manifest-v1.13.toml` hash is
+`09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc`.
+
+Compile/list-only session `92500` completed with exit 0 and listed exactly one
+ignored test, `mpi_physcal_callback_preserves_two_samples_and_collective_error_boundaries`.
+Separate target: `/home/vscode/.cache/mvmc/target/mpi-callback-c8-t9A8dB`.
+Actual MPI worlds 2 and 4 subsequently **both completed with exit 0**; each rank
+reported **1 passed, 0 failed, 0 ignored**, 0.14s. This is one distinct test
+launched twice. Each world exercises eight runner cases per width, widths 1 and
+2, hence 16 cases/rank: 32 runner executions for world 2 and 64 for world 4,
+not 96 distinct tests.
+
+The eight cases are callback-off prefixes 1/2, callback-on two samples,
+last-world-rank callback errors at samples 0/1 with and without a callback on the
+root, and a genuine root filesystem write failure. Every rank has ten diagnostic
+markers (four callback-error cases and one output-error case per width).
+Assertions verify every-rank callback indexes/status/post-average energy,
+collective error agreement and retained boundary, full configurations/counters,
+actual raw SFMT words/index/draw count/next624, fixed coefficient bits/flags,
+QP values and same-run copies where anchored, and ordered root-only output.
+Output failure prevents callbacks; callback failure prevents later samples.
+Each world retains sixteen case directories, writer 0 only. Root-write failures
+retain out/var sample 001 and the blocking cisajs directory, with no sample 002.
+
+```sh
+docker exec -u vscode -w /tmp/mvmc-175-c8-frozen.t9A8dB 73c57e563c61 \
+  env MPI_PHYSCAL_CALLBACK_OUTPUT=/tmp/NEW-exclusive-output \
+  OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  BLIS_NUM_THREADS=1 RAYON_NUM_THREADS=1 \
+  MVMC_RS_INNER_THREADS=1 MVMC_RS_INNER_THRESHOLD=32 \
+  timeout --kill-after=15s 120s /opt/mpich/bin/mpiexec -n 2 \
+  /home/vscode/.cache/mvmc/target/mpi-callback-c8-t9A8dB/test-fast/deps/mpi_physcal_callback_contract-6c9a483627524c9b \
+  --ignored --exact mpi_physcal_callback_preserves_two_samples_and_collective_error_boundaries \
+  --test-threads=1 --nocapture
+```
+
+Repeat with `-n 4` and another nonexistent output path. Actual outputs and native
+tee-captured logs are under container `/tmp/mvmc-175-c8-results.l830c5/`, with
+`world2` and `world4` output roots. Linux x86_64, Rust 1.99.0/LLVM 23.1.1,
+MPICH 4.2.0 `ch4:ucx` under `/opt/mpich`, OpenBLAS 0.3.26, threads 1.
+Image ID: `sha256:28023cf1c31b9854391c41a4af428fada275f9d4883f85120506ffb25b1c51c9`.
+Archive has no local `.cargo/config.toml`; build uses explicit separate target,
+`RUSTC_WRAPPER=/opt/devtools/bin/kache`, `KACHE_CONFIG=/opt/devcontainer/kache.toml`,
+`MPICC=/opt/mpich/bin/mpicc`, `LIBCLANG_PATH=/usr/lib/llvm-18/lib`,
+`LD_LIBRARY_PATH=/opt/mpich/lib`, `PKG_CONFIG_PATH=/opt/mpich/lib/pkgconfig`.
+No dependency, fixture, numerical budget or production change was made.
+
+All 25,881 archived/hydrated source files have identical pre/post sorted
+`sha256sum` inventory digest
+`0e4f1d8e40d1abc04912fb37522d686e64dfd423a36d0d1d66c77627ee9402e6`.
+Binary SHA-256 is unchanged before/after launches:
+`cfa2fbc448347520876b395e0bf2f82c5464d518e8c1e0b56f3e3fa41aeb5eda`.
+Every resolved linked library, loader and launcher was hashed before/after and
+remained unchanged; the full post list is retained in `post-hashes.log`.
+In particular, OpenBLAS is
+`bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e`
+and libmpi is
+`638c51116955894e0a8fd91b3f7091246ad3155c37141780958e39f5e102da11`.
+Parent independently reviewed the fresh MPI logs and hashes.
+
+| Artifact under `/tmp/mvmc-175-c8-results.l830c5/` | SHA-256 |
+| --- | --- |
+| `world2.log` | `afb848b37b7bf4efa6503c6060055118bfeacdf0b7967e4f3b96f0b056c5d291` |
+| `world4.log` | `13e640aaf794be137fadc5d648aaef02364b1f08259611f6fdc2aca481a8f141` |
+| `post-hashes.log` | `6a519d226061203de24fb03321082394fb1ab71fa0e5430219ea07e8db32f3f0` |
+| `qualified-output-inventory.log` | `d80b95444ef5ca7b36da1691774b645624c27b1d5ed43f5aca230f17575d7102` |
+
+## Original five-criterion acceptance mapping
+
+The current serial 22-test gate and current c8 MPI2/4 gate above execute the
+specific checks below. Historical runs are not silently reassigned to these
+snapshots. No general full-model or whole-workspace prerequisite is added to #175.
 
 | Criterion | Existing concrete evidence | New bounded gap closure (details below) |
 | --- | --- | --- |
@@ -30,7 +136,7 @@ native-C sampling evidence. Callback on/off comparisons are same-input execution
 not replacement independent numerical oracles. No fixture regeneration or numerical
 budget change is part of this audit.
 
-Wegener confirms existing actual MPI PhysCal repeat gates cover configuration,
+Historically, Wegener confirmed existing actual MPI PhysCal repeat gates cover configuration,
 SFMT state/count/next624, fixed signed bits and output, but not callbacks. His
 optimization callback gates are not PhysCal callback proof. The new disjoint
 `mpi_physcal_callback_contract.rs` is assigned separately; no edits to
@@ -154,7 +260,7 @@ was introduced to bypass that setup failure.
 Parent review/current-integration validation remain separate from these bounded
 proofs. Existing independent fixtures and their provenance are unchanged.
 
-## Revised QP policy and validation
+## Historical revised QP policy and validation
 
 Only QP comparison scope changes; no production code, parameter/RNG algorithms,
 independent fixtures or numerical bounds change. Both tests compare independently
@@ -262,3 +368,9 @@ Full serial tests, `physcal_callback.rs`:
 
 Full independent-reference tests, `physcal_callback_reference.rs`:
 `6c6267569280044c1c0dbbc61d8eb2357dea6401c261741974f609e7fb7f1fd9`.
+
+Current exact serial test, `physcal_callback_exact_contract.rs`:
+`31093b6cdf7c5023d0f1d4fdb5287351b448b5bcadb996722463e68508444aac`.
+
+Current actual-MPI test, `mpi_physcal_callback_contract.rs`:
+`5846bc61ed12bca23fa4adc556b413b063c28f71d9274e1e577df1d5222d2c60`.

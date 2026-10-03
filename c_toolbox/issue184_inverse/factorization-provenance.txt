@@ -1,0 +1,70 @@
+Julia=1.13.1 arch=x86_64 kernel=Linux project=/home/terasaki/work/atelierarith/mvmc-rs/extern/Julia-mVMC/Project.toml
+BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
+/home/terasaki/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libopenblas64_.so SHA256=4ee5ad9dcc4082b918d3e5bfc434b5a74fb43025f102447eb16a7f04ba21a12b
+OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+	linux-vdso.so.1 (0x00007ffc813ec000)
+	libopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007e973fe70000)
+	libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007e973fa00000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007e973fd87000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007e973fd59000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007e973f600000)
+	libgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x00007e973f200000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007e974227c000)
+
+native OpenBLAS package=libopenblas0-pthread:amd64	0.3.26+ds-1ubuntu0.1
+
+native OpenBLAS SHA256=bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e
+native probe SHA256=f3c4aab4916dac476888b7edf341696656dc2173f57c70fa30f7ab087be2bed7
+`gfortran -O0 -ffp-contract=off -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/pfapack/fortran/zsktrf.f -o /tmp/mvmc-issue184-factorized-20261003-d/zsktrf.f.o`
+`gfortran -O0 -ffp-contract=off -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/pfapack/fortran/zsktf2.f -o /tmp/mvmc-issue184-factorized-20261003-d/zsktf2.f.o`
+`gfortran -O0 -ffp-contract=off -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/pfapack/fortran/zlasktrf.f -o /tmp/mvmc-issue184-factorized-20261003-d/zlasktrf.f.o`
+`gfortran -O0 -ffp-contract=off -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/pfapack/fortran/zskr2.f -o /tmp/mvmc-issue184-factorized-20261003-d/zskr2.f.o`
+`gfortran -O0 -ffp-contract=off -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/pfapack/fortran/zskr2k.f -o /tmp/mvmc-issue184-factorized-20261003-d/zskr2k.f.o`
+`gfortran -O0 -ffp-contract=off -J/tmp/mvmc-issue184-factorized-20261003-d -c /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/ltl2inv/ilaenv_wrap.f90 -o /tmp/mvmc-issue184-factorized-20261003-d/ilaenv.o`
+`c++ -std=c++17 -O0 -ffp-contract=off -DBLAS_EXTERNAL -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/common -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/common/deps -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/ltl2inv /home/terasaki/work/atelierarith/mvmc-rs/c_toolbox/issue184_inverse/factorization_probe.cc /home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/ltl2inv/ilaenv_lauum.cc /tmp/mvmc-issue184-factorized-20261003-d/zsktrf.f.o /tmp/mvmc-issue184-factorized-20261003-d/zsktf2.f.o /tmp/mvmc-issue184-factorized-20261003-d/zlasktrf.f.o /tmp/mvmc-issue184-factorized-20261003-d/zskr2.f.o /tmp/mvmc-issue184-factorized-20261003-d/zskr2k.f.o /tmp/mvmc-issue184-factorized-20261003-d/ilaenv.o -lopenblas -lgfortran -o /tmp/mvmc-issue184-factorized-20261003-d/factorization-probe`
+c_toolbox/issue184_inverse/factorization_probe.cc SHA256=491ad587408c7479cd867491d7528bf2eb80f84e4af801c95cd5fa320f7814f2
+c_toolbox/issue184_inverse/generate_factorized.jl SHA256=0d7eeeaa771bdca5da10a4a6aa8938436a8a0fbcaf9d2d712b0853911fd49828
+extern/Julia-mVMC/Manifest-v1.13.toml SHA256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+extern/Julia-mVMC/PfaPack.jl/src/ltl_decomposition.jl SHA256=b651376e24c08677fde11b7b80c9f302877ecbefff55353ad146e6532fba5ae0
+extern/Julia-mVMC/PfaPack.jl/src/utu2.jl SHA256=1352a3edbc413611ad99877ea32f7faf5e54e003f9a3fa088f8dbdbdb2723a43
+extern/mVMC-1.3.0/src/common/blalink.hh SHA256=b8eb892bef092e13b8b7b276222c08c86ac57566fa81d99cb91f2a320b2d4ac4
+extern/mVMC-1.3.0/src/common/blalink_fort.h SHA256=3b5839a6ae52453e81e3f1c1aa2f0ca8fc683a9b73503795179c8945c4ff1481
+extern/mVMC-1.3.0/src/common/colmaj.hh SHA256=3ee5e722a29bedb8217390271e53ede5a2736cd27f29285e7afca4b1383a3321
+extern/mVMC-1.3.0/src/common/deps/blis.h SHA256=ca7f652623bb32fe512595e939e21b32918ff4847fd3db7c9b243b32352debec
+extern/mVMC-1.3.0/src/common/setmemory.c SHA256=47295de0bfa1747cc995d41bd08a74c7f9e456039c4e2933b06d1726e06ea9cb
+extern/mVMC-1.3.0/src/common/setmemory.h SHA256=b217959c22c51c0cd7284009d2f88dba943d88873e2ee36ae354efc92cb6bf17
+extern/mVMC-1.3.0/src/ltl2inv/CMakeLists.txt SHA256=d6c8cdbb165128f519a20a90ea37d865ab9888464cf163ce1e367632830e10fc
+extern/mVMC-1.3.0/src/ltl2inv/blalink_gemmt.c SHA256=06c27f5aafe7caeb66fc26806427c9ee8df9dfc28fe5b078114e3cbbda652789
+extern/mVMC-1.3.0/src/ltl2inv/blalink_gemmt.hh SHA256=7add54f8f1a2228e085cbf02bd2a08c6776df504dff223407bca1a9b40b8f404
+extern/mVMC-1.3.0/src/ltl2inv/ilaenv.h SHA256=728fd28be974a3e63059803f0f67946ef4b38f377e946d4ef23b75ffac85b97e
+extern/mVMC-1.3.0/src/ltl2inv/ilaenv_lauum.cc SHA256=2e2f764cb9315088e397a649bd4487f1ff342e8c54549c0bc9695d0b63be3a5e
+extern/mVMC-1.3.0/src/ltl2inv/ilaenv_lauum.hh SHA256=3dd4dd04c95d4a112660f470d5646685095f9ce7817934a70044228fbc655523
+extern/mVMC-1.3.0/src/ltl2inv/ilaenv_wrap.f90 SHA256=13292b4a29358488f5a4bbac300bc09bd4b500c9af6e5579fc7a0b95d5e7b2ca
+extern/mVMC-1.3.0/src/ltl2inv/invert.tcc SHA256=d477c7d2bb6d2b0c29872d06ec75fd7e804e1e30ace00888b77d31d2c74b821c
+extern/mVMC-1.3.0/src/ltl2inv/ltl2inv.cc SHA256=d2b954765728a864a3729ac62016eec20c03f75b706b2c19eb8497774a3ea5dd
+extern/mVMC-1.3.0/src/ltl2inv/makefile_ltl2inv SHA256=f510ea1f286aebca9390fd18fd819674dbb9bc05b8911fb4edebde22fe926089
+extern/mVMC-1.3.0/src/ltl2inv/pfaffian.tcc SHA256=d35ebf7af8d9e06dba8f7f95aaf692bbefbccb778f2c6a5c2acf94c3b7b87e14
+extern/mVMC-1.3.0/src/ltl2inv/testinv.cc SHA256=8ec270d2fd821fadc52b7881f3f7d7fe89b742e1ec732905ffef1f80aacfb8e6
+extern/mVMC-1.3.0/src/ltl2inv/trmmt.tcc SHA256=0a32f98038bf7accdcb6344063589be4451655bf1a3113ddef7dd37469d41d3d
+extern/mVMC-1.3.0/src/pfapack/fortran/zlasktrf.f SHA256=302b5f52686846ad90338abf2630b7207309ce1a28d30c55dad13af88e2b76fc
+extern/mVMC-1.3.0/src/pfapack/fortran/zskr2.f SHA256=c1cc1cf9753a2f16d2551cab0e52490ccc873ff26f84727b45a5e51dd9d095d7
+extern/mVMC-1.3.0/src/pfapack/fortran/zskr2k.f SHA256=a984e56cc46129d5635ad5e975f35a2511ad05ce40a31bb0f6f86bafcaa3ad78
+extern/mVMC-1.3.0/src/pfapack/fortran/zsktf2.f SHA256=f418a9c878434d0f441336b2b1b9016a16548fccb20bc924de2f5a15782d0d62
+extern/mVMC-1.3.0/src/pfapack/fortran/zsktrf.f SHA256=6335d352b368f9561b9f75114df2e78dd8be4c7c6beda597dc024efec2349b0c
+complex6_factorized.c.txt SHA256=65db4e147e75c4ad53339011cc0d576e6a7f3bbfca925b07612d0bb144a813bc
+complex6_factorized.factor.txt SHA256=d999dca36c0f8bc2152f8c90740e03d7ef31a1108ee3ac82e59580fd1287a060
+complex6_factorized.input.txt SHA256=9d1d73b6e9d2cd067b7e3ecee3ebf93b8f9b50e0a365157cc8712a480e1db0ea
+complex6_factorized.j.txt SHA256=8a05ff4b20d4c04d2558524ab428ddcd039cdc9a0d4d74de0233bcc7f252aef4
+complex6_factorized.native.txt SHA256=37365e69a3a4a74194cf58f7ef9a1e802c1b666e2a85abe3ad8ad23863bea182
+complex6_factorized.operator.txt SHA256=19f223d72b902b6f54984fd81183aba86300c824cb7928023b6496583c3dac60
+complex6_factorized.raw.txt SHA256=96a4ccbfef766c11e20ae5277c34325433c2e49b75bba4bfa394b635f75070b1

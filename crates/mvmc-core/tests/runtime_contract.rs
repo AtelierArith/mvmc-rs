@@ -23,7 +23,9 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NVMCSample -1", "NVMCSample must be positive"),
     ] {
         let mut data = ExpertModeData::new();
-        data.modpara = parse_modpara_content(text);
+        // A valid unrelated projection setting prevents default zero from
+        // masking the deliberately invalid option under test.
+        data.modpara = parse_modpara_content(&format!("NMPTrans 1\n{text}"));
         let before = data.clone();
         let mut rng = Sfmt19937Rng::new(1);
         let mut probe = Sfmt19937Rng::new(1);
@@ -105,6 +107,7 @@ fn rejects_duplicate_mode2_one_body_entries_without_factored_green() {
 fn unported_sections_cannot_silently_change_the_model() {
     for kind in ["TwoBodyGEx", "SpinJastrow"] {
         let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
         data.namelist.push((kind.into(), "missing.def".into()));
         let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
         assert!(error.contains(kind), "{kind}: {error}");
@@ -133,6 +136,9 @@ fn normal_spin_changing_interall_is_rejected_before_initialization_with_or_witho
     for has_namelist in [true, false] {
         let mut data =
             historical_orbital_model::historical_kernel_model(root.join("namelist.def")).unwrap();
+        // The archived kernel fixture omits projection settings. Supply the
+        // accepted C identity count, keeping its actual InterAll terms intact.
+        data.modpara.nmp_trans = 1;
         if !has_namelist {
             data.namelist.clear();
         }
