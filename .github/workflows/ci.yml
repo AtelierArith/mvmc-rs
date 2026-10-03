@@ -34,7 +34,6 @@ jobs:
       matrix:
         platform:
           - { name: Linux x86_64, os: ubuntu-24.04, arch: X64, blas_core: HASWELL, cache: linux-x86_64 }
-          - { name: macOS ARM64, os: macos-15, arch: ARM64, blas_core: NEOVERSEN1, cache: macos-arm64 }
         configuration:
           - { name: Default features — serial, args: '', cache: default }
           - { name: All features — MPI + SIMD, args: --all-features, cache: all-features }
@@ -72,7 +71,6 @@ jobs:
       matrix:
         platform:
           - { name: Linux x86_64, os: ubuntu-24.04, arch: X64, blas_core: HASWELL, cache: linux-x86_64 }
-          - { name: macOS ARM64, os: macos-15, arch: ARM64, blas_core: NEOVERSEN1, cache: macos-arm64 }
     steps:
       - uses: actions/checkout@v5
         with:
