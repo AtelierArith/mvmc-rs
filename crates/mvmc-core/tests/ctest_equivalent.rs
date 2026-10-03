@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 
 use mvmc_core::{run_para_opt_from_namelist, RunConfig};
 
+mod support;
+
 const ABSOLUTE_FLOOR: f64 = 1.0e-8;
 
 #[derive(Clone, Copy)]
@@ -126,11 +128,10 @@ fn passes(calculated: f64, expected: f64, sigma: f64) -> bool {
 }
 
 #[test]
+#[ignore = "long optional ctest gate: MVMC_RS_CTEST_MODELS required"]
 fn rust_ctest_equivalent_selected_models() {
-    let Ok(filter) = std::env::var("MVMC_RS_CTEST_MODELS") else {
-        eprintln!("skipping Rust ctest-equivalent harness; set MVMC_RS_CTEST_MODELS");
-        return;
-    };
+    support::require_gate("ctest-equivalent", "MVMC_RS_CTEST_MODELS");
+    let filter = std::env::var("MVMC_RS_CTEST_MODELS").expect("required selector");
     let requested: Vec<_> = filter
         .split(',')
         .map(str::trim)
@@ -146,13 +147,23 @@ fn rust_ctest_equivalent_selected_models() {
         let model = MODELS
             .iter()
             .find(|model| model.fixture == name)
-            .unwrap_or_else(|| panic!("unknown ctest model {name:?}"));
+            .unwrap_or_else(|| {
+                support::unsupported("ctest-equivalent", format!("unknown model {name:?}"))
+            });
         if !model.supported {
-            eprintln!("ctest model {name} unsupported: {}", model.reason);
-            continue;
+            support::unsupported("ctest-equivalent", format!("{name}: {}", model.reason));
         }
         let fixture = root.join("test/integration/reference").join(model.fixture);
         let namelist = fixture.join("inputs/namelist.def");
+        for path in [
+            &namelist,
+            &fixture.join("ctest_ref/ref_mean.dat"),
+            &fixture.join("ctest_ref/ref_std.dat"),
+        ] {
+            if !path.is_file() {
+                support::missing_fixture("ctest-equivalent", path.display().to_string());
+            }
+        }
         let ref_mean = read_values(&fixture.join("ctest_ref/ref_mean.dat"));
         let ref_std = read_values(&fixture.join("ctest_ref/ref_std.dat"));
         assert!(
