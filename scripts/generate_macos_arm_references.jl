@@ -77,7 +77,7 @@ for (index, (solver, case, store, prefix)) in enumerate(selected)
     body = replace(body, root_line => "const FIXTURE_ROOT = " * repr(target))
     metadata = prefix == "c_kernel_order/native_fsz" ? PROVENANCE * NativeFSZEnergyReference.PROVENANCE[] : PROVENANCE
     body = replace(body, "function verify(name, actual)\n" => "function verify(name, actual)\n    Main.record(joinpath(FIXTURE_ROOT, name))\n    if name in (\"fixed-input.txt\", \"reference.txt\")\n        actual = $(repr(metadata)) * actual\n    end\n"; count=1)
-    steps = !startswith(prefix, "c_kernel_order/native_fsz") && solver == "sr_direct" && case == "opt_real" && store == 0 ? "1,2,3,27,28,29,50" : solver == "sr_direct" && case == "hubbard" ? "1,2,3,4,5,6,7,8,9,10,50" : "1,2,3,50"
+    steps = solver == "sr_direct" && case == "hubbard" ? "1,2,3,4,5,6,7,8,9,10" : "1,2,3"
     empty!(ARGS); append!(ARGS, ["--case=$case", "--steps=$steps", "--write"])
     solver == "sr_direct" && push!(ARGS, "--store=$store")
     prefix == "c_kernel_order" && push!(ARGS, "--c-kernel-order")

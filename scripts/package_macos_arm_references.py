@@ -42,6 +42,20 @@ def archived(relative: Path) -> bytes | None:
 
 
 def unused_auxiliary(relative: Path) -> bool:
+    if relative.name.startswith("step-") and int(relative.name.split("-")[1]) > 10:
+        return True  # Twenty-step runs check repeatability, not oracle output.
+    if relative.parts[0] in ("sr_direct", "sr_cg") and len(relative.parts) > 2:
+        case = relative.parts[1].removesuffix("_store_runner").removesuffix("_runner")
+        # These runner tests exclusively use the C-kernel-order overlays.
+        if case in ("fsz", "interall", "pairhop_fsz", "opt_fsz", "dh2_fsz", "dh4_fsz", "dh24_fsz"):
+            return True
+        if relative.parts[0] == "sr_direct" and case == "opt_real":
+            return True
+    if relative.name.endswith("-status.txt"):
+        solver = "sr_direct" if "sr_direct" in relative.parts else "sr_cg"
+        case = relative.parts[relative.parts.index(solver) + 1]
+        if not case.startswith(("rbm_fsz_", "opt_")):
+            return True
     if relative.parts[0] == "sr_direct_fixed" and relative.name == "fixed-input.txt":
         return True  # Replay stores only the independently refactored solution.
     if relative.name not in ("fixed-input.txt", "gram.txt") or "sr_direct" not in relative.parts:

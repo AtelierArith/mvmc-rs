@@ -96,6 +96,8 @@ julia +1.13.1 --project=extern/Julia-mVMC scripts/generate_macos_arm_references.
 ```
 
 The generator supports `--job=solver/case/store` and `--job=fixed`.
+It generates only consumed short prefixes (1–3, plus Hubbard direct 4–10);
+20-step repeatability runs do not need oracle output.
 Repeat with `OPENBLAS_CORETYPE=NEOVERSEN1` for that kernel.
 `generate_sr_direct_fixed_reference.jl` separately replays 51 archived
 systems using the same BLAS bridge; inputs/matrices/gradients stay unchanged.
@@ -110,3 +112,39 @@ The workflow checks Linux x86_64 and macOS ARM64 with the `ci` profile,
 following tenferro-rs's matrix and tooling. See [DEVELOPMENT.md](DEVELOPMENT.md)
 for the optimized numerical-test profile. Hosted CI uses checked-in references
 and system BLAS/MPI; fixture generation remains an optional developer command.
+
+### Regenerate a single short-run artifact
+
+First install the pinned reference dependencies:
+
+```sh
+julia +1.13.1 --project=extern/Julia-mVMC -e \
+  'using Pkg; Pkg.instantiate(); Pkg.build("PfaPack"); Pkg.build("SFMT")'
+```
+
+After building the two bridges above, reproduce the requested NEOVERSEN1
+`dh24_fsz` CG artifact in a fresh scratch directory:
+
+```sh
+OPENBLAS_CORETYPE=NEOVERSEN1 julia +1.13.1 --project=extern/Julia-mVMC \
+  scripts/generate_macos_arm_references.jl \
+  --blas-bridge=/tmp/mvmc-arm-reference/libblas.dylib \
+  --fsz-bridge-dir=/tmp/mvmc-arm-reference/native-fsz \
+  --job=c_kernel_order/native_fsz/sr_cg/dh24_fsz/0 \
+  --output-root=/tmp/mvmc-arm-reference/dh24-fsz-cg-neoversen1
+```
+
+The plaintext result is
+`/tmp/mvmc-arm-reference/dh24-fsz-cg-neoversen1/c_kernel_order/native_fsz/sr_cg/dh24_fsz_runner/step-2-zqp_opt.dat`.
+The adjacent provenance and job SHA manifest record its origin. The committed
+`.dat.gz` stores the same logical format using deterministic gzip (`mtime=0`);
+Rust transparently decompresses it. Numerical reproduction uses the comparison
+policy, rather than requiring new floating-point output bytes to match a hash.
+
+For complete fixture replacement, generate all jobs into fresh directories
+for both cores and generate their fixed direct-SR replay. Validate the results
+before replacing the corresponding unpackaged repository directories, then
+run the packager. It requires complete manifests, verifies logical hashes,
+reuses unchanged archives and omits artifacts not consumed by Rust tests,
+including historical long-run outputs. A single-job scratch directory is for
+focused investigation, not a complete replacement for the fixture tree.
