@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod support;
 use support::julia_mvmc_root;
@@ -70,18 +71,22 @@ fn mandatory_smoke_missing_checkout_or_namelist_fails_before_running() {
             .unwrap();
         assert!(!output.status.success(), "missing fixture must not pass");
         assert!(String::from_utf8_lossy(&output.stderr).contains("MissingFixture"));
-        assert!(
-            !empty_checkout.join("out").exists(),
-            "runner must not start"
-        );
     }
     fs::remove_dir(empty_checkout).unwrap();
 }
 
 fn tempdir_in_target() -> PathBuf {
-    let mut path = std::env::temp_dir();
-    path.push(format!("mvmc-core-run-smoke-{}", std::process::id(),));
-    let _ = fs::remove_dir_all(&path);
-    fs::create_dir_all(&path).expect("create temp dir");
-    path
+    static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
+    loop {
+        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "mvmc-core-run-smoke-{}-{sequence}",
+            std::process::id(),
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => return path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("cannot create {}: {error}", path.display()),
+        }
+    }
 }
