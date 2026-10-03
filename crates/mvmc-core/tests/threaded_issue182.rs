@@ -2,6 +2,8 @@
 //! Kernel expectations are analytic or archived independent Julia values.
 //! Runner comparisons are Rust worker invariance, not fresh C/Julia parity.
 
+#[path = "support/case_observation.rs"]
+mod case_observation;
 #[path = "support/ctest_provenance.rs"]
 mod ctest_provenance;
 #[path = "../../../tests/support/numerical_comparison.rs"]
@@ -60,7 +62,9 @@ fn complex(label: &str, values: &[C]) {
 }
 
 fn child(job: &str, workers: usize, threshold: usize) -> BTreeMap<String, (char, String)> {
-    let result = Command::new(std::env::current_exe().unwrap())
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    let invocation = case_observation::configure_child(&mut command, job, workers, threshold);
+    let result = command
         .args([
             "--ignored",
             "--exact",
@@ -78,6 +82,7 @@ fn child(job: &str, workers: usize, threshold: usize) -> BTreeMap<String, (char,
         .env("RAYON_NUM_THREADS", "1")
         .output()
         .unwrap();
+    case_observation::retain_child(invocation, job, workers, threshold, &result);
     assert!(
         result.status.success(),
         "{job}: workers={workers}, threshold={threshold}\n{}\n{}",
@@ -141,6 +146,7 @@ fn compare(expected: &BTreeMap<String, (char, String)>, actual: &BTreeMap<String
         "issue182 compared {} records; maximum numerical difference {max_difference:.5e}",
         actual.len()
     );
+    case_observation::comparison(expected, actual);
 }
 
 #[test]
@@ -433,6 +439,7 @@ fn selected_runner_missing_fixture_root_fails_before_matrix_execution() {
 #[ignore = "internal process-scoped matrix worker; ISSUE182_CHILD required"]
 fn issue182_child() {
     let job = std::env::var("ISSUE182_CHILD").expect("internal worker requires ISSUE182_CHILD");
+    let _recorder_job = case_observation::enter_job();
     let config = inner_thread_config();
     for size in [0, 1, 2, 4, 31, 32, 33, 34] {
         let enabled = config.threads > 1 && size >= config.threshold;
@@ -547,6 +554,7 @@ fn issue182_child() {
             );
         }
     }
+    case_observation::finish_child();
 }
 
 fn scratch_isolation(workers: usize) {
@@ -1377,6 +1385,7 @@ fn mapped_parameters(data: &ExpertModeData) -> Vec<C> {
 }
 
 fn emit_state(label: &str, data: &ExpertModeData, state: &VmcOptimizationState) {
+    case_observation::retain_layout(label, data, state);
     discrete(&format!("{label}-configuration"), &state.electron_config);
     discrete(&format!("{label}-flags"), &data.optimization_flags);
     complex(&format!("{label}-parameters"), &parameters(data));
@@ -1476,6 +1485,17 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                 {
                     continue;
                 }
+                let recorded_case = (case_observation::enabled() && steps == 20).then(|| {
+                    if failure_boundary_only {
+                        "failure/hubbard_chain_real/qp32/store0/cg0".to_owned()
+                    } else {
+                        let variant = if real_fsz { "real-fsz" } else { model };
+                        format!("long20/{variant}/qp{size}/store{store}/cg{cg}")
+                    }
+                });
+                if let Some(case) = &recorded_case {
+                    case_observation::begin(case, "runtime-outcome");
+                }
                 let mut data = mvmc_expert_parsers::parse_expert_mode_files(root.join(format!(
                     "test/integration/reference/{model}/inputs/namelist.def"
                 )))
@@ -1504,6 +1524,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                 let output = output_root.join(&label);
                 std::fs::create_dir(&output).unwrap();
                 let mut rng = Sfmt19937Rng::new(1);
+                case_observation::retain_launch_seed(&label, 1);
                 init_parameter(&mut data, &mut rng);
                 if real_fsz {
                     for value in &mut data.slater_params {
@@ -1606,6 +1627,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                         assert_eq!(records.len(), failed_step + 1);
                         assert!(records[..failed_step].iter().all(|r| r.status == Some(0)));
                         let failed = &records[failed_step];
+                        case_observation::retain_sr_dimension(&label, failed.dimension);
                         assert_eq!(failed.dimension, 5);
                         assert_eq!(failed.triangle, 'U');
                         assert_eq!(failed.status, Some(1));
@@ -1693,6 +1715,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                     );
                 }
                 if failure_boundary_only {
+                    case_observation::retain_layout(&label, &data, &state);
                     discrete("direct-sr-failure-rng", &rng);
                     discrete("direct-sr-failure-words", rng.words_consumed());
                     let mut next = rng.clone();
@@ -1702,6 +1725,9 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                     );
                     discrete("direct-sr-failure-config", &state.electron_config);
                     complex("direct-sr-failure-parameters", &parameters(&data));
+                    if let Some(case) = &recorded_case {
+                        case_observation::complete(case, "runtime-outcome");
+                    }
                     return;
                 }
                 if diagnostic_collect_all && result.is_err() {
@@ -1722,6 +1748,16 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                     (0..624).map(|_| peek.gen_rand32()).collect::<Vec<_>>(),
                 );
                 emit_state(&label, &data, &state);
+                if let Some(case) = &recorded_case {
+                    case_observation::complete(case, "runtime-outcome");
+                }
+            }
+            let recorded_physcal = (case_observation::enabled() && steps == 20).then(|| {
+                let variant = if real_fsz { "real-fsz" } else { model };
+                format!("long20/{variant}/qp{size}/physcal")
+            });
+            if let Some(case) = &recorded_physcal {
+                case_observation::begin(case, "runtime-outcome");
             }
             let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
             let mode = if model.ends_with("real") {
@@ -1753,6 +1789,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
             }
             let variant = if real_fsz { "real-fsz" } else { model };
             let label = format!("synthetic-{variant}-{size}-physcal");
+            case_observation::retain_launch_seed(&label, 1);
             discrete(&format!("{label}-initial-rng"), &prepared.rng);
             let output = output_root.join(&label);
             let result = mvmc_core::vmc_phys_cal_to_dir(prepared, &output);
@@ -1768,6 +1805,9 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
             discrete(&format!("{label}-final-rng"), &result.final_rng);
             discrete(&format!("{label}-iterations"), result.iterations);
             emit_state(&label, &result.data, &result.state);
+            if let Some(case) = &recorded_physcal {
+                case_observation::complete(case, "runtime-outcome");
+            }
         }
     }
     if steps == 20 && !failure_boundary_only {
@@ -1837,6 +1877,12 @@ fn transfer_site(output_root: &Path) {
         "extern/Julia-mVMC/test/integration/reference/hubbard_chain_real/inputs/namelist.def",
     );
     for size in SIZES {
+        let recorded_case = if case_observation::enabled() {
+            format!("transfer/hubbard_chain_real/terms{size}")
+        } else {
+            String::new()
+        };
+        case_observation::begin(&recorded_case, "measured-activation");
         let mut data = mvmc_expert_parsers::parse_expert_mode_files(&input).unwrap();
         assert!(!mvmc_core::get_all_complex_flag(&data));
         threshold_transfer_input(&mut data, size);
@@ -1861,6 +1907,9 @@ fn transfer_site(output_root: &Path) {
             false,
         );
         let output = output_root.join(format!("synthetic-transfer-{size}"));
+        if case_observation::enabled() {
+            case_observation::retain_launch_seed(&format!("synthetic-transfer-{size}"), 1);
+        }
         std::fs::create_dir(&output).unwrap();
         let observer = start_observation();
         mvmc_core::vmc_para_opt(
@@ -1893,6 +1942,7 @@ fn transfer_site(output_root: &Path) {
             .worker_ids
             .iter()
             .all(|&id| id < inner_thread_config().threads));
+        case_observation::complete(&recorded_case, "measured-activation");
         eprintln!("actual site vmc_main_cal.jl:1707 real transfer terms={size}: {snapshot:?}");
         discrete(&format!("synthetic-transfer-{size}-rng"), &rng);
         emit_state(&format!("synthetic-transfer-{size}"), &data, &state);
@@ -1906,6 +1956,14 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
     assert!(provenance.contains("Julia=1.13.1"));
     assert!(provenance.contains("actual serial native C FSZ local energy"));
     for (model, input_model) in INDEPENDENT_PREFIX_CASES {
+        let recorded_case = if !case_observation::enabled() {
+            String::new()
+        } else if verify_stage {
+            format!("prefix/{model}")
+        } else {
+            format!("long20/prefix/{model}")
+        };
+        case_observation::begin(&recorded_case, "independent-assertions");
         let expected = references.join(model).join("step-1");
         let reviewed = repo.join("tests/fixtures/reviewed_cg_62b/canonical_general_rbm");
         let final_reference = |name: &str| {
@@ -1980,6 +2038,12 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
             "{model} reference seed"
         );
         let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
+        if case_observation::enabled() {
+            case_observation::retain_launch_seed(
+                &format!("independent-{model}"),
+                data.modpara.rnd_seed as u32,
+            );
+        }
         init_parameter(&mut data, &mut rng);
         let initial = input.parent().unwrap().join("initial.def");
         if initial.is_file() {
@@ -2201,6 +2265,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
             );
             eprintln!("reviewed CG declared parameters={} mapped parameters={}; independent schemas both checked", parameters(&data).len(), mapped.len());
         }
+        case_observation::complete(&recorded_case, "independent-assertions");
         let label = format!("independent-{model}");
         discrete(&format!("{label}-final-rng"), &rng);
         emit_state(&label, &data, &state);
@@ -2208,6 +2273,8 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
 }
 
 fn reviewed_cg_long20(output_root: &Path) {
+    let recorded_case = "cg20/general_rbm_cmp/steps20/window20/store0/cg1";
+    case_observation::begin(recorded_case, "independent-assertions-and-activation");
     let repo = runner_fixture_root();
     let root = repo.join("tests/fixtures/reviewed_cg_62b/canonical_general_rbm");
     let metadata = std::fs::read_to_string(root.join("step-20/provenance.txt")).unwrap();
@@ -2246,6 +2313,7 @@ fn reviewed_cg_long20(output_root: &Path) {
         false,
     );
     let output = output_root.join("reviewed-cg-long20");
+    case_observation::retain_launch_seed("reviewed-cg-long20", data.modpara.rnd_seed as u32);
     std::fs::create_dir(&output).unwrap();
     let observer = start_observation();
     mvmc_core::vmc_para_opt(
@@ -2350,6 +2418,7 @@ fn reviewed_cg_long20(output_root: &Path) {
         (0..624).map(|_| probe.gen_rand32()).collect::<Vec<_>>(),
         words
     );
+    case_observation::complete(recorded_case, "independent-assertions-and-activation");
     discrete("reviewed-cg-long20-rng", &rng);
     emit_state("reviewed-cg-long20", &data, &state);
 }
@@ -2539,6 +2608,12 @@ fn assert_independent_physcal_output(actual: &Path, expected: &Path) {
 
 fn independent_physcal(output_root: &Path) {
     for (model, mode) in INDEPENDENT_PHYSCAL_CASES {
+        let recorded_case = if case_observation::enabled() {
+            format!("physcal/{model}")
+        } else {
+            String::new()
+        };
+        case_observation::begin(&recorded_case, "independent-assertions");
         let root = independent_physcal_root().join(model);
         let provenance = std::fs::read_to_string(root.join("provenance.txt")).unwrap();
         assert!(provenance.contains("julia=1.13.1") && provenance.contains("seed=1"));
@@ -2631,7 +2706,9 @@ fn independent_physcal(output_root: &Path) {
                 &root.join("expected").join(name),
             );
         }
+        case_observation::complete(&recorded_case, "independent-assertions");
         let label = format!("independent-physcal-{model}");
+        case_observation::retain_launch_seed(&label, 1);
         discrete(&format!("{label}-final-rng"), &result.final_rng);
         emit_state(&label, &result.data, &result.state);
         eprintln!("independent PhysCal {model}: two frames, exact saved/config/draw count, ordered output reference verified");
@@ -2703,6 +2780,7 @@ fn require_independent_real_fsz_fixtures() {
 
 fn independent_real_fsz(output_root: &Path) {
     require_independent_real_fsz_fixtures();
+    case_observation::begin("real-fsz/seeded", "independent-seeded-rng");
     let root = independent_real_fsz_root();
     let provenance = std::fs::read_to_string(root.join("provenance.txt")).unwrap();
     assert!(provenance.contains("ADAPTED C-compatible real-FSZ"));
@@ -2724,6 +2802,8 @@ fn independent_real_fsz(output_root: &Path) {
     assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 0));
     let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
     assert_independent_rng(&root.join("seeded"), &rng);
+    case_observation::complete("real-fsz/seeded", "independent-seeded-rng");
+    case_observation::begin("real-fsz/initialized", "independent-assertions");
     init_parameter(&mut data, &mut rng);
     mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut data, &input)
         .unwrap();
@@ -2810,6 +2890,7 @@ fn independent_real_fsz(output_root: &Path) {
         data.qp_weights.as_ref().unwrap().qp_full_weight.clone(),
         INITIAL_MATH_ABS_REL,
     );
+    case_observation::complete("real-fsz/initialized", "independent-assertions");
     data.modpara.nsr_opt_itr_step = 1;
     data.modpara.nsr_opt_itr_smp = 1;
     let nqp = data.modpara.nsp_gauss_leg.max(1) as usize
@@ -2828,6 +2909,15 @@ fn independent_real_fsz(output_root: &Path) {
         )
     };
     for (stage, skip_sr) in [("pre-sr", true), ("final", false)] {
+        let recorded_case = if case_observation::enabled() {
+            format!("real-fsz/{stage}")
+        } else {
+            String::new()
+        };
+        case_observation::begin(
+            &recorded_case,
+            "independent-assertions-and-serial-activation",
+        );
         let mut run_data = data.clone();
         let mut run_rng = rng.clone();
         let mut state = create_state(&run_data);
@@ -2882,7 +2972,17 @@ fn independent_real_fsz(output_root: &Path) {
             parameters(&run_data),
             1e-11,
         );
+        case_observation::complete(
+            &recorded_case,
+            "independent-assertions-and-serial-activation",
+        );
         discrete(&format!("independent-real-fsz-{stage}-rng"), &run_rng);
+        if case_observation::enabled() {
+            case_observation::retain_launch_seed(
+                &format!("independent-real-fsz-{stage}"),
+                data.modpara.rnd_seed as u32,
+            );
+        }
         emit_state(&format!("independent-real-fsz-{stage}"), &run_data, &state);
     }
 }
