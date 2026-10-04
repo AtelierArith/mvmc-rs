@@ -704,6 +704,38 @@ pub(crate) fn update_parameter_value(
     }
 }
 
+#[cfg(test)]
+mod original_parameter_delta_tests {
+    use super::update_parameter_value;
+    use crate::pack_parameters;
+    use num_complex::Complex64;
+    use std::path::Path;
+
+    #[test]
+    fn original_m0581_additive_helper_updates_first_and_last_parameters() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/original_heisenberg_parser_184/namelist.def");
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files(path).unwrap();
+        assert!(data.input_errors.is_empty(), "{:?}", data.input_errors);
+        let n = data.count_variational_parameters();
+        assert!(n > 1);
+        let n_proj = data.projection_layout().n_proj;
+        // Julia's original first/last ordinals (1,n) become Rust (0,n-1).
+        // Invoke the actual SR additive helper, not get/set as a replacement.
+        for index in [0, n - 1] {
+            let before = pack_parameters(&data).unwrap()[index];
+            // Original parsed first projection and last declared Slater are zero;
+            // independent literal endpoint expectations supplement the original
+            // before+delta assertion, without initialization or an RNG draw.
+            assert_eq!(before, Complex64::new(0.0, 0.0));
+            update_parameter_value(&mut data, index, 0.25, -0.5, n_proj);
+            let after = pack_parameters(&data).unwrap()[index];
+            assert_eq!(after, before + Complex64::new(0.25, -0.5));
+            assert_eq!(after, Complex64::new(0.25, -0.5));
+        }
+    }
+}
+
 /// LAPACK `dpotrf('U')` + `dpotrs('U')` Cholesky factorisation and solve.
 ///
 /// `s` is a column-major `n×n` symmetric positive-definite matrix.
