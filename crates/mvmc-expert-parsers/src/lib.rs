@@ -30,11 +30,16 @@ pub use types::{
 };
 
 pub use utils::validation::{
-    validate_coulomb_inter_terms, validate_coulomb_intra_terms,
-    validate_doublon_holon_2site_indices, validate_doublon_holon_4site_indices,
-    validate_expert_mode_data, validate_general_rbm_phys_hidden_terms, validate_gutzwiller_terms,
-    validate_jastrow_terms, validate_modpara_params, validate_orbital_terms,
-    validate_rbm_parameters, validate_transfer_terms,
+    validate_charge_rbm_hidden_layer_terms, validate_charge_rbm_phys_hidden_terms,
+    validate_charge_rbm_phys_layer_terms, validate_coulomb_inter_terms,
+    validate_coulomb_intra_terms, validate_doublon_holon_2site_indices,
+    validate_doublon_holon_4site_indices, validate_expert_mode_data,
+    validate_expert_mode_term_diagnostics, validate_general_rbm_hidden_layer_terms,
+    validate_general_rbm_phys_hidden_terms, validate_general_rbm_phys_layer_terms,
+    validate_gutzwiller_terms, validate_jastrow_terms, validate_modpara_params,
+    validate_orbital_terms, validate_rbm_parameters, validate_spin_rbm_hidden_layer_terms,
+    validate_spin_rbm_phys_hidden_terms, validate_spin_rbm_phys_layer_terms,
+    validate_transfer_terms,
 };
 
 pub use utils::opt_flag::{
