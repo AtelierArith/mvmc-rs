@@ -7,7 +7,7 @@ Actual validated source: immutable PR291 head
 `c6418c1fa7627bb99964605074646a32a3942d3c` plus the five scalar paths.
 The base versions of `lib.rs`, `mpi.rs`, and `reducer.rs` are byte-identical
 between these revisions. Publication preserves the merged PR291 signed
-`sampling_max_info(i32)` and Pauli's PR290 changes. This is not a fresh
+`sampling_max_info(i32)` and Pauli's separate #290 work. This is not a fresh
 main87cd execution or a whole-workspace proof.
 
 ## Source authority and declared differences
