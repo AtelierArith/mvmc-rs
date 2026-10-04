@@ -12,7 +12,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 MODULES = ("run_optional_gates_183.py", "aggregate_optional_gates_183.py",
-           "optional_mpi_provider_183.py")
+           "optional_mpi_provider_183.py", "optional_fixture_metadata_183.py")
 MODELS = ("hubbard_chain_real", "hubbard_chain_lanczos", "spin_chain_lanczos")
 
 

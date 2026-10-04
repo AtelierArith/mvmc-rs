@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import optional_mpi_provider_183 as mpi_provider
+import optional_fixture_metadata_183 as fixture_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 FAMILIES = ("general", "lanczos", "mpi", "thread")
@@ -351,6 +352,10 @@ def run(family, output, excluded=()):
         execute(["git", "status", "--short"], "working-tree-status")
         source = digest_files(source_files())
         fixtures = digest_files(fixture_files(family))
+        if family == "lanczos":
+            metadata["fixture_modpara"] = fixture_metadata.capture(ROOT)
+            fixture_metadata.validate(metadata["fixture_modpara"], fixtures)
+            write_json(output / "metadata.json", metadata)
         write_json(output / "source.before.json", source)
         write_json(output / "fixtures.before.json", fixtures)
         if family == "mpi":

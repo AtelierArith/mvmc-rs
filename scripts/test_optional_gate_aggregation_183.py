@@ -49,6 +49,20 @@ def fixture(root, packages, plan, family):
     for stem in ("source", "fixtures", "binary"):
         put(evidence / f"{stem}.before.json", {"synthetic-path": "b" * 64})
         put(evidence / ("binary.json" if stem == "binary" else f"{stem}.after.json"), {"synthetic-path": "b" * 64})
+    if family == "lanczos":
+        report = {"schema": 1, "authority": "static fixture declaration; NOT runtime observation",
+                  "explicit_gate_overrides": {"seed": 1, "modes": ["real", "cmp"]},
+                  "fixtures": [{"model": model,
+                                "path": f"/synthetic/{model}/physcal_ref/inputs/modpara.def",
+                                "sha256": "b" * 64,
+                                "declared": audit.fixture_metadata.expected(model)}
+                               for model in audit.MODELS]}
+        metadata = audit.read_json(evidence / "metadata.json")
+        metadata["fixture_modpara"] = report
+        put(evidence / "metadata.json", metadata)
+        for suffix in ("before", "after"):
+            put(evidence / f"fixtures.{suffix}.json",
+                {row["path"]: row["sha256"] for row in report["fixtures"]})
     put(evidence / "backend.json", {"actual_threads": 1, "actual_config": "OpenBLAS 0.3.26 synthetic",
                                    "actual_core": "Haswell", "library_sha256": "c" * 64})
     for name in ("commands.json", "selection.json"):
@@ -318,6 +332,61 @@ class AggregationContract(unittest.TestCase):
                 put(path, data)
                 refresh(package)
                 self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 1, name)
+
+    def test_rehashed_lanczos_metadata_semantic_rejection_not_hash_failure(self):
+        variants = [("missing_report", None), ("override_bool", None),
+                    ("unbound_hash", None)]
+        variants += [(kind, field) for field in audit.fixture_metadata.FIELDS
+                     for kind in ("missing_field", "mismatch")]
+        for kind, field in variants:
+            with self.subTest(kind=kind, field=field), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan("lanczos", BINDING)
+                package = fixture(root, packages, plan, "lanczos")
+                positive = audit.aggregate(plan, packages, BINDING)
+                self.assertEqual(positive["exit_status"], 0)
+                self.assertEqual(positive["families"]["lanczos"]["status"], "Pass")
+                evidence = package / "evidence"
+                path = evidence / "metadata.json"
+                metadata = audit.read_json(path)
+                report = metadata["fixture_modpara"]
+                expected_error = "fixture declarations mismatch reviewed gate report"
+                if kind == "missing_report":
+                    metadata.pop("fixture_modpara")
+                    expected_error = "invalid fixture report schema"
+                elif kind == "override_bool":
+                    report["explicit_gate_overrides"]["seed"] = True
+                    expected_error = "wrong explicit gate overrides"
+                elif kind == "unbound_hash":
+                    report["fixtures"][0]["sha256"] = "d" * 64
+                    expected_error = "fixture report hash not bound"
+                elif kind == "missing_field":
+                    report["fixtures"][0]["declared"].pop(field)
+                else:
+                    report["fixtures"][0]["declared"][field] += 1
+                put(path, metadata)
+                refresh(package)
+                # Prove legitimate artifact/envelope rehashing succeeded before
+                # asking the public aggregate to reject metadata semantics.
+                envelope = audit.read_json(package / "envelope.json")
+                for name, sha in envelope["driver_hashes"].items():
+                    self.assertEqual(audit.digest(evidence / name), sha)
+                audit.validate_manifest(evidence, envelope["evidence_root"],
+                                        audit.read_json(evidence / "artifacts.json"))
+                result = audit.aggregate(plan, packages, BINDING)
+                self.assertEqual(result["exit_status"], 1)
+                row = result["families"]["lanczos"]
+                self.assertTrue(row["selected"])
+                self.assertEqual(row["status"], "Failure")
+                self.assertEqual(row["comparison_evidence"], "Unverified")
+                self.assertIsNone(row["numeric_reference_comparisons"])
+                self.assertEqual(row["empty_contracts"], 0)
+                self.assertEqual(row["detail"], expected_error)
+                for family in ("general", "mpi", "thread"):
+                    self.assertEqual(result["families"][family],
+                                     {"selected": False, "status": "NotRun"})
 
     def test_missing_nonempty_dc_reference_not_replaced_by_empty_claim(self):
         with tempfile.TemporaryDirectory() as tmp:
