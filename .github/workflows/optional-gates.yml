@@ -83,6 +83,13 @@ jobs:
           cache-key: optional-${{ matrix.family }}
           tools: nextest
       - uses: astral-sh/setup-uv@v6
+      - name: Match MPI PMI1 and Hydra before compiling the MPI family
+        if: matrix.family == 'mpi'
+        run: |
+          sudo apt-get install -y libucx-dev gfortran build-essential
+          bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/optional-mpich-$RUN_ID-$ATTEMPT" \
+            "$RUNNER_TEMP/optional-mpi-provider-$RUN_ID-$ATTEMPT"
       - name: Infrastructure tests (not model execution)
         run: |
           uv run --no-project python scripts/test_optional_gates_183.py
@@ -100,7 +107,8 @@ jobs:
           uv run --no-project python scripts/aggregate_optional_gates_183.py seal \
             --plan "$PLAN" --family "$FAMILY" --head "$EXPECTED_HEAD" \
             --run-id "$RUN_ID" --attempt "$ATTEMPT" --workflow "$WORKFLOW_ID" \
-            --evidence "$EVIDENCE" --job-status "$JOB_STATUS" --output "$PACKAGE"
+            --evidence "$EVIDENCE" --job-status "$JOB_STATUS" --output "$PACKAGE" \
+            --mpi-provider-receipt "$RUNNER_TEMP/optional-mpi-provider-$RUN_ID-$ATTEMPT"
       - name: Retain evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4

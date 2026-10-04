@@ -18,6 +18,29 @@ def listing(names=gate.GENERAL):
 
 
 class OptionalGateContract(unittest.TestCase):
+    def test_mpi_provider_capture_precedes_cargo_and_failure_is_not_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "fixed-source"
+            source.write_bytes(b"synthetic nonexecutable input")
+            with patch.object(gate.platform, "system", return_value="Linux"), \
+                    patch.dict(gate.os.environ, {"CARGO_TARGET_DIR": str(root / "target")}), \
+                    patch.object(gate.subprocess, "check_output", return_value="synthetic"), \
+                    patch.object(gate.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run, \
+                    patch.object(gate, "source_files", return_value=[source]), \
+                    patch.object(gate, "fixture_files", return_value=[source]), \
+                    patch.object(gate.mpi_provider, "capture", side_effect=ValueError("startup failure")) as capture:
+                output = root / "evidence"
+                with self.assertRaisesRegex(ValueError, "startup failure"):
+                    gate.run("mpi", output)
+                capture.assert_called_once()
+                cargo_commands = [call.args[0] for call in run.call_args_list
+                                  if call.args[0][0] == "cargo"]
+                self.assertEqual(cargo_commands, [["cargo", "nextest", "--version"]])
+                terminal = json.loads((output / "terminal.json").read_text())
+                self.assertEqual((terminal["status"], terminal["exit_status"]), ("Failure", 1))
+                self.assertEqual(terminal["completed"], [])
+
     def test_family_ledger_unselected_explicit_skip_and_no_fake_counts(self):
         ledger = gate.family_ledger("lanczos", ["mpi"])
         self.assertEqual(set(ledger), set(gate.FAMILIES))

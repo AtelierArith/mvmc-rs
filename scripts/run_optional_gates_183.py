@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import time
+import optional_mpi_provider_183 as mpi_provider
 
 ROOT = Path(__file__).resolve().parents[1]
 FAMILIES = ("general", "lanczos", "mpi", "thread")
@@ -353,6 +354,8 @@ def run(family, output, excluded=()):
         write_json(output / "source.before.json", source)
         write_json(output / "fixtures.before.json", fixtures)
         if family == "mpi":
+            # Installer/startup receipts and live prefix must be valid before Cargo.
+            mpi_binding = mpi_provider.capture(output, env)
             text = execute(["cargo", "test", "--locked", "-p", "mvmc-core", "--profile",
                             "test-fast", "--features", "mpi", "--test", "mpi_physcal",
                             "--no-run", "--message-format=json"], "build")
@@ -373,6 +376,9 @@ def run(family, output, excluded=()):
                 text += (output / f"mpi-{ranks}.stderr").read_text()
                 validate_mpi_run(text, ranks)
                 completed.append(f"world{ranks}")
+            mpi_provider.finish(output, mpi_binding, binary)
+            required.extend(["mpi-provider.json", "mpi-provider.before.json",
+                             "mpi-provider.after.json", "mpi-linkage.txt"])
         else:
             target, names = {"general": ("ctest_general_reference", GENERAL),
                              "lanczos": ("lanczos_transfer_physcal", (LANCZOS,)),
