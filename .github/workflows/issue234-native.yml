@@ -35,7 +35,11 @@ jobs:
           cache-key: issue234-native
           tools: nextest
       - name: Install capture-only utilities
-        run: sudo apt-get install -y jq ripgrep
+        run: sudo apt-get install -y jq ripgrep libucx-dev gfortran build-essential
+      - name: Match MPICH PMI1 and Hydra, prove worlds before Rust compilation
+        run: |
+          bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/issue234-mpich" "$RUNNER_TEMP/issue234-mpi-provider"
       - name: Execute current-checkout contracts (no reference runtime)
         env:
           EXPECTED_HEAD: ${{ github.sha }}
@@ -53,5 +57,6 @@ jobs:
           path: |
             ${{ runner.temp }}/issue234-evidence
             ${{ runner.temp }}/issue234-native
+            ${{ runner.temp }}/issue234-mpi-provider
           if-no-files-found: error
           retention-days: 14

@@ -1,5 +1,16 @@
 # Issue 234 opt-in native Actions candidate — SOURCE only
 
+Current proposed repair base: main `83fd58ffa270cf211ca742ce842ebe3825fc8c4b`.
+Actual PR245 head8eb native run37165248140 failed before SR: Hydra supplied
+rank0/1 size2 and socketFD9/10, but both initialized rank0/world1/Funneled;
+Ubuntu MPICH4.2.0-5build3 configured externalPMIx. The unexecuted repair uses
+the repository's pinned MPICH4.2.0/ch4:ucx/PMI1/Hydra recipe in a job-local
+prefix, with actual C process-manager startup worlds2/4 before Cargo. This
+is infrastructure, not a C numerical oracle or a Rust world-size workaround.
+Schema6/48, notification16 and serial1 passed on8eb; summary/CLI260 did not run.
+No repair execution is claimed. The original SOURCE checkpoints below are
+historical and do not imply that the later published workflow remains unrun.
+
 Base: `0130fdf0496742f8e49675722dea63d9cb3401d8` (PR244).
 Historical initial SOURCE base was `e41ffc38265310492546b33c7df008a378a99ee9`
 (tree `5e44fb5ea371bbb8c7a9b3b480c8ddac96392ed1`). The official delta modifies

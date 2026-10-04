@@ -7,6 +7,11 @@ cd "$repo"
 [[ -n ${CARGO_TARGET_DIR:?exclusive target} && -d ${TMPDIR:?exclusive native output} ]]
 [[ -z ${LD_PRELOAD-} && -z ${LD_AUDIT-} && -z ${BASH_ENV-} ]]
 mkdir "$out"
+mpi_prefix=${MVMC_ISSUE234_MPI_PREFIX:?job-local matched MPI provider}
+mpi_receipt=${MVMC_ISSUE234_MPI_RECEIPT:?startup worlds2/4 receipt}
+grep -Fx 'prior=0 post=0' "$mpi_receipt/terminal.txt"
+grep -Fx 'MPI_PROVIDER_READY version=4.2.0 pmi=pmi1 worlds=2,4' "$mpi_receipt/ready.txt"
+[[ $(readlink -f "$(command -v mpicc)") = "$mpi_prefix/bin/mpicc" && $(readlink -f "$(command -v mpiexec)") = "$mpi_prefix/bin/mpiexec.hydra" ]]
 here=$(cd "$(dirname "$0")" && pwd)
 source_inventory(){
  find "$repo" -name .git -prune -o -type f -print0 | sort -z | xargs -0 sha256sum
@@ -16,7 +21,7 @@ symlink_inventory(){
 }
 finish(){
  prior=$?;trap - EXIT;set +e;post=0
- for manifest in source tools tool-providers mpi-headers runtime selected;do
+ for manifest in source tools tool-providers mpi-headers mpi-provider runtime selected;do
   [[ ! -f $out/$manifest.sha256 ]] || sha256sum -c --quiet "$out/$manifest.sha256" > "$out/$manifest.post.log" 2>&1 || post=1
  done
  git status --porcelain --untracked-files=all > "$out/status.after.txt"
@@ -84,7 +89,9 @@ done >> "$out/launcher-pmi-env.txt"
 printf 'RUSTC_WRAPPER=%s\nRUSTC_WORKSPACE_WRAPPER=%s\nCARGO_TARGET_DIR=%s\n' "${RUSTC_WRAPPER-}" "${RUSTC_WORKSPACE_WRAPPER-}" "$CARGO_TARGET_DIR" > "$out/compiler-settings.txt"
 mpiexec -help > "$out/hydra-help.txt" 2>&1
 for flag in -disable-auto-cleanup -outfile-pattern -errfile-pattern;do rg -q -- "$flag" "$out/hydra-help.txt";done
-find /usr/include/x86_64-linux-gnu/mpich -type f -print0 | sort -z | xargs -0 sha256sum > "$out/mpi-headers.sha256"
+sha256sum -c --quiet "$mpi_receipt/provider.sha256"
+cp "$mpi_receipt/provider.sha256" "$out/mpi-provider.sha256"
+find "$mpi_prefix/include" -type f -print0 | sort -z | xargs -0 sha256sum > "$out/mpi-headers.sha256"
 test -s "$out/mpi-headers.sha256"
 timeout -k 10s 120s bash scripts/issue234/semantic_controls_wrapper.sh "$out/schema-controls" --schema-fixtures > "$out/schema-controls.log" 2>&1
 timeout -k 10s 60s bash "$here/foreground-controls.sh" "$TMPDIR/foreground-controls" > "$out/foreground-controls.log" 2>&1
@@ -118,6 +125,7 @@ for binary in "$out"/selected/* "$(command -v mpiexec)" "$(command -v hydra_pmi_
  ldd "$binary" >> "$out/ldd.txt"
 done
 ! grep -q 'not found' "$out/ldd.txt"
+awk -v prefix="$mpi_prefix/lib/" '$1~/^libmpi[.]so/{if(index($3,prefix)!=1)bad=1;n++}END{exit(bad||n!=3)}' "$out/ldd.txt"
 awk '/=> \/|^\s*\//{for(i=1;i<=NF;i++)if($i~/^\//)print $i}' "$out/ldd.txt" | sort -u | xargs -r sha256sum > "$out/runtime.sha256"
 test -s "$out/runtime.sha256"
 for suite in mpi_issue178_sr_failure mpi_issue234_summary;do
