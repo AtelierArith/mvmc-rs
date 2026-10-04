@@ -1,6 +1,8 @@
 # Joined evidence for #184 / #185
 
-Current source checkpoint: main `4d39231688b55b22ebbd1c23cac2e4bc0884080b`.
+Current documentation SOURCE checkpoint: main `5c1e03d9f31186f784a355022d424d4eb4e49455`.
+The 58 original helper-condition joins below are a reviewed documentation draft,
+not complete parent/API/scenario acceptance. The prior4d392 checkpoint remains historical.
 The fab2335 / PR271 reconciliation below is historical; its57 controls and114
 execution records remain unchanged. PR273 adds five reader-policy controls and10 records.
 The prior `eaa5db6254c721b95e8e63096287cdb74d5124e2` checkpoint and its exact
@@ -17,11 +19,11 @@ for explicitly reviewed conditions.
 
 | Status | Rows | Interpretation |
 | --- | ---: | --- |
-| CoveredScopedOrdinaryCI | 17 | Named original assertion conditions, not complete API/scenario verification |
+| CoveredScopedOrdinaryCI | 75 | Named original assertion conditions, not complete API/scenario verification |
 | IntentionalDifference | 1 | M0971: zero-QP helper retains zero instead of Julia's one |
-| SourceMappedMissingEvidence | 1,617 | Conditions/execution reconciliation incomplete |
+| SourceMappedMissingEvidence | 1,589 | Conditions/execution reconciliation incomplete |
 | HistoricalExecutionClaimNeedsReconciliation | 80 | Historical claims retained, not newly certified |
-| ExplicitScopeExclusionNeedsReview | 627 | Review-required classifications, not automatic exclusions or PASS |
+| ExplicitScopeExclusionNeedsReview | 597 | Review-required classifications, not automatic exclusions or PASS |
 
 The [38 semantic source reviews](issue-184-semantic38.tsv) remain source-only
 conditions and explicit gaps, not file-wide acceptance. Full API overloads,
@@ -29,6 +31,38 @@ examples, unit/integration/MPI scenarios and per-cell settings/evidence remain
 required. InterAll numerical verification is excluded; generic filename parsing
 does not establish its kernels. Current numerical long baseline is20 steps;
 historical50-step records are not relabelled.
+
+## Original helper conditions: PR276 / PR277 / PR278
+
+Exactly58 existing assertion rows receive scoped joins: M0111–130/M0135–144
+(30 translation mapping/sign/default-query conditions), M0305–315 (11 initialized
+weight/copy/OptTrans-major conditions), M0282–288/M0293–298/M0316–319 (17
+quadrature/public weight/trigonometric conditions). Six Rust test identities in
+two Linux jobs each provide12 execution records, reused across58 assertions;
+these are not58 independent test executions. Existing62 controls/124 records
+remain a byte-identical prefix of the table; six controls/12 records are appended.
+
+Original rows, owner identifiers and629 historical scope flags remain unchanged.
+The629 historical review cohort is recomputed as the baseline627 review-required
+rows plus the separately promoted M0110/M0134 cardinality rows; it is not a
+count of raw flag-string occurrences. Legacy `result` values such as
+`INVENTORY_ONLY; NOT_RUN` remain historical inventory results, not the outcome
+of the added CI. Current scoped status, named bindings and raw PASS records
+describe the new evidence without rewriting those historical values.
+Rust fresh immutable inverse queries are distinguished from Julia stored inverse
+arrays. Nonoptional fields within Rust's optional public qp_weights are not a
+claim of Julia optional-field representation parity. M0316–319 use the exact
+original setup at Julia8bb test_qp_weight.jl:176–198: GaussLeg4/Stot1/NMPTrans1/
+Para[1]. No Stot-independence assumption is needed. Their four-row half-angle/
+product identities do not independently certify every coefficient.
+
+Full bindings, source hashes, settings, commands and raw PASS records are in
+`reconciliation.original_helper_58`. Each record distinguishes `source_pr_head`
+from the actual `tested_merge` and `tested_base`; legacy `tested_head` denotes
+the source PR head, never a relabelled execution checkout. Tested merges are
+7d0d3c38b993310b7a245aa83952c06a754465c6,61dc5839189a96eecd2d592598c187c6c7ecb323,
+and b7babab534817a6d6407327b47256c43853a291f. Remaining pending rows:2266.
+PR280/M1032 is deliberately separate and is not promoted by this58-row draft.
 
 ## Actual execution and durable identities
 
