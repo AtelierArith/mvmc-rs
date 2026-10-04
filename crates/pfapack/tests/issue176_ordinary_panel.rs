@@ -35,7 +35,7 @@ fn ordinary_real_public_boundary_and_pivot_contracts() {
             for i in 0..n - 1 {
                 assert_eq!(work[i + (n - 1) * n], 0., "assigned final M column {n}/{i}");
             }
-            for i in 0..n - 1 {
+            for (i, value) in vt.iter().enumerate() {
                 let copied = if i % 2 == 1 {
                     0.
                 } else if i == 0 {
@@ -43,7 +43,7 @@ fn ordinary_real_public_boundary_and_pivot_contracts() {
                 } else {
                     -2.
                 };
-                assert_eq!(vt[i], copied);
+                assert_eq!(*value, copied);
             }
             if n > 64 {
                 // These exact assertions test explicit C zero/sign-copy assignments.
