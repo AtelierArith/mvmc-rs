@@ -1,5 +1,21 @@
 # Joined evidence for #184 / #185
 
+## M0586 representation clarification — no status promotion
+
+Publication base1b0e9d90de7ffb90c84d098c181cefa470042021 retains PR300's
+M0585 CI join and PR299 scripts. Source reviewed main7af2d4ab1158c4bfc2a416f1b245669ecd5b177e.
+Original Julia8bb test_unit/test_unit_parallel.jl:274–287 corrupts one independent
+orbital term.value and repairs duplicate values by unpacking unchanged para.
+Rust OrbitalTerm has no independent value: mappings observe one dense Slater
+slot, matching C Slater[OrbitalIdx] storage. Preserve Julia-style public
+pack/unpack architecture without inventing duplicated orbital coefficients.
+Related shared assignment is NOT equivalent repair execution. M0586 remains
+pending with RELATED_NOT_EQUIVALENT source mapping/reasons, no automatic PASS
+or IntentionalDifference. S121 remains unpromoted. All2342 original rows/owners,
+row order and status counts unchanged. Public API comments clarify RBM shadow
+refresh versus canonical shared Slater assignment; no executable behavior change.
+Exact source paths/revisions/hashes are bound in the M0586 row. No runtime evidence.
+
 ## M0585 scoped CI successor (SOURCE join proposal)
 
 Base main1ad3f582f0c6bd35ac522393e65b972a739234a1, PR298 merged.

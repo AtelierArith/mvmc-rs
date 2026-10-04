@@ -76170,15 +76170,15 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/src/parameters.rs::unpack_parameters / set_parameter_value; crates/mvmc-core/src/sync.rs::unpack_variational_parameters; crates/mvmc-expert-parsers/src/types.rs::OrbitalTerm and ExpertModeData::slater_params (related storage/API, not equivalent assertion)",
+      "supported_rejected_conditions": "RELATED_NOT_EQUIVALENT: Julia M0586 conditionally corrupts one independently stored orbital term.value then unpack repairs all duplicates. Rust mappings have no independent value; canonical dense Slater[idx] is shared by construction. Public pack/unpack architecture retained, C dense storage authoritative; do not fabricate shadows or substitute shared-value observation for repair execution.",
+      "intentional_scope": "Parent-reviewed representation rationale; original shadow corruption unavailable, no automatic IntentionalDifference/PASS. M0585 shared assignment and M0587 RBM diagnostic separate; S121 remains unpromoted.",
+      "evidence_type": "REVIEWED_SOURCE_MAPPING_RELATED_NOT_EQUIVALENT",
       "owner": "#184 inventory; implementation owner pending classification",
       "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "settings": "Original8bb Heisenberg duplicate index conditional, one term.value +=complex(1,0), unchanged flat para unpack; original one-based n_proj+n_rbm+idx+1. Rust source reviewed main7af2, no runtime for this M0586 condition.",
+      "command": "SOURCE_ONLY git show 8bb1b9e8ae47b1512c00b321be05664ddcac0fd1:MVMCOptimizers.jl/test_unit/test_unit_parallel.jl (274-287); git show 7af2d4ab1158c4bfc2a416f1b245669ecd5b177e:crates/mvmc-expert-parsers/src/types.rs (OrbitalTerm383-394); no test RUN equivalent.",
+      "result": "RELATED_NOT_EQUIVALENT; SOURCE clarification only. Original M0586 independent-shadow repair NOT_RUN/unrepresentable; status remains pending, not covered or intentional-difference execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
@@ -76186,7 +76186,9 @@
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
       "status": "ExplicitScopeExclusionNeedsReview",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "original_independent_orbital_shadow_corruption_unrepresentable_in_canonical_dense_storage",
+        "related_shared_coefficient_assignment_is_not_original_shadow_repair_execution",
+        "parent_S121_and_other_conditions_not_promoted"
       ],
       "original_row": {
         "audit_id": "M0586",
@@ -76220,7 +76222,26 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "representation_source_review": {
+        "reviewed_main": "7af2d4ab1158c4bfc2a416f1b245669ecd5b177e",
+        "original_julia_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "original_path": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl",
+        "original_lines": "274-287",
+        "original_sha256": "a2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+        "rust_type_path": "crates/mvmc-expert-parsers/src/types.rs",
+        "rust_type_sha256": "66ce40e36766d1016e1a874dbdf1e5b295ecc5662d511bea4ba7ffe849a545e7",
+        "rust_parameters_sha256_before_doc_clarification": "a08a8d8f3a7235c77e0580afe91d731a39e63097892f14e5ba5c83711040c76a",
+        "rust_sync_sha256": "ecdbda70e4cd63c16c80038a1b2e022457bf2d2866ed366bc487c5b183ca05f3",
+        "c_revision": "d73d06bd529d3b2573f38eb5817c4a5f52971006",
+        "c_paths": [
+          "src/mVMC/slater.c:68-89",
+          "src/mVMC/parameter.c:132-145",
+          "src/mVMC/readdef.c:2462-2533,2583-2640"
+        ],
+        "decision": "Retain Julia-style public pack/unpack; use C canonical dense Slater. No fabricated orbital shadows required.",
+        "runtime_evidence": "NONE"
+      }
     },
     {
       "key": "assertion:M0587",

@@ -142,7 +142,10 @@ pub fn pack_parameters(data: &ExpertModeData) -> Result<Vec<Complex64>, Paramete
     Ok(crate::sync::pack_variational_parameters(data))
 }
 
-/// Directly assign a complete vector, repairing every duplicate mapping.
+/// Directly assign a complete vector and refresh mapped RBM shadow values.
+///
+/// Orbital mappings share canonical dense Slater coefficients; they have no
+/// independent per-term value to repair. This is not an orbital-shadow repair API.
 ///
 /// Length/storage errors are nonmutating. Assigning OptTrans slots refreshes
 /// existing QP weights even when their coefficient values are unchanged, as in
@@ -180,10 +183,11 @@ pub fn get_parameter_value(
         })
 }
 
-/// Directly assign one zero-based coefficient and all mappings of that slot.
+/// Directly assign one zero-based coefficient and refresh its RBM shadows.
 ///
-/// Errors occur before mutation. Unrelated duplicate mappings are not repaired
-/// by this single-slot operation; bulk unpack explicitly repairs all mappings.
+/// Errors occur before mutation. Unrelated RBM shadow values are not repaired
+/// by this single-slot operation; bulk unpack refreshes all mapped RBM values.
+/// Orbital mappings observe the single updated dense Slater slot.
 pub fn set_parameter_value(
     data: &mut ExpertModeData,
     index: usize,
