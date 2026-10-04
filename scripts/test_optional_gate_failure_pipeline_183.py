@@ -20,6 +20,53 @@ MODELS = ("hubbard_chain_real", "hubbard_chain_lanczos", "spin_chain_lanczos")
 
 
 class RealFailurePipeline(unittest.TestCase):
+    def test_all_family_first_failure_keeps_available_posts_and_not_started(self):
+        for family in ("general", "lanczos", "mpi", "thread"):
+            with self.subTest(family=family), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                scripts = root / "scripts"
+                scripts.mkdir()
+                for name in MODULES:
+                    shutil.copyfile(SCRIPTS / name, scripts / name)
+                env = os.environ.copy()
+                env.pop("CARGO_TARGET_DIR", None)
+                env.pop("GITHUB_OUTPUT", None)
+                env["PYTHONDONTWRITEBYTECODE"] = "1"
+                self.command(["git", "init", "--quiet"], root, env)
+                evidence = root / "evidence"
+                result = self.command([sys.executable, "-B", str(scripts / MODULES[0]),
+                                       family, str(evidence)], root, env, expected=1)
+                self.assertIn("explicit checkout-specific CARGO_TARGET_DIR required", result.stderr)
+                self.assertEqual((evidence / "failure.txt").read_text(),
+                                 "ValueError: explicit checkout-specific CARGO_TARGET_DIR required\n")
+                posts = json.loads((evidence / "closure-posts.json").read_text())
+                self.assertEqual(posts, {"source": {"status": "UNCHANGED", "error": None},
+                                         "fixtures": {"status": "NOT_STARTED", "error": None},
+                                         "binary": {"status": "NOT_STARTED", "error": None}})
+                terminal = json.loads((evidence / "terminal.json").read_text())
+                self.assertEqual((terminal["exit_status"], terminal["status"], terminal["completed"]),
+                                 (1, "Failure", []))
+                self.assertEqual(terminal["closure_posts"], posts)
+                self.assertFalse((evidence / "commands.json").exists())
+
+    def test_posts_attempt_other_closures_after_real_missing_input(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, fixture, binary = (root / name for name in ("source", "fixture", "binary"))
+            for path in (source, fixture, binary):
+                path.write_text("original\n")
+            for name, path in (("source", source), ("fixtures", fixture), ("binary", binary)):
+                driver_source.write_json(root / f"{name}.before.json", driver_source.digest_files([path]))
+            source.unlink()
+            fixture.write_text("changed\n")
+            posts = driver_source.closure_posts(root)
+            self.assertEqual(posts["source"]["status"], "UNAVAILABLE")
+            self.assertIn("missing artifact/input", posts["source"]["error"])
+            self.assertEqual(posts["fixtures"], {"status": "CHANGED", "error": None})
+            self.assertEqual(posts["binary"], {"status": "UNCHANGED", "error": None})
+            self.assertTrue((root / "fixtures.after.json").is_file())
+            self.assertTrue((root / "binary.after.json").is_file())
+
     def test_actual_command_lifecycle_discovery_failure_timeout_and_incomplete(self):
         # Real tiny Python children exercise the production command boundary;
         # none is a selected numerical gate or a mocked driver success.

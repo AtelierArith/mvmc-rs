@@ -35,7 +35,14 @@ def fixture(root, packages, plan, family):
                                 ("zvo_ls_cisajscktalt_001.dat", "REFERENCE_COMPARED"),
                                 ("zvo_ls_cisajscktaltex_001.dat", "EMPTY_CONTRACT"))]
         put(evidence / "dc-comparisons.json", {"records": records})
-    put(evidence / "terminal.json", {"status": "Pass", "exit_status": 0, "completed": completed})
+    # Literal independent fresh-B closure declarations, not production-generated
+    # POSTs or numerical execution. Legacy 305 evidence is not rewritten.
+    posts = {"source": {"status": "UNCHANGED", "error": None},
+             "fixtures": {"status": "UNCHANGED", "error": None},
+             "binary": {"status": "UNCHANGED", "error": None}}
+    put(evidence / "closure-posts.json", posts)
+    put(evidence / "terminal.json", {"status": "Pass", "exit_status": 0,
+                                      "completed": completed, "closure_posts": posts})
     put(evidence / "family-ledger.json", {"families": rows})
     settings = {
         "general": {"model": "general_rbm_cmp", "seed": 12395, "prefixes_and_windows": [1, 2, 3, 20], "NSRCG": 0, "NStore": 1, "ranks": 1, "workers": 1, "threshold": 32},
@@ -49,6 +56,8 @@ def fixture(root, packages, plan, family):
     for stem in ("source", "fixtures", "binary"):
         put(evidence / f"{stem}.before.json", {"synthetic-path": "b" * 64})
         put(evidence / ("binary.json" if stem == "binary" else f"{stem}.after.json"), {"synthetic-path": "b" * 64})
+        if stem == "binary":
+            put(evidence / "binary.after.json", {"synthetic-path": "b" * 64})
     if family == "lanczos":
         report = {"schema": 1, "authority": "static fixture declaration; NOT runtime observation",
                   "explicit_gate_overrides": {"seed": 1, "modes": ["real", "cmp"]},
@@ -149,6 +158,7 @@ def fixture(root, packages, plan, family):
     put(evidence / "commands.json", acquisitions + commands)
     metadata = audit.read_json(evidence / "metadata.json")
     metadata["command_receipt_schema"] = 1
+    metadata["closure_post_schema"] = 1
     metadata["checkout_root"] = "/synthetic/checkout"
     put(evidence / "metadata.json", metadata)
     for name in ("linkage.txt", "rust-version.stdout", "nextest-version.stdout", "reference-revisions.stdout"):
@@ -206,6 +216,73 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_rehashed_closure_posts_join_terminal_and_fresh_schema(self):
+        variants = ("schema_missing", "schema_bool", "schema_float", "schema_old",
+                    "file_missing", "terminal_missing", "terminal_list", "file_list",
+                    "missing_closure", "extra_closure", "terminal_contradiction",
+                    "record_list", "record_extra", "error", "status_bool",
+                    "CHANGED", "NOT_STARTED", "UNAVAILABLE", "binary_hash_contradiction")
+        for family in audit.FAMILIES:
+            for variant in variants:
+                with self.subTest(family=family, variant=variant), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packages = root / "packages"
+                    packages.mkdir()
+                    plan = audit.make_plan(family, BINDING)
+                    package = fixture(root, packages, plan, family)
+                    self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                    evidence = package / "evidence"
+                    metadata = audit.read_json(evidence / "metadata.json")
+                    terminal = audit.read_json(evidence / "terminal.json")
+                    posts = audit.read_json(evidence / "closure-posts.json")
+                    expected = "terminal/file closure POST mismatch"
+                    if variant.startswith("schema_"):
+                        if variant == "schema_missing":
+                            metadata.pop("closure_post_schema")
+                        else:
+                            metadata["closure_post_schema"] = {"schema_bool": True, "schema_float": 1.0,
+                                                               "schema_old": 0}[variant]
+                        expected = "historical closure POST receipts lack current schema; not current-eligible"
+                    elif variant == "file_missing":
+                        (evidence / "closure-posts.json").unlink()
+                        expected = "missing fresh closure POST file"
+                    elif variant == "terminal_missing":
+                        terminal.pop("closure_posts")
+                    elif variant == "terminal_list":
+                        terminal["closure_posts"] = []
+                    elif variant == "file_list":
+                        posts = []
+                        expected = "expected JSON object"
+                    elif variant == "missing_closure":
+                        posts.pop("binary")
+                        terminal["closure_posts"] = copy.deepcopy(posts)
+                    elif variant == "extra_closure":
+                        posts["unknown"] = {"status": "UNCHANGED", "error": None}
+                        terminal["closure_posts"] = copy.deepcopy(posts)
+                    elif variant == "terminal_contradiction":
+                        terminal["closure_posts"]["source"]["status"] = "CHANGED"
+                    elif variant == "binary_hash_contradiction":
+                        put(evidence / "binary.after.json", {"synthetic-path": "c" * 64})
+                        expected = "closure POST claim contradicts captured before/after hashes"
+                    else:
+                        expected = "successful driver requires three unchanged closure POSTs"
+                        if variant == "record_list":
+                            posts["source"] = []
+                        elif variant == "record_extra":
+                            posts["source"]["extra"] = None
+                        elif variant == "error":
+                            posts["source"]["error"] = "preserved POST error"
+                        elif variant == "status_bool":
+                            posts["source"]["status"] = True
+                        else:
+                            posts["source"]["status"] = variant
+                        terminal["closure_posts"] = copy.deepcopy(posts)
+                    put(evidence / "metadata.json", metadata)
+                    put(evidence / "terminal.json", terminal)
+                    if variant != "file_missing":
+                        put(evidence / "closure-posts.json", posts)
+                    self.assert_rehashed_type_failure(package, plan, packages, family, expected)
+
     def test_rehashed_command_receipts_bind_actual_calls_not_discovery(self):
         variants = ("absent_schema", "schema_bool", "legacy", "discovery_only", "duplicate", "missing_call",
                     "profile", "features", "identity", "argv", "environment", "target", "thread_setting",
