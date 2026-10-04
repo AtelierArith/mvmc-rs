@@ -2576,6 +2576,26 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) {
+    if data.modpara.vmc_calc_mode == 1 {
+        // PhysCal does not need an owned SR cache. Retain its existing
+        // in-place publication arithmetic without allocating a local shape.
+        accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
+        crate::sr_accumulator::publish_physcal_in_place(&mut state.sr_opt);
+        return;
+    }
+    let mut local = crate::sr_accumulator::SrMeasurement::begin(state);
+    accumulate_observables_local(data, local.state(), all_complex, use_fsz, timer, reducer);
+    local.finish();
+}
+
+fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    all_complex: bool,
+    use_fsz: bool,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+) {
     let diag = timer.diagnostics.maincal && !use_fsz;
     timer.start_diag(940, diag);
     timer.start_diag(941, diag);
@@ -3031,26 +3051,6 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
             );
         }
         timer.stop(45);
-    }
-    // Julia merges the local SR accumulator into cleared global arrays.
-    // Keep the addition: it turns negative zero into positive zero.
-    for value in state
-        .sr_opt
-        .sr_opt_oo
-        .iter_mut()
-        .chain(&mut state.sr_opt.sr_opt_ho)
-        .chain(&mut state.sr_opt.sr_opt_o_store)
-    {
-        *value = Complex64::new(0.0, 0.0) + *value;
-    }
-    for value in state
-        .sr_opt
-        .sr_opt_oo_real
-        .iter_mut()
-        .chain(&mut state.sr_opt.sr_opt_ho_real)
-        .chain(&mut state.sr_opt.sr_opt_o_store_real)
-    {
-        *value += 0.0;
     }
 }
 

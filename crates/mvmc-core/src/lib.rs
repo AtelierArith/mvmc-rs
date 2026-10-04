@@ -43,6 +43,7 @@ mod serial_blas;
 mod slater_derivative;
 pub mod slater_update;
 pub mod sr;
+pub mod sr_accumulator;
 pub mod sr_cg;
 pub mod state;
 pub mod sync;
