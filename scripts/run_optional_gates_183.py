@@ -272,6 +272,35 @@ def validate_mpi_run(text, ranks):
         raise ValueError("missing/duplicate/wrong actual rank/world/group or per-rank PASS summaries")
 
 
+def validate_general_settings(text):
+    """Actual successful selected-test receipts, not an independent oracle."""
+    expected = [{"kind": "prefix", "steps": steps, "window": steps, "repeats": 1}
+                for steps in (1, 2, 3, 20)] + [
+                    {"kind": "public", "steps": 20, "window": 20, "repeats": 2}]
+    for row in expected:
+        row.update(seed=12395, samples=100, frames=1, warmup=10, interval=1,
+                   cg=0, store=1, mode="cmp", ranks=1, workers=1)
+    records = []
+    for marker in re.findall(r"GENERAL_GATE_SETTINGS ([^\r\n]+)", text):
+        tokens = marker.split()
+        if len(tokens) != len(expected[0]) or any(token.count("=") != 1 for token in tokens):
+            raise ValueError("malformed General settings receipt")
+        row = dict(token.split("=", 1) for token in tokens)
+        if len(row) != len(tokens) or set(row) != set(expected[0]):
+            raise ValueError("duplicate/unknown General settings fields")
+        for key in set(row) - {"kind", "mode"}:
+            if not re.fullmatch(r"0|[1-9][0-9]*", row[key]):
+                raise ValueError("noncanonical General integer setting")
+            row[key] = int(row[key])
+        records.append(row)
+    # Nextest may interleave the two selected identities; compare membership,
+    # retain strict five-record counts and reject duplicates rather than order.
+    if len(records) != 5 or any(records.count(row) != 1 for row in expected):
+        raise ValueError("missing/duplicate/mismatched executed General settings")
+    return {"schema": 1, "authority": "successful gate harness arguments/input declarations; not internal sampler instrumentation",
+            "records": sorted(records, key=lambda row: (row["kind"], row["steps"]))}
+
+
 def validate_dc_run(text, model, mode):
     """Only the exact selected gate emits these records; helpers are not selected."""
     if model not in MODELS or mode not in ("real", "cmp"):
@@ -455,7 +484,10 @@ def run(family, output, excluded=()):
             gate = ["cargo", "nextest", "run", *common, "--no-fail-fast", "--retries", "0",
                     "--success-output", "immediate", "--failure-output", "immediate"]
             if family == "general":
-                execute(gate, "general", {"MVMC_RS_CTEST_GENERAL": "1"}, selected_gate=True)
+                text = execute(gate, "general", {"MVMC_RS_CTEST_GENERAL": "1"}, selected_gate=True)
+                text += "\n" + (output / "general.stderr").read_text()
+                write_json(output / "general-settings.json", validate_general_settings(text))
+                required.append("general-settings.json")
                 completed.extend(names)
             elif family == "lanczos":
                 dc_records = []
