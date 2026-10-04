@@ -9,9 +9,11 @@
 //!
 
 use crate::types::{
-    CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, DoublonHolon4SiteIndex,
-    ExpertModeData, GeneralRBMPhysHiddenTerm, GutzwillerTerm, JastrowTerm, ModParaParameters,
-    OrbitalTerm, TransferTerm, ValidationResult,
+    ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, CoulombInterTerm,
+    CoulombIntraTerm, DoublonHolon2SiteIndex, DoublonHolon4SiteIndex, ExpertModeData,
+    GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm, GutzwillerTerm,
+    JastrowTerm, ModParaParameters, OrbitalTerm, SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm,
+    SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
 };
 
 /// Validate ModPara dimensions, electron/spin consistency, and VMC/SR settings.
@@ -250,6 +252,152 @@ pub fn validate_doublon_holon_4site_indices(
     ValidationResult::new(errors, Vec::new())
 }
 
+fn large_rbm_shadow(value: num_complex::Complex64) -> bool {
+    // Julia hypot checks infinity before NaN. Preserve this discrete decision
+    // independently of a platform's mixed Inf/NaN hypot behavior.
+    if value.re.is_infinite() || value.im.is_infinite() {
+        true
+    } else if value.re.is_nan() || value.im.is_nan() {
+        false
+    } else {
+        value.norm() > 1e10
+    }
+}
+
+fn validate_rbm_shadows<const N: usize>(
+    family: &str,
+    fields: [&str; N],
+    terms: impl Iterator<Item = ([i64; N], num_complex::Complex64)>,
+    nsite: i64,
+) -> ValidationResult {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    for (row, (sites, value)) in terms.enumerate() {
+        for (field, site) in fields.iter().zip(sites) {
+            check_site(&mut errors, family, row + 1, field, site, nsite);
+        }
+        if large_rbm_shadow(value) {
+            warnings.push(format!(
+                "{family} term {}: very large value {value:?}",
+                row + 1
+            ));
+        }
+    }
+    ValidationResult::new(errors, warnings)
+}
+
+/// Manually check Charge PhysLayer sites and warn about large shadow values.
+/// Does not validate dense storage, indices, finiteness or shadow consistency.
+pub fn validate_charge_rbm_phys_layer_terms(
+    terms: &[ChargeRBMPhysLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "ChargeRBM_PhysLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check Spin PhysLayer sites and warn about large shadow values.
+/// Does not validate dense storage, indices, finiteness or shadow consistency.
+pub fn validate_spin_rbm_phys_layer_terms(
+    terms: &[SpinRBMPhysLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "SpinRBM_PhysLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check General PhysLayer sites and warn about large shadow values.
+/// Spin and parameter index are outside this manual diagnostic contract.
+pub fn validate_general_rbm_phys_layer_terms(
+    terms: &[GeneralRBMPhysLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "GeneralRBM_PhysLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check Charge HiddenLayer sites against diagnostic `nsite`.
+/// This Julia architecture utility is not C hidden-neuron input validation.
+pub fn validate_charge_rbm_hidden_layer_terms(
+    terms: &[ChargeRBMHiddenLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "ChargeRBM_HiddenLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check Spin HiddenLayer sites against diagnostic `nsite`.
+/// This Julia architecture utility is not C hidden-neuron input validation.
+pub fn validate_spin_rbm_hidden_layer_terms(
+    terms: &[SpinRBMHiddenLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "SpinRBM_HiddenLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check General HiddenLayer sites against diagnostic `nsite`.
+/// This Julia architecture utility is not C hidden-neuron input validation.
+pub fn validate_general_rbm_hidden_layer_terms(
+    terms: &[GeneralRBMHiddenLayerTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "GeneralRBM_HiddenLayer",
+        ["site"],
+        terms.iter().map(|t| ([t.site], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check Charge PhysHidden sites and warn about large shadow values.
+/// Both sites use diagnostic `nsite`, not C hidden-neuron dimensions.
+pub fn validate_charge_rbm_phys_hidden_terms(
+    terms: &[ChargeRBMPhysHiddenTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "ChargeRBM_PhysHidden",
+        ["site1", "site2"],
+        terms.iter().map(|t| ([t.site1, t.site2], t.value)),
+        nsite,
+    )
+}
+
+/// Manually check Spin PhysHidden sites and warn about large shadow values.
+/// Both sites use diagnostic `nsite`, not C hidden-neuron dimensions.
+pub fn validate_spin_rbm_phys_hidden_terms(
+    terms: &[SpinRBMPhysHiddenTerm],
+    nsite: i64,
+) -> ValidationResult {
+    validate_rbm_shadows(
+        "SpinRBM_PhysHidden",
+        ["site1", "site2"],
+        terms.iter().map(|t| ([t.site1, t.site2], t.value)),
+        nsite,
+    )
+}
+
 /// Diagnose General RBM PhysHidden term values without changing input acceptance.
 ///
 /// This manual, read-only utility observes caller-owned term values, including
@@ -283,16 +431,7 @@ pub fn validate_general_rbm_phys_hidden_terms(
             term.site2,
             nsite,
         );
-        // Julia hypot checks infinity before NaN. Do not rely on a platform's
-        // mixed Inf/NaN hypot behavior for this discrete diagnostic decision.
-        let large = if term.value.re.is_infinite() || term.value.im.is_infinite() {
-            true
-        } else if term.value.re.is_nan() || term.value.im.is_nan() {
-            false
-        } else {
-            term.value.norm() > 1e10
-        };
-        if large {
+        if large_rbm_shadow(term.value) {
             warnings.push(format!(
                 "GeneralRBM_PhysHidden term {}: very large value {:?}",
                 row + 1,
@@ -501,6 +640,44 @@ pub fn validate_expert_mode_data(data: &ExpertModeData) -> ValidationResult {
         validate_doublon_holon_4site_indices(&data.doublon_holon_4site_indices, nsite),
         validate_rbm_parameters(data),
         validate_green_terms(data),
+    ] {
+        result.errors.extend(family.errors);
+        result.warnings.extend(family.warnings);
+    }
+    result.is_valid = result.errors.is_empty();
+    result
+}
+
+/// Manually aggregate original Julia term diagnostics in source family order.
+///
+/// This opt-in, read-only API observes RBM term shadows, not canonical dense
+/// storage. It does not check RBM indices, spin, finiteness or consistency and
+/// does not repair values. Hidden coordinates use diagnostic `NSite`, separate
+/// from C hidden-neuron dimensions. It is not invoked by loaders or runners.
+/// Errors and warnings keep family/row/field order in separate vectors;
+/// warnings alone remain valid. Green and dense storage checks belong to the
+/// distinct existing [`validate_expert_mode_data`] API, not this aggregate.
+pub fn validate_expert_mode_term_diagnostics(data: &ExpertModeData) -> ValidationResult {
+    let mut result = validate_modpara_params(&data.modpara);
+    let nsite = data.modpara.nsite;
+    for family in [
+        validate_transfer_terms(&data.transfer_terms, nsite),
+        validate_coulomb_intra_terms(&data.coulomb_intra_terms, nsite),
+        validate_coulomb_inter_terms(&data.coulomb_inter_terms, nsite),
+        validate_gutzwiller_terms(&data.gutzwiller_terms, nsite),
+        validate_jastrow_terms(&data.jastrow_terms, nsite),
+        validate_orbital_terms(&data.orbital_terms, nsite),
+        validate_charge_rbm_phys_layer_terms(&data.charge_rbm_phys_layer_terms, nsite),
+        validate_spin_rbm_phys_layer_terms(&data.spin_rbm_phys_layer_terms, nsite),
+        validate_general_rbm_phys_layer_terms(&data.general_rbm_phys_layer_terms, nsite),
+        validate_charge_rbm_hidden_layer_terms(&data.charge_rbm_hidden_layer_terms, nsite),
+        validate_spin_rbm_hidden_layer_terms(&data.spin_rbm_hidden_layer_terms, nsite),
+        validate_general_rbm_hidden_layer_terms(&data.general_rbm_hidden_layer_terms, nsite),
+        validate_charge_rbm_phys_hidden_terms(&data.charge_rbm_phys_hidden_terms, nsite),
+        validate_spin_rbm_phys_hidden_terms(&data.spin_rbm_phys_hidden_terms, nsite),
+        validate_general_rbm_phys_hidden_terms(&data.general_rbm_phys_hidden_terms, nsite),
+        validate_doublon_holon_2site_indices(&data.doublon_holon_2site_indices, nsite),
+        validate_doublon_holon_4site_indices(&data.doublon_holon_4site_indices, nsite),
     ] {
         result.errors.extend(family.errors);
         result.warnings.extend(family.warnings);
