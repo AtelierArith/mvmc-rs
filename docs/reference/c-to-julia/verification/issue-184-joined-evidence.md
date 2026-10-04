@@ -1,5 +1,44 @@
 # Joined evidence for #184 / #185
 
+## Manual term diagnostics — ten SOURCE corrections and four literal leaves
+
+Documentation milestone based on main679e082585547c1fb7bcfeaabaf95c83e7a078af, preserving
+merged PR328's A201 correction and the complete PR327 packet. Earlier f617
+composed-tree45ad1570b820f112b1e76e3f4149cae2f5fd399a preparation is historical.
+This checkpoint reconciles bounded existing evidence, not full API/scenario acceptance.
+All2342 keys/order/original rows/owners remain unchanged. Only A172–A180/A185
+SOURCE fields and M0473–M0476 bounded assertion evidence change. The ten APIs
+remain pending; S093 and all neighboring scenarios remain pending. Reconciled
+counts97CI/6local/1579Missing/80Historical/579Review/1Difference=2342.
+Earlier count paragraphs below retain their historical checkpoint scope.
+
+The nine typed manual RBM functions and validate_expert_mode_term_diagnostics
+replace stale dense-aggregate source mappings, not the existing dense/Green
+validate_expert_mode_data API or runtime validators. Site/shadow observations
+are opt-in; hidden manual Nsite is not C hidden-neuron admission. No new
+spin/index/finite loader rejection, coefficient repair or RNG operation.
+Direct typed-family controls bind each API's actual empty/site/threshold/norm
+observations, while full original overload/display contracts remain unverified.
+
+M0473/M0474 require the original valid literal is_valid/errors-empty conditions;
+M0475/M0476 require the original negative literal !is_valid/errors-nonempty.
+Original8bb test_validation.jl132–151 and expert_types.jl138–235 establish
+exact literals/defaults: ncond=-1 and RBM block200, matching the explicit Rust
+test values. The old default-mismatch gap is retained in prior_canonical history
+but resolved for these four conditions. Four leaves share ONE exact runtime
+identity, not four distinct executions or full S093 acceptance.
+
+PR326 head412d14a34f1c2e008854c992a5e0f0134128f210/tested merge
+0fbf2bd300497a5650c4ab3cca69dca7c723ee20 into2fb451d6; run37208171215.
+Default job1114536665221191PASS42skip282.258s, original-literal identity
+ordinal1085/1191PASS.008; all job1114536665421193PASS62skip290.734s,
+ordinal1087/1193PASS.006. Exact per-job commands/raw hashes/source revisions
+are nested separately in each row. Source mainf617 has the tested tree, not
+a relabelled original local execution. Old LIST101 and local successor31PASS
+retain their2fb lineage in the issue325 provenance doc. Native scalar six-rank
+artifact is separate scalar evidence, not a manual-validator/model oracle.
+No C/Julia runtime, model, numerical tolerance, fixture or umbrella completion.
+
 ## Green direct file-reader boundaries — pending API scope preserved
 
 SOURCE publication base12f8ac8ddd81b6e3ee05ec40c3f3cda73cf92e06.
