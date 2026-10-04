@@ -137,3 +137,43 @@ max idx + 1 の section 幅計算が 3 箇所に重複している:
 - unit test は General 系 section のみ使用しており、Charge/Spin/General の
   interleave 順そのものは test で固定されていない。ただし section tuple が
   C の `fidx` offset と一致していることをソース対照で確認済み。
+
+## 2026-10-04 Rust General限定5-cell実行証拠（追補）
+
+以下は上記2026-07-08の歴史レビューとは別reference・別実行の限定追補。原本文・global status・台帳rowは変更しない。Related to #183; Related to #185; no closure. PR312はcommit `c3909f86d8825811da2639c9e79472d1e7d30ac0`でmerge済み。以下の実行証拠はmerge前head06f850の履歴として保持する。
+
+### Shared execution identity and authority
+
+Actual head `06f8509d8d0a3f11ac9782be38abd6e74426ec7c`, [dispatch37197873853](https://github.com/AtelierArith/mvmc-rs/actions/runs/37197873853), attempt1; [General job111423423107](https://github.com/AtelierArith/mvmc-rs/actions/runs/37197873853/job/111423423107), [aggregate111423698205](https://github.com/AtelierArith/mvmc-rs/actions/runs/37197873853/job/111423698205). Actual Rust identities in `crates/mvmc-core/tests/ctest_general_reference.rs`: prefix identity `corrected_general_all_four_prefixes_match_independent_reference`; public identity `corrected_general_twenty_step_public_runner_is_repeatable`.
+
+Reference: checked-in `tests/fixtures/ctest_general_pr54_3d0fd263/`, acquisition reference commit `3d0fd2638fd34de2a8f9609fcfaac2504caf02d2`, historical Julia1.13.1 ILP64 OpenBLAS acquisition, Manifest SHA `09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc`. This run used offline fixtures only: Julia runtime NotRun, version/BLAS null; no C/Julia oracle. Preserve per-fixture provenance, not a newly acquired numerical reference claim.
+
+Common actual settings: seed12395, samples100, frames1, warmup10, interval1, NSRCG0, NStore1, complex mode, ranks1/workers1, default features/test-fast/locked. Original Modpara declaration steps1500/window100 is unchanged and separate from effective gate overrides below. Actual OpenBLAS0.3.26 Haswell LP64 threads1; resolved library SHA `bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e`. Rust1.99.0 b940084d7/LLVM23.1.1/Linuxx86_64.
+
+### Five-cell evidence join (not five separate Rust tests)
+
+| Scoped cell | Effective steps/window | Calls/repeats | Actual evidence | Result and limits | Owner |
+|---|---|---|---|---|---|
+| General prefix1 | 1/1 | 1 | prefix identity; raw Generalprefix1 and settings kind=prefix steps=1 | Included in prefix test PASS1.233s; original exact raw/cursor/count/next624/config assertions retained | Goodall implementation; parent review; #183/#185 |
+| General prefix2 | 2/2 | 1 | prefix identity; raw Generalprefix2 and settings kind=prefix steps=2 | Same prefix test PASS; not an additional Rust identity | Same |
+| General prefix3 | 3/3 | 1 | prefix identity; raw Generalprefix3 and settings kind=prefix steps=3 | Same prefix test PASS; original numerical budgets unchanged | Same |
+| General prefix20 | 20/20 | 1 | prefix identity; raw Generalprefix20 and settings kind=prefix steps=20 | Same prefix test PASS; not whole model/settings matrix | Same |
+| General public20 | 20/20 | 2 fresh high-level calls | public identity; settings kind=public steps=20 repeats=2 after both calls/output assertions | Public test PASS1.745s; marker reports call arguments/input, not internal public RNG instrumentation | Same |
+
+The raw nextest result is **two tests passed,16 excluded**, UUID `6d5333dc-a6ad-4ea1-90a3-d58d7585165d`; exclusions are not model PASS or ExplicitSkip. No tolerance, RNG, independent assertion or fixture edits support these joins.
+
+Actual selected command (one invocation serving all five cells):
+
+```sh
+cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test ctest_general_reference --run-ignored only -E 'test(=corrected_general_all_four_prefixes_match_independent_reference) | test(=corrected_general_twenty_step_public_runner_is_repeatable)' --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
+```
+
+Actual environment includes `MVMC_RS_CTEST_GENERAL=1` and BLAS thread controls1; backend actual_threads independently reports1. commands.json records start/end, Completed, returncode0, exact selected identities/profile/features. Version/discovery commands are not selected completion. Selected Cargo ELF recorded SHA `1eab64b0be0dc0caf3cbb0629241f88b08975ac268f3a866a2ad9e15fca89be6`; binary closure before/after identical. No uploaded ELF independently rehash claim.
+
+### Artifact pins and remaining classifications
+
+Local retained HOST packet `/tmp/issue183-general-06f850-actual.qduCpV` (temporary filesystem, not a durable attachment); original downloaded artifacts remain unchanged. External acquisition: [plan artifact11302090205](https://api.github.com/repos/AtelierArith/mvmc-rs/actions/artifacts/11302090205), [General artifact11301389785](https://api.github.com/repos/AtelierArith/mvmc-rs/actions/artifacts/11301389785), [aggregate artifact11300719852](https://api.github.com/repos/AtelierArith/mvmc-rs/actions/artifacts/11300719852), associated with the linked exact run/attempt/head; GH retention/authentication limits apply. General artifact `evidence/artifacts.json` supplies all28 member SHA records (manifest SHA `395c2cdc94850ecc2c08f2d195ed4cb7632f233548891f7561ba7567eb6bb0c0`), not merely workflow status. Raw general.stderr SHA `a6cf1a7199488d2ddab121e34f240647d9b4b16ebb047ca8444dc38ae385025a`; five settings JSON SHA `746c9da4533b1f35e368df3cf8f26a2bd97f9a970388ac9baaf7d4740bab527c`; actual commands SHA `245fcc928821d859afd40b6f23e761afc849c981a1f129b8858435d6badb01e3`; backend SHA `cb86986d76af09aa543db1fefb4ba83e844686e056ab2b4343f7d59ff1439ae1`; closure-posts SHA `e6b302e7f2528a4a0bc34c0e3169b167c6853faacceae54a7be25f337b70b5bf`. All28 stored artifact hash records replay0; all source/fixture/binary JSON before-after comparisons0. terminal0/Pass, three closure records UNCHANGED/errornull.
+
+Aggregate is GeneralPass with **comparison_evidence Unverified / numeric_reference_comparisons null**. Preserve that exact classification: successful test assertions are not permission to set whole comparison inventory Verified. Lanczos/MPI/thread remain NotRun for this dispatch; their historical receipts are not erased or relabelled current-head results. Full13 model matrix, full public API inventory, genuine MPI/public-RNG coverage and #183/#185 overall acceptance remain outside this bounded join.
+
+Keep historical2cc failures: V2 inventory1 and V3 fmt1, and separate V4 compile/LIST/lint prior/post0. They are not current06 model execution. Ordinary PR312 CI37197823229 remains a separate requirement; lint/docsSUCCESS and other jobs pending at acquisition. No ordinary CI PASS inferred from optional workflow.
