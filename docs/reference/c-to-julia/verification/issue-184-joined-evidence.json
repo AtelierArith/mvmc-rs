@@ -1,6 +1,6 @@
 {
   "schema": "issue184-joined-evidence-v1",
-  "current_main": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
+  "current_main": "4d39231688b55b22ebbd1c23cac2e4bc0884080b",
   "original_inventory_lineage": "e41 source-mapped inventory; historical fields preserved, not current runtime claims",
   "rows": [
     {
@@ -100,10 +100,14 @@
           "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate.",
           "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified.",
           "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved.",
-          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header discrepancy was historical at fab2335; PR273 resolves only this scoped reader policy."
         ],
         "table": "issue-184-parser-milestone-controls.tsv"
-      }
+      },
+      "reader_policy_evidence": [
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections",
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_reject_malformed_count_and_positive_short_header"
+      ]
     },
     {
       "key": "api:A002",
@@ -437,10 +441,14 @@
           "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate.",
           "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified.",
           "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved.",
-          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header discrepancy was historical at fab2335; PR273 resolves only this scoped reader policy."
         ],
         "table": "issue-184-parser-milestone-controls.tsv"
-      }
+      },
+      "reader_policy_evidence": [
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections",
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_reject_malformed_count_and_positive_short_header"
+      ]
     },
     {
       "key": "api:A008",
@@ -3214,10 +3222,17 @@
         "state": "PartialConditionEvidence; whole original row status retained",
         "owner_issue": "#184 / #185; original responsible owner retained",
         "remaining": [
-          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header discrepancy was historical at fab2335; PR273 resolves only this scoped reader policy."
         ],
         "table": "issue-184-parser-milestone-controls.tsv"
-      }
+      },
+      "reader_policy_evidence": [
+        "PR273:issue184_qptrans_definition_boundary::qptrans_zero_accepts_two_to_five_header_lines_and_ignores_unconsumed_body",
+        "PR273:issue184_qptrans_definition_boundary::qptrans_count_header_errors_and_positive_short_headers_remain_rejected",
+        "PR273:issue184_qptrans_definition_boundary::qptrans_consumed_header_length_limits_do_not_apply_to_zero_unconsumed_lines",
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections",
+        "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_reject_malformed_count_and_positive_short_header"
+      ]
     },
     {
       "key": "api:A057",
@@ -44717,24 +44732,22 @@
       "parent_keys": [
         "scenario:S025"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-expert-parsers/tests/issue184_orbital_qptrans_semantics.rs::original_four_site_identity_cyclic_and_default_opttrans_are_loaded line118; public parse_expert_mode_files -> qptrans entries",
+      "supported_rejected_conditions": "length(data.qp_trans)==2 at original Julia test186 mapped to explicit Rust qp_trans_entries.len() assertion; no model/runner/RNG scope",
+      "intentional_scope": "This one original cardinality assertion only; original full model settings and stored parallel-array architecture are not claimed equivalent",
+      "evidence_type": "ScopedOriginalAssertionOrdinaryCI; manual semantic input join, not token matcher",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 testSHAfe430c50c3efd22b3007e93cad377a427fcbedf5bc3b47d446a2ae017e65bd01; C readdefSHA6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; tested Rust4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5; RusttestSHA10835405ff3d19cc397e151ab8b4f6d6d0f998ce1fc8d3cea473be22b76cf977 historical source snapshot main1e9c596; same test bytes verified at matrix main4d392",
+      "settings": "Original Nsite4/NElec2/NLocSpin0/NQPTrans2/NQPOptTrans1/NMPTrans2; Rust public Bundle Nsite4/NElec1/NMPTrans2. NElec differs and is not a count-reader parameter. Literal2weights+8 complete identity/cyclic mappings; header decoration/whitespace differs, numeric payload independently equal.",
+      "command": "cargo nextest run --workspace [default:no feature argument; other:--all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS original cardinality condition only: run37172837109 default job111349156674 ordinal868/1043; all-features job111349156624 ordinal871/1045; full raw log hashes and PASS records bound in cardinality_ci_evidence. Not a whole S028 scenario or native executable PASS.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "scope_exclusion": "Reviewed original cardinality condition is non-InterAll; whole composite and other row scopes still require their own review",
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0110",
         "parent_rows": "S025",
@@ -44767,7 +44780,33 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_scope_flag": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
+      "scope_flag_review": "Individually reviewed pure QP translation cardinality; original flag text retained, no blanket629 classification",
+      "current_primary_owner_issue": "#184 source/assertion reconciliation; original owner identifier remains unchanged",
+      "durable_logs": [
+        "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156674",
+        "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156624"
+      ],
+      "cardinality_ci_evidence": [
+        {
+          "run": 37172837109,
+          "job": 111349156674,
+          "tested_head": "4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5",
+          "raw_log_sha256": "03ffccb01f6ff29dd82fd98fb7aeac36f0dca6a9525553e548bed51c4b6e6d16",
+          "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156674",
+          "pass_line": "2026-10-04T03:07:14.9493772Z         PASS [   0.006s] ( 868/1043) mvmc-expert-parsers::issue184_orbital_qptrans_semantics original_four_site_identity_cyclic_and_default_opttrans_are_loaded"
+        },
+        {
+          "run": 37172837109,
+          "job": 111349156624,
+          "tested_head": "4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5",
+          "raw_log_sha256": "9225b0c711e78c789cd77c7d33a49f657564583d338a240b85a289ae80574f32",
+          "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156624",
+          "pass_line": "2026-10-04T03:06:31.5291835Z         PASS [   0.003s] ( 871/1045) mvmc-expert-parsers::issue184_orbital_qptrans_semantics original_four_site_identity_cyclic_and_default_opttrans_are_loaded"
+        }
+      ],
+      "semantic_review": "Parent FULL original Julia/helper, Rust test/reader and C lifecycle review approved this cardinality-only join; no composite/API/inverse/model promotion."
     },
     {
       "key": "assertion:M0111",
@@ -46205,24 +46244,22 @@
       "parent_keys": [
         "scenario:S026"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-expert-parsers/tests/issue184_orbital_qptrans_semantics.rs::original_heisenberg_sixteen_site_translation_sample_and_default_identity line170; public parse_expert_mode_files -> qptrans entries",
+      "supported_rejected_conditions": "length(data.qp_trans)==4 at original Julia test257 mapped to explicit Rust qp_trans_entries.len() assertion; no model/runner/RNG scope",
+      "intentional_scope": "This one original cardinality assertion only; original full model settings and stored parallel-array architecture are not claimed equivalent",
+      "evidence_type": "ScopedOriginalAssertionOrdinaryCI; manual semantic input join, not token matcher",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 testSHAfe430c50c3efd22b3007e93cad377a427fcbedf5bc3b47d446a2ae017e65bd01; C readdefSHA6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; tested Rust4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5; RusttestSHA10835405ff3d19cc397e151ab8b4f6d6d0f998ce1fc8d3cea473be22b76cf977 historical source snapshot main1e9c596; same test bytes verified at matrix main4d392",
+      "settings": "Original Nsite16/NElec8/NLocSpin16/NQPTrans4/NQPOptTrans1/NMPTrans4; Rust public Bundle Nsite16/NElec1/NMPTrans4. NElec/NLocSpin differ outside this count condition. Byte-original qptransidx.def SHA25715a81bbc8127724cbd666f55a4c9187c7907240ce03e201989fce963c0d16;4 unit weights+64 complete mappings.",
+      "command": "cargo nextest run --workspace [default:no feature argument; other:--all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS original cardinality condition only: run37172837109 default job111349156674 ordinal870/1043; all-features job111349156624 ordinal873/1045; full raw log hashes and PASS records bound in cardinality_ci_evidence. Not a whole S028 scenario or native executable PASS.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "scope_exclusion": "Reviewed original cardinality condition is non-InterAll; whole composite and other row scopes still require their own review",
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0134",
         "parent_rows": "S026",
@@ -46255,7 +46292,33 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_scope_flag": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
+      "scope_flag_review": "Individually reviewed pure QP translation cardinality; original flag text retained, no blanket629 classification",
+      "current_primary_owner_issue": "#184 source/assertion reconciliation; original owner identifier remains unchanged",
+      "durable_logs": [
+        "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156674",
+        "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156624"
+      ],
+      "cardinality_ci_evidence": [
+        {
+          "run": 37172837109,
+          "job": 111349156674,
+          "tested_head": "4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5",
+          "raw_log_sha256": "03ffccb01f6ff29dd82fd98fb7aeac36f0dca6a9525553e548bed51c4b6e6d16",
+          "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156674",
+          "pass_line": "2026-10-04T03:07:14.9612132Z         PASS [   0.006s] ( 870/1043) mvmc-expert-parsers::issue184_orbital_qptrans_semantics original_heisenberg_sixteen_site_translation_sample_and_default_identity"
+        },
+        {
+          "run": 37172837109,
+          "job": 111349156624,
+          "tested_head": "4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5",
+          "raw_log_sha256": "9225b0c711e78c789cd77c7d33a49f657564583d338a240b85a289ae80574f32",
+          "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156624",
+          "pass_line": "2026-10-04T03:06:31.5323366Z         PASS [   0.003s] ( 873/1045) mvmc-expert-parsers::issue184_orbital_qptrans_semantics original_heisenberg_sixteen_site_translation_sample_and_default_identity"
+        }
+      ],
+      "semantic_review": "Parent FULL original Julia/helper, Rust test/reader and C lifecycle review approved this cardinality-only join; no composite/API/inverse/model promotion."
     },
     {
       "key": "assertion:M0135",
@@ -150483,24 +150546,67 @@
     }
   ],
   "reconciliation": {
-    "checkpoint": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
+    "checkpoint": "4d39231688b55b22ebbd1c23cac2e4bc0884080b",
     "prior_checkpoint": "eaa5db6254c721b95e8e63096287cdb74d5124e2",
     "original_matrix_sha256": "ccdd19c7e8c14e207c3c3b7122efee0b0aafaad3b86f203a4d932a76f056d7e1",
     "condition_table": "issue-184-parser-milestone-controls.tsv",
-    "condition_table_sha256": "8c2455ac70f2ae3dc24d284fa9c6a0b455fe5266f5827149487e189c64aa151c",
-    "control_count": 57,
-    "execution_records": 114,
+    "condition_table_sha256": "d462239df2f3a76741ec6cdc72ed46c6acf09a2b904d0871782e5123e96e9659",
+    "control_count": 62,
+    "execution_records": 124,
     "policy": "Partial condition evidence does not promote complete original rows. Six merged milestones; source/caller contract distinctions explicitly retained.",
-    "unresolved_c_input_contracts": [
+    "unresolved_c_input_contracts": [],
+    "scope_flags": "629 review-required flags retained; not blanket InterAll exclusions",
+    "remaining_execution": "Ignored model20, explicit MPI launches, thread crossover and independent missing FSZ fixtures are not certified by ordinary CI totals.",
+    "policy_history": [
       {
-        "id": "QPTransShortZeroHeader",
-        "rust": "parse_qptrans_def requires five physical header lines even count0",
-        "c": "ReadBuffInt reads count from two lines; ignored five-header EOF precedes GetInfoTransSym NArray0 with no body-buffer use",
-        "source": "readdef.c:118-124,874-876,2232-2265; SHA256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9",
-        "status": "SourceIdentifiedUnresolved; no native probe executed or production repair in this reconciliation"
+        "checkpoint": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
+        "unresolved_c_input_contracts": [
+          {
+            "id": "QPTransShortZeroHeader",
+            "rust": "parse_qptrans_def requires five physical header lines even count0",
+            "c": "ReadBuffInt reads count from two lines; ignored five-header EOF precedes GetInfoTransSym NArray0 with no body-buffer use",
+            "source": "readdef.c:118-124,874-876,2232-2265; SHA256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9",
+            "status": "SourceIdentifiedUnresolved; no native probe executed or production repair in this reconciliation"
+          }
+        ],
+        "condition_table_sha256": "8c2455ac70f2ae3dc24d284fa9c6a0b455fe5266f5827149487e189c64aa151c",
+        "control_count": 57,
+        "execution_records": 114
       }
     ],
-    "scope_flags": "629 review-required flags retained; not blanket InterAll exclusions",
-    "remaining_execution": "Ignored model20, explicit MPI launches, thread crossover and independent missing FSZ fixtures are not certified by ordinary CI totals."
+    "previous_reconciliation_checkpoint": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
+    "reader_policy_changes": [
+      {
+        "id": "QPTransShortZeroHeader",
+        "issue": 272,
+        "pr": 273,
+        "tested_head": "35ac648ebf3e2b0c561ce5d592a89e3ff28c0f00",
+        "ci_run": 37174830753,
+        "job_ids": [
+          111355185604,
+          111355185560
+        ],
+        "evidence_ids": [
+          "PR273:issue184_qptrans_definition_boundary::qptrans_zero_accepts_two_to_five_header_lines_and_ignores_unconsumed_body",
+          "PR273:issue184_qptrans_definition_boundary::qptrans_count_header_errors_and_positive_short_headers_remain_rejected",
+          "PR273:issue184_qptrans_definition_boundary::qptrans_consumed_header_length_limits_do_not_apply_to_zero_unconsumed_lines",
+          "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections",
+          "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_reject_malformed_count_and_positive_short_header"
+        ],
+        "status": "ResolvedScopedReaderPolicySourceAndOrdinaryCI; no native execution or whole-row promotion",
+        "historical_rejection": "PR270/PR271 rejection and unresolved source annotation retained verbatim in policy_history and original table prefix"
+      }
+    ],
+    "original_cardinality_review": {
+      "approved_keys": [
+        "assertion:M0110",
+        "assertion:M0134"
+      ],
+      "historical_scope_flags_retained": 629,
+      "remaining_individual_scope_reviews": 627,
+      "additional_historical_ci_records": 4,
+      "parser_control_table_unchanged": "62 controls /124 records; four cardinality records are separate original-assertion evidence",
+      "scope": "Cardinality only; NElec/NLocSpin differences explicit in each row; S028 and every other row unchanged"
+    }
   }
 }
