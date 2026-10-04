@@ -127,61 +127,55 @@ pub fn safe_parse_float(token: &str, default: f64) -> f64 {
     token.parse::<f64>().unwrap_or(default)
 }
 
-/// Best-effort complex parser used by `gutzwilleridx.def` /
-/// `orbitalidx.def` legacy forms. Recognises:
+/// Best-effort public complex utility. This is not the strict C definition
+/// reader: C parameter overlays contain separate index, real and imaginary fields.
+/// Recognises:
 ///
-/// * `"1.0+2.0i"` / `"1.0-2.0j"` (Julia-style complex literal),
+/// * `"1.0+2.0i"` / `"1.0-2.0j"` / `"1.0+2.0im"`, including exponent signs,
 /// * `"1.0 2.0"` (two whitespace-separated reals),
 /// * `"1.0"` (real-only).
 ///
-/// Returns `Complex64::new(0.0, 0.0)` on parse failure so the Julia
-/// fallback (`safe_parse_complex` -> `0+0i`) is preserved.
-pub fn safe_parse_complex(token: &str) -> Complex64 {
-    if token.contains('i') || token.contains('j') {
-        // Julia's `parse(Complex{Float64}, ...)` accepts e.g. "1+2im".
-        // We do a minimal split on the last +/-.
-        if let Some(c) = parse_complex_literal(token) {
-            return c;
-        }
-    } else if token.contains(' ') {
-        let mut it = token.split_ascii_whitespace();
-        let re = it.next().and_then(|s| s.parse::<f64>().ok());
-        let im = it.next().and_then(|s| s.parse::<f64>().ok());
-        if let (Some(re), Some(im)) = (re, im) {
-            return Complex64::new(re, im);
-        }
-    }
-    if let Ok(re) = token.parse::<f64>() {
-        return Complex64::new(re, 0.0);
-    }
-    Complex64::new(0.0, 0.0)
+/// Returns the caller's `default` on parse failure, matching Julia's public
+/// `safe_parse_complex(str, default)` contract. Pass zero for Julia's usual default.
+pub fn safe_parse_complex(token: &str, default: Complex64) -> Complex64 {
+    parse_complex_literal(token).unwrap_or(default)
 }
 
 fn parse_complex_literal(token: &str) -> Option<Complex64> {
-    // Accept "a+bi", "a-bi", "a+bj", "a-bj", "a+im b" -- the round-trip
-    // fixtures here are tiny so a small handwritten splitter is enough.
     let token = token.trim();
-    let last_marker = token
-        .rfind('+')
-        .or_else(|| token.rfind('-'))
-        .filter(|&p| p > 0)?;
-    // Skip a sign that immediately follows an exponent marker.
-    let chars: Vec<char> = token.chars().collect();
-    if last_marker > 0 {
-        let prev = chars[last_marker - 1];
-        if prev == 'e' || prev == 'E' {
-            return None;
-        }
+    let imaginary = token.strip_suffix("im").or_else(|| {
+        token
+            .strip_suffix('i')
+            .or_else(|| token.strip_suffix('j'))
+            .or_else(|| token.strip_suffix('I'))
+            .or_else(|| token.strip_suffix('J'))
+    });
+    if let Some(body) = imaginary {
+        // A component sign must not be the sign of a decimal exponent.
+        let separator = body.bytes().enumerate().rev().find_map(|(pos, byte)| {
+            (pos > 0
+                && matches!(byte, b'+' | b'-')
+                && !matches!(body.as_bytes()[pos - 1], b'e' | b'E'))
+            .then_some(pos)
+        });
+        let (real, imaginary) = match separator {
+            Some(pos) => (body[..pos].trim().parse::<f64>().ok()?, &body[pos..]),
+            None => (0.0, body),
+        };
+        let imaginary = match imaginary.trim() {
+            "" | "+" => 1.0,
+            "-" => -1.0,
+            value => value.parse::<f64>().ok()?,
+        };
+        return Some(Complex64::new(real, imaginary));
     }
-    let (re_str, im_str_with_sign) = token.split_at(last_marker);
-    let im_str = im_str_with_sign
-        .trim_end_matches('i')
-        .trim_end_matches('j')
-        .trim_end_matches('I')
-        .trim_end_matches('J');
-    let re = re_str.trim().parse::<f64>().ok()?;
-    let im = im_str.trim().parse::<f64>().ok()?;
-    Some(Complex64::new(re, im))
+    let mut fields = token.split_ascii_whitespace();
+    let real = fields.next()?.parse::<f64>().ok()?;
+    let imaginary = fields.next().map(str::parse::<f64>).transpose().ok()?;
+    if fields.next().is_some() {
+        return None;
+    }
+    Some(Complex64::new(real, imaginary.unwrap_or(0.0)))
 }
 
 /// Parse `namelist.def` content into ordered `(file_type, file_name)`
@@ -230,18 +224,30 @@ mod tests {
 
     #[test]
     fn safe_parse_complex_real_only() {
-        assert_eq!(safe_parse_complex("1.5"), Complex64::new(1.5, 0.0));
+        assert_eq!(
+            safe_parse_complex("1.5", Complex64::default()),
+            Complex64::new(1.5, 0.0)
+        );
     }
 
     #[test]
     fn safe_parse_complex_two_reals() {
-        assert_eq!(safe_parse_complex("1.5 -2.0"), Complex64::new(1.5, -2.0));
+        assert_eq!(
+            safe_parse_complex("1.5 -2.0", Complex64::default()),
+            Complex64::new(1.5, -2.0)
+        );
     }
 
     #[test]
     fn safe_parse_complex_julia_literal() {
-        assert_eq!(safe_parse_complex("1.5+2.0i"), Complex64::new(1.5, 2.0));
-        assert_eq!(safe_parse_complex("3.0-4.0j"), Complex64::new(3.0, -4.0));
+        assert_eq!(
+            safe_parse_complex("1.5+2.0i", Complex64::default()),
+            Complex64::new(1.5, 2.0)
+        );
+        assert_eq!(
+            safe_parse_complex("3.0-4.0j", Complex64::default()),
+            Complex64::new(3.0, -4.0)
+        );
     }
 
     #[test]
