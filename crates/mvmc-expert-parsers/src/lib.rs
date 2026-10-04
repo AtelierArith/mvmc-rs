@@ -14,9 +14,12 @@
 #![warn(missing_docs)]
 
 pub mod constants;
+pub mod definition;
 pub mod parsers;
 pub mod types;
 pub mod utils;
+
+pub use definition::{load_hamiltonian_definition, HamiltonianDefinitionKind};
 
 pub use types::{
     ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, CoulombInterTerm,
@@ -55,8 +58,8 @@ use std::io;
 use std::path::Path;
 
 use crate::parsers::{
-    coulomb, doublon_holon, exchange, green, gutzwiller, hund, interall, jastrow, locspin, modpara,
-    opttrans, orbital, pairhop, qptrans, rbm, trans,
+    doublon_holon, green, gutzwiller, interall, jastrow, locspin, modpara, opttrans, orbital,
+    qptrans, rbm,
 };
 use crate::utils::file::{parse_namelist_content, read_def_file};
 
@@ -478,24 +481,22 @@ fn parse_file_by_type(
             data.locspin_terms = definition.terms;
         }
         "Trans" => {
-            data.transfer_terms = trans::parse_trans_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::Transfer, path)?;
         }
         "CoulombIntra" => {
-            data.coulomb_intra_terms =
-                coulomb::parse_coulomb_intra_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::CoulombIntra, path)?;
         }
         "CoulombInter" => {
-            data.coulomb_inter_terms =
-                coulomb::parse_coulomb_inter_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::CoulombInter, path)?;
         }
         "Hund" => {
-            data.hund_terms = hund::parse_hund_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::Hund, path)?;
         }
         "Exchange" => {
-            data.exchange_terms = exchange::parse_exchange_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::Exchange, path)?;
         }
         "PairHop" => {
-            data.pair_hop_terms = pairhop::parse_pairhop_definition(path, data.modpara.nsite)?;
+            load_hamiltonian_definition(data, HamiltonianDefinitionKind::PairHop, path)?;
         }
         "InterAll" => {
             data.inter_all_terms =
