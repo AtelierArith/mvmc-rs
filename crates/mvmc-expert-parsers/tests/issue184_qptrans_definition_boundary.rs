@@ -144,7 +144,7 @@ fn qptrans_indices_integer_overflow_and_invalid_header_are_safe_errors() {
 }
 
 #[test]
-fn qptrans_zero_ignores_body_but_requires_full_defined_header() {
+fn qptrans_zero_accepts_two_to_five_header_lines_and_ignores_unconsumed_body() {
     let bundle = Bundle::new();
     let section = parse_qptrans_def(bundle.definition("anything 0", "ignored\n"), 0).unwrap();
     assert_eq!(section.n_qp_trans, 0);
@@ -152,8 +152,115 @@ fn qptrans_zero_ignores_body_but_requires_full_defined_header() {
     let long_ignored = "x".repeat(300);
     assert!(parse_qptrans_def(bundle.definition("anything 0", &long_ignored), 0).is_ok());
     let path = bundle.0.join("short.def");
-    fs::write(&path, "===\nNQPTrans 0\n").unwrap();
-    assert!(parse_qptrans_def(path, 2).is_err());
+    for extra in ["", "===\n", "===\ncolumns\n", "===\ncolumns\n===\n"] {
+        fs::write(&path, format!("===\nNQPTrans 0\n{extra}")).unwrap();
+        let section = parse_qptrans_def(&path, 2).unwrap();
+        assert_eq!(section.n_qp_trans, 0);
+        assert!(section.entries.is_empty());
+    }
+    fs::write(&path, format!("===\nNQPTrans 0\n{long_ignored}\ninvalid\n")).unwrap();
+    let section = parse_qptrans_def(&path, 2).unwrap();
+    assert_eq!(section.n_qp_trans, 0);
+    assert!(section.entries.is_empty());
+}
+
+#[test]
+fn qptrans_count_header_errors_and_positive_short_headers_remain_rejected() {
+    let bundle = Bundle::new();
+    let path = bundle.0.join("short.def");
+    for content in [
+        "",
+        "===\n",
+        "===\n\n",
+        "===\nNQPTrans\n",
+        "===\nNQPTrans nope\n",
+        "===\nNQPTrans -1\n",
+        "===\nNQPTrans 2147483648\n",
+        "===\nNQPTrans 1\n",
+        "===\nNQPTrans 1\n===\n",
+        "===\nNQPTrans 1\n===\ncolumns\n",
+    ] {
+        fs::write(&path, content).unwrap();
+        assert!(parse_qptrans_def(&path, 2).is_err(), "{content:?}");
+    }
+}
+
+#[test]
+fn qptrans_consumed_header_length_limits_do_not_apply_to_zero_unconsumed_lines() {
+    let bundle = Bundle::new();
+    let path = bundle.0.join("length.def");
+    for length in [255, 256] {
+        let first = "x".repeat(length);
+        let second = format!("NQPTrans 0{}", " ".repeat(length - "NQPTrans 0".len()));
+        for content in [format!("{first}\nNQPTrans 0\n"), format!("===\n{second}\n")] {
+            fs::write(&path, content).unwrap();
+            assert!(parse_qptrans_def(&path, 2).is_err());
+        }
+    }
+    let first = "x".repeat(254);
+    let second = format!("NQPTrans 0{}", " ".repeat(254 - "NQPTrans 0".len()));
+    fs::write(&path, format!("{first}\n{second}\n{}\n", "x".repeat(300))).unwrap();
+    let section = parse_qptrans_def(&path, 2).unwrap();
+    assert_eq!(section.n_qp_trans, 0);
+    assert!(section.entries.is_empty());
+    for header_index in 0..5 {
+        let mut headers = ["===", "NQPTrans 2", "===", "columns", "==="].map(str::to_owned);
+        headers[header_index] = if header_index == 1 {
+            format!("NQPTrans 2{}", " ".repeat(255 - "NQPTrans 2".len()))
+        } else {
+            "x".repeat(255)
+        };
+        fs::write(&path, format!("{}\n{COMPLETE}", headers.join("\n"))).unwrap();
+        assert!(parse_qptrans_def(&path, 2).is_err());
+    }
+}
+
+#[test]
+fn public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections() {
+    let bundle = Bundle::new();
+    for alias in ["TransSym", "QPTrans"] {
+        for nmp in [1, -1] {
+            let namelist = bundle.loader(alias, nmp);
+            for extra in ["", "===\n", "===\ncolumns\n", "===\ncolumns\n===\n"] {
+                fs::write(
+                    bundle.0.join("qptrans.def"),
+                    format!("===\nNQPTrans 0\n{extra}"),
+                )
+                .unwrap();
+                let data = parse_expert_mode_files(&namelist).unwrap();
+                assert!(data.input_errors.is_empty());
+                assert_eq!(data.n_qp_trans, 0);
+                assert!(data.qp_trans_entries.is_empty());
+                assert!(data.para_qp_trans.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn public_qptrans_aliases_reject_malformed_count_and_positive_short_header() {
+    let bundle = Bundle::new();
+    for alias in ["TransSym", "QPTrans"] {
+        for nmp in [1, -1] {
+            let namelist = bundle.loader(alias, nmp);
+            for content in [
+                "",
+                "===\n",
+                "===\n\n",
+                "===\nNQPTrans\n",
+                "===\nNQPTrans nope\n",
+                "===\nNQPTrans -1\n",
+                "===\nNQPTrans 2147483648\n",
+                "===\nNQPTrans 1\n",
+            ] {
+                fs::write(bundle.0.join("qptrans.def"), content).unwrap();
+                assert!(matches!(
+                    parse_expert_mode_files(&namelist),
+                    Err(ParseError::InvalidInput { .. })
+                ));
+            }
+        }
+    }
 }
 
 #[test]

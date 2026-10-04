@@ -60,13 +60,9 @@ fn read_definition(content: &str, nsite: i64) -> io::Result<QPTransSection> {
     // Unlike split_def_line, this preserves blank/comment physical records.
     // Reject long records rather than emulate native fgets chunking/stale EOF.
     let lines: Vec<_> = content.split_terminator('\n').collect();
-    if lines.len() < IGNORE_LINES_IN_DEF
-        || lines[..IGNORE_LINES_IN_DEF]
-            .iter()
-            .any(|line| line.len() >= 255)
-    {
+    if lines.len() < 2 || lines[..2].iter().any(|line| line.len() >= 255) {
         return Err(invalid(
-            "incomplete five-line header or overlong physical record",
+            "incomplete count header or overlong consumed header record",
         ));
     }
     let mut header = Scan::new(lines[1].as_bytes());
@@ -76,7 +72,18 @@ fn read_definition(content: &str, nsite: i64) -> io::Result<QPTransSection> {
     let count = integer(&mut header)?.ok_or_else(|| invalid("missing declared count"))?;
     let count = usize::try_from(count).map_err(|_| invalid("negative declared count"))?;
     if count == 0 {
+        // C reads the count from two lines. Its remaining header skips may hit
+        // EOF, but GetInfoTransSym reads no body or array when NArray == 0.
         return Ok(QPTransSection::default());
+    }
+    if lines.len() < IGNORE_LINES_IN_DEF
+        || lines[..IGNORE_LINES_IN_DEF]
+            .iter()
+            .any(|line| line.len() >= 255)
+    {
+        return Err(invalid(
+            "incomplete five-line header or overlong physical record",
+        ));
     }
     let sites = usize::try_from(nsite)
         .ok()
