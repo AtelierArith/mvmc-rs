@@ -10,6 +10,62 @@ use crate::utils::file::{clean_line, read_def_file, safe_parse_int, split_def_li
 
 const IGNORE_LINES_IN_DEF: usize = 5;
 
+// File readers are definition boundaries. Payload helpers below remain separate
+// permissive utilities. Without Nsite this checks nonnegative sites, not the
+// context-dependent upper bound enforced by the public namelist loader.
+fn parse_counted_definition<T>(
+    content: &str,
+    fields: usize,
+    parse_row: impl Fn(&str) -> Vec<T>,
+) -> io::Result<Vec<T>> {
+    let invalid = |message| io::Error::new(io::ErrorKind::InvalidData, message);
+    let lines: Vec<_> = content.lines().collect();
+    let count = lines
+        .get(1)
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|value| value.parse::<usize>().ok())
+        .ok_or_else(|| invalid("Green definition: missing or invalid count"))?;
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    if lines.len() < IGNORE_LINES_IN_DEF {
+        return Err(invalid(
+            "Green definition: incomplete positive-count header",
+        ));
+    }
+    let mut terms = Vec::new();
+    for line in lines.iter().skip(IGNORE_LINES_IN_DEF) {
+        let cleaned = clean_line(line);
+        if cleaned.is_empty() {
+            continue;
+        }
+        let tokens = split_def_line(cleaned);
+        if tokens.len() < fields {
+            return Err(invalid("Green definition: incomplete integer row"));
+        }
+        // No unchecked sscanf carry emulation: malformed integers and typed
+        // spin violations fail rather than silently disappearing from output.
+        if tokens
+            .iter()
+            .take(fields)
+            .any(|token| token.parse::<i64>().is_err())
+        {
+            return Err(invalid("Green definition: malformed integer"));
+        }
+        let mut row = parse_row(cleaned);
+        if row.len() != 1 {
+            return Err(invalid(
+                "Green definition: negative site or invalid typed spin",
+            ));
+        }
+        terms.append(&mut row);
+    }
+    if terms.len() != count {
+        return Err(invalid("Green definition: declared row count mismatch"));
+    }
+    Ok(terms)
+}
+
 fn detect_start(lines: &[&str], min_tokens: usize) -> usize {
     if lines.len() > IGNORE_LINES_IN_DEF {
         let first_data = clean_line(lines[IGNORE_LINES_IN_DEF]);
@@ -26,10 +82,10 @@ fn detect_start(lines: &[&str], min_tokens: usize) -> usize {
 /// Parse a `greenone.def` file from disk.
 pub fn parse_green_one_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<GreenOneTerm>> {
     let content = read_def_file(path)?;
-    Ok(parse_green_one_content(&content))
+    parse_counted_definition(&content, 4, parse_green_one_content)
 }
 
-/// Parse a `greenone.def` payload from memory.
+/// Parse a permissive `greenone.def` payload, not a validated definition file.
 pub fn parse_green_one_content(content: &str) -> Vec<GreenOneTerm> {
     let lines: Vec<&str> = content.lines().collect();
     let start = detect_start(&lines, 2);
@@ -67,10 +123,10 @@ pub fn parse_green_one_content(content: &str) -> Vec<GreenOneTerm> {
 /// Parse a `greentwo.def` file from disk.
 pub fn parse_green_two_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<GreenTwoTerm>> {
     let content = read_def_file(path)?;
-    Ok(parse_green_two_content(&content))
+    parse_counted_definition(&content, 8, parse_green_two_content)
 }
 
-/// Parse a `greentwo.def` payload from memory.
+/// Parse a permissive `greentwo.def` payload, not a validated definition file.
 pub fn parse_green_two_content(content: &str) -> Vec<GreenTwoTerm> {
     let lines: Vec<&str> = content.lines().collect();
     let start = detect_start(&lines, 4);
