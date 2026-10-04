@@ -36,10 +36,27 @@ its historical name; the runtime receipt explicitly records the actual 12c5 base
 Owner session `45633` completed with pipeline status zero. Nextest UUID
 `b1154204-5566-466e-84a9-723e625b540d`: **4 passed**, 225 filtered, 0.064 seconds.
 The commands below, targeted strict Clippy, formatting, and complete source/tool
-before-after checks all returned zero. Final receipt:
+before-after checks all returned zero at acquisition. Initial receipt:
 `happy_jackson:/tmp/issue184-qp-sync-four-main12c5-proof`.
 The existing dependency deprecation warning from tenferro-runtime was retained;
 no warning suppression or dependency change was made.
+
+A later replay detected a post-validation change to `mvmc-core/src/lib.rs` in
+that retained source directory. The initial receipt is historical evidence,
+not a claim that the directory remains immutable. Its tested file hash was
+`6991cb03ee1e558b08a08fbd295923da7d49e8a622148403f0389c9220edce61`;
+the later changed file hash was
+`237db40dab8fe894053f7f29a54d30b030bb857725f43e56bf73a1f1f342cdff`.
+The publication retains the tested main file, not that subsequent change.
+
+Fresh verification copied publication commit `3eda7ff0` into the separate source
+directory `happy_jackson:/tmp/issue184-qp-sync-main12c5-fresh`.
+Owner session `24970` completed with status zero; nextest UUID
+`fab7712f-aaf6-4621-80a8-f275babc1e8a`: **4 passed**, 0.072 seconds.
+Targeted strict Clippy, formatting and source/tool checks returned zero.
+Final receipt: `happy_jackson:/tmp/issue184-qp-sync-fresh-main12c5-proof`.
+The orchestrator independently replayed its source and tool manifests from
+the correct source directory with status zero and inspected the four-pass log.
 
 ## Historical 92a9 verification
 
