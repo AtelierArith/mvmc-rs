@@ -5280,7 +5280,7 @@ mod callback_tests {
             let mut direct_guard = diagnostic
                 .as_ref()
                 .filter(|_| !cg)
-                .map(|_| crate::sr_observer::capture_with_normalized().unwrap());
+                .map(|_| crate::sr::observer::capture_with_normalized().unwrap());
             let mut run_once = || {
                 vmc_para_opt(
                     &mut data,
