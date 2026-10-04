@@ -10,8 +10,8 @@
 
 use crate::types::{
     CoulombInterTerm, CoulombIntraTerm, DoublonHolon2SiteIndex, DoublonHolon4SiteIndex,
-    ExpertModeData, GutzwillerTerm, JastrowTerm, ModParaParameters, OrbitalTerm, TransferTerm,
-    ValidationResult,
+    ExpertModeData, GeneralRBMPhysHiddenTerm, GutzwillerTerm, JastrowTerm, ModParaParameters,
+    OrbitalTerm, TransferTerm, ValidationResult,
 };
 
 /// Validate ModPara dimensions, electron/spin consistency, and VMC/SR settings.
@@ -248,6 +248,59 @@ pub fn validate_doublon_holon_4site_indices(
         }
     }
     ValidationResult::new(errors, Vec::new())
+}
+
+/// Diagnose General RBM PhysHidden term values without changing input acceptance.
+///
+/// This manual, read-only utility observes caller-owned term values, including
+/// shadows, not canonical dense RBM storage. It does not check shadow consistency,
+/// spin, parameter index or finiteness, and does not repair any values.
+/// Both sites use the supplied diagnostic `nsite`, following the Julia API.
+/// The C loader's separate hidden-neuron dimension remains a different contract;
+/// this utility is not invoked by parsing, packing or the runner.
+/// Magnitudes above `1e10` are warnings, not errors. Infinity dominates NaN as
+/// in Julia's complex `abs`; NaN without infinity does not warn.
+pub fn validate_general_rbm_phys_hidden_terms(
+    terms: &[GeneralRBMPhysHiddenTerm],
+    nsite: i64,
+) -> ValidationResult {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    for (row, term) in terms.iter().enumerate() {
+        check_site(
+            &mut errors,
+            "GeneralRBM_PhysHidden",
+            row + 1,
+            "site1",
+            term.site1,
+            nsite,
+        );
+        check_site(
+            &mut errors,
+            "GeneralRBM_PhysHidden",
+            row + 1,
+            "site2",
+            term.site2,
+            nsite,
+        );
+        // Julia hypot checks infinity before NaN. Do not rely on a platform's
+        // mixed Inf/NaN hypot behavior for this discrete diagnostic decision.
+        let large = if term.value.re.is_infinite() || term.value.im.is_infinite() {
+            true
+        } else if term.value.re.is_nan() || term.value.im.is_nan() {
+            false
+        } else {
+            term.value.norm() > 1e10
+        };
+        if large {
+            warnings.push(format!(
+                "GeneralRBM_PhysHidden term {}: very large value {:?}",
+                row + 1,
+                term.value
+            ));
+        }
+    }
+    ValidationResult::new(errors, warnings)
 }
 
 /// Validate the complete C-declared RBM storage and all mapped slots.
