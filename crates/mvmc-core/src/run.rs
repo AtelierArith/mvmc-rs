@@ -847,13 +847,15 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
         } else if all_complex {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
                 data, state, rng, timer, reducer,
-            );
-            Ok(())
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
         } else {
             crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
                 data, state, rng, timer, reducer,
-            );
-            Ok(())
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
         };
         timer.stop(3);
         let sample_error = sample_result.as_ref().err().cloned();
@@ -1045,15 +1047,15 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 .map_err(|error| error.to_string())
             }
         } else if !all_complex {
-            Ok(
-                crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
-                    data, state, rng, timer, reducer,
-                ),
-            )
-        } else {
-            Ok(crate::sampling::driver::vmc_make_sample_with_reducer_timed(
+            crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
                 data, state, rng, timer, reducer,
-            ))
+            )
+            .map_err(|error| error.to_string())
+        } else {
+            crate::sampling::driver::vmc_make_sample_with_reducer_timed(
+                data, state, rng, timer, reducer,
+            )
+            .map_err(|error| error.to_string())
         };
         let sample_error = sample_result.as_ref().err().cloned();
         if reducer.any_failure(sample_error.is_some()) {
@@ -3235,6 +3237,12 @@ mod callback_tests {
     fn remote_sr_failure_restores_successful_local_parameter_update() {
         struct RemoteSrFailure;
         impl Reducer for RemoteSrFailure {
+            fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+                // This double's comm1 peers share the local initialization
+                // INFO. Only the later SR status reduction injects failure.
+                // Signed MAX(info, info) preserves negative INFO unchanged.
+                Ok(info)
+            }
             fn allreduce_sum_f64(&self, _: &mut [f64]) {}
             fn allreduce_sum_c64(&self, _: &mut [Complex64]) {}
             fn allreduce_sum_i64(&self, values: &mut [i64]) {
@@ -3515,6 +3523,11 @@ mod callback_tests {
     fn mpi_measurement_partition_preserves_full_chain_count_and_rng() {
         struct MeasurementRank(usize);
         impl Reducer for MeasurementRank {
+            fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+                // Replicated sampling uses identical comm1 initializer INFO;
+                // measurement partitioning must not consume SR collectives.
+                Ok(info)
+            }
             fn allreduce_sum_f64(&self, _: &mut [f64]) {}
             fn allreduce_sum_c64(&self, _: &mut [Complex64]) {}
             fn allreduce_sum_i64(&self, _: &mut [i64]) {}

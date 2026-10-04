@@ -76,6 +76,18 @@ pub trait Reducer {
         failed
     }
 
+    /// C shared normal initializer: signed integer MPI_MAX on comm1.
+    ///
+    /// MPI implementations must override this on the initializing thread.
+    /// Never flatten negative INFO or silently run a multi-rank identity.
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        if self.world_size() == 1 && self.reduction_size() == 1 {
+            Ok(info)
+        } else {
+            Err("comm1 integer INFO MAX requires a coordinated reducer implementation".into())
+        }
+    }
+
     /// C ReduceCounter: six statistical entries, comm2, root-only writeback.
     /// Logical/configuration fields (including burn status) are not summed.
     fn reduce_counters(&self, counters: &mut [i64]) {

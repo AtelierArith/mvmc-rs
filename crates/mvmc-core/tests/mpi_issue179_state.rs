@@ -178,6 +178,10 @@ impl Recording<'_> {
     }
 }
 impl Reducer for Recording<'_> {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        self.assert_funneled();
+        self.inner.sampling_max_info(info)
+    }
     fn sampling_any_failure(&self, failed: bool) -> bool {
         self.assert_funneled();
         self.inner.sampling_any_failure(failed)

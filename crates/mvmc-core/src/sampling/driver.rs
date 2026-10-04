@@ -21,15 +21,21 @@ use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 
 use crate::observables::{calculate_ip_complex, calculate_ip_real};
-use crate::pfaffian::{calc_m_all_complex, calc_m_all_real};
+use crate::pfaffian::{
+    calc_m_all_complex, calc_m_all_complex_native_info, calc_m_all_real,
+    calc_m_all_real_native_info,
+};
 use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::sampling::candidate::{
     get_update_type, make_candidate_exchange, make_candidate_exchange_fsz, make_candidate_hopping,
     make_candidate_hopping_fsz, make_candidate_local_spin_flip_conduction,
     make_candidate_local_spin_flip_localspin, FszHoppingCandidate, UpdateType,
 };
-use crate::sampling::initial::make_initial_sample;
 use crate::sampling::metropolis::metropolis_decision;
+use crate::sampling::normal_initial::{
+    coordinate_normal_setup, make_initial_sample_normal_with_info, preflight_normal_sampler,
+    NormalInitializationError,
+};
 use crate::sampling::projection::{
     init_loc_spn, log_proj_ratio, revert_ele_config, update_ele_config, update_proj_cnt,
 };
@@ -96,7 +102,7 @@ pub fn vmc_make_sample_real(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
-) -> SampleStats {
+) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_real_timed(data, state, rng, &mut CTimer::<false>::new())
 }
 
@@ -106,7 +112,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
-) -> SampleStats {
+) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
 }
 
@@ -117,78 +123,87 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
-) -> SampleStats {
-    let n_site = data.modpara.nsite.max(0) as usize;
-    let n_elec = data.modpara.nelec.max(0) as usize;
-    let n_size = 2 * n_elec;
-    let n_qp_full = state.slater_matrix.pf_m.len();
-    let qp_range = reducer.sampling_qp_range(n_qp_full);
-    let qp_start = qp_range.start;
-    let qp_end = qp_range.end;
-    let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
-    let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
-    let n_vmc_interval = data.modpara.nvmc_interval.max(0) as usize;
+) -> Result<SampleStats, NormalInitializationError> {
+    timer.start(30);
+    // This writes LocSpin workspace before typed preflight; the no-mutation
+    // contract on rejection covers electron configuration and RNG, not all state.
+    // init_loc_spn only writes existing slots; term indices are checked against
+    // the slice length before indexing, independently of model dimensions.
+    init_loc_spn(&mut state.workspace.loc_spn, data);
+    let shape = match preflight_normal_sampler(
+        data,
+        state,
+        &state.workspace.loc_spn,
+        |length| reducer.sampling_qp_range(length),
+        true,
+        |info| reducer.sampling_max_info(info),
+    ) {
+        Ok(shape) => shape,
+        Err(error) => {
+            timer.stop(30);
+            return Err(error);
+        }
+    };
+    let n_site = shape.n_site;
+    let n_elec = shape.n_elec;
+    let n_size = shape.n_size;
+    let n_qp_full = shape.n_qp_full;
+    let qp_start = shape.qp_range.start;
+    let qp_end = shape.qp_range.end;
+    let n_vmc_sample = shape.n_vmc_sample;
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
 
-    let loc_spn = {
-        let ws = &mut state.workspace;
-        init_loc_spn(&mut ws.loc_spn, data);
-        ws.loc_spn.clone()
-    };
-
-    // Sync the real-mode Slater table from the complex master.
-    for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
-        for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
-            for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                state.slater_matrix.slater_elm_real.set(
-                    qp,
-                    row,
-                    col,
-                    state.slater_matrix.slater_elm.get(qp, row, col).re,
-                );
-            }
-        }
-    }
-
+    let loc_spn = state.workspace.loc_spn.clone();
     // Working buffers.
     let mut tmp_ele_idx = state.electron_config.tmp_ele_idx.clone();
     let mut tmp_ele_cfg = state.electron_config.tmp_ele_cfg.clone();
     let mut tmp_ele_num = state.electron_config.tmp_ele_num.clone();
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
 
-    timer.start(30);
-    let burn_flag = state.electron_config.counter[9] != 0;
-    if burn_flag {
-        state.electron_config.restore_burn();
-        tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
-        tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
-        tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
-        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
-    } else if make_initial_sample(
-        &mut tmp_ele_idx,
-        &mut tmp_ele_cfg,
-        &mut tmp_ele_num,
-        &mut tmp_ele_proj_cnt,
-        data,
-        &loc_spn,
-        rng,
-    )
-    .is_err()
-    {
-        return SampleStats {
-            accepted: 0,
-            saved: 0,
-        };
-    }
-
-    // Initial Pfaffian / inv_m.
+    let mut burn_flag = state.electron_config.counter[9] != 0;
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
-    let mut initialized = false;
-    for _ in 0..100 {
-        if !reducer.sampling_any_failure(
-            calc_m_all_real(
+    let initialization = (|| {
+        // Sync the real-mode Slater table from the complex master.
+        for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
+            for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
+                for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
+                    state.slater_matrix.slater_elm_real.set(
+                        qp,
+                        row,
+                        col,
+                        state.slater_matrix.slater_elm.get(qp, row, col).re,
+                    );
+                }
+            }
+        }
+
+        if burn_flag {
+            state.electron_config.restore_burn();
+            tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
+            tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
+            tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
+            tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
+        } else {
+            make_initial_sample_normal_with_info(
+                &mut tmp_ele_idx,
+                &mut tmp_ele_cfg,
+                &mut tmp_ele_num,
+                &mut tmp_ele_proj_cnt,
+                data,
+                &loc_spn,
+                rng,
+                &mut state.slater_matrix,
+                qp_start..qp_end,
+                &pool,
+                |info| reducer.sampling_max_info(info),
+            )?;
+        }
+        // C performs this separate real setup once and ignores numeric INFO.
+        // Invalid Rust/input preconditions are not fabricated native INFO.
+        let _real_info = coordinate_normal_setup(
+            calc_m_all_real_native_info(
                 &tmp_ele_idx,
                 &state.slater_matrix.slater_elm_real,
                 &mut state.slater_matrix.inv_m_real,
@@ -198,47 +213,26 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                 n_site,
                 n_elec,
                 &pool,
-            )
-            .is_err(),
-        ) {
-            initialized = true;
-            break;
-        }
-        // Julia also regenerates after the final failed calculation.
-        if make_initial_sample(
-            &mut tmp_ele_idx,
-            &mut tmp_ele_cfg,
-            &mut tmp_ele_num,
-            &mut tmp_ele_proj_cnt,
-            data,
-            &loc_spn,
-            rng,
-        )
-        .is_err()
-        {
-            break;
-        }
-    }
-    if !initialized {
-        return SampleStats {
-            accepted: 0,
-            saved: 0,
-        };
-    }
-    let mut log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
-    if !log_ip_old.is_finite() {
-        if make_initial_sample(
-            &mut tmp_ele_idx,
-            &mut tmp_ele_cfg,
-            &mut tmp_ele_num,
-            &mut tmp_ele_proj_cnt,
-            data,
-            &loc_spn,
-            rng,
-        )
-        .is_err()
-            || reducer.sampling_any_failure(
-                calc_m_all_real(
+            ),
+            |info| reducer.sampling_max_info(info),
+        )?;
+        let mut log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
+        if !log_ip.is_finite() {
+            make_initial_sample_normal_with_info(
+                &mut tmp_ele_idx,
+                &mut tmp_ele_cfg,
+                &mut tmp_ele_num,
+                &mut tmp_ele_proj_cnt,
+                data,
+                &loc_spn,
+                rng,
+                &mut state.slater_matrix,
+                qp_start..qp_end,
+                &pool,
+                |info| reducer.sampling_max_info(info),
+            )?;
+            let _real_info = coordinate_normal_setup(
+                calc_m_all_real_native_info(
                     &tmp_ele_idx,
                     &state.slater_matrix.slater_elm_real,
                     &mut state.slater_matrix.inv_m_real,
@@ -248,27 +242,36 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                     n_site,
                     n_elec,
                     &pool,
-                )
-                .is_err(),
-            )
-        {
-            return SampleStats {
-                accepted: 0,
-                saved: 0,
-            };
+                ),
+                |info| reducer.sampling_max_info(info),
+            )?;
+            log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
+            burn_flag = false;
         }
-        log_ip_old = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
-    }
+        Ok::<_, NormalInitializationError>(log_ip)
+    })();
+    let mut log_ip_old = match initialization {
+        Ok(log_ip) => log_ip,
+        Err(error) => {
+            // C aborts with the last actual working configuration, not rollback.
+            state.electron_config.tmp_ele_idx = tmp_ele_idx;
+            state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
+            state.electron_config.tmp_ele_num = tmp_ele_num;
+            state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
+            timer.stop(30);
+            return Err(error);
+        }
+    };
 
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![0.0_f64; n_qp_full];
     let mut proj_cnt_new = vec![0_i64; tmp_ele_proj_cnt.len()];
     let n_out_step = if burn_flag {
-        n_vmc_sample + 1
+        shape.n_out_burn
     } else {
-        n_vmc_warmup + n_vmc_sample
+        shape.n_out_warm
     };
-    let n_in_step = n_vmc_interval * n_site.max(1);
+    let n_in_step = shape.n_in_step;
     let mut accepted_total = 0usize;
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
@@ -584,10 +587,10 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
     state.electron_config.counter[9] = 1;
     trace::checkpoint(state, rng);
 
-    SampleStats {
+    Ok(SampleStats {
         accepted: accepted_total,
         saved,
-    }
+    })
 }
 
 /// Complex-arithmetic counterpart of [`vmc_make_sample_real`]. Mirrors
@@ -598,7 +601,7 @@ pub fn vmc_make_sample(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
-) -> SampleStats {
+) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_timed(data, state, rng, &mut CTimer::<false>::new())
 }
 
@@ -608,7 +611,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
-) -> SampleStats {
+) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
 }
 
@@ -619,62 +622,71 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
-) -> SampleStats {
-    let n_site = data.modpara.nsite.max(0) as usize;
-    let n_elec = data.modpara.nelec.max(0) as usize;
-    let n_size = 2 * n_elec;
-    let n_qp_full = state.slater_matrix.pf_m.len();
-    let qp_range = reducer.sampling_qp_range(n_qp_full);
-    let qp_start = qp_range.start;
-    let qp_end = qp_range.end;
-    let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
-    let n_vmc_warmup = data.modpara.nvmc_warmup.max(0) as usize;
-    let n_vmc_interval = data.modpara.nvmc_interval.max(0) as usize;
+) -> Result<SampleStats, NormalInitializationError> {
+    timer.start(30);
+    // This writes LocSpin workspace before typed preflight; the no-mutation
+    // contract on rejection covers electron configuration and RNG, not all state.
+    // init_loc_spn only writes existing slots; term indices are checked against
+    // the slice length before indexing, independently of model dimensions.
+    init_loc_spn(&mut state.workspace.loc_spn, data);
+    let shape = match preflight_normal_sampler(
+        data,
+        state,
+        &state.workspace.loc_spn,
+        |length| reducer.sampling_qp_range(length),
+        false,
+        |info| reducer.sampling_max_info(info),
+    ) {
+        Ok(shape) => shape,
+        Err(error) => {
+            timer.stop(30);
+            return Err(error);
+        }
+    };
+    let n_site = shape.n_site;
+    let n_elec = shape.n_elec;
+    let n_size = shape.n_size;
+    let n_qp_full = shape.n_qp_full;
+    let qp_start = shape.qp_range.start;
+    let qp_end = shape.qp_range.end;
+    let n_vmc_sample = shape.n_vmc_sample;
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
 
-    let loc_spn = {
-        let ws = &mut state.workspace;
-        init_loc_spn(&mut ws.loc_spn, data);
-        ws.loc_spn.clone()
-    };
-
+    let loc_spn = state.workspace.loc_spn.clone();
     let mut tmp_ele_idx = state.electron_config.tmp_ele_idx.clone();
     let mut tmp_ele_cfg = state.electron_config.tmp_ele_cfg.clone();
     let mut tmp_ele_num = state.electron_config.tmp_ele_num.clone();
     let mut tmp_ele_proj_cnt = state.electron_config.tmp_ele_proj_cnt.clone();
 
-    timer.start(30);
     let mut burn_flag = state.electron_config.counter[9] != 0;
-    if burn_flag {
-        state.electron_config.restore_burn();
-        tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
-        tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
-        tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
-        tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
-    } else if make_initial_sample(
-        &mut tmp_ele_idx,
-        &mut tmp_ele_cfg,
-        &mut tmp_ele_num,
-        &mut tmp_ele_proj_cnt,
-        data,
-        &loc_spn,
-        rng,
-    )
-    .is_err()
-    {
-        return SampleStats {
-            accepted: 0,
-            saved: 0,
-        };
-    }
-
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
-    let mut initial_ok = false;
-    for _ in 0..100 {
-        if !reducer.sampling_any_failure(
-            calc_m_all_complex(
+    let initialization = (|| {
+        if burn_flag {
+            state.electron_config.restore_burn();
+            tmp_ele_idx.copy_from_slice(&state.electron_config.tmp_ele_idx);
+            tmp_ele_cfg.copy_from_slice(&state.electron_config.tmp_ele_cfg);
+            tmp_ele_num.copy_from_slice(&state.electron_config.tmp_ele_num);
+            tmp_ele_proj_cnt.copy_from_slice(&state.electron_config.tmp_ele_proj_cnt);
+        } else {
+            make_initial_sample_normal_with_info(
+                &mut tmp_ele_idx,
+                &mut tmp_ele_cfg,
+                &mut tmp_ele_num,
+                &mut tmp_ele_proj_cnt,
+                data,
+                &loc_spn,
+                rng,
+                &mut state.slater_matrix,
+                qp_start..qp_end,
+                &pool,
+                |info| reducer.sampling_max_info(info),
+            )?;
+        }
+        // C's distinct complex setup ignores numeric INFO, not typed errors.
+        let _setup_info = coordinate_normal_setup(
+            calc_m_all_complex_native_info(
                 &tmp_ele_idx,
                 &state.slater_matrix.slater_elm,
                 &mut state.slater_matrix.inv_m,
@@ -684,54 +696,26 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
                 n_site,
                 n_elec,
                 &pool,
-            )
-            .is_err(),
-        ) {
-            initial_ok = true;
-            break;
-        }
-        // Julia regenerates even on the last failed retry.
-        if make_initial_sample(
-            &mut tmp_ele_idx,
-            &mut tmp_ele_cfg,
-            &mut tmp_ele_num,
-            &mut tmp_ele_proj_cnt,
-            data,
-            &loc_spn,
-            rng,
-        )
-        .is_err()
-        {
-            return SampleStats {
-                accepted: 0,
-                saved: 0,
-            };
-        }
-    }
-    if !initial_ok {
-        return SampleStats {
-            accepted: 0,
-            saved: 0,
-        };
-    }
-    let mut log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
-    let rbm_cfg = crate::sampling::rbm::RbmConfig::from(data);
-    let use_rbm = data.has_rbm_terms();
-    let mut rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
-    let mut rbm_cnt_new = vec![Complex64::new(0.0, 0.0); rbm_cnt_old.len()];
-    if !log_ip_old.re.is_finite() || !log_ip_old.im.is_finite() {
-        if make_initial_sample(
-            &mut tmp_ele_idx,
-            &mut tmp_ele_cfg,
-            &mut tmp_ele_num,
-            &mut tmp_ele_proj_cnt,
-            data,
-            &loc_spn,
-            rng,
-        )
-        .is_err()
-            || reducer.sampling_any_failure(
-                calc_m_all_complex(
+            ),
+            |info| reducer.sampling_max_info(info),
+        )?;
+        let mut log_ip = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
+        if !(log_ip.re + log_ip.im).is_finite() {
+            make_initial_sample_normal_with_info(
+                &mut tmp_ele_idx,
+                &mut tmp_ele_cfg,
+                &mut tmp_ele_num,
+                &mut tmp_ele_proj_cnt,
+                data,
+                &loc_spn,
+                rng,
+                &mut state.slater_matrix,
+                qp_start..qp_end,
+                &pool,
+                |info| reducer.sampling_max_info(info),
+            )?;
+            let _setup_info = coordinate_normal_setup(
+                calc_m_all_complex_native_info(
                     &tmp_ele_idx,
                     &state.slater_matrix.slater_elm,
                     &mut state.slater_matrix.inv_m,
@@ -741,30 +725,39 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
                     n_site,
                     n_elec,
                     &pool,
-                )
-                .is_err(),
-            )
-        {
-            return SampleStats {
-                accepted: 0,
-                saved: 0,
-            };
+                ),
+                |info| reducer.sampling_max_info(info),
+            )?;
+            log_ip = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
+            burn_flag = false;
         }
-        log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
-        rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
-        rbm_cnt_new.resize(rbm_cnt_old.len(), Complex64::new(0.0, 0.0));
-        burn_flag = false;
-    }
+        Ok::<_, NormalInitializationError>(log_ip)
+    })();
+    let mut log_ip_old = match initialization {
+        Ok(log_ip) => log_ip,
+        Err(error) => {
+            state.electron_config.tmp_ele_idx = tmp_ele_idx;
+            state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
+            state.electron_config.tmp_ele_num = tmp_ele_num;
+            state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
+            timer.stop(30);
+            return Err(error);
+        }
+    };
+    let rbm_cfg = crate::sampling::rbm::RbmConfig::from(data);
+    let use_rbm = data.has_rbm_terms();
+    let mut rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+    let mut rbm_cnt_new = vec![Complex64::new(0.0, 0.0); rbm_cnt_old.len()];
 
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![Complex64::new(0.0, 0.0); n_qp_full];
     let mut proj_cnt_new = vec![0_i64; tmp_ele_proj_cnt.len()];
     let n_out_step = if burn_flag {
-        n_vmc_sample + 1
+        shape.n_out_burn
     } else {
-        n_vmc_warmup + n_vmc_sample
+        shape.n_out_warm
     };
-    let n_in_step = n_vmc_interval * n_site.max(1);
+    let n_in_step = shape.n_in_step;
     let mut accepted_total = 0usize;
     let mut n_accept_window = 0usize;
     let mut saved = 0usize;
@@ -1111,10 +1104,10 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
     state.electron_config.counter[9] = 1;
     trace::checkpoint(state, rng);
 
-    SampleStats {
+    Ok(SampleStats {
         accepted: accepted_total,
         saved,
-    }
+    })
 }
 
 pub(super) fn update_ele_config_fsz(

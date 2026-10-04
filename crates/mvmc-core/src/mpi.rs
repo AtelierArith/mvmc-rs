@@ -177,6 +177,19 @@ impl MpiContext {
 }
 
 impl Reducer for MpiContext {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        if self.world.size() == 1 {
+            return Ok(info);
+        }
+        let mut result = 0_i32;
+        self.world.all_reduce_into(
+            &info,
+            &mut result,
+            ::mpi::collective::SystemOperation::max(),
+        );
+        Ok(result)
+    }
+
     fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
         Self::broadcast_f64(self, root, values)
     }
@@ -267,6 +280,19 @@ impl MpiGroupContext {
 }
 
 impl Reducer for MpiGroupContext {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        if self.communicator.size() == 1 {
+            return Ok(info);
+        }
+        let mut result = 0_i32;
+        self.communicator.all_reduce_into(
+            &info,
+            &mut result,
+            ::mpi::collective::SystemOperation::max(),
+        );
+        Ok(result)
+    }
+
     fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
         if root >= self.global_communicator.size() as usize {
             return Err("MPI broadcast root is outside the global world".into());

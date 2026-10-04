@@ -19,6 +19,9 @@ struct ReadbackFault<'a> {
 }
 
 impl Reducer for ReadbackFault<'_> {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        self.inner.sampling_max_info(info)
+    }
     fn broadcast_f64(&self, root: usize, values: &mut [f64]) -> Result<(), String> {
         self.inner.broadcast_f64(root, values)
     }

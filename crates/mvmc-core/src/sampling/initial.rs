@@ -69,8 +69,10 @@ fn serial_error(error: SamplingInitializationError) -> CalcMAllError {
     }
 }
 
-/// Result of [`make_initial_sample`]. `Ok(())` matches upstream's
-/// `info = 0`; `Err(())` matches `info != 0` (too many retries).
+/// Draw one normal placement and its projection counters.
+///
+/// This helper does not factorize or retry. Shared C-style validation belongs
+/// to [`super::normal_initial::make_initial_sample_normal_with_info`].
 pub fn make_initial_sample(
     ele_idx: &mut [i64],
     ele_cfg: &mut [i64],
@@ -131,8 +133,7 @@ pub fn make_initial_sample(
     }
     // Projection counts.
     make_proj_cnt(ele_proj_cnt, ele_num, data);
-    // Caller can validate via Pfaffian; we always return Ok on the
-    // first successful layout, mirroring upstream when `flag == 0`.
+    // Placement only; this is not a native factorization INFO or retry result.
     Ok(())
 }
 

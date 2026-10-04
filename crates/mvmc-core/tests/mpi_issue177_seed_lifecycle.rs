@@ -11,6 +11,9 @@ mod enabled {
         offset_fault: Option<usize>,
     }
     impl Reducer for ObserveSeed<'_> {
+        fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+            self.inner.sampling_max_info(info)
+        }
         fn broadcast_i64(&self, root: usize, b: &mut [i64]) -> Result<(), String> {
             self.inner.broadcast_i64(root, b)?;
             self.payloads.borrow_mut().push(b.to_vec());

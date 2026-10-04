@@ -1,0 +1,25 @@
+Scope: SOURCE-derived normal-kernel N=0 argument status only. No native Ne=0 model or XERBLA runtime acquisition.
+Original source root: container73c:/tmp/mvmc-native13-build.sULMMH/source
+src/pfapack/fortran/dsktrf.f SHA256 aeda208bcacdbda11ee2a184a840ee3719e576607a0a5bc25d04ff20e96aa5c9
+DSKTRF lines201-202: LDA.LT.MAX(1,N) => INFO=-5.
+DSKTRF lines217-219: nonzero INFO calls XERBLA and returns.
+DSKTRF line238: N=0 quick return is later.
+src/pfapack/fortran/zsktrf.f SHA256 6335d352b368f9561b9f75114df2e78dd8be4c7c6beda597dc024efec2349b0c
+ZSKTRF lines201-202: LDA.LT.MAX(1,N) => INFO=-5.
+ZSKTRF lines218-220: nonzero INFO calls XERBLA and returns.
+ZSKTRF line239: N=0 quick return is later.
+src/mVMC/matrix.c SHA256 849488176375102fbc3bab7001e0dc27dfa7c8e049fd90ee1d6248ebfba10764
+Normal child passes N=LDA=Nsize, LWORK=Nsize*Nsize; Nsize=0 therefore hits INFO=-5 before Pfaffian/inverse.
+XERBLA provider abort-versus-return is NOT measured. No full Ne=0 sampling compatibility claim.
+Successor validates range and storage dimensions before returning negative INFO or empty-owned-range zero.
+Tests preserve Pf/Inv sentinel storage and reject reversed/outside ranges and wrong electron buffer even for empty range.
+Historical SOURCE-proposal checkpoint: these tests were not yet compiled when the initial notes were written.
+Subsequent frozen main12c5 focused/default/all-feature validations passed; see docs/reference/c-to-julia/verification/issue-274-shared-normal-initializer.md.
+This does not promote SOURCE-defined Ne=0 argument behavior to measured native XERBLA/model behavior.
+Complex caller on the same vmcmake.c SHA: VMCMakeSample lines69-71 calls makeInitialSample when not burning; normal non-block-update branch lines109-110 separately calls CalculateMAll_fcmp again. Recovery lines117-118 calls makeInitialSample, then lines129-130 separately calls CalculateMAll_fcmp. Thus shared validation does not replace distinct caller setup.
+Complex recovery predicate line115 is !isfinite(creal(logIpOld)+cimag(logIpOld)); successor uses the same sum-finite predicate, not a componentwise substitute.
+state.rs ElectronConfiguration.counter is a fixed [i64;10] (line580), not Vec.
+state.rs SlaterMatrixData::zeros(all_complex=true) deliberately creates empty real fields (lines807-814); successor requires real storage only for the real caller.
+ThreadedPfaPackWorkspace::n_size getter exists in state.rs (line947).
+Placement scope: vmcmake.c lines377-385 selects a free electron slot for each raw LocSpn==1 site, consuming integer+real2 draws on every candidate. Lines389-398 select an unoccupied same-spin site with LocSpn!=1 for each remaining electron, consuming draws on rejected sites. These inner loops have no attempt cap. The 101-call exhaustion applies after completed complex validation, not to inner placement attempts.
+Checked Ne<=Nsite and local-spin count<=2Ne are necessary shape/slot conditions, NOT a claim that all impossible or branch-dependent placement inputs terminate. No worst-case-spin-distribution rejection, random rejection cap, reseed, or trajectory change is added. Only defined original placement paths are claimed; Ne=0 native/XERBLA/model behavior remains separately unmeasured.
