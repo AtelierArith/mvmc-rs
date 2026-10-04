@@ -26,7 +26,7 @@ jobs:
   tests:
     name: Tests (${{ matrix.platform.name }}, ${{ matrix.configuration.name }})
     runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features' && 90 || 45 }}
     env:
       OPENBLAS_CORETYPE: ${{ matrix.platform.blas_core }}
     strategy:
@@ -64,6 +64,12 @@ jobs:
             --python /usr/bin/python3 python -B scripts/test_optional_gate_aggregation_183.py
           timeout -k 5s 120s uv run --offline --no-project --no-python-downloads \
             --python /usr/bin/python3 python -B scripts/test_optional_reference_provenance_183.py
+      - name: Match MPI provider for scalar native contracts
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
+        run: |
+          sudo apt-get install -y jq libucx-dev gfortran build-essential
+          bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/scalar-mpich" "$RUNNER_TEMP/scalar-mpi-provider"
       - name: Run unit and integration tests
         env:
           FEATURE_ARGS: ${{ matrix.configuration.args }}
@@ -74,6 +80,62 @@ jobs:
           feature_args=()
           if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
           cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Launch exact-head scalar contracts on worlds2 and4
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/scalar-native"
+          mkdir "$out"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'head=%s\n' "$GITHUB_SHA" > "$out/head.txt"
+          sha256sum crates/mvmc-core/src/{lib,mpi,reducer,parallel_scalar}.rs \
+            crates/mvmc-core/tests/{issue184_parallel_scalar_contracts,mpi_issue184_parallel_scalar_contracts}.rs \
+            .github/workflows/ci.yml > "$out/source.before.sha256"
+          finish() {
+            prior=$?; trap - EXIT; set +e; post=0
+            for manifest in source selected runtime; do
+              test ! -f "$out/$manifest.before.sha256" ||
+                sha256sum -c --quiet "$out/$manifest.before.sha256" > "$out/$manifest.post.log" 2>&1 || post=1
+            done
+            sha256sum -c --quiet "$MVMC_ISSUE234_MPI_RECEIPT/provider.sha256" > "$out/provider.post.log" 2>&1 || post=1
+            printf 'prior=%s post=%s\n' "$prior" "$post" > "$out/terminal.txt"
+            test "$prior" = 0 && test "$post" = 0
+          }
+          trap finish EXIT
+          cargo nextest list --workspace --all-features --cargo-profile ci --locked \
+            --message-format json > "$out/list.json"
+          binary=$(jq -er '[."rust-suites"[]|select(."binary-name"=="mpi_issue184_parallel_scalar_contracts"
+            and (.testcases|length)==1
+            and .testcases.scalar_domains_use_actual_membership_and_signed_negative_max.ignored==true)]
+            |if length==1 then .[0]["binary-path"] else error("native identity missing") end' "$out/list.json")
+          sha256sum "$binary" > "$out/selected.before.sha256"
+          ldd "$binary" > "$out/ldd.txt"
+          ! grep -q 'not found' "$out/ldd.txt"
+          awk -v prefix="$MVMC_ISSUE234_MPI_PREFIX/lib/" '$1~/^libmpi[.]so/&&index($3,prefix)==1{n++}END{exit(n!=1)}' "$out/ldd.txt"
+          awk '$2=="=>"&&substr($3,1,1)=="/"{print $3}substr($1,1,1)=="/"{print $1}' "$out/ldd.txt" |
+            sort -u | xargs -r sha256sum > "$out/runtime.before.sha256"
+          for world in 2 4; do
+            status=0
+            timeout -k 10s 120s "$MVMC_ISSUE234_MPI_PREFIX/bin/mpiexec" -disable-auto-cleanup \
+              -outfile-pattern "$out/world$world-rank%r.stdout" -errfile-pattern "$out/world$world-rank%r.stderr" \
+              -n "$world" "$binary" --ignored --exact scalar_domains_use_actual_membership_and_signed_negative_max --nocapture ||
+              status=$?
+            printf '%s\n' "$status" > "$out/world$world.native.status"
+            test "$status" = 0
+            for ((rank=0;rank<world;rank++)); do
+              awk '/^test result: ok[.] 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in [0-9]+[.][0-9]+s$/{n++}
+                END{exit(n!=1)}' "$out/world$world-rank$rank.stdout"
+            done
+          done
+      - name: Upload scalar native receipts including first failure
+        if: always() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scalar-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/scalar-native
+            ${{ runner.temp }}/scalar-mpi-provider
+          if-no-files-found: error
       - name: Upload CG diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
