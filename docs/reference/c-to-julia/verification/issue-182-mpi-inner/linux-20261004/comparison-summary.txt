@@ -1,0 +1,19 @@
+World2 handle19697/PID1692005 terminal0 receiptworld2-readonly.4jT55d.
+World4 handle66183/PID1693139 terminal0 receiptworld2-readonly.LAAJff
+(accepted commonproofprefix, actual metadataworld4 explicitlybound).
+Both49controls actual2positive47negative PASS, controls/comparison original0
+cleanup0/reapNOT_STARTED/postempty0. AlltopPREPOST and sixowner/writerphase
+statuses0 independently rechecked; final3source/input/runtime replay0.
+SOURCEseal35ab1f4d7a1d596f249a4fcdfb35c0230936d3af9e883f3ff7bcb54fceaa8ee1.
+World2completeJSONs /tmp/mvmc-issue182-world2-readonly.4jT55d/results/
+width1-rank0.json,width1-rank1.json,width2-rank0.json,width2-rank1.json.
+World4completeJSONs /tmp/mvmc-issue182-world2-readonly.LAAJff/results/
+width1-rank0..3.json,width2-rank0..3.json (eightindividualfiles).
+All12triples discreteEXACT acrossworkers1/2/4 atsameworld/width/rank/group.
+Includes fullraw624/cursor/u128count/future,callback/saved/burn32/inactive/
+scratch/config/counters. No crossworld or differentseedgroup equalityclaim.
+Eachtriple192numericcomponents compared afterdiscretegate, maxobservederror0,
+existing1e-12abs/relative policy unchanged (not computedbitwiseacceptance).
+OriginalfailedpBRUcI/64MiBpreflightfailure/pilotouter1 preservedunchanged.
+No native/model/Cargo rerun, no Cparity/perproposal/full182closure/perfclaim.
+Fullobservation workerIDs/entries and full32/active6/inactivefields ineachJSON.

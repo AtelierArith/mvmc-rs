@@ -1,0 +1,14 @@
+ONEpilot handle16830 terminal1. NO automaticretry or remaining11MPIjobs.
+Native command actual0; rank0/rank1 actual full summary1PASS0failed0ignored
+0measured0filtered each0.12s. Both records resultOk2/callbacksframe0,1status0.
+Post inventory threw ENOENT stat ranks/rank0.stderr (not created by Hydra).
+Original/overall1 retained; not promoted wholepilot PASS.
+Ten input/provider/source PREPOST groups0; SHMpre/post0, unchanged29960KiBfree.
+Owner2433373 PGID/SIDsame starttick21208443 original0 cleanup0 postempty0.
+No global RLIMIT_FSIZE, MPIinit completed and rawrecords retained.
+RankJSONbytes35829/35838. workers1 actualserialEntries69800each, workerEntries0.
+Initialcounts0/cursor624; finalcounts5104/5100,cursors112/108 respectively.
+Distinct groupseeds correctlynot compared as equal acrossranks/groups.
+Rankstderr missing is evidence of harness expectation failure, not yet independent
+claim empty measurement. Sourceproposal should use proven provider output semantics
+and readonly currentcaptures, no modelrerun unless parent explicitlyapproves.
