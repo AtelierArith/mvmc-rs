@@ -157,6 +157,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                     | "Hund"
                     | "Exchange"
                     | "PairHop"
+                    | "LocSpin"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -200,6 +201,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                     | "Hund"
                     | "Exchange"
                     | "PairHop"
+                    | "LocSpin"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -448,12 +450,9 @@ fn parse_file_by_type(
             data.modpara = modpara::parse_modpara_def(path)?;
         }
         "LocSpin" => {
-            // Mirror upstream: read NlocalSpin from the header before parsing.
-            let content = read_def_file(path)?;
-            if let Some(n) = locspin::read_nlocspin(&content) {
-                data.modpara.nlocspin = n;
-            }
-            data.locspin_terms = locspin::parse_locspin_content(&content);
+            let definition = locspin::parse_locspin_definition(path, data.modpara.nsite)?;
+            data.modpara.nlocspin = definition.nlocal_spin;
+            data.locspin_terms = definition.terms;
         }
         "Trans" => {
             data.transfer_terms = trans::parse_trans_definition(path, data.modpara.nsite)?;
