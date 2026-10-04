@@ -128,6 +128,11 @@ impl<const ENABLED: bool> CTimer<ENABLED> {
     pub fn write_diag(&self, dir: &Path, prefix: &str) -> io::Result<PathBuf> {
         self.write_lines(dir, prefix, "CalcTimerDiag", DIAG_LINES)
     }
+    /// Write the upstream PhysCal report (`NVMCCalMode=1`).
+    /// Pass `"zvo"` for the original Julia default prefix.
+    pub fn write_phys_cal(&self, dir: &Path, prefix: &str) -> io::Result<PathBuf> {
+        self.write_lines(dir, prefix, "CalcTimer", PHYS_CAL_LINES)
+    }
     fn write_lines(
         &self,
         dir: &Path,
@@ -281,4 +286,53 @@ const DIAG_LINES: &[(&str, usize)] = &[
     ("  SR HO allreduce          [964] ", 964),
     ("  SR normalize             [965] ", 965),
     ("  ReduceCounter            [966] ", 966),
+];
+
+/// C's `OutputTimerPhysCal` line set (`vmcclock.c:140-191`). Distinct from the
+/// ParaOpt set: ids 50-53 mean GreenFunc1/GreenFunc2/addPhysCA/addPhysCACA in
+/// this mode, and StochasticOpt/ReturnSlaterElmDiff ids are absent.
+const PHYS_CAL_LINES: &[(&str, usize)] = &[
+    ("All                         [0] ", 0),
+    ("Initialization              [1] ", 1),
+    ("  read options             [10] ", 10),
+    ("  ReadDefFile              [11] ", 11),
+    ("  SetMemory                [12] ", 12),
+    ("  InitParameter            [13] ", 13),
+    ("VMCPhysCal                  [2] ", 2),
+    ("  VMCMakeSample             [3] ", 3),
+    ("    makeInitialSample      [30] ", 30),
+    ("    make candidate         [31] ", 31),
+    ("    hopping update         [32] ", 32),
+    ("      UpdateProjCnt        [60] ", 60),
+    ("      CalculateNewPfM2     [61] ", 61),
+    ("      CalculateLogIP       [62] ", 62),
+    ("      UpdateMAll           [63] ", 63),
+    ("    exchange update        [33] ", 33),
+    ("      UpdateProjCnt        [65] ", 65),
+    ("      CalculateNewPfMTwo2  [66] ", 66),
+    ("      CalculateLogIP       [67] ", 67),
+    ("      UpdateMAllTwo        [68] ", 68),
+    ("    lspinflip update       [36] ", 36),
+    ("      UpdateProjCnt       [600] ", 600),
+    ("      CalculateNewPfMTwo2 [601] ", 601),
+    ("      CalculateLogIP      [602] ", 602),
+    ("      UpdateMAllTwo       [603] ", 603),
+    ("    recal PfM and InvM     [34] ", 34),
+    ("    save electron config   [35] ", 35),
+    ("  VMCMainCal                [4] ", 4),
+    ("    CalculateMAll          [40] ", 40),
+    ("    LocEnergyCal           [41] ", 41),
+    ("      CalHamiltonian0      [70] ", 70),
+    ("      CalHamiltonian1      [71] ", 71),
+    ("      CalHamiltonian2      [72] ", 72),
+    ("    CalculateGreenFunc     [42] ", 42),
+    ("      GreenFunc1           [50] ", 50),
+    ("      GreenFunc2           [51] ", 51),
+    ("      addPhysCA            [52] ", 52),
+    ("      addPhysCACA          [53] ", 53),
+    ("    Lanczos1               [43] ", 43),
+    ("    Lanczos2               [44] ", 44),
+    ("  UpdateSlaterElm          [20] ", 20),
+    ("  WeightAverage            [21] ", 21),
+    ("  outputData               [22] ", 22),
 ];

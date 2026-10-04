@@ -650,6 +650,97 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
     );
 }
 
+// PhysCal (`NVMCCalMode=1`) emits its own C-format `OutputTimerPhysCal` report.
+// The committed zero golden `tests/fixtures/timers/julia_phys_cal_zero.dat` was
+// generated with `MVMCOptimizers.write_ctimer_phys_cal(CTimer(false), dir)` on
+// Julia 1.13.1 from the julia-patch branch.
+#[test]
+fn physcal_timer_environment_controls_report_without_changing_output() {
+    let dir = TestDir::new("physcal-timer");
+    let (namelist, fixed) = copy_physcal_fixture(&dir);
+    let run = |name: &str, enabled: &str, diagnostic: Option<&str>| {
+        let out = dir.0.join(name);
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+        command
+            .arg(&namelist)
+            .args(["--physcal", fixed.to_str().unwrap()])
+            .args(["--seed", "1", "--mode", "real", "--opt-trans", "--out-dir"])
+            .arg(&out);
+        for key in [
+            "MVMC_C_TIMER",
+            "MVMC_TIMER",
+            "MVMC_CALHAM1_DIAG",
+            "MVMC_SLATER_DIAG",
+            "MVMC_MAINCAL_DIAG",
+            "MVMC_WEIGHTAVG_DIAG",
+        ] {
+            command.env(key, "0");
+        }
+        command.env("MVMC_C_TIMER", enabled);
+        if let Some(key) = diagnostic {
+            command.env(key, "");
+        }
+        let result = command.output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        out
+    };
+
+    let baseline = run("disabled", "0", None);
+    assert!(!baseline.join("zvo_CalcTimer.dat").exists());
+    assert!(!baseline.join("zvo_CalcTimerDiag.dat").exists());
+    let enabled = run("enabled", "false", None); // Literal "false" enables C's switch.
+    assert!(enabled.join("zvo_CalcTimer.dat").is_file());
+    assert!(!enabled.join("zvo_CalcTimerDiag.dat").exists());
+
+    // The timer is additive: every non-timer output must be byte-identical.
+    let outputs = |path: &std::path::Path| {
+        let mut names: Vec<String> = fs::read_dir(path)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.starts_with("zvo_CalcTimer"))
+            .collect();
+        names.sort();
+        names
+    };
+    let baseline_files = outputs(&baseline);
+    let enabled_files = outputs(&enabled);
+    assert_eq!(baseline_files, enabled_files);
+    assert!(!baseline_files.is_empty());
+    for name in &baseline_files {
+        assert_eq!(
+            fs::read(baseline.join(name)).unwrap(),
+            fs::read(enabled.join(name)).unwrap(),
+            "timer perturbed {name}"
+        );
+    }
+
+    let golden = include_str!("../../../tests/fixtures/timers/julia_phys_cal_zero.dat");
+    let report = fs::read_to_string(enabled.join("zvo_CalcTimer.dat")).unwrap();
+    assert_eq!(report.lines().count(), golden.lines().count());
+    for (row, expected) in report.lines().zip(golden.lines()) {
+        assert_eq!(&row[..row.len() - 12], &expected[..expected.len() - 12]);
+        let value: f64 = row.split_whitespace().last().unwrap().parse().unwrap();
+        assert!(value.is_finite() && value >= 0.0);
+    }
+
+    // A diagnostic family enables the parent timer and writes the diag report.
+    let diag = run("diag", "0", Some("MVMC_CALHAM1_DIAG"));
+    assert!(diag.join("zvo_CalcTimer.dat").is_file());
+    assert!(diag.join("zvo_CalcTimerDiag.dat").is_file());
+    for name in &baseline_files {
+        assert_eq!(
+            fs::read(baseline.join(name)).unwrap(),
+            fs::read(diag.join(name)).unwrap(),
+            "diag timer perturbed {name}"
+        );
+    }
+}
+
 // Historical Julia runner goldens are checked by the core trajectory tests.
 // These frontend checks use the complete C declarations (including fixed-zero
 // padding) and C's explicit OptTrans activation/flags through both entry points.

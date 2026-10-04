@@ -223,6 +223,34 @@ fn reports_match_julia_zero_fixtures_and_respect_prefix() {
     );
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn phys_cal_report_matches_julia_zero_fixture_and_prefix() {
+    let dir = std::env::temp_dir().join(format!("mvmc-timer-physcal-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let timer = CTimer::<false>::new();
+    let path = timer.write_phys_cal(&dir, "custom").unwrap();
+    assert_eq!(path, dir.join("custom_CalcTimer.dat"));
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        include_str!("../../../tests/fixtures/timers/julia_phys_cal_zero.dat")
+    );
+    let mut nonzero = CTimer::<true>::new();
+    nonzero.start_at(0, 100);
+    nonzero.stop_at(0, 1_500_000_100);
+    let path = nonzero.write_phys_cal(&dir, "nonzero").unwrap();
+    assert_eq!(
+        fs::read_to_string(path).unwrap().lines().next().unwrap(),
+        "All                         [0]      1.50000"
+    );
+    let absent = dir.join("absent");
+    assert_eq!(
+        timer.write_phys_cal(&absent, "zvo").unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn worker_elapsed_times_merge_without_changing_parent_start_slots() {
     let mut parent = CTimer::<true>::new();

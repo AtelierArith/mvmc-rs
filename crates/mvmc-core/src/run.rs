@@ -676,6 +676,27 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
     vmc_phys_cal_with_reducer_and_callback(preparation, output_dir, reducer, None)
 }
 
+/// Run PhysCal with a caller-provided reducer and C-compatible section timer.
+///
+/// `[20]` UpdateSlaterElm, `[3]` VMCMakeSample, `[4]` VMCMainCal,
+/// `[21]` WeightAverage and `[22]` outputData are started/stopped inside; the
+/// caller owns `[0]`/`[1]`/`[2]` and report writing. A disabled timer is a
+/// no-op (the const generic erases the clock reads).
+pub fn vmc_phys_cal_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    preparation: PhysCalPreparation,
+    output_dir: Option<&Path>,
+    reducer: &R,
+    timer: &mut CTimer<TIMED>,
+) -> Result<PhysCalResult, String> {
+    vmc_phys_cal_with_reducer_and_callback_timed::<TIMED, R>(
+        preparation,
+        output_dir,
+        reducer,
+        None,
+        timer,
+    )
+}
+
 /// Run PhysCal with a caller-provided reducer and per-sample callback.
 ///
 /// The callback runs on every rank, after reductions and rank-root output for
@@ -683,21 +704,42 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
 /// including ranks whose callback succeeded, so a rank-local error is returned
 /// consistently without leaving MPI peers in different loop states.
 pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
-    mut preparation: PhysCalPreparation,
+    preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
     callback: Option<&mut PhysCalCallback<'_>>,
 ) -> Result<PhysCalResult, String> {
+    vmc_phys_cal_with_reducer_and_callback_timed::<false, R>(
+        preparation,
+        output_dir,
+        reducer,
+        callback,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+/// Run PhysCal with caller-provided reducer, callback and section timer.
+///
+/// Behaves like [`vmc_phys_cal_with_reducer_and_callback`] and additionally
+/// records the `NVMCCalMode=1` sections into `timer`.
+pub fn vmc_phys_cal_with_reducer_and_callback_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    mut preparation: PhysCalPreparation,
+    output_dir: Option<&Path>,
+    reducer: &R,
+    callback: Option<&mut PhysCalCallback<'_>>,
+    timer: &mut CTimer<TIMED>,
+) -> Result<PhysCalResult, String> {
     // The in-place core allocates the correctly sized state after validation
     // and QP setup. Avoid allocating a second full saved chain here.
     let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
-    let iterations = vmc_phys_cal_in_place(
+    let iterations = vmc_phys_cal_in_place_timed::<TIMED, R>(
         &mut preparation.data,
         &mut state,
         &mut preparation.rng,
         output_dir,
         reducer,
         callback,
+        timer,
     )?;
     Ok(PhysCalResult {
         data: preparation.data,
@@ -721,7 +763,32 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
     rng: &mut Sfmt19937Rng,
     output_dir: Option<&Path>,
     reducer: &R,
+    callback: Option<&mut PhysCalCallback<'_>>,
+) -> Result<usize, String> {
+    vmc_phys_cal_in_place_timed::<false, R>(
+        data,
+        state,
+        rng,
+        output_dir,
+        reducer,
+        callback,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+/// Run fixed-parameter PhysCal with a caller-provided section timer.
+///
+/// Records `[20]` UpdateSlaterElm, `[3]` VMCMakeSample, `[4]` VMCMainCal,
+/// `[21]` WeightAverage and `[22]` outputData (the caller owns
+/// `[0]`/`[1]`/`[2]`).
+pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    output_dir: Option<&Path>,
+    reducer: &R,
     mut callback: Option<&mut PhysCalCallback<'_>>,
+    timer: &mut CTimer<TIMED>,
 ) -> Result<usize, String> {
     collective_result(
         crate::validation::validate_phys_cal(data)
@@ -750,21 +817,20 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
     let all_complex = get_all_complex_flag(data);
     let use_fsz = data.i_flg_orbital_general != 0;
     *state = state_from_data(data);
+    timer.start(20);
     if use_fsz {
         update_slater_elm_fsz(data, state);
     } else {
         update_slater_elm(data, state);
     }
+    timer.stop(20);
     let iterations = data.modpara.n_data_qty_smp.max(0) as usize;
     for sample in 0..iterations {
+        timer.start(3);
         let sample_result = if use_fsz {
             if all_complex {
                 crate::sampling::driver::vmc_make_sample_fsz_with_reducer_timed(
-                    data,
-                    state,
-                    rng,
-                    &mut CTimer::<false>::new(),
-                    reducer,
+                    data, state, rng, timer, reducer,
                 );
                 Ok(())
             } else {
@@ -776,23 +842,16 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
             }
         } else if all_complex {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
-                data,
-                state,
-                rng,
-                &mut CTimer::<false>::new(),
-                reducer,
+                data, state, rng, timer, reducer,
             );
             Ok(())
         } else {
             crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
-                data,
-                state,
-                rng,
-                &mut CTimer::<false>::new(),
-                reducer,
+                data, state, rng, timer, reducer,
             );
             Ok(())
         };
+        timer.stop(3);
         let sample_error = sample_result.as_ref().err().cloned();
         if reducer.any_failure(sample_error.is_some()) {
             return Err(sample_error
@@ -809,20 +868,18 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
             }
         });
         clear_phys_quantity(state);
+        timer.start(4);
         with_physcal_green_sample(sample, || {
-            accumulate_observables(
-                data,
-                state,
-                all_complex,
-                use_fsz,
-                &mut CTimer::<false>::new(),
-                reducer,
-            );
+            accumulate_observables(data, state, all_complex, use_fsz, timer, reducer);
         });
+        timer.stop(4);
+        timer.start(21);
         reduce_accumulators(state, reducer, all_complex);
         weight_average_we(state);
         average_physcal_rank_contributions(state, reducer);
         reduce_counter(state, reducer);
+        timer.stop(21);
+        timer.start(22);
         let output_error = if reducer.is_output_root() {
             if let Some(output_dir) = output_dir {
                 crate::io::output_phys_data(data, state, sample, Some(output_dir))
@@ -834,6 +891,7 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
         } else {
             None
         };
+        timer.stop(22);
         if reducer.any_failure(output_error.is_some()) {
             return Err(output_error
                 .unwrap_or_else(|| format!("output sample {sample} failed on another MPI rank")));

@@ -57,10 +57,11 @@ pub use run::{
     prepare_phys_cal_from_namelist_with_reducer,
     prepare_phys_cal_from_namelist_with_reducer_and_opt_trans, run_para_opt_from_namelist,
     run_para_opt_from_namelist_with_reducer, vmc_para_opt, vmc_para_opt_timed, vmc_phys_cal,
-    vmc_phys_cal_in_place, vmc_phys_cal_to_dir, vmc_phys_cal_to_dir_with_callback,
-    vmc_phys_cal_with_callback, vmc_phys_cal_with_reducer, vmc_phys_cal_with_reducer_and_callback,
-    InitialDef, OptimizationOptions, PhysCalCallback, PhysCalPreparation, PhysCalResult, RunConfig,
-    RunSummary, StepCallback, FALLBACK_SEED,
+    vmc_phys_cal_in_place, vmc_phys_cal_in_place_timed, vmc_phys_cal_to_dir,
+    vmc_phys_cal_to_dir_with_callback, vmc_phys_cal_with_callback, vmc_phys_cal_with_reducer,
+    vmc_phys_cal_with_reducer_and_callback, vmc_phys_cal_with_reducer_and_callback_timed,
+    vmc_phys_cal_with_reducer_timed, InitialDef, OptimizationOptions, PhysCalCallback,
+    PhysCalPreparation, PhysCalResult, RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
 };
 pub use sampling::driver::{vmc_make_sample, vmc_make_sample_real, SampleStats};
 pub use state::{
