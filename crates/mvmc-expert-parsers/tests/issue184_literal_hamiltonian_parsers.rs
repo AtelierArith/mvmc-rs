@@ -42,7 +42,8 @@ fn original_transfer_payload_preserves_all_sites_spin_codes_and_values() {
 
 #[test]
 fn original_coulomb_payload_preserves_both_sites_and_couplings() {
-    let terms = parse_coulomb_intra_content("    0 4.0\n    1 4.0\n");
+    let mut context = mvmc_expert_parsers::ParsingContext::new("original-payload");
+    let terms = parse_coulomb_intra_content("    0 4.0\n    1 4.0\n", &mut context);
     assert_eq!(terms.len(), 2);
     assert_eq!(
         terms

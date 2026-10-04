@@ -24,9 +24,10 @@ pub use types::{
     DoublonHolon4SiteDefinition, DoublonHolon4SiteIndex, ExchangeTerm, ExpertModeData,
     GeneralRBMHiddenLayerTerm, GeneralRBMPhysHiddenTerm, GeneralRBMPhysLayerTerm, GreenOneTerm,
     GreenTwoExTerm, GreenTwoTerm, GutzwillerTerm, HundTerm, InterAllTerm, JastrowTerm, LocSpinTerm,
-    ModParaParameters, OrbitalTerm, PairHopTerm, ProjectionLayout, QPTransEntry,
-    QPTransInverseError, QuantumProjectionWeights, RbmParameter, Spin, SpinRBMHiddenLayerTerm,
-    SpinRBMPhysHiddenTerm, SpinRBMPhysLayerTerm, TransferTerm, ValidationResult,
+    ModParaParameters, OrbitalTerm, PairHopTerm, ParsingContext, ParsingDiagnostic,
+    ProjectionLayout, QPTransEntry, QPTransInverseError, QuantumProjectionWeights, RbmParameter,
+    Spin, SpinRBMHiddenLayerTerm, SpinRBMPhysHiddenTerm, SpinRBMPhysLayerTerm, TransferTerm,
+    ValidationResult,
 };
 
 pub use utils::validation::{

@@ -214,6 +214,10 @@ fn public_coulomb_loader_rejects_missing_and_mismatched_declared_counts() {
 
 #[test]
 fn headerless_coulomb_helpers_are_separate_julia_architecture() {
-    assert_eq!(parse_coulomb_intra_content("0 4.0\n")[0].value, 4.0);
+    let mut context = mvmc_expert_parsers::ParsingContext::new("historical-payload");
+    assert_eq!(
+        parse_coulomb_intra_content("0 4.0\n", &mut context)[0].value,
+        4.0
+    );
     assert_eq!(parse_coulomb_inter_content("0 1 1.0\n")[0].value, 1.0);
 }
