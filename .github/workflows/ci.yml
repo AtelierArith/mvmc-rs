@@ -86,16 +86,6 @@ jobs:
           bash scripts/issue234/native/validate-local-transport.sh \
             "$RUNNER_TEMP/scalar-mpi-provider/settings.txt"
           printf 'UCX_TLS=%s\n' "$UCX_TLS" >> "$GITHUB_ENV"
-      - name: Run unit and integration tests
-        env:
-          FEATURE_ARGS: ${{ matrix.configuration.args }}
-          MVMC_CG_DIAGNOSTICS: '1'
-          MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
-          TMPDIR: /tmp
-        run: |
-          feature_args=()
-          if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
-          cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Acquire independent C59 factor/inverse stage witness (default only)
         if: ${{ !cancelled() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default' }}
         timeout-minutes: 55
@@ -249,6 +239,18 @@ jobs:
             ${{ runner.temp }}/issue180-transport-controls
             ${{ runner.temp }}/issue179-native-prefix1
           if-no-files-found: error
+      - name: Run unit and integration tests
+        # Preserve ordinary scientific failures even if an earlier acquisition fails.
+        if: ${{ !cancelled() }}
+        env:
+          FEATURE_ARGS: ${{ matrix.configuration.args }}
+          MVMC_CG_DIAGNOSTICS: '1'
+          MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
+          TMPDIR: /tmp
+        run: |
+          feature_args=()
+          if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
+          cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Launch exact-head scalar contracts on worlds2 and4
         if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
         run: |

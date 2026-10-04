@@ -1,11 +1,12 @@
 //! Private test-only acquisition. No C/Julia runtime or public observer API.
+#[path = "acquisition_fd.rs"]
+mod acquisition_fd;
 #[path = "factor_acquisition_observer.rs"]
 pub(super) mod observer;
 #[path = "factor_acquisition_writer.rs"]
 mod writer;
 
 use std::cell::Cell;
-use std::fs::OpenOptions;
 use std::rc::Rc;
 
 use crate::{dsktf2, utu2inv_real, utu2pfa_real, PivotIndex1Based, SqMat};
@@ -78,10 +79,8 @@ fn independent_c59_four_factor_inverse_stage_stream() {
         let mut pivots = vec![PivotIndex1Based(0); n];
         // FD3 is the actual anonymous pipe installed by the reviewed CI harness.
         // It is neither a guessed result path nor an overwriteable output file.
-        let pipe = OpenOptions::new()
-            .write(true)
-            .open("/proc/self/fd/3")
-            .expect("FD3 acquisition pipe");
+        let pipe =
+            acquisition_fd::inherited_fd3().expect("duplicate inherited FD3 acquisition pipe");
         let result = writer::capture(n, &original, pipe, Rc::clone(&total), || {
             let info = dsktf2(&mut SqMat::new(&mut a, n), &mut pivots).err();
             let factor = a.clone();

@@ -37,7 +37,8 @@
 // `backend` module into a thin FFI shim around the `blas` / `lapack`
 // crates, which require `unsafe`; that module overrides the deny with
 // its own `#![allow(unsafe_code)]`.
-#![cfg_attr(not(feature = "blas-backend"), forbid(unsafe_code))]
+#![cfg_attr(all(not(feature = "blas-backend"), not(test)), forbid(unsafe_code))]
+#![cfg_attr(all(not(feature = "blas-backend"), test), deny(unsafe_code))]
 #![cfg_attr(feature = "blas-backend", deny(unsafe_code))]
 #![warn(missing_docs)]
 

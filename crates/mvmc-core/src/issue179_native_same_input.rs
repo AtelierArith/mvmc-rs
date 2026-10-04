@@ -8,11 +8,153 @@ use mvmc_core::run::{
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 type RngSnapshot = (&'static str, [u32; 624], usize, u128, [u32; 624]);
+type LocalMoments = (usize, Vec<u64>, Vec<u64>);
+
+#[derive(Debug, Default)]
+struct OperandCapture {
+    weighted: Vec<Vec<u64>>,
+    local: Vec<LocalMoments>,
+}
+thread_local! {
+    static OPERANDS: RefCell<Option<OperandCapture>> = const { RefCell::new(None) };
+}
+struct OperandGuard;
+impl OperandGuard {
+    fn start() -> Self {
+        OPERANDS.with(|slot| {
+            assert!(slot.borrow().is_none(), "nested native operand capture");
+            *slot.borrow_mut() = Some(OperandCapture::default());
+        });
+        Self
+    }
+    fn finish(self) -> OperandCapture {
+        OPERANDS.with(|slot| slot.borrow_mut().take().expect("operand capture active"))
+    }
+}
+impl Drop for OperandGuard {
+    fn drop(&mut self) {
+        OPERANDS.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+pub(super) fn weighted_store(active: &[f64], n: usize, samples: usize) {
+    OPERANDS.with(|slot| {
+        if let Some(records) = slot.borrow_mut().as_mut() {
+            assert!(
+                records.weighted.is_empty(),
+                "one weighted operand capture only"
+            );
+            assert_eq!((n, samples, active.len()), (15, 100, 1500));
+            records
+                .weighted
+                .push(active.iter().map(|x| x.to_bits()).collect());
+        }
+    });
+}
+pub(super) fn local_moments(
+    step: usize,
+    state: &crate::state::VmcOptimizationState,
+    all_complex: bool,
+) {
+    OPERANDS.with(|slot| {
+        if let Some(records) = slot.borrow_mut().as_mut() {
+            assert!(records.local.is_empty(), "one local moment capture only");
+            assert!(!all_complex);
+            assert_eq!(state.sr_opt.sr_opt_size, 15);
+            assert_eq!(state.sr_opt.sr_opt_oo_real.len(), 255);
+            assert_eq!(state.sr_opt.sr_opt_ho_real.len(), 15);
+            // Preserve all extra native storage; semantic OO is first 225.
+            records.local.push((
+                step,
+                state
+                    .sr_opt
+                    .sr_opt_oo_real
+                    .iter()
+                    .map(|x| x.to_bits())
+                    .collect(),
+                state
+                    .sr_opt
+                    .sr_opt_ho_real
+                    .iter()
+                    .map(|x| x.to_bits())
+                    .collect(),
+            ));
+        }
+    });
+}
+
+#[test]
+fn operand_hook_rejects_geometry_and_second_copy_without_losing_receipt() {
+    let capture = OperandGuard::start();
+    let weighted = [1.0; 1500];
+    assert!(std::panic::catch_unwind(|| weighted_store(&weighted, 14, 100)).is_err());
+    OPERANDS.with(|slot| assert!(slot.borrow().as_ref().unwrap().weighted.is_empty()));
+    weighted_store(&weighted, 15, 100);
+    assert!(std::panic::catch_unwind(|| weighted_store(&weighted, 15, 100)).is_err());
+    let receipt = capture.finish();
+    assert_eq!(receipt.weighted.len(), 1);
+    assert_eq!(receipt.weighted[0], vec![1.0_f64.to_bits(); 1500]);
+    assert!(receipt.local.is_empty());
+    OPERANDS.with(|slot| assert!(slot.borrow().is_none()));
+}
 
 #[derive(Default)]
 struct BorrowedSamples {
     samples: RefCell<Vec<Vec<u64>>>,
     rng: RefCell<Vec<RngSnapshot>>,
+}
+
+#[test]
+fn optimization_operand_hook_receipt_and_passivity() {
+    let input = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/issue179_native_prefix1/namelist.def");
+    let root = super::fresh_output_directory().unwrap();
+    let mut snapshots = Vec::new();
+    for enabled in [false, true] {
+        let out = root.join(if enabled { "on" } else { "off" });
+        // Common passive RNG/measurement tap in both control runs; this does not
+        // replace the ignored acquisition's genuinely observer-free OFF process.
+        let observer = Rc::new(BorrowedSamples::default());
+        let tap = install_optimization_measurement_observer(observer.clone()).unwrap();
+        let operands = enabled.then(OperandGuard::start);
+        let mut config = RunConfig::new(1, "real");
+        config.nsmp = Some(1);
+        config.output_dir = Some(out);
+        config.enable_opt_trans = Some(false);
+        let result = mvmc_core::run_para_opt_from_namelist(&input, config);
+        let captured = operands.map(OperandGuard::finish);
+        drop(tap);
+        assert_eq!(result.unwrap().status, 0);
+        assert_eq!(observer.samples.borrow().len(), 100);
+        snapshots.push(observer.rng.borrow().clone());
+        if let Some(captured) = captured {
+            assert_eq!(captured.weighted.len(), 1);
+            assert_eq!(captured.weighted[0].len(), 1500);
+            assert_eq!(captured.local.len(), 1);
+            assert_eq!(captured.local[0].0, 0);
+            assert_eq!(captured.local[0].1.len(), 255);
+            assert_eq!(captured.local[0].2.len(), 15);
+        } else {
+            OPERANDS.with(|slot| assert!(slot.borrow().is_none()));
+        }
+    }
+    assert_eq!(
+        snapshots[0], snapshots[1],
+        "raw/cursor/count/future passivity"
+    );
+    for name in [
+        "zqp_opt.dat",
+        "zvo_SRinfo.dat",
+        "zvo_out_001.dat",
+        "zvo_var_001.dat",
+    ] {
+        assert_eq!(
+            std::fs::read(root.join("off").join(name)).unwrap(),
+            std::fs::read(root.join("on").join(name)).unwrap(),
+            "same-language operand hook passivity {name}"
+        );
+    }
+    println!("optimization-local-hook: calls=1 step=0 OO=255 HO=15 weighted=1500; common-tap RNG/public passivity");
+    std::fs::remove_dir_all(root).unwrap();
 }
 impl OptimizationMeasurementObserver for BorrowedSamples {
     fn measured(&self, view: OptimizationMeasurementView<'_>) {
@@ -104,6 +246,7 @@ fn issue179_native_same_input_public_runner() {
         mvmc_core::sampling::driver::trace::start_with_raw_checkpoints();
     }
     let mut systems = enabled.then(|| mvmc_core::sr::observer::capture_with_normalized().unwrap());
+    let operands = enabled.then(OperandGuard::start);
     let observer = Rc::new(BorrowedSamples::default());
     let _guard =
         enabled.then(|| install_optimization_measurement_observer(observer.clone()).unwrap());
@@ -123,6 +266,7 @@ fn issue179_native_same_input_public_runner() {
         .map(|s| s.take_normalized())
         .unwrap_or_default();
     let direct = systems.map(|s| s.finish()).unwrap_or_default();
+    let operands = operands.map(OperandGuard::finish);
     // Save partial actual trace BEFORE checking the native runner outcome.
     std::fs::write(
         diagnostic.join("outcome.txt"),
@@ -130,6 +274,17 @@ fn issue179_native_same_input_public_runner() {
     )
     .unwrap();
     if enabled {
+        let operands = operands.as_ref().expect("enabled operand capture");
+        std::fs::write(
+            diagnostic.join("actual-weighted-store-bits.txt"),
+            format!("{:?}\n", operands.weighted),
+        )
+        .unwrap();
+        std::fs::write(
+            diagnostic.join("actual-local-moments-bits.txt"),
+            format!("{:?}\n", operands.local),
+        )
+        .unwrap();
         std::fs::write(
             diagnostic.join("actual-sampling-schema2.txt"),
             format!("{trace:?}\n"),
@@ -164,6 +319,10 @@ fn issue179_native_same_input_public_runner() {
         return;
     }
     assert_eq!(observer.samples.borrow().len(), 100);
+    let operands = operands.unwrap();
+    assert_eq!(operands.weighted.len(), 1);
+    assert_eq!(operands.local.len(), 1);
+    assert_eq!(operands.local[0].0, 0);
     assert_eq!(
         observer
             .rng

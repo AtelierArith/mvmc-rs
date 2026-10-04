@@ -20,6 +20,11 @@ mod reference_slater;
 mod issue179_native_same_input;
 
 #[cfg(test)]
+pub(crate) fn issue179_weighted_store(active: &[f64], n: usize, samples: usize) {
+    issue179_native_same_input::weighted_store(active, n, samples);
+}
+
+#[cfg(test)]
 #[path = "../../../tests/support/native_fsz_fixture.rs"]
 mod native_fsz_fixture;
 
@@ -1171,6 +1176,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         accumulate_observables(data, state, all_complex, use_fsz, timer, reducer);
 
         timer.stop(4);
+        #[cfg(test)]
+        issue179_native_same_input::local_moments(step, state, all_complex);
         timer.start(21);
         reduce_accumulators(state, reducer, all_complex);
         timer.start_diag(960, timer.diagnostics.weightavg);
@@ -6635,6 +6642,7 @@ mod physcal_green_observer_tests {
         data.modpara.vmc_calc_mode = 0;
         data.modpara.nsr_opt_itr_step = 1;
         data.modpara.nsr_opt_itr_smp = 1;
+        let output = fresh_output_directory().unwrap();
         let capture = Rc::new(Capture::default());
         let _guard = install_physcal_green_observer(capture.clone()).unwrap();
         with_physcal_green_sample(7, || {
@@ -6642,12 +6650,59 @@ mod physcal_green_observer_tests {
                 &mut data,
                 &mut state,
                 &mut rng,
-                None,
+                Some(&output),
                 &SingleProcessReducer,
                 OptimizationOptions::default(),
             )
         })
         .unwrap();
         assert!(capture.0.borrow().is_empty());
+        for name in ["zqp_opt.dat", "zvo_out.dat", "zvo_var.dat"] {
+            assert!(
+                output.join(name).is_file(),
+                "isolated optimization output {name}"
+            );
+        }
+        fs::remove_dir_all(output).unwrap();
+    }
+    #[test]
+    fn physcal_green_optimization_output_does_not_pollute_child_cwd() {
+        // Isolated child cwd detects the original None-output regression.
+        // Never change the parent cwd: nextest/libtest can run tests concurrently.
+        let directory = fresh_output_directory().unwrap();
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "run::physcal_green_observer_tests::physcal_green_observer_does_not_attribute_optimization_to_outer_sample",
+                "--nocapture",
+                "--test-threads=1",
+                "--color=never",
+            ])
+            .current_dir(&directory)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated child failed: status={} stdout={} stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stdout.contains("running 1 test"),
+            "exact child identity not executed: {stdout}"
+        );
+        assert!(
+            stdout.contains("1 passed; 0 failed;"),
+            "child did not complete its assertion: {stdout}"
+        );
+        let remaining: Vec<_> = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert!(remaining.is_empty(), "test polluted its cwd: {remaining:?}");
+        fs::remove_dir(directory).unwrap();
     }
 }
