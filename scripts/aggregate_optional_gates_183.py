@@ -11,6 +11,7 @@ import subprocess
 import sys
 import optional_mpi_provider_183 as mpi_provider
 import optional_fixture_metadata_183 as fixture_metadata
+import optional_reference_provenance_183 as reference_provenance
 
 from run_optional_gates_183 import FAMILIES, GENERAL, LANCZOS, MODELS, MPI, THREAD
 
@@ -237,6 +238,12 @@ def validate_package(package, family, plan):
             raise ValueError("unselected driver family masquerades as executed")
     for stem in ("source", "fixtures", "binary"):
         stable_closure(evidence, stem)
+    if (metadata.get("oracle_execution") != "none; checked-in fixtures only" or
+            metadata.get("reference_version") != "per-fixture provenance, NOT current Julia runtime verification" or
+            metadata.get("not_claimed") != "full13 matrix, fullJulia features, fullC sampler, InterAll"):
+        raise ValueError("offline reference scope/claim mismatch")
+    reference_provenance.validate(metadata.get("offline_reference"),
+                                  read_json(evidence / "fixtures.before.json"))
     if family == "mpi":
         mpi_provider.validate_package(evidence, read_json)
     backend = read_json(evidence / "backend.json")

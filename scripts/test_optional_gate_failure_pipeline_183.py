@@ -12,7 +12,8 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 MODULES = ("run_optional_gates_183.py", "aggregate_optional_gates_183.py",
-           "optional_mpi_provider_183.py", "optional_fixture_metadata_183.py")
+           "optional_mpi_provider_183.py", "optional_fixture_metadata_183.py",
+           "optional_reference_provenance_183.py")
 MODELS = ("hubbard_chain_real", "hubbard_chain_lanczos", "spin_chain_lanczos")
 
 
@@ -52,7 +53,7 @@ class RealFailurePipeline(unittest.TestCase):
                 reference = root / "extern/Julia-mVMC"
                 reference.mkdir(parents=True)
                 manifest = reference / "Manifest-v1.13.toml"
-                manifest.write_text("# synthetic presence control; no Julia runtime\n")
+                manifest.write_text('julia_version = "1.13.1"\n# synthetic; no Julia runtime\n')
                 for model, samples in zip(MODELS, (100, 1000, 5000)):
                     inputs = reference / "test/integration/reference" / model / "physcal_ref/inputs"
                     inputs.mkdir(parents=True)

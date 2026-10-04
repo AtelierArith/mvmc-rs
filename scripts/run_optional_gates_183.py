@@ -13,6 +13,7 @@ import sys
 import time
 import optional_mpi_provider_183 as mpi_provider
 import optional_fixture_metadata_183 as fixture_metadata
+import optional_reference_provenance_183 as reference_provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 FAMILIES = ("general", "lanczos", "mpi", "thread")
@@ -352,6 +353,10 @@ def run(family, output, excluded=()):
         execute(["git", "status", "--short"], "working-tree-status")
         source = digest_files(source_files())
         fixtures = digest_files(fixture_files(family))
+        metadata["offline_reference"] = reference_provenance.capture(
+            [Path(path) for path in fixtures])
+        reference_provenance.validate(metadata["offline_reference"], fixtures)
+        write_json(output / "metadata.json", metadata)
         if family == "lanczos":
             metadata["fixture_modpara"] = fixture_metadata.capture(ROOT)
             fixture_metadata.validate(metadata["fixture_modpara"], fixtures)

@@ -17,18 +17,27 @@ def listing(names=gate.GENERAL):
                           for name in names}}}}
 
 
+def synthetic_manifest(root):
+    # Independent declaration prerequisite, not a Julia runtime/model result.
+    path = root / "extern/Julia-mVMC/Manifest-v1.13.toml"
+    path.parent.mkdir(parents=True)
+    path.write_text('julia_version = "1.13.1"\n')
+    return path
+
+
 class OptionalGateContract(unittest.TestCase):
     def test_mpi_provider_capture_precedes_cargo_and_failure_is_not_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "fixed-source"
             source.write_bytes(b"synthetic nonexecutable input")
+            manifest = synthetic_manifest(root)
             with patch.object(gate.platform, "system", return_value="Linux"), \
                     patch.dict(gate.os.environ, {"CARGO_TARGET_DIR": str(root / "target")}), \
                     patch.object(gate.subprocess, "check_output", return_value="synthetic"), \
                     patch.object(gate.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run, \
                     patch.object(gate, "source_files", return_value=[source]), \
-                    patch.object(gate, "fixture_files", return_value=[source]), \
+                    patch.object(gate, "fixture_files", return_value=[source, manifest]), \
                     patch.object(gate.mpi_provider, "capture", side_effect=ValueError("startup failure")) as capture:
                 output = root / "evidence"
                 with self.assertRaisesRegex(ValueError, "startup failure"):
@@ -113,6 +122,7 @@ class OptionalGateContract(unittest.TestCase):
                 root = Path(tmp)
                 binary = root / "mock-binary"
                 binary.write_bytes(b"not executable; simulated infrastructure")
+                manifest = synthetic_manifest(root)
                 data = listing()
                 data["rust-suites"]["one"]["binary-path"] = str(binary)
                 def fake_run(args, **kwargs):
@@ -127,7 +137,7 @@ class OptionalGateContract(unittest.TestCase):
                         patch.object(subprocess, "check_output", return_value="mock revision"), \
                         patch.object(subprocess, "run", side_effect=fake_run), \
                         patch.object(gate, "source_files", return_value=[binary]), \
-                        patch.object(gate, "fixture_files", return_value=[binary]), \
+                        patch.object(gate, "fixture_files", return_value=[binary, manifest]), \
                         patch.object(gate, "backend", side_effect=fake_backend):
                     output = root / "evidence"
                     if artifact_failure:
@@ -201,6 +211,7 @@ class OptionalGateContract(unittest.TestCase):
                 root = Path(tmp)
                 binary = root / "mock-binary"
                 binary.write_bytes(b"simulated; not executable")
+                manifest = synthetic_manifest(root)
                 data = listing()
                 data["rust-suites"]["one"]["binary-path"] = str(binary)
                 def fake_run(args, **kwargs):
@@ -219,7 +230,7 @@ class OptionalGateContract(unittest.TestCase):
                         patch.object(subprocess, "check_output", return_value="mock revision"), \
                         patch.object(subprocess, "run", side_effect=fake_run), \
                         patch.object(gate, "source_files", return_value=[binary]), \
-                        patch.object(gate, "fixture_files", return_value=[binary]), \
+                        patch.object(gate, "fixture_files", return_value=[binary, manifest]), \
                         patch.object(gate, "backend", side_effect=fake_backend):
                     output = root / "evidence"
                     with self.assertRaises((ValueError, RuntimeError)):

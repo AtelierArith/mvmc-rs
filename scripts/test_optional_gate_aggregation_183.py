@@ -63,6 +63,32 @@ def fixture(root, packages, plan, family):
         for suffix in ("before", "after"):
             put(evidence / f"fixtures.{suffix}.json",
                 {row["path"]: row["sha256"] for row in report["fixtures"]})
+    # Independent literal declarations, not a simulated Julia/model execution.
+    manifest_path = "/synthetic/extern/Julia-mVMC/Manifest-v1.13.toml"
+    declaration_path = "/synthetic/reference/provenance.txt"
+    manifest_text = 'julia_version = "1.13.1"\n'
+    declaration_text = "C historical acquisition; Julia version not recorded\n"
+    import hashlib
+    declarations = [
+        {"path": manifest_path, "sha256": hashlib.sha256(manifest_text.encode()).hexdigest(),
+         "text": manifest_text, "kind": "checkout_manifest", "julia_version": "1.13.1"},
+        {"path": declaration_path, "sha256": hashlib.sha256(declaration_text.encode()).hexdigest(),
+         "text": declaration_text, "kind": "historical_acquisition_declaration", "julia_versions": "NotRecorded"},
+    ]
+    for suffix in ("before", "after"):
+        path = evidence / f"fixtures.{suffix}.json"
+        state = audit.read_json(path)
+        state.update({item["path"]: item["sha256"] for item in declarations})
+        put(path, state)
+    metadata = audit.read_json(evidence / "metadata.json")
+    metadata.update(oracle_execution="none; checked-in fixtures only",
+                    reference_version="per-fixture provenance, NOT current Julia runtime verification",
+                    not_claimed="full13 matrix, fullJulia features, fullC sampler, InterAll",
+                    offline_reference={"schema": 1,
+                        "authority": "hash-bound offline declarations; NOT current runtime verification",
+                        "julia_runtime": {"status": "NotRun", "version": None, "blas": None},
+                        "declarations": declarations})
+    put(evidence / "metadata.json", metadata)
     put(evidence / "backend.json", {"actual_threads": 1, "actual_config": "OpenBLAS 0.3.26 synthetic",
                                    "actual_core": "Haswell", "library_sha256": "c" * 64})
     for name in ("commands.json", "selection.json"):
@@ -122,6 +148,59 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_rehashed_offline_reference_claims_fail_semantically(self):
+        cases = ("missing", "runtime", "manifest_version", "acquisition_version",
+                 "duplicate", "hash", "authority", "oracle_execution",
+                 "reference_version", "not_claimed")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan("general", BINDING)
+                package = fixture(root, packages, plan, "general")
+                self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                path = package / "evidence/metadata.json"
+                metadata = audit.read_json(path)
+                report = metadata["offline_reference"]
+                error = "reference declaration semantics/hash mismatch"
+                if case == "missing":
+                    del metadata["offline_reference"]
+                    error = "invalid offline reference report schema"
+                elif case == "runtime":
+                    report["julia_runtime"]["status"] = "Pass"
+                    error = "offline gate cannot claim Julia runtime execution"
+                elif case == "manifest_version":
+                    report["declarations"][0]["julia_version"] = "1.11.0"
+                elif case == "acquisition_version":
+                    report["declarations"][1]["julia_versions"] = ["1.13.1"]
+                elif case == "duplicate":
+                    report["declarations"].append(copy.deepcopy(report["declarations"][0]))
+                    error = "missing/duplicate/off-closure reference declarations"
+                elif case == "hash":
+                    report["declarations"][0]["sha256"] = "d" * 64
+                elif case == "authority":
+                    report["authority"] = "current Julia verified"
+                    error = "invalid offline reference authority"
+                else:
+                    metadata[case] = "current Julia verified"
+                    error = "offline reference scope/claim mismatch"
+                put(path, metadata)
+                refresh(package)
+                envelope = audit.read_json(package / "envelope.json")
+                audit.validate_manifest(package / "evidence", envelope["evidence_root"],
+                                        audit.read_json(package / "evidence/artifacts.json"))
+                for name, sha in envelope["driver_hashes"].items():
+                    self.assertEqual(audit.digest(package / "evidence" / name), sha)
+                result = audit.aggregate(plan, packages, BINDING)
+                row = result["families"]["general"]
+                self.assertEqual(result["exit_status"], 1)
+                self.assertEqual(row["detail"], error)
+                self.assertEqual(row["status"], "Failure")
+                self.assertEqual(row["comparison_evidence"], "Unverified")
+                self.assertIsNone(row["numeric_reference_comparisons"])
+                self.assertEqual(row["empty_contracts"], 0)
+
     def test_failed_installer_sidecar_is_retained_not_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
