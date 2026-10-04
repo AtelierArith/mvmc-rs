@@ -215,7 +215,80 @@ fn finite_negative_regularizer_fails_actual_public_sr_after_healthy_control() {
 #[test]
 #[ignore = "explicit native MPI worlds2/4; external bounded launcher required"]
 fn actual_rank_local_nonpd_sr_restores_successful_peers_before_callback() {
+    // Diagnostic only: allowlisted startup metadata, never the whole environment.
+    for name in [
+        "PMI_RANK",
+        "PMI_SIZE",
+        "PMI_FD",
+        "PMI_VERSION",
+        "PMI_SUBVERSION",
+        "PMIX_RANK",
+    ] {
+        let value = std::env::var(name).ok();
+        let safe = value
+            .as_deref()
+            .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()));
+        eprintln!(
+            "ISSUE234_MPI_DIAG env={name} value={}",
+            safe.unwrap_or(if value.is_some() {
+                "NONNUMERIC_REDACTED"
+            } else {
+                "UNSET"
+            })
+        );
+    }
+    for name in [
+        "MPIR_CVAR_PMI_VERSION",
+        "MPICH_PMI_VERSION",
+        "MPIR_PARAM_PMI_VERSION",
+    ] {
+        let value = std::env::var(name).ok();
+        let safe = value
+            .as_deref()
+            .filter(|value| matches!(*value, "1" | "2" | "x"));
+        eprintln!(
+            "ISSUE234_MPI_DIAG env={name} value={}",
+            safe.unwrap_or(if value.is_some() {
+                "OTHER_REDACTED"
+            } else {
+                "UNSET"
+            })
+        );
+    }
+    for name in [
+        "PMI_PORT",
+        "PMIX_NAMESPACE",
+        "PMIX_SERVER_URI",
+        "PMIX_SERVER_URI2",
+        "PMIX_SERVER_URI21",
+    ] {
+        eprintln!(
+            "ISSUE234_MPI_DIAG env={name} present={}",
+            std::env::var_os(name).is_some()
+        );
+    }
+    let fd_kind = std::env::var("PMI_FD")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .map(|fd| match fs::read_link(format!("/proc/self/fd/{fd}")) {
+            Ok(link) if link.to_string_lossy().starts_with("socket:") => "socket",
+            Ok(link) if link.to_string_lossy().starts_with("pipe:") => "pipe",
+            Ok(_) => "other",
+            Err(_) => "unavailable",
+        })
+        .unwrap_or("unset_or_invalid");
+    eprintln!(
+        "ISSUE234_MPI_DIAG before_init pid={} thread={:?} pmi_fd_kind={fd_kind}",
+        std::process::id(),
+        std::thread::current().name()
+    );
     let world = mvmc_core::mpi::MpiContext::initialize().unwrap();
+    eprintln!(
+        "ISSUE234_MPI_DIAG after_init rank={} world_size={} threading={:?}",
+        world.rank(),
+        world.world_size(),
+        mpi::environment::threading_support()
+    );
     assert!([2, 4].contains(&world.world_size()));
     let root = PathBuf::from(std::env::var_os("MPI_ISSUE178_SR_OUTPUT").unwrap());
     let setup = if world.is_root() {

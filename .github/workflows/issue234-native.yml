@@ -1,0 +1,62 @@
+name: Explicit issue 234 native contracts
+
+"on":
+  # Parent explicitly activates a dedicated verification branch. Ordinary
+  # feature/main pushes and pull requests do not run this expensive matrix.
+  push:
+    branches: ['verify/issue234-native-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
+  OPENBLAS_CORETYPE: HASWELL
+  MVMC_RS_INNER_THREADS: '1'
+  MVMC_RS_INNER_THRESHOLD: '32'
+  CARGO_TERM_COLOR: never
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: issue234-native
+          tools: nextest
+      - name: Install capture-only utilities
+        run: sudo apt-get install -y jq ripgrep libucx-dev gfortran build-essential
+      - name: Match MPICH PMI1 and Hydra, prove worlds before Rust compilation
+        run: |
+          bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/issue234-mpich" "$RUNNER_TEMP/issue234-mpi-provider"
+      - name: Execute current-checkout contracts (no reference runtime)
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          CARGO_TARGET_DIR: ${{ runner.temp }}/issue234-target
+          EVIDENCE: ${{ runner.temp }}/issue234-evidence
+          TMPDIR: ${{ runner.temp }}/issue234-native
+        run: |
+          mkdir "$TMPDIR"
+          bash scripts/issue234/native/run-actions.sh "$GITHUB_WORKSPACE" "$EVIDENCE"
+      - name: Upload complete receipts, including first failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue234-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/issue234-evidence
+            ${{ runner.temp }}/issue234-native
+            ${{ runner.temp }}/issue234-mpi-provider
+          if-no-files-found: error
+          retention-days: 14
