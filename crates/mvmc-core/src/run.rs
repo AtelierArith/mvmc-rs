@@ -16,6 +16,10 @@
 mod reference_slater;
 
 #[cfg(test)]
+#[path = "issue179_native_same_input.rs"]
+mod issue179_native_same_input;
+
+#[cfg(test)]
 #[path = "../../../tests/support/native_fsz_fixture.rs"]
 mod native_fsz_fixture;
 
