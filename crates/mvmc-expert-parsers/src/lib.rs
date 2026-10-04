@@ -15,11 +15,17 @@
 
 pub mod constants;
 pub mod definition;
+pub mod orbital_mode;
 pub mod parsers;
+pub mod rbm_flags;
 pub mod types;
 pub mod utils;
 
 pub use definition::{load_hamiltonian_definition, HamiltonianDefinitionKind};
+pub use orbital_mode::{
+    judge_orbital_mode, NativeOrbitalModeStatus, OrbitalModeReport, OrbitalModeWarning,
+};
+pub use rbm_flags::{refresh_rbm_optimization_flags, RbmDefinitionKey, RbmOptimizationSource};
 
 pub use types::{
     ChargeRBMHiddenLayerTerm, ChargeRBMPhysHiddenTerm, ChargeRBMPhysLayerTerm, CoulombInterTerm,
