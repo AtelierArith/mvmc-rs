@@ -1,6 +1,8 @@
 # Joined evidence for #184 / #185
 
-Current source checkpoint: main `fab2335db872fdd62b5389d96d11b59ccdfa80ec`.
+Current source checkpoint: main `4d39231688b55b22ebbd1c23cac2e4bc0884080b`.
+The fab2335 / PR271 reconciliation below is historical; its57 controls and114
+execution records remain unchanged. PR273 adds five reader-policy controls and10 records.
 The prior `eaa5db6254c721b95e8e63096287cdb74d5124e2` checkpoint and its exact
 execution revisions below remain historical, not relabelled as fab2335 runs.
 Related to #184/#185; neither umbrella issue is complete.
@@ -15,11 +17,11 @@ for explicitly reviewed conditions.
 
 | Status | Rows | Interpretation |
 | --- | ---: | --- |
-| CoveredScopedOrdinaryCI | 15 | Named original assertion conditions, not complete API/scenario verification |
+| CoveredScopedOrdinaryCI | 17 | Named original assertion conditions, not complete API/scenario verification |
 | IntentionalDifference | 1 | M0971: zero-QP helper retains zero instead of Julia's one |
 | SourceMappedMissingEvidence | 1,617 | Conditions/execution reconciliation incomplete |
 | HistoricalExecutionClaimNeedsReconciliation | 80 | Historical claims retained, not newly certified |
-| ExplicitScopeExclusionNeedsReview | 629 | Review-required classifications, not automatic exclusions or PASS |
+| ExplicitScopeExclusionNeedsReview | 627 | Review-required classifications, not automatic exclusions or PASS |
 
 The [38 semantic source reviews](issue-184-semantic38.tsv) remain source-only
 conditions and explicit gaps, not file-wide acceptance. Full API overloads,
@@ -53,7 +55,7 @@ Original Julia revision is `8bb1b9e8ae47b1512c00b321be05664ddcac0fd1`.
 Earlier execution heads remain unchanged after subsequent merges. This
 reconciliation ran no Julia, C oracle, Cargo or model tests.
 
-## Parser condition reconciliation at fab2335
+## Historical parser condition reconciliation at fab2335
 
 The [57 named controls](issue-184-parser-milestone-controls.tsv) bind complete
 reviewed Rust test bodies to actual PASS records in both Linux jobs:114 execution
@@ -77,7 +79,7 @@ rows; four additional
 generic QPTrans API/type rows have their incorrect representation mapping
 corrected to explicit missing counterparts. No whole original API/scenario or
 assertion row is promoted solely from these new tests. The status counts above
-remain15 scoped covered assertions, one intentional difference and2326 rows
+historically remained15 scoped covered assertions, one intentional difference and2326 rows
 still requiring reconciliation/review. Original fields/owners remain preserved.
 
 Native reader conditions link to original file-helper rows as architecture
@@ -100,23 +102,65 @@ are not equivalent to Rust's indexed `QPTransSection/QPTransEntry`. Indexed
 A056/A057 likewise need explicit representation and overload reconciliation.
 The core PairHop smoke uses archived component composition and checks only that
 both metadata branches do not reject solely issue43; it is **not** S409's
-independent energy/RNG/output or20-step scenario proof. Original S028/M0110/M0134
-input cardinalities and S128/S129 normalization need their own condition joins.
+independent energy/RNG/output or20-step scenario proof. Original S028 composite and S128/S129 normalization remain pending. M0110/M0134
+receive only the individually reviewed cardinality joins below.
 
-One source-identified input-contract discrepancy remains: Rust's QPTrans
+At the historical fab2335 checkpoint, one source-identified discrepancy remained: Rust's QPTrans
 zero-count test requires five header lines, while C `ReadBuffInt` reads the count
 from two lines and the caller ignores subsequent header EOF before
-`GetInfoTransSym` skips all body reads when NArray=0. Thus the current test's
+`GetInfoTransSym` skips all body reads when NArray=0. Thus that historical test's
 two-line-zero rejection is recorded as `UnresolvedCContractDifference`, not
 native parity PASS. Source: `readdef.c:118–124,874–876,2232–2265`, SHA256
 `6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`.
-No native QPTrans probe or production repair was executed in this reconciliation.
+No native QPTrans probe or production repair was executed in that historical reconciliation.
+
+### Scoped reader-policy update at4d392 / PR273
+
+[PR273](https://github.com/AtelierArith/mvmc-rs/pull/273) resolves the short-zero
+reader discrepancy under #272: two consumed count lines precede zero return;
+positive full-header checks remain. Five named controls append10 actual CI
+records to the preserved57/114 table, for62 controls/124 records total.
+Tested head `35ac648ebf3e2b0c561ce5d592a89e3ff28c0f00`; [default job](https://github.com/AtelierArith/mvmc-rs/actions/runs/37174830753/job/111355185604)1047/1047 PASS,40 skipped,282.109s;
+[all-features job](https://github.com/AtelierArith/mvmc-rs/actions/runs/37174830753/job/111355185560)1049/1049 PASS,58 skipped,223.637s.
+The table binds full raw-log hashes, ordinals, source hashes, settings and commands.
+C authority remains readdef118–124,874–876,2232–2265; this is source review and
+ordinary Rust CI, **not native execution**. Count0 parsing is not runnable-model
+approval. The old rejection/control remains historical in the unchanged table
+prefix and JSON policy_history. All2342 rows, statuses and owners remain unchanged.
+M0110/M0134 subsequently received full original/source review: only their cardinality assertions are promoted as described below.
+
+### Original cardinality assertions: M0110 and M0134
+
+Parent full-source review approved exactly two original assertions, not S028,
+whole-model, inverse or full API acceptance. M0110 maps Julia test186 length2 to
+Rust `original_four_site_identity_cyclic_and_default_opttrans_are_loaded` line118;
+M0134 maps Julia test257 length4 to
+`original_heisenberg_sixteen_site_translation_sample_and_default_identity` line170.
+Original revision is Julia8bb; tested Rust head is
+`4d89e2a4b5c160bb3469f4b5bbde40fe1c7cdef5`, not a new4d392 execution.
+[Default job](https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156674)
+ordinals868/1043 and870/1043; [all-features job](https://github.com/AtelierArith/mvmc-rs/actions/runs/37172837109/job/111349156624)
+ordinals871/1045 and873/1045 supply four historical actual PASS records.
+These are separate original-assertion receipts, not additions to the62/124 control table.
+
+M0110 uses original Nsite4/NElec2/NLocSpin0 versus Rust Nsite4/NElec1;
+M0134 uses original Nsite16/NElec8/NLocSpin16 versus Rust Nsite16/NElec1
+and default local-spin settings. NElec/local-spin are not inputs to this
+translation-count reader; no equivalent complete model is claimed. The four-site
+numeric payload is independently equal despite header/whitespace differences;
+the16-site qptransidx.def is byte-original (SHA256
+`25715a81bbc8127724cbd666f55a4c9187c7907240ce03e201989fce963c0d16`).
+The JSON rows bind source revisions/hashes, exact conditions, settings, command,
+raw log hashes, four PASS lines and durable job links. Original records, owners,
+parent links and both historical exclusion flags remain intact. Current counts
+are17 scoped covered assertions, one intentional difference and2324 pending rows.
 
 ### Remaining full acceptance
 
 All300 APIs,456 scenarios,1444 assertions,125 source files and17 documents remain
-in the deliverable. The629 scope flags remain individually review-required,
-not629 InterAll numerical exclusions. The38 semantic source reviews remain
+in the deliverable. All629 historical scope flags remain preserved;627 still
+require individual review after the two cardinality joins, not blanket InterAll
+numerical exclusions. The38 semantic source reviews remain
 source-only. Full method overloads, examples, unit/integration/MPI callsites,
 settings, commands, ownership and independent evidence are still required.
 Normal all-features CI does not establish actual MPI launch/crossover; skipped
@@ -128,7 +172,7 @@ are not filled by reader controls. Related #184/#185 remain open.
 
 Current metadata validation uses Node, not a Python/Cargo/oracle run. It checks
 all2342 keys/classes/original records/owners/parent links, preserves all15+1 prior
-covered mappings and semantic38 bytes, and binds57 named test sources to114
+covered mappings plus the two reviewed cardinality joins and semantic38 bytes, and binds57 named test sources to114
 actual job records. Fifteen negative controls reject wrong revision/anchor/hash,
 absent identity, wrong job/ordinal, duplicate join, context or unresolved C
 discrepancy promoted to parity, absent settings/command, changed owner, blanket
@@ -136,9 +180,10 @@ exclusion and whole-row promotion. These are metadata controls, not57 new Rust
 executions or semantic acceptance of every original row.
 
 Counts still needing complete reconciliation:1617 source-mapped missing evidence,
-80 historical execution claims and629 scope classifications to review (2326
-rows total). The19 partial/context joins and four representation-gap annotations
-do not change these totals. Remaining300-API/456-scenario breadth is not reduced.
+80 historical execution claims and627 scope classifications to review (2324
+rows total). The original629 flag texts remain preserved; only two individually
+reviewed cardinality conditions changed current classification. The19 partial/context joins and four representation-gap annotations
+do not independently promote rows. Remaining300-API/456-scenario breadth is not reduced.
 
 Historical validation of the earlier eaa5 delivery:
 
