@@ -600,16 +600,7 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
     })();
     let (data, n_para_consumed) =
         collective_result(loaded, reducer, "PhysCal parse/load/validation")?;
-    let actual_seed =
-        resolve_seed_with_reducer(data.modpara.rnd_seed, seed, seed_offset, reducer, || {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
-                .and_then(|duration| {
-                    i64::try_from(duration.as_secs())
-                        .map_err(|error| format!("cannot convert time-based RndSeed: {error}"))
-                })
-        })?;
+    let actual_seed = resolve_rnd_seed(data.modpara.rnd_seed, seed, seed_offset, reducer)?;
     let rng = seeded_rng_with_reducer(actual_seed, reducer)?;
     observe_physcal_lifecycle("seeded", &data, Some(&rng), Some(n_para_consumed));
     Ok(PhysCalPreparation {
@@ -1365,20 +1356,11 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         collective_result(parsed, reducer, "optimization parse/validation")?;
 
     // Preserve Julia's init -> initial.def -> In*.def -> sync -> QP phase order.
-    let actual_seed = resolve_seed_with_reducer(
+    let actual_seed = resolve_rnd_seed(
         data.modpara.rnd_seed,
         config.seed,
         reducer.seed_offset(),
         reducer,
-        || {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
-                .and_then(|duration| {
-                    i64::try_from(duration.as_secs())
-                        .map_err(|error| format!("cannot convert time-based RndSeed: {error}"))
-                })
-        },
     )?;
     let mut rng = seeded_rng_with_reducer(actual_seed, reducer)?;
     timer.start(13);
@@ -1735,6 +1717,40 @@ pub fn get_all_complex_flag(data: &ExpertModeData) -> Result<bool, String> {
         return Ok(data.complex_flags.iter().any(|&flag| flag != 0));
     }
     Ok(declared)
+}
+
+/// Resolve the seed integer before the runner's separate SFMT UInt32 conversion.
+///
+/// An explicit override takes precedence, including negative overrides. Without
+/// an override, nonnegative input is used directly (zero remains zero); negative
+/// input uses one output-root Unix clock value broadcast through the reducer.
+/// The caller-supplied group offset is then added with existing wrapping i64
+/// arithmetic. Passing the parser's default11272 preserves that default.
+///
+/// This retains Julia's public resolution lifecycle and C's base-plus-group
+/// seeding order without initializing or drawing from an RNG. A returned value
+/// is not necessarily a valid SFMT seed: runners subsequently check UInt32
+/// conversion. No absolute-value conversion or reseeding repair is performed.
+///
+/// Group-offset conversion, root-clock and broadcast errors propagate
+/// collectively through the existing reducer contract. Every participating rank
+/// must enter this function with consistent override/input policy. The clock is
+/// not queried for explicit overrides or nonnegative input.
+pub fn resolve_rnd_seed<R: Reducer + ?Sized>(
+    rnd_seed: i64,
+    seed_override: Option<i64>,
+    group1: usize,
+    reducer: &R,
+) -> Result<i64, String> {
+    resolve_seed_with_reducer(rnd_seed, seed_override, group1, reducer, || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| format!("cannot resolve time-based RndSeed: {error}"))
+            .and_then(|duration| {
+                i64::try_from(duration.as_secs())
+                    .map_err(|error| format!("cannot convert time-based RndSeed: {error}"))
+            })
+    })
 }
 
 fn resolve_seed_with_reducer<R: Reducer + ?Sized>(
