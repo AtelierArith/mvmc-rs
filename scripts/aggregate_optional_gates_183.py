@@ -200,6 +200,8 @@ def validate_package(package, family, plan):
                 metadata = read_json(evidence / "metadata.json")
                 if metadata.get("head") != plan["head"] or metadata.get("family") != family:
                     raise ValueError("failed driver belongs to another head/family")
+            if type(terminal.get("exit_status")) is not int:
+                raise ValueError("failed driver exit status must be an integer")
             if terminal.get("exit_status") == 1 and row.get("selected") is True and terminal.get("status") == row.get("status") in STATUSES[1:]:
                 return {"selected": True, "status": row["status"], "comparison_evidence": "Unverified",
                         "numeric_reference_comparisons": None, "empty_contracts": 0,
@@ -234,7 +236,7 @@ def validate_package(package, family, plan):
             not exact_setting(configuration.get(key), value)
             for key, value in expected_settings.items()):
         raise ValueError("bounded model/seed/steps/ranks/groups/workers settings mismatch")
-    if terminal.get("exit_status") != 0 or terminal.get("status") != "Pass" or row.get("status") != "Pass" or row.get("selected") is not True:
+    if type(terminal.get("exit_status")) is not int or terminal.get("exit_status") != 0 or terminal.get("status") != "Pass" or row.get("status") != "Pass" or row.get("selected") is not True:
         raise ValueError("unfinished/inconsistent selected driver terminal")
     expected_identities = {"general": list(GENERAL), "lanczos": [LANCZOS], "mpi": [MPI], "thread": [THREAD]}[family]
     expected_completed = {"general": list(GENERAL), "lanczos": [f"{model}-{mode}" for model in MODELS for mode in ("real", "cmp")],
@@ -272,9 +274,9 @@ def validate_package(package, family, plan):
                                          ("zvo_ls_cisajscktalt_001.dat", "REFERENCE_COMPARED"),
                                          ("zvo_ls_cisajscktaltex_001.dat", "EMPTY_CONTRACT"))}
         actual = [(r["model"], r["mode"], r["file"], r["status"]) for r in records]
-        if len(actual) != 12 or set(actual) != expected or row.get("numeric_reference_comparisons") != 8 or row.get("empty_contracts") != 4 or row.get("comparison_evidence") != "Verified":
+        if len(actual) != 12 or set(actual) != expected or type(row.get("numeric_reference_comparisons")) is not int or row.get("numeric_reference_comparisons") != 8 or type(row.get("empty_contracts")) is not int or row.get("empty_contracts") != 4 or row.get("comparison_evidence") != "Verified":
             raise ValueError("DC numeric/empty evidence mismatch")
-    elif row.get("numeric_reference_comparisons") is not None or row.get("empty_contracts") != 0:
+    elif row.get("numeric_reference_comparisons") is not None or type(row.get("empty_contracts")) is not int or row.get("empty_contracts") != 0:
         raise ValueError("invented uninstrumented comparison totals")
     return {"selected": True, **row, "detail": "validated package; bounded scope only"}
 
