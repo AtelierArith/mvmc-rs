@@ -31,6 +31,7 @@ pub mod mpi;
 pub use pfapack::julia_complex;
 pub mod observables;
 pub mod parallel;
+pub mod parallel_scalar;
 pub mod pfaffian;
 pub mod qp;
 pub mod reducer;
