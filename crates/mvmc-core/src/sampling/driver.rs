@@ -73,7 +73,9 @@ pub fn sampling_log_ip_real<R: Reducer + ?Sized>(
     let range = reducer.sampling_qp_range(pf.len());
     let mut ip = [calculate_ip_real(pf, range.start, range.end, data)];
     reducer.sampling_sum_f64(&mut ip);
-    mvmc_expert_parsers::utils::julia_log::log(ip[0].abs() + 1.0e-100)
+    // C qp_real.c returns clog(ip) from a double function: retain its real
+    // part, including zero -> -inf for the caller's single recovery branch.
+    mvmc_expert_parsers::utils::julia_log::log(ip[0].abs())
 }
 
 /// Complex range-owned sampling overlap; measurement uses its separate full-QP path.
