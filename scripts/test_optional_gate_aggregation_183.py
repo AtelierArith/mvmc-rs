@@ -148,6 +148,93 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def assert_rehashed_type_failure(self, package, plan, packages, family, diagnostic):
+        refresh(package)
+        envelope = audit.read_json(package / "envelope.json")
+        evidence = package / "evidence"
+        audit.validate_manifest(evidence, envelope["evidence_root"],
+                                audit.read_json(evidence / "artifacts.json"))
+        for name, sha in envelope["driver_hashes"].items():
+            self.assertEqual(audit.digest(evidence / name), sha)
+        result = audit.aggregate(plan, packages, BINDING)
+        row = result["families"][family]
+        self.assertEqual(result["exit_status"], 1)
+        self.assertEqual(row["status"], "Failure")
+        self.assertEqual(row["detail"], diagnostic)
+        self.assertEqual(row["comparison_evidence"], "Unverified")
+        self.assertIsNone(row["numeric_reference_comparisons"])
+        self.assertEqual(row["empty_contracts"], 0)
+
+    def test_rehashed_success_exit_numeric_types_fail_semantically(self):
+        for family in audit.FAMILIES:
+            for replacement in (False, 0.0):
+                with self.subTest(family=family, type=type(replacement).__name__), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packages = root / "packages"
+                    packages.mkdir()
+                    plan = audit.make_plan(family, BINDING)
+                    package = fixture(root, packages, plan, family)
+                    self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                    path = package / "evidence/terminal.json"
+                    terminal = audit.read_json(path)
+                    self.assertEqual(terminal["exit_status"], replacement)
+                    terminal["exit_status"] = replacement
+                    put(path, terminal)
+                    self.assert_rehashed_type_failure(package, plan, packages, family,
+                                                      "unfinished/inconsistent selected driver terminal")
+
+    def test_rehashed_failed_exit_numeric_types_preserve_failure(self):
+        for classification in ("MissingFixture", "Unsupported", "Failure"):
+            for replacement in (True, 1.0):
+                with self.subTest(classification=classification, type=type(replacement).__name__), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packages = root / "packages"
+                    packages.mkdir()
+                    plan = audit.make_plan("general", BINDING)
+                    package = fixture(root, packages, plan, "general")
+                    terminal_path = package / "evidence/terminal.json"
+                    terminal = audit.read_json(terminal_path)
+                    terminal.update(exit_status=1, status=classification)
+                    put(terminal_path, terminal)
+                    ledger_path = package / "evidence/family-ledger.json"
+                    ledger = audit.read_json(ledger_path)
+                    ledger["families"]["general"]["status"] = classification
+                    put(ledger_path, ledger)
+                    refresh(package)
+                    envelope_path = package / "envelope.json"
+                    envelope = audit.read_json(envelope_path)
+                    envelope["job_status"] = "failure"
+                    put(envelope_path, envelope)
+                    positive = audit.aggregate(plan, packages, BINDING)
+                    self.assertEqual(positive["exit_status"], 1)
+                    self.assertEqual(positive["families"]["general"]["status"], classification)
+                    self.assertEqual(terminal["exit_status"], replacement)
+                    terminal["exit_status"] = replacement
+                    put(terminal_path, terminal)
+                    self.assert_rehashed_type_failure(package, plan, packages, "general",
+                                                      "failed driver exit status must be an integer")
+
+    def test_rehashed_comparison_count_numeric_types_fail_semantically(self):
+        cases = [("lanczos", "numeric_reference_comparisons", 8.0),
+                 ("lanczos", "empty_contracts", 4.0)]
+        cases += [(family, "empty_contracts", value)
+                  for family in ("general", "mpi", "thread") for value in (False, 0.0)]
+        for family, field, replacement in cases:
+            with self.subTest(family=family, field=field, type=type(replacement).__name__), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan(family, BINDING)
+                package = fixture(root, packages, plan, family)
+                self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                path = package / "evidence/family-ledger.json"
+                ledger = audit.read_json(path)
+                self.assertEqual(ledger["families"][family][field], replacement)
+                ledger["families"][family][field] = replacement
+                put(path, ledger)
+                diagnostic = "DC numeric/empty evidence mismatch" if family == "lanczos" else "invented uninstrumented comparison totals"
+                self.assert_rehashed_type_failure(package, plan, packages, family, diagnostic)
+
     def test_rehashed_configuration_numeric_types_fail_semantically(self):
         for family in audit.FAMILIES:
             with tempfile.TemporaryDirectory() as tmp:
