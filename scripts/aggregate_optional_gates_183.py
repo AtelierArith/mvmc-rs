@@ -276,6 +276,24 @@ def validate_command_receipts(evidence, family, metadata, identities):
             raise ValueError("build/selection command profile/features/order mismatch")
 
 
+def validate_closure_posts(evidence, metadata, terminal):
+    if type(metadata.get("closure_post_schema")) is not int or metadata["closure_post_schema"] != 1:
+        raise ValueError("historical closure POST receipts lack current schema; not current-eligible")
+    if not (evidence / "closure-posts.json").is_file():
+        raise ValueError("missing fresh closure POST file")
+    posts = read_json(evidence / "closure-posts.json")
+    if (type(posts) is not dict or set(posts) != {"source", "fixtures", "binary"} or
+            type(terminal.get("closure_posts")) is not dict or terminal["closure_posts"] != posts):
+        raise ValueError("terminal/file closure POST mismatch")
+    for record in posts.values():
+        if (type(record) is not dict or set(record) != {"status", "error"} or
+                record["status"] != "UNCHANGED" or record["error"] is not None):
+            raise ValueError("successful driver requires three unchanged closure POSTs")
+    for name in ("source", "fixtures", "binary"):
+        if read_json(evidence / f"{name}.before.json") != read_json(evidence / f"{name}.after.json"):
+            raise ValueError("closure POST claim contradicts captured before/after hashes")
+
+
 def validate_package(package, family, plan):
     safe_tree(package)
     envelope = read_json(package / "envelope.json")
@@ -356,6 +374,7 @@ def validate_package(package, family, plan):
             raise ValueError("unselected driver family masquerades as executed")
     for stem in ("source", "fixtures", "binary"):
         stable_closure(evidence, stem)
+    validate_closure_posts(evidence, metadata, terminal)
     validate_command_receipts(evidence, family, metadata, expected_identities)
     if (metadata.get("oracle_execution") != "none; checked-in fixtures only" or
             metadata.get("reference_version") != "per-fixture provenance, NOT current Julia runtime verification" or

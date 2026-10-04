@@ -293,6 +293,25 @@ def validate_dc_run(text, model, mode):
     return [{"model": m, "mode": c, "file": f, "status": s} for m, c, f, s in records]
 
 
+def closure_posts(output):
+    """Attempt every captured closure, without replacing the primary failure."""
+    records = {}
+    for name in ("source", "fixtures", "binary"):
+        before_path = output / f"{name}.before.json"
+        record = {"status": "NOT_STARTED", "error": None}
+        if before_path.is_file():
+            try:
+                before = json.loads(before_path.read_text())
+                after = digest_files(Path(path) for path in before)
+                write_json(output / f"{name}.after.json", after)
+                record["status"] = "UNCHANGED" if before == after else "CHANGED"
+            except Exception as error:
+                record.update(status="UNAVAILABLE", error=f"{type(error).__name__}: {error}")
+        records[name] = record
+    write_json(output / "closure-posts.json", records)
+    return records
+
+
 def run(family, output, excluded=()):
     ledger = family_ledger(family, excluded)
     output.mkdir(parents=False, exist_ok=False)
@@ -336,6 +355,8 @@ def run(family, output, excluded=()):
             raise RuntimeError(f"{name} failed with exit {result.returncode}")
         return (output / f"{name}.stdout").read_text()
     try:
+        source = digest_files(source_files())
+        write_json(output / "source.before.json", source)
         if platform.system() != "Linux":
             raise UnsupportedError("bounded dispatch supports Linux only")
         if not env.get("CARGO_TARGET_DIR"):
@@ -350,6 +371,7 @@ def run(family, output, excluded=()):
             "profile": "test-fast", "features": "mpi" if family == "mpi" else "default",
             "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
             "command_receipt_schema": 1,
+            "closure_post_schema": 1,
             "checkout_root": str(ROOT),
             "platform": platform.platform(), "started_unix": time.time(),
             "reference_version": "per-fixture provenance, NOT current Julia runtime verification",
@@ -379,8 +401,8 @@ def run(family, output, excluded=()):
         execute(["cargo", "nextest", "--version"], "nextest-version")
         execute(["git", "submodule", "status", "--recursive"], "reference-revisions")
         execute(["git", "status", "--short"], "working-tree-status")
-        source = digest_files(source_files())
         fixtures = digest_files(fixture_files(family))
+        write_json(output / "fixtures.before.json", fixtures)
         metadata["offline_reference"] = reference_provenance.capture(
             [Path(path) for path in fixtures])
         reference_provenance.validate(metadata["offline_reference"], fixtures)
@@ -389,8 +411,6 @@ def run(family, output, excluded=()):
             metadata["fixture_modpara"] = fixture_metadata.capture(ROOT)
             fixture_metadata.validate(metadata["fixture_modpara"], fixtures)
             write_json(output / "metadata.json", metadata)
-        write_json(output / "source.before.json", source)
-        write_json(output / "fixtures.before.json", fixtures)
         if family == "mpi":
             # Installer/startup receipts and live prefix must be valid before Cargo.
             mpi_binding = mpi_provider.capture(output, env)
@@ -398,6 +418,7 @@ def run(family, output, excluded=()):
                             "test-fast", "--features", "mpi", "--test", "mpi_physcal",
                             "--no-run", "--message-format=json"], "build")
             binary = cargo_binary([json.loads(line) for line in text.splitlines()], "mpi_physcal")
+            write_json(output / "binary.before.json", digest_files([binary]))
             listing = execute([binary, "--list"], "selection")
             if listing.splitlines().count(f"{MPI}: test") != 1:
                 raise ValueError("exact MPI gate absent/duplicated")
@@ -426,6 +447,7 @@ def run(family, output, excluded=()):
                       "--test", target, "--run-ignored", "only", "-E", filter_expr]
             text = execute(["cargo", "nextest", "list", *common, "--message-format", "json"], "selection")
             binary = selected_binary(json.loads(text), names)
+            write_json(output / "binary.before.json", digest_files([binary]))
             ledger[family]["selected_test_identities"] = list(names)
             write_json(output / "selection.json", json.loads(text))
             write_json(output / "backend.json", backend(binary, output / "linkage.txt"))
@@ -506,8 +528,18 @@ def run(family, output, excluded=()):
         (output / "failure.txt").write_text(f"{type(error).__name__}: {error}\n")
         raise
     finally:
+        # Failure before acquisition is NOT_STARTED, never an unchanged/Pass
+        # claim. All available closures are attempted even after the first error.
+        posts = closure_posts(output)
+        post_failure = status == 0 and any(record["status"] != "UNCHANGED"
+                                          for record in posts.values())
+        if post_failure:
+            status = 1
+            outcome = "Failure"
+            (output / "failure.txt").write_text("closure POST failed after gate execution\n")
         write_json(output / "terminal.json", {"exit_status": status, "completed": completed,
                                                "status": "Pass" if status == 0 else outcome,
+                                               "closure_posts": posts,
                                                "finished_unix": time.time()})
         ledger[family]["completed_selection_identities"] = list(completed)
         ledger[family]["status"] = outcome
@@ -533,6 +565,8 @@ def run(family, output, excluded=()):
                 raise
         else:
             write_json(output / "family-ledger.json", {"scope": "driver invocation only; NOT workflow aggregate", "families": ledger})
+        if post_failure:
+            raise RuntimeError("closure POST failed after gate execution")
 
 
 def main():
