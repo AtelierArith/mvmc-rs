@@ -1,5 +1,34 @@
 # Joined evidence for #184 / #185
 
+## Green direct file-reader boundaries — pending API scope preserved
+
+SOURCE publication base12f8ac8ddd81b6e3ee05ec40c3f3cda73cf92e06.
+Only A020/A023 gain four bounded direct-reader controls and PR309 evidence.
+Both remain SourceMappedMissingEvidence; all2342 original rows/order/owners,
+statuses/counts and neighboring API/scenario entries are unchanged. Historical
+field/result values remain history, not a denial of the new scoped controls.
+
+Count3 mixed-order A/B/A fullsite/spin sequences preserve duplicates/order;
+count0 ignores invalid body; invalid count/header/rows/typed integers/spins/sites
+fail safely; missing files preserve NotFound. These are definition boundaries,
+not equivalence of unchanged permissive payload/term APIs. Direct APIs have no
+Nsite upper-bound context; the namelist loader owns that validation. C whole
+readdef SHA/revision/normal !IndirectGFOn branch are bound in each row;
+malformed sscanf carry is not reproduced or called C supported behavior.
+
+PR309 sourceb7e0430002a8ca88e50668b9ca19bfecc9d8832f tested as merge
+ea05a142871b63a40ce34202270fb54b2fce8c5f into2cc623d12c709e2a90b1c1ea268b70f71a0f9a8d,
+run37195026653. Default job1114149992381137PASS41skip180.709s; all job
+1114149992811139PASS61skip210.687s; four exact controls PASS both jobs.
+Each job records its exact default/allfeatures argv separately, profileci,
+locked/no-fail-fast/retries0, durable URL and verified fullraw log SHA.
+Local281PASS test-fast remains separate from fullworkspace CI and currentmain.
+
+Scalar-native artifact11300473064 six-rank/provider checks are separately
+reviewed scalar evidence, not Green model/measurement evidence or independent
+owner-session empty scans. No Green model/oracle/MPI trajectory claim, no parent
+scenario/source-file completion, no #184/#185 closure or status promotion.
+
 ## A202 six seed integer-policy leaves — scoped PR303 join
 
 Publication SOURCE base98064faeed46b10ff1d2e96a9cc47e50b47f4531.
