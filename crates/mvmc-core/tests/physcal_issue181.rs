@@ -249,7 +249,7 @@ fn original_io134_occupied_green_dispatch_and_fsz_state_publication() {
                 spin,
                 Complex64::new(1.0, 0.0),
                 &data,
-                &mut state,
+                &state,
                 &idx,
                 &cfg,
                 &num,

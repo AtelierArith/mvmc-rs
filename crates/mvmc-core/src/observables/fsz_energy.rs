@@ -65,7 +65,7 @@ pub(super) fn native_energy<const REAL: bool, const TIMED: bool>(
     }
     timer.stop(71);
     timer.start(72);
-    let mut green = |sites: [usize; 4], op_spins: [u8; 4]| {
+    let green = |sites: [usize; 4], op_spins: [u8; 4]| {
         let [i, j, k, l] = sites;
         let [s, t, u, v] = op_spins;
         if REAL {

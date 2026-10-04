@@ -147,7 +147,7 @@ fn historical_fsz_energy(
             );
         }
     }
-    let mut green = |sites: [usize; 4], codes: [u8; 4]| {
+    let green = |sites: [usize; 4], codes: [u8; 4]| {
         let [i, j, k, l] = sites;
         let [s, t, u, v] = codes;
         green_func2_fsz(
@@ -367,7 +367,7 @@ fn normal_complex_interall_matches_native_c_green_kernels_and_ordered_sums() {
                 ops[5] as u8,
                 ip,
                 &data,
-                &mut state,
+                &state,
                 &idx,
                 &cfg,
                 &num,
@@ -495,7 +495,7 @@ fn normal_real_interall_matches_native_c_green_kernels_and_ordered_sums() {
                 ops[5] as u8,
                 ip.re,
                 &data,
-                &mut state,
+                &state,
                 &idx,
                 &cfg,
                 &num,
@@ -629,7 +629,7 @@ fn check_normal_green(factor: &str) {
                 ops[5] as u8,
                 ip,
                 &data,
-                &mut state,
+                &state,
                 &idx,
                 &cfg,
                 &num,
@@ -728,7 +728,7 @@ fn native_fsz_green_rejects_rbm_before_density_reductions() {
     let mut data = green_data(true);
     add_rbm_green_model(&mut data);
     data.i_flg_orbital_general = 1;
-    let mut state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, true, true);
+    let state = VmcOptimizationState::zeros(4, 2, 2, 0, 2, 1, true, true);
     let idx = [0, 2, 1, 3];
     let cfg = [0, -1, 1, -1, -1, 2, -1, 3];
     let num = [1, 0, 1, 0, 0, 1, 0, 1];
@@ -741,22 +741,22 @@ fn native_fsz_green_rejects_rbm_before_density_reductions() {
             if real {
                 let value = if two_body {
                     green_func2_fsz_real(
-                        0, 0, 0, 0, 0, 0, 0, 0, ip.re, &data, &mut state, &idx, &cfg, &num, &cnt,
+                        0, 0, 0, 0, 0, 0, 0, 0, ip.re, &data, &state, &idx, &cfg, &num, &cnt,
                         &spins,
                     )
                 } else {
                     green_func1_fsz_real(
-                        0, 0, 0, 0, ip.re, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                        0, 0, 0, 0, ip.re, &data, &state, &idx, &cfg, &num, &cnt, &spins,
                     )
                 };
                 Complex64::new(value, 0.0)
             } else if two_body {
                 green_func2_fsz_complex(
-                    0, 0, 0, 0, 0, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                    0, 0, 0, 0, 0, 0, 0, 0, ip, &data, &state, &idx, &cfg, &num, &cnt, &spins,
                 )
             } else {
                 green_func1_fsz_complex(
-                    0, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                    0, 0, 0, 0, ip, &data, &state, &idx, &cfg, &num, &cnt, &spins,
                 )
             }
         }))
@@ -902,15 +902,14 @@ fn check_native_fsz_green<const REAL: bool>() {
                             if REAL {
                                 Complex64::new(
                                     green_func1_fsz_real(
-                                        ri, rj, s, t, ip.re, &data, &mut state, &idx, &cfg, &num,
-                                        &cnt, &spins,
+                                        ri, rj, s, t, ip.re, &data, &state, &idx, &cfg, &num, &cnt,
+                                        &spins,
                                     ),
                                     0.0,
                                 )
                             } else {
                                 green_func1_fsz_complex(
-                                    ri, rj, s, t, ip, &data, &mut state, &idx, &cfg, &num, &cnt,
-                                    &spins,
+                                    ri, rj, s, t, ip, &data, &state, &idx, &cfg, &num, &cnt, &spins,
                                 )
                             },
                             expected_one[index],
@@ -936,13 +935,13 @@ fn check_native_fsz_green<const REAL: bool>() {
                                             Complex64::new(
                                                 green_func2_fsz_real(
                                                     ri, rj, rk, rl, s, t, u, v, ip.re, &data,
-                                                    &mut state, &idx, &cfg, &num, &cnt, &spins,
+                                                    &state, &idx, &cfg, &num, &cnt, &spins,
                                                 ),
                                                 0.0,
                                             )
                                         } else {
                                             green_func2_fsz_complex(
-                                                ri, rj, rk, rl, s, t, u, v, ip, &data, &mut state,
+                                                ri, rj, rk, rl, s, t, u, v, ip, &data, &state,
                                                 &idx, &cfg, &num, &cnt, &spins,
                                             )
                                         };
@@ -1304,7 +1303,7 @@ fn check_fsz_green(factor: &str) {
                 for ri in 0..4 {
                     for rj in 0..4 {
                         let actual = green_func1_fsz(
-                            ri, rj, s, t, ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins,
+                            ri, rj, s, t, ip, &data, &state, &idx, &cfg, &num, &cnt, &spins,
                         );
                         let expected = expected_one[index];
                         index += 1;
@@ -1328,8 +1327,8 @@ fn check_fsz_green(factor: &str) {
                                 for rk in 0..4 {
                                     for rl in 0..4 {
                                         let actual = green_func2_fsz(
-                                            ri, rj, rk, rl, s, t, u, v, ip, &data, &mut state,
-                                            &idx, &cfg, &num, &cnt, &spins,
+                                            ri, rj, rk, rl, s, t, u, v, ip, &data, &state, &idx,
+                                            &cfg, &num, &cnt, &spins,
                                         );
                                         let expected = expected_two[index];
                                         index += 1;
