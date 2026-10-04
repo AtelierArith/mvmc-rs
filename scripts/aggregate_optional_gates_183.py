@@ -172,6 +172,110 @@ def exact_setting(actual, expected):
     return actual == expected
 
 
+def validate_command_receipts(evidence, family, metadata, identities):
+    if type(metadata.get("command_receipt_schema")) is not int or metadata["command_receipt_schema"] != 1:
+        raise ValueError("historical command receipts lack execution schema; not current-eligible")
+    commands = json.loads(regular(evidence / "commands.json").read_text(), object_pairs_hook=unique_object)
+    if not isinstance(commands, list) or not commands:
+        raise ValueError("actual command receipt list missing")
+    checkout = metadata.get("checkout_root")
+    if not isinstance(checkout, str) or not Path(checkout).is_absolute():
+        raise ValueError("actual command checkout root missing")
+    names = set()
+    selected = []
+    fields = {"schema", "name", "argv", "cwd", "env", "selected", "timeout_seconds", "state",
+              "started_unix_ns", "started_monotonic_ns", "ended_unix_ns", "ended_monotonic_ns",
+              "returncode", "exception", "stdout", "stderr"}
+    for record in commands:
+        if (not isinstance(record, dict) or set(record) != fields or
+                type(record["schema"]) is not int or record["schema"] != 1 or
+                not isinstance(record["name"], str) or
+                not re.fullmatch(r"[A-Za-z0-9_-]+", record["name"]) or record["name"] in names):
+            raise ValueError("invalid/duplicate command receipt identity")
+        names.add(record["name"])
+        if (not isinstance(record["argv"], list) or not record["argv"] or
+                any(not isinstance(arg, str) or not arg for arg in record["argv"]) or
+                record["cwd"] != checkout or
+                not isinstance(record["env"], dict) or
+                any(not isinstance(k, str) or not isinstance(v, str) for k, v in record["env"].items())):
+            raise ValueError("invalid command argv/cwd/environment")
+        if (record["state"] != "Completed" or type(record["returncode"]) is not int or
+                record["returncode"] != 0 or record["exception"] is not None or
+                type(record["timeout_seconds"]) is not int or record["timeout_seconds"] != 2400 or
+                any(type(record[key]) is not int or record[key] < 0 for key in
+                    ("started_unix_ns", "ended_unix_ns", "started_monotonic_ns", "ended_monotonic_ns")) or
+                record["ended_monotonic_ns"] < record["started_monotonic_ns"]):
+            raise ValueError("unfinished/failed/invalid command lifecycle")
+        for stream in ("stdout", "stderr"):
+            if record[stream] != f"{record['name']}.{stream}":
+                raise ValueError("command raw stream identity mismatch")
+            regular(evidence / record[stream])  # Empty output is legitimate; do not invent it.
+        if record["selected"] is not None:
+            context = {"family": family, "profile": metadata["profile"],
+                       "features": metadata["features"], "identities": identities}
+            if record["selected"] != context:
+                raise ValueError("command selection/profile/features mismatch")
+            selected.append(record)
+    call_names = {"general": ["general"], "lanczos": [f"{m}-{c}" for m in MODELS for c in ("real", "cmp")],
+                  "mpi": ["mpi-2", "mpi-4"], "thread": ["thread"]}[family]
+    if [record["name"] for record in selected] != call_names:
+        raise ValueError("selected command coverage/order mismatch; discovery is not completion")
+    binary = read_json(evidence / "binary.before.json")
+    if len(binary) != 1:
+        raise ValueError("selected executable binding is not unique")
+    target = {"general": "ctest_general_reference", "lanczos": "lanczos_transfer_physcal"}.get(family)
+    for record in selected:
+        env = record["env"]
+        if family in ("general", "lanczos"):
+            expr = " | ".join(f"test(={name})" for name in identities)
+            argv = ["cargo", "nextest", "run", "--locked", "-p", "mvmc-core", "--cargo-profile", "test-fast",
+                    "--test", target, "--run-ignored", "only", "-E", expr, "--no-fail-fast", "--retries", "0",
+                    "--success-output", "immediate", "--failure-output", "immediate"]
+            if family == "general":
+                required_env = {"MVMC_RS_CTEST_GENERAL": "1"}
+            else:
+                model, mode = record["name"].rsplit("-", 1)
+                required_env = {"MVMC_RS_LANCZOS_PHYSICAL": "1", "MVMC_RS_LANCZOS_MODEL": model,
+                                "MVMC_RS_LANCZOS_MODE": mode}
+        elif family == "mpi":
+            world = record["name"].split("-", 1)[1]
+            argv = ["mpiexec", "-n", world, next(iter(binary)), "--ignored", "--exact", MPI, "--nocapture"]
+            required_env = {"MVMC_RS_MPI_PHYSICAL": "1", "MPI179_PHYSCAL_OUTPUT":
+                            str(PurePosixPath(read_json(evidence.parent / "envelope.json")["evidence_root"]) / f"world-{world}")}
+        else:
+            argv = ["bash", "scripts/verify_threaded_issue182.sh"]
+            required_env = {"MVMC_RS_THREADED_TARGET_DIR": metadata["compiler_environment"].get("CARGO_TARGET_DIR"),
+                            "TMPDIR": str(PurePosixPath(read_json(evidence.parent / "envelope.json")["evidence_root"]) / "thread-artifacts")}
+        if record["argv"] != argv or any(env.get(key) != value for key, value in required_env.items()):
+            raise ValueError("selected command argv/gate environment mismatch")
+        target_dir = metadata["compiler_environment"].get("CARGO_TARGET_DIR")
+        if not isinstance(target_dir, str) or not target_dir or env.get("CARGO_TARGET_DIR") != target_dir:
+            raise ValueError("selected command target binding mismatch")
+        if any(env.get(key) != "1" for key in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS")):
+            raise ValueError("selected command backend thread setting mismatch")
+    # Discovery/listing is not completion, but actual build profile/features must
+    # still agree with the selected command, particularly for mpiexec's ELF.
+    if family == "mpi":
+        acquisitions = {
+            "build": ["cargo", "test", "--locked", "-p", "mvmc-core", "--profile", "test-fast",
+                      "--features", "mpi", "--test", "mpi_physcal", "--no-run", "--message-format=json"],
+            "selection": [next(iter(binary)), "--list"],
+        }
+    else:
+        target = {"general": "ctest_general_reference", "lanczos": "lanczos_transfer_physcal",
+                  "thread": "threaded_issue182"}[family]
+        expr = " | ".join(f"test(={name})" for name in identities)
+        acquisitions = {"selection": ["cargo", "nextest", "list", "--locked", "-p", "mvmc-core",
+                        "--cargo-profile", "test-fast", "--test", target, "--run-ignored", "only",
+                        "-E", expr, "--message-format", "json"]}
+    for name, argv in acquisitions.items():
+        matching = [record for record in commands if record["name"] == name]
+        if (len(matching) != 1 or matching[0]["selected"] is not None or matching[0]["argv"] != argv or
+                matching[0]["env"].get("CARGO_TARGET_DIR") != metadata["compiler_environment"].get("CARGO_TARGET_DIR") or
+                commands.index(matching[0]) >= commands.index(selected[0])):
+            raise ValueError("build/selection command profile/features/order mismatch")
+
+
 def validate_package(package, family, plan):
     safe_tree(package)
     envelope = read_json(package / "envelope.json")
@@ -252,6 +356,7 @@ def validate_package(package, family, plan):
             raise ValueError("unselected driver family masquerades as executed")
     for stem in ("source", "fixtures", "binary"):
         stable_closure(evidence, stem)
+    validate_command_receipts(evidence, family, metadata, expected_identities)
     if (metadata.get("oracle_execution") != "none; checked-in fixtures only" or
             metadata.get("reference_version") != "per-fixture provenance, NOT current Julia runtime verification" or
             metadata.get("not_claimed") != "full13 matrix, fullJulia features, fullC sampler, InterAll"):
