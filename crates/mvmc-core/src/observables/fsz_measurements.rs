@@ -85,11 +85,28 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
         green_func2_fsz_complex
     };
 
+    // Complete structural checks on the caller before any worker can enter.
+    // RBM is a separate Julia extension; preserve its serial producer route.
+    let parallel = !data.has_rbm_terms();
+    if parallel {
+        super::green_measurements::validate_green_sample(
+            data,
+            state,
+            idx,
+            cfg,
+            num,
+            cnt,
+            Some(spins),
+        );
+    }
+    let sample_state: &VmcOptimizationState = state;
+
     timer.start(50);
-    let one_body: Vec<_> = data
-        .green_one_terms
-        .iter()
-        .map(|term| {
+    let one_body = super::green_measurements::collect_green_values(
+        data.green_one_terms.len(),
+        parallel,
+        |index| {
+            let term = &data.green_one_terms[index];
             one_kernel(
                 term.site1 as usize,
                 term.site2 as usize,
@@ -97,21 +114,22 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
                 spin_code(term.spin2),
                 ip,
                 data,
-                state,
+                sample_state,
                 idx,
                 cfg,
                 num,
                 cnt,
                 spins,
             )
-        })
-        .collect();
+        },
+    );
     timer.stop(50);
     timer.start(51);
-    let direct: Vec<_> = data
-        .green_two_terms
-        .iter()
-        .map(|term| {
+    let direct = super::green_measurements::collect_green_values(
+        data.green_two_terms.len(),
+        parallel,
+        |index| {
+            let term = &data.green_two_terms[index];
             two_kernel(
                 term.site1 as usize,
                 term.site2 as usize,
@@ -123,15 +141,15 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
                 spin_code(term.spin4),
                 ip,
                 data,
-                state,
+                sample_state,
                 idx,
                 cfg,
                 num,
                 cnt,
                 spins,
             )
-        })
-        .collect();
+        },
+    );
     let phys = state.phys_quantities.as_mut().expect("checked above");
     for (index, value) in direct.into_iter().enumerate() {
         phys.local_cis_ajs_ckt_alt_dc[index] = value;

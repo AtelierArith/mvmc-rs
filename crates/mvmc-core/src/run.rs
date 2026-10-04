@@ -2813,40 +2813,15 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                 timer,
             );
         } else if state.phys_quantities.is_some() {
-            let mut one_body = vec![Complex64::new(0.0, 0.0); data.green_one_terms.len()];
-            for (index, term) in data.green_one_terms.iter().enumerate() {
-                one_body[index] = crate::observables::green_func1(
-                    term.site1 as usize,
-                    term.site2 as usize,
-                    crate::observables::spin_code(term.spin1),
-                    crate::observables::spin_code(term.spin2),
-                    ip,
-                    data,
-                    state,
-                    &ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                );
-            }
-            let mut direct = vec![Complex64::new(0.0, 0.0); data.green_two_terms.len()];
-            for (index, term) in data.green_two_terms.iter().enumerate() {
-                direct[index] = crate::observables::green_func2(
-                    term.site1 as usize,
-                    term.site2 as usize,
-                    term.site3 as usize,
-                    term.site4 as usize,
-                    crate::observables::spin_code(term.spin1),
-                    crate::observables::spin_code(term.spin3),
-                    ip,
-                    data,
-                    state,
-                    &ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                );
-            }
+            let (one_body, direct) = crate::observables::ordinary_green_values(
+                data,
+                state,
+                ip,
+                &ele_idx,
+                &ele_cfg,
+                &ele_num,
+                &ele_proj_cnt,
+            );
             let lanczos_green = if data.modpara.lanczos_mode > 1 {
                 Some(crate::observables::calculate_lanczos_green(
                     e,

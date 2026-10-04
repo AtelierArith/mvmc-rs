@@ -36,9 +36,11 @@ mod fsz_energy;
 mod fsz_green;
 pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex, green_func2_fsz_real};
 mod fsz_measurements;
+mod green_measurements;
 pub use fsz_measurements::{
     calculate_green_func_fsz, calculate_green_func_fsz_timed, weight_average_green_func_fsz,
 };
+pub(crate) use green_measurements::ordinary_green_values;
 
 /// Complete Julia's projection ratio with the RBM ratio for an operator move.
 /// Counters are rebuilt from occupations and current parameters, including saved walkers.
@@ -602,7 +604,7 @@ pub fn green_func2(
     spin_other: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -638,7 +640,7 @@ pub fn green_func2_real(
     spin_other: u8,
     ip: f64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -674,7 +676,7 @@ pub fn green_func2_complex(
     spin_other: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -707,7 +709,7 @@ fn green_func2_impl<const C_KERNEL: bool>(
     spin_other: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -719,7 +721,7 @@ fn green_func2_impl<const C_KERNEL: bool>(
     if n_elec == 0 || n_site == 0 {
         return Complex64::new(0.0, 0.0);
     }
-    let one = |ri, rj, s, state: &mut VmcOptimizationState| {
+    let one = |ri, rj, s, state: &VmcOptimizationState| {
         green_func1_impl::<false, false, C_KERNEL>(
             ri,
             rj,
@@ -990,7 +992,7 @@ pub fn green_func1_fsz(
     spin_annihilate: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -1026,7 +1028,7 @@ pub fn green_func1_fsz_complex(
     spin_annihilate: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -1065,7 +1067,7 @@ pub fn green_func1_fsz_real(
     spin_annihilate: u8,
     ip: f64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -1101,7 +1103,7 @@ fn green_func1_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
     spin_annihilate: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -1437,7 +1439,7 @@ pub fn green_func1(
     spin_annihilate: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -3288,7 +3290,7 @@ mod tests {
         let counts: [i64; 0] = [];
         let ip = Complex64::new(1.0, 0.0);
 
-        let generic = green_func1(1, 0, 0, 0, ip, &data, &mut state, &idx, &cfg, &num, &counts);
+        let generic = green_func1(1, 0, 0, 0, ip, &data, &state, &idx, &cfg, &num, &counts);
         refresh_transfer_cache(&data, &mut state);
         let mut timer = CTimer::<false>::new();
         let fast = green_func1_timed(

@@ -8,6 +8,40 @@ use mvmc_expert_parsers::utils::qp_weight::init_qp_weight;
 use mvmc_expert_parsers::{GreenOneTerm, GreenTwoTerm, GutzwillerTerm, JastrowTerm, Spin};
 use num_complex::Complex64;
 
+#[test]
+fn supported_fsz_native_fixture_covers_worker_processes_without_new_goldens() {
+    // Same independently acquired 12-case native fixture and existing budgets.
+    // Each process owns OnceLock configuration; no in-process environment edits.
+    for workers in [1, 2, 4] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("MVMC_RS_INNER_THREADS", workers.to_string())
+            .env("MVMC_RS_INNER_THRESHOLD", "32")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .env("OMP_NUM_THREADS", "1")
+            .env("MKL_NUM_THREADS", "1")
+            .env("BLIS_NUM_THREADS", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "native fixture workers={workers}:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"));
+        println!(
+            "native_fixture_worker={workers}\n{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+}
+
 fn integers(line: &str) -> Vec<i64> {
     line.split_whitespace()
         .map(|v| v.parse().unwrap())
@@ -174,9 +208,26 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
             let expected_weighted_one = complexes(lines.next().unwrap());
             let expected_weighted_direct = complexes(lines.next().unwrap());
             let expected_factored = complexes(lines.next().unwrap());
+            let observer = mvmc_core::threading::start_observation();
             calculate_green_func_fsz(
                 &data, &mut state, weight, ip, &idx, &cfg, &num, &cnt, &spins,
             );
+            let observed = observer.finish();
+            let p1 = mvmc_core::threading::inner_parallel_enabled(64);
+            let p2 = mvmc_core::threading::inner_parallel_enabled(4098);
+            let parallel_items = (if p1 { 64 } else { 0 }) + (if p2 { 4098 } else { 0 });
+            assert_eq!(observed.parallel_entry_items, parallel_items);
+            assert_eq!(observed.serial_entry_items, 4162 - parallel_items);
+            assert_eq!(observed.worker_entries, parallel_items);
+            let workers = mvmc_core::threading::inner_thread_config().threads;
+            assert!(observed.worker_ids.iter().all(|&id| id < workers));
+            assert_eq!(observed.distinct_workers, observed.worker_ids.len());
+            if parallel_items > 0 {
+                assert!(observed.distinct_workers > 0);
+            } else {
+                assert!(observed.worker_ids.is_empty());
+            }
+            println!("FSZ_NATIVE_ITEMS case={case} sample={sample} configured={workers} one=64 direct=4098 actual={observed:?}");
             assert_eq!(state.slater_matrix, before_matrix);
             assert_eq!(state.electron_config, before_configuration);
             let phys = state.phys_quantities.as_ref().unwrap();

@@ -28,7 +28,7 @@ pub fn green_func2_fsz(
     v: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -73,7 +73,7 @@ pub fn green_func2_fsz_complex(
     v: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -120,7 +120,7 @@ pub fn green_func2_fsz_real(
     v: u8,
     ip: f64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -164,7 +164,7 @@ fn green_func2_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
     v: u8,
     ip: Complex64,
     data: &ExpertModeData,
-    state: &mut VmcOptimizationState,
+    state: &VmcOptimizationState,
     ele_idx: &[i64],
     ele_cfg: &[i64],
     ele_num: &[i64],
@@ -183,7 +183,7 @@ fn green_func2_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
     let xk = rk + u as usize * ns;
     let xl = rl + v as usize * ns;
     let zero = Complex64::new(0.0, 0.0);
-    let one = |i, j, a, b, state: &mut VmcOptimizationState| {
+    let one = |i, j, a, b, state: &VmcOptimizationState| {
         green_func1_fsz_impl::<C_KERNEL, C_REAL>(
             i,
             j,
