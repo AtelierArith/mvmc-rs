@@ -1,5 +1,37 @@
 # Joined evidence for #184 / #185
 
+## A202 six seed integer-policy leaves — scoped PR303 join
+
+Publication SOURCE base98064faeed46b10ff1d2e96a9cc47e50b47f4531.
+Earlier eight-row proposal/materialization base809510d8 is historical SOURCE
+preparation only. PR305's four Python command scripts/documentation are retained;
+they do not relabel PR303's actual tested merge or local execution base.
+Only A202/S117 and M0562–M0567 reconciliation fields change; all2342 original
+rows/order/owners and historical evidence remain preserved. A202 and S117
+remain SourceMappedMissingEvidence, not complete API/scenario acceptance.
+Six leaves are CoveredScopedOrdinaryCI; totals93 CI,6 local,1 intentional,
+1583 source-mapped missing,80 historical,579 exclusion-review pending =2342.
+Prior count checkpoints below remain historical.
+
+M0562 passes literal11272 to the resolver: parser-supplied-default policy,
+NOT parser execution. M0563 zero0, M0564 positive123, M0566 override777,
+M0567 base100 plus group3 =>103 are deterministic literal controls. M0565
+uses private injected clock1700000000 and checks positive integer resolution;
+public real-time/actual MPI trajectory is not certified. M0567 uses a serial
+typedReducer with group argument, not actual MPI topology. Six conditions
+execute within ONE unit-test identity, not six distinct test executions.
+
+PR303 source8200a0f9ef6046180990fe80cfa74fa79c04f57e was actually executed as
+mergebf93ea9bf9c045049afaaf35904b8fa1a164b6c0 into5b0874eb70b72e2a7993662af757d50b25dadc17.
+Run37193009494 Linux jobs111408980141/111408980103: serial1122PASS41skip287.555s,
+all1124PASS60skip271.725s; profile ci, --locked --no-fail-fast --retries 0.
+Literal unit identity ordinal170 and public policy identity ordinal445 PASS
+both jobs. Durable job URLs/raw hashes/settings are bound per row in JSON.
+Current publication main includes PR302's disjoint counter test/doc; the old
+tested merge must not be relabelled as combined-current-main execution.
+Local8+2 test-fast receipt remains separate. No ledger umbrella completion,
+full model, C/Julia runtime or actual MPI seed trajectory claim.
+
 ## M0586 representation clarification — no status promotion
 
 Publication base1b0e9d90de7ffb90c84d098c181cefa470042021 retains PR300's
