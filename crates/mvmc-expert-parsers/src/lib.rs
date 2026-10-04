@@ -156,6 +156,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                     | "CoulombInter"
                     | "Hund"
                     | "Exchange"
+                    | "PairHop"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -198,6 +199,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                     | "CoulombInter"
                     | "Hund"
                     | "Exchange"
+                    | "PairHop"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -471,14 +473,7 @@ fn parse_file_by_type(
             data.exchange_terms = exchange::parse_exchange_definition(path, data.modpara.nsite)?;
         }
         "PairHop" => {
-            let section = pairhop::parse_pairhop_def(path)?;
-            if !section.is_success() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    section.errors.join("; "),
-                ));
-            }
-            data.pair_hop_terms = section.terms;
+            data.pair_hop_terms = pairhop::parse_pairhop_definition(path, data.modpara.nsite)?;
         }
         "InterAll" => {
             data.inter_all_terms =
