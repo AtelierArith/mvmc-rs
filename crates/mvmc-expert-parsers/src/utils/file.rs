@@ -127,6 +127,31 @@ pub fn safe_parse_float(token: &str, default: f64) -> f64 {
     token.parse::<f64>().unwrap_or(default)
 }
 
+/// A complex utility input could not be parsed in a supported literal format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ComplexParseError;
+
+impl std::fmt::Display for ComplexParseError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("invalid complex literal: expected a real, two reals, or i/j/im form")
+    }
+}
+
+impl std::error::Error for ComplexParseError {}
+
+/// Parse a real-only, exactly-two-real, or `i`/`j`/`im` complex utility literal.
+///
+/// This is the fallible Rust counterpart of Julia's `parse_complex_value`;
+/// [`safe_parse_complex`] alone supplies a fallback on error. It is not a C
+/// definition reader: C parameter overlays use separate numeric fields.
+///
+/// # Errors
+///
+/// Returns [`ComplexParseError`] for malformed components or surplus fields.
+pub fn parse_complex_value(token: &str) -> Result<Complex64, ComplexParseError> {
+    parse_complex_literal(token).ok_or(ComplexParseError)
+}
+
 /// Best-effort public complex utility. This is not the strict C definition
 /// reader: C parameter overlays contain separate index, real and imaginary fields.
 /// Recognises:
@@ -138,7 +163,7 @@ pub fn safe_parse_float(token: &str, default: f64) -> f64 {
 /// Returns the caller's `default` on parse failure, matching Julia's public
 /// `safe_parse_complex(str, default)` contract. Pass zero for Julia's usual default.
 pub fn safe_parse_complex(token: &str, default: Complex64) -> Complex64 {
-    parse_complex_literal(token).unwrap_or(default)
+    parse_complex_value(token).unwrap_or(default)
 }
 
 fn parse_complex_literal(token: &str) -> Option<Complex64> {
