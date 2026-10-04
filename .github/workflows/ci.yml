@@ -26,7 +26,8 @@ jobs:
   tests:
     name: Tests (${{ matrix.platform.name }}, ${{ matrix.configuration.name }})
     runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: ${{ matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features' && 90 || 45 }}
+    # Default Linux now also retains bounded acquisition after workspace FAIL.
+    timeout-minutes: ${{ matrix.platform.cache == 'linux-x86_64' && 90 || 45 }}
     env:
       OPENBLAS_CORETYPE: ${{ matrix.platform.blas_core }}
     strategy:
@@ -95,6 +96,20 @@ jobs:
           feature_args=()
           if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
           cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Acquire independent C59 factor/inverse stage witness (default only)
+        if: ${{ !cancelled() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default' }}
+        timeout-minutes: 55
+        run: |
+          /bin/bash --noprofile --norc -p scripts/pfapack-factor-acquisition/run-ci.sh \
+            "$RUNNER_TEMP/pfapack-factor-acquisition"
+      - name: Upload independent factor acquisition including first failure
+        if: always() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pfapack-factor-acquisition-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pfapack-factor-acquisition
+          if-no-files-found: error
+          compression-level: 9
       - name: Check lossless developer transport and passive boundary controls
         if: ${{ !cancelled() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default' }}
         run: |
@@ -141,21 +156,44 @@ jobs:
           finish() {
             prior=$?; trap - EXIT; set +e; post=0
             for kind in source selected providers input; do
-              test ! -f "$out/$kind.before.sha256" ||
-                sha256sum -c --quiet "$out/$kind.before.sha256" > "$out/$kind.post.log" 2>&1 || post=1
+              status=NOT_STARTED
+              if test -s "$out/$kind.before.sha256"; then
+                sha256sum -c --quiet "$out/$kind.before.sha256" > "$out/$kind.post.log" 2>&1
+                status=$?
+              fi
+              printf '%s\n' "$status" > "$out/$kind.post.status"
+              if test "$status" = NOT_STARTED; then
+                test "$post" != 0 || post=NOT_STARTED
+              elif test "$status" != 0; then post=1; fi
             done
             if test -f "$out/tree.before.txt"; then
-              { git rev-parse HEAD HEAD^{tree}; git status --porcelain=v1 --untracked-files=all; } > "$out/tree.after.txt"
+              { git rev-parse HEAD HEAD^{tree}; git status --porcelain=v1 --untracked-files=all --ignore-submodules=none; } > "$out/tree.after.txt"
               cmp "$out/tree.before.txt" "$out/tree.after.txt" > "$out/tree.post.log" 2>&1 || post=1
             fi
             printf 'prior=%s post=%s scope=world1-prefix1-store1-passivity-only\n' "$prior" "$post" > "$out/terminal.txt"
             if test "$prior" != 0; then exit "$prior"; fi
-            exit "$post"
+            if test "$post" = 0; then exit 0; else exit 74; fi
           }
           trap finish EXIT
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          { git rev-parse HEAD HEAD^{tree}; git status --porcelain=v1 --untracked-files=all; } > "$out/tree.before.txt"
+          # Retain actual guard evidence BEFORE rejecting; no cleanliness waiver.
+          printf 'GITHUB_SHA=%s\n' "$GITHUB_SHA" > "$out/expected-head.txt"
+          git rev-parse HEAD HEAD^{tree} > "$out/observed-head-tree.txt"
+          git rev-parse --show-toplevel > "$out/observed-toplevel.txt"
+          git status --porcelain=v1 --untracked-files=all --ignore-submodules=none > "$out/guard-status.txt"
+          git diff --submodule=short --name-status > "$out/guard-tracked-diff.txt"
+          git diff --cached --submodule=short --name-status > "$out/guard-index-diff.txt"
+          git submodule status --recursive > "$out/guard-submodules.txt"
+          git submodule foreach --quiet --recursive 'printf "submodule=%s\n" "$displaypath"; git rev-parse HEAD; git status --porcelain=v1 --untracked-files=all --ignore-submodules=none' > "$out/guard-child-status.txt"
+          if test "$(git rev-parse HEAD)" != "$GITHUB_SHA"; then
+            printf 'HEAD_MISMATCH\n' > "$out/guard-reason.txt"
+            exit 1
+          fi
+          if test -s "$out/guard-status.txt"; then
+            printf 'DIRTY_WORKTREE\n' > "$out/guard-reason.txt"
+            exit 1
+          fi
+          printf 'HEAD_AND_CLEAN_GUARDS_PASS\n' > "$out/guard-reason.txt"
+          { git rev-parse HEAD HEAD^{tree}; git status --porcelain=v1 --untracked-files=all --ignore-submodules=none; } > "$out/tree.before.txt"
           printf 'head=%s\n' "$GITHUB_SHA" > "$out/head.txt"
           # Record inherited thread overrides; do not replace MVMC_RS_* settings.
           env | LC_ALL=C sort | grep -E '^(MVMC_RS_INNER_THREADS|MVMC_RS_INNER_THRESHOLD|OMP_NUM_THREADS|OPENBLAS_NUM_THREADS|OPENBLAS_CORETYPE|MKL_NUM_THREADS|BLIS_NUM_THREADS)=' > "$out/thread-env.txt"
@@ -169,7 +207,7 @@ jobs:
           cargo metadata --locked --no-deps --format-version 1 > "$out/metadata.json"
           pkg=$(jq -er --arg m "$GITHUB_WORKSPACE/crates/mvmc-core/Cargo.toml" '[.packages[]|select(.name=="mvmc-core" and .manifest_path==$m)]|if length==1 then .[0].id else error("package/source association") end' "$out/metadata.json")
           selection='test(=run::issue179_native_same_input::issue179_native_same_input_public_runner)'
-          cargo nextest list -p mvmc-core --lib --locked --cargo-profile ci -E "$selection" --message-format json > "$out/list.json"
+          cargo nextest list -p mvmc-core --lib --locked --cargo-profile ci --run-ignored ignored-only -E "$selection" --message-format json > "$out/list.json"
           jq -e --arg package "$pkg" --arg cwd "$GITHUB_WORKSPACE/crates/mvmc-core" '
             [."rust-suites"[] as $suite | $suite.testcases|to_entries[] |
               select(.value."filter-match".status=="matches") |

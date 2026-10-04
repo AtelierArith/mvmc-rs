@@ -19,6 +19,10 @@
 #[path = "rank2_real_regression.rs"]
 mod rank2_real_regression;
 
+#[cfg(test)]
+#[path = "factor_acquisition.rs"]
+mod factor_acquisition;
+
 use num_complex::Complex64;
 
 use crate::backend::{self, BlasScalar};
@@ -67,6 +71,8 @@ where
     Mag: Fn(T) -> f64,
 {
     let n = a.n();
+    #[cfg(test)]
+    let capture_lda = a.lda();
     assert_eq!(pivots.len(), n, "pivots length must equal matrix side");
 
     let mut info: Option<usize> = None;
@@ -87,6 +93,16 @@ where
     while k0 > 1 {
         k0 -= 1;
         let kk0 = k0 - 1; // Julia's kk = k - 1, 0-based
+        #[cfg(test)]
+        T::capture_factor_stage(
+            factor_acquisition::observer::Kind::BeforePivot,
+            a.as_mut_slice(),
+            capture_lda,
+            n,
+            k0,
+            None,
+            info,
+        );
 
         // Pivot search: argmax_{j in 0..kk0+1} |A[j, k0]| via the
         // appropriate 1-norm. Julia uses IDAMAX / IZAMAX which return
@@ -111,6 +127,27 @@ where
                 info = Some(kk0 + 1);
             }
             pivots[kk0] = PivotIndex1Based((kk0 as u32) + 1);
+            #[cfg(test)]
+            {
+                T::capture_factor_stage(
+                    factor_acquisition::observer::Kind::AfterSwap,
+                    a.as_mut_slice(),
+                    capture_lda,
+                    n,
+                    k0,
+                    Some(kk0),
+                    info,
+                );
+                T::capture_factor_stage(
+                    factor_acquisition::observer::Kind::AfterUpdate,
+                    a.as_mut_slice(),
+                    capture_lda,
+                    n,
+                    k0,
+                    Some(kk0),
+                    info,
+                );
+            }
             continue;
         }
 
@@ -147,6 +184,16 @@ where
         }
 
         pivots[kk0] = PivotIndex1Based((kp as u32) + 1);
+        #[cfg(test)]
+        T::capture_factor_stage(
+            factor_acquisition::observer::Kind::AfterSwap,
+            a.as_mut_slice(),
+            capture_lda,
+            n,
+            k0,
+            Some(kp),
+            info,
+        );
 
         // Skew-symmetric rank-2 update of A[0..kk0, 0..kk0].
         // Julia: if k >= 3 ... (kk = k-1 >= 2, i.e. kk0 >= 1 in 0-based).
@@ -180,6 +227,16 @@ where
             let col_k0 = k0 * lda;
             T::scale_column_mode(&mut data[col_k0..col_k0 + n_sub], n_sub, alpha, turbo);
         }
+        #[cfg(test)]
+        T::capture_factor_stage(
+            factor_acquisition::observer::Kind::AfterUpdate,
+            a.as_mut_slice(),
+            capture_lda,
+            n,
+            k0,
+            Some(kp),
+            info,
+        );
     }
 
     match info {
@@ -200,6 +257,18 @@ fn update_upper_rank2<T: UpperRank2Kernel>(
 }
 
 trait UpperRank2Kernel: BlasScalar {
+    #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
+    fn capture_factor_stage(
+        _kind: factor_acquisition::observer::Kind,
+        _data: &[Self],
+        _lda: usize,
+        _n: usize,
+        _k: usize,
+        _kp: Option<usize>,
+        _info: Option<usize>,
+    ) {
+    }
     fn ltl_alpha(pivot: Self, _turbo: bool) -> Self {
         Self::pfaf_one().julia_div(pivot)
     }
@@ -221,6 +290,28 @@ trait UpperRank2Kernel: BlasScalar {
 }
 
 impl UpperRank2Kernel for f64 {
+    #[cfg(test)]
+    fn capture_factor_stage(
+        kind: factor_acquisition::observer::Kind,
+        data: &[Self],
+        lda: usize,
+        n: usize,
+        k: usize,
+        kp: Option<usize>,
+        info: Option<usize>,
+    ) {
+        factor_acquisition::observer::borrow(
+            factor_acquisition::observer::Event {
+                kind,
+                n,
+                k,
+                kp,
+                info,
+            },
+            data,
+            lda,
+        );
+    }
     #[inline]
     fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
         update_upper_rank2_f64(data, lda, kk0, k0, alpha);
