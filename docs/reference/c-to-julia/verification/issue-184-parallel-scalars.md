@@ -2,7 +2,19 @@
 
 Related to #184, #179 and #185; not full issue completion.
 
-Current integration base: main `14a30849ae4fa9dd78900f113257389d906008ee`.
+Current integration base: main `1ad3f582f0c6bd35ac522393e65b972a739234a1`.
+Resolved merge `6fee8422d4a810ab5b00d1a81dbed669d59a9b55` has tested tree
+`03f2ce055cb9581d0482440b60e0b69166e52d0c`. Both scalar and parameter
+diagnostic modules/parameter exports are retained, as are main294–298 changes.
+Session72857: terminal0/prior0/post0/cleanup0; scalar1, parameters9,
+sync/SR25 (220 unselected), original-boundaries2 and shared-orbital1 passed.
+MPI strict Clippy, fmt and core MPI docs passed (zero doctests). All complete
+source/runtime/tools/scripts/selected-binary posts and independent replays0.
+Receipt HOST/container: `/tmp/issue292-main298-proof.uP36YW`.
+The following documentation update is post-validation only; executable
+sources are unchanged. New exact-head native worlds2/4 CI remains pending.
+
+Historical integration base: main `14a30849ae4fa9dd78900f113257389d906008ee`.
 Resolved merge `393dbda7e6234f73f68a15bccdd98ad68dd3582e` preserves both
 PR293 parameter exports and this scalar module. Its tested tree is
 `cc3795db1f66c8535bc285da83ef4337525c3ff5`.
@@ -13,7 +25,7 @@ All source/runtime/tools/scripts/selected-binary postchecks passed.
 Container receipt: `/tmp/issue292-integration-proof.z5eEhh`; host copy:
 `/tmp/issue292-integration-proof.z5eEhh/issue292-integration-proof.z5eEhh`.
 This documentation update is post-validation only; executable sources are
-unchanged. Native worlds2/4 on the new publication head await exact-head CI.
+unchanged. Its later exact-head native CI passed; this is not new-head proof.
 
 Historical publication base: main `87cd786c7086618d6f13ec70110a75377d92c337`.
 Historical validated source: immutable PR291 head
@@ -81,8 +93,16 @@ shared `owned-nextest` helper `d335bc9e5de2d3a8310943b3c43a684c92ab6a2257258bb47
 and separate stopped-launch abort helper `46d45967eca7ea0442e984f3c53fd1ff402cd2a47a261caef905954d2355a3ab`.
 Their prior13 mock/4 OS controls were reused, not rerun or replaced.
 
+A later integration preflight `/tmp/issue292-main296-proof.XAfEeL` remains
+terminal1/prior1/post1/cleanup0: a HOST helper path was absent in the container;
+no Cargo/test ran. Successor `yCQOXS` pinned the same helpers in its receipt
+and passed37 on main-da979 integration. The final main1ad receipt above is
+separate; neither historical failure was discarded or labelled PASS.
+
 Old head `dfa7f9b054aac245cc8ec3bf84bdc4ec5e15ab41` completed all six CI
 checks and native worlds2/4; parent reviewed its six rank PASS receipts.
+Head `ae75149f819c6c682935329b2ea4a1490a5ea1c6` also completed all six checks
+in run37188904027, with Linux-all native receipts reviewed by parent.
 The integrated publication head requires fresh exact-head CI receipts.
 Array/root-only/abort APIs, all Julia Integer
 widths, full model/MPI matrices and full #184/#185 acceptance remain unproved
