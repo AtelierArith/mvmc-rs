@@ -420,6 +420,8 @@ fn solve_sktd_direct<T: BlasScalar>(
     }
 }
 
+type InverseStep5Observer<'a, T> = dyn for<'view> Fn(InverseStep5View<'view, T>) + 'a;
+
 fn utu2inv_generic<T>(
     a: &mut SqMat<'_, T>,
     pivots: &[PivotIndex1Based],
@@ -427,7 +429,7 @@ fn utu2inv_generic<T>(
     m: &mut SqMat<'_, T>,
     fsz: Option<fn(T, T) -> T>,
     solver_divide: Option<fn(T, T) -> T>,
-    observer: Option<&dyn Fn(InverseStep5View<'_, T>)>,
+    observer: Option<&InverseStep5Observer<'_, T>>,
 ) where
     T: BlasScalar,
 {

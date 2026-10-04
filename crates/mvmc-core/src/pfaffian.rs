@@ -701,20 +701,23 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     ensure_workspace_real(ws, n_size);
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let mut a = SqMat::new(qp_buf, n_size);
-        let factor_result = dsktf2(&mut a, &mut ws.pivots[..n_size]);
+        let factor_result = {
+            let mut a = SqMat::new(qp_buf, n_size);
+            dsktf2(&mut a, &mut ws.pivots[..n_size])
+        };
         if let Some(observer) = &observer {
             observer.real_factor(crate::run::RealFactorView {
                 stage: "factorized",
                 qp,
                 dimension: n_size,
-                matrix: a.as_slice(),
+                matrix: qp_buf,
                 pivots: &ws.pivots[..n_size],
                 factor_error: factor_result.as_ref().err().copied(),
                 pf: None,
             });
         }
         factor_result.map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
+        let a = SqMat::new(qp_buf, n_size);
         utu2pfa_real(&a, &ws.pivots[..n_size])
     };
     if let Some(observer) = &observer {
