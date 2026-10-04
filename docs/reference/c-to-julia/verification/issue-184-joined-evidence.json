@@ -1217,7 +1217,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/green_parser.jl:12",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_green_one_def",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/green.rs::parse_green_one_def",
+      "rust_entry": "mvmc_expert_parsers::parsers::green::parse_green_one_def",
       "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -1233,7 +1233,7 @@
       "scope_exclusion": "",
       "status": "SourceMappedMissingEvidence",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "Full original API conditions and context-bound/site/MPI/model acceptance not certified by these four controls; neighbors/source file/scenarios unchanged"
       ],
       "original_row": {
         "id": "A020",
@@ -1254,7 +1254,93 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr309": {
+        "status": "SourceMappedMissingEvidence",
+        "rust_entry": "crates/mvmc-expert-parsers/src/parsers/green.rs::parse_green_one_def",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "supported_conditions": [
+        {
+          "name": "direct_green_readers_preserve_declared_duplicate_order",
+          "condition": "count3 full literal A/B/A OneBody4/TwoBody8 sites+spins, order/duplicates preserved; OneBody extra fields ignored"
+        },
+        {
+          "name": "direct_green_zero_count_ignores_body",
+          "condition": "count0 two header lines then invalid body ignored"
+        },
+        {
+          "name": "direct_green_invalid_definitions_fail_instead_of_dropping_rows",
+          "condition": "invalid/missing count, positive short header, missing/extra records, malformed consumed integers, typed spins, negative sites; valid4-column OneBody independently incomplete TwoBody"
+        },
+        {
+          "name": "direct_green_missing_file_preserves_io_kind",
+          "condition": "both missing file paths preserve NotFound"
+        }
+      ],
+      "rejected_safety_scope": "Malformed integer/typed spin/negative site rejection is explicit Rust safety, not reproduction of unchecked C sscanf carry; direct no-Nsite API cannot validate site upper bound.",
+      "api_boundary": "Strict direct definition file vs unchanged permissive payload utility vs context-bound namelist loader. Preserve independent Julia architecture scope; no full original API equivalence.",
+      "ci_evidence": {
+        "source_head": "b7e0430002a8ca88e50668b9ca19bfecc9d8832f",
+        "tested_merge": "ea05a142871b63a40ce34202270fb54b2fce8c5f",
+        "tested_base": "2cc623d12c709e2a90b1c1ea268b70f71a0f9a8d",
+        "run_id": 37195026653,
+        "argv": "cargo nextest run --workspace [default: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111414999238,
+            "configuration": "default",
+            "passed": 1137,
+            "skipped": 41,
+            "seconds": 180.709,
+            "raw_sha256": "cc5ea7afb51cec9c49d1a0ea2dca9c722206ed7752f59858031a76d77ddb9d30",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37195026653/job/111414999238",
+            "control_ordinals": [
+              1030,
+              1031,
+              1029,
+              1028
+            ],
+            "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0"
+          },
+          {
+            "id": 111414999281,
+            "configuration": "all",
+            "passed": 1139,
+            "skipped": 61,
+            "seconds": 210.687,
+            "raw_sha256": "79c1143927d7a1ae3d48d073e953b35267b3f5940e7953cc81d05b4a1b312757",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37195026653/job/111414999281",
+            "control_ordinals": [
+              1032,
+              1033,
+              1030,
+              1031
+            ],
+            "command": "cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0"
+          }
+        ],
+        "artifact_note": "scalar-native-37195026653-1 is separate scalar/provider evidence, NOT Green model/measurement evidence or independent owner/session-empty scan proof"
+      },
+      "local_evidence": {
+        "base": "2cc623d12c709e2a90b1c1ea268b70f71a0f9a8d",
+        "receipt": "/tmp/mvmc-184-issue308-proof.20261004",
+        "result": "281PASS0skip .402s; exact4 new controls; strictClippy/fmt/allposts0",
+        "production_sha256": "9ed30c4cf92e25310d15462454097ae2749dc7c6d2d9874584bcaee61b7fd5f5",
+        "test_sha256": "c03a4dbdbb6c7c12b526e9d67e7505af90f5ed68517748e1235b4d9b9aa79da8"
+      },
+      "c_authority": {
+        "revision": "d73d06bd529d3b2573f38eb5817c4a5f52971006",
+        "path": "src/mVMC/readdef.c",
+        "whole_sha256": "6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9",
+        "sections": [
+          "GetInfoOneBodyG2270–2303 normal !IndirectGFOn branch",
+          "GetInfoTwoBodyG2354–2386"
+        ],
+        "scope": "Declared NArray zero return/order/count equality. Not sscanf malformed carry/typed spin equivalence; direct API no Nsite upper bound."
+      }
     },
     {
       "key": "api:A021",
@@ -1358,7 +1444,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/green_parser.jl:140",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_green_two_def",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/green.rs::parse_green_two_def",
+      "rust_entry": "mvmc_expert_parsers::parsers::green::parse_green_two_def",
       "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -1374,7 +1460,7 @@
       "scope_exclusion": "",
       "status": "SourceMappedMissingEvidence",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "Full original API conditions and context-bound/site/MPI/model acceptance not certified by these four controls; neighbors/source file/scenarios unchanged"
       ],
       "original_row": {
         "id": "A023",
@@ -1395,7 +1481,93 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr309": {
+        "status": "SourceMappedMissingEvidence",
+        "rust_entry": "crates/mvmc-expert-parsers/src/parsers/green.rs::parse_green_two_def",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "supported_conditions": [
+        {
+          "name": "direct_green_readers_preserve_declared_duplicate_order",
+          "condition": "count3 full literal A/B/A OneBody4/TwoBody8 sites+spins, order/duplicates preserved; OneBody extra fields ignored"
+        },
+        {
+          "name": "direct_green_zero_count_ignores_body",
+          "condition": "count0 two header lines then invalid body ignored"
+        },
+        {
+          "name": "direct_green_invalid_definitions_fail_instead_of_dropping_rows",
+          "condition": "invalid/missing count, positive short header, missing/extra records, malformed consumed integers, typed spins, negative sites; valid4-column OneBody independently incomplete TwoBody"
+        },
+        {
+          "name": "direct_green_missing_file_preserves_io_kind",
+          "condition": "both missing file paths preserve NotFound"
+        }
+      ],
+      "rejected_safety_scope": "Malformed integer/typed spin/negative site rejection is explicit Rust safety, not reproduction of unchecked C sscanf carry; direct no-Nsite API cannot validate site upper bound.",
+      "api_boundary": "Strict direct definition file vs unchanged permissive payload utility vs context-bound namelist loader. Preserve independent Julia architecture scope; no full original API equivalence.",
+      "ci_evidence": {
+        "source_head": "b7e0430002a8ca88e50668b9ca19bfecc9d8832f",
+        "tested_merge": "ea05a142871b63a40ce34202270fb54b2fce8c5f",
+        "tested_base": "2cc623d12c709e2a90b1c1ea268b70f71a0f9a8d",
+        "run_id": 37195026653,
+        "argv": "cargo nextest run --workspace [default: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111414999238,
+            "configuration": "default",
+            "passed": 1137,
+            "skipped": 41,
+            "seconds": 180.709,
+            "raw_sha256": "cc5ea7afb51cec9c49d1a0ea2dca9c722206ed7752f59858031a76d77ddb9d30",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37195026653/job/111414999238",
+            "control_ordinals": [
+              1030,
+              1031,
+              1029,
+              1028
+            ],
+            "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0"
+          },
+          {
+            "id": 111414999281,
+            "configuration": "all",
+            "passed": 1139,
+            "skipped": 61,
+            "seconds": 210.687,
+            "raw_sha256": "79c1143927d7a1ae3d48d073e953b35267b3f5940e7953cc81d05b4a1b312757",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37195026653/job/111414999281",
+            "control_ordinals": [
+              1032,
+              1033,
+              1030,
+              1031
+            ],
+            "command": "cargo nextest run --workspace --all-features --locked --cargo-profile ci --no-fail-fast --retries 0"
+          }
+        ],
+        "artifact_note": "scalar-native-37195026653-1 is separate scalar/provider evidence, NOT Green model/measurement evidence or independent owner/session-empty scan proof"
+      },
+      "local_evidence": {
+        "base": "2cc623d12c709e2a90b1c1ea268b70f71a0f9a8d",
+        "receipt": "/tmp/mvmc-184-issue308-proof.20261004",
+        "result": "281PASS0skip .402s; exact4 new controls; strictClippy/fmt/allposts0",
+        "production_sha256": "9ed30c4cf92e25310d15462454097ae2749dc7c6d2d9874584bcaee61b7fd5f5",
+        "test_sha256": "c03a4dbdbb6c7c12b526e9d67e7505af90f5ed68517748e1235b4d9b9aa79da8"
+      },
+      "c_authority": {
+        "revision": "d73d06bd529d3b2573f38eb5817c4a5f52971006",
+        "path": "src/mVMC/readdef.c",
+        "whole_sha256": "6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9",
+        "sections": [
+          "GetInfoOneBodyG2270–2303 normal !IndirectGFOn branch",
+          "GetInfoTwoBodyG2354–2386"
+        ],
+        "scope": "Declared NArray zero return/order/count equality. Not sscanf malformed carry/typed spin equivalence; direct API no Nsite upper bound."
+      }
     },
     {
       "key": "api:A024",
