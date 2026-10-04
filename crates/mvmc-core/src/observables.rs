@@ -161,7 +161,7 @@ pub fn calculate_ip_complex(
     ip
 }
 
-/// `log(|ip| + 1e-100)` mirror used by the sampler’s acceptance test.
+/// Real part of C's `clog(ip)` double return, preserving zero as `-inf`.
 pub fn calculate_log_ip_real(
     pf_m_real: &[f64],
     qp_start: usize,
@@ -169,7 +169,7 @@ pub fn calculate_log_ip_real(
     data: &ExpertModeData,
 ) -> f64 {
     let ip = calculate_ip_real(pf_m_real, qp_start, qp_end, data);
-    mvmc_expert_parsers::utils::julia_log::log(ip.abs() + 1.0e-100)
+    mvmc_expert_parsers::utils::julia_log::log(ip.abs())
 }
 
 /// Complex `calculate_log_ip_fcmp` mirror.
