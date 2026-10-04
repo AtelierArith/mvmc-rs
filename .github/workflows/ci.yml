@@ -48,6 +48,16 @@ jobs:
           platform: ${{ matrix.platform.cache }}
           cache-key: tests-${{ matrix.configuration.cache }}
           tools: nextest
+      - name: Set up uv for bounded infrastructure regression
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Check real optional gate failure reporting
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        run: |
+          timeout -k 10s 120s uv run --offline --no-project --no-python-downloads \
+            --python /usr/bin/python3 python -B scripts/test_optional_gate_failure_pipeline_183.py
       - name: Run unit and integration tests
         env:
           FEATURE_ARGS: ${{ matrix.configuration.args }}
