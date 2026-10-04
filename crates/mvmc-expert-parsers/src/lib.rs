@@ -152,6 +152,8 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             if matches!(
                 file_type.as_str(),
                 "DH2"
+                    | "CoulombIntra"
+                    | "CoulombInter"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -190,6 +192,8 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             if matches!(
                 file_type.as_str(),
                 "DH2"
+                    | "CoulombIntra"
+                    | "CoulombInter"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -449,10 +453,12 @@ fn parse_file_by_type(
             data.transfer_terms = trans::parse_trans_definition(path, data.modpara.nsite)?;
         }
         "CoulombIntra" => {
-            data.coulomb_intra_terms = coulomb::parse_coulomb_intra_def(path)?;
+            data.coulomb_intra_terms =
+                coulomb::parse_coulomb_intra_definition(path, data.modpara.nsite)?;
         }
         "CoulombInter" => {
-            data.coulomb_inter_terms = coulomb::parse_coulomb_inter_def(path)?;
+            data.coulomb_inter_terms =
+                coulomb::parse_coulomb_inter_definition(path, data.modpara.nsite)?;
         }
         "Hund" => {
             data.hund_terms = hund::parse_hund_def(path)?;

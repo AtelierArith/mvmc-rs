@@ -7,10 +7,96 @@ use std::path::Path;
 
 use crate::types::{CoulombInterTerm, CoulombIntraTerm};
 use crate::utils::file::{
-    clean_line, read_def_file, safe_parse_float, safe_parse_int, split_def_line,
+    c_parse_float, clean_line, read_def_file, safe_parse_float, safe_parse_int, split_def_line,
 };
 
-/// Parse a `coulombintra.def` file from disk.
+/// Read C-declared CoulombIntra records with supplied site bounds.
+/// A zero count ignores the body; omitted scalar fields retain the native
+/// initialized/prior value. Malformed rows are safely rejected before publication.
+pub fn parse_coulomb_intra_definition<P: AsRef<Path>>(
+    path: P,
+    nsite: i64,
+) -> io::Result<Vec<CoulombIntraTerm>> {
+    Ok(read_definition(path.as_ref(), nsite, 1)?
+        .into_iter()
+        .map(|(sites, value)| CoulombIntraTerm {
+            site: sites[0],
+            value,
+        })
+        .collect())
+}
+
+/// Read C-declared CoulombInter records, preserving row and coordinate order.
+/// This is not the permissive headerless Julia content helper. Native
+/// `ReadPairDValue` accepts diagonal pairs; no invented off-diagonal rule applies.
+pub fn parse_coulomb_inter_definition<P: AsRef<Path>>(
+    path: P,
+    nsite: i64,
+) -> io::Result<Vec<CoulombInterTerm>> {
+    Ok(read_definition(path.as_ref(), nsite, 2)?
+        .into_iter()
+        .map(|(sites, value)| CoulombInterTerm {
+            site1: sites[0],
+            site2: sites[1],
+            value,
+        })
+        .collect())
+}
+
+fn read_definition(
+    path: &Path,
+    nsite: i64,
+    site_fields: usize,
+) -> io::Result<Vec<([i64; 2], f64)>> {
+    let content = read_def_file(path)?;
+    let lines: Vec<_> = content.lines().collect();
+    let invalid = |message| io::Error::new(io::ErrorKind::InvalidData, message);
+    let count = lines
+        .get(1)
+        .and_then(|line| line.split_ascii_whitespace().nth(1))
+        .and_then(|field| field.parse::<usize>().ok())
+        .ok_or_else(|| invalid("Coulomb: missing or invalid declared count"))?;
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    if lines.len() < 5 {
+        return Err(invalid("Coulomb: incomplete positive-count header"));
+    }
+    let mut rows = Vec::new();
+    let mut previous_value = 0.0;
+    for line in &lines[5..] {
+        let fields: Vec<_> = line.split_ascii_whitespace().collect();
+        if fields.len() < site_fields {
+            return Err(invalid("Coulomb: missing site coordinates"));
+        }
+        let mut sites = [0; 2];
+        for (site, field) in sites[..site_fields].iter_mut().zip(&fields[..site_fields]) {
+            *site = field
+                .parse::<i64>()
+                .map_err(|_| invalid("Coulomb: invalid integer coordinate"))?;
+            if *site < 0 || *site >= nsite {
+                return Err(invalid("Coulomb: site coordinate out of range"));
+            }
+        }
+        let value = match fields.get(site_fields) {
+            Some(field) => {
+                c_parse_float(field).ok_or_else(|| invalid("Coulomb: invalid coefficient"))?
+            }
+            None => previous_value,
+        };
+        previous_value = value;
+        rows.push((sites, value));
+        if rows.len() > count {
+            return Err(invalid("Coulomb: excess records"));
+        }
+    }
+    if rows.len() != count {
+        return Err(invalid("Coulomb: row count differs from declaration"));
+    }
+    Ok(rows)
+}
+
+/// Read a permissive Julia-helper CoulombIntra payload without C count/bounds checks.
 pub fn parse_coulomb_intra_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<CoulombIntraTerm>> {
     let content = read_def_file(path)?;
     Ok(parse_coulomb_intra_content(&content))
@@ -35,7 +121,7 @@ pub fn parse_coulomb_intra_content(content: &str) -> Vec<CoulombIntraTerm> {
     out
 }
 
-/// Parse a `coulombinter.def` file from disk.
+/// Read a permissive Julia-helper CoulombInter payload without C count/bounds checks.
 pub fn parse_coulomb_inter_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<CoulombInterTerm>> {
     let content = read_def_file(path)?;
     Ok(parse_coulomb_inter_content(&content))
