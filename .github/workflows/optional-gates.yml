@@ -96,6 +96,7 @@ jobs:
           uv run --no-project python scripts/test_optional_gate_aggregation_183.py
           uv run --no-project python scripts/test_optional_gate_failure_pipeline_183.py
           uv run --no-project python scripts/test_optional_fixture_metadata_183.py
+          uv run --no-project python scripts/test_optional_reference_provenance_183.py
       - name: Execute ONLY requested bounded gates
         env:
           CARGO_TERM_COLOR: never
