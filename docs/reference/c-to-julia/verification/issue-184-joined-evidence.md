@@ -1,5 +1,20 @@
 # Joined evidence for #184 / #185
 
+## Proposed M0585 local and M0587 scoped CI additions
+
+Draft publication base da979375739292e5e0c68a0413768a78094bee74.
+Only assertion:M0585 and assertion:M0587 change in this follow-up. Original_row
+and owner for all2342, all other2340 rows and prior history remain unchanged. The shared coefficient
+observation is bounded, not M0586 repair or complete S121 verification.
+See [original/source/fixture/command/result provenance](issue-184-original-shared-orbital.md).
+M0587 joins PR296's original RBM manual error condition only, both Linux jobs;
+local13diagnostic +9public tests and retained initial101 remain distinct.
+See [diagnostic source/local provenance](issue-184-manual-rbm-diagnostic.md).
+Recomputed draft totals:86 scoped CI,7 scoped LOCAL_ONLY,1 intentional difference,
+1583 source-mapped missing,80 historical claims,585 exclusion-review pending:
+2342 total. The historical six-local/587 counts below describe prior checkpoint,
+not this two-row update (M0585/M0587). Exact new-head CI pending.
+
 Current documentation SOURCE checkpoint: main `14a30849ae4fa9dd78900f113257389d906008ee`.
 The prior main5c1 checkpoint and its original helper reconciliation below remain
 historical. This follow-up changes only A204–A207, M0579–M0584, S120,
