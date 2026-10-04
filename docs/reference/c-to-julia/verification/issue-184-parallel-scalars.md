@@ -2,8 +2,21 @@
 
 Related to #184, #179 and #185; not full issue completion.
 
-Publication base: main `87cd786c7086618d6f13ec70110a75377d92c337`.
-Actual validated source: immutable PR291 head
+Current integration base: main `14a30849ae4fa9dd78900f113257389d906008ee`.
+Resolved merge `393dbda7e6234f73f68a15bccdd98ad68dd3582e` preserves both
+PR293 parameter exports and this scalar module. Its tested tree is
+`cc3795db1f66c8535bc285da83ef4337525c3ff5`.
+Session97222 completed terminal0/prior0/post0/cleanup0: serial1,
+parameters9 and sync/SR24 passed (220 unselected); targeted MPI strict
+Clippy, workspace fmt and core MPI doctests passed (zero doctests).
+All source/runtime/tools/scripts/selected-binary postchecks passed.
+Container receipt: `/tmp/issue292-integration-proof.z5eEhh`; host copy:
+`/tmp/issue292-integration-proof.z5eEhh/issue292-integration-proof.z5eEhh`.
+This documentation update is post-validation only; executable sources are
+unchanged. Native worlds2/4 on the new publication head await exact-head CI.
+
+Historical publication base: main `87cd786c7086618d6f13ec70110a75377d92c337`.
+Historical validated source: immutable PR291 head
 `c6418c1fa7627bb99964605074646a32a3942d3c` plus the five scalar paths.
 The base versions of `lib.rs`, `mpi.rs`, and `reducer.rs` are byte-identical
 between these revisions. Publication preserves the merged PR291 signed
@@ -68,7 +81,9 @@ shared `owned-nextest` helper `d335bc9e5de2d3a8310943b3c43a684c92ab6a2257258bb47
 and separate stopped-launch abort helper `46d45967eca7ea0442e984f3c53fd1ff402cd2a47a261caef905954d2355a3ab`.
 Their prior13 mock/4 OS controls were reused, not rerun or replaced.
 
-Regular exact-head Linux native CI integration is a separate prospective
-workflow change until executed. Array/root-only/abort APIs, all Julia Integer
+Old head `dfa7f9b054aac245cc8ec3bf84bdc4ec5e15ab41` completed all six CI
+checks and native worlds2/4; parent reviewed its six rank PASS receipts.
+The integrated publication head requires fresh exact-head CI receipts.
+Array/root-only/abort APIs, all Julia Integer
 widths, full model/MPI matrices and full #184/#185 acceptance remain unproved
 by this milestone.
