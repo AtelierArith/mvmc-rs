@@ -134,7 +134,7 @@ fn body_rows<'a>(
     for row in tokens[..main * width].chunks_exact(width) {
         rows.push((row[0].0, row.iter().map(|entry| entry.1).collect()));
     }
-    for row in tokens[main * width..].chunks_exact(2) {
+    for row in tokens[main * width..].as_chunks::<2>().0 {
         rows.push((row[0].0, row.iter().map(|entry| entry.1).collect()));
     }
     Ok(rows)

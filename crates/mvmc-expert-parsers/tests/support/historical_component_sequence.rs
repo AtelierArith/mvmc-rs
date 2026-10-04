@@ -17,24 +17,40 @@ pub fn model(
     let content = fs::read_to_string(path).unwrap();
     let entries = mvmc_expert_parsers::utils::file::parse_namelist_content(&content);
     let sequence: Vec<_> = entries.iter().filter(|(kind, _)| kind == family).collect();
-    if sequence.len() < 2 {
+    if sequence.is_empty() || (family == "OptTrans" && sequence.len() < 2) {
         return load(path).unwrap();
     }
-    let error = mvmc_expert_parsers::parse_expert_mode_files(path).unwrap_err();
-    let mvmc_expert_parsers::ParseError::InvalidInput { message } = error else {
-        panic!("archived repeated keyword must be InvalidInput: {error:?}");
-    };
-    assert!(message.contains(&format!("duplicate keyword {family}")));
-    // DH fixtures contain successful sections only: load the last definition
-    // through the original production assembly, then independently compare
-    // every public component read and the final assembly below. OptTrans has
-    // a failing second section: load its first definition before sequential
-    // public mutating component reads, which publish only successful parses.
     let selected = if family == "OptTrans" {
         sequence[0]
     } else {
         sequence[sequence.len() - 1]
     };
+    let selected_content = fs::read_to_string(path.parent().unwrap().join(&selected.1)).unwrap();
+    let selected_header: Vec<_> = selected_content.lines().take(5).collect();
+    let empty_family = matches!(family, "DH2" | "DH4")
+        && selected_header.len() == 5
+        && selected_header[1].split_whitespace().nth(1) == Some("0");
+    if sequence.len() < 2 && !empty_family {
+        return load(path).unwrap();
+    }
+    let error = mvmc_expert_parsers::parse_expert_mode_files(path).unwrap_err();
+    let mvmc_expert_parsers::ParseError::InvalidInput { message } = error else {
+        panic!("archived duplicate/zero-count input must be InvalidInput: {error:?}");
+    };
+    if sequence.len() > 1 {
+        assert!(message.contains(&format!("duplicate keyword {family}")));
+    } else {
+        assert!(message.contains(&format!("Error parsing required {family}")));
+        assert!(message.contains("must be a positive C integer"));
+    }
+    // Load the last positive DH definition through production assembly, then
+    // independently compare component reads and the final assembly below.
+    // Zero-count archived sections require programmatic assembly. OptTrans has
+    // a failing second section: load its first definition before sequential
+    // public mutating component reads, which publish only successful parses.
+    // C ReadBuffIntCmpFlg rejects a present zero-count DH file before GetInfoDH.
+    // Omit that section from the accepted base and explicitly construct the
+    // archived empty family below. It is not a newly accepted C input.
     let directory = loop {
         let directory = std::env::temp_dir().join(format!(
             "issue184-component-{}-{}",
@@ -54,6 +70,9 @@ pub fn model(
             if entry.0 != family {
                 return true;
             }
+            if empty_family {
+                return false;
+            }
             if *entry == selected && !kept_family {
                 kept_family = true;
                 return true;
@@ -67,6 +86,43 @@ pub fn model(
     let result = load(&namelist);
     fs::remove_dir_all(&directory).unwrap();
     let mut data = result.unwrap();
+    if empty_family {
+        assert!(selected_content
+            .lines()
+            .skip(5)
+            .all(|line| line.trim().is_empty()));
+        let complex_type: i32 = selected_header[2]
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(
+            matches!(complex_type, 0 | 1),
+            "reviewed archived empty mode"
+        );
+        // Preserve the original empty-family declaration: it still participates
+        // in initialization's complex-mode sum and hence the consumed RNG stream.
+        // This replaces loaded metadata only for the explicitly constructed family.
+        data.native_complex_headers.remove(family);
+        data.native_complex_declarations.remove(family);
+        match family {
+            "DH2" => {
+                data.doublon_holon_2site_indices.clear();
+                data.doublon_holon_2site_params.clear();
+                data.doublon_holon_2site_opt_flags.clear();
+                data.doublon_holon_2site_complex = complex_type != 0;
+            }
+            "DH4" => {
+                data.doublon_holon_4site_indices.clear();
+                data.doublon_holon_4site_params.clear();
+                data.doublon_holon_4site_opt_flags.clear();
+                data.doublon_holon_4site_complex = complex_type != 0;
+            }
+            _ => unreachable!(),
+        }
+        set_dh_opt_flags(&mut data);
+    }
     data.namelist = entries.clone(); // Preserve archived overlay metadata, not C acceptance.
     for (_, file) in sequence {
         let definition_path = path.parent().unwrap().join(file);
@@ -77,6 +133,15 @@ pub fn model(
                     data.modpara.nsite,
                 )
                 .unwrap();
+                if definition_has_zero_count(&definition_path) {
+                    assert!(!section.is_success());
+                    assert_eq!(section.line_number, 0);
+                    assert_eq!(
+                        section.error_message,
+                        "NDoublonHolon2siteIdx must be a positive C integer"
+                    );
+                    continue;
+                }
                 let definition = section.data.expect("archived successful DH2 component");
                 if file == &selected.1 {
                     assert_eq!(data.doublon_holon_2site_indices, definition.indices);
@@ -94,6 +159,15 @@ pub fn model(
                     data.modpara.nsite,
                 )
                 .unwrap();
+                if definition_has_zero_count(&definition_path) {
+                    assert!(!section.is_success());
+                    assert_eq!(section.line_number, 0);
+                    assert_eq!(
+                        section.error_message,
+                        "NDoublonHolon4siteIdx must be a positive C integer"
+                    );
+                    continue;
+                }
                 let definition = section.data.expect("archived successful DH4 component");
                 if file == &selected.1 {
                     assert_eq!(data.doublon_holon_4site_indices, definition.indices);
@@ -131,4 +205,15 @@ pub fn model(
         assert_eq!(data.optimization_flags, flags);
     }
     data
+}
+
+fn definition_has_zero_count(path: &Path) -> bool {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        == Some("0")
 }

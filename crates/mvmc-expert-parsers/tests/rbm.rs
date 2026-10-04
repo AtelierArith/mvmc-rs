@@ -58,6 +58,9 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
             parse_expert_mode_files(root().join(format!("namelist_{case}.def"))).unwrap();
         match mode {
             "complex" => {
+                // Explicit programmatic replacement, not a loaded-header mutation.
+                data.native_complex_headers.clear();
+                data.native_complex_declarations.clear();
                 // C ignores ModPara.ComplexType for AllComplexFlag; make the
                 // definition-level projection header complex instead.
                 data.gutzwiller_terms

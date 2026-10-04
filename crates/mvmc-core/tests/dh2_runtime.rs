@@ -40,11 +40,16 @@ fn supported_dh2_sections_pass_runtime_validation_with_or_without_namelist() {
         // Use the same final single-keyword metadata as the valid loader stage,
         // not the archived component sequence preserved by the parser helper.
         let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH2");
+        // Archived zero-count DH is a no-DH programmatic layout, not a valid
+        // required C definition. The shared helper separately asserts rejection.
+        let active = data.projection_layout().n_dh2 != 0;
         data.namelist = data
             .namelist
             .iter()
             .enumerate()
-            .filter(|(index, (kind, _))| kind != "DH2" || Some(*index) == final_definition)
+            .filter(|(index, (kind, _))| {
+                kind != "DH2" || (active && Some(*index) == final_definition)
+            })
             .map(|(_, entry)| entry.clone())
             .collect();
         mvmc_core::validation::validate_para_opt(&data).unwrap();

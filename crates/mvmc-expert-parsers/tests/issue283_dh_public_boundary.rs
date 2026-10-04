@@ -137,7 +137,7 @@ fn combined(files: &Files, header2: i32, header4: i32, aliases: bool, reverse: b
     } else {
         ("DH2", "DH4")
     };
-    let mut list = vec![
+    let mut list = [
         "ModPara mod.def".into(),
         "Gutzwiller g.def".into(),
         "Jastrow j.def".into(),
@@ -380,7 +380,7 @@ fn orbital_ap_parallel_signed_sum_is_bound_before_local_flag_normalization() {
                     &definition(1, ap, "0 0 0 1\n0 1 0 1\n1 0 0 1\n1 1 0 1\n0 -2"),
                 );
                 files.put("p.def", &definition(1, parallel, "0 1 0 1\n0 3"));
-                let mut list = vec![
+                let mut list = [
                     "ModPara mod.def".to_string(),
                     format!("{ap_key} ap.def"),
                     "OrbitalParallel p.def".to_string(),
