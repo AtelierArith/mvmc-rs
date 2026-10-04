@@ -7,10 +7,12 @@ use mvmc_core::run::{
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
+type RngSnapshot = (&'static str, [u32; 624], usize, u128, [u32; 624]);
+
 #[derive(Default)]
 struct BorrowedSamples {
     samples: RefCell<Vec<Vec<u64>>>,
-    rng: RefCell<Vec<(&'static str, [u32; 624], usize, u128, [u32; 624])>>,
+    rng: RefCell<Vec<RngSnapshot>>,
 }
 impl OptimizationMeasurementObserver for BorrowedSamples {
     fn measured(&self, view: OptimizationMeasurementView<'_>) {
