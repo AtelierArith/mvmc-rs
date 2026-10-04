@@ -1,6 +1,6 @@
 {
   "schema": "issue184-joined-evidence-v1",
-  "current_main": "eaa5db6254c721b95e8e63096287cdb74d5124e2",
+  "current_main": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
   "original_inventory_lineage": "e41 source-mapped inventory; historical fields preserved, not current runtime claims",
   "rows": [
     {
@@ -48,7 +48,62 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184 Chandra ledger; Pauli public parser/fixture implementation; parent independent review and execution",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_missing_transfer_is_required_not_an_incomplete_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_routes_transfer_definition_errors_instead_of_silent_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::public_coulomb_loader_rejects_missing_and_mismatched_declared_counts",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::public_pair_loaders_reject_missing_and_invalid_required_files",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::public_pairhop_loader_rejects_missing_and_invalid_required_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR265:pairhop::public_loader_rejects_archived_count_one_seven_row_component_input",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::public_locspin_loader_rejects_advertised_missing_or_incomplete_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::public_qptrans_missing_or_invalid_section_never_returns_partial_model",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "File-helper error collection and every original overload/scenario require separate joins; native file reading does not certify helper diagnostics.",
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified.",
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate.",
+          "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified.",
+          "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved.",
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A002",
@@ -330,7 +385,62 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_missing_transfer_is_required_not_an_incomplete_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_routes_transfer_definition_errors_instead_of_silent_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::public_coulomb_loader_rejects_missing_and_mismatched_declared_counts",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::public_pair_loaders_reject_missing_and_invalid_required_files",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::public_pairhop_loader_rejects_missing_and_invalid_required_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR265:pairhop::public_loader_rejects_archived_count_one_seven_row_component_input",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::public_locspin_loader_rejects_advertised_missing_or_incomplete_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::public_qptrans_missing_or_invalid_section_never_returns_partial_model",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "File-helper error collection and every original overload/scenario require separate joins; native file reading does not certify helper diagnostics.",
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified.",
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate.",
+          "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified.",
+          "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved.",
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A008",
@@ -377,7 +487,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_file_reader_preserves_nonfinite_c_numeric_values_without_policy_rejection",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "ParserOnlyNonfinite"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_native_hex_coefficients_do_not_use_zero_fallback",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_invalid_consumed_records_reject_without_partial_success",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_omitted_scalar_retains_initialized_then_prior_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_original_valid_literals_preserve_coordinates_and_values",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_short_zero_header_ignores_body_but_positive_header_is_incomplete",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_zero_count_ignores_body_and_diagonal_inter_is_not_rejected",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::public_coulomb_loader_rejects_missing_and_mismatched_declared_counts",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A009",
@@ -424,7 +584,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184 Chandra ledger; Pauli parser implementation; parent independent source review and fresh execution",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::headerless_coulomb_helpers_are_separate_julia_architecture",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A010",
@@ -518,7 +693,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_file_reader_preserves_nonfinite_c_numeric_values_without_policy_rejection",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "ParserOnlyNonfinite"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_native_hex_coefficients_do_not_use_zero_fallback",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_invalid_consumed_records_reject_without_partial_success",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_omitted_scalar_retains_initialized_then_prior_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_original_valid_literals_preserve_coordinates_and_values",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_short_zero_header_ignores_body_but_positive_header_is_incomplete",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::coulomb_zero_count_ignores_body_and_diagonal_inter_is_not_rejected",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::public_coulomb_loader_rejects_missing_and_mismatched_declared_counts",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A012",
@@ -565,7 +790,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR261:issue184_coulomb_definition_boundary::headerless_coulomb_helpers_are_separate_julia_architecture",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A013",
@@ -847,7 +1087,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_hex_coefficients_are_not_zero_fallbacks",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_invalid_consumed_rows_reject_partial_results_and_count_mismatch",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_literals_preserve_order_sign_and_diagonal_without_expansion",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_nonfinite_values_are_parser_only_not_runnable_model_policy",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "ParserOnlyNonfinite"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_omitted_scalar_retains_initialized_then_prior_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_short_zero_header_is_supported_but_positive_header_is_incomplete",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_zero_count_ignores_body",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::public_pair_loaders_reject_missing_and_invalid_required_files",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A019",
@@ -894,7 +1184,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::headerless_pair_helpers_remain_separate_convenience_apis",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A020",
@@ -1552,7 +1857,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_hex_coefficients_are_not_zero_fallbacks",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_invalid_consumed_rows_reject_partial_results_and_count_mismatch",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_literals_preserve_order_sign_and_diagonal_without_expansion",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_nonfinite_values_are_parser_only_not_runnable_model_policy",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "ParserOnlyNonfinite"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_omitted_scalar_retains_initialized_then_prior_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_short_zero_header_is_supported_but_positive_header_is_incomplete",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::pair_zero_count_ignores_body",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::public_pair_loaders_reject_missing_and_invalid_required_files",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A034",
@@ -1599,7 +1954,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR263:issue184_pair_value_definition_boundaries::headerless_pair_helpers_remain_separate_convenience_apis",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "C-defined diagonal retention differs from Julia convenience-helper rejection; helper diagnostics and numerical Hamiltonian consumption are separate."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A035",
@@ -2022,7 +2392,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_bounds_overflow_missing_header_reject_before_partial_publication",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_complete_negative_and_nonbinary_scalars_are_not_normalized",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_complete_permuted_table_is_site_indexed_not_input_order",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_decimal_prefix_and_defined_stale_scalar_site_are_preserved",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_exact_nsite_body_and_complete_coverage_are_safety_boundaries",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_header_token_is_informational_and_not_body_or_one_count",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_scalar_omission_preserves_initialized_then_previous_integer",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::public_locspin_loader_rejects_advertised_missing_or_incomplete_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A044",
@@ -2069,7 +2489,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR268:issue184_locspin_definition_boundary::locspin_permissive_content_helper_remains_separate",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Complete native indexed table permits negative/nonbinary integers; Julia helper error reporting/partial result semantics remain separately unresolved."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A045",
@@ -2398,7 +2833,62 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_diagonal_and_duplicate_rows_expand_without_deduplication",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_hex_and_signed_zero_are_preserved_in_both_directions",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_invalid_rows_and_input_count_mismatch_return_no_partial_payload",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_native_expansion_preserves_forward_reverse_order_and_sign",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_omitted_scalar_retains_initialized_then_prior_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_nonfinite_parser_values_are_not_runnable_model_approval",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "ParserOnlyNonfinite"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_zero_and_short_zero_headers_ignore_body_positive_requires_header",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        },
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::public_pairhop_loader_rejects_missing_and_invalid_required_definition",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR265:pairhop::public_loader_rejects_archived_count_one_seven_row_component_input",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A052",
@@ -2445,7 +2935,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184 Chandra ledger; Pauli parser implementation; parent independent FULL81 review and fresh execution",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR265:issue184_pairhop_definition_boundary::pairhop_headerless_helper_keeps_separate_partial_error_collection",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A053",
@@ -2455,15 +2960,15 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl:12",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_qptrans_def",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/qptrans.rs::parse_qptrans_def",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "NO_IDENTIFIED_EQUIVALENT_GENERIC_MOMENTUM_PHASE_API; indexed QPTransSection/QPTransEntry is a different C definition representation",
+      "supported_rejected_conditions": "Original Julia generic QPTransTerm carries site, momentum vector and phase; PR270 tests C indexed weights/map/signs, not these original generic fields/overloads.",
+      "intentional_scope": "Architecture correspondence unresolved; no API execution promotion from native indexed reader.",
+      "evidence_type": "SourceReviewedRepresentationDifference; generic API executable proof missing",
       "owner": "#184/#178",
       "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl=7ade525089d4b4af1fc3f103e6ec5e9e6e2973a57ab5e01498e5d54afc50b384; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
       "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
       "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-expert-parsers --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "result": "MissingEvidence for original generic API; PR270 indexed definition PASS is not an equivalent generic momentum/phase result.",
       "owner_text": "#184/#178",
       "proposed_followup_owner": "#184/#234",
       "reconciliation_coordinator": "Pauli / #185",
@@ -2492,7 +2997,15 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_reconciliation": {
+        "state": "SourceReviewedMissingCounterpart",
+        "owner_issue": "#184 / #185",
+        "remaining": [
+          "Identify or explicitly classify original generic momentum/phase API; no invented wrapper or fabricated runtime proof."
+        ],
+        "source_review": "J8bb qptrans_parser.jl generic parse_qptrans_def/content/term and expert_types.jl QPTransTerm versus fab2335 Rust indexed QPTransSection/QPTransEntry"
+      }
     },
     {
       "key": "api:A054",
@@ -2502,15 +3015,15 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl:26",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_qptrans_content",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/qptrans.rs::parse_qptrans_content",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "NO_IDENTIFIED_EQUIVALENT_GENERIC_MOMENTUM_PHASE_API; indexed QPTransSection/QPTransEntry is a different C definition representation",
+      "supported_rejected_conditions": "Original Julia generic QPTransTerm carries site, momentum vector and phase; PR270 tests C indexed weights/map/signs, not these original generic fields/overloads.",
+      "intentional_scope": "Architecture correspondence unresolved; no API execution promotion from native indexed reader.",
+      "evidence_type": "SourceReviewedRepresentationDifference; generic API executable proof missing",
       "owner": "#184/#178",
       "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl=7ade525089d4b4af1fc3f103e6ec5e9e6e2973a57ab5e01498e5d54afc50b384; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
       "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
       "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-expert-parsers --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "result": "MissingEvidence for original generic API; PR270 indexed definition PASS is not an equivalent generic momentum/phase result.",
       "owner_text": "#184/#178",
       "proposed_followup_owner": "#184/#234",
       "reconciliation_coordinator": "Pauli / #185",
@@ -2539,7 +3052,15 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_reconciliation": {
+        "state": "SourceReviewedMissingCounterpart",
+        "owner_issue": "#184 / #185",
+        "remaining": [
+          "Identify or explicitly classify original generic momentum/phase API; no invented wrapper or fabricated runtime proof."
+        ],
+        "source_review": "J8bb qptrans_parser.jl generic parse_qptrans_def/content/term and expert_types.jl QPTransTerm versus fab2335 Rust indexed QPTransSection/QPTransEntry"
+      }
     },
     {
       "key": "api:A055",
@@ -2549,15 +3070,15 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl:69",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_qptrans_term",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/qptrans.rs::parse_qptrans_content",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "NO_IDENTIFIED_EQUIVALENT_GENERIC_MOMENTUM_PHASE_API; indexed QPTransSection/QPTransEntry is a different C definition representation",
+      "supported_rejected_conditions": "Original Julia generic QPTransTerm carries site, momentum vector and phase; PR270 tests C indexed weights/map/signs, not these original generic fields/overloads.",
+      "intentional_scope": "Architecture correspondence unresolved; no API execution promotion from native indexed reader.",
+      "evidence_type": "SourceReviewedRepresentationDifference; generic API executable proof missing",
       "owner": "#184/#178",
       "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCExpertModeParsers.jl/src/parsers/qptrans_parser.jl=7ade525089d4b4af1fc3f103e6ec5e9e6e2973a57ab5e01498e5d54afc50b384; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
       "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
       "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-expert-parsers --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "result": "MissingEvidence for original generic API; PR270 indexed definition PASS is not an equivalent generic momentum/phase result.",
       "owner_text": "#184/#178",
       "proposed_followup_owner": "#184/#234",
       "reconciliation_coordinator": "Pauli / #185",
@@ -2586,7 +3107,15 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_reconciliation": {
+        "state": "SourceReviewedMissingCounterpart",
+        "owner_issue": "#184 / #185",
+        "remaining": [
+          "Identify or explicitly classify original generic momentum/phase API; no invented wrapper or fabricated runtime proof."
+        ],
+        "source_review": "J8bb qptrans_parser.jl generic parse_qptrans_def/content/term and expert_types.jl QPTransTerm versus fab2335 Rust indexed QPTransSection/QPTransEntry"
+      }
     },
     {
       "key": "api:A056",
@@ -2633,7 +3162,62 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::public_qptrans_aliases_preserve_raw_signs_and_effective_ap_lifecycle",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::public_qptrans_missing_or_invalid_section_never_returns_partial_model",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_hex_complex_weights_and_reordered_maps_are_indexed",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_defined_scan_failure_keeps_reset_weight_or_prior_mapping_fields",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_physical_count_truncation_and_extra_records_fail",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "CountBoundary"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_indices_integer_overflow_and_invalid_header_are_safe_errors",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_unwritten_weight_forward_and_inverse_slots_are_not_fabricated",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_weight_fields_reset_and_mapping_sign_retains_native_carry",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_zero_ignores_body_but_requires_full_defined_header",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "UnresolvedCContractDifference"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A057",
@@ -2680,7 +3264,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR270:issue184_qptrans_definition_boundary::qptrans_content_helper_remains_separate_and_permissive",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Generic Julia momentum/phase API is not this indexed representation; inverse/normalization/model consumers require separate joins; two-line zero header differs from C source lifecycle."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A058",
@@ -4090,7 +4689,57 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::native_five_field_rows_retain_initialized_or_previous_imaginary_value",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCCarry"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_missing_transfer_is_required_not_an_incomplete_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::public_loader_routes_transfer_definition_errors_instead_of_silent_success",
+          "relation": "PartialPublicLoaderConditionWithFamilyArchitectureContext",
+          "condition_class": "RequiredPublicLoader"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::transfer_consumed_invalid_row_cannot_publish_partial_payload",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "RustSafetyRejection"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::transfer_definition_preserves_original_complex_and_spin_coordinates",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::transfer_definition_reads_c_hexadecimal_coefficients_not_zero_fallbacks",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCRead"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::transfer_zero_count_ignores_body_and_positive_count_is_exact",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "CountBoundary"
+        },
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::transfer_zero_count_short_header_is_defined_body_ignore_not_stale_data",
+          "relation": "CDefinitionBoundaryContextNotOriginalHelperVerification",
+          "condition_class": "DefinedCZero"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "File-helper error collection and every original overload/scenario require separate joins; native file reading does not certify helper diagnostics."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A088",
@@ -4137,7 +4786,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184 Chandra ledger; Pauli parser implementation; parent historical execution/fresh-run owner",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR258:issue184_transfer_definition_boundary::headerless_julia_helper_remains_distinct_from_c_definition_validation",
+          "relation": "PartialContentHelperCondition",
+          "condition_class": "HelperArchitecture"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "File-helper error collection and every original overload/scenario require separate joins; native file reading does not certify helper diagnostics."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "api:A089",
@@ -4993,15 +5657,15 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/types/expert_types.jl:419",
       "symbol_or_scenario": "MVMCExpertModeParsers.QPTransTerm",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/types.rs::QPTransEntry",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "NO_IDENTIFIED_EQUIVALENT_GENERIC_MOMENTUM_PHASE_API; indexed QPTransSection/QPTransEntry is a different C definition representation",
+      "supported_rejected_conditions": "Original Julia generic QPTransTerm carries site, momentum vector and phase; PR270 tests C indexed weights/map/signs, not these original generic fields/overloads.",
+      "intentional_scope": "Architecture correspondence unresolved; no API execution promotion from native indexed reader.",
+      "evidence_type": "SourceReviewedRepresentationDifference; generic API executable proof missing",
       "owner": "#184/#178",
       "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCExpertModeParsers.jl/src/types/expert_types.jl=2ebb3c0dbc95f323b708f21fb5c3222a0dbd90640ed056f856f2838e356acf67; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
       "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
       "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-expert-parsers --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "result": "MissingEvidence for original generic API; PR270 indexed definition PASS is not an equivalent generic momentum/phase result.",
       "owner_text": "#184/#178",
       "proposed_followup_owner": "#184/#234",
       "reconciliation_coordinator": "Pauli / #185",
@@ -5030,7 +5694,15 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_reconciliation": {
+        "state": "SourceReviewedMissingCounterpart",
+        "owner_issue": "#184 / #185",
+        "remaining": [
+          "Identify or explicitly classify original generic momentum/phase API; no invented wrapper or fabricated runtime proof."
+        ],
+        "source_review": "J8bb qptrans_parser.jl generic parse_qptrans_def/content/term and expert_types.jl QPTransTerm versus fab2335 Rust indexed QPTransSection/QPTransEntry"
+      }
     },
     {
       "key": "api:A108",
@@ -33457,7 +34129,22 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_evidence": [
+        {
+          "evidence_id": "PR265:runtime_contract::real_fsz_pairhop_is_not_rejected_by_issue_43_gate",
+          "relation": "ContextOnlyNotScenarioVerification",
+          "condition_class": "ContextOnlyRuntimeRejection"
+        }
+      ],
+      "condition_reconciliation": {
+        "state": "PartialConditionEvidence; whole original row status retained",
+        "owner_issue": "#184 / #185; original responsible owner retained",
+        "remaining": [
+          "Archived helper composition is not acceptance of count1/seven-row C input; original e2e energy/RNG/20-step fixtures remain unverified."
+        ],
+        "table": "issue-184-parser-milestone-controls.tsv"
+      }
     },
     {
       "key": "scenario:S410",
@@ -149794,5 +150481,26 @@
       "original_owner_identifier": "#180/Pauli #181/Chandra #179/Wegener",
       "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
     }
-  ]
+  ],
+  "reconciliation": {
+    "checkpoint": "fab2335db872fdd62b5389d96d11b59ccdfa80ec",
+    "prior_checkpoint": "eaa5db6254c721b95e8e63096287cdb74d5124e2",
+    "original_matrix_sha256": "ccdd19c7e8c14e207c3c3b7122efee0b0aafaad3b86f203a4d932a76f056d7e1",
+    "condition_table": "issue-184-parser-milestone-controls.tsv",
+    "condition_table_sha256": "8c2455ac70f2ae3dc24d284fa9c6a0b455fe5266f5827149487e189c64aa151c",
+    "control_count": 57,
+    "execution_records": 114,
+    "policy": "Partial condition evidence does not promote complete original rows. Six merged milestones; source/caller contract distinctions explicitly retained.",
+    "unresolved_c_input_contracts": [
+      {
+        "id": "QPTransShortZeroHeader",
+        "rust": "parse_qptrans_def requires five physical header lines even count0",
+        "c": "ReadBuffInt reads count from two lines; ignored five-header EOF precedes GetInfoTransSym NArray0 with no body-buffer use",
+        "source": "readdef.c:118-124,874-876,2232-2265; SHA256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9",
+        "status": "SourceIdentifiedUnresolved; no native probe executed or production repair in this reconciliation"
+      }
+    ],
+    "scope_flags": "629 review-required flags retained; not blanket InterAll exclusions",
+    "remaining_execution": "Ignored model20, explicit MPI launches, thread crossover and independent missing FSZ fixtures are not certified by ordinary CI totals."
+  }
 }
