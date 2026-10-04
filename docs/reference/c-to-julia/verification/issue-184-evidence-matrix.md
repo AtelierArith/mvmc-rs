@@ -8,6 +8,57 @@ and original owners retained;15 scoped assertion PASS and one intentional
 difference. PR254 initialization does not certify13 models'20-step execution.
 #184/#185 remain open. All records below retain their historical identities.
 
+## Merged #283 signed-DH/global-mode boundary (PR286)
+
+Merged main checkpoint `12c5bd83967c12b8d246fa81a102ada360bc19e1` (2026-10-04 06:54:22 UTC);
+local SOURCE baseline `92a9de4fae7d1eb8cafc97b351550d26e2e6187a`;
+tested PR286 head `92faf6e9e3c4430289b3a53bb377714b6bc61bce`. Owners: #283 implementation/test
+contracts and #184/#185 assertion/API reconciliation. This addition preserves
+all original rows, owners, historical conditions and fixture expectations; it
+does not promote a whole Julia API, scenario, family or model. Exact-head Linux serial1071/all-features1073 tests and lint/docs passed.
+Both Mac jobs were LIVE at the merge checkpoint; their later results are recorded below.
+
+| Existing boundary scope | Rust entry / actual evidence | Supported/rejected distinction and remaining scope |
+| --- | --- | --- |
+| Public DH2/DH4 loading and parameter layout | `issue283_dh_public_boundary`: ten ordinary controls, included in parser24 PASS; `parse_expert_mode_files`, DH component readers and projection-layout assembler | Positive C count, token-stream records, reordered count2 tables, 74 literal parameter components and offsets; signed raw headers retained. Missing/zero/truncated required definitions and invalid consumed indices/headers reject safely. Historical Julia comments/zero-definition behavior is not advertised as C acceptance. |
+| Global complex declaration / initialization | Parser `all_complex_flag` and `init_parameter` Result APIs; signed cancellation, AP/Parallel aggregate/local-flag normalization, stale metadata and initialization-order controls in the same ten tests | C raw integer sum determines mode before local normalization; coefficient imaginary values do not infer mode. Explicit programmatic declaration replacement must clear native bindings. No changed arithmetic, tolerance, golden or RNG expectation. Not an independent whole-sampler trajectory. |
+| Runtime, callback and declaration consumers | Core `dh2_runtime`, `dh4_runtime`, `physcal_callback`: 15 PASS; parser `dh2`, `dh4`, `rbm`, `issue283_dh_public_boundary`: 24 PASS | Historical empty DH is tested as a programmatic no-DH layout separately from public required-file rejection. Callback failure injection follows validation1/directory2/initialization3/state4/sample5/output6/callback7; callback count1/check count7 preserves the original error boundary. RBM test replacement explicitly clears both metadata maps. No general RBM-native or model20 parity claim. |
+| Error / collective preflight / CLI scope | `get_all_complex_flag`, `state_from_data`, runner validators and allocated-mode guards; original parser10 + core26 prior scoped controls retained separately | Declaration errors propagate as Result before mutation/RNG, with rank agreement in the runner. CLI caller propagation is implementation correspondence, not a new CLI execution proof. Actual two-rank invalid-metadata test and complete MPI lifecycle remain NotRun locally. |
+| Verification infrastructure | Combined local parser24/core15 PASS; combined aggregate83, core execution/cleanup/lock-release1 retained. Fresh-target lint-only successor fmt0/parser all-target Clippy0/core all-target Clippy0/source-post0/aggregate0 | Old owner guard rejected nextest per-test PGIDs, so 39 test PASS is not guard success. Three fresh empty PID/PGID/SID scans performed; old receipt/target/lock retained without waiver. No full-workspace or all-features PASS is inferred from these local runs. |
+
+Numerical authority is vendored `extern/mVMC-1.3.0/src/mVMC/readdef.c`,
+SHA-256 `6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`:
+`ReadBuffIntCmpFlg` at126, family-header reads428–502 and global raw sum641–644.
+Julia supplies public API/lifecycle architecture, not C input extensions.
+Safe rejection of malformed/overflowing records does not claim parity with C
+undefined behavior. No native program was executed by this matrix update.
+
+Bound local source: `doublon_holon.rs`
+SHA-256 `51b43fd252b4d5c506b2f7e5e76152172b522b5315dc8bbf250b257fef7e3de5`;
+`issue283_dh_public_boundary.rs`
+SHA-256 `203e2fd79b85b5b817e0c9b9380fa21724b68280545c511df744541fc4d3d245`.
+Commands: `cargo nextest run --locked --cargo-profile test-fast -p
+mvmc-expert-parsers --test dh2 --test dh4 --test rbm --test
+issue283_dh_public_boundary --no-tests fail --no-fail-fast --retries 0`, and
+the corresponding `-p mvmc-core --test dh2_runtime --test dh4_runtime --test
+physcal_callback`; jobs2/default features/BLAS1. Lint successor used
+`cargo clippy --locked --profile test-fast -p <affected-package>
+--all-targets -- -D warnings` and `cargo fmt --all --check`.
+Local receipts are `/tmp/mvmc-283-combined-proof.20261004` (aggregate83) and
+`/tmp/mvmc-283-lint-only-proof.20261004` (aggregate0), not durable CI proof.
+Durable CI evidence: [PR286](https://github.com/AtelierArith/mvmc-rs/pull/286)
+and [run37183730350](https://github.com/AtelierArith/mvmc-rs/actions/runs/37183730350)
+bind exact source head `92faf6e9e3c4430289b3a53bb377714b6bc61bce`.
+Parent verified Linux serial1071/1071 and all-features1073/1073 PASS,
+plus lint/docs SUCCESS before merge; ignored tests are not executed PASS.
+Both Mac jobs remained LIVE at this merge checkpoint. Original fd451
+run37182667009 failures remain historical evidence.
+Subsequent exact-head terminal evidence: Mac default job111381263504 finished
+2026-10-04 06:54:45 UTC, 1073/1073 PASS, 40 skipped, 258.427s; Mac all-features
+job111381263498 finished 06:55:00 UTC, 1075/1075 PASS, 59 skipped, 246.598s.
+All six CI jobs are now SUCCESS; skipped/ignored tests are not executed PASS.
+#184/#185 remain open; original-row status counts are unchanged.
+
 ## Historical CURRENT snapshot (main3b953a5)
 
 Authoritative main is **3b953a5099a500b1566f0e06107ca0d7a02e685b** (PR238). This standalone SOURCE reconciliation preserves all historical records below and does not import the dirty 1444-row assertion audit. #184/#185 remain OPEN. A source pointer, infrastructure control or passing whole-crate gate is not verification of every original assertion/API/scenario.
