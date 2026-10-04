@@ -99,7 +99,17 @@ pub(crate) fn validate_green_sample(
             "Green direct site bounds"
         );
     }
-    for &(first, second) in &data.green_two_ex_indices {
+    // Ordinary publication skips cached map slots beyond its destination.
+    // In particular, removed TwoBodyGEx terms leave an empty destination even
+    // when the caller retains the old, unused canonical map. FSZ below keeps
+    // its original full-map width contract.
+    let factored_width = state
+        .phys_quantities
+        .as_ref()
+        .expect("Green physical storage must exist")
+        .phys_cis_ajs_ckt_alt
+        .len();
+    for &(first, second) in data.green_two_ex_indices.iter().take(factored_width) {
         assert!(
             first < data.green_one_terms.len() && second < data.green_one_terms.len(),
             "Green factored index bounds"
@@ -188,11 +198,13 @@ pub(crate) fn validate_green_sample(
         data.green_two_terms.len(),
         "Green aggregate direct width"
     );
-    assert_eq!(
-        phys.phys_cis_ajs_ckt_alt.len(),
-        data.green_two_ex_indices.len(),
-        "Green factored width"
-    );
+    if spins.is_some() {
+        assert_eq!(
+            phys.phys_cis_ajs_ckt_alt.len(),
+            data.green_two_ex_indices.len(),
+            "Green factored width"
+        );
+    }
 }
 
 // One output cell has exactly one producer; kernel reductions inside it stay
@@ -537,6 +549,86 @@ mod tests {
                 0
             );
         }
+    }
+
+    #[test]
+    fn ordinary_factored_validation_ignores_only_unused_map_slots() {
+        for width in [0, 1] {
+            let (mut data, mut state) = diagonal_sample(33, false);
+            // Match state_from_data's empty destination after terms are removed;
+            // also cover one active slot with an unused out-of-range tail.
+            assert!(data.green_two_ex_terms.is_empty());
+            data.green_two_ex_indices = if width == 0 {
+                vec![(usize::MAX, usize::MAX)]
+            } else {
+                vec![(0, 0), (usize::MAX, usize::MAX)]
+            };
+            state.phys_quantities = Some(PhysicalQuantities::zeros(33, width, 33));
+            state
+                .phys_quantities
+                .as_mut()
+                .unwrap()
+                .phys_cis_ajs_ckt_alt
+                .fill(Complex64::new(11.0, 0.0));
+            let map_before = data.green_two_ex_indices.clone();
+            let matrix_before = state.slater_matrix.clone();
+            let phys_before = state.phys_quantities.clone();
+            let observer = crate::threading::start_observation();
+            let (one, direct) = ordinary_green_values(
+                &data,
+                &state,
+                Complex64::new(1.0, 0.0),
+                &[0, 1],
+                &[0, -1, -1, 0],
+                &[1, 0, 0, 1],
+                &[],
+            );
+            check_observation(
+                observer.finish(),
+                33,
+                crate::threading::inner_parallel_enabled(33),
+            );
+            for (i, value) in one.iter().enumerate() {
+                assert_eq!(
+                    *value,
+                    Complex64::new(if i.is_multiple_of(2) { 1.0 } else { 0.0 }, 0.0)
+                );
+            }
+            assert!(direct.iter().all(|&z| z == Complex64::new(1.0, 0.0)));
+            assert_eq!(state.slater_matrix, matrix_before);
+            assert_eq!(state.phys_quantities, phys_before);
+            assert_eq!(data.green_two_ex_indices, map_before);
+            let destination = &mut state.phys_quantities.as_mut().unwrap().phys_cis_ajs_ckt_alt;
+            super::super::accumulate_two_body_gex_sample(
+                destination,
+                &one,
+                &data.green_two_ex_indices,
+                Complex64::new(0.5, -0.25),
+            );
+            assert_eq!(destination.len(), width);
+            if width == 1 {
+                assert_eq!(destination[0], Complex64::new(11.5, -0.25));
+            }
+        }
+        // Active indices remain rejected before producers; this is not a
+        // relaxation for a malformed slot that would actually be consumed.
+        let (mut data, state) = diagonal_sample(1, false);
+        data.green_two_ex_indices[0] = (usize::MAX, 0);
+        let observer = crate::threading::start_observation();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            ordinary_green_values(
+                &data,
+                &state,
+                Complex64::new(1.0, 0.0),
+                &[0, 1],
+                &[0, -1, -1, 0],
+                &[1, 0, 0, 1],
+                &[],
+            );
+        }))
+        .is_err());
+        let actual = observer.finish();
+        assert_eq!(actual.parallel_entry_items + actual.serial_entry_items, 0);
     }
 
     #[test]
