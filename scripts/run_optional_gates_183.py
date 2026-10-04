@@ -215,6 +215,35 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def execute_command(args, name, output, commands, env, cwd, selected=None, timeout=2400):
+    """Record actual process lifecycle; selected context is a request, not a model verdict."""
+    record = {"schema": 1, "name": name, "argv": list(map(str, args)), "cwd": str(cwd),
+              "env": {k: v for k, v in env.items() if k.startswith(("MVMC_", "MPI179_"))
+                      or k in ("CARGO_TARGET_DIR", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS",
+                               "MKL_NUM_THREADS", "BLIS_NUM_THREADS", "TMPDIR")},
+              "selected": selected, "timeout_seconds": timeout, "state": "Started",
+              "started_unix_ns": time.time_ns(), "started_monotonic_ns": time.monotonic_ns(),
+              "ended_unix_ns": None, "ended_monotonic_ns": None, "returncode": None,
+              "exception": None, "stdout": f"{name}.stdout", "stderr": f"{name}.stderr"}
+    commands.append(record)
+    write_json(output / "commands.json", commands)
+    try:
+        with (output / record["stdout"]).open("w") as stdout, (output / record["stderr"]).open("w") as stderr:
+            result = subprocess.run(record["argv"], cwd=cwd, env=env, stdout=stdout,
+                                    stderr=stderr, timeout=timeout)
+        record.update(state="Completed", returncode=result.returncode)
+        return result
+    except subprocess.TimeoutExpired as error:
+        record.update(state="Timeout", exception=type(error).__name__)
+        raise
+    except BaseException as error:
+        record.update(state="Incomplete", exception=type(error).__name__)
+        raise
+    finally:
+        record.update(ended_unix_ns=time.time_ns(), ended_monotonic_ns=time.monotonic_ns())
+        write_json(output / "commands.json", commands)
+
+
 def validate_artifacts(root, required):
     for name in required:
         path = root / name
@@ -289,16 +318,13 @@ def run(family, output, excluded=()):
     outcome = "Failure"
     def execute(args, name, extra=None, selected_gate=False):
         call_env = env | (extra or {})
-        commands.append({"argv": list(map(str, args)), "env": {
-            k: v for k, v in call_env.items() if k.startswith(("MVMC_", "MPI179_"))
-            or k in ("CARGO_TARGET_DIR", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS",
-                     "MKL_NUM_THREADS", "BLIS_NUM_THREADS", "TMPDIR")}})
-        write_json(output / "commands.json", commands)
-        with (output / f"{name}.stdout").open("w") as stdout, (output / f"{name}.stderr").open("w") as stderr:
-            if selected_gate:
-                ledger[family]["started_driver_invocations"] += 1
-            result = subprocess.run(list(map(str, args)), cwd=ROOT, env=call_env,
-                                    stdout=stdout, stderr=stderr, timeout=2400)
+        selected = None
+        if selected_gate:
+            selected = {"family": family, "profile": "test-fast",
+                        "features": "mpi" if family == "mpi" else "default",
+                        "identities": list(ledger[family]["selected_test_identities"])}
+            ledger[family]["started_driver_invocations"] += 1
+        result = execute_command(args, name, output, commands, call_env, ROOT, selected)
         if result.returncode:
             diagnostic = (output / f"{name}.stderr").read_text() + (output / f"{name}.stdout").read_text()
             if selected_gate:
@@ -323,6 +349,8 @@ def run(family, output, excluded=()):
             }[family], "oracle_execution": "none; checked-in fixtures only",
             "profile": "test-fast", "features": "mpi" if family == "mpi" else "default",
             "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            "command_receipt_schema": 1,
+            "checkout_root": str(ROOT),
             "platform": platform.platform(), "started_unix": time.time(),
             "reference_version": "per-fixture provenance, NOT current Julia runtime verification",
             "not_claimed": "full13 matrix, fullJulia features, fullC sampler, InterAll",

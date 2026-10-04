@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+import run_optional_gates_183 as driver_source
+
 
 SCRIPTS = Path(__file__).resolve().parent
 MODULES = ("run_optional_gates_183.py", "aggregate_optional_gates_183.py",
@@ -18,6 +20,41 @@ MODELS = ("hubbard_chain_real", "hubbard_chain_lanczos", "spin_chain_lanczos")
 
 
 class RealFailurePipeline(unittest.TestCase):
+    def test_actual_command_lifecycle_discovery_failure_timeout_and_incomplete(self):
+        # Real tiny Python children exercise the production command boundary;
+        # none is a selected numerical gate or a mocked driver success.
+        cases = (("success", [sys.executable, "-B", "-c", "print('discovery')"], None, 0),
+                 ("nonzero", [sys.executable, "-B", "-c", "raise SystemExit(7)"], None, 7),
+                 ("timeout", [sys.executable, "-B", "-c", "import time; time.sleep(1)"], subprocess.TimeoutExpired, None),
+                 ("missing", ["/nonexistent-issue183-command"], FileNotFoundError, None))
+        for name, argv, error, code in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                commands = []
+                if error is None:
+                    result = driver_source.execute_command(argv, name, root, commands,
+                                                           os.environ.copy(), root, timeout=1)
+                    self.assertEqual(result.returncode, code)
+                else:
+                    with self.assertRaises(error):
+                        driver_source.execute_command(argv, name, root, commands,
+                                                      os.environ.copy(), root, timeout=0.05)
+                receipt = json.loads((root / "commands.json").read_text())
+                self.assertEqual(receipt, commands)
+                self.assertEqual(len(receipt), 1)
+                record = receipt[0]
+                self.assertIsNone(record["selected"])
+                self.assertEqual(record["argv"], argv)
+                self.assertEqual(record["returncode"], code)
+                self.assertEqual(record["state"], "Timeout" if name == "timeout" else
+                                 "Incomplete" if name == "missing" else "Completed")
+                self.assertEqual(record["exception"], error.__name__ if error else None)
+                self.assertGreaterEqual(record["ended_monotonic_ns"], record["started_monotonic_ns"])
+                self.assertTrue((root / record["stdout"]).is_file())
+                self.assertTrue((root / record["stderr"]).is_file())
+                if name == "success":
+                    self.assertEqual((root / record["stdout"]).read_text(), "discovery\n")
+
     def command(self, argv, root, env, expected=0):
         result = subprocess.run(argv, cwd=root, env=env, capture_output=True,
                                 text=True, timeout=30)
@@ -121,6 +158,14 @@ class RealFailurePipeline(unittest.TestCase):
                                   driver.stderr)
                 self.assertEqual([json.loads(line) for line in calls.read_text().splitlines()],
                                  [["nextest", "--version"]])
+                command_receipts = json.loads((evidence / "commands.json").read_text())
+                self.assertEqual([record["name"] for record in command_receipts],
+                                 ["rust-version", "nextest-version", "reference-revisions", "working-tree-status"])
+                for record in command_receipts:
+                    self.assertIsNone(record["selected"], "discovery cannot become selected completion")
+                    self.assertEqual((record["state"], record["returncode"], record["exception"]),
+                                     ("Completed", 0, None))
+                    self.assertGreaterEqual(record["ended_monotonic_ns"], record["started_monotonic_ns"])
                 terminal = json.loads((evidence / "terminal.json").read_text())
                 row = json.loads((evidence / "family-ledger.json").read_text())["families"]["lanczos"]
                 self.assertEqual((terminal["exit_status"], terminal["status"], terminal["completed"]),

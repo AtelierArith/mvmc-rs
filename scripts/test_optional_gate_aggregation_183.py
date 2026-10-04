@@ -91,8 +91,66 @@ def fixture(root, packages, plan, family):
     put(evidence / "metadata.json", metadata)
     put(evidence / "backend.json", {"actual_threads": 1, "actual_config": "OpenBLAS 0.3.26 synthetic",
                                    "actual_core": "Haswell", "library_sha256": "c" * 64})
-    for name in ("commands.json", "selection.json"):
-        put(evidence / name, {"synthetic": True})
+    put(evidence / "selection.json", {"synthetic": True})
+    # Independent literal command receipts, not subprocess/model execution.
+    calls = {"general": ["general"], "lanczos": [f"{m}-{c}" for m in audit.MODELS for c in ("real", "cmp")],
+             "mpi": ["mpi-2", "mpi-4"], "thread": ["thread"]}[family]
+    commands = []
+    for name in calls:
+        env = {key: "1" for key in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS")}
+        env["CARGO_TARGET_DIR"] = "/synthetic/target"
+        if family in ("general", "lanczos"):
+            target = "ctest_general_reference" if family == "general" else "lanczos_transfer_physcal"
+            expr = " | ".join(f"test(={identity})" for identity in identities)
+            argv = ["cargo", "nextest", "run", "--locked", "-p", "mvmc-core", "--cargo-profile", "test-fast",
+                    "--test", target, "--run-ignored", "only", "-E", expr, "--no-fail-fast", "--retries", "0",
+                    "--success-output", "immediate", "--failure-output", "immediate"]
+            if family == "general":
+                env["MVMC_RS_CTEST_GENERAL"] = "1"
+            else:
+                model, mode = name.rsplit("-", 1)
+                env.update(MVMC_RS_LANCZOS_PHYSICAL="1", MVMC_RS_LANCZOS_MODEL=model, MVMC_RS_LANCZOS_MODE=mode)
+        elif family == "mpi":
+            world = name.split("-")[1]
+            argv = ["mpiexec", "-n", world, "synthetic-path", "--ignored", "--exact", audit.MPI, "--nocapture"]
+            env.update(MVMC_RS_MPI_PHYSICAL="1", MPI179_PHYSCAL_OUTPUT=str(evidence / f"world-{world}"))
+        else:
+            argv = ["bash", "scripts/verify_threaded_issue182.sh"]
+            env.update(MVMC_RS_THREADED_TARGET_DIR="/synthetic/target", TMPDIR=str(evidence / "thread-artifacts"))
+        commands.append({"schema": 1, "name": name, "argv": argv, "cwd": "/synthetic/checkout", "env": env,
+                         "selected": {"family": family, "profile": "test-fast",
+                                      "features": "mpi" if family == "mpi" else "default", "identities": identities},
+                         "timeout_seconds": 2400, "state": "Completed", "returncode": 0, "exception": None,
+                         "started_unix_ns": 100, "ended_unix_ns": 200, "started_monotonic_ns": 10,
+                         "ended_monotonic_ns": 20, "stdout": f"{name}.stdout", "stderr": f"{name}.stderr"})
+        for stream in ("stdout", "stderr"):
+            (evidence / f"{name}.{stream}").write_text("")
+    if family == "mpi":
+        acquisition_argv = [
+            ("build", ["cargo", "test", "--locked", "-p", "mvmc-core", "--profile", "test-fast",
+                       "--features", "mpi", "--test", "mpi_physcal", "--no-run", "--message-format=json"]),
+            ("selection", ["synthetic-path", "--list"])]
+    else:
+        target = {"general": "ctest_general_reference", "lanczos": "lanczos_transfer_physcal",
+                  "thread": "threaded_issue182"}[family]
+        expr = " | ".join(f"test(={identity})" for identity in identities)
+        acquisition_argv = [("selection", ["cargo", "nextest", "list", "--locked", "-p", "mvmc-core",
+                            "--cargo-profile", "test-fast", "--test", target, "--run-ignored", "only", "-E", expr,
+                            "--message-format", "json"])]
+    acquisitions = []
+    for name, argv in acquisition_argv:
+        acquisitions.append({"schema": 1, "name": name, "argv": argv, "cwd": "/synthetic/checkout",
+                             "env": {"CARGO_TARGET_DIR": "/synthetic/target"}, "selected": None,
+                             "timeout_seconds": 2400, "state": "Completed", "returncode": 0, "exception": None,
+                             "started_unix_ns": 1, "ended_unix_ns": 2, "started_monotonic_ns": 1,
+                             "ended_monotonic_ns": 2, "stdout": f"{name}.stdout", "stderr": f"{name}.stderr"})
+        for stream in ("stdout", "stderr"):
+            (evidence / f"{name}.{stream}").write_text("")
+    put(evidence / "commands.json", acquisitions + commands)
+    metadata = audit.read_json(evidence / "metadata.json")
+    metadata["command_receipt_schema"] = 1
+    metadata["checkout_root"] = "/synthetic/checkout"
+    put(evidence / "metadata.json", metadata)
     for name in ("linkage.txt", "rust-version.stdout", "nextest-version.stdout", "reference-revisions.stdout"):
         (evidence / name).write_text("synthetic infrastructure evidence only\n")
     if family == "mpi":
@@ -148,6 +206,92 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_rehashed_command_receipts_bind_actual_calls_not_discovery(self):
+        variants = ("absent_schema", "schema_bool", "legacy", "discovery_only", "duplicate", "missing_call",
+                    "profile", "features", "identity", "argv", "environment", "target", "thread_setting",
+                    "started", "timeout", "incomplete", "nonzero", "bool_exit", "backwards", "stream",
+                    "checkout", "acquisition", "acquisition_missing", "discovery_selected")
+        for family in audit.FAMILIES:
+            for variant in variants:
+                with self.subTest(family=family, variant=variant), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packages = root / "packages"
+                    packages.mkdir()
+                    plan = audit.make_plan(family, BINDING)
+                    package = fixture(root, packages, plan, family)
+                    self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                    evidence = package / "evidence"
+                    commands = json.loads((evidence / "commands.json").read_text())
+                    record = next(command for command in commands if command["selected"] is not None)
+                    expected = "unfinished/failed/invalid command lifecycle"
+                    if variant in ("absent_schema", "schema_bool"):
+                        metadata = audit.read_json(evidence / "metadata.json")
+                        if variant == "absent_schema":
+                            metadata.pop("command_receipt_schema")
+                        else:
+                            metadata["command_receipt_schema"] = True
+                        put(evidence / "metadata.json", metadata)
+                        expected = "historical command receipts lack execution schema; not current-eligible"
+                    elif variant == "legacy":
+                        commands = [{"argv": record["argv"], "env": record["env"]}]
+                        expected = "invalid/duplicate command receipt identity"
+                    elif variant == "discovery_only":
+                        for command in commands:
+                            command["selected"] = None
+                        expected = "selected command coverage/order mismatch; discovery is not completion"
+                    elif variant == "duplicate":
+                        commands.append(copy.deepcopy(record))
+                        expected = "invalid/duplicate command receipt identity"
+                    elif variant == "missing_call":
+                        commands.pop()
+                        expected = ("actual command receipt list missing" if not commands else
+                                    "selected command coverage/order mismatch; discovery is not completion")
+                    elif variant in ("profile", "features", "identity"):
+                        if variant == "identity":
+                            record["selected"]["identities"] = ["helper"]
+                        else:
+                            record["selected"][variant] = "wrong"
+                        expected = "command selection/profile/features mismatch"
+                    elif variant == "argv":
+                        record["argv"] = ["cargo", "nextest", "--version"]
+                        expected = "selected command argv/gate environment mismatch"
+                    elif variant == "environment":
+                        record["env"] = {key: value for key, value in record["env"].items()
+                                         if not key.startswith(("MVMC_", "MPI179_", "TMPDIR"))}
+                        expected = "selected command argv/gate environment mismatch"
+                    elif variant == "target":
+                        record["env"]["CARGO_TARGET_DIR"] = "/other-target"
+                        expected = "selected command target binding mismatch"
+                    elif variant == "thread_setting":
+                        record["env"]["OPENBLAS_NUM_THREADS"] = "2"
+                        expected = "selected command backend thread setting mismatch"
+                    elif variant == "checkout":
+                        record["cwd"] = "/different-checkout"
+                        expected = "invalid command argv/cwd/environment"
+                    elif variant == "acquisition":
+                        commands[0]["argv"] = ["cargo", "nextest", "--version"]
+                        expected = "build/selection command profile/features/order mismatch"
+                    elif variant == "acquisition_missing":
+                        commands.pop(0)
+                        expected = "build/selection command profile/features/order mismatch"
+                    elif variant == "discovery_selected":
+                        commands[0]["selected"] = copy.deepcopy(record["selected"])
+                        expected = "selected command coverage/order mismatch; discovery is not completion"
+                    elif variant in ("started", "timeout", "incomplete"):
+                        record["state"] = {"started": "Started", "timeout": "Timeout", "incomplete": "Incomplete"}[variant]
+                        record["returncode"] = None
+                    elif variant == "nonzero":
+                        record["returncode"] = 7
+                    elif variant == "bool_exit":
+                        record["returncode"] = False
+                    elif variant == "backwards":
+                        record["ended_monotonic_ns"] = 9
+                    else:
+                        record["stdout"] = "rust-version.stdout"
+                        expected = "command raw stream identity mismatch"
+                    put(evidence / "commands.json", commands)
+                    self.assert_rehashed_type_failure(package, plan, packages, family, expected)
+
     def assert_rehashed_type_failure(self, package, plan, packages, family, diagnostic):
         refresh(package)
         envelope = audit.read_json(package / "envelope.json")
