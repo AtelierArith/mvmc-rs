@@ -26,7 +26,10 @@ class RealFailurePipeline(unittest.TestCase):
     def test_real_classified_failures_survive_seal_and_aggregate(self):
         for case, status in (("manifest", "MissingFixture"),
                              ("referenced_input", "MissingFixture"),
-                             ("interall", "Unsupported"), ("invalid_utf8", "Failure")):
+                             ("interall", "Unsupported"), ("invalid_utf8", "Failure"),
+                             ("metadata_mismatch", "Failure"),
+                             ("metadata_missing", "Failure"),
+                             ("metadata_duplicate", "Failure")):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 scripts = root / "scripts"
@@ -50,17 +53,23 @@ class RealFailurePipeline(unittest.TestCase):
                 reference.mkdir(parents=True)
                 manifest = reference / "Manifest-v1.13.toml"
                 manifest.write_text("# synthetic presence control; no Julia runtime\n")
-                for model in MODELS:
+                for model, samples in zip(MODELS, (100, 1000, 5000)):
                     inputs = reference / "test/integration/reference" / model / "physcal_ref/inputs"
                     inputs.mkdir(parents=True)
-                    (inputs / "modpara.def").write_text("Nsite 2\n")
+                    (inputs / "modpara.def").write_text(
+                        f"Nsite 2\nNVMCSample {samples}\nNDataQtySmp 1\n"
+                        "NVMCWarmUp 10\nNVMCInterval 1\nRndSeed 1\n"
+                        "NVMCCalMode 1\nNLanczosMode 2\n")
                     (inputs / "namelist.def").write_text("ModPara modpara.def\n")
                 # Real fixture selection succeeds before intentional mutation; this
                 # is only a filesystem closure control, never a simulated model Pass.
                 self.command([sys.executable, "-B", "-c",
                               "import sys;sys.path.insert(0,'scripts');"
                               "import run_optional_gates_183 as g;"
-                              "assert len(set(g.fixture_files('lanczos')))==7"], root, env)
+                              "assert len(set(g.fixture_files('lanczos')))==7;"
+                              "r=g.fixture_metadata.capture(g.ROOT);"
+                              "assert [v['declared']['NVMCSample'] for v in r['fixtures']]==[100,1000,5000];"
+                              "assert r['explicit_gate_overrides']=={'seed':1,'modes':['real','cmp']}"], root, env)
                 namelist = reference / "test/integration/reference" / MODELS[0] / "physcal_ref/inputs/namelist.def"
                 if case == "manifest":
                     manifest.unlink()
@@ -68,8 +77,21 @@ class RealFailurePipeline(unittest.TestCase):
                     namelist.write_text("ModPara absent.def\n")
                 elif case == "interall":
                     namelist.write_text("InterAll modpara.def\n")
-                else:
+                elif case == "invalid_utf8":
                     namelist.write_bytes(b"ModPara \xff\n")
+                else:
+                    modpara = namelist.parent / "modpara.def"
+                    original = modpara.read_text()
+                    if case == "metadata_mismatch":
+                        modpara.write_text(original.replace("NVMCSample 100\n", "NVMCSample 101\n"))
+                        expected_metadata_error = "fixture declarations mismatch reviewed gate report"
+                    elif case == "metadata_missing":
+                        modpara.write_text(original.replace("NVMCSample 100\n", ""))
+                        expected_metadata_error = "missing required fixture report fields"
+                    else:
+                        modpara.write_text(original + "NVMCSample 100\n")
+                        expected_metadata_error = "ambiguous fixture report field: NVMCSample"
+                    self.assertNotEqual(modpara.read_text(), original)
 
                 # Guard executable boundary, not the driver: only existing Cargo
                 # version discovery may reach the real Cargo binary. No build/test.
@@ -91,8 +113,11 @@ class RealFailurePipeline(unittest.TestCase):
                 originals = {name: hashlib.sha256((scripts / name).read_bytes()).hexdigest()
                              for name in MODULES}
                 evidence = root / "evidence"
-                self.command([sys.executable, "-B", str(scripts / MODULES[0]),
-                              "lanczos", str(evidence)], root, env, expected=1)
+                driver = self.command([sys.executable, "-B", str(scripts / MODULES[0]),
+                                      "lanczos", str(evidence)], root, env, expected=1)
+                if case.startswith("metadata_"):
+                    self.assertIn("optional gate failed: " + expected_metadata_error,
+                                  driver.stderr)
                 self.assertEqual([json.loads(line) for line in calls.read_text().splitlines()],
                                  [["nextest", "--version"]])
                 terminal = json.loads((evidence / "terminal.json").read_text())
@@ -123,6 +148,10 @@ class RealFailurePipeline(unittest.TestCase):
                 self.assertEqual(result["exit_status"], 1)
                 self.assertEqual(result["families"]["lanczos"]["status"], status)
                 self.assertTrue(result["families"]["lanczos"]["selected"])
+                self.assertEqual(result["families"]["lanczos"]["comparison_evidence"],
+                                 "Unverified")
+                self.assertIsNone(result["families"]["lanczos"]["numeric_reference_comparisons"])
+                self.assertEqual(result["families"]["lanczos"]["empty_contracts"], 0)
                 for family in ("general", "mpi", "thread"):
                     self.assertEqual(result["families"][family],
                                      {"selected": False, "status": "NotRun"})
