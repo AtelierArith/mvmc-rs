@@ -111,9 +111,15 @@ timeout -k 5s 120s node scripts/issue182_mpi_inner/replay-recorded.mjs \
 
 Both outputs must be fresh/absent, never inside retained input. Replay verifies
 the durable manifest then discrete-first comparator; first failure stops.
-These relocated-publication commands have **not yet been run**; actual proof
-used the pinned historical harness (schema seal
-`35ab1f4d7a1d596f249a4fcdfb35c0230936d3af9e883f3ff7bcb54fceaa8ee1`).
+The relocated publication scripts were subsequently run on unchanged head
+`6e6bc7b0a3054aacd4fdfe97e9666979b94346a0` by the existing bounded owner:
+49 controls then all12 same-world worker triples PASS, terminal0, all
+source/input/runtime PRE/POST and both phase owner/writer/group-empty statuses0.
+Actual local receipt `/tmp/mvmc-issue182-world2-readonly.2uo2ee`, handle72582;
+source seal `66190c7fae50cab2dcc2982e6be4a14276df3ef4d05212181c965c95a7b6f8c0`.
+This read-only run verified the durable SHA256SUMS and regenerated comparison
+diagnostics only; no native/model captures were regenerated. The original
+historical schema seal remains `35ab1f4d7a1d596f249a4fcdfb35c0230936d3af9e883f3ff7bcb54fceaa8ee1`.
 
 Explicit native developer gate: build/list the ignored test with `mpi`, retain
 the actual selected ELF/provider inventory, then run each world/width/workers
