@@ -165,6 +165,20 @@ def fixture(root, packages, plan, family):
         (evidence / name).write_text("synthetic infrastructure evidence only\n")
     if family == "mpi":
         mpi_fixture(evidence)
+    elif family == "general":
+        # Independent successful-harness declaration literals; not model runs.
+        records = [{"kind": "prefix", "steps": steps, "window": steps, "repeats": 1}
+                   for steps in (1, 2, 3, 20)] + [
+                       {"kind": "public", "steps": 20, "window": 20, "repeats": 2}]
+        for record in records:
+            record.update(seed=12395, samples=100, frames=1, warmup=10, interval=1,
+                          cg=0, store=1, mode="cmp", ranks=1, workers=1)
+        (evidence / "general.stderr").write_text("\n".join(
+            "GENERAL_GATE_SETTINGS " + " ".join(f"{key}={value}" for key, value in record.items())
+            for record in records) + "\n")
+        put(evidence / "general-settings.json", {"schema": 1,
+            "authority": "successful gate harness arguments/input declarations; not internal sampler instrumentation",
+            "records": records})
     put(evidence / "artifacts.json", {str(path): audit.digest(path)
         for path in evidence.rglob("*") if path.is_file()})
     package = packages / audit.artifact_name(family, plan)
@@ -216,6 +230,35 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_rehashed_general_settings_join_actual_raw_not_declaration_only(self):
+        for variant in ("raw_missing", "raw_duplicate", "raw_warmup", "report_warmup", "report_schema_bool", "report_schema_float"):
+            with self.subTest(case=variant), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan("general", BINDING)
+                package = fixture(root, packages, plan, "general")
+                self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 0)
+                evidence = package / "evidence"
+                raw = evidence / "general.stderr"
+                report_path = evidence / "general-settings.json"
+                report = audit.read_json(report_path)
+                diagnostic = "missing/duplicate/mismatched executed General settings"
+                if variant == "raw_missing":
+                    raw.write_text("no settings receipt\n")
+                elif variant == "raw_duplicate":
+                    raw.write_text(raw.read_text() + raw.read_text().splitlines()[0] + "\n")
+                elif variant == "raw_warmup":
+                    raw.write_text(raw.read_text().replace("warmup=10", "warmup=11", 1))
+                else:
+                    diagnostic = "General settings report/raw selected call mismatch"
+                    if variant == "report_warmup":
+                        report["records"][0]["warmup"] = 11
+                    else:
+                        report["schema"] = True if variant == "report_schema_bool" else 1.0
+                    put(report_path, report)
+                self.assert_rehashed_type_failure(package, plan, packages, "general", diagnostic)
+
     def test_rehashed_closure_posts_join_terminal_and_fresh_schema(self):
         variants = ("schema_missing", "schema_bool", "schema_float", "schema_old",
                     "file_missing", "terminal_missing", "terminal_list", "file_list",

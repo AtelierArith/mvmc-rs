@@ -13,7 +13,7 @@ import optional_mpi_provider_183 as mpi_provider
 import optional_fixture_metadata_183 as fixture_metadata
 import optional_reference_provenance_183 as reference_provenance
 
-from run_optional_gates_183 import FAMILIES, GENERAL, LANCZOS, MODELS, MPI, THREAD
+from run_optional_gates_183 import FAMILIES, GENERAL, LANCZOS, MODELS, MPI, THREAD, validate_general_settings
 
 SCHEMA = 1
 BINDING = ("head", "run_id", "attempt", "workflow")
@@ -376,6 +376,15 @@ def validate_package(package, family, plan):
         stable_closure(evidence, stem)
     validate_closure_posts(evidence, metadata, terminal)
     validate_command_receipts(evidence, family, metadata, expected_identities)
+    if family == "general":
+        text = regular(evidence / "general.stdout").read_text() + "\n" + regular(evidence / "general.stderr").read_text()
+        observed = validate_general_settings(text)
+        report = read_json(evidence / "general-settings.json")
+        if (type(report.get("schema")) is not int or report != observed or
+                any(type(row[key]) is not type(value)
+                    for row, expected in zip(report["records"], observed["records"])
+                    for key, value in expected.items())):
+            raise ValueError("General settings report/raw selected call mismatch")
     if (metadata.get("oracle_execution") != "none; checked-in fixtures only" or
             metadata.get("reference_version") != "per-fixture provenance, NOT current Julia runtime verification" or
             metadata.get("not_claimed") != "full13 matrix, fullJulia features, fullC sampler, InterAll"):

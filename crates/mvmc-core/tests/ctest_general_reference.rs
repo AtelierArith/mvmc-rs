@@ -186,6 +186,18 @@ fn corrected_general_all_four_prefixes_match_independent_reference() {
             }
         }
         assert_eq!(compared, if steps == 1 { 1 } else { 7 });
+        eprintln!(
+            "GENERAL_GATE_SETTINGS kind=prefix seed={} steps={} window={} samples={} frames={} warmup={} interval={} cg={} store={} mode=cmp ranks=1 workers=1 repeats=1",
+            data.modpara.rnd_seed,
+            data.modpara.nsr_opt_itr_step,
+            data.modpara.nsr_opt_itr_smp,
+            data.modpara.nvmc_sample,
+            data.modpara.n_data_qty_smp,
+            data.modpara.nvmc_warmup,
+            data.modpara.nvmc_interval,
+            data.modpara.nsrcg,
+            data.modpara.nstore_o
+        );
         eprintln!("EXECUTED corrected3d0f Generalprefix{steps}: exactRAW/cursor/drawcount/next624/config; parameters/energy/OOHO/outputdeclaredCslots/allCwindows; no historical models claimed");
     }
 }
@@ -243,5 +255,19 @@ fn corrected_general_twenty_step_public_runner_is_repeatable() {
         1e-11,
         &[],
         "corrected General20 public output",
+    );
+    // Public call arguments and immutable input declaration, not internal RNG
+    // instrumentation. Both public calls and all output assertions returned.
+    let data =
+        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+    eprintln!(
+        "GENERAL_GATE_SETTINGS kind=public seed={} steps=20 window=20 samples={} frames={} warmup={} interval={} cg={} store={} mode=cmp ranks=1 workers=1 repeats=2",
+        data.modpara.rnd_seed,
+        data.modpara.nvmc_sample,
+        data.modpara.n_data_qty_smp,
+        data.modpara.nvmc_warmup,
+        data.modpara.nvmc_interval,
+        data.modpara.nsrcg,
+        data.modpara.nstore_o
     );
 }

@@ -26,6 +26,32 @@ def synthetic_manifest(root):
 
 
 class OptionalGateContract(unittest.TestCase):
+    def test_general_actual_settings_receipts_require_all_five_scenarios(self):
+        # Independent literals for the immutable declared input and explicit
+        # harness overrides, not model execution or Rust-generated expectations.
+        rows = [f"GENERAL_GATE_SETTINGS kind=prefix seed=12395 steps={steps} window={steps} samples=100 frames=1 warmup=10 interval=1 cg=0 store=1 mode=cmp ranks=1 workers=1 repeats=1"
+                for steps in (1, 2, 3, 20)] + [
+                    "GENERAL_GATE_SETTINGS kind=public seed=12395 steps=20 window=20 samples=100 frames=1 warmup=10 interval=1 cg=0 store=1 mode=cmp ranks=1 workers=1 repeats=2"]
+        text = "\n".join(rows)
+        report = gate.validate_general_settings(text)
+        self.assertEqual(len(report["records"]), 5)
+        self.assertEqual(gate.validate_general_settings("\n".join(reversed(rows))), report)
+        variants = {"missing": "\n".join(rows[:-1]), "duplicate": text + "\n" + rows[0],
+                    "unknown": text.replace("kind=public", "kind=unknown"),
+                    "warmup": text.replace("warmup=10", "warmup=11", 1),
+                    "window": text.replace("window=20", "window=100", 1),
+                    "seed": text.replace("seed=12395", "seed=1", 1),
+                    "bool": text.replace("samples=100", "samples=true", 1),
+                    "float": text.replace("samples=100", "samples=100.0", 1),
+                    "leading_zero": text.replace("samples=100", "samples=0100", 1),
+                    "duplicate_key": text.replace("cg=0", "cg=0 cg=0", 1),
+                    "extra": text.replace("cg=0", "cg=0 unknown=1", 1)}
+        for name, broken in variants.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(broken, text)
+                with self.assertRaises(ValueError):
+                    gate.validate_general_settings(broken)
+
     def test_mpi_provider_capture_precedes_cargo_and_failure_is_not_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -128,6 +154,12 @@ class OptionalGateContract(unittest.TestCase):
                 def fake_run(args, **kwargs):
                     if args[:3] == ["cargo", "nextest", "list"]:
                         kwargs["stdout"].write(json.dumps(data))
+                    elif args[:3] == ["cargo", "nextest", "run"]:
+                        # Keep this pre-existing mocked infrastructure completion
+                        # explicitly synthetic; never waive actual marker parsing.
+                        for steps in (1, 2, 3, 20):
+                            kwargs["stderr"].write(f"GENERAL_GATE_SETTINGS kind=prefix seed=12395 steps={steps} window={steps} samples=100 frames=1 warmup=10 interval=1 cg=0 store=1 mode=cmp ranks=1 workers=1 repeats=1\n")
+                        kwargs["stderr"].write("GENERAL_GATE_SETTINGS kind=public seed=12395 steps=20 window=20 samples=100 frames=1 warmup=10 interval=1 cg=0 store=1 mode=cmp ranks=1 workers=1 repeats=2\n")
                     return SimpleNamespace(returncode=0)
                 def fake_backend(_, linkage):
                     linkage.write_text("mock linkage, not native backend evidence\n")
