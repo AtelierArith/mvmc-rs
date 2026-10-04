@@ -144,19 +144,22 @@ fn metadata_identity_preserves_non_utf8_filename() {
         Err(create_error)
             if cfg!(target_os = "macos") && create_error.raw_os_error() == Some(92) =>
         {
-            // SOURCE hypothesis: native Mac CI must prove metadata rejects the
-            // same invalid-byte path. NotFound/any other result must still fail.
+            // Native Mac CI observed creation raw92 followed by metadata raw2.
+            // Exercise the public missing-file contract, not an error or skip.
             let metadata_error = fs::metadata(&path).unwrap_err();
-            assert_eq!(metadata_error.raw_os_error(), Some(92));
-            let api_error = get_file_info(&path).unwrap_err();
-            assert_eq!(api_error.raw_os_error(), Some(92));
-            assert_eq!(api_error.kind(), metadata_error.kind());
+            assert_eq!(metadata_error.raw_os_error(), Some(2));
+            assert_eq!(metadata_error.kind(), std::io::ErrorKind::NotFound);
+            let info = get_file_info(&path).unwrap();
+            assert_eq!(info.filename, name);
+            assert_eq!(info.filepath, path);
+            assert!(!info.exists);
+            assert_eq!(info.size_bytes, 0);
+            assert_eq!(info.last_modified, UNIX_EPOCH);
             assert!(!validate_file_exists(&path));
             println!(
-                "native invalid-byte path: create kind={:?} raw={:?}; metadata kind={:?} raw={:?}; API kind={:?} raw={:?}; predicate=false",
+                "native invalid-byte path: create kind={:?} raw={:?}; metadata kind={:?} raw={:?}; API exists=false size=0 epoch; predicate=false",
                 create_error.kind(), create_error.raw_os_error(),
-                metadata_error.kind(), metadata_error.raw_os_error(),
-                api_error.kind(), api_error.raw_os_error()
+                metadata_error.kind(), metadata_error.raw_os_error()
             );
             return;
         }
