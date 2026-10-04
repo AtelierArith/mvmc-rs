@@ -1,6 +1,14 @@
 # Julia-mVMC → Rust evidence matrix (issue #184)
 
-## CURRENT snapshot
+## Current joined reconciliation
+
+Main checkpoint: `eaa5db6254c721b95e8e63096287cdb74d5124e2`.
+See the [canonical joined matrix](issue-184-joined-evidence.md): all2,342 rows
+and original owners retained;15 scoped assertion PASS and one intentional
+difference. PR254 initialization does not certify13 models'20-step execution.
+#184/#185 remain open. All records below retain their historical identities.
+
+## Historical CURRENT snapshot (main3b953a5)
 
 Authoritative main is **3b953a5099a500b1566f0e06107ca0d7a02e685b** (PR238). This standalone SOURCE reconciliation preserves all historical records below and does not import the dirty 1444-row assertion audit. #184/#185 remain OPEN. A source pointer, infrastructure control or passing whole-crate gate is not verification of every original assertion/API/scenario.
 
