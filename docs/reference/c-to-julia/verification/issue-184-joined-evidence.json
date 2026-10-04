@@ -10168,15 +10168,15 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:82",
       "symbol_or_scenario": "MVMCOptimizers.resolve_rnd_seed",
       "parent_keys": [],
-      "rust_entry": "prepare_phys_cal_from_namelist/_with_reducer -> resolve_seed_with_reducer; MpiGroupContext::seed_offset",
-      "supported_rejected_conditions": "Actualprepared RNG words_consumed0/clone624; expectedSFMT initialized literalresolvedseed; not independentprimitivegolden/MCMC trajectory",
+      "rust_entry": "mvmc_core::resolve_rnd_seed -> same private resolve_seed_with_reducer; both runner consumers",
+      "supported_rejected_conditions": "Six seed integer-policy leaf conditions and bounded public callability; no full parent scenario/API acceptance",
       "intentional_scope": "Implemented public preparation path,typedReducer vsJulia fakecontext; no error/optimization/fullMPIseedmatrix proof in thisbatch",
-      "evidence_type": "E1 bounded six source-seedconditions M0562\u2013M0567; broader #177root-clock/collective-error criteria separate",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
-      "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1/testparallelSHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; RusttestSHAfc0655a88fea7f6ed23f0547a0a322c38d4fd6fc62545e2da61ff7094751c2ae; snapshotbase70e525ac+onlynewtest manifest85842997498100be93e5c25b865ea70b6a071bbb66f6ff995dcd763d31e63681; handoffissue-179-parallel-literals.md",
-      "settings": "m0562_m0578_missing_seed_uses_parser_default11272;m0563_zero_seed_is_not_default_or_clock;m0564_positive_seed123;m0565_negative_seed_uses_positive_current_unix_seconds;m0566_explicit777_overrides_input123;m0567_actual_mpi_group3_base100_is103. CopiedofflineHeisenbergreal fixedfile;onlyRndSeedaltered; liveworld4/width1 allrankseeds100..103; LinuxMPICH4.2/Rust1.99/LP64OpenBLAS.26threads1",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_parallel_literals --no-fail-fast --retries 0; actual mpiexec -n4 binary --ignored --exact m0567_actual_mpi_group3_base100_is103 --nocapture",
-      "result": "Owner7821 terminal0 tenPASS .052s/oneignored livecase,focusedallfeaturesClippy0; then world4 launch0 eachrank1PASS0fail0ignored .07s; binary3e4f0b0b5eea9d2b97db3ad9b45ba715d2809a6d219c66283e7f80c384ce1892/postchecks0. Sixseedleafs only; notparallel74/MPI87/#177completion; rankclocks/startdelays/grouped2ranks/errors notcoveredhere",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "See six leaf settings; serial typedReducer and private injected clock separate",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "Related leaf/API controls PASS; parent status pending, not blanket fullS117/API PASS",
       "owner_text": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
       "proposed_followup_owner": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
       "reconciliation_coordinator": "Pauli / #185",
@@ -10184,7 +10184,7 @@
       "scope_exclusion": "",
       "status": "SourceMappedMissingEvidence",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "actual MPI topology/rank-clock/full runner trajectory not verified by this join; no automatic parent completion"
       ],
       "original_row": {
         "id": "A202",
@@ -10205,7 +10205,54 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "SourceMappedMissingEvidence",
+        "rust_entry": "prepare_phys_cal_from_namelist/_with_reducer -> resolve_seed_with_reducer; MpiGroupContext::seed_offset",
+        "supported_rejected_conditions": "Actualprepared RNG words_consumed0/clone624; expectedSFMT initialized literalresolvedseed; not independentprimitivegolden/MCMC trajectory",
+        "evidence_type": "E1 bounded six source-seedconditions M0562–M0567; broader #177root-clock/collective-error criteria separate",
+        "settings": "m0562_m0578_missing_seed_uses_parser_default11272;m0563_zero_seed_is_not_default_or_clock;m0564_positive_seed123;m0565_negative_seed_uses_positive_current_unix_seconds;m0566_explicit777_overrides_input123;m0567_actual_mpi_group3_base100_is103. CopiedofflineHeisenbergreal fixedfile;onlyRndSeedaltered; liveworld4/width1 allrankseeds100..103; LinuxMPICH4.2/Rust1.99/LP64OpenBLAS.26threads1",
+        "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1/testparallelSHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; RusttestSHAfc0655a88fea7f6ed23f0547a0a322c38d4fd6fc62545e2da61ff7094751c2ae; snapshotbase70e525ac+onlynewtest manifest85842997498100be93e5c25b865ea70b6a071bbb66f6ff995dcd763d31e63681; handoffissue-179-parallel-literals.md",
+        "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_parallel_literals --no-fail-fast --retries 0; actual mpiexec -n4 binary --ignored --exact m0567_actual_mpi_group3_base100_is103 --nocapture",
+        "result": "Owner7821 terminal0 tenPASS .052s/oneignored livecase,focusedallfeaturesClippy0; then world4 launch0 eachrank1PASS0fail0ignored .07s; binary3e4f0b0b5eea9d2b97db3ad9b45ba715d2809a6d219c66283e7f80c384ce1892/postchecks0. Sixseedleafs only; notparallel74/MPI87/#177completion; rankclocks/startdelays/grouped2ranks/errors notcoveredhere",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "api:A203",
@@ -20283,17 +20330,17 @@
       "original_kind": "testset",
       "original_id": "S117",
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:162",
-      "symbol_or_scenario": "@testset \"resolve_rnd_seed C parity (spec \u00a75-1, A5)\" begin",
+      "symbol_or_scenario": "@testset \"resolve_rnd_seed C parity (spec §5-1, A5)\" begin",
       "parent_keys": [],
-      "rust_entry": "prepare_phys_cal_from_namelist/_with_reducer -> resolve_seed_with_reducer; MpiGroupContext::seed_offset",
-      "supported_rejected_conditions": "Actualprepared RNG words_consumed0/clone624; expectedSFMT initialized literalresolvedseed; not independentprimitivegolden/MCMC trajectory",
+      "rust_entry": "mvmc_core::resolve_rnd_seed -> same private resolve_seed_with_reducer; both runner consumers",
+      "supported_rejected_conditions": "Six seed integer-policy leaf conditions and bounded public callability; no full parent scenario/API acceptance",
       "intentional_scope": "Implemented public preparation path,typedReducer vsJulia fakecontext; no error/optimization/fullMPIseedmatrix proof in thisbatch",
-      "evidence_type": "E1 bounded six source-seedconditions M0562\u2013M0567; broader #177root-clock/collective-error criteria separate",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
-      "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1/testparallelSHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; RusttestSHAfc0655a88fea7f6ed23f0547a0a322c38d4fd6fc62545e2da61ff7094751c2ae; snapshotbase70e525ac+onlynewtest manifest85842997498100be93e5c25b865ea70b6a071bbb66f6ff995dcd763d31e63681; handoffissue-179-parallel-literals.md",
-      "settings": "m0562_m0578_missing_seed_uses_parser_default11272;m0563_zero_seed_is_not_default_or_clock;m0564_positive_seed123;m0565_negative_seed_uses_positive_current_unix_seconds;m0566_explicit777_overrides_input123;m0567_actual_mpi_group3_base100_is103. CopiedofflineHeisenbergreal fixedfile;onlyRndSeedaltered; liveworld4/width1 allrankseeds100..103; LinuxMPICH4.2/Rust1.99/LP64OpenBLAS.26threads1",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_parallel_literals --no-fail-fast --retries 0; actual mpiexec -n4 binary --ignored --exact m0567_actual_mpi_group3_base100_is103 --nocapture",
-      "result": "Owner7821 terminal0 tenPASS .052s/oneignored livecase,focusedallfeaturesClippy0; then world4 launch0 eachrank1PASS0fail0ignored .07s; binary3e4f0b0b5eea9d2b97db3ad9b45ba715d2809a6d219c66283e7f80c384ce1892/postchecks0. Sixseedleafs only; notparallel74/MPI87/#177completion; rankclocks/startdelays/grouped2ranks/errors notcoveredhere",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "See six leaf settings; serial typedReducer and private injected clock separate",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "Related leaf/API controls PASS; parent status pending, not blanket fullS117/API PASS",
       "owner_text": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
       "proposed_followup_owner": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
       "reconciliation_coordinator": "Pauli / #185",
@@ -20301,7 +20348,7 @@
       "scope_exclusion": "",
       "status": "SourceMappedMissingEvidence",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "actual MPI topology/rank-clock/full runner trajectory not verified by this join; no automatic parent completion"
       ],
       "original_row": {
         "id": "S117",
@@ -20322,7 +20369,54 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#177/#184 mapping Chandra; Wegener literaltests/evidence; otherseed/failurematrix owners separate",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "SourceMappedMissingEvidence",
+        "rust_entry": "prepare_phys_cal_from_namelist/_with_reducer -> resolve_seed_with_reducer; MpiGroupContext::seed_offset",
+        "supported_rejected_conditions": "Actualprepared RNG words_consumed0/clone624; expectedSFMT initialized literalresolvedseed; not independentprimitivegolden/MCMC trajectory",
+        "evidence_type": "E1 bounded six source-seedconditions M0562–M0567; broader #177root-clock/collective-error criteria separate",
+        "settings": "m0562_m0578_missing_seed_uses_parser_default11272;m0563_zero_seed_is_not_default_or_clock;m0564_positive_seed123;m0565_negative_seed_uses_positive_current_unix_seconds;m0566_explicit777_overrides_input123;m0567_actual_mpi_group3_base100_is103. CopiedofflineHeisenbergreal fixedfile;onlyRndSeedaltered; liveworld4/width1 allrankseeds100..103; LinuxMPICH4.2/Rust1.99/LP64OpenBLAS.26threads1",
+        "reference_revision": "J8bb1b9e8ae47b1512c00b321be05664ddcac0fd1/testparallelSHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; RusttestSHAfc0655a88fea7f6ed23f0547a0a322c38d4fd6fc62545e2da61ff7094751c2ae; snapshotbase70e525ac+onlynewtest manifest85842997498100be93e5c25b865ea70b6a071bbb66f6ff995dcd763d31e63681; handoffissue-179-parallel-literals.md",
+        "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_parallel_literals --no-fail-fast --retries 0; actual mpiexec -n4 binary --ignored --exact m0567_actual_mpi_group3_base100_is103 --nocapture",
+        "result": "Owner7821 terminal0 tenPASS .052s/oneignored livecase,focusedallfeaturesClippy0; then world4 launch0 eachrank1PASS0fail0ignored .07s; binary3e4f0b0b5eea9d2b97db3ad9b45ba715d2809a6d219c66283e7f80c384ce1892/postchecks0. Sixseedleafs only; notparallel74/MPI87/#177completion; rankclocks/startdelays/grouped2ranks/errors notcoveredhere",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "scenario:S118",
@@ -74634,28 +74728,26 @@
       "original_kind": "@test",
       "original_id": "M0562",
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:164",
-      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 11272, nothing) == 11272   # missing \u2192 parser default",
+      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 11272, nothing) == 11272   # missing → parser default",
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy; mvmc_core::resolve_rnd_seed -> public_seed_resolution_matches_original_literal_integer_policy",
+      "supported_rejected_conditions": "input11272 overrideNone group0 =>11272; parser-supplied default; no parser execution",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input11272 overrideNone group0 =>11272; parser-supplied default; literal resolver argument, no parser execution",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0562",
         "parent_rows": "S117",
@@ -74688,7 +74780,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0563",
@@ -74696,28 +74835,26 @@
       "original_kind": "@test",
       "original_id": "M0563",
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:165",
-      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 0, nothing) == 0           # RndSeed==0 \u2192 seed 0 (C parity)",
+      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 0, nothing) == 0           # RndSeed==0 → seed 0 (C parity)",
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy; mvmc_core::resolve_rnd_seed -> public_seed_resolution_matches_original_literal_integer_policy",
+      "supported_rejected_conditions": "input0 overrideNone group0 =>0; no clock read",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input0 overrideNone group0 =>0; no clock read",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0563",
         "parent_rows": "S117",
@@ -74750,7 +74887,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0564",
@@ -74758,28 +74942,26 @@
       "original_kind": "@test",
       "original_id": "M0564",
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:166",
-      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 123, nothing) == 123       # \u6b63\u5024",
+      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 123, nothing) == 123       # 正値",
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy; mvmc_core::resolve_rnd_seed -> public_seed_resolution_matches_original_literal_integer_policy",
+      "supported_rejected_conditions": "input123 overrideNone group0 =>123",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input123 overrideNone group0 =>123",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0564",
         "parent_rows": "S117",
@@ -74812,7 +74994,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0565",
@@ -74824,24 +75053,22 @@
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy (private injected clock)",
+      "supported_rejected_conditions": "input-1 overrideNone group0; injected Unix clock1700000000 =>positive i64; no direct public wallclock assertion",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input-1 overrideNone group0; injected Unix clock1700000000 =>positive i64; no direct public wallclock assertion",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0565",
         "parent_rows": "S117",
@@ -74874,7 +75101,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0566",
@@ -74882,28 +75156,26 @@
       "original_kind": "@test",
       "original_id": "M0566",
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:169",
-      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 123, 777) == 777           # \u660e\u793a seed kwarg \u304c\u512a\u5148",
+      "symbol_or_scenario": "@test resolve_rnd_seed(ctx, 123, 777) == 777           # 明示 seed kwarg が優先",
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy; mvmc_core::resolve_rnd_seed -> public_seed_resolution_matches_original_literal_integer_policy",
+      "supported_rejected_conditions": "input123 overrideSome777 group0 =>777",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input123 overrideSome777 group0 =>777",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0566",
         "parent_rows": "S117",
@@ -74936,7 +75208,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0567",
@@ -74948,24 +75267,22 @@
       "parent_keys": [
         "scenario:S117"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+      "rust_entry": "run::seed_tests::resolve_seed_matches_julia_serial_and_group_policy; mvmc_core::resolve_rnd_seed -> public_seed_resolution_matches_original_literal_integer_policy",
+      "supported_rejected_conditions": "input100 overrideNone group3 =>103; serial reducer/context not actual MPI topology",
       "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "evidence_type": "Scoped ordinary Rust CI; computed integer policy; no actual MPI trajectory/C or Julia runtime",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 test_unit/test_unit_parallel.jl:162–173 SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050",
+      "settings": "input100 overrideNone group3 =>103; serial reducer/context not actual MPI topology",
+      "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+      "result": "PASS scoped literal condition within ONE unit-test identity in both Linux jobs; not six separate executions",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0567",
         "parent_rows": "S117",
@@ -74998,7 +75315,54 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "historical_evidence_before_pr303": {
+        "status": "ExplicitScopeExclusionNeedsReview",
+        "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
+        "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
+        "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+        "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
+        "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "command": "NOT_AVAILABLE until exact assertion/setting mapping",
+        "result": "INVENTORY_ONLY; NOT_RUN",
+        "pending_reasons": [
+          "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        ]
+      },
+      "ci_evidence": {
+        "source_head": "8200a0f9ef6046180990fe80cfa74fa79c04f57e",
+        "tested_merge": "bf93ea9bf9c045049afaaf35904b8fa1a164b6c0",
+        "tested_base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "run_id": 37193009494,
+        "command": "cargo nextest run --workspace [serial: no feature flags; all: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0",
+        "jobs": [
+          {
+            "id": 111408980141,
+            "features": "default",
+            "count": 1122,
+            "skipped": 41,
+            "seconds": 287.555,
+            "raw_sha256": "6afb6a184984ecff0696c512d164ffe435c2c5cca13c1843dd2035d9abed38db",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980141"
+          },
+          {
+            "id": 111408980103,
+            "features": "all",
+            "count": 1124,
+            "skipped": 60,
+            "seconds": 271.725,
+            "raw_sha256": "ee150c05a6b8dcde40c1e2a03e4e68398b73ce5c83e985b6e0ee79dc1191923f",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37193009494/job/111408980103"
+          }
+        ]
+      },
+      "local_evidence": {
+        "base": "5b0874eb70b72e2a7993662af757d50b25dadc17",
+        "receipt": "/tmp/mvmc-184-a202-proof.20261004",
+        "unit": "8PASS .014s 236outside filter NotRun",
+        "public": "2PASS .006s 0skip",
+        "terminal": 0
+      }
     },
     {
       "key": "assertion:M0568",
