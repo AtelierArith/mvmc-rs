@@ -29,6 +29,7 @@ for name in gcc g++ gfortran make;do ldd "$(readlink -f "$(command -v "$name")")
 ! grep -q 'not found' "$proof/compiler.ldd.txt"
 awk '$2=="=>"&&substr($3,1,1)=="/"{print $3}substr($1,1,1)=="/"{print $1}' "$proof/compiler.ldd.txt" | sort -u | xargs -r sha256sum > "$proof/compiler-providers.sha256"
 printf 'version=%s sha256=%s prefix=%s\n' "$version" "$digest" "$prefix" > "$proof/settings.txt"
+printf 'UCX_TLS=%s\n' "${UCX_TLS-NotSet}" >> "$proof/settings.txt"
 source_root=$(mktemp -d "${RUNNER_TEMP:?}/issue234-mpich-source.XXXXXX")
 printf '%s\n' "$source_root" > "$proof/source-root.txt"
 timeout -k 10s 120s curl -fsSL --max-time 110 \
