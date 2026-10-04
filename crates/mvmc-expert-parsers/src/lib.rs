@@ -154,6 +154,8 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                 "DH2"
                     | "CoulombIntra"
                     | "CoulombInter"
+                    | "Hund"
+                    | "Exchange"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -194,6 +196,8 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
                 "DH2"
                     | "CoulombIntra"
                     | "CoulombInter"
+                    | "Hund"
+                    | "Exchange"
                     | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
@@ -461,10 +465,10 @@ fn parse_file_by_type(
                 coulomb::parse_coulomb_inter_definition(path, data.modpara.nsite)?;
         }
         "Hund" => {
-            data.hund_terms = hund::parse_hund_def(path)?;
+            data.hund_terms = hund::parse_hund_definition(path, data.modpara.nsite)?;
         }
         "Exchange" => {
-            data.exchange_terms = exchange::parse_exchange_def(path)?;
+            data.exchange_terms = exchange::parse_exchange_definition(path, data.modpara.nsite)?;
         }
         "PairHop" => {
             let section = pairhop::parse_pairhop_def(path)?;
