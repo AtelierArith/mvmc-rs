@@ -5,7 +5,7 @@
 use std::io;
 use std::path::Path;
 
-use crate::types::{CoulombInterTerm, CoulombIntraTerm};
+use crate::types::{CoulombInterTerm, CoulombIntraTerm, ParsingContext, ParsingDiagnostic};
 use crate::utils::file::{
     c_parse_float, clean_line, read_def_file, safe_parse_float, safe_parse_int, split_def_line,
 };
@@ -97,15 +97,31 @@ fn read_definition(
 }
 
 /// Read a permissive Julia-helper CoulombIntra payload without C count/bounds checks.
-pub fn parse_coulomb_intra_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<CoulombIntraTerm>> {
-    let content = read_def_file(path)?;
-    Ok(parse_coulomb_intra_content(&content))
+pub fn parse_coulomb_intra_def<P: AsRef<Path>>(
+    path: P,
+) -> io::Result<(Vec<CoulombIntraTerm>, ParsingContext)> {
+    let content = read_def_file(path.as_ref())?;
+    let mut context = ParsingContext::new(path.as_ref());
+    let terms = parse_coulomb_intra_content(&content, &mut context);
+    Ok((terms, context))
 }
 
 /// Parse a `coulombintra.def` payload from memory.
-pub fn parse_coulomb_intra_content(content: &str) -> Vec<CoulombIntraTerm> {
+/// Starts a new observation in `context`, retaining its filename but clearing
+/// previous diagnostics. Like Julia's split, an empty input and a trailing
+/// newline each include an empty physical line. Negative sites are warning-only
+/// skipped rows; malformed coefficients retain the existing safe zero default.
+/// This helper does not apply C declared-count or Nsite admission checks.
+pub fn parse_coulomb_intra_content(
+    content: &str,
+    context: &mut ParsingContext,
+) -> Vec<CoulombIntraTerm> {
+    context.line_number = 0;
+    context.errors.clear();
+    context.warnings.clear();
     let mut out = Vec::new();
-    for line in content.lines() {
+    for (index, line) in content.split('\n').enumerate() {
+        context.line_number = index + 1;
         let tokens = split_def_line(line);
         if tokens.len() < 2 {
             continue;
@@ -113,6 +129,13 @@ pub fn parse_coulomb_intra_content(content: &str) -> Vec<CoulombIntraTerm> {
         // Header lines like "NCoulombIntra 8" -- skip silently.
         let site = match tokens[0].parse::<i64>() {
             Ok(v) if v >= 0 => v,
+            Ok(v) => {
+                context.warnings.push(ParsingDiagnostic {
+                    line_number: context.line_number,
+                    message: format!("Negative site index: {v}"),
+                });
+                continue;
+            }
             _ => continue,
         };
         let value = safe_parse_float(tokens[1], 0.0);

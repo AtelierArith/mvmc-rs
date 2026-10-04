@@ -8,6 +8,41 @@
 
 use num_complex::Complex64;
 
+/// One opt-in payload diagnostic, located at a 1-based physical line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsingDiagnostic {
+    /// Physical input line, including blank and comment lines.
+    pub line_number: usize,
+    /// Diagnostic text; not a C reader acceptance rule.
+    pub message: String,
+}
+
+/// Caller-owned diagnostic context for Julia-style payload helpers.
+/// Strict C definition readers and runtime validation do not consume this context.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsingContext {
+    /// Caller-supplied input identity, preserved without filesystem access.
+    pub filename: std::path::PathBuf,
+    /// Last physical line observed; zero before parsing.
+    pub line_number: usize,
+    /// Ordered fatal payload observations.
+    pub errors: Vec<ParsingDiagnostic>,
+    /// Ordered nonfatal payload observations.
+    pub warnings: Vec<ParsingDiagnostic>,
+}
+
+impl ParsingContext {
+    /// Start an empty context for a caller-supplied path identity.
+    pub fn new(filename: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            filename: filename.into(),
+            line_number: 0,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+}
+
 /// Structured result of Julia-compatible consistency validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationResult {
