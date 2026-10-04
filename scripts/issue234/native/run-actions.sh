@@ -44,7 +44,7 @@ git ls-files --recurse-submodules -z | xargs -0 sha256sum > "$out/source.sha256"
 git ls-files --recurse-submodules -z | while IFS= read -r -d '' path;do
  if [[ -L $path ]];then printf '%s -> %s\n' "$path" "$(readlink "$path")";fi
 done > "$out/source-symlinks.txt"
-for name in bash cargo rustc cargo-nextest mpicc mpiexec hydra_pmi_proxy cc ld ar pkg-config jq awk sed rg timeout sha256sum find sort xargs cmp ldd readlink od cat;do
+for name in bash cargo rustc cargo-nextest mpicc mpiexec hydra_pmi_proxy mpichversion dpkg-query cc ld ar pkg-config jq awk sed rg timeout sha256sum find sort xargs cmp ldd readlink od cat;do
  path=$(command -v "$name");sha256sum "$(readlink -f "$path")" >> "$out/tools.sha256"
 done
 for wrapper in "${RUSTC_WRAPPER-}" "${RUSTC_WORKSPACE_WRAPPER-}";do
@@ -68,6 +68,18 @@ done < "$out/tools.sha256"
 awk '$2=="=>"&&substr($3,1,1)=="/"{print $3}substr($1,1,1)=="/"{print $1}' "$out/tools.ldd.txt" | sort -u | xargs -r sha256sum > "$out/tool-providers.sha256"
 test -s "$out/tool-providers.sha256"
 { uname -a;rustc -Vv;cargo -V;cargo nextest --version;mpicc -show;mpiexec -version;pkg-config --modversion openblas; } > "$out/environment.txt" 2>&1
+mpichversion > "$out/mpichversion.txt" 2>&1
+dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' mpich libmpich12 libmpich-dev libpmix2 > "$out/mpi-packages.txt"
+for name in PMI_RANK PMI_SIZE PMI_FD PMI_VERSION PMI_SUBVERSION PMIX_RANK MPIR_CVAR_PMI_VERSION MPICH_PMI_VERSION MPIR_PARAM_PMI_VERSION;do
+ if [[ ! -v $name ]];then value=UNSET
+ elif [[ ${!name} =~ ^[0-9]+$ || ${!name} = x ]];then value=${!name}
+ else value=OTHER_REDACTED;fi
+ printf '%s=%s\n' "$name" "$value"
+done > "$out/launcher-pmi-env.txt"
+for name in PMI_PORT PMIX_NAMESPACE PMIX_SERVER_URI PMIX_SERVER_URI2 PMIX_SERVER_URI21;do
+ if [[ -v $name ]];then present=true;else present=false;fi
+ printf '%s present=%s\n' "$name" "$present"
+done >> "$out/launcher-pmi-env.txt"
 { cc --version;ld --version;rustc --print sysroot;pkg-config --cflags --libs openblas; } > "$out/compiler-backend.txt" 2>&1
 printf 'RUSTC_WRAPPER=%s\nRUSTC_WORKSPACE_WRAPPER=%s\nCARGO_TARGET_DIR=%s\n' "${RUSTC_WRAPPER-}" "${RUSTC_WORKSPACE_WRAPPER-}" "$CARGO_TARGET_DIR" > "$out/compiler-settings.txt"
 mpiexec -help > "$out/hydra-help.txt" 2>&1
