@@ -223,7 +223,7 @@ fn actual_sampling_outputs_configurations_and_rng_are_unchanged_by_capture() {
             .join("../../extern/Julia-mVMC/test/integration/reference/heisenberg_chain_real/inputs/namelist.def");
         let mut data = mvmc_expert_parsers::parse_expert_mode_files(input).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng);
+        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng).unwrap();
         mvmc_core::sync::sync_modified_parameter_local(&mut data, true);
         mvmc_core::qp::init_qp_weight(&mut data);
         data.modpara.nsr_opt_itr_step = 2;
@@ -237,7 +237,7 @@ fn actual_sampling_outputs_configurations_and_rng_are_unchanged_by_capture() {
                 * data.modpara.nmp_trans.unsigned_abs() as usize
                 * data.n_qp_opt_trans.max(1) as usize,
             data.modpara.nvmc_sample as usize,
-            mvmc_core::get_all_complex_flag(&data),
+            mvmc_core::get_all_complex_flag(&data).unwrap(),
             false,
         );
         let id = std::time::SystemTime::now()

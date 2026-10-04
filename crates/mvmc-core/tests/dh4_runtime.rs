@@ -74,7 +74,7 @@ fn dh4_runtime_mode_uses_declarations_and_ignores_loaded_imaginary_values() {
             data.complex_flags = vec![row[2]];
         }
         assert_eq!(
-            mvmc_core::run::get_all_complex_flag(&data),
+            mvmc_core::run::get_all_complex_flag(&data).unwrap(),
             // C uses definition flags; the archived Julia result in row[3]
             // also inferred the mode from loaded imaginary coefficients.
             if row[2] == -1 {
@@ -84,7 +84,7 @@ fn dh4_runtime_mode_uses_declarations_and_ignores_loaded_imaginary_values() {
             },
             "{line}"
         );
-        assert_eq!(all_complex_flag(&data), row[0] != 0, "{line}");
+        assert_eq!(all_complex_flag(&data).unwrap(), row[0] != 0, "{line}");
         mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }

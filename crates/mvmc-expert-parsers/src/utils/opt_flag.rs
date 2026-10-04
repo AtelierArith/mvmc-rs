@@ -5,6 +5,20 @@ use super::parameter_init::n_slater;
 use crate::types::ExpertModeData;
 use std::collections::BTreeMap;
 
+pub(crate) fn raw_orbital_complex_header(data: &ExpertModeData) -> Option<i64> {
+    let headers = [
+        "Orbital",
+        "OrbitalAntiParallel",
+        "OrbitalParallel",
+        "OrbitalGeneral",
+    ]
+    .into_iter()
+    .filter_map(|key| data.native_complex_headers.get(key));
+    headers.fold(None, |sum, &header| {
+        Some(sum.unwrap_or(0) + i64::from(header))
+    })
+}
+
 /// Extend the component array with integer 1 defaults without changing existing flags.
 pub fn ensure_optimization_flags_size(data: &mut ExpertModeData, n_components: usize) {
     if data.optimization_flags.len() < n_components {
@@ -54,8 +68,10 @@ pub fn set_orbital_opt_flags(data: &mut ExpertModeData, flags: &BTreeMap<i64, i6
         return;
     }
     let n_proj = data.projection_layout().n_proj + data.count_rbm_parameters();
-    // C collapses the sum of orbital headers to 1 before all orbital readers.
-    let complex = data.orbital_terms.iter().any(|term| term.is_complex);
+    // readdef.c: only a positive sum is normalized to one; negatives remain raw.
+    let raw = raw_orbital_complex_header(data)
+        .unwrap_or_else(|| i64::from(data.orbital_terms.iter().any(|term| term.is_complex)));
+    let complex = if raw > 0 { 1 } else { raw };
     ensure_optimization_flags_size(
         data,
         2 * (n_proj + n_slater(data) + data.count_opt_trans_parameters()),
@@ -70,8 +86,8 @@ pub fn set_orbital_opt_flags(data: &mut ExpertModeData, flags: &BTreeMap<i64, i6
             data.optimization_flags[component + 1] = if data.i_flg_orbital_parallel == 1
                 && idx >= data.n_orbital_anti_parallel as usize
             {
-                i64::from(complex)
-            } else if complex {
+                complex
+            } else if complex > 0 {
                 flag
             } else {
                 0
@@ -93,7 +109,11 @@ pub fn set_dh_opt_flags(data: &mut ExpertModeData) {
         let component = 2 * (layout.dh2_offset + index);
         if component < data.optimization_flags.len() {
             data.optimization_flags[component] = flag;
-            data.optimization_flags[component + 1] = if data.doublon_holon_2site_complex {
+            data.optimization_flags[component + 1] = if data
+                .native_complex_headers
+                .get("DH2")
+                .map_or(data.doublon_holon_2site_complex, |&header| header > 0)
+            {
                 flag
             } else {
                 0
@@ -104,7 +124,11 @@ pub fn set_dh_opt_flags(data: &mut ExpertModeData) {
         let component = 2 * (layout.dh4_offset + index);
         if component < data.optimization_flags.len() {
             data.optimization_flags[component] = flag;
-            data.optimization_flags[component + 1] = if data.doublon_holon_4site_complex {
+            data.optimization_flags[component + 1] = if data
+                .native_complex_headers
+                .get("DH4")
+                .map_or(data.doublon_holon_4site_complex, |&header| header > 0)
+            {
                 flag
             } else {
                 0

@@ -21,6 +21,8 @@ pub enum OrbitalKind {
 /// Output of [`parse_orbital_content`].
 #[derive(Debug, Clone, Default)]
 pub struct OrbitalSection {
+    /// Validated raw signed C header, before aggregate normalization.
+    pub complex_type: i32,
     /// `(site1, site2, idx, sign)` entries from the OrbitalIdx block.
     pub terms: Vec<OrbitalTerm>,
     /// `NOrbitalIdx` from the header (number of unique parameters).
@@ -59,11 +61,11 @@ pub fn parse_orbital_content(
         .filter(|&width| width > 0)
         .ok_or_else(|| invalid("orbital declaration on line 2 must have a positive width"))?
         as i64;
-    let is_complex = c_fields(lines[2])
+    let complex_type = c_fields(lines[2])
         .nth(1)
         .and_then(|field| field.parse::<i32>().ok())
-        .unwrap_or(0)
-        > 0;
+        .ok_or_else(|| invalid("Orbital ComplexType must be a C integer"))?;
+    let is_complex = complex_type > 0;
     let nsite = usize::try_from(nsite)
         .ok()
         .filter(|&count| count > 0)
@@ -167,6 +169,7 @@ pub fn parse_orbital_content(
         opt_flags.insert(index as i64, i64::from(flag));
     }
     Ok(OrbitalSection {
+        complex_type,
         terms,
         n_orbital_idx,
         is_complex,

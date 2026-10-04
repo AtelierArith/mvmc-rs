@@ -142,7 +142,7 @@ fn normal_spin_changing_interall_is_rejected_before_initialization_with_or_witho
         if !has_namelist {
             data.namelist.clear();
         }
-        assert!(!mvmc_core::run::get_all_complex_flag(&data));
+        assert!(!mvmc_core::run::get_all_complex_flag(&data).unwrap());
         let before = data.clone();
         let mut probe = Sfmt19937Rng::new(1);
         let mut rng = Sfmt19937Rng::new(1);

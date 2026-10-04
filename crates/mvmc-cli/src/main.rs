@@ -250,7 +250,10 @@ fn main() {
     let nsteps = nsteps_override.unwrap_or(p.nsr_opt_itr_step);
     let inferred_mode = if data.i_flg_orbital_general != 0 {
         "fsz"
-    } else if mvmc_core::get_all_complex_flag(&data) {
+    } else if mvmc_core::get_all_complex_flag(&data).unwrap_or_else(|error| {
+        eprintln!("error: {error}");
+        process::exit(1);
+    }) {
         "cmp"
     } else {
         "real"

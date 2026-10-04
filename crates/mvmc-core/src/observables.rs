@@ -1237,6 +1237,8 @@ pub fn calculate_local_energy_fsz(
 }
 
 /// Evaluate this kernel with call-site-specific section and diagnostic timers.
+/// Direct callers must validate the state's declared mode before this
+/// infallible numerical kernel; public runners do so collectively.
 pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
     ip: Complex64,
     data: &ExpertModeData,
@@ -1249,7 +1251,7 @@ pub fn calculate_local_energy_fsz_timed<const TIMED: bool>(
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
     if !data.has_rbm_terms() {
-        return if crate::run::get_all_complex_flag(data) {
+        return if state.all_complex {
             fsz_energy::native_energy::<false, TIMED>(
                 ip,
                 data,
@@ -1459,7 +1461,7 @@ pub fn green_func1(
     )
 }
 
-fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
+fn transfer_cache_signature(data: &ExpertModeData, all_complex: bool) -> u64 {
     let mut hash = 0xcbf29ce484222325_u64;
     let mut mix = |value: u64| {
         hash ^= value;
@@ -1467,7 +1469,7 @@ fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
     };
     mix(data.modpara.nsite as u64);
     mix(data.modpara.nelec as u64);
-    mix(u64::from(crate::run::get_all_complex_flag(data)));
+    mix(u64::from(all_complex));
     for term in &data.transfer_terms {
         mix(term.site1 as u64);
         mix(term.site2 as u64);
@@ -1527,7 +1529,7 @@ fn transfer_cache_signature(data: &ExpertModeData) -> u64 {
 }
 
 fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationState) {
-    let signature = transfer_cache_signature(data);
+    let signature = transfer_cache_signature(data, state.all_complex);
     if state.transfer_cache.signature == signature {
         return;
     }
@@ -1535,7 +1537,7 @@ fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationStat
     // disabled for RBM. The generic RBM/C complex path adds each contribution
     // directly to the diagonal energy; grouping that sum changes SR's HO.
     let all_real = !data.has_rbm_terms()
-        && !crate::run::get_all_complex_flag(data)
+        && !state.all_complex
         && data.transfer_terms.iter().all(|term| term.value.im == 0.0);
     let n_site = data.modpara.nsite.max(0) as usize;
     let direct_projection_eligible = !data.has_rbm_terms()
@@ -1722,7 +1724,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
     scratch: &mut GreenScratch,
     timer: &mut CTimer<TIMED>,
 ) -> Complex64 {
-    let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
+    let diag = timer.diagnostics.calham1 && !state.all_complex;
     timer.start_diag(927, diag);
     let n_site = data.modpara.nsite as usize;
     let n_elec = data.modpara.nelec as usize;
@@ -1790,14 +1792,12 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
 
     timer.stop_diag(921, diag);
     timer.start_diag(922, diag);
-    let direct_ratio = if TRANSFER
-        && !crate::run::get_all_complex_flag(data)
-        && state.transfer_cache.direct_projection_eligible
-    {
-        calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, data)
-    } else {
-        None
-    };
+    let direct_ratio =
+        if TRANSFER && !state.all_complex && state.transfer_cache.direct_projection_eligible {
+            calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, data)
+        } else {
+            None
+        };
     let proj_ratio = if let Some(ratio) = direct_ratio {
         ratio
     } else if C_KERNEL {
@@ -1879,6 +1879,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
 /// diagonal contributions (CoulombIntra / CoulombInter / Hund),
 /// 1-body Transfer (kinetic hopping via `green_func1`),
 /// and PairHop, Exchange and InterAll via general two-body Green ratios.
+/// Direct callers must first use `state.validate_declared_mode(data)`.
 pub fn calculate_local_energy(
     ip: Complex64,
     data: &ExpertModeData,
@@ -2777,6 +2778,8 @@ pub(crate) fn calculate_lanczos_h2_transfer(
 }
 
 /// Evaluate this kernel with call-site-specific section and diagnostic timers.
+/// Direct callers must validate the state's declared mode before this
+/// infallible numerical kernel; public runners do so collectively.
 pub fn calculate_local_energy_timed<const TIMED: bool>(
     ip: Complex64,
     data: &ExpertModeData,
@@ -2806,7 +2809,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         // local-energy call.
         let mut green_scratch = std::mem::take(&mut state.transfer_scratch);
         let parallel_transfer = real_transfer
-            && !crate::run::get_all_complex_flag(data)
+            && !state.all_complex
             && !timer.diagnostics.calham1
             && crate::threading::inner_parallel_enabled(state.transfer_cache.terms.len());
         let observed = crate::threading::observe_kernel(
@@ -2849,7 +2852,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             let rj = term.site2;
             let spin_create = term.spin1;
             let spin_annihilate = term.spin2;
-            let diag = timer.diagnostics.calham1 && !crate::run::get_all_complex_flag(data);
+            let diag = timer.diagnostics.calham1 && !state.all_complex;
             timer.start_diag(920, diag);
             let g1 = if let Some(values) = &parallel_green {
                 values[index]
@@ -3158,6 +3161,13 @@ mod tests {
         data.doublon_holon_2site_indices.clear();
 
         data.complex_flags = vec![1];
+        // A changed mode needs matching buffers, not reuse of a real state's
+        // cached mode. Check the direct caller boundary before reconstruction.
+        let old_state = format!("{state:?}");
+        assert!(state.validate_declared_mode(&data).is_err());
+        assert_eq!(format!("{state:?}"), old_state);
+        state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, true, false);
+        state.validate_declared_mode(&data).unwrap();
         refresh_transfer_cache(&data, &mut state);
         assert!(!state.transfer_cache.all_real);
     }

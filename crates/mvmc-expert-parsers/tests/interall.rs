@@ -81,7 +81,7 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut data = parse_expert_mode_files(root().join("namelist.def")).unwrap();
     assert!(data.inter_all_terms.iter().any(|term| term.is_complex));
-    assert!(!all_complex_flag(&data));
+    assert!(!all_complex_flag(&data).unwrap());
     let flags: Vec<i64> = lines
         .next()
         .unwrap()
@@ -95,8 +95,8 @@ fn complex_hamiltonian_coefficients_leave_initialization_mode_values_and_rng_unc
     plain.inter_all_terms.clear();
     let mut rng = Sfmt19937Rng::new(11272);
     let mut plain_rng = Sfmt19937Rng::new(11272);
-    init_parameter(&mut data, &mut rng);
-    init_parameter(&mut plain, &mut plain_rng);
+    init_parameter(&mut data, &mut rng).unwrap();
+    init_parameter(&mut plain, &mut plain_rng).unwrap();
     assert_eq!(data.inter_all_terms, original);
     assert_eq!(data.orbital_terms, plain.orbital_terms);
     assert_eq!(data.slater_params, plain.slater_params);

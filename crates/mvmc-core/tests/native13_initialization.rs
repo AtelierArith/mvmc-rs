@@ -261,7 +261,7 @@ fn public_initialization_matches_native13_defined_contracts() {
         // C LAPACK workspace query has no Rust initializer counterpart.
         // Check its recorded RNG identity without inventing a Rust numerical stage.
         check_rng(&rng, &stages[1], model);
-        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng);
+        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng).unwrap();
         check_stage(&data, &rng, &stages[2], model, 2);
         let initial = input.parent().unwrap().join("initial.def");
         if initial.exists() {

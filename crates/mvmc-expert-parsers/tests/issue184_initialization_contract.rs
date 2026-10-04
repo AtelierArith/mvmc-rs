@@ -44,7 +44,7 @@ fn literal_five_slots_respect_real_and_complex_conditional_draws() {
         let mut data = orbitals(5, complex, active);
         let mut actual = Sfmt19937Rng::new(SEED);
         let mut expected = Sfmt19937Rng::new(SEED);
-        init_parameter(&mut data, &mut actual);
+        init_parameter(&mut data, &mut actual).unwrap();
         assert_eq!(data.slater_params.len(), 5);
         for (i, value) in data.slater_params.iter().enumerate() {
             if i >= active {
@@ -109,7 +109,7 @@ fn literal_seed_pair_initializes_then_normalizes_without_extra_draws() {
         for _ in 0..5 {
             expected.genrand_real2();
         }
-        initialize_parameters(&mut data, &mut rng);
+        initialize_parameters(&mut data, &mut rng).unwrap();
         same_rng(&rng, &expected, 5);
         assert!(data.slater_params.iter().all(|v| v.norm() <= 4.0 + 1e-10));
         results.push(data.slater_params);
@@ -125,7 +125,7 @@ fn empty_initialization_and_normalization_consume_zero_words() {
     let mut data = ExpertModeData::new();
     let mut rng = Sfmt19937Rng::new(SEED);
     let expected = rng.clone();
-    initialize_parameters(&mut data, &mut rng);
+    initialize_parameters(&mut data, &mut rng).unwrap();
     sync_modified_parameter(&mut data, false);
     assert!(data.slater_params.is_empty());
     same_rng(&rng, &expected, 0);
@@ -155,13 +155,13 @@ fn literal_basic_and_ten_slot_workflow_zero_both_projections() {
             .map(|_| 2.0 * (expected_rng.genrand_real2() - 0.5))
             .collect();
         if normalize {
-            initialize_parameters(&mut data, &mut rng);
+            initialize_parameters(&mut data, &mut rng).unwrap();
             let max = expected.iter().map(|v| v.abs()).fold(0.0, f64::max);
             for value in &mut expected {
                 *value *= 4.0 / max;
             }
         } else {
-            init_parameter(&mut data, &mut rng);
+            init_parameter(&mut data, &mut rng).unwrap();
         }
         assert_eq!(data.gutzwiller_terms[0].value, Complex64::new(0.0, 0.0));
         assert_eq!(data.jastrow_terms[0].value, Complex64::new(0.0, 0.0));

@@ -139,7 +139,8 @@ fn canonical_models_match_independent_prefix_oracles() {
                     "oracle seed must be deterministic"
                 );
                 let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-                mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng);
+                mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng)
+                    .unwrap();
                 let initial = input.parent().unwrap().join("initial.def");
                 if initial.is_file() {
                     assert!(mvmc_core::read_initial_def(&mut data, initial).unwrap());
@@ -161,7 +162,7 @@ fn canonical_models_match_independent_prefix_oracles() {
                         * data.modpara.nmp_trans.unsigned_abs() as usize
                         * data.n_qp_opt_trans.max(1) as usize,
                     data.modpara.nvmc_sample as usize,
-                    mvmc_core::get_all_complex_flag(&data),
+                    mvmc_core::get_all_complex_flag(&data).unwrap(),
                     data.i_flg_orbital_general != 0,
                 );
                 let output = OutputDirectory::create();
@@ -217,7 +218,7 @@ fn canonical_models_match_independent_prefix_oracles() {
                     .collect();
                 compare_complex(&expected.join("parameters.txt"), &parameters, 1e-11);
                 compare_complex(&expected.join("energy.txt"), &[state.energy.etot], 1e-11);
-                let complex = mvmc_core::get_all_complex_flag(&data);
+                let complex = mvmc_core::get_all_complex_flag(&data).unwrap();
                 let oo: Vec<_> = if complex {
                     state.sr_opt.sr_opt_oo.clone()
                 } else {
@@ -410,7 +411,8 @@ fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
             mvmc_core::validation::validate_para_opt(&data).unwrap();
             assert_eq!(data.modpara.rnd_seed, 12395);
             let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-            mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng);
+            mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng)
+                .unwrap();
             assert!(mvmc_core::read_initial_def(
                 &mut data,
                 input.parent().unwrap().join("initial.def"),
@@ -435,7 +437,7 @@ fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
                     * data.modpara.nmp_trans.unsigned_abs() as usize
                     * data.n_qp_opt_trans.max(1) as usize,
                 data.modpara.nvmc_sample as usize,
-                mvmc_core::get_all_complex_flag(&data),
+                mvmc_core::get_all_complex_flag(&data).unwrap(),
                 data.i_flg_orbital_general != 0,
             );
             let output = OutputDirectory::create();

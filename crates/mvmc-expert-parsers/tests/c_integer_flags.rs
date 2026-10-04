@@ -274,7 +274,7 @@ fn integer_component_flags_header_normalization_coefficients_and_rng_match_c() {
             ));
         }
         let mut rng = Sfmt19937Rng::new(seed);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         let expected_bits: Vec<u64> = record[4]
             .split_whitespace()
             .map(|s| u64::from_str_radix(s, 16).unwrap())

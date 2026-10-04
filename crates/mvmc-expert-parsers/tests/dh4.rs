@@ -180,7 +180,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
         let mode = integers(lines.next().unwrap());
         assert_eq!(data.doublon_holon_2site_complex, mode[0] != 0);
         assert_eq!(data.doublon_holon_4site_complex, mode[1] != 0);
-        assert_eq!(all_complex_flag(&data), mode[2] != 0);
+        assert_eq!(all_complex_flag(&data).unwrap(), mode[2] != 0);
         assert_eq!(data.i_flg_orbital_general, mode[3]);
         assert_eq!(data.n_orbital_anti_parallel, mode[4]);
         assert_eq!(data.modpara.n_orbital_idx, mode[5]);
@@ -196,7 +196,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
         }
         check_bits(data.projection_parameters(), lines.next().unwrap(), name);
         let mut rng = Sfmt19937Rng::new(11272);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         assert!(data
             .doublon_holon_4site_params
             .iter()
@@ -232,7 +232,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
                     == format!(
                         "{} {} 11272",
                         data.modpara.n_orbital_idx,
-                        i64::from(all_complex_flag(&data))
+                        i64::from(all_complex_flag(&data).unwrap())
                     )
             })
             .unwrap();

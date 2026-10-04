@@ -161,7 +161,7 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             );
             v
         };
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         let initialized = (snapshot(&mut data), complex_line(lines.next().unwrap()));
         if case == "all" {
             assert!(read_initial_def(&mut data, root().join("production/initial.def")).unwrap());

@@ -76,7 +76,7 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
             "parsed" => (),
             _ => unreachable!(),
         }
-        if mode == "complex" && !all_complex_flag(&data) {
+        if mode == "complex" && !all_complex_flag(&data).unwrap() {
             // This historical case used ModPara.ComplexType as a Julia-only
             // mode switch; C leaves it real when all definition headers are
             // real. Consume its archived rows without treating them as C
@@ -117,7 +117,7 @@ fn rbm_layout_and_values_match_julia_with_full_declared_slater_rng_from_c() {
         );
         data.visit_rbm_terms_mut(|_, t| t.set_value(Complex64::new(7.0, -9.0)));
         let mut rng = Sfmt19937Rng::new(11272);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         let mut values = data.projection_parameters();
         data.visit_rbm_terms_mut(|_, t| values.push(t.value()));
         values.extend(

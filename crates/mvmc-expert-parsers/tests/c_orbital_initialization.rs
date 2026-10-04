@@ -78,7 +78,7 @@ fn c_initialization_consumes_every_declared_active_slot_before_sampling() {
     assert_eq!(rows.len(), 8 * 4);
     for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         check_parameter_values(&data, record[1], record[0]);
         let expected: Vec<u32> = record[3]
             .split_whitespace()
@@ -102,7 +102,7 @@ fn c_normalization_includes_initialized_declared_slots_without_spatial_mappings(
     assert_eq!(rows.len(), 8 * 4);
     for record in rows.as_chunks::<4>().0.iter() {
         let (mut data, mut rng) = data(record[0]);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         check_parameter_values(&data, record[1], record[0]);
         sync_modified_parameter(&mut data, false);
         check_parameter_values(&data, record[2], record[0]);

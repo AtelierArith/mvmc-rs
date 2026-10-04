@@ -249,7 +249,7 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
         let flags = historical_optimization_flags::c_orbital_representation(&data, flags);
         assert_eq!(data.optimization_flags, flags);
         let mut rng = Sfmt19937Rng::new(1);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         for (i, t) in data.gutzwiller_terms.iter_mut().enumerate() {
             t.value = Complex64::new((i + 1) as f64, 0.2);
         }

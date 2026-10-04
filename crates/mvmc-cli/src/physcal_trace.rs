@@ -72,7 +72,7 @@ impl Trace {
         fs::write(directory.join("resolved.txt"), format!(
             "actual_c_opt_trans_flags={}\nactual_opt_trans_slots={}\nactual_n_qp_opt_trans={}\nactual_all_complex={}\nactual_orbital_general={}\nactual_qp_total={:?}\n",
             data.c_opt_trans_flags, data.opt_trans.len(), data.n_qp_opt_trans,
-            mvmc_core::get_all_complex_flag(data), data.i_flg_orbital_general,
+            mvmc_core::get_all_complex_flag(data)?, data.i_flg_orbital_general,
             data.qp_weights.as_ref().map(|weights| weights.qp_full_weight.len())
         )).map_err(|e| e.to_string())?;
         fs::write(directory.join("settings.txt"), format!("nsite={}\nseed_declaration={}\nNSRCG={}\nNStore={}\nNSplitSize={}\nNDataQtySmp={}\nNVMCSample={}\nNVMCWarmUp={}\nNVMCSampleInterval={}\nNMPTrans={}\nconsumed={consumed:?}\nflags={:?}\n", data.modpara.nsite, data.modpara.rnd_seed, data.modpara.nsrcg, data.modpara.nstore_o, data.modpara.nsplit_size, data.modpara.n_data_qty_smp, data.modpara.nvmc_sample, data.modpara.nvmc_warmup, data.modpara.nvmc_interval, data.modpara.nmp_trans, data.optimization_flags)).map_err(|e| e.to_string())?;

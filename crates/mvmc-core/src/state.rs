@@ -1143,6 +1143,9 @@ impl PhysicalQuantities {
 /// and gets populated for `NVMCCalMode=1` (physics calc).
 #[derive(Debug)]
 pub struct VmcOptimizationState {
+    /// Declared mode used to allocate this state's real/complex buffers.
+    /// Numerical kernels use this already-resolved mode, not fallible parsing.
+    pub(crate) all_complex: bool,
     /// Per-iteration energy accumulator.
     pub energy: EnergyData,
     /// Slater matrices.
@@ -1162,6 +1165,21 @@ pub struct VmcOptimizationState {
 }
 
 impl VmcOptimizationState {
+    /// Check declaration metadata and the mode used to allocate this state.
+    /// Direct Slater/energy callers must check this before using their buffers;
+    /// public runners perform it inside their collective preflight.
+    pub fn validate_declared_mode(
+        &self,
+        data: &mvmc_expert_parsers::ExpertModeData,
+    ) -> Result<(), String> {
+        let declared = crate::run::get_all_complex_flag(data)?;
+        if self.all_complex == declared {
+            Ok(())
+        } else {
+            Err("state's allocated mode differs from model declaration".to_string())
+        }
+    }
+
     /// Mirror of `VMCOptimizationState(n_site, n_elec, n_proj, n_para,
     /// n_qp_full, n_vmc_sample, all_complex, use_fsz)`.
     #[allow(clippy::too_many_arguments)]
@@ -1177,6 +1195,7 @@ impl VmcOptimizationState {
     ) -> Self {
         let n_size = 2 * n_elec;
         Self {
+            all_complex,
             energy: EnergyData::new(),
             slater_matrix: SlaterMatrixData::zeros(n_qp_full, n_site, n_elec, all_complex),
             electron_config: ElectronConfiguration::zeros(

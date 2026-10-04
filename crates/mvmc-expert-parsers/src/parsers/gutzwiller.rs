@@ -9,6 +9,8 @@ use std::path::Path;
 /// Declared coefficients and C site-index/flag assignments.
 #[derive(Debug, Clone, Default)]
 pub struct GutzwillerSection {
+    /// Validated raw signed C header, before the local >0 test.
+    pub complex_type: i32,
     /// One coefficient slot per declared parameter, including unused slots.
     pub terms: Vec<GutzwillerTerm>,
     /// Declared coefficient count.
@@ -40,11 +42,11 @@ pub fn parse_gutzwiller_content(content: &str, nsite: i64) -> io::Result<Gutzwil
         .filter(|&width| width > 0)
         .ok_or_else(|| invalid("Gutzwiller declaration on line 2 must have a positive width"))?
         as i64;
-    let is_complex = c_fields(lines[2])
+    let complex_type = c_fields(lines[2])
         .nth(1)
         .and_then(|field| field.parse::<i32>().ok())
-        .unwrap_or(0)
-        > 0;
+        .ok_or_else(|| invalid("Gutzwiller ComplexType must be a C integer"))?;
+    let is_complex = complex_type > 0;
     let nsite = usize::try_from(nsite)
         .ok()
         .filter(|&count| count > 0)
@@ -95,6 +97,7 @@ pub fn parse_gutzwiller_content(content: &str, nsite: i64) -> io::Result<Gutzwil
         })
         .collect();
     Ok(GutzwillerSection {
+        complex_type,
         terms,
         n_gutzwiller_idx,
         is_complex,

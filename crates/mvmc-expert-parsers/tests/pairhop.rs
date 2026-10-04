@@ -212,7 +212,7 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
     let fixture = std::fs::read_to_string(root().join("initial.txt")).unwrap();
     let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
     let mut data = archived_component_model();
-    assert!(!all_complex_flag(&data));
+    assert!(!all_complex_flag(&data).unwrap());
     let flags: Vec<i64> = lines
         .next()
         .unwrap()
@@ -226,8 +226,8 @@ fn pairhop_retains_wavefunction_flags_initialized_values_and_the_next_rng_block(
     plain.pair_hop_terms.clear();
     let mut rng = Sfmt19937Rng::new(11272);
     let mut plain_rng = Sfmt19937Rng::new(11272);
-    init_parameter(&mut data, &mut rng);
-    init_parameter(&mut plain, &mut plain_rng);
+    init_parameter(&mut data, &mut rng).unwrap();
+    init_parameter(&mut plain, &mut plain_rng).unwrap();
     assert_eq!(data.pair_hop_terms, original);
     assert_eq!(data.orbital_terms, plain.orbital_terms);
     assert_eq!(data.slater_params, plain.slater_params);

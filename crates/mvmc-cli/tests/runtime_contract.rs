@@ -761,7 +761,7 @@ fn check_cli_and_library_model(
     );
     let mode = if data.i_flg_orbital_general != 0 {
         "fsz"
-    } else if mvmc_core::get_all_complex_flag(&data) {
+    } else if mvmc_core::get_all_complex_flag(&data).unwrap() {
         "cmp"
     } else {
         "real"
@@ -889,7 +889,7 @@ fn normal_interall_scientific_coefficients_and_c_counts_agree_in_cli_and_library
             ],
             [1e-3, -2e-3]
         );
-        assert_eq!(mvmc_core::get_all_complex_flag(&parsed), complex);
+        assert_eq!(mvmc_core::get_all_complex_flag(&parsed).unwrap(), complex);
         check_cli_and_library_model(
             &dir,
             if complex {

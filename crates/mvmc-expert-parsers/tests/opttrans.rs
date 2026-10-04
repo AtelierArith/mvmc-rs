@@ -221,7 +221,7 @@ fn component_layout_initial_values_and_next_rng_state_match_common_julia_cases_a
             "{header}"
         );
         let mut rng = Sfmt19937Rng::new(11272);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         state(&data, &mut lines, header);
         let mut values = data.projection_parameters();
         data.visit_rbm_terms_mut(|_, term| values.push(term.value()));

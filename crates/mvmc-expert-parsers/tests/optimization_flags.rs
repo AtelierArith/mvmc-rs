@@ -96,7 +96,7 @@ fn fixed_slater_slots_skip_rng_draws_including_shared_and_reserved_slots() {
     let mut data = parsed("rng", 1, true);
     let mut rng = Sfmt19937Rng::new(1);
     let mut probe = Sfmt19937Rng::new(1);
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     // Live Julia v0.5.0, including division by sqrt(2) rather than
     // multiplication by its rounded reciprocal.
     for (idx, (re, im)) in [0, 1, 7, 8, 9, 10].into_iter().zip([
@@ -217,7 +217,7 @@ fn declared_projection_widths_determine_slater_flag_and_rng_offsets() {
     );
     let mut rng = Sfmt19937Rng::new(1);
     let mut probe = Sfmt19937Rng::new(1);
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     assert_eq!(
         data.slater_params[data.orbital_terms[0].idx as usize],
         Complex64::new(0.0, 0.0)
