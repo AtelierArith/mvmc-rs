@@ -76065,24 +76065,22 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_shared_orbital.rs::original_m0585_unpack_assigns_shared_orbital_coefficients",
+      "supported_rejected_conditions": "Original Heisenberg parse, duplicate idx exists; unpack(before + complex(0.1,-0.1)); every same-idx mapping observes independently expected assigned dense coefficient; all declared slots checked. No sign or independent shadow-repair claim.",
+      "intentional_scope": "M0585 shared coefficient observation, representation-aware; M0586 repair and S121 parent remain unverified.",
+      "evidence_type": "SCOPED_ORDINARY_LOCAL",
       "owner": "#184 inventory; implementation owner pending classification",
       "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "settings": "Original8bb Heisenberg13-file literal closure unchanged; default features locked test-fast jobs2 BLAS/OMP/MKL1, executed base9b6; no initialization/RNG.",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_shared_orbital --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL_ONLY: 1/1 PASS,0 skipped,0.006s; UUID43dd6e1b-bd40-4a08-9060-2b2aa4cee49d; LIST/Clippy/fmt/postLIST/source/tools/providers/ELF/runtime/cleanup/aggregate0. Exact publication-head CI pending.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "scope_exclusion": "Original historical review flag retained in original_row; this shared-coefficient condition classified only.",
+      "status": "CoveredScopedOrdinaryLocal",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0585",
         "parent_rows": "S121",
@@ -76115,7 +76113,15 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "evidence_reference": {
+        "doc": "issue-184-original-shared-orbital.md",
+        "source_sha256": "d6364dbc35aa73837ec43290d85d4159b74594bd7bccfb88ee6f4369e44095e0",
+        "raw_run_log_sha256": "320d1d265d73aa2e6742e63c523db2bb6f69a7a14098cb4785a5ae1d77312153",
+        "receipt": "/tmp/mvmc-184-m0585-proof.20261004",
+        "scope": "LOCAL_ONLY",
+        "original_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1"
+      }
     },
     {
       "key": "assertion:M0586",
@@ -76189,24 +76195,22 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_manual_rbm_diagnostic.rs::original_m0587_unequal_rbm_shadows_report_without_repair; parameter_diagnostics::check_duplicate_consistency",
+      "supported_rejected_conditions": "Original Heisenberg parse; inject same-index0 ChargeRBMPhysLayer shadows0.1/0.2; typed manual duplicate error and nonmutation, not repair/dense invariant.",
+      "intentional_scope": "Original M0587 only; S121/M0586 unpromoted. No pack rejection, C storage or RNG change.",
+      "evidence_type": "SCOPED_ORDINARY_CI_WITH_SEPARATE_LOCAL",
       "owner": "#184 inventory; implementation owner pending classification",
       "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "settings": "Original8bb Heisenberg fixture; local default/locked/test-fast/jobs2 BLAS1 executed14a308; PR296 Linux serial/allfeatures normal CI, no model/MPI scenario assertion.",
+      "command": "LOCAL: cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_manual_rbm_diagnostic --no-tests fail --no-fail-fast --retries 0; CI: cargo nextest run --workspace [allfeatures job: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0.",
+      "result": "Scoped M0587 PASS both Linux jobs PR296: serial1119PASS41skip281.661s/all1121PASS60skip272.959s; 13diagnostic identities each job, not 13 originalM0587 rows. Local13diagnostic +9 separate regressions aggregate0; initial aggregate101 retained.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
-      "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
-      ],
+      "scope_exclusion": "Original review flag retained inside original_row; only RBM manual assertion classified.",
+      "status": "CoveredScopedOrdinaryCI",
+      "pending_reasons": [],
       "original_row": {
         "audit_id": "M0587",
         "parent_rows": "S121",
@@ -76239,7 +76243,32 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "evidence_reference": {
+        "doc": "issue-184-manual-rbm-diagnostic.md",
+        "source_sha256": "1693104a33fa6c8f738af25419286a481d55b6d7618c909ac7bac201e345fc82",
+        "api_sha256": "803a1232b323776f31c65f3985082aa54b3e4fcdf21b177fdb2288dd9fa89762",
+        "local_receipt": "/tmp/mvmc-184-manual-rbm-proof.successor20261004",
+        "local_uuid": "8eb7cc35-cff4-41ae-a626-31caa9469b12",
+        "retained_failure_receipt": "/tmp/mvmc-184-manual-rbm-proof.20261004",
+        "ci_run": 37189677044,
+        "ci_source_head": "f659f9982e5481a3950b0f94b9011bcdb676f44c",
+        "ci_tested_merge": "7cc9abe133d3c737cea5654b183de309d9e1c50d",
+        "ci_base": "9b6ed40754e88eb2dd8c3c3978309540df19b32d",
+        "jobs": [
+          111399067594,
+          111399067598
+        ],
+        "job_urls": [
+          "https://github.com/AtelierArith/mvmc-rs/actions/runs/37189677044/job/111399067594",
+          "https://github.com/AtelierArith/mvmc-rs/actions/runs/37189677044/job/111399067598"
+        ],
+        "ci_evidence_source": "Raw complete jobs independently downloaded via GitHub API; actual checkout merge/head/base, ci-profile argv and original M0587 PASS ordinal424 verified.",
+        "ci_raw_logs_sha256": [
+          "f9b42ec399a967c542791ec87dc07bb30b0afa761e7f3d5930f9e2f7eb5abe24",
+          "f0916c46308a8cdc31c144a38509d684a0790a482970afda98cac23075ffdb92"
+        ]
+      }
     },
     {
       "key": "assertion:M0588",
