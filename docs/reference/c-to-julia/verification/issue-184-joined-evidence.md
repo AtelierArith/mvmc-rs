@@ -1,6 +1,10 @@
 # Joined evidence for #184 / #185
 
-Current documentation SOURCE checkpoint: main `5c1e03d9f31186f784a355022d424d4eb4e49455`.
+Current documentation SOURCE checkpoint: main `14a30849ae4fa9dd78900f113257389d906008ee`.
+The prior main5c1 checkpoint and its original helper reconciliation below remain
+historical. This follow-up changes only A204–A207, M0579–M0584, S120,
+M0588–M0591 and S122; original
+rows/owners and all other entries remain unchanged.
 The 58 original helper-condition joins below are a reviewed documentation draft,
 not complete parent/API/scenario acceptance. The prior4d392 checkpoint remains historical.
 The fab2335 / PR271 reconciliation below is historical; its57 controls and114
@@ -19,11 +23,56 @@ for explicitly reviewed conditions.
 
 | Status | Rows | Interpretation |
 | --- | ---: | --- |
-| CoveredScopedOrdinaryCI | 75 | Named original assertion conditions, not complete API/scenario verification |
+| CoveredScopedOrdinaryCI | 85 | Prior75 plus five S120 assertions, four bounded API mappings and one partial scenario; not complete API/scenario verification |
+| CoveredScopedOrdinaryLocal | 6 | M0581 actual additive operation; M0588–M0591 and S122 signed-zero/serial-context controls, current-head CI pending |
 | IntentionalDifference | 1 | M0971: zero-QP helper retains zero instead of Julia's one |
-| SourceMappedMissingEvidence | 1,589 | Conditions/execution reconciliation incomplete |
+| SourceMappedMissingEvidence | 1,583 | Other conditions/execution reconciliation incomplete |
 | HistoricalExecutionClaimNeedsReconciliation | 80 | Historical claims retained, not newly certified |
-| ExplicitScopeExclusionNeedsReview | 597 | Review-required classifications, not automatic exclusions or PASS |
+| ExplicitScopeExclusionNeedsReview | 587 | Ten ordinary parameter assertions reviewed; original597 flags retained in original_row, remaining flags not automatic exclusions or PASS |
+
+## Public parameter milestone: PR293 (bounded)
+
+A204–A207 now map to public fallible `parameters::{pack_parameters,
+unpack_parameters,set_parameter_value,get_parameter_value}` rather than private
+helpers or a nonexistent getter. M0579–M0584/S120 bind the original Heisenberg
+count/length, algebraic roundtrip and short-vector rejection. M0581 observes
+related direct get/set of before+delta, not the original additive operation.
+That historical PR293 evidence remains RelatedNotEquivalent for M0581; the
+later actual additive-helper local receipt below supersedes its pending status,
+without pretending PR293 executed it. The nine controls also include literal complete
+block order, reserved slots, mapping/overflow and nonmutation boundaries.
+No full parent/API/overload, MPI sampling or model20 parity is inferred.
+
+PR source head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296 was executed in CI
+checkout merge f0b6fc6daa08b583588671b38b7d5b8663ae9a6b into87cd;
+these are distinct identities. Run37187273640:
+[Linux serial](https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363)
+1103PASS41skip170.620s and
+[Linux all-features](https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360)
+1105PASS60skip211.515s, all nine controls PASS in both. Actual CI command uses
+`--cargo-profile ci --locked --no-fail-fast --retries 0`, with `--all-features`
+for the second job; local receipt uses test-fast separately.
+Original Julia8bb and source/test/raw-log hashes/settings are recorded per row.
+Raw-log digests: serial6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad,
+allc768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7.
+This is ten bounded CI joins sharing nine test executions per job, not ten
+separate model runs. S120 remains a scoped scenario, with its additive condition
+now evidenced locally rather than by that historical CI. Original owners remain; current
+reconciliation is #184/#185.
+
+The later main14a308 sibling receipt `/tmp/mvmc-184-additive-proof.20261004`
+executes actual `sr::original_parameter_delta_tests::original_m0581_additive_helper_updates_first_and_last_parameters`:
+1/1 PASS0.011s, UUID8db81051-8931-48b4-a162-f31ee4ec6da7, 243 unselected
+(not PASS). Its boundary test target rerun has 2/2 PASS0.008s, zero skipped,
+UUIDe529a87c-bc39-49e4-a863-2a54126e7404. The earlier boundary-only 2PASS0.009s
+receipt remains historical, not relabelled. Clippy lib/testtargets, fmt,
+source/tools/compiler-provider posts and aggregate all0; both targets' pre/post
+LISTs byte-identical. These six row joins share three test executions, not six
+model runs. They use CoveredScopedOrdinaryLocal, not current-head CI coverage.
+M0587
+dense-vs-cache diagnostic design remains source-only in
+[boundary design](issue-184-parameter-boundary-design.md), not a newly implemented
+public diagnostic. All remaining original conditions stay pending.
 
 The [38 semantic source reviews](issue-184-semantic38.tsv) remain source-only
 conditions and explicit gaps, not file-wide acceptance. Full API overloads,

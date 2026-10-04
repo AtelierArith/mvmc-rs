@@ -32,6 +32,7 @@ pub use pfapack::julia_complex;
 pub mod observables;
 pub mod parallel;
 pub mod parallel_scalar;
+pub mod parameter_diagnostics;
 pub mod parameters;
 pub mod pfaffian;
 pub mod qp;

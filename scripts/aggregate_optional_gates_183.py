@@ -162,6 +162,16 @@ def stable_closure(evidence, stem):
         raise ValueError("invalid source/fixture/binary digest")
 
 
+def exact_setting(actual, expected):
+    """JSON report settings must preserve declared types, not numeric coercions."""
+    if type(actual) is not type(expected):
+        return False
+    if type(expected) is list:
+        return len(actual) == len(expected) and all(
+            exact_setting(item, value) for item, value in zip(actual, expected))
+    return actual == expected
+
+
 def validate_package(package, family, plan):
     safe_tree(package)
     envelope = read_json(package / "envelope.json")
@@ -220,7 +230,9 @@ def validate_package(package, family, plan):
         "mpi": {"model": "heisenberg_chain_real", "ranks": [2, 4], "group_widths": [1, 2], "repeats": 2, "seed": 1, "steps": 1, "samples": 3, "warmup": 1, "workers": 1},
         "thread": {"workers": [1, 2, 4], "threshold": 32, "sizes": [31, 32, 33], "steps": 2, "samples": 200, "ranks": 1, "seed": 1},
     }[family]
-    if any(configuration.get(key) != value for key, value in expected_settings.items()):
+    if type(configuration) is not dict or any(
+            not exact_setting(configuration.get(key), value)
+            for key, value in expected_settings.items()):
         raise ValueError("bounded model/seed/steps/ranks/groups/workers settings mismatch")
     if terminal.get("exit_status") != 0 or terminal.get("status") != "Pass" or row.get("status") != "Pass" or row.get("selected") is not True:
         raise ValueError("unfinished/inconsistent selected driver terminal")

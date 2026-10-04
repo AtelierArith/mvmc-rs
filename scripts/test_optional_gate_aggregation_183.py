@@ -148,6 +148,56 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_rehashed_configuration_numeric_types_fail_semantically(self):
+        for family in audit.FAMILIES:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan(family, BINDING)
+                package = fixture(root, packages, plan, family)
+                positive = audit.aggregate(plan, packages, BINDING)
+                self.assertEqual(positive["exit_status"], 0)
+                self.assertEqual(positive["families"][family]["status"], "Pass")
+                path = package / "evidence/metadata.json"
+                original = audit.read_json(path)
+                settings = original["configuration"]
+                mutations = []
+                for key, value in settings.items():
+                    if type(value) is int:
+                        mutations.append((key, None, float(value)))
+                        if value in (0, 1):
+                            mutations.append((key, None, bool(value)))
+                    elif type(value) is list:
+                        for index, item in enumerate(value):
+                            if type(item) is int:
+                                mutations.append((key, index, float(item)))
+                                if item in (0, 1):
+                                    mutations.append((key, index, bool(item)))
+                self.assertTrue(mutations)
+                for key, index, replacement in mutations:
+                    with self.subTest(family=family, field=key, index=index,
+                                      replacement_type=type(replacement).__name__):
+                        metadata = copy.deepcopy(original)
+                        if index is None:
+                            metadata["configuration"][key] = replacement
+                        else:
+                            metadata["configuration"][key][index] = replacement
+                        # Equal numeric values are deliberate: only type is wrong.
+                        self.assertEqual(metadata["configuration"], settings)
+                        put(path, metadata)
+                        refresh(package)
+                        result = audit.aggregate(plan, packages, BINDING)
+                        row = result["families"][family]
+                        self.assertEqual(result["exit_status"], 1)
+                        self.assertEqual(row["status"], "Failure")
+                        self.assertEqual(row["detail"],
+                                         "bounded model/seed/steps/ranks/groups/workers settings mismatch")
+                        self.assertEqual(row["comparison_evidence"], "Unverified")
+                        self.assertIsNone(row["numeric_reference_comparisons"])
+                        put(path, original)
+                        refresh(package)
+
     def test_rehashed_offline_reference_claims_fail_semantically(self):
         cases = ("missing", "runtime", "manifest_version", "acquisition_version",
                  "duplicate", "hash", "authority", "oracle_execution",
