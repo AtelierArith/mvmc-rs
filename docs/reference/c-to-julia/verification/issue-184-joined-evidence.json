@@ -1,6 +1,6 @@
 {
   "schema": "issue184-joined-evidence-v1",
-  "current_main": "5c1e03d9f31186f784a355022d424d4eb4e49455",
+  "current_main": "14a30849ae4fa9dd78900f113257389d906008ee",
   "original_inventory_lineage": "e41 source-mapped inventory; historical fields preserved, not current runtime claims",
   "rows": [
     {
@@ -10262,23 +10262,23 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:85",
       "symbol_or_scenario": "MVMCOptimizers.pack_parameters",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-core/src/sync.rs::pack_variational_parameters",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "crates/mvmc-core/src/parameters.rs::pack_parameters; crates/mvmc-core/tests/issue290_public_parameters.rs",
+      "supported_rejected_conditions": "Named public API block order/reserved slots, duplicate RBM repair, range/length nonmutation, bound projection/orbital declarations and OptTrans refresh; no full model/MPI/BackFlow/RBM declaration-history claim",
+      "intentional_scope": "PR293 bounded named conditions only, not full parent/API/overload/scenario numerical acceptance; zero-based typed range errors vs Julia zero/no-op documented",
+      "evidence_type": "CoveredScopedOrdinaryCI: nine named tests total, not nine model runs or one execution per audit row",
       "owner": "#180/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCOptimizers.jl/src/MVMCOptimizers.jl=eec5c87052ce316fd22b131cd8313976e65f2c5a8e49ec9f2ce672b70a6d1a47; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test run_smoke --test runner_config --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 source head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; merged main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29; C parameter.c/setmemory.c source authorities in issue-290-public-parameters.md",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure; no initialization/seed/20-step model run. Literal synthetic layouts in nine tests. Linux default/all-features locked ci-profile; local test-fast jobs2 BLAS1.",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 (default); same with --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both Linux jobs111391782363/111391782360 run37187273640. Serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Actual checkout merge f0b6fc6 merges ec41 into87cd (PR head is source identity, not execution merge). Raw log SHA serial6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allc768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#180/#179",
       "proposed_followup_owner": "#180/#179",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "id": "A204",
@@ -10299,7 +10299,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "api:A205",
@@ -10309,23 +10309,23 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:85",
       "symbol_or_scenario": "MVMCOptimizers.unpack_parameters!",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-core/src/sync.rs::unpack_variational_parameters",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "crates/mvmc-core/src/parameters.rs::unpack_parameters; crates/mvmc-core/tests/issue290_public_parameters.rs",
+      "supported_rejected_conditions": "Named public API block order/reserved slots, duplicate RBM repair, range/length nonmutation, bound projection/orbital declarations and OptTrans refresh; no full model/MPI/BackFlow/RBM declaration-history claim",
+      "intentional_scope": "PR293 bounded named conditions only, not full parent/API/overload/scenario numerical acceptance; zero-based typed range errors vs Julia zero/no-op documented",
+      "evidence_type": "CoveredScopedOrdinaryCI: nine named tests total, not nine model runs or one execution per audit row",
       "owner": "#180/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCOptimizers.jl/src/MVMCOptimizers.jl=eec5c87052ce316fd22b131cd8313976e65f2c5a8e49ec9f2ce672b70a6d1a47; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test run_smoke --test runner_config --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 source head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; merged main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29; C parameter.c/setmemory.c source authorities in issue-290-public-parameters.md",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure; no initialization/seed/20-step model run. Literal synthetic layouts in nine tests. Linux default/all-features locked ci-profile; local test-fast jobs2 BLAS1.",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 (default); same with --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both Linux jobs111391782363/111391782360 run37187273640. Serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Actual checkout merge f0b6fc6 merges ec41 into87cd (PR head is source identity, not execution merge). Raw log SHA serial6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allc768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#180/#179",
       "proposed_followup_owner": "#180/#179",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "id": "A205",
@@ -10346,7 +10346,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "api:A206",
@@ -10356,23 +10356,23 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:85",
       "symbol_or_scenario": "MVMCOptimizers.set_parameter_value!",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-core/src/sr.rs::update_parameter_value",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "crates/mvmc-core/src/parameters.rs::set_parameter_value; crates/mvmc-core/tests/issue290_public_parameters.rs",
+      "supported_rejected_conditions": "Named public API block order/reserved slots, duplicate RBM repair, range/length nonmutation, bound projection/orbital declarations and OptTrans refresh; no full model/MPI/BackFlow/RBM declaration-history claim",
+      "intentional_scope": "PR293 bounded named conditions only, not full parent/API/overload/scenario numerical acceptance; zero-based typed range errors vs Julia zero/no-op documented",
+      "evidence_type": "CoveredScopedOrdinaryCI: nine named tests total, not nine model runs or one execution per audit row",
       "owner": "#180/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCOptimizers.jl/src/MVMCOptimizers.jl=eec5c87052ce316fd22b131cd8313976e65f2c5a8e49ec9f2ce672b70a6d1a47; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test run_smoke --test runner_config --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 source head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; merged main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29; C parameter.c/setmemory.c source authorities in issue-290-public-parameters.md",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure; no initialization/seed/20-step model run. Literal synthetic layouts in nine tests. Linux default/all-features locked ci-profile; local test-fast jobs2 BLAS1.",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 (default); same with --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both Linux jobs111391782363/111391782360 run37187273640. Serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Actual checkout merge f0b6fc6 merges ec41 into87cd (PR head is source identity, not execution merge). Raw log SHA serial6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allc768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#180/#179",
       "proposed_followup_owner": "#180/#179",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "id": "A206",
@@ -10393,7 +10393,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "api:A207",
@@ -10403,23 +10403,23 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:85",
       "symbol_or_scenario": "MVMCOptimizers.get_parameter_value",
       "parent_keys": [],
-      "rust_entry": "ExpertModeData::{projection_parameters,rbm_parameters} and slater_params/opt_trans fields; NO standalone indexed get_parameter_value API",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "partial architectural mapping; indexed convenience API absent",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "crates/mvmc-core/src/parameters.rs::get_parameter_value; crates/mvmc-core/tests/issue290_public_parameters.rs",
+      "supported_rejected_conditions": "Named public API block order/reserved slots, duplicate RBM repair, range/length nonmutation, bound projection/orbital declarations and OptTrans refresh; no full model/MPI/BackFlow/RBM declaration-history claim",
+      "intentional_scope": "PR293 bounded named conditions only, not full parent/API/overload/scenario numerical acceptance; zero-based typed range errors vs Julia zero/no-op documented",
+      "evidence_type": "CoveredScopedOrdinaryCI: nine named tests total, not nine model runs or one execution per audit row",
       "owner": "#180/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCOptimizers.jl/src/MVMCOptimizers.jl=eec5c87052ce316fd22b131cd8313976e65f2c5a8e49ec9f2ce672b70a6d1a47; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "API arguments/overloads at listed source lines; run settings/seeds not applicable to source inspection; candidate gate settings per test; no new reference runtime",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test run_smoke --test runner_config --no-fail-fast --retries 0",
-      "result": "UNVERIFIED independent API replay; related local runner records R76/R43/R4/LR/LC do not establish every overload",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 source head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; merged main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29; C parameter.c/setmemory.c source authorities in issue-290-public-parameters.md",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure; no initialization/seed/20-step model run. Literal synthetic layouts in nine tests. Linux default/all-features locked ci-profile; local test-fast jobs2 BLAS1.",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 (default); same with --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both Linux jobs111391782363/111391782360 run37187273640. Serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Actual checkout merge f0b6fc6 merges ec41 into87cd (PR head is source identity, not execution merge). Raw log SHA serial6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allc768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#180/#179",
       "proposed_followup_owner": "#180/#179",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "id": "A207",
@@ -10440,7 +10440,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "api:A208",
@@ -20426,23 +20426,23 @@
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:233",
       "symbol_or_scenario": "@testset \"parameter pack/unpack roundtrip (spec \u00a75-2, F4)\" begin",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/lib.rs::parse_expert_mode_files; crates/mvmc-expert-parsers/src/types.rs::count_variational_parameters; crates/mvmc-core/src/sync.rs::pack_variational_parameters; crates/mvmc-core/src/sr.rs::update_parameter_value; crates/mvmc-core/src/sync.rs::unpack_variational_parameters",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 scenario-to-production mapping; proposed gate only unless result names executed record",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::original_s120_roundtrip_and_first_last_updates",
+      "supported_rejected_conditions": "S120 named count/length/first-last/roundtrip/rejection conditions only; no full numerical model/MPI",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#177/#178/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256=a2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "No local scalar override; inherited fixture/synthetic constructor arguments; File-wide declarations (inherited where used): (3, 2) => [(0, 1), (1, 3)], # F8: size0=3, NSplitSize=2 \u76f8\u5f53;# size0=3, NSplitSize=2: \u6700\u5f8c\u306e group \u304c\u5c0f\u3055\u3044 (F8, warning \u306e\u307f\u3067\u7d99\u7d9a);using MVMCOptimizers: resolve_rnd_seed;@testset \"resolve_rnd_seed C parity (spec \u00a75-1, A5)\" begin;@test resolve_rnd_seed(ctx, 11272, nothing) == 11272 # missing \u2192 parser default;@test resolve_rnd_seed(ctx, 0, nothing) == 0 # RndSeed==0 \u2192 seed 0 (C parity);@test resolve_rnd_seed(ctx, 123, nothing) == 123 # \u6b63\u5024;t = resolve_rnd_seed(ctx, -1, nothing) # \u8ca0\u5024 \u2192 \u6642\u523b seed;@test resolve_rnd_seed(ctx, 123, 777) == 777 # \u660e\u793a seed kwarg \u304c\u512a\u5148;@test resolve_rnd_seed(ctx2, 100, nothing) == 103;modpara.nsrcg = 1;serial_modpara.nsrcg = 1;split_direct_modpara.nsplit_size = 2;split_direct_modpara.nsrcg = 0;split_cg_modpara.nsplit_size = 2;split_cg_modpara.nsrcg = 1;@test occursin(\"NSplitSize > 1 with SR-CG\", sprint(showerror, err));modpara.nsrcg = 2;@testset \"ModPara rnd_seed default matches C readdef.c:1967 (review F2)\" begin;@test MVMCExpertModeParsers.ModParaParameters().rnd_seed == 11272",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_collectives --test mpi_issue179_state --no-fail-fast --retries 0",
-      "result": "UNVERIFIED: individual Julia scenario not replayed against Rust; candidate gate is not evidence of equivalent assertions",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#177/#178/#179",
       "proposed_followup_owner": "#177/#234/#179",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "id": "S120",
@@ -20463,7 +20463,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#177/#178/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "scenario:S121",
@@ -20520,23 +20520,24 @@
       "source_anchor": "MVMCOptimizers.jl/test_unit/test_unit_parallel.jl:309",
       "symbol_or_scenario": "@testset \"sync_modified_parameter!(ctx, data) serial == legacy\" begin",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-core/src/sync.rs::sync_modified_parameter_local; crates/mvmc-expert-parsers/src/lib.rs::parse_expert_mode_files; crates/mvmc-core/src/reducer.rs::SingleProcessReducer; crates/mvmc-core/src/sync.rs::pack_variational_parameters",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
-      "evidence_type": "E0 scenario-to-production mapping; proposed gate only unless result names executed record",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_parameter_boundaries.rs::original_heisenberg_serial_context_sync_matches_local_sync",
+      "supported_rejected_conditions": "Bounded original serial-context vs local synchronization equality condition (M0591); not full MPI/context-overload acceptance",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#177/#178/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256=a2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "No local scalar override; inherited fixture/synthetic constructor arguments; File-wide declarations (inherited where used): (3, 2) => [(0, 1), (1, 3)], # F8: size0=3, NSplitSize=2 \u76f8\u5f53;# size0=3, NSplitSize=2: \u6700\u5f8c\u306e group \u304c\u5c0f\u3055\u3044 (F8, warning \u306e\u307f\u3067\u7d99\u7d9a);using MVMCOptimizers: resolve_rnd_seed;@testset \"resolve_rnd_seed C parity (spec \u00a75-1, A5)\" begin;@test resolve_rnd_seed(ctx, 11272, nothing) == 11272 # missing \u2192 parser default;@test resolve_rnd_seed(ctx, 0, nothing) == 0 # RndSeed==0 \u2192 seed 0 (C parity);@test resolve_rnd_seed(ctx, 123, nothing) == 123 # \u6b63\u5024;t = resolve_rnd_seed(ctx, -1, nothing) # \u8ca0\u5024 \u2192 \u6642\u523b seed;@test resolve_rnd_seed(ctx, 123, 777) == 777 # \u660e\u793a seed kwarg \u304c\u512a\u5148;@test resolve_rnd_seed(ctx2, 100, nothing) == 103;modpara.nsrcg = 1;serial_modpara.nsrcg = 1;split_direct_modpara.nsplit_size = 2;split_direct_modpara.nsrcg = 0;split_cg_modpara.nsplit_size = 2;split_cg_modpara.nsrcg = 1;@test occursin(\"NSplitSize > 1 with SR-CG\", sprint(showerror, err));modpara.nsrcg = 2;@testset \"ModPara rnd_seed default matches C readdef.c:1967 (review F2)\" begin;@test MVMCExpertModeParsers.ModParaParameters().rnd_seed == 11272",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --features mpi --test mpi_issue179_collectives --test mpi_issue179_state --no-fail-fast --retries 0",
-      "result": "UNVERIFIED: individual Julia scenario not replayed against Rust; candidate gate is not evidence of equivalent assertions",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_parameter_boundaries --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): issue184_original_parameter_boundaries::original_heisenberg_serial_context_sync_matches_local_sync; 2/2PASS0.008s UUIDe529a87c-bc39-49e4-a863-2a54126e7404;0skipped; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#177/#178/#179",
       "proposed_followup_owner": "#177/#234/#179",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
       "scope_exclusion": "",
-      "status": "SourceMappedMissingEvidence",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "id": "S122",
@@ -20557,7 +20558,7 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#177/#178/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "scenario:S123",
@@ -75691,23 +75692,23 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::original_s120_roundtrip_and_first_last_updates",
+      "supported_rejected_conditions": "Count >1 implies original >0",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named condition bound to PR293; broader parent acceptance remains pending",
+      "scope_exclusion": "Original S120 ordinary parameter API condition; historical review flag preserved in original_row, not an InterAll numerical case",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "audit_id": "M0579",
@@ -75741,7 +75742,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "assertion:M0580",
@@ -75753,23 +75754,23 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::original_s120_roundtrip_and_first_last_updates",
+      "supported_rejected_conditions": "Packed length equals declared count",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named condition bound to PR293; broader parent acceptance remains pending",
+      "scope_exclusion": "Original S120 ordinary parameter API condition; historical review flag preserved in original_row, not an InterAll numerical case",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "audit_id": "M0580",
@@ -75803,7 +75804,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "assertion:M0581",
@@ -75815,23 +75816,24 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/src/sr.rs::sr::original_parameter_delta_tests::original_m0581_additive_helper_updates_first_and_last_parameters",
+      "supported_rejected_conditions": "Actual existing SR additive helper first/last (0,n-1), original Heisenberg inputs, parsed n_proj; before+delta plus independent zero→(0.25,-0.5) endpoints; not substituted get/set",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --lib -E 'test(original_m0581_additive_helper_updates_first_and_last_parameters)' --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): sr::original_parameter_delta_tests::original_m0581_additive_helper_updates_first_and_last_parameters; 1/1PASS0.011s UUID8db81051-8931-48b4-a162-f31ee4ec6da7;243unselected NOTPASS; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
+      "scope_exclusion": "Original ordinary parameter condition, not InterAll numerical; historical flags preserved in original_row",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "audit_id": "M0581",
@@ -75865,7 +75867,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "assertion:M0582",
@@ -75877,23 +75879,23 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::original_s120_roundtrip_and_first_last_updates",
+      "supported_rejected_conditions": "Perturbed vector algebraic roundtrip",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named condition bound to PR293; broader parent acceptance remains pending",
+      "scope_exclusion": "Original S120 ordinary parameter API condition; historical review flag preserved in original_row, not an InterAll numerical case",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "audit_id": "M0582",
@@ -75927,7 +75929,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "assertion:M0583",
@@ -75939,23 +75941,23 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::original_s120_roundtrip_and_first_last_updates",
+      "supported_rejected_conditions": "Original vector restored",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named condition bound to PR293; broader parent acceptance remains pending",
+      "scope_exclusion": "Original S120 ordinary parameter API condition; historical review flag preserved in original_row, not an InterAll numerical case",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "audit_id": "M0583",
@@ -75989,7 +75991,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "assertion:M0584",
@@ -76001,23 +76003,23 @@
       "parent_keys": [
         "scenario:S120"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue290_public_parameters.rs::length_and_range_errors_leave_all_model_storage_unchanged",
+      "supported_rejected_conditions": "Short/long LengthMismatch and nonmutation",
+      "intentional_scope": "Bounded named original condition, not full parent/API/scenario acceptance",
+      "evidence_type": "CoveredScopedOrdinaryCI: PR293 nine controls total, not one model execution per row",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; test_unit_parallel.jl SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; PR293 head ec41f31c5a3e4f46f1e96c7c0f045fd74a8c2296; main14a30849ae4fa9dd78900f113257389d906008ee; Rusttest SHA8539a280d09d6a0cfadd4f084c7572578902d6b0aa30c850063bb960d5624f29",
+      "settings": "Unchanged original Heisenberg13-file parse-only closure, original inputs no seed/init/20-step override; literal independent first/last values; Linux default/all-features locked ci-profile",
+      "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0; all-features job adds --all-features; local -p mvmc-core --test issue290_public_parameters --locked --cargo-profile test-fast --no-tests fail --no-fail-fast --retries 0",
+      "result": "PASS(scope): nine issue290 identities both jobs111391782363/111391782360 run37187273640; serial1103PASS41skip170.620s/all1105PASS60skip211.515s. Checkout f0b6fc6 merge ec41 into87cd, not source PR head execution. SerialSHA6d8267a3beb8f31676d0a9156050b6023f5deacd80e09d5d72299a832236eaad/allSHA c768cec2a7ae7cd08defe58ce3bda393e4ce0bb35535751179f7eb67b2f6f0e7; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782363 ; https://github.com/AtelierArith/mvmc-rs/actions/runs/37187273640/job/111391782360",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named condition bound to PR293; broader parent acceptance remains pending",
+      "scope_exclusion": "Original S120 ordinary parameter API condition; historical review flag preserved in original_row, not an InterAll numerical case",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "only_named_conditions_not_full_parent_API_or_scenario_acceptance"
       ],
       "original_row": {
         "audit_id": "M0584",
@@ -76051,7 +76053,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 scoped reconciliation after closed290; original owner preserved"
     },
     {
       "key": "assertion:M0585",
@@ -76249,23 +76251,24 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_parameter_boundaries.rs::original_first_projection_complex_signed_zero_survives_public_unpack",
+      "supported_rejected_conditions": "Public unpack/pack first projection value complex(-0,-0) equality, same complex slot",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_parameter_boundaries --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): issue184_original_parameter_boundaries::original_first_projection_complex_signed_zero_survives_public_unpack; 2/2PASS0.008s UUIDe529a87c-bc39-49e4-a863-2a54126e7404;0skipped; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
+      "scope_exclusion": "Original ordinary parameter condition, not InterAll numerical; historical flags preserved in original_row",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "audit_id": "M0588",
@@ -76299,7 +76302,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "assertion:M0589",
@@ -76311,23 +76314,24 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_parameter_boundaries.rs::original_first_projection_complex_signed_zero_survives_public_unpack",
+      "supported_rejected_conditions": "First projection real negative-zero sign bit exact (Julia1/Rust0)",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_parameter_boundaries --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): issue184_original_parameter_boundaries::original_first_projection_complex_signed_zero_survives_public_unpack; 2/2PASS0.008s UUIDe529a87c-bc39-49e4-a863-2a54126e7404;0skipped; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
+      "scope_exclusion": "Original ordinary parameter condition, not InterAll numerical; historical flags preserved in original_row",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "audit_id": "M0589",
@@ -76361,7 +76365,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "assertion:M0590",
@@ -76373,23 +76377,24 @@
       "parent_keys": [
         "scenario:S121"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_parameter_boundaries.rs::original_first_projection_complex_signed_zero_survives_public_unpack",
+      "supported_rejected_conditions": "First projection imaginary negative-zero sign bit exact, same complex slot",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_parameter_boundaries --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): issue184_original_parameter_boundaries::original_first_projection_complex_signed_zero_survives_public_unpack; 2/2PASS0.008s UUIDe529a87c-bc39-49e4-a863-2a54126e7404;0skipped; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
+      "scope_exclusion": "Original ordinary parameter condition, not InterAll numerical; historical flags preserved in original_row",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "audit_id": "M0590",
@@ -76423,7 +76428,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "assertion:M0591",
@@ -76435,23 +76440,24 @@
       "parent_keys": [
         "scenario:S122"
       ],
-      "rust_entry": "NOT_IDENTIFIED individual equivalent assertion",
-      "supported_rejected_conditions": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "intentional_scope": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "evidence_type": "SYNTAX_ONLY_UNREVIEWED",
+      "rust_entry": "crates/mvmc-core/tests/issue184_original_parameter_boundaries.rs::original_heisenberg_serial_context_sync_matches_local_sync",
+      "supported_rejected_conditions": "Two original Heisenberg parses: SingleProcessReducer context sync vs local sync, original array approximate norm rule; serial-only no MPI",
+      "intentional_scope": "CoveredScopedOrdinaryLocal named original condition only; no full API/parent/scenario/model/MPI proof",
+      "evidence_type": "CoveredScopedOrdinaryLocal: actual same-source owner receipt, not PR293 CI execution of these new helpers",
       "owner": "#184 inventory; implementation owner pending classification",
-      "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
-      "settings": "UNRESOLVED inherited settings; inspect enclosing testset and loop constructors",
-      "command": "NOT_AVAILABLE until exact assertion/setting mapping",
-      "result": "INVENTORY_ONLY; NOT_RUN",
+      "reference_revision": "Julia8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; original parallel-test SHAa2b582f61dc981c318f817fc0575cfadfdb8c93e34c5679aeaf7fdae48be5050; source baseline14a30849ae4fa9dd78900f113257389d906008ee; sr.rs SHA55e820e461f457fba68de04235a560bcd721b9d1293a986017fcf2ffd91a72c6; boundary-test SHA0730581f7e09c2a81110d3fdbd2913677e206efb66157c8dad312813f65212a7",
+      "settings": "Unchanged original Heisenberg13-file parse-only inputs, no initialization/RNG/seed/20-step run; jobs2 BLAS/OMP/MKL1 default features, locked test-fast",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_parameter_boundaries --no-tests fail --no-fail-fast --retries 0",
+      "result": "LOCAL PASS(scope): issue184_original_parameter_boundaries::original_heisenberg_serial_context_sync_matches_local_sync; 2/2PASS0.008s UUIDe529a87c-bc39-49e4-a863-2a54126e7404;0skipped; receipt /tmp/mvmc-184-additive-proof.20261004 aggregate0, Clippy/fmt/source/tools/providers posts0, both pre/postLISTbyteidentical. Earlier PR293 CI ninecontrols did not execute new original additive/boundary identities; prior getter/setter effect remains related historical evidence, not original additive execution.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
-      "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
-      "scope_exclusion": "SCOPE_REVIEW_PENDING; InterAll excluded; mixed blocks/loops require semantic classification",
-      "status": "ExplicitScopeExclusionNeedsReview",
+      "original_proof_gap": "Named original condition locally executed; current-head CI and full parent acceptance remain pending",
+      "scope_exclusion": "Original ordinary parameter condition, not InterAll numerical; historical flags preserved in original_row",
+      "status": "CoveredScopedOrdinaryLocal",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "current_head_CI_for_new_identity_pending",
+        "only_named_original_condition_not_full_parent_acceptance"
       ],
       "original_row": {
         "audit_id": "M0591",
@@ -76485,7 +76491,7 @@
         }
       ],
       "original_owner_identifier": "#184 inventory; implementation owner pending classification",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 original-condition reconciliation; original owner identifiers retained"
     },
     {
       "key": "assertion:M0592",
