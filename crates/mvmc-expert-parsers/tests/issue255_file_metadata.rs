@@ -139,7 +139,32 @@ fn metadata_identity_preserves_non_utf8_filename() {
     let input = Inputs::new();
     let name = std::ffi::OsString::from_vec(vec![b'x', 0xff]);
     let path = input.0.join(&name);
-    fs::write(&path, [0xff]).unwrap();
+    match fs::write(&path, [0xff]) {
+        Ok(()) => {}
+        Err(create_error)
+            if cfg!(target_os = "macos") && create_error.raw_os_error() == Some(92) =>
+        {
+            // Native Mac CI observed creation raw92 followed by metadata raw2.
+            // Exercise the public missing-file contract, not an error or skip.
+            let metadata_error = fs::metadata(&path).unwrap_err();
+            assert_eq!(metadata_error.raw_os_error(), Some(2));
+            assert_eq!(metadata_error.kind(), std::io::ErrorKind::NotFound);
+            let info = get_file_info(&path).unwrap();
+            assert_eq!(info.filename, name);
+            assert_eq!(info.filepath, path);
+            assert!(!info.exists);
+            assert_eq!(info.size_bytes, 0);
+            assert_eq!(info.last_modified, UNIX_EPOCH);
+            assert!(!validate_file_exists(&path));
+            println!(
+                "native invalid-byte path: create kind={:?} raw={:?}; metadata kind={:?} raw={:?}; API exists=false size=0 epoch; predicate=false",
+                create_error.kind(), create_error.raw_os_error(),
+                metadata_error.kind(), metadata_error.raw_os_error()
+            );
+            return;
+        }
+        Err(error) => panic!("unexpected invalid-byte filename creation failure: {error:?}"),
+    }
     let info = get_file_info(&path).unwrap();
     assert_eq!(info.filename, name);
     assert_eq!(info.filepath, path);
