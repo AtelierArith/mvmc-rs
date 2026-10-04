@@ -426,6 +426,61 @@ fn run_physcal_with_selected_backend(
     enable_opt_trans: bool,
     #[cfg(feature = "mpi")] mpi_context: Option<&mvmc_core::mpi::MpiContext>,
 ) -> Result<mvmc_core::PhysCalResult, String> {
+    let flags = mvmc_core::c_timer::TimerEnv::from_env();
+    if flags.legacy_warning() {
+        eprintln!(
+            "warning: MVMC_TIMER is deprecated; use MVMC_C_TIMER=1 for the C-compatible zvo_CalcTimer.dat timer."
+        );
+    }
+    if flags.enabled() {
+        run_physcal_with_selected_backend_timed::<true>(
+            namelist,
+            fixed_params,
+            seed,
+            output_dir,
+            mode,
+            enable_opt_trans,
+            #[cfg(feature = "mpi")]
+            mpi_context,
+            &mut mvmc_core::c_timer::CTimer::<true>::new(),
+            flags,
+        )
+    } else {
+        run_physcal_with_selected_backend_timed::<false>(
+            namelist,
+            fixed_params,
+            seed,
+            output_dir,
+            mode,
+            enable_opt_trans,
+            #[cfg(feature = "mpi")]
+            mpi_context,
+            &mut mvmc_core::c_timer::CTimer::<false>::new(),
+            flags,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
+    namelist: &Path,
+    fixed_params: &Path,
+    seed: Option<i64>,
+    output_dir: &Path,
+    mode: &str,
+    enable_opt_trans: bool,
+    #[cfg(feature = "mpi")] mpi_context: Option<&mvmc_core::mpi::MpiContext>,
+    timer: &mut mvmc_core::c_timer::CTimer<TIMED>,
+    flags: mvmc_core::c_timer::TimerEnv,
+) -> Result<mvmc_core::PhysCalResult, String> {
+    // [0] All / [1] Initialization / [11] ReadDefFile bracket the CLI-side
+    // parse. The in-place core records [20]/[3]/[4]/[21]/[22]; [2] VMCPhysCal
+    // wraps the measurement call below. Mirrors run_para_opt_from_namelist.
+    timer.reset();
+    timer.diagnostics = flags;
+    timer.start(0);
+    timer.start(1);
+    timer.start(11);
     let parsed = (|| {
         let parsed = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
             namelist,
@@ -441,6 +496,7 @@ fn run_physcal_with_selected_backend(
         }
         Ok(parsed)
     })();
+    timer.stop(11);
     #[cfg(feature = "mpi")]
     let parsed = match mpi_context {
         Some(context) => agree_result(parsed, context, "CLI PhysCal parse/load/validation"),
@@ -461,6 +517,8 @@ fn run_physcal_with_selected_backend(
             } else {
                 context
             };
+            // [13] InitParameter: fixed load + overlays + sync.
+            timer.start(13);
             let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
                 namelist,
                 fixed_params,
@@ -469,7 +527,19 @@ fn run_physcal_with_selected_backend(
                 reducer,
                 enable_opt_trans,
             )?;
-            return mvmc_core::vmc_phys_cal_with_reducer(preparation, Some(output_dir), reducer);
+            timer.stop(13);
+            timer.stop(1);
+            timer.start(2);
+            let result = mvmc_core::vmc_phys_cal_with_reducer_timed::<TIMED, _>(
+                preparation,
+                Some(output_dir),
+                reducer,
+                timer,
+            )?;
+            timer.stop(2);
+            timer.stop(0);
+            write_physcal_timer::<TIMED, _>(timer, output_dir, reducer, flags)?;
+            return Ok(result);
         }
         #[cfg(not(feature = "mpi"))]
         {
@@ -481,6 +551,8 @@ fn run_physcal_with_selected_backend(
     }
 
     mvmc_core::validation::validate_reducer_rank(&parsed, &mvmc_core::SingleProcessReducer)?;
+    // [13] InitParameter: fixed load + overlays + sync.
+    timer.start(13);
     let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
         namelist,
         fixed_params,
@@ -489,11 +561,39 @@ fn run_physcal_with_selected_backend(
         &mvmc_core::SingleProcessReducer,
         enable_opt_trans,
     )?;
-    mvmc_core::vmc_phys_cal_with_reducer(
+    timer.stop(13);
+    timer.stop(1);
+    timer.start(2);
+    let result = mvmc_core::vmc_phys_cal_with_reducer_timed::<TIMED, _>(
         preparation,
         Some(output_dir),
         &mvmc_core::SingleProcessReducer,
-    )
+        timer,
+    )?;
+    timer.stop(2);
+    timer.stop(0);
+    write_physcal_timer::<TIMED, _>(timer, output_dir, &mvmc_core::SingleProcessReducer, flags)?;
+    Ok(result)
+}
+
+/// Write the C-compatible PhysCal timer report(s) on the output root.
+fn write_physcal_timer<const TIMED: bool, R: mvmc_core::Reducer + ?Sized>(
+    timer: &mvmc_core::c_timer::CTimer<TIMED>,
+    output_dir: &Path,
+    reducer: &R,
+    flags: mvmc_core::c_timer::TimerEnv,
+) -> Result<(), String> {
+    if TIMED && reducer.is_output_root() {
+        timer
+            .write_phys_cal(output_dir, "zvo")
+            .map_err(|error| error.to_string())?;
+        if flags.any_diag() {
+            timer
+                .write_diag(output_dir, "zvo")
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 fn run_with_selected_backend(
