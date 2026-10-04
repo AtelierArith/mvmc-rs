@@ -41,6 +41,7 @@ pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
     is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_c_opt_flags,
     set_opt_trans_opt_flags, set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags,
+    write_optimization_status,
 };
 
 use std::collections::BTreeMap;
