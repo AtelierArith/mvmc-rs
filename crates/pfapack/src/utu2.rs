@@ -297,9 +297,9 @@ where
 }
 
 #[inline]
-fn should_use_panel_trmmt(n: usize) -> bool {
+fn should_use_panel_trmmt(n: usize, ordinary_real: bool) -> bool {
     const PANEL: usize = 64;
-    cfg!(not(feature = "blas-backend")) && PANEL > 1 && PANEL < n
+    (ordinary_real || cfg!(not(feature = "blas-backend"))) && PANEL > 1 && PANEL < n
 }
 
 fn fill_lower_from_upper_skew<T>(a: &mut [T], n: usize)
@@ -326,7 +326,8 @@ pub fn utu2inv_real(
     vt: &mut [f64],
     m_work: &mut SqMat<'_, f64>,
 ) {
-    utu2inv_generic::<f64>(a, pivots, vt, m_work, None);
+    // C sktdsmx uses direct division; retain the ordinary backend independently.
+    utu2inv_generic::<f64>(a, pivots, vt, m_work, None, Some(ordinary_real_divide));
 }
 
 /// Compute the inverse of a complex skew-symmetric matrix from its
@@ -337,7 +338,7 @@ pub fn utu2inv_complex(
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None, None);
 }
 
 /// Inverse arithmetic used by Julia's FSZ runtime: direct tridiagonal
@@ -351,7 +352,7 @@ pub fn utu2inv_complex_fsz(
     m_work: &mut SqMat<'_, Complex64>,
     divide: fn(Complex64, Complex64) -> Complex64,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide));
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide), Some(divide));
 }
 
 fn solve_sktd_direct<T: BlasScalar>(
@@ -387,6 +388,7 @@ fn utu2inv_generic<T>(
     vt: &mut [T],
     m: &mut SqMat<'_, T>,
     fsz: Option<fn(T, T) -> T>,
+    solver_divide: Option<fn(T, T) -> T>,
 ) where
     T: BlasScalar,
 {
@@ -451,13 +453,13 @@ fn utu2inv_generic<T>(
     //
     // We pass `m` by shared reference and `a` by mutable reference;
     // the helper only writes into the output (`a`).
-    if let Some(divide) = fsz {
+    if let Some(divide) = solver_divide {
         solve_sktd_direct(vt, m, a, divide);
     } else {
         solve_sktd::<T>(vt, m, a);
     }
 
-    let panel_trmmt = should_use_panel_trmmt(n);
+    let panel_trmmt = should_use_panel_trmmt(n, fsz.is_none() && solver_divide.is_some());
     if panel_trmmt {
         // Mirrors deps/invert.tcc::utu2inv: for large matrices, compute only
         // the upper-triangular part of M^T * A by 64-column panels, then
@@ -499,6 +501,105 @@ fn utu2inv_generic<T>(
                 let col = j * n;
                 a_data.swap(col + i, col + target);
             }
+        }
+    }
+}
+
+#[inline]
+fn ordinary_real_divide(x: f64, y: f64) -> f64 {
+    #[cfg(test)]
+    c_direct_solver_contract::record(x, y);
+    x / y
+}
+
+#[cfg(test)]
+mod c_direct_solver_contract {
+    use super::*;
+    use std::cell::RefCell;
+    thread_local! { static CALLS: RefCell<Option<Vec<(f64,f64)>>> = const {RefCell::new(None)}; }
+    pub(super) fn record(x: f64, y: f64) {
+        CALLS.with(|calls| {
+            if let Some(v) = calls.borrow_mut().as_mut() {
+                assert!(v.len() < 64);
+                v.push((x, y));
+            }
+        });
+    }
+    struct Capture;
+    impl Drop for Capture {
+        fn drop(&mut self) {
+            CALLS.with(|c| {
+                c.borrow_mut().take();
+            });
+        }
+    }
+    fn capture() -> Capture {
+        CALLS.with(|c| {
+            assert!(c.borrow().is_none());
+            *c.borrow_mut() = Some(Vec::new());
+        });
+        Capture
+    }
+    #[test]
+    fn public_real_inverse_dispatches_direct_numerators() {
+        // Independent sparse U/T input; actual public dispatch is recorded,
+        // not inferred from the final binary64 quotient.
+        let mut factor = [0.; 16];
+        factor[4] = 7.;
+        factor[12] = 5.;
+        factor[14] = 2.;
+        let pivots = [
+            PivotIndex1Based(1),
+            PivotIndex1Based(2),
+            PivotIndex1Based(3),
+            PivotIndex1Based(4),
+        ];
+        let mut work = [91.; 16];
+        let mut vt = [0.; 3];
+        let _scope = capture();
+        utu2inv_real(
+            &mut SqMat::new(&mut factor, 4),
+            &pivots,
+            &mut vt,
+            &mut SqMat::new(&mut work, 4),
+        );
+        CALLS.with(|c| {
+            let b = c.borrow();
+            let calls = b.as_ref().unwrap();
+            assert_eq!(calls.len(), 16);
+            // This dyadic numerator and copied divisor are C input operands,
+            // not a computed quotient comparison.
+            assert!(calls.iter().any(|&(x, y)| x == -5. && y == 7.));
+        });
+        assert_eq!(vt, [-7., 0., -2.]); // original input/sign-copy contract
+        let u = f64::EPSILON / 2.;
+        let g = 12. * u / (1. - 12. * u);
+        assert!(factor[9].is_finite());
+        assert!((factor[9] - (-5. / 7.)).abs() <= (2. * g / (1. - g)) * 27.);
+    }
+    #[test]
+    fn solver_consumes_direct_division_operands() {
+        let mut b = [5., 0., 0., 5.];
+        let mut out = [0.; 4];
+        let _scope = capture();
+        solve_sktd_direct(
+            &[7.],
+            &SqMat::new(&mut b, 2),
+            &mut SqMat::new(&mut out, 2),
+            ordinary_real_divide,
+        );
+        CALLS.with(|c| {
+            let b = c.borrow();
+            let calls = b.as_ref().unwrap();
+            assert_eq!(calls.len(), 4);
+            assert!(calls.iter().any(|&(x, y)| x == 5. && y == -7.));
+            assert!(calls.iter().any(|&(x, y)| x == 5. && y == 7.));
+        });
+        let u = f64::EPSILON / 2.;
+        let g = 2. * u / (1. - 2. * u);
+        for (i, e) in [0., -5. / 7., 5. / 7., 0.].into_iter().enumerate() {
+            assert!(out[i].is_finite());
+            assert!((out[i] - e).abs() <= 2. * g / (1. - g));
         }
     }
 }

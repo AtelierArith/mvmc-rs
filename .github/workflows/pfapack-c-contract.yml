@@ -1,0 +1,89 @@
+name: PfaPack C-contract feature coverage
+on:
+  pull_request:
+    paths:
+      - 'crates/pfapack/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'scripts/issue176/**'
+      - '.github/workflows/pfapack-c-contract.yml'
+      - '.github/actions/setup-rust-ci/**'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/pfapack/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/issue176/**'
+      - '.github/workflows/pfapack-c-contract.yml'
+permissions:
+  contents: read
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
+  OPENBLAS_CORETYPE: HASWELL
+jobs:
+  pfapack:
+    name: PfaPack Linux ${{ matrix.feature }} ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [default, simd-backend, blas-backend, both]
+        mode: [ordinary, ignored]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: pfapack-c-contract-${{ matrix.feature }}-${{ matrix.mode }}
+          tools: nextest
+      - name: Exact-head list, numerical tests, relist and closures
+        env:
+          FEATURE: ${{ matrix.feature }}
+          MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          bash scripts/issue176/pfapack-ci-run.sh "$FEATURE" "$MODE" "$RUNNER_TEMP/pfapack176-proof"
+      - name: Stage bounded first-failure receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="$RUNNER_TEMP/pfapack176-proof"
+          small="$RUNNER_TEMP/pfapack176-artifact"
+          mkdir "$small"
+          test -d "$raw" || { printf 'proof=NOT_STARTED\n' >"$small/not-started.txt"; exit 0; }
+          exceeded=0; used=0
+          for file in "$raw"/*; do
+            test -f "$file" || continue
+            bytes=$(stat -c %s "$file")
+            name=$(basename "$file")
+            allowance=$((65011712-used))
+            test "$allowance" -le 16777216 || allowance=16777216
+            if test "$bytes" -le "$allowance"; then
+              cp "$file" "$small/$name"
+              used=$((used+bytes))
+            else
+              head -c "$allowance" "$file" >"$small/$name.prefix"
+              used=$((used+allowance))
+              printf 'originalBytes=%s\ntruncated=true\nscientificAcceptance=false\n' "$bytes" >"$small/$name.cap-failure.txt"
+              exceeded=1
+            fi
+          done
+          test "$(du -sk "$small" | cut -f1)" -le 65536
+          test "$exceeded" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pfapack-c-contract-${{ matrix.feature }}-${{ matrix.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pfapack176-artifact
+          if-no-files-found: error
+          retention-days: 14

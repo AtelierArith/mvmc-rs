@@ -15,6 +15,10 @@
 //! Returns `Ok(())` on success or `Err(zero_pivot_row)` mirroring the
 //! Fortran `INFO > 0` semantics.
 
+#[cfg(test)]
+#[path = "rank2_real_regression.rs"]
+mod rank2_real_regression;
+
 use num_complex::Complex64;
 
 use crate::backend::{self, BlasScalar};
@@ -531,7 +535,7 @@ fn update_upper_rank2_f64(data: &mut [f64], lda: usize, kk0: usize, k0: usize, a
         let temp2 = alpha * col_k0_data[j];
 
         for i in 0..j {
-            col_j[i] += col_k0_data[i] * temp1 - col_kk0_data[i] * temp2;
+            col_j[i] = (col_j[i] + col_k0_data[i] * temp1) - col_kk0_data[i] * temp2;
         }
         col_j[j] = 0.0;
     }
