@@ -1,4 +1,0 @@
-zvo_ls_out_007.dat
-zvo_ls_qqqq_007.dat
-zvo_out_007.dat
-zvo_var_007.dat

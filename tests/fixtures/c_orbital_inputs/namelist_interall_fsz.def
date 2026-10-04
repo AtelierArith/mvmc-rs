@@ -1,7 +1,0 @@
-ModPara ../interall/spin_chain/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/modpara.def
-LocSpin ../interall/spin_chain/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/locspn.def
-InterAll ../interall/c_spin_chain.def
-Gutzwiller ../interall/spin_chain/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/gutzwilleridx.def
-Jastrow ../interall/spin_chain/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/jastrowidx.def
-OrbitalGeneral general_heisenberg_six.def
-TransSym ../interall/spin_chain/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/qptransidx.def

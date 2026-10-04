@@ -1,7 +1,0 @@
-# Toolchain selection. We always track the latest `stable` release rather
-# than pinning a patch version. There is no MSRV floor in Cargo.toml; this
-# file is the single source of truth for the toolchain.
-[toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy"]
-profile = "minimal"

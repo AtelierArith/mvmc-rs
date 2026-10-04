@@ -1,2 +1,0 @@
-# Julia 1.13.1; LBTConfig([ILP64] libopenblas64_.0.3.30.dylib); threads=1
-# Julia-mVMC 8bb1b9e; numerical sources c2ea432; seed=1; canonical hubbard_chain_pairhop_fsz inputs, unchanged sampling settings

@@ -1,7 +1,0 @@
-model=hubbard_chain_real mode=real seed=1
-steps=3 window=3 NSRCG=0 NStore=1
-canonical_NSROptItrStep=500 canonical_NSROptItrSmp=50
-effective_NSROptItrStep=3 effective_NSROptItrSmp=3 override=both_no_clamp
-initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
-initial.def sha256=7701f066f459b1b0c26ffc9f7437f10e9fa72637efa38789815bd710cbfeaf7e
-In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256

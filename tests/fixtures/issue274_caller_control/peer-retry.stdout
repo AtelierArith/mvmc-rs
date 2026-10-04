@@ -1,7 +1,0 @@
-complex 1 0 2
-integer-max 1 0 4 4
-complex 2 0 4
-integer-max 2 0 0 0
-returned 0 2 4
-real-setup -7
-continued-after-real-setup

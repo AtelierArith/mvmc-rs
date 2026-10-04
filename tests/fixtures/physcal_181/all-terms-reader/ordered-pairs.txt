@@ -1,5 +1,0 @@
-CoulombInter 0 1 0.375
-Hund 0 1 -0.125
-Exchange 0 1 0.25
-PairHop 0 1 -0.0625
-PairHop 1 0 -0.0625

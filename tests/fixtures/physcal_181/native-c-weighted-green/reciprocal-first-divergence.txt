@@ -1,6 +1,0 @@
-weight=2.5 + 0.125im
-C_reciprocal=0.399002493765586 - 0.0199501246882793im
-Julia_reciprocal=0.39900249376558605 - 0.0199501246882793im
-delta_re=-5.551115123125783e-17
-delta_im=0.0
-scope=actual C weightAverageReduce_fcmp on unit numerator, before any nontrivial Green multiplication; independent Julia reciprocal

@@ -1,2 +1,0 @@
-Filesystem     1024-blocks  Used Available Capacity Mounted on
-shm                  65536 35576     29960      55% /dev/shm

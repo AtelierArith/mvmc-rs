@@ -109,6 +109,9 @@ pub trait OptimizationMeasurementObserver {
     fn measured(&self, view: OptimizationMeasurementView<'_>);
     /// Borrow the actual local O/HO/OO prefix immediately after its accumulation.
     fn accumulated(&self, _view: OptimizationMeasurementView<'_>) {}
+    /// Test-only actual runner RNG boundary; no production API or live draws.
+    #[cfg(test)]
+    fn rng_boundary(&self, _phase: &'static str, _rng: &Sfmt19937Rng) {}
 }
 
 /// Actual Real QP boundary; matrix may include its existing public padding.
@@ -204,6 +207,16 @@ fn observe_optimization_measurement(view: OptimizationMeasurementView<'_>) {
         let observer = slot.borrow().clone();
         if let Some(observer) = observer {
             observer.measured(view);
+        }
+    });
+}
+
+#[cfg(test)]
+fn observe_optimization_rng(phase: &'static str, rng: &Sfmt19937Rng) {
+    OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+        let observer = slot.borrow().clone();
+        if let Some(observer) = observer {
+            observer.rng_boundary(phase, rng);
         }
     });
 }
@@ -1087,6 +1100,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     // on every chain. Only VMCMainCal partitions those saved configurations
     // within comm_child1; partitioning this count changes the RNG trajectory.
     timer.start(2);
+    #[cfg(test)]
+    observe_optimization_rng("initialized", rng);
     for step in 0..n_steps {
         timer.start(20);
         // 1. Slater table refresh.
@@ -1129,6 +1144,10 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 .unwrap_or_else(|| format!("sample step {step} failed on another MPI rank")));
         }
         let _sample_stats = sample_result?;
+        #[cfg(test)]
+        if step == 0 {
+            observe_optimization_rng("sampling-return", rng);
+        }
         if use_fsz && !all_complex {
             sync_real_fsz_shadow(state);
         }
@@ -4749,6 +4768,20 @@ mod callback_tests {
     }
 
     impl OptimizationMeasurementObserver for RunnerCgDiagnostics {
+        fn rng_boundary(&self, phase: &'static str, rng: &Sfmt19937Rng) {
+            if self.5.get() {
+                return;
+            }
+            let (words, cursor) = rng.state_snapshot();
+            let count = rng.words_consumed();
+            let mut peek = rng.clone();
+            let future: Vec<u32> = (0..624).map(|_| peek.gen_rand32()).collect();
+            assert_eq!(rng.state_snapshot(), (words, cursor));
+            assert_eq!(rng.words_consumed(), count);
+            self.metadata(&format!(
+                "raw-boundary={phase} cursor={cursor} count={count} words={words:?} future={future:?}\n"
+            ));
+        }
         fn begin_real_factor(
             &self,
             data: &ExpertModeData,
@@ -4931,6 +4964,27 @@ mod callback_tests {
             ));
         }
         assert!(RunnerCgDiagnostics::direct_record_counts_complete(1, 1));
+    }
+
+    #[test]
+    fn small_model_raw_checkpoint_keeps_live_words_cursor_and_u128_count() {
+        let mut rng = Sfmt19937Rng::new(1);
+        for _ in 0..12 {
+            rng.gen_rand32();
+        }
+        let before = rng.state_snapshot();
+        let count: u128 = rng.words_consumed();
+        let observer = RunnerCgDiagnostics::default();
+        observer.rng_boundary("initialized", &rng);
+        assert_eq!(rng.state_snapshot(), before);
+        assert_eq!(rng.words_consumed(), count);
+        assert!(observer
+            .0
+            .borrow()
+            .contains("raw-boundary=initialized cursor=12 count=12"));
+        assert!(observer.0.borrow().contains(" words=["));
+        assert!(observer.0.borrow().contains(" future=["));
+        assert!(!observer.5.get());
     }
 
     impl crate::sr_cg::CgObserver for RunnerCgDiagnostics {

@@ -1,9 +1,0 @@
-source_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
-driver_sha256=6221a747add3f59356285e5d23bcfb711fa1b55fc0cb16252e02ae2560c57c8a
-architecture=x86_64-linux-gnu
-compiler=cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
-Copyright (C) 2023 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-options=-std=c11 -O0
-scope=actual CountOneBodyGForLanczos, GetInfoOneBodyG and GetInfoTwoBodyGEx; ReadGreen adapter supplies declared records; padded storage; no MPI/BLAS/RNG/LS execution

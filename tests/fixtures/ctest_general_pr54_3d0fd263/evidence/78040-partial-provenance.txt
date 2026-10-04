@@ -1,6 +1,0 @@
-Actual Julia direct-SR captures; no Rust expectations; not full native-C solver validation
-Julia=1.13.1 platform=x86_64-linux-gnu BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
-244b7e7c715bf92c7d0695f4e52e89a7a89c34787b025da21b13f2787a2c1f97  extern/Julia-mVMC/MVMCOptimizers.jl/src/stochastic_opt.jl
-b246af8cd515b6689338b1641445e5df4b5ef59056ef15ff9d4c4a0eeb38c68e  c_toolbox/ctest_direct_sr_metrics.jl
-19ae5d405fd46d15e85892527dc7d68c81cfe30797a2fed297b12d465870c610  c_toolbox/ctest_prefix_oracle.jl
-440cbcb61b58663775fb7e69c52f71464bdd7ee3f4fddce7ebdeb79fe43eb7c1  c_toolbox/ctest_direct_sr_capture.jl

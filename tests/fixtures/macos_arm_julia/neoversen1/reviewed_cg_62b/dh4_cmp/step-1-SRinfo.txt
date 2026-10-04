@@ -1,2 +1,0 @@
-#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax
-   78    43    17    18  1.64910e+00  0.00000e+00 -5.03115e-02    70, 43

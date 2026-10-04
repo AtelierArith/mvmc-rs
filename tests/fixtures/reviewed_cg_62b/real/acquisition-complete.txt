@@ -1,6 +1,0 @@
-Reviewed PR54 62b0f97f076fb55c71c3ab0caa041a9adff94e04 cg/store0 prefixes=1,2,3,20.
-Source /tmp/mvmc-review62b-runner20.Ctp8Dh-real; per-prefix provenance records input/environment/full production hashes.
-Snapshot parameters are EXPANDED MAPPED TERMS; c-window/history uses C-declared DENSE pack.
-Native FSZ kernel bridge scope=false; Julia sampler/SR; NOT full native C execution.
-Archived sparse declarations are synthetic API regressions, NOT C input acceptance evidence.
-Existing CG/direct numerical budgets unchanged; initial8.7e-19 approval is separate.

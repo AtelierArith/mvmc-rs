@@ -1,6 +1,0 @@
-Reviewed PR54 62b0f97f076fb55c71c3ab0caa041a9adff94e04 direct/store1 prefixes=20.
-Source /tmp/mvmc-review62b-runner20.Ctp8Dh-real-direct1
-Mapped-term snapshots are not C-declared dense packs; complete history/window uses dense pack.
-Standalone C aggregation; Julia sampler/SR; not full native C/MPI execution.
-Archived sparse inputs are synthetic API regressions, not C input acceptance goldens.
-All imported artifacts SHA-verified; numerical budgets unchanged.

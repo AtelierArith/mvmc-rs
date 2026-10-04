@@ -1,4 +1,0 @@
-# Preserve authoritative C excerpts byte for byte, including upstream trailing spaces.
-c_toolbox/*.inc whitespace=-blank-at-eol
-# Output regression files compare reference formatting byte for byte.
-tests/fixtures/c_kernel_order/**/*.dat whitespace=-blank-at-eol

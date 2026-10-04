@@ -1,1 +1,0 @@
-RLIMIT_FSIZE=unlimited; MPI internalSHM unmodified
