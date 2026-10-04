@@ -1,5 +1,14 @@
 # Issue #185 current milestone status
 
+## Current joined evidence checkpoint
+
+Main `eaa5db6254c721b95e8e63096287cdb74d5124e2` includes PR254's scoped
+initialization milestone. The [complete joined inventory](issue-184-joined-evidence.md)
+retains all2,342 rows and original owners:15 scoped assertion PASS, one
+intentional difference, all other statuses pending/review-required. No full
+20-step model, API/example/scenario/MPI or umbrella completion is inferred.
+Earlier checkpoint sections below remain historical, not current authority.
+
 Related to #185, #184, #183, #176, #177, #178, #175, #174, #181, #180, #179 and #182. No whole-goal closure.
 
 ## Current authority and bounded status — 2026-10-03 post-PR212
