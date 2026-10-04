@@ -152,6 +152,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             if matches!(
                 file_type.as_str(),
                 "DH2"
+                    | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
                     | "DoublonHolon4Site"
@@ -189,6 +190,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             if matches!(
                 file_type.as_str(),
                 "DH2"
+                    | "Trans"
                     | "DoublonHolon2Site"
                     | "DH4"
                     | "DoublonHolon4Site"
@@ -444,7 +446,7 @@ fn parse_file_by_type(
             data.locspin_terms = locspin::parse_locspin_content(&content);
         }
         "Trans" => {
-            data.transfer_terms = trans::parse_trans_def(path)?;
+            data.transfer_terms = trans::parse_trans_definition(path, data.modpara.nsite)?;
         }
         "CoulombIntra" => {
             data.coulomb_intra_terms = coulomb::parse_coulomb_intra_def(path)?;
