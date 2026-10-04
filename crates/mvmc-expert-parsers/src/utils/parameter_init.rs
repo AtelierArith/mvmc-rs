@@ -16,12 +16,41 @@ use sfmt19937::Sfmt19937Rng;
 use crate::c_const::D_AMP_MAX;
 use crate::types::ExpertModeData;
 
-/// Compute C's `AllComplexFlag` from definition-level complex headers.
-pub fn all_complex_flag(data: &ExpertModeData) -> bool {
-    let g = data.gutzwiller_terms.iter().any(|t| t.is_complex);
-    let j = data.jastrow_terms.iter().any(|t| t.is_complex);
-    let o = data.orbital_terms.iter().any(|t| t.is_complex);
-    g || j || data.doublon_holon_2site_complex || data.doublon_holon_4site_complex || o
+/// Validate loaded declarations and compute C's raw header sum.
+///
+/// Coefficient values do not define the declaration. To replace loaded
+/// declarations programmatically, clear both native metadata maps first.
+pub fn all_complex_flag(data: &ExpertModeData) -> Result<bool, &'static str> {
+    let mut sum = 0_i64;
+    for (key, declaration) in [
+        (
+            "Gutzwiller",
+            data.gutzwiller_terms.iter().any(|t| t.is_complex),
+        ),
+        ("Jastrow", data.jastrow_terms.iter().any(|t| t.is_complex)),
+        ("DH2", data.doublon_holon_2site_complex),
+        ("DH4", data.doublon_holon_4site_complex),
+    ] {
+        if let Some(&header) = data.native_complex_headers.get(key) {
+            if data.native_complex_declarations.get(key) != Some(&declaration) {
+                return Err("loaded complex declaration changed without clearing native metadata");
+            }
+            sum += i64::from(header);
+        } else {
+            sum += i64::from(declaration);
+        }
+    }
+    let orbital = super::opt_flag::raw_orbital_complex_header(data);
+    let declaration = data.orbital_terms.iter().any(|t| t.is_complex);
+    if let Some(header) = orbital {
+        if data.native_complex_declarations.get("Orbitals") != Some(&declaration) {
+            return Err("loaded orbital declaration changed without clearing native metadata");
+        }
+        sum += header;
+    } else {
+        sum += i64::from(declaration);
+    }
+    Ok(sum != 0)
 }
 
 /// Number of unique Slater (orbital) parameters. Mirrors
@@ -31,7 +60,12 @@ pub fn n_slater(data: &ExpertModeData) -> usize {
 }
 
 /// `init_parameter!(data; rng)` mirror.
-pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
+pub fn init_parameter(
+    data: &mut ExpertModeData,
+    rng: &mut Sfmt19937Rng,
+) -> Result<(), &'static str> {
+    // Validate before changing coefficients or consuming RNG draws.
+    let all_complex = all_complex_flag(data)?;
     // Proj parameters always start at zero.
     for term in data.gutzwiller_terms.iter_mut() {
         term.value = Complex64::new(0.0, 0.0);
@@ -45,7 +79,6 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     data.doublon_holon_4site_params
         .fill(Complex64::new(0.0, 0.0));
 
-    let all_complex = all_complex_flag(data);
     let n_proj = data.projection_layout().n_proj;
     let sizes = data.rbm_section_sizes();
     let n_rbm = sizes.iter().sum::<usize>();
@@ -126,6 +159,7 @@ pub fn init_parameter(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
     if !data.para_qp_opt_trans.is_empty() {
         data.opt_trans.clone_from(&data.para_qp_opt_trans);
     }
+    Ok(())
 }
 
 /// Synchronize DH2/DH4/Gutzwiller/Jastrow real gauges when enabled, then rescale
@@ -229,9 +263,13 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bo
 }
 
 /// `initialize_parameters!` — init + sync.
-pub fn initialize_parameters(data: &mut ExpertModeData, rng: &mut Sfmt19937Rng) {
-    init_parameter(data, rng);
+pub fn initialize_parameters(
+    data: &mut ExpertModeData,
+    rng: &mut Sfmt19937Rng,
+) -> Result<(), &'static str> {
+    init_parameter(data, rng)?;
     sync_modified_parameter(data, false);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -259,7 +297,7 @@ mod tests {
     fn real_slater_initial_values_match_julia_for_seed_one() {
         let mut d = data_with_orbitals(4);
         let mut rng = Sfmt19937Rng::new(1);
-        init_parameter(&mut d, &mut rng);
+        init_parameter(&mut d, &mut rng).unwrap();
         // Sample once via fresh RNG to confirm draw order: 4 draws of
         // genrand_real2() should match what `init_parameter` consumed.
         let mut probe = Sfmt19937Rng::new(1);

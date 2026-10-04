@@ -790,9 +790,10 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
     mut callback: Option<&mut PhysCalCallback<'_>>,
     timer: &mut CTimer<TIMED>,
 ) -> Result<usize, String> {
-    collective_result(
+    let all_complex = collective_result(
         crate::validation::validate_phys_cal(data)
-            .and_then(|()| crate::validation::validate_reducer_rank(data, reducer)),
+            .and_then(|()| crate::validation::validate_reducer_rank(data, reducer))
+            .and_then(|()| get_all_complex_flag(data)),
         reducer,
         "PhysCal validation",
     )?;
@@ -805,7 +806,11 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
     };
     collective_result(output_setup, reducer, "PhysCal output directory")?;
     let mut init_data = data.clone();
-    init_parameter(&mut init_data, rng);
+    collective_result(
+        init_parameter(&mut init_data, rng).map_err(str::to_string),
+        reducer,
+        "PhysCal complex declaration/initialization",
+    )?;
     observe_physcal_lifecycle("initialized-clone", &init_data, Some(rng), None);
     if data.modpara.nmp_trans == 0 {
         data.modpara.nmp_trans = 1;
@@ -814,9 +819,8 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
     }
     data.modpara.vmc_calc_mode = 1;
     init_qp_weight(data);
-    let all_complex = get_all_complex_flag(data);
     let use_fsz = data.i_flg_orbital_general != 0;
-    *state = state_from_data(data);
+    *state = collective_result(state_from_data(data), reducer, "PhysCal state construction")?;
     timer.start(20);
     if use_fsz {
         update_slater_elm_fsz(data, state);
@@ -983,7 +987,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     mut options: OptimizationOptions<'_>,
     timer: &mut CTimer<TIMED>,
 ) -> Result<(), String> {
-    collective_result(
+    let all_complex = collective_result(
         crate::validation::validate_grouped_runtime(
             data,
             crate::validation::RuntimeEntryPoint::ParaOpt,
@@ -995,7 +999,9 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 data.modpara.nsr_opt_itr_step,
                 data.modpara.nsr_opt_itr_smp,
             )
-        }),
+        })
+        .and_then(|()| state.validate_declared_mode(data))
+        .and_then(|()| get_all_complex_flag(data)),
         reducer,
         "optimization validation",
     )?;
@@ -1007,7 +1013,6 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     state.opt_data.clear();
     let n_para = data.count_variational_parameters();
     data.ensure_optimization_flags(n_para);
-    let all_complex = get_all_complex_flag(data);
     let i_flg_general = data.i_flg_orbital_general;
     let use_fsz = i_flg_general != 0;
     // C VMCMakeSample(comm_child1) generates NVMCSample saved configurations
@@ -1114,7 +1119,11 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
                 callback(step, data, state.energy.etot, 0)
             });
-            collective_result(callback_result, reducer, "optimization callback")?;
+            collective_result(
+                callback_result.and_then(|()| state.validate_declared_mode(data)),
+                reducer,
+                "optimization callback/declaration",
+            )?;
             return Ok(());
         }
 
@@ -1164,7 +1173,11 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
             callback(step, data, state.energy.etot, info)
         });
-        collective_result(callback_result, reducer, "optimization callback")?;
+        collective_result(
+            callback_result.and_then(|()| state.validate_declared_mode(data)),
+            reducer,
+            "optimization callback/declaration",
+        )?;
     }
 
     let output_error = if reducer.is_output_root() {
@@ -1367,7 +1380,11 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     )?;
     let mut rng = seeded_rng_with_reducer(actual_seed, reducer)?;
     timer.start(13);
-    init_parameter(&mut data, &mut rng);
+    collective_result(
+        init_parameter(&mut data, &mut rng).map_err(str::to_string),
+        reducer,
+        "optimization complex declaration/initialization",
+    )?;
     let (initial_path, auto) = match config.initial_def {
         InitialDef::Auto => {
             let path = namelist_path
@@ -1404,7 +1421,11 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     timer.stop(1);
     data.modpara.nsr_opt_itr_step = config.nsteps;
     data.modpara.nsr_opt_itr_smp = effective_nsmp;
-    let mut state = state_from_data(&data);
+    let mut state = collective_result(
+        state_from_data(&data),
+        reducer,
+        "optimization state construction",
+    )?;
     let output_result = (|| {
         let output_dir = match config.output_dir {
             Some(path) => {
@@ -1705,11 +1726,13 @@ fn read_run_summary(data: &ExpertModeData, output_dir: &Path) -> Result<RunSumma
 ///
 /// C does not infer complex mode from loaded imaginary coefficients. Both
 /// initialization and execution must honor the model's declarations.
-pub fn get_all_complex_flag(data: &ExpertModeData) -> bool {
+pub fn get_all_complex_flag(data: &ExpertModeData) -> Result<bool, String> {
+    let declared = mvmc_expert_parsers::utils::parameter_init::all_complex_flag(data)
+        .map_err(str::to_string)?;
     if !data.complex_flags.is_empty() {
-        return data.complex_flags.iter().any(|&flag| flag != 0);
+        return Ok(data.complex_flags.iter().any(|&flag| flag != 0));
     }
-    mvmc_expert_parsers::utils::parameter_init::all_complex_flag(data)
+    Ok(declared)
 }
 
 fn resolve_seed_with_reducer<R: Reducer + ?Sized>(
@@ -1948,7 +1971,7 @@ mod seed_tests {
     }
 }
 
-fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
+fn state_from_data(data: &ExpertModeData) -> Result<VmcOptimizationState, String> {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_proj = data.projection_layout().n_proj;
@@ -1958,7 +1981,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
     let n_opt = data.n_qp_opt_trans.max(1) as usize;
     let n_qp_full = n_sp * n_mp * n_opt;
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
-    let all_complex = get_all_complex_flag(data);
+    let all_complex = get_all_complex_flag(data)?;
     let mut state = VmcOptimizationState::zeros(
         n_site,
         n_elec,
@@ -1976,7 +1999,7 @@ fn state_from_data(data: &ExpertModeData) -> VmcOptimizationState {
             data.green_two_terms.len(),
         ));
     }
-    state
+    Ok(state)
 }
 
 /// Make real-FSZ sampling results visible to the shared observable kernels.
@@ -2010,7 +2033,7 @@ mod mode_tests {
         let base = data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(&data);
         for width in [0, 1, 2, 3] {
             data.opt_trans.resize(width, Complex64::new(1.0, 0.0));
-            let state = state_from_data(&data);
+            let state = state_from_data(&data).unwrap();
             assert_eq!(state.sr_opt.sr_opt_size, 1 + base + width);
             assert_eq!(
                 state.slater_matrix.pf_m.len(),
@@ -2026,7 +2049,7 @@ mod mode_tests {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/rbm/namelist_all.def");
         let data = crate::historical_orbital_model::historical_kernel_model(path).unwrap();
-        assert_eq!(state_from_data(&data).sr_opt.sr_opt_size, 37);
+        assert_eq!(state_from_data(&data).unwrap().sr_opt.sr_opt_size, 37);
     }
 
     #[test]
@@ -2140,7 +2163,7 @@ mod mode_tests {
             value: Complex64::new(0.0, 0.0),
             is_complex: true,
         });
-        let state = state_from_data(&data);
+        let state = state_from_data(&data).unwrap();
         assert!(state.sr_opt.sr_opt_oo_real.is_empty());
         assert_eq!(state.slater_matrix.slater_elm_real.n_qp_full(), 0);
     }
@@ -2154,14 +2177,18 @@ mod mode_tests {
             value: Complex64::new(0.0, 0.0),
             is_complex: true,
         });
-        assert!(state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
+        assert!(state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
     }
 
     #[test]
     fn imaginary_loaded_parameter_does_not_change_c_header_mode() {
         let mut data = data();
         data.slater_params[data.orbital_terms[0].idx as usize].im = 0.5;
-        let state = state_from_data(&data);
+        let state = state_from_data(&data).unwrap();
         // C's AllComplexFlag is decided from definition headers before
         // loading values; an imaginary overlay cannot change the buffers.
         assert!(!state.sr_opt.sr_opt_oo_real.is_empty());
@@ -2169,7 +2196,11 @@ mod mode_tests {
 
     #[test]
     fn all_real_parameters_allocate_real_state() {
-        assert!(!state_from_data(&data()).sr_opt.sr_opt_oo_real.is_empty());
+        assert!(!state_from_data(&data())
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
     }
 
     #[test]
@@ -2202,7 +2233,7 @@ mod mode_tests {
             site4: 0,
             spin4: Spin::Down,
         });
-        let state = state_from_data(&data);
+        let state = state_from_data(&data).unwrap();
         let phys = state.phys_quantities.expect("PhysCal buffers");
         assert_eq!(phys.local_cis_ajs.len(), 1);
         assert_eq!(phys.phys_cis_ajs_ckt_alt.len(), 1);
@@ -2303,7 +2334,7 @@ mod mode_tests {
         let mut data = data();
         data.modpara.nmp_trans = 0;
         data.modpara.nsp_gauss_leg = 3;
-        let mut state = state_from_data(&data);
+        let mut state = state_from_data(&data).unwrap();
         assert_eq!(state.slater_matrix.slater_elm.n_qp_full(), 0);
         assert_eq!(state.slater_matrix.slater_elm_real.n_qp_full(), 0);
         let parameters = data.slater_params.clone();
@@ -2355,10 +2386,10 @@ mod mode_tests {
                 data.orbital_sgn_matrix = None;
             }
             let mut rng = Sfmt19937Rng::new(1);
-            init_parameter(&mut data, &mut rng);
+            init_parameter(&mut data, &mut rng).unwrap();
             sync_modified_parameter(&mut data, true);
             init_qp_weight(&mut data);
-            let mut state = state_from_data(&data);
+            let mut state = state_from_data(&data).unwrap();
             let output = std::env::temp_dir().join(format!(
                 "mvmc-general-trajectory-{}-{pure_general}",
                 std::process::id()
@@ -2401,21 +2432,72 @@ mod mode_tests {
         let mut data = data();
         data.slater_params[data.orbital_terms[0].idx as usize].im = 0.5;
         data.complex_flags = vec![0, 0];
-        assert!(!state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
+        assert!(!state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
     }
 
     #[test]
     fn explicit_nonzero_complex_flags_select_complex_state() {
         let mut data = data();
         data.complex_flags = vec![0, -1];
-        assert!(state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
+        assert!(state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
+    }
+
+    #[test]
+    fn loaded_signed_cancellation_reaches_state_and_explicit_override_remains_distinct() {
+        let mut data = data();
+        data.doublon_holon_2site_complex = true;
+        data.doublon_holon_4site_complex = true;
+        data.native_complex_headers.insert("DH2".to_string(), 1);
+        data.native_complex_headers.insert("DH4".to_string(), -1);
+        data.native_complex_declarations
+            .insert("DH2".to_string(), true);
+        data.native_complex_declarations
+            .insert("DH4".to_string(), true);
+        assert_eq!(get_all_complex_flag(&data), Ok(false));
+        assert!(!state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
+        data.complex_flags = vec![1];
+        assert_eq!(get_all_complex_flag(&data), Ok(true));
+        assert!(state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
+    }
+
+    #[test]
+    fn stale_loaded_declaration_is_an_error_in_validation_and_state_construction() {
+        let mut data = data();
+        data.native_complex_headers.insert("DH2".to_string(), 0);
+        data.native_complex_declarations
+            .insert("DH2".to_string(), false);
+        data.doublon_holon_2site_complex = true;
+        assert!(get_all_complex_flag(&data).is_err());
+        assert!(state_from_data(&data).is_err());
+        assert!(crate::validation::validate_para_opt(&data).is_err());
+        assert!(crate::validation::validate_phys_cal(&data).is_err());
     }
 
     #[test]
     fn modpara_flag_does_not_override_runtime_factor_inference() {
         let mut data = data();
         data.modpara.complex_flag = 1;
-        assert!(!state_from_data(&data).sr_opt.sr_opt_oo_real.is_empty());
+        assert!(!state_from_data(&data)
+            .unwrap()
+            .sr_opt
+            .sr_opt_oo_real
+            .is_empty());
     }
 
     #[test]
@@ -2436,7 +2518,7 @@ mod mode_tests {
                     is_complex: false,
                 });
             }
-            let state = state_from_data(&data);
+            let state = state_from_data(&data).unwrap();
             assert!(!state.sr_opt.sr_opt_oo_real.is_empty());
             assert!(!state.sr_opt.sr_opt_ho_real.is_empty());
             assert!(!state.sr_opt.sr_opt_o_real.is_empty());
@@ -3240,7 +3322,7 @@ mod callback_tests {
         data.modpara.nsr_opt_itr_step = steps;
         data.modpara.nsr_opt_itr_smp = steps;
         let mut rng = Sfmt19937Rng::new(1);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         if !data.doublon_holon_2site_indices.is_empty()
             || !data.doublon_holon_4site_indices.is_empty()
             || data.has_rbm_terms()
@@ -3249,7 +3331,7 @@ mod callback_tests {
         }
         sync_modified_parameter(&mut data, true);
         init_qp_weight(&mut data);
-        let state = state_from_data(&data);
+        let state = state_from_data(&data).unwrap();
         (data, state, rng)
     }
 
@@ -3265,7 +3347,7 @@ mod callback_tests {
                 }
                 sync_modified_parameter(&mut baseline, true);
             }
-            assert_eq!(get_all_complex_flag(&baseline), complex);
+            assert_eq!(get_all_complex_flag(&baseline).unwrap(), complex);
             baseline.green_one_terms = vec![
                 GreenOneTerm {
                     site1: 0,
@@ -3311,8 +3393,8 @@ mod callback_tests {
             baseline.green_two_terms.push(baseline.green_two_terms[0]);
             baseline.green_two_ex_indices = vec![(0, 0), (1, 2), (1, 2)];
             let mut observed = baseline.clone();
-            let mut base_state = state_from_data(&baseline);
-            let mut state = state_from_data(&observed);
+            let mut base_state = state_from_data(&baseline).unwrap();
+            let mut state = state_from_data(&observed).unwrap();
             state.phys_quantities = Some(crate::state::PhysicalQuantities::zeros(3, 3, 3));
             let mut base_rng = base_rng;
             let mut rng = base_rng.clone();
@@ -3448,7 +3530,7 @@ mod callback_tests {
         }
         let (mut baseline, _, initial_rng) = prepared(1);
         baseline.modpara.nvmc_sample = 3;
-        let mut baseline_state = state_from_data(&baseline);
+        let mut baseline_state = state_from_data(&baseline).unwrap();
         let mut baseline_rng = initial_rng.clone();
         let dir = fresh_output_directory().unwrap();
         vmc_para_opt(
@@ -3466,7 +3548,7 @@ mod callback_tests {
         for rank in 0..2 {
             let (mut data, _, _) = prepared(1);
             data.modpara.nvmc_sample = 3;
-            let mut state = state_from_data(&data);
+            let mut state = state_from_data(&data).unwrap();
             let mut rng = initial_rng.clone();
             vmc_para_opt(
                 &mut data,
@@ -4142,7 +4224,7 @@ mod callback_tests {
             let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_{case}/inputs/namelist.def"));
             let (data, _, mut rng) = prepared_namelist(1, &input);
             assert_eq!(data.pair_hop_terms.len(), 2);
-            assert_eq!(get_all_complex_flag(&data), case == "pairhop_fsz");
+            assert_eq!(get_all_complex_flag(&data).unwrap(), case == "pairhop_fsz");
             let root = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join(format!("../../tests/fixtures/sr_cg/{case}_runner"));
             check_initial_boundary(&data, &mut rng, &root);
@@ -4233,7 +4315,7 @@ mod callback_tests {
                         }
                     }
                     sync_modified_parameter(&mut data, true);
-                    let mut state = state_from_data(&data);
+                    let mut state = state_from_data(&data).unwrap();
                     let mut records = Vec::new();
                     let directory = fresh_output_directory().unwrap();
                     let mut callback =
@@ -4304,7 +4386,7 @@ mod callback_tests {
             .join("../../tests/fixtures/c_orbital_inputs/namelist_interall_fsz.def");
         let (data, _, mut rng) = prepared_namelist(1, &input);
         assert_eq!(data.inter_all_terms.len(), 26);
-        assert!(get_all_complex_flag(&data));
+        assert!(get_all_complex_flag(&data).unwrap());
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/sr_cg/interall_runner");
         check_initial_boundary(&data, &mut rng, &root);
@@ -4762,7 +4844,7 @@ mod callback_tests {
                 data.modpara.nsr_opt_itr_step = steps;
                 data.modpara.nsr_opt_itr_smp = steps;
                 let mut rng = Sfmt19937Rng::new(12395);
-                init_parameter(&mut data, &mut rng);
+                init_parameter(&mut data, &mut rng).unwrap();
                 assert!(
                     read_initial_def(&mut data, path.parent().unwrap().join("initial.def"))
                         .unwrap()
@@ -4770,7 +4852,7 @@ mod callback_tests {
                 read_input_parameters(&mut data, &path).unwrap();
                 sync_modified_parameter(&mut data, true);
                 init_qp_weight(&mut data);
-                let state = state_from_data(&data);
+                let state = state_from_data(&data).unwrap();
                 (data, state, rng)
             } else if case.starts_with("opt_") {
                 prepared_namelist(
@@ -4873,7 +4955,7 @@ mod callback_tests {
                     }
                 }
                 let mut repeat_data = initial_data;
-                let mut repeat_state = state_from_data(&repeat_data);
+                let mut repeat_state = state_from_data(&repeat_data).unwrap();
                 let mut repeat_rng = initial_rng;
                 let repeat_dir = fresh_output_directory().unwrap();
                 let repeat_result = vmc_para_opt(
@@ -4964,7 +5046,7 @@ mod callback_tests {
                 let components = |values: &[Complex64]| -> Vec<f64> {
                     values.iter().flat_map(|z| [z.re, z.im]).collect()
                 };
-                let (oo, ho) = if get_all_complex_flag(&data) {
+                let (oo, ho) = if get_all_complex_flag(&data).unwrap() {
                     (
                         components(&state.sr_opt.sr_opt_oo),
                         components(&state.sr_opt.sr_opt_ho),
@@ -4992,7 +5074,7 @@ mod callback_tests {
                 if store == 1 {
                     let fixture = read_fixture("gram.txt");
                     let expected = scalars(fixture.lines().nth(1).unwrap());
-                    let actual = if get_all_complex_flag(&data) {
+                    let actual = if get_all_complex_flag(&data).unwrap() {
                         components(&state.sr_opt.sr_opt_o_store)
                     } else {
                         state.sr_opt.sr_opt_o_store_real.to_vec()
@@ -5213,14 +5295,14 @@ mod callback_tests {
             data.modpara.nsrcg = 1;
             data.modpara.nstore_o = 0;
             let mut rng = Sfmt19937Rng::new(12395);
-            init_parameter(&mut data, &mut rng);
+            init_parameter(&mut data, &mut rng).unwrap();
             assert!(
                 read_initial_def(&mut data, path.parent().unwrap().join("initial.def")).unwrap()
             );
             read_input_parameters(&mut data, &path).unwrap();
             sync_modified_parameter(&mut data, true);
             init_qp_weight(&mut data);
-            let mut state = state_from_data(&data);
+            let mut state = state_from_data(&data).unwrap();
             let dir = fresh_output_directory().unwrap();
             vmc_para_opt(
                 &mut data,
@@ -5553,7 +5635,7 @@ mod callback_tests {
             data.modpara.nstore_o = 0;
             data.modpara.nsrcg = 1;
             clear_phys_quantity(&mut state);
-            let complex = get_all_complex_flag(&data);
+            let complex = get_all_complex_flag(&data).unwrap();
             let fsz = data.i_flg_orbital_general != 0;
             let mut timer = CTimer::<true>::new();
             accumulate_observables(
@@ -5636,7 +5718,7 @@ mod callback_tests {
                 value: f64::NAN,
             }];
             clear_phys_quantity(&mut state);
-            let complex = get_all_complex_flag(&data);
+            let complex = get_all_complex_flag(&data).unwrap();
             let fsz = data.i_flg_orbital_general != 0;
             accumulate_observables(
                 &data,
@@ -5686,7 +5768,7 @@ mod callback_tests {
                 .fill(Complex64::new(123.0, -456.0));
             state.sr_opt.sr_opt_o_store_real.fill(123.0);
             clear_phys_quantity(&mut state);
-            let complex = get_all_complex_flag(&data);
+            let complex = get_all_complex_flag(&data).unwrap();
             let fsz = data.i_flg_orbital_general != 0;
             let mut timer = CTimer::<true>::new();
             accumulate_observables(
@@ -5820,7 +5902,7 @@ mod callback_tests {
             )
             .unwrap();
             assert!(timer.elapsed_ns[45] > 0, "{case}: no Gram finalization");
-            if get_all_complex_flag(&stored) {
+            if get_all_complex_flag(&stored).unwrap() {
                 assert_eq!(
                     stored_state.sr_opt.sr_opt_o_store[0],
                     Complex64::new(1.0, 0.0)
@@ -6030,12 +6112,12 @@ mod physcal_green_observer_tests {
             .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
         let mut data = parse_expert_mode_files(&path).unwrap();
         let mut rng = Sfmt19937Rng::new(1);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         read_input_parameters(&mut data, &path).unwrap();
         sync_modified_parameter(&mut data, true);
         init_qp_weight(&mut data);
         data.modpara.vmc_calc_mode = 1;
-        let mut state = state_from_data(&data);
+        let mut state = state_from_data(&data).unwrap();
         assert!(state.phys_quantities.is_some());
         data.modpara.vmc_calc_mode = 0;
         data.modpara.nsr_opt_itr_step = 1;

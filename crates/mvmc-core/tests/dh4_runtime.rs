@@ -44,11 +44,16 @@ fn parsed_and_programmatic_dh4_sections_pass_runtime_validation() {
             |path| parse_expert_mode_files(path),
         );
         let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH4");
+        // Archived zero-count DH is a no-DH programmatic layout, not a valid
+        // required C definition. The shared helper separately asserts rejection.
+        let active = data.projection_layout().n_dh4 != 0;
         data.namelist = data
             .namelist
             .iter()
             .enumerate()
-            .filter(|(index, (kind, _))| kind != "DH4" || Some(*index) == final_definition)
+            .filter(|(index, (kind, _))| {
+                kind != "DH4" || (active && Some(*index) == final_definition)
+            })
             .map(|(_, entry)| entry.clone())
             .collect();
         mvmc_core::validation::validate_para_opt(&data).unwrap();
@@ -74,7 +79,7 @@ fn dh4_runtime_mode_uses_declarations_and_ignores_loaded_imaginary_values() {
             data.complex_flags = vec![row[2]];
         }
         assert_eq!(
-            mvmc_core::run::get_all_complex_flag(&data),
+            mvmc_core::run::get_all_complex_flag(&data).unwrap(),
             // C uses definition flags; the archived Julia result in row[3]
             // also inferred the mode from loaded imaginary coefficients.
             if row[2] == -1 {
@@ -84,7 +89,7 @@ fn dh4_runtime_mode_uses_declarations_and_ignores_loaded_imaginary_values() {
             },
             "{line}"
         );
-        assert_eq!(all_complex_flag(&data), row[0] != 0, "{line}");
+        assert_eq!(all_complex_flag(&data).unwrap(), row[0] != 0, "{line}");
         mvmc_core::validation::validate_para_opt(&data).unwrap();
     }
 }

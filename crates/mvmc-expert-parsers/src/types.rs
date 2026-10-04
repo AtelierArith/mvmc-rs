@@ -589,6 +589,8 @@ pub struct DoublonHolon2SiteIndex {
 /// Complete strict DH2 definition; optimization indices are intentionally ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoublonHolon2SiteDefinition {
+    /// Raw signed C header; local imaginary optimization writes require >0.
+    pub complex_type: i32,
     /// Tables indexed by the final column of each neighbor row.
     pub indices: Vec<DoublonHolon2SiteIndex>,
     /// Six flags per table, in input row order.
@@ -607,6 +609,8 @@ pub struct DoublonHolon4SiteIndex {
 /// Complete strict DH4 definition; optimization indices are intentionally ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoublonHolon4SiteDefinition {
+    /// Raw signed C header; local imaginary optimization writes require >0.
+    pub complex_type: i32,
     /// Tables indexed by the final column of each neighbor row.
     pub indices: Vec<DoublonHolon4SiteIndex>,
     /// Ten flags per table, in input row order.
@@ -1002,6 +1006,15 @@ pub struct ExpertModeData {
     /// selects inference from factor declarations and current values.
     pub complex_flags: Vec<i64>,
 
+    /// Raw C header contributions, before orbital header normalization.
+    /// Populated by public definition loading; absent for programmatic data.
+    pub native_complex_headers: std::collections::BTreeMap<String, i32>,
+
+    /// Loaded declaration snapshot, used to detect stale raw-header metadata.
+    /// Coefficient values may change freely. To replace a declaration with
+    /// programmatic data, clear both native metadata maps first.
+    pub native_complex_declarations: std::collections::BTreeMap<String, bool>,
+
     /// Quantum-projection weights (`init_qp_weight!`).
     /// `None` until [`crate::utils::qp_weight::init_qp_weight`] runs.
     pub qp_weights: Option<QuantumProjectionWeights>,
@@ -1069,6 +1082,8 @@ impl Default for ExpertModeData {
             optimization_flags: Default::default(),
             c_opt_trans_flags: false,
             complex_flags: Default::default(),
+            native_complex_headers: Default::default(),
+            native_complex_declarations: Default::default(),
             qp_weights: Default::default(),
         }
     }

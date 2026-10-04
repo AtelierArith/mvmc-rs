@@ -132,7 +132,7 @@ fn model_mode(model: &Model) -> &'static str {
 }
 
 fn validate_model(model: &Model, data: &mvmc_core::ExpertModeData) -> Result<(), String> {
-    let complex = mvmc_core::get_all_complex_flag(data);
+    let complex = mvmc_core::get_all_complex_flag(data).unwrap();
     let fsz = data.i_flg_orbital_general != 0;
     if data.modpara.nsrcg != 0
         || data.modpara.nstore_o != 1

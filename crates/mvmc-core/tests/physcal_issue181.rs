@@ -1107,13 +1107,13 @@ fn check_independent_sampling_trajectory(model: Model) {
     assert_fixed_values(&preparation.data, &expected);
     // C's single InitParameter advances RNG; the fixed zqp/overlay values are
     // restored before sampling. No runtime reference program is called here.
-    init_parameter(&mut preparation.data.clone(), &mut preparation.rng);
+    init_parameter(&mut preparation.data.clone(), &mut preparation.rng).unwrap();
     assert_rng_checkpoint(model, "initialized", &preparation.rng);
     let data = &mut preparation.data;
     data.modpara.nmp_trans = data.modpara.nmp_trans.abs().max(1);
     data.modpara.vmc_calc_mode = 1;
     init_qp_weight(data);
-    let complex = mvmc_core::get_all_complex_flag(data);
+    let complex = mvmc_core::get_all_complex_flag(data).unwrap();
     let fsz = data.i_flg_orbital_general != 0;
     let n_qp = data.qp_weights.as_ref().unwrap().qp_full_weight.len();
     let mut state = mvmc_core::VmcOptimizationState::zeros(
@@ -1126,6 +1126,7 @@ fn check_independent_sampling_trajectory(model: Model) {
         complex,
         fsz,
     );
+    state.validate_declared_mode(data).unwrap();
     if fsz {
         mvmc_core::slater_update::update_slater_elm_fsz(data, &mut state);
     } else {
@@ -1594,7 +1595,7 @@ fn fsz_measurement_diagnostic(
         actual.electron_config,
         rng.words_consumed()
     );
-    if !mvmc_core::get_all_complex_flag(data) || data.has_rbm_terms() {
+    if !mvmc_core::get_all_complex_flag(data).unwrap() || data.has_rbm_terms() {
         eprintln!(
             "FSZ181 unsupported replay mode: only native complex/no-RBM; no production changes"
         );
@@ -1802,7 +1803,7 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
         let flags = preparation.data.optimization_flags.clone();
         let lanczos_mode = preparation.data.modpara.lanczos_mode;
         let use_fsz = preparation.data.i_flg_orbital_general != 0;
-        let complex_sr_calls = if mvmc_core::get_all_complex_flag(&preparation.data) {
+        let complex_sr_calls = if mvmc_core::get_all_complex_flag(&preparation.data).unwrap() {
             2
         } else {
             0
@@ -2144,7 +2145,8 @@ fn all_six_non_interall_terms_match_independent_lanczos_modes() {
         mvmc_expert_parsers::utils::parameter_init::init_parameter(
             &mut data.clone(),
             &mut initialized_rng,
-        );
+        )
+        .unwrap();
         assert_rng_checkpoint(model, "initialized", &initialized_rng);
         let out = output_dir("all-terms-lanczos", name);
         let result = mvmc_core::vmc_phys_cal_to_dir(preparation, &out).unwrap();
@@ -2276,7 +2278,7 @@ fn fixed_records_overlays_and_normalization_follow_native_c_stages() {
         let mut data =
             mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, true).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(1);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         for stage in ["initialized", "fixed", "overlaid", "synchronized"] {
             match stage {
                 "fixed" => {

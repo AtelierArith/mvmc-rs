@@ -69,7 +69,8 @@ pub fn parse_doublon_holon_4site_def(
 
 fn integer(token: &str, number: usize, field: &str) -> Result<i64, String> {
     token
-        .parse()
+        .parse::<i32>()
+        .map(i64::from)
         .map_err(|_| format!("line {number}: invalid integer for {field}: '{token}'"))
 }
 
@@ -95,6 +96,50 @@ fn check_site(site: i64, nsite: i64, number: usize, field: &str) -> Result<(), S
     Ok(())
 }
 
+/// C fscanf bodies are token streams; physical newlines do not delimit records.
+/// Keep source lines for diagnostics and reject incomplete/extra consumed tokens.
+fn body_rows<'a>(
+    lines: &[&'a str],
+    nsite: i64,
+    count: i64,
+    width: usize,
+    flags_per_definition: usize,
+) -> Result<Vec<(usize, Vec<&'a str>)>, String> {
+    let sites = usize::try_from(nsite).map_err(|_| "invalid Nsite")?;
+    let count = usize::try_from(count).map_err(|_| "invalid DH count")?;
+    let main = sites.checked_mul(count).ok_or("DH row count overflow")?;
+    let flags = flags_per_definition
+        .checked_mul(count)
+        .ok_or("DH flag count overflow")?;
+    let expected = main
+        .checked_mul(width)
+        .and_then(|n| flags.checked_mul(2).and_then(|f| n.checked_add(f)))
+        .ok_or("DH token count overflow")?;
+    let tokens: Vec<_> = lines
+        .iter()
+        .enumerate()
+        .skip(5)
+        .flat_map(|(i, line)| {
+            line.split_ascii_whitespace()
+                .map(move |token| (i + 1, token))
+        })
+        .collect();
+    if tokens.len() != expected {
+        return Err(format!(
+            "DH token count mismatch: got {}, expected {expected}",
+            tokens.len()
+        ));
+    }
+    let mut rows = Vec::with_capacity(main + flags);
+    for row in tokens[..main * width].chunks_exact(width) {
+        rows.push((row[0].0, row.iter().map(|entry| entry.1).collect()));
+    }
+    for row in tokens[main * width..].as_chunks::<2>().0 {
+        rows.push((row[0].0, row.iter().map(|entry| entry.1).collect()));
+    }
+    Ok(rows)
+}
+
 /// Parse exactly Nsite*NDH2 neighbor rows followed by 6*NDH2 optimization rows.
 ///
 /// Neighbor rows may be unordered; definitions are stored by index and center.
@@ -112,22 +157,15 @@ pub fn parse_doublon_holon_2site_content(content: &str, nsite: i64) -> Dh2ParseR
         }
         let n_dh2 = header_value(&lines, 2, "NDoublonHolon2siteIdx")?;
         let complex_type = header_value(&lines, 3, "ComplexType")?;
-        if n_dh2 < 0 {
-            return Err("NDoublonHolon2siteIdx must be non-negative".into());
+        if n_dh2 <= 0 || i32::try_from(n_dh2).is_err() {
+            return Err("NDoublonHolon2siteIdx must be a positive C integer".into());
         }
-        let rows: Vec<_> = lines
-            .iter()
-            .enumerate()
-            .skip(5)
-            .filter_map(|(i, line)| {
-                let parts = tokens(line);
-                (!parts.is_empty()).then_some((i + 1, parts))
-            })
-            .collect();
-        // Julia Int arithmetic wraps; reject row-count mismatches before allocation.
-        let expected_main = nsite.wrapping_mul(n_dh2);
-        let expected_opt = 6_i64.wrapping_mul(n_dh2);
-        let expected_total = expected_main.wrapping_add(expected_opt);
+        let rows = body_rows(&lines, nsite, n_dh2, 4, 6)?;
+        let expected_main = nsite.checked_mul(n_dh2).ok_or("DH2 row count overflow")?;
+        let expected_opt = 6_i64.checked_mul(n_dh2).ok_or("DH2 flag count overflow")?;
+        let expected_total = expected_main
+            .checked_add(expected_opt)
+            .ok_or("DH2 total count overflow")?;
         if rows.len() as i64 != expected_total {
             return Err(format!(
                 "DH2 row count mismatch: got {}, expected {expected_total} ({expected_main} neighbor rows + {expected_opt} opt rows)", rows.len()
@@ -193,6 +231,7 @@ pub fn parse_doublon_holon_2site_content(content: &str, nsite: i64) -> Dh2ParseR
             opt_flags.push(flag);
         }
         Ok(DoublonHolon2SiteDefinition {
+            complex_type: complex_type as i32,
             indices,
             opt_flags,
             is_complex: complex_type != 0,
@@ -229,22 +268,15 @@ pub fn parse_doublon_holon_4site_content(content: &str, nsite: i64) -> Dh4ParseR
         }
         let n_dh4 = header_value(&lines, 2, "NDoublonHolon4siteIdx")?;
         let complex_type = header_value(&lines, 3, "ComplexType")?;
-        if n_dh4 < 0 {
-            return Err("NDoublonHolon4siteIdx must be non-negative".into());
+        if n_dh4 <= 0 || i32::try_from(n_dh4).is_err() {
+            return Err("NDoublonHolon4siteIdx must be a positive C integer".into());
         }
-        let rows: Vec<_> = lines
-            .iter()
-            .enumerate()
-            .skip(5)
-            .filter_map(|(i, line)| {
-                let parts = tokens(line);
-                (!parts.is_empty()).then_some((i + 1, parts))
-            })
-            .collect();
-        // Julia Int arithmetic wraps; reject row-count mismatches before allocation.
-        let expected_main = nsite.wrapping_mul(n_dh4);
-        let expected_opt = 10_i64.wrapping_mul(n_dh4);
-        let expected_total = expected_main.wrapping_add(expected_opt);
+        let rows = body_rows(&lines, nsite, n_dh4, 6, 10)?;
+        let expected_main = nsite.checked_mul(n_dh4).ok_or("DH4 row count overflow")?;
+        let expected_opt = 10_i64.checked_mul(n_dh4).ok_or("DH4 flag count overflow")?;
+        let expected_total = expected_main
+            .checked_add(expected_opt)
+            .ok_or("DH4 total count overflow")?;
         if rows.len() as i64 != expected_total {
             return Err(format!(
                 "DH4 row count mismatch: got {}, expected {expected_total} ({expected_main} neighbor rows + {expected_opt} opt rows)", rows.len()
@@ -314,6 +346,7 @@ pub fn parse_doublon_holon_4site_content(content: &str, nsite: i64) -> Dh4ParseR
             opt_flags.push(flag);
         }
         Ok(DoublonHolon4SiteDefinition {
+            complex_type: complex_type as i32,
             indices,
             opt_flags,
             is_complex: complex_type != 0,

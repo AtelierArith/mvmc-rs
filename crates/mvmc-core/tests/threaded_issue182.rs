@@ -1525,7 +1525,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                 std::fs::create_dir(&output).unwrap();
                 let mut rng = Sfmt19937Rng::new(1);
                 case_observation::retain_launch_seed(&label, 1);
-                init_parameter(&mut data, &mut rng);
+                init_parameter(&mut data, &mut rng).unwrap();
                 if real_fsz {
                     for value in &mut data.slater_params {
                         value.im = 0.0;
@@ -1541,7 +1541,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                     data.count_variational_parameters(),
                     size,
                     samples,
-                    mvmc_core::get_all_complex_flag(&data),
+                    mvmc_core::get_all_complex_flag(&data).unwrap(),
                     data.i_flg_orbital_general != 0,
                 );
                 let mut completed_steps = Vec::new();
@@ -1884,7 +1884,7 @@ fn transfer_site(output_root: &Path) {
         };
         case_observation::begin(&recorded_case, "measured-activation");
         let mut data = mvmc_expert_parsers::parse_expert_mode_files(&input).unwrap();
-        assert!(!mvmc_core::get_all_complex_flag(&data));
+        assert!(!mvmc_core::get_all_complex_flag(&data).unwrap());
         threshold_transfer_input(&mut data, size);
         data.modpara.nvmc_sample = 4;
         data.modpara.nsr_opt_itr_step = 1;
@@ -1892,7 +1892,7 @@ fn transfer_site(output_root: &Path) {
         data.modpara.nstore_o = 0;
         data.modpara.nsrcg = 0;
         let mut rng = Sfmt19937Rng::new(1);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         mvmc_core::sync::sync_modified_parameter(&mut data, &SingleProcessReducer);
         init_qp_weight(&mut data);
         let nqp = data.qp_weights.as_ref().unwrap().qp_full_weight.len();
@@ -2044,7 +2044,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
                 data.modpara.rnd_seed as u32,
             );
         }
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         let initial = input.parent().unwrap().join("initial.def");
         if initial.is_file() {
             assert!(mvmc_core::read_initial_def(&mut data, initial).unwrap());
@@ -2066,7 +2066,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
                 data.count_variational_parameters(),
                 nqp,
                 data.modpara.nvmc_sample as usize,
-                mvmc_core::get_all_complex_flag(data),
+                mvmc_core::get_all_complex_flag(data).unwrap(),
                 data.i_flg_orbital_general != 0,
             )
         };
@@ -2105,7 +2105,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
             OptimizationOptions::default(),
         )
         .unwrap();
-        let all_complex = mvmc_core::get_all_complex_flag(&data);
+        let all_complex = mvmc_core::get_all_complex_flag(&data).unwrap();
         let (oo, ho) = normalized_sr_buffers(&state, all_complex);
         for (name, actual) in [("sr_oo.txt", &oo), ("sr_ho.txt", &ho)] {
             let expected_values: Vec<f64> = std::fs::read_to_string(expected.join(name))
@@ -2292,7 +2292,7 @@ fn reviewed_cg_long20(output_root: &Path) {
     data.modpara.nsrcg = 1;
     data.modpara.nstore_o = 0;
     let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     assert!(
         mvmc_core::read_initial_def(&mut data, input.parent().unwrap().join("initial.def"))
             .unwrap()
@@ -2644,7 +2644,7 @@ fn independent_physcal(output_root: &Path) {
         assert_independent_rng(&root.join("seeded"), &prepared.rng);
         let mut init_probe = prepared.rng.clone();
         let mut init_data = prepared.data.clone();
-        init_parameter(&mut init_data, &mut init_probe);
+        init_parameter(&mut init_data, &mut init_probe).unwrap();
         assert_independent_rng(&root.join("initialized"), &init_probe);
         let fixed = parameters(&prepared.data);
         let fixed_reference: Vec<f64> = std::fs::read_to_string(root.join("fixed-parameters.txt"))
@@ -2797,7 +2797,7 @@ fn independent_real_fsz(output_root: &Path) {
     assert!(!root.join("inputs/initial.def").exists());
     let mut data =
         mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
-    assert!(!mvmc_core::get_all_complex_flag(&data));
+    assert!(!mvmc_core::get_all_complex_flag(&data).unwrap());
     assert_ne!(data.i_flg_orbital_general, 0);
     assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 0));
     let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
@@ -2808,7 +2808,7 @@ fn independent_real_fsz(output_root: &Path) {
     }
     case_observation::complete("real-fsz/seeded", "independent-seeded-rng");
     case_observation::begin("real-fsz/initialized", "independent-assertions");
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters(&mut data, &input)
         .unwrap();
     mvmc_core::sync::sync_modified_parameter_local(&mut data, true);

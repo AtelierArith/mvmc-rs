@@ -24,7 +24,10 @@ pub fn declared_slater_record(data: &ExpertModeData) -> [&'static str; 4] {
                 > 0,
         ) << i)
     });
-    let key = format!("{} {active_rbm} {mask}", u8::from(all_complex_flag(data)));
+    let key = format!(
+        "{} {active_rbm} {mask}",
+        u8::from(all_complex_flag(data).unwrap())
+    );
     let rows: Vec<_> = include_str!("../fixtures/orbital_general/c_rbm_prefix.txt")
         .lines()
         .filter(|line| !line.starts_with('#'))

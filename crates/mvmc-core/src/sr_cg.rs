@@ -112,7 +112,7 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
 ) -> io::Result<i32> {
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
-    let complex = crate::run::get_all_complex_flag(data);
+    let complex = crate::run::get_all_complex_flag(data).map_err(io::Error::other)?;
     let offset = if complex { 2 } else { 1 };
     let full = offset * n_para;
     if full == 0 {

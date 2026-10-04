@@ -106,6 +106,7 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
 
 /// Validate parameter-optimization entry points before initialization or IO.
 pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
+    crate::run::get_all_complex_flag(data)?;
     let p = &data.modpara;
     validate_supported_modpara(p)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
@@ -241,6 +242,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
 
 /// Validate PhysCal input combinations that are independent of the reducer.
 pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
+    crate::run::get_all_complex_flag(data)?;
     let p = &data.modpara;
     if !data.input_errors.is_empty() {
         return Err(format!(

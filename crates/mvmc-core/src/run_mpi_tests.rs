@@ -301,11 +301,11 @@ fn negative_clock_and_asymmetric_runner_failures() {
         data.modpara.nsr_opt_itr_step = 1;
         data.modpara.nsr_opt_itr_smp = 1;
         let mut rng = seeded_rng_with_reducer(1 + reducer.seed_offset() as i64, reducer).unwrap();
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         sync_modified_parameter(&mut data, true);
         init_qp_weight(&mut data);
         let before = data.clone();
-        let mut state = state_from_data(&data);
+        let mut state = state_from_data(&data).unwrap();
         let sr_output = directory.join(format!("{case}-sr"));
         let setup = if world.is_root() {
             std::fs::create_dir(&sr_output).map_err(|e| e.to_string())

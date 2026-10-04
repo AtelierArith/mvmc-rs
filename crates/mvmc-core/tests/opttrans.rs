@@ -372,8 +372,10 @@ fn nonidentity_slater_matrices_and_derivatives_match_canonical_julia() {
             qp::update_qp_weight_for(&mut data);
         }
         if fields[0] == "fsz" {
+            state.validate_declared_mode(&data).unwrap();
             mvmc_core::slater_update::update_slater_elm_fsz(&mut data, &mut state);
         } else {
+            state.validate_declared_mode(&data).unwrap();
             mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
         }
         check_values(
@@ -456,6 +458,7 @@ fn c_normal_slater_preserves_subthreshold_coefficients() {
     let value = f64::from_bits(1e-14_f64.to_bits() - 1);
     data.slater_params.fill(Complex64::new(value, 0.0));
     let mut state = mvmc_core::VmcOptimizationState::zeros(4, 1, 0, 4, 6, 1, false, false);
+    state.validate_declared_mode(&data).unwrap();
     mvmc_core::slater_update::update_slater_elm(&mut data, &mut state);
     assert!(state
         .slater_matrix

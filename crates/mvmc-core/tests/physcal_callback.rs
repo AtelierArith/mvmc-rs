@@ -244,10 +244,13 @@ impl Reducer for CallbackReducer {
 fn reducer_callback_runs_on_local_rank_and_reports_remote_failure() {
     let reducer = CallbackReducer {
         rank: 1,
-        remote_failure_at: 5,
+        // Validation, directory, initialization, state, sample, output, callback.
+        remote_failure_at: 7,
         failure_checks: Cell::new(0),
     };
+    let callback_calls = Cell::new(0);
     let mut callback = |sample, _: &ExpertModeData, _: Complex64, status| {
+        callback_calls.set(callback_calls.get() + 1);
         assert_eq!(sample, 0);
         assert_eq!(status, 0);
         Ok(())
@@ -260,20 +263,22 @@ fn reducer_callback_runs_on_local_rank_and_reports_remote_failure() {
     )
     .unwrap_err();
     assert_eq!(error, "PhysCal callback failed on another rank");
+    assert_eq!(reducer.failure_checks.get(), 7);
+    assert_eq!(callback_calls.get(), 1);
 }
 
 #[test]
 fn absent_callback_still_participates_in_remote_failure_agreement() {
     let reducer = CallbackReducer {
         rank: 1,
-        remote_failure_at: 5,
+        remote_failure_at: 7,
         failure_checks: Cell::new(0),
     };
     let error =
         mvmc_core::vmc_phys_cal_with_reducer_and_callback(preparation(1), None, &reducer, None)
             .unwrap_err();
     assert_eq!(error, "PhysCal callback failed on another rank");
-    assert_eq!(reducer.failure_checks.get(), 5);
+    assert_eq!(reducer.failure_checks.get(), 7);
 }
 
 #[test]
@@ -290,7 +295,7 @@ fn remote_validation_failure_stops_before_sampling_or_output() {
 
 #[test]
 fn remote_output_failure_prevents_callback() {
-    for check in [2, 4] {
+    for check in [2, 6] {
         // Directory setup and per-sample output agreement.
         let reducer = CallbackReducer {
             rank: 1,

@@ -248,6 +248,15 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         }
         offset += size;
     }
+    // Individual AP/P headers are not the final orbital declaration. C sums
+    // every native orbital key before deciding the model mode and local flags.
+    if let Some(raw) = utils::opt_flag::raw_orbital_complex_header(&data) {
+        for term in &mut data.orbital_terms {
+            term.is_complex = raw != 0;
+        }
+        data.native_complex_declarations
+            .insert("Orbitals".to_string(), raw != 0);
+    }
     set_orbital_opt_flags(&mut data, &orbital_flags);
     if c_opt_trans_flags {
         utils::opt_flag::set_opt_trans_c_opt_flags(&mut data);
@@ -449,6 +458,9 @@ fn parse_file_by_type(
     orbital_flags: &mut BTreeMap<i64, i64>,
     rbm_flags: &mut RbmFlags,
 ) -> io::Result<()> {
+    // Capture only the header returned by the same successful family reader.
+    // No second path read and no fallback0 for malformed consumed values.
+    let mut complex_header = None;
     match file_type {
         "ModPara" => {
             data.modpara = modpara::parse_modpara_def(path)?;
@@ -494,6 +506,7 @@ fn parse_file_by_type(
                     ),
                 )
             })?;
+            complex_header = Some(("DH2", definition.complex_type));
             data.doublon_holon_2site_indices = definition.indices;
             data.doublon_holon_2site_complex = definition.is_complex;
             data.doublon_holon_2site_params =
@@ -512,6 +525,7 @@ fn parse_file_by_type(
                     ),
                 )
             })?;
+            complex_header = Some(("DH4", definition.complex_type));
             data.doublon_holon_4site_indices = definition.indices;
             data.doublon_holon_4site_complex = definition.is_complex;
             data.doublon_holon_4site_params =
@@ -521,6 +535,7 @@ fn parse_file_by_type(
         "Gutzwiller" => {
             let content = read_def_file(path)?;
             let section = gutzwiller::parse_gutzwiller_content(&content, data.modpara.nsite)?;
+            complex_header = Some(("Gutzwiller", section.complex_type));
             data.gutzwiller_terms = section.terms;
             data.n_gutzwiller_idx = section.n_gutzwiller_idx;
             set_projection_opt_flags(
@@ -546,6 +561,7 @@ fn parse_file_by_type(
         "Jastrow" => {
             let content = read_def_file(path)?;
             let section = jastrow::parse_jastrow_content(&content, data.modpara.nsite)?;
+            complex_header = Some(("Jastrow", section.complex_type));
             data.jastrow_terms = section.terms;
             data.n_jastrow_idx = section.n_jastrow_idx;
             set_projection_opt_flags(
@@ -563,6 +579,8 @@ fn parse_file_by_type(
                 data.modpara.nsite,
                 orbital::OrbitalKind::AntiParallel,
             )?;
+            // Native Orbital and OrbitalAntiParallel are distinct KW indices.
+            complex_header = Some((file_type, section.complex_type));
             data.orbital_terms = section.terms.clone();
             data.i_flg_orbital_anti_parallel = 1;
             data.modpara.n_orbital_idx = section.n_orbital_idx;
@@ -575,6 +593,7 @@ fn parse_file_by_type(
                 data.modpara.nsite,
                 orbital::OrbitalKind::Parallel,
             )?;
+            complex_header = Some((file_type, section.complex_type));
             // Interleave with the existing (anti-parallel) orbital list.
             let n_orbital_ap = data.n_orbital_anti_parallel;
             for term in &section.terms {
@@ -602,6 +621,7 @@ fn parse_file_by_type(
                 data.modpara.nsite,
                 orbital::OrbitalKind::General,
             )?;
+            complex_header = Some((file_type, section.complex_type));
             data.modpara.n_orbital_idx = section.n_orbital_idx;
             data.orbital_terms = section.terms;
             data.i_flg_orbital_general = 1;
@@ -784,6 +804,18 @@ fn parse_file_by_type(
             // Silently skip to match the upstream `@warn`-only policy.
             tracing::debug!("unknown namelist keyword: {}", file_type);
         }
+    }
+    if let Some((key, header)) = complex_header {
+        data.native_complex_headers.insert(key.to_string(), header);
+        let (group, declaration) = match key {
+            "DH2" => (key, data.doublon_holon_2site_complex),
+            "DH4" => (key, data.doublon_holon_4site_complex),
+            "Gutzwiller" => (key, data.gutzwiller_terms.iter().any(|t| t.is_complex)),
+            "Jastrow" => (key, data.jastrow_terms.iter().any(|t| t.is_complex)),
+            _ => ("Orbitals", data.orbital_terms.iter().any(|t| t.is_complex)),
+        };
+        data.native_complex_declarations
+            .insert(group.to_string(), declaration);
     }
     Ok(())
 }

@@ -324,7 +324,7 @@ fn issue179_state() {
         file: RefCell::new(File::create(dir.join(format!("rank-{}.txt", world.rank()))).unwrap()),
         complex_call: RefCell::new(0),
         real_call: RefCell::new(0),
-        sr_complex: mvmc_core::get_all_complex_flag(&data),
+        sr_complex: mvmc_core::get_all_complex_flag(&data).unwrap(),
         step: Cell::new(0),
         initiating_thread: std::thread::current().id(),
         collective_calls: Cell::new(0),
@@ -353,7 +353,7 @@ fn issue179_state() {
     let (seeded_words, seeded_cursor) = rng.state_snapshot();
     recording.discrete("before-init-raw-rng", &seeded_words.map(i64::from));
     recording.discrete("before-init-rng-cursor", &[seeded_cursor as i64]);
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     let initial = input.parent().unwrap().join("initial.def");
     if initial.is_file() && !enable_opt_trans {
         assert!(mvmc_core::read_initial_def(&mut data, initial).unwrap());
@@ -397,7 +397,7 @@ fn issue179_state() {
             * data.modpara.nmp_trans.unsigned_abs() as usize
             * data.n_qp_opt_trans.max(1) as usize,
         data.modpara.nvmc_sample as usize,
-        mvmc_core::get_all_complex_flag(&data),
+        mvmc_core::get_all_complex_flag(&data).unwrap(),
         data.i_flg_orbital_general != 0,
     );
     let failure_rank = std::env::var("MPI179_FAIL_RANK")

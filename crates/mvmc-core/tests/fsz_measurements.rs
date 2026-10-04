@@ -168,7 +168,7 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
         state.slater_matrix.pf_m_real.fill(19.0);
         let before_matrix = state.slater_matrix.clone();
         let before_configuration = state.electron_config.clone();
-        assert_eq!(mvmc_core::get_all_complex_flag(&data), complex);
+        assert_eq!(mvmc_core::get_all_complex_flag(&data).unwrap(), complex);
         for (sample, weight) in weights.into_iter().enumerate() {
             state.energy.wc += Complex64::new(weight, 0.0);
             let expected_weighted_one = complexes(lines.next().unwrap());

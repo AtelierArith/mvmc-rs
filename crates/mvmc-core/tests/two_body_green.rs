@@ -192,7 +192,7 @@ fn check_pairhop_energy(
     let local_energy = |data: &ExpertModeData, state: &mut VmcOptimizationState| {
         if let Some(spins) = spins {
             historical_fsz_energy(data, state, ip, [idx, cfg, num, cnt], spins)
-        } else if mvmc_core::run::get_all_complex_flag(data) {
+        } else if mvmc_core::run::get_all_complex_flag(data).unwrap() {
             // Keep the archived Julia PairHop energy bits as a historical
             // kernel check. Production complex PairHop now follows C's
             // different quotient, independently checked below against C.
@@ -1217,7 +1217,7 @@ fn check_native_fsz_hamiltonian<const REAL: bool>() {
                     data.inter_all_terms.push(data.inter_all_terms[k]);
                 }
             }
-            assert_eq!(mvmc_core::get_all_complex_flag(&data), !REAL);
+            assert_eq!(mvmc_core::get_all_complex_flag(&data).unwrap(), !REAL);
             let actual =
                 calculate_local_energy_fsz(ip, &data, &mut state, &idx, &cfg, &num, &cnt, &spins);
             if !complex_within(actual, expected, ENERGY_ROUNDOFF) {

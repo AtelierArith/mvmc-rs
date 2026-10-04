@@ -56,6 +56,7 @@ fn supplied_orbital_cache_is_preserved_and_missing_weights_leave_state_unchanged
     assert!(data.qp_weights.is_none());
     let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
     let before = format!("{state:?}");
+    state.validate_declared_mode(&data).unwrap();
     update_slater_elm(&mut data, &mut state);
     assert_eq!(format!("{state:?}"), before);
     assert_eq!(data.orbital_idx_matrix, indices);
@@ -110,6 +111,7 @@ fn public_slater_update_composes_opttrans_before_fixed_translation_in_each_plane
         spgl_sin_sin: vec![Complex64::new(0.0, 0.0)],
     });
     let mut state = VmcOptimizationState::zeros(4, 2, 0, 16, 4, 1, false, false);
+    state.validate_declared_mode(&data).unwrap();
     update_slater_elm(&mut data, &mut state);
     let maps = [[0, 1, 2, 3], [1, 2, 3, 0], [1, 0, 2, 3], [2, 1, 3, 0]];
     let signs = [[1, 1, 1, 1], [1, -1, 1, 1], [-1, 1, 1, 1], [1, 1, 1, 1]];
@@ -160,7 +162,8 @@ fn check_parsed_heisenberg_wiring(fixture: &str, nsite: usize, seed: i64) {
         assert_eq!(data.modpara.nmp_trans, -1);
         assert!(!data.qp_trans_entries.is_empty());
         let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-        mvmc_expert_parsers::utils::parameter_init::initialize_parameters(&mut data, &mut rng);
+        mvmc_expert_parsers::utils::parameter_init::initialize_parameters(&mut data, &mut rng)
+            .unwrap();
         mvmc_core::qp::init_qp_weight(&mut data);
         let nqp = data.modpara.nsp_gauss_leg as usize
             * data.modpara.nmp_trans.unsigned_abs() as usize
@@ -177,6 +180,7 @@ fn check_parsed_heisenberg_wiring(fixture: &str, nsite: usize, seed: i64) {
             false,
             false,
         );
+        state.validate_declared_mode(&data).unwrap();
         update_slater_elm(&mut data, &mut state);
         let table = state.slater_matrix.slater_elm.as_slice();
         let nsite2 = 2 * nsite;

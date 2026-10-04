@@ -71,7 +71,7 @@ fn corrected_general_all_four_prefixes_match_independent_reference() {
         provenance::settings(&root, &case, steps, &data);
         mvmc_core::validation::validate_para_opt(&data).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
-        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng);
+        mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng).unwrap();
         assert!(mvmc_core::read_initial_def(
             &mut data,
             input.parent().unwrap().join("initial.def")
@@ -92,7 +92,7 @@ fn corrected_general_all_four_prefixes_match_independent_reference() {
                 * data.modpara.nmp_trans.unsigned_abs() as usize
                 * data.n_qp_opt_trans.max(1) as usize,
             data.modpara.nvmc_sample as usize,
-            mvmc_core::get_all_complex_flag(&data),
+            mvmc_core::get_all_complex_flag(&data).unwrap(),
             data.i_flg_orbital_general != 0,
         );
         let output = Output::new();

@@ -48,7 +48,7 @@ fn sparse_ap_and_parallel_use_declared_widths_and_rng_consumption() {
     );
     let mut rng = Sfmt19937Rng::new(1);
     let mut probe = Sfmt19937Rng::new(1);
-    init_parameter(&mut data, &mut rng);
+    init_parameter(&mut data, &mut rng).unwrap();
     // Live Julia v0.5.0 / SFMT v0.1.0 reference, seed 1. Compare
     // numerical values with rounding bounds and the exact next RNG word.
     for (idx, expected) in [0, 1, 7, 8].into_iter().zip([

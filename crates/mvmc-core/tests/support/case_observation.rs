@@ -647,7 +647,7 @@ pub fn retain_layout(
         data.modpara.rnd_seed,
         data.modpara.nsr_opt_itr_step,
         data.modpara.nsr_opt_itr_smp,
-        mvmc_core::get_all_complex_flag(data),
+        mvmc_core::get_all_complex_flag(data).unwrap(),
         state.phys_quantities.is_some(),
     );
     if let Some(dimension) = retained_dimension {

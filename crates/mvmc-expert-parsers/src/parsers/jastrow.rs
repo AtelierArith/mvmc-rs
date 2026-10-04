@@ -9,6 +9,8 @@ use std::path::Path;
 /// Declared coefficients, directional site indices and flag assignments.
 #[derive(Debug, Clone, Default)]
 pub struct JastrowSection {
+    /// Validated raw signed C header, before the local >0 test.
+    pub complex_type: i32,
     /// One coefficient slot per declared parameter, including unmapped slots.
     pub terms: Vec<JastrowTerm>,
     /// Declared coefficient count.
@@ -40,11 +42,11 @@ pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSec
         .filter(|&width| width > 0)
         .ok_or_else(|| invalid("Jastrow declaration on line 2 must have a positive width"))?
         as i64;
-    let is_complex = c_fields(lines[2])
+    let complex_type = c_fields(lines[2])
         .nth(1)
         .and_then(|field| field.parse::<i32>().ok())
-        .unwrap_or(0)
-        > 0;
+        .ok_or_else(|| invalid("Jastrow ComplexType must be a C integer"))?;
+    let is_complex = complex_type > 0;
     let nsite = usize::try_from(nsite)
         .ok()
         .filter(|&count| count >= 2)
@@ -122,6 +124,7 @@ pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSec
         })
         .collect();
     Ok(JastrowSection {
+        complex_type,
         terms,
         n_jastrow_idx,
         is_complex,

@@ -10,10 +10,10 @@ fn original_declaration_only_dh2_marks_public_optimizer_mode_complex() {
     assert!(data.complex_flags.is_empty());
     assert!(data.doublon_holon_2site_indices.is_empty());
     assert!(data.doublon_holon_2site_params.is_empty());
-    assert!(!get_all_complex_flag(&data));
+    assert!(!get_all_complex_flag(&data).unwrap());
     // Exact original input: no coefficients, index table or imaginary values.
     data.doublon_holon_2site_complex = true;
-    assert!(get_all_complex_flag(&data)); // Original M1032 expected literal true.
+    assert!(get_all_complex_flag(&data).unwrap()); // Original M1032 expected literal true.
     assert!(data.doublon_holon_2site_complex);
     assert!(!data.doublon_holon_4site_complex);
     assert!(data.complex_flags.is_empty());
@@ -21,7 +21,7 @@ fn original_declaration_only_dh2_marks_public_optimizer_mode_complex() {
     assert!(data.doublon_holon_2site_params.is_empty());
     // Helper query is fresh/read-only, not cached after the original assertion.
     data.doublon_holon_2site_complex = false;
-    assert!(!get_all_complex_flag(&data));
+    assert!(!get_all_complex_flag(&data).unwrap());
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn sibling_declaration_only_dh4_participates_without_materializing_coefficients(
     assert!(data.complex_flags.is_empty());
     assert!(data.doublon_holon_4site_indices.is_empty());
     assert!(data.doublon_holon_4site_params.is_empty());
-    assert!(get_all_complex_flag(&data));
+    assert!(get_all_complex_flag(&data).unwrap());
     assert!(data.doublon_holon_4site_complex);
     assert!(data.doublon_holon_4site_indices.is_empty());
     assert!(data.doublon_holon_4site_params.is_empty());

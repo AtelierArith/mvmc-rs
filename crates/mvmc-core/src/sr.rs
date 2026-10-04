@@ -470,6 +470,11 @@ mod opttrans_tests {
             let cg = fields[2] == "cg";
             let n: usize = fields[4].parse().unwrap();
             let no = data.opt_trans.len();
+            // This fixture explicitly replaces the loaded declarations with
+            // its synthetic real/complex SR system. Retire both source-bound
+            // snapshots, not the guard or the independent numerical oracle.
+            data.native_complex_headers.clear();
+            data.native_complex_declarations.clear();
             data.modpara.complex_flag = i64::from(complex);
             data.complex_flags = vec![i64::from(complex)];
             for t in &mut data.orbital_terms {
@@ -483,6 +488,7 @@ mod opttrans_tests {
             }
             data.doublon_holon_2site_complex = complex;
             data.doublon_holon_4site_complex = complex;
+            assert_eq!(crate::run::get_all_complex_flag(&data).unwrap(), complex);
             data.modpara.dsr_opt_sta_del = 0.0;
             data.modpara.dsr_opt_step_dt = 0.125;
             data.modpara.dsr_opt_red_cut = 1e-8;
@@ -504,6 +510,7 @@ mod opttrans_tests {
                 false,
             );
             state.energy.wc = Complex64::new(8.0, 0.0);
+            state.validate_declared_mode(&data).unwrap();
             let off = if complex { 2 } else { 1 };
             let size = off * (n + 1);
             for p in 0..off * no {

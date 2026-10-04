@@ -77,7 +77,7 @@ fn all_declared_rbm_slots_and_following_slater_values_match_native_c_and_rng() {
             .collect();
         assert_eq!(data.optimization_flags, flags, "{}", header[0]);
         let mut rng = Sfmt19937Rng::new(seed);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         if mode != "init" {
             fs::write(dir.0.join("initial.def"), record[2].replace('|', "\n")).unwrap();
             assert!(

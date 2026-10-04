@@ -12,6 +12,8 @@ use crate::state::VmcOptimizationState;
 /// `i_flg_orbital_general == 0` path. The Slater table is rebuilt for
 /// every QP plane using the cached orbital-idx matrix and the parsed
 /// `qptransidx.def` maps composed after optimized translations and their signs.
+/// Direct callers must first use `state.validate_declared_mode(data)`; changing
+/// a declaration requires matching newly allocated state buffers.
 pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
@@ -33,7 +35,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
         .as_ref()
         .expect("orbital_sgn_matrix populated alongside orbital_idx_matrix");
     let n_orb = data.modpara.n_orbital_idx.max(0) as usize;
-    let all_complex = crate::run::get_all_complex_flag(data);
+    let all_complex = state.all_complex;
     if n_orb == 0 {
         return;
     }
@@ -144,6 +146,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
 /// FSZ uses an explicit `2*n_site × 2*n_site` orbital matrix and does not
 /// apply spin projection (`NSPGaussLeg` is treated as 1). QP translation is
 /// applied to the site index and the spin offset is kept explicit.
+/// Direct callers must first use `state.validate_declared_mode(data)`.
 pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizationState) {
     data.ensure_orbital_idx_matrix();
     let n_site = data.modpara.nsite.max(0) as usize;
@@ -255,6 +258,7 @@ mod tests {
         weights.spgl_cos_cos = vec![Complex64::new(0.75, -7.0)];
         weights.spgl_sin_sin = vec![Complex64::new(0.5, 5.0)];
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
+        state.validate_declared_mode(&data).unwrap();
         update_slater_elm(&mut data, &mut state);
         assert!(state
             .slater_matrix
@@ -370,6 +374,7 @@ mod tests {
             let ip = complexes(lines.next().unwrap())[0];
             let expected_slater = complexes(lines.next().unwrap());
             let expected_o = complexes(lines.next().unwrap());
+            state.validate_declared_mode(&data).unwrap();
             update_slater_elm_fsz(&mut data, &mut state);
             crate::numerical_comparison::assert_values_close(
                 components(state.slater_matrix.slater_elm.as_slice()),
@@ -448,6 +453,7 @@ mod tests {
             "shared normalization",
         );
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 13, 1, 1, true, false);
+        state.validate_declared_mode(&data).unwrap();
         update_slater_elm(&mut data, &mut state);
         let matrix = expected(rows[1])
             .as_chunks::<2>()
@@ -500,6 +506,7 @@ mod tests {
             data.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
             mvmc_expert_parsers::utils::qp_weight::init_qp_weight(&mut data);
             let mut state = VmcOptimizationState::zeros(2, 1, 0, 2, 1, 1, true, true);
+            state.validate_declared_mode(&data).unwrap();
             update_slater_elm_fsz(&mut data, &mut state);
             // Live Julia v0.5.0: F(2,3)=+/- (0.6+0.4im),
             // F(3,2)=-F(2,3); every unmapped cell is zero here.
@@ -554,6 +561,7 @@ mod tests {
             data.para_qp_trans = vec![Complex64::new(1.0, 0.0)];
             init_qp_weight(&mut data);
             let mut state = VmcOptimizationState::zeros(2, 1, 0, 1, 1, 1, false, false);
+            state.validate_declared_mode(&data).unwrap();
             update_slater_elm(&mut data, &mut state);
             assert_eq!(
                 state.slater_matrix.slater_elm.get(0, 0, 3),

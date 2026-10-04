@@ -98,17 +98,103 @@ fn historical_julia_diagnostics_except_c_integer_flag_extensions() {
     while let Some(header) = lines.next() {
         let parts: Vec<_> = header.split_whitespace().collect();
         let content = std::fs::read_to_string(root().join(format!("{}.def", parts[0]))).unwrap();
+        let archived_error = lines.next().unwrap();
+        // Consume every original Julia record before comparing current C-token
+        // behavior. Successful archival payloads remain independently asserted
+        // for compatible cases, not overwritten to match the current parser.
+        let archived = if parts[2] == "1" {
+            let shape = integers(lines.next().unwrap());
+            let tables: Vec<_> = (0..shape[0])
+                .map(|_| integers(lines.next().unwrap()))
+                .collect();
+            Some((shape, tables, integers(lines.next().unwrap())))
+        } else {
+            None
+        };
         let result = parse_doublon_holon_2site_content(&content, parts[1].parse().unwrap());
-        // Julia rejected these integer flags; the native C DH readers accept
-        // them. Keep the historical diagnostic record unchanged and verify
-        // the new values separately against c_dh_flags.txt.
         if matches!(parts[0], "negative_opt" | "opt_bounds" | "nonbinary_opt") {
+            // C GetInfoOpt retains raw integer flags; historical Julia rejected
+            // these. Separate native c_dh_flags.txt tests retain that authority.
+            assert!(archived.is_none(), "{header}");
             assert!(result.is_success(), "{header}");
             assert_eq!(
                 result.data.as_ref().unwrap().opt_flags[0],
                 if parts[0] == "negative_opt" { -1 } else { 2 }
             );
-            lines.next().unwrap(); // archived Julia error text
+            continue;
+        }
+        let changed_diagnostic = match parts[0] {
+            "signed_ignored_indices" => {
+                // C's ignored first column is still scanned into int, not Int64.
+                // This archived successful Julia token exceeds that domain.
+                assert!(archived.is_some(), "{header}");
+                Some("line 9: invalid integer for ignored local parameter index: '-9223372036854775808'".to_owned())
+            }
+            "empty" | "empty_real" | "negative_count" => {
+                Some("NDoublonHolon2siteIdx must be a positive C integer".to_owned())
+            }
+            "max_count" => Some(format!(
+                "line 2: invalid integer for NDoublonHolon2siteIdx: '{}'",
+                content
+                    .lines()
+                    .nth(1)
+                    .unwrap()
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap()
+            )),
+            "comments"
+            | "extra_neighbor_column"
+            | "extra_opt_column"
+            | "extra_row"
+            | "short_neighbor_row"
+            | "short_opt_row"
+            | "truncated" => {
+                // C fscanf consumes integer tokens across physical lines and
+                // does not discard body comments. Malformed scans have no C
+                // safe-error oracle; this is Rust's bounded rejection contract.
+                let count: usize = content
+                    .lines()
+                    .nth(1)
+                    .unwrap()
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                let sites: usize = parts[1].parse().unwrap();
+                let actual = content
+                    .lines()
+                    .skip(5)
+                    .flat_map(str::split_ascii_whitespace)
+                    .count();
+                let expected = sites * count * 4 + 12 * count;
+                assert_ne!(actual, expected, "{header} intended token-count difference");
+                Some(format!(
+                    "DH token count mismatch: got {actual}, expected {expected}"
+                ))
+            }
+            _ => None,
+        };
+        if let Some(expected_error) = changed_diagnostic {
+            assert!(!result.is_success(), "{header}");
+            assert!(result.data.is_none(), "{header}");
+            assert_eq!(
+                result.line_number,
+                if parts[0] == "signed_ignored_indices" {
+                    9
+                } else {
+                    0
+                },
+                "{header}"
+            );
+            assert_eq!(result.error_message, expected_error, "{header}");
+            if matches!(parts[0], "empty" | "empty_real") {
+                let (shape, tables, flags) = archived.as_ref().unwrap();
+                assert_eq!(shape, &[0, i64::from(parts[0] != "empty_real")]);
+                assert!(tables.is_empty() && flags.is_empty());
+                assert!(archived_error.is_empty());
+            }
             continue;
         }
         assert_eq!(result.is_success(), parts[2] == "1", "{header}");
@@ -117,20 +203,16 @@ fn historical_julia_diagnostics_except_c_integer_flag_extensions() {
             parts[3].parse::<usize>().unwrap(),
             "{header}"
         );
-        assert_eq!(result.error_message, lines.next().unwrap(), "{header}");
+        assert_eq!(result.error_message, archived_error, "{header}");
         if let Some(definition) = result.data {
-            let shape = integers(lines.next().unwrap());
+            let (shape, tables, flags) = archived.unwrap();
             assert_eq!(definition.indices.len(), shape[0] as usize);
             assert_eq!(definition.is_complex, shape[1] != 0);
-            for table in definition.indices {
+            for (table, expected) in definition.indices.into_iter().zip(tables) {
                 let flat: Vec<_> = table.neighbors.into_iter().flatten().collect();
-                assert_eq!(flat, integers(lines.next().unwrap()), "{header}");
+                assert_eq!(flat, expected, "{header}");
             }
-            assert_eq!(
-                definition.opt_flags,
-                integers(lines.next().unwrap()),
-                "{header}"
-            );
+            assert_eq!(definition.opt_flags, flags, "{header}");
         }
     }
     assert!(parse_doublon_holon_2site_def(root().join("absent.def"), 3).is_err());
@@ -181,7 +263,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
         assert_eq!(data.optimization_flags, expected_flags, "{name} flags");
         let mode = integers(lines.next().unwrap());
         assert_eq!(data.doublon_holon_2site_complex, mode[0] != 0);
-        assert_eq!(all_complex_flag(&data), mode[1] != 0);
+        assert_eq!(all_complex_flag(&data).unwrap(), mode[1] != 0);
         assert_eq!(data.doublon_holon_2site_params.len(), 6 * layout.n_dh2);
         let definition = data.doublon_holon_2site_indices.clone();
         let flags = data.optimization_flags.clone();
@@ -190,7 +272,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
         }
         check_bits(data.projection_parameters(), lines.next().unwrap(), name);
         let mut rng = Sfmt19937Rng::new(11272);
-        init_parameter(&mut data, &mut rng);
+        init_parameter(&mut data, &mut rng).unwrap();
         assert!(data
             .doublon_holon_2site_params
             .iter()
@@ -221,7 +303,7 @@ fn layout_and_mapped_values_match_julia_while_declared_slot_rng_matches_c() {
                     == format!(
                         "{} {} 11272",
                         data.modpara.n_orbital_idx,
-                        i64::from(all_complex_flag(&data))
+                        i64::from(all_complex_flag(&data).unwrap())
                     )
             })
             .unwrap();

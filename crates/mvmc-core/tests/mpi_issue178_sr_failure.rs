@@ -82,7 +82,7 @@ fn exercise(
     rank: usize,
 ) -> String {
     let mut data = loaded(width, if faulty { -2.0 } else { 0.02 });
-    assert!(!mvmc_core::run::get_all_complex_flag(&data));
+    assert!(!mvmc_core::run::get_all_complex_flag(&data).unwrap());
     // Own same-call fixed-parameter anchor: this low-level runner does not
     // initialize/load parameters before SR. The solve observer captures flags,
     // matrix and statuses, but does not expose a pre-SR parameter snapshot.

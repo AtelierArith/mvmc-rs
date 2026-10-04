@@ -84,7 +84,7 @@ fn state(data: &ExpertModeData) -> VmcOptimizationState {
             * data.modpara.nmp_trans.unsigned_abs() as usize
             * data.n_qp_opt_trans.max(1) as usize,
         data.modpara.nvmc_sample as usize,
-        mvmc_core::run::get_all_complex_flag(data),
+        mvmc_core::run::get_all_complex_flag(data).unwrap(),
         data.i_flg_orbital_general != 0,
     )
 }

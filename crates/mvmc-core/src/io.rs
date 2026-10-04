@@ -324,7 +324,7 @@ pub fn output_phys_data(
         )?;
 
         if data.modpara.lanczos_mode > 1 {
-            let complex = crate::run::get_all_complex_flag(data);
+            let complex = crate::run::get_all_complex_flag(data).map_err(io::Error::other)?;
             let one_values = lanczos_phys_values(
                 &phys.phys_lanczos_qqqq,
                 &phys.phys_lanczos_qcisajsq,
