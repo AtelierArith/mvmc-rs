@@ -10,7 +10,24 @@ use crate::utils::file::{
     clean_line, read_def_file, safe_parse_float, safe_parse_int, split_def_line,
 };
 
-/// Parse a `hund.def` file from disk.
+/// Read C-declared Hund pairs with supplied site bounds.
+///
+/// C uses the same `ReadPairDValue` routine as CoulombInter. Coordinates,
+/// scalar values and row order are retained without sign or symmetry changes.
+/// Diagonal pairs are allowed; omitted scalar fields retain initialized/prior
+/// values. Nonfinite values are parser results, not runnable-model approval.
+pub fn parse_hund_definition<P: AsRef<Path>>(path: P, nsite: i64) -> io::Result<Vec<HundTerm>> {
+    Ok(super::coulomb::parse_coulomb_inter_definition(path, nsite)?
+        .into_iter()
+        .map(|term| HundTerm {
+            site1: term.site1,
+            site2: term.site2,
+            value: term.value,
+        })
+        .collect())
+}
+
+/// Read a permissive headerless convenience payload without C count/bounds checks.
 pub fn parse_hund_def<P: AsRef<Path>>(path: P) -> io::Result<Vec<HundTerm>> {
     let content = read_def_file(path)?;
     Ok(parse_hund_content(&content))
