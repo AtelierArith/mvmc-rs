@@ -786,7 +786,17 @@ pub struct SlaterMatrixData {
 }
 
 impl SlaterMatrixData {
-    /// Mirror `SlaterMatrixData(n_qp_full, n_site, n_elec, all_complex)`.
+    /// Allocate zero-filled Slater helper buffers for the supplied QP count.
+    ///
+    /// Site and electron helper dimensions are normalized to at least one,
+    /// following Julia's constructor architecture. Unlike Julia's minimum-one
+    /// QP normalization, a zero QP count stays zero: C's projection-count and
+    /// capacity calculations do not manufacture an identity sector. All complex
+    /// buffers are empty in that case; real buffers are also empty in
+    /// all-complex mode, regardless of the QP count.
+    ///
+    /// Representing empty storage is not validation of a zero-sector sampling
+    /// model. Runner input validation remains a separate lifecycle boundary.
     pub fn zeros(n_qp_full: usize, n_site: usize, n_elec: usize, all_complex: bool) -> Self {
         let n_site = n_site.max(1);
         let n_elec = n_elec.max(1);
