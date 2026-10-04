@@ -298,10 +298,51 @@ fn real_fixed_sz_interall_passes_runtime_validation() {
 
 #[test]
 fn real_fsz_pairhop_is_not_rejected_by_issue_43_gate() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/pairhop/namelist.def");
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pairhop");
+    // The archived PairHop helper input declares one row but contains seven
+    // permissive rows. It is not a supported C definition file. Parse the
+    // unchanged wavefunction inputs separately, then compose its public helper
+    // result explicitly; do not relax production parsing or shared helpers.
+    let directory = (0..)
+        .find_map(|attempt| {
+            let path = std::env::temp_dir().join(format!(
+                "issue264-pairhop-runtime-{}-{attempt}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => Some(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => None,
+                Err(error) => panic!("exclusive PairHop runtime input: {error}"),
+            }
+        })
+        .unwrap();
+    let namelist = directory.join("namelist.def");
+    std::fs::write(
+        &namelist,
+        format!(
+            "ModPara {}\nOrbital {}\n",
+            root.join("../interall/modpara.def").display(),
+            root.join("../interall/orbital.def").display()
+        ),
+    )
+    .unwrap();
+    let model = historical_orbital_model::historical_kernel_model(&namelist);
+    std::fs::remove_dir_all(&directory).unwrap();
+    let mut model = model.unwrap();
+    assert!(model.pair_hop_terms.is_empty());
+    let component =
+        mvmc_expert_parsers::parsers::pairhop::parse_pairhop_def(root.join("parser_cases.def"))
+            .unwrap();
+    assert!(component.is_success());
+    model.pair_hop_terms = component.terms;
+    // Retain the original metadata branch as well as the archived payload;
+    // this does not send its unsupported definition back through the loader.
+    model.namelist = mvmc_expert_parsers::utils::file::parse_namelist_content(
+        &std::fs::read_to_string(root.join("namelist.def")).unwrap(),
+    );
     for has_namelist in [true, false] {
-        let mut data = historical_orbital_model::historical_kernel_model(&root).unwrap();
+        let mut data = model.clone();
         data.i_flg_orbital_general = 1;
         if !has_namelist {
             data.namelist.clear();
