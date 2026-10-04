@@ -10293,15 +10293,15 @@
       "source_anchor": "MVMCOptimizers.jl/src/MVMCOptimizers.jl:82",
       "symbol_or_scenario": "MVMCOptimizers.allreduce_max_scalar",
       "parent_keys": [],
-      "rust_entry": "NO standalone max-reduction API; Reducer::any_failure uses summed integer status, not max-value semantics",
-      "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
-      "intentional_scope": "partial: no standalone Rust max scalar API",
-      "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
+      "rust_entry": "mvmc_core::parallel_scalar::ParallelScalarOperations::max_integer; SingleProcessReducer, MpiContext and MpiGroupContext implementations",
+      "supported_rejected_conditions": "Signed i32 scalar maximum: serial identity on World/Sampling/CrossGroup; MPI actual communicator maximum including negative values and i32::MIN. Bare MpiContext rejects Sampling/CrossGroup. Not all Julia Integer widths or arbitrary symbolic selectors; no model trajectory scope.",
+      "intentional_scope": "Existing merged scalar API, not a missing implementation. Complete original API/context/scenario acceptance remains pending.",
+      "evidence_type": "SourceReconciledExistingPublicAPI; ScopedSerialCIAndExplicitNativeMPI; whole-row acceptance pending",
       "owner": "#180/#179",
-      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1; source SHA256 MVMCOptimizers.jl/src/MVMCOptimizers.jl=eec5c87052ce316fd22b131cd8313976e65f2c5a8e49ec9f2ce672b70a6d1a47; C=extern/mVMC-1.3.0; independent expectation provenance must be read from named fixtures; no regeneration/run in documentation audit",
-      "settings": "Julia serial integer max7 and MPI numeric maximum; any_failure sum cannot substitute",
-      "command": "NO_EXECUTABLE_GATE standalone max-scalar API absent",
-      "result": "API_GAP/intentional scope decision pending; NOT_RUN; no invented generic verification command",
+      "reference_revision": "J=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1 parallel.jl:269-272, test_unit/test_unit_parallel.jl:49-55; Rust source main2fb451d63d1922797cfbd267f64412c12c931e0f; actual CI merge487f113dc4d89b37c9cd0719e4c4fc46c164453b (20dab/ef0c), not combined-main execution.",
+      "settings": "Serial original Sampling max7 plus -7/i32::MIN on three domains. Native worlds2/4, widths1/2/3/world, two passes; MPICH4.2.0/ch4:ucx/Hydra/PMI1, UCX_TLS=self,sm,tcp. i32 limitation explicit; no arbitrary scheduling/threading or model scope.",
+      "command": "Serial: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0. Explicit native ELF: --ignored --exact scalar_domains_use_actual_membership_and_signed_negative_max --nocapture under mpiexec worlds2/4; full argv in linked notes.",
+      "result": "Bounded serial/native conditions observed PASS; complete A201 correspondence pending. Normally ignored native execution is separately evidenced, not inferred from workspace summaries.",
       "owner_text": "#180/#179",
       "proposed_followup_owner": "#180/#179",
       "reconciliation_coordinator": "Pauli / #185",
@@ -10309,7 +10309,8 @@
       "scope_exclusion": "",
       "status": "SourceMappedMissingEvidence",
       "pending_reasons": [
-        "exact_current_row_execution_and_condition_coverage_not_independently_reconciled"
+        "full_original_API_Integer_width_and_context_condition_correspondence_not_reconciled",
+        "bounded_scalar_controls_do_not_prove_parent_scenarios_models_or_arbitrary_collective_errors"
       ],
       "original_row": {
         "id": "A201",
@@ -10330,7 +10331,49 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#180/#179",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "condition_reconciliation": {
+        "state": "SourceMappedExistingPublicAPIWithBoundedEvidence",
+        "owner_issue": "#184 / #185; original #180/#179 owner retained",
+        "source_notes": "docs/reference/c-to-julia/verification/issue-184-a201-public-max-source.md",
+        "remaining": [
+          "Julia Integer breadth differs from Rust C-compatible i32.",
+          "Invalid Julia symbolic selectors are not Rust enum inputs.",
+          "Full API/context/parent-scenario and arbitrary collective error conditions remain pending."
+        ],
+        "bounded_evidence": {
+          "workflow_run": 37205217809,
+          "source_head": "ef0c89f43f1e2e9e1db1c6da2ce4a3961c095ff5",
+          "tested_merge": "487f113dc4d89b37c9cd0719e4c4fc46c164453b",
+          "tested_base": "20dab9c5a12279e1d0337c77d13168e3846cc1cb",
+          "serial": {
+            "job_id": 111444893555,
+            "identity": "issue184_parallel_scalar_contracts::original_serial_scalar_literals_and_negative_max_are_identities",
+            "result": "PASS",
+            "ordinal": "448/1177",
+            "seconds": 0.006,
+            "command": "cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0",
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37205217809/job/111444893555"
+          },
+          "native": {
+            "job_id": 111444893611,
+            "identity": "mpi_issue184_parallel_scalar_contracts::scalar_domains_use_actual_membership_and_signed_negative_max",
+            "artifact_id": 11304578875,
+            "artifact_sha256": "682dbb0993853293fa81b7632885a691f6732107e3d1ebe9d977fdedcb5cb687",
+            "worlds": [
+              2,
+              4
+            ],
+            "rank_pass_count": 6,
+            "native_prior": 0,
+            "native_post": 0,
+            "provider_prior": 0,
+            "provider_post": 0,
+            "empty_post_logs": 10,
+            "url": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37205217809/artifacts/11304578875"
+          }
+        }
+      }
     },
     {
       "key": "api:A202",
