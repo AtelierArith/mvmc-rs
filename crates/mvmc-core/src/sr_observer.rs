@@ -49,6 +49,9 @@ pub struct DirectSolveSettings {
 #[derive(Debug, Clone, PartialEq)]
 /// Owned pre-factorization system and actual original solve result.
 pub struct DirectSolveObservation {
+    /// Test-only actual normalized step at the original solve callsite.
+    #[cfg(test)]
+    pub(crate) capture_step: Option<usize>,
     /// Real or complex moment-storage path.
     pub mode: DirectMode,
     /// Active square matrix dimension.
@@ -102,6 +105,11 @@ thread_local! {
     static NORMALIZED: RefCell<Option<Vec<NormalizedObservation>>> = const { RefCell::new(None) };
 }
 
+#[cfg(test)]
+thread_local! {
+    static CAPTURE_STEP: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Nested captures on the same thread are rejected without disturbing the first.
 pub struct CaptureAlreadyActive;
@@ -126,6 +134,8 @@ pub fn capture() -> Result<CaptureGuard, CaptureAlreadyActive> {
     }
     RECORDS.with(|records| *records.borrow_mut() = Some(Vec::new()));
     NORMALIZED.with(|records| *records.borrow_mut() = None);
+    #[cfg(test)]
+    CAPTURE_STEP.with(|step| step.set(None));
     ENABLED.with(|enabled| enabled.set(true));
     Ok(CaptureGuard {
         active: true,
@@ -157,6 +167,8 @@ impl CaptureGuard {
         ENABLED.with(|enabled| enabled.set(false));
         self.active = false;
         NORMALIZED.with(|records| *records.borrow_mut() = None);
+        #[cfg(test)]
+        CAPTURE_STEP.with(|step| step.set(None));
         RECORDS.with(|records| records.borrow_mut().take().unwrap_or_default())
     }
 }
@@ -166,6 +178,8 @@ impl Drop for CaptureGuard {
             ENABLED.with(|enabled| enabled.set(false));
             RECORDS.with(|records| *records.borrow_mut() = None);
             NORMALIZED.with(|records| *records.borrow_mut() = None);
+            #[cfg(test)]
+            CAPTURE_STEP.with(|step| step.set(None));
         }
     }
 }
@@ -180,6 +194,8 @@ pub(crate) fn normalized(
     if !ENABLED.with(Cell::get) {
         return;
     }
+    #[cfg(test)]
+    CAPTURE_STEP.with(|current| current.set(Some(step)));
     NORMALIZED.with(|records| {
         let mut records = records.borrow_mut();
         let Some(records) = records.as_mut() else {
@@ -239,6 +255,8 @@ pub(super) fn before_solve(
         let records = records.as_mut()?;
         let index = records.len();
         records.push(DirectSolveObservation {
+            #[cfg(test)]
+            capture_step: CAPTURE_STEP.with(Cell::get),
             mode,
             dimension: rhs.len(),
             triangle: 'U',

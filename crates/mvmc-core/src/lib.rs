@@ -13,6 +13,10 @@
 
 #![warn(missing_docs)]
 
+// Optional developer transport only; never part of production execution.
+#[cfg(test)]
+mod issue180_binary_diagnostics;
+
 #[cfg(test)]
 #[path = "../../../tests/support/julia_fixture.rs"]
 mod julia_fixture;

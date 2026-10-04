@@ -48,6 +48,10 @@ use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
 #[path = "run_mpi_tests.rs"]
 mod mpi_runtime_tests;
 
+#[cfg(test)]
+#[path = "issue180_boundary_dev.rs"]
+mod issue180_boundary_dev;
+
 // Every rank must reach this boundary even when its local operation failed.
 fn collective_result<T, R: Reducer + ?Sized>(
     result: Result<T, String>,
@@ -1254,6 +1258,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.start(23);
         sync_modified(data, reducer);
         timer.stop(23);
+        #[cfg(test)]
+        issue180_boundary_dev::record_step(step, data, state, rng);
         if step >= window_start {
             store_opt_data(data, state, step - window_start);
         }
@@ -1546,6 +1552,8 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         Ok(output_dir)
     })();
     let output_dir = collective_result(output_result, reducer, "optimization output directory")?;
+    #[cfg(test)]
+    issue180_boundary_dev::record("initialized", &data, &state, &rng);
     vmc_para_opt_timed(
         &mut data,
         &mut state,
@@ -1556,6 +1564,8 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer,
     )?;
     timer.stop(0);
+    #[cfg(test)]
+    issue180_boundary_dev::record("final", &data, &state, &rng);
     let final_result = (|| {
         if TIMED && reducer.is_output_root() {
             timer

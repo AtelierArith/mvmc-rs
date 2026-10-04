@@ -95,6 +95,47 @@ jobs:
           feature_args=()
           if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
           cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Check lossless developer transport and passive boundary controls
+        if: ${{ !cancelled() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default' }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/issue180-transport-controls"
+          mkdir "$out"
+          finish() {
+            prior=$?; trap - EXIT; set +e; post=0
+            if test -f "$out/source.before.sha256"; then
+              sha256sum -c --quiet "$out/source.before.sha256" > "$out/source.post.log" 2>&1 || post=1
+            else post=1; fi
+            printf 'prior=%s post=%s\n' "$prior" "$post" > "$out/terminal.txt"
+            if test "$prior" != 0; then exit "$prior"; fi
+            test "$post" = 0
+          }
+          trap finish EXIT
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'head=%s\n' "$GITHUB_SHA" > "$out/head.txt"
+          sha256sum crates/mvmc-core/src/{lib,run,sr_observer,issue180_boundary_dev,issue180_binary_diagnostics}.rs \
+            scripts/decode_issue180_f64.rs .github/workflows/ci.yml > "$out/source.before.sha256"
+          selection='test(/^issue180_binary_diagnostics::(literal_header_and_boundary_bits_roundtrip|malformed_truncated_oversized_and_wrong_record_rejected|file_creation_is_exclusive_and_preserves_literal_bits)$/) | test(/^run::issue180_boundary_dev::tests::(passive_snapshot_preserves_raw_cursor_count_and_future|scope_panic_cleanup_and_thread_local_isolation|disabled_hook_has_no_records_or_rng_mutation|full_field_order_lengths_and_explicit_boundary_sequence)$/)'
+          cargo nextest list --workspace --locked --cargo-profile ci -E "$selection" \
+            --message-format json > "$out/list.json"
+          cargo metadata --locked --no-deps --format-version 1 > "$out/metadata.json"
+          package=$(jq -er --arg manifest "$GITHUB_WORKSPACE/crates/mvmc-core/Cargo.toml" \
+            '[.packages[]|select(.name=="mvmc-core" and .manifest_path==$manifest)] | if length==1 then .[0].id else error("core package association") end' "$out/metadata.json")
+          jq -e --arg package "$package" --arg cwd "$GITHUB_WORKSPACE/crates/mvmc-core" '
+            [."rust-suites"[] as $suite | $suite.testcases|to_entries[] |
+              select(.value."filter-match"=="matches") |
+              {name:.key,ignored:.value.ignored,package:$suite."package-id",cwd:$suite.cwd,kind:$suite."binary-kind"}]
+            | length==7 and all(.[]; .ignored==false and .package==$package and .cwd==$cwd and .kind=="lib")
+              and ([.[].name]|unique|length)==7' "$out/list.json" > "$out/inventory.log"
+          timeout -k 5s 120s cargo nextest run --workspace --locked --cargo-profile ci \
+            -E "$selection" --no-tests fail --no-fail-fast --retries 0 2>&1 | tee "$out/controls.log"
+      - name: Upload lossless transport control receipts
+        if: always() && matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue180-transport-controls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/issue180-transport-controls
+          if-no-files-found: error
       - name: Launch exact-head scalar contracts on worlds2 and4
         if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
         run: |
