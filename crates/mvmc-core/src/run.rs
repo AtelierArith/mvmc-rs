@@ -85,8 +85,83 @@ pub struct OptimizationMeasurementView<'a> {
 
 /// Read-only observation of overlap, energy, Pfaffians and `state.sr_opt.sr_opt_o`.
 pub trait OptimizationMeasurementObserver {
+    /// Opt into caller-thread Real factor observation for this saved walker.
+    /// Default false preserves existing observers. A collector must bound frames.
+    fn begin_real_factor(
+        &self,
+        _data: &ExpertModeData,
+        _state: &VmcOptimizationState,
+        _sample: usize,
+    ) -> bool {
+        false
+    }
+    /// Whether the collector's first-walker factor scope is currently active.
+    fn real_factor_active(&self) -> bool {
+        false
+    }
+    /// Borrow actual QP0 Real assembly/factor/PF/inverse storage boundaries.
+    fn real_factor(&self, _view: RealFactorView<'_>) {}
+    /// Borrow actual Step5 RHS and signed tridiagonal operands, never reconstructed.
+    fn real_step5(&self, _view: pfapack::utu2::InverseStep5View<'_, f64>) {}
+    /// Close the borrowed factor scope, including errors or panic unwinding.
+    fn end_real_factor(&self) {}
     /// Borrow the production values without changing state or consuming RNG.
     fn measured(&self, view: OptimizationMeasurementView<'_>);
+    /// Borrow the actual local O/HO/OO prefix immediately after its accumulation.
+    fn accumulated(&self, _view: OptimizationMeasurementView<'_>) {}
+}
+
+/// Actual Real QP boundary; matrix may include its existing public padding.
+pub struct RealFactorView<'a> {
+    /// Chronological boundary name, not a replayed operation.
+    pub stage: &'static str,
+    /// Actual QP index, restricted to zero by this diagnostic scope.
+    pub qp: usize,
+    /// Actual occupied-matrix dimension.
+    pub dimension: usize,
+    /// Actual column-major matrix slice; padding, if any, is not synthesized.
+    pub matrix: &'a [f64],
+    /// Actual one-based pivot swap targets, not a permutation.
+    pub pivots: &'a [pfapack::PivotIndex1Based],
+    /// Actual factor error index, if factorization failed.
+    pub factor_error: Option<usize>,
+    /// Actual PF when already evaluated by the original kernel.
+    pub pf: Option<f64>,
+}
+
+struct FirstRealFactorScope(std::rc::Rc<dyn OptimizationMeasurementObserver>);
+impl Drop for FirstRealFactorScope {
+    fn drop(&mut self) {
+        self.0.end_real_factor();
+    }
+}
+
+fn begin_first_real_factor(
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+    sample: usize,
+) -> Option<FirstRealFactorScope> {
+    if sample != 0 || data.modpara.vmc_calc_mode != 0 {
+        return None;
+    }
+    OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+        let observer = slot.borrow().clone()?;
+        observer
+            .begin_real_factor(data, state, sample)
+            .then(|| FirstRealFactorScope(observer))
+    })
+}
+
+pub(crate) fn first_real_factor_observer(
+    qp: usize,
+) -> Option<std::rc::Rc<dyn OptimizationMeasurementObserver>> {
+    if qp != 0 {
+        return None;
+    }
+    OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+        let observer = slot.borrow().clone()?;
+        observer.real_factor_active().then_some(observer)
+    })
 }
 
 thread_local! {
@@ -2651,6 +2726,11 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
         timer.stop_diag(940, diag);
         timer.start(40);
         // Refresh Pfaffian for the saved walker.
+        let factor_scope = if !use_fsz && !all_complex {
+            begin_first_real_factor(data, state, sample)
+        } else {
+            None
+        };
         let info = if use_fsz {
             refresh_fsz_observation_matrix(data, state, all_complex, &ele_idx, &ele_spn, &pool)
                 .err()
@@ -2681,6 +2761,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             )
             .err()
         };
+        drop(factor_scope);
         timer.stop(40);
         timer.start_diag(940, diag);
         timer.start_diag(943, diag);
@@ -2999,6 +3080,19 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             }
         }
         timer.stop(43);
+        OPTIMIZATION_MEASUREMENT_OBSERVER.with(|slot| {
+            let observer = slot.borrow().clone();
+            if let Some(observer) = observer {
+                observer.accumulated(OptimizationMeasurementView {
+                    data,
+                    state,
+                    sample,
+                    overlap: ip,
+                    local_energy: e,
+                    weight: w,
+                });
+            }
+        });
     }
     observe_physcal_green(data, state, use_fsz);
     normalize_physcal_green(state, use_fsz, all_complex);
@@ -4584,11 +4678,55 @@ mod callback_tests {
     }
 
     #[derive(Default)]
-    struct RunnerCgDiagnostics(std::cell::RefCell<String>);
+    struct RunnerCgDiagnostics(
+        std::cell::RefCell<String>,
+        std::cell::Cell<bool>, // first factor claimed
+        std::cell::Cell<bool>, // factor scope active
+        std::cell::Cell<bool>, // first O claimed
+        std::cell::Cell<bool>, // first accumulator prefix claimed
+        std::cell::Cell<bool>, // quota failure, never labelled complete
+        std::cell::Cell<bool>, // inverse-published boundary actually observed
+        std::cell::Cell<bool>, // pre-Step5 boundary actually observed
+        std::cell::Cell<bool>, // actual CG prepared operands recorded
+        std::cell::Cell<bool>, // actual CG operator product recorded
+        std::cell::Cell<bool>, // actual CG completion recorded
+    );
 
     impl RunnerCgDiagnostics {
+        fn metadata(&self, value: &str) {
+            if self.5.get() {
+                return;
+            }
+            if self.0.borrow().len().saturating_add(value.len()) > 4 * 1024 * 1024 - 1024 {
+                self.5.set(true);
+                self.0
+                    .borrow_mut()
+                    .push_str("CAPTURE_INCOMPLETE metadata quota\n");
+                return;
+            }
+            self.0.borrow_mut().push_str(value);
+        }
+
+        fn cg_boundaries_complete(&self) -> bool {
+            !self.5.get() && self.8.get() && self.9.get() && self.10.get()
+        }
+
+        fn direct_record_counts_complete(normalized: usize, solved: usize) -> bool {
+            normalized == 1 && solved == 1
+        }
+
         fn values(&self, label: &str, values: &[f64]) {
             use std::fmt::Write;
+            if self.5.get() {
+                return;
+            }
+            if values.len() > 32_768
+                || self.0.borrow().len() + 64 * values.len() + label.len() + 64 > 4 * 1024 * 1024
+            {
+                self.5.set(true);
+                self.0.borrow_mut().push_str("CAPTURE_INCOMPLETE quota\n");
+                return;
+            }
             let mut text = self.0.borrow_mut();
             writeln!(text, "{label} {}", values.len()).unwrap();
             for value in values {
@@ -4596,6 +4734,203 @@ mod callback_tests {
             }
             text.push('\n');
         }
+
+        fn components(&self, label: &str, values: &[Complex64]) {
+            if values.len() > 16_384 {
+                self.5.set(true);
+                self.0
+                    .borrow_mut()
+                    .push_str("CAPTURE_INCOMPLETE component quota\n");
+                return;
+            }
+            let components: Vec<_> = values.iter().flat_map(|v| [v.re, v.im]).collect();
+            self.values(label, &components);
+        }
+    }
+
+    impl OptimizationMeasurementObserver for RunnerCgDiagnostics {
+        fn begin_real_factor(
+            &self,
+            data: &ExpertModeData,
+            state: &VmcOptimizationState,
+            sample: usize,
+        ) -> bool {
+            if sample != 0 || self.1.replace(true) {
+                return false;
+            }
+            let n = state.electron_config.ele_idx_slice(sample).len();
+            if n == 0
+                || n > 16
+                || state.slater_matrix.pf_m_real.len() > 128
+                || state.electron_config.ele_cfg_slice(sample).len() > 256
+                || state.electron_config.ele_num_slice(sample).len() > 256
+                || state.electron_config.ele_proj_cnt_slice(sample).len() > 256
+            {
+                self.0
+                    .borrow_mut()
+                    .push_str("CAPTURE_INCOMPLETE unsupported factor shape\n");
+                self.5.set(true);
+                return false;
+            }
+            self.metadata(&format!("first-factor sample={sample} nsize={n} seed={} idx={:?} cfg={:?} num={:?} proj={:?}\n",
+                data.modpara.rnd_seed, state.electron_config.ele_idx_slice(sample),
+                state.electron_config.ele_cfg_slice(sample), state.electron_config.ele_num_slice(sample),
+                state.electron_config.ele_proj_cnt_slice(sample)));
+            self.2.set(true);
+            self.components("first-slater-parameters", &data.slater_params);
+            self.values(
+                "first-slater-real-rowmajor-allqp",
+                state.slater_matrix.slater_elm_real.as_slice(),
+            );
+            if let Some(weights) = &data.qp_weights {
+                self.components("first-qp-full-weights", &weights.qp_full_weight);
+            }
+            true
+        }
+        fn real_factor_active(&self) -> bool {
+            self.2.get()
+        }
+        fn end_real_factor(&self) {
+            self.2.set(false);
+        }
+        fn real_factor(&self, view: RealFactorView<'_>) {
+            if self.5.get() {
+                return;
+            }
+            if view.pivots.len() > 16 || view.stage.len() > 64 {
+                self.5.set(true);
+                self.0
+                    .borrow_mut()
+                    .push_str("CAPTURE_INCOMPLETE factor metadata shape\n");
+                return;
+            }
+            self.metadata(&format!(
+                "factor stage={} qp={} n={} pivots={:?} error={:?} pf={:?}\n",
+                view.stage, view.qp, view.dimension, view.pivots, view.factor_error, view.pf
+            ));
+            self.values(view.stage, view.matrix);
+            if view.stage == "inverse-published" {
+                self.6.set(true);
+            }
+        }
+        fn real_step5(&self, view: pfapack::utu2::InverseStep5View<'_, f64>) {
+            self.values("pre-step5-rhs", view.rhs);
+            self.values("pre-step5-tridiagonal", view.tridiagonal);
+            self.7.set(true);
+        }
+        fn measured(&self, view: OptimizationMeasurementView<'_>) {
+            if view.sample != 0 || self.3.replace(true) {
+                return;
+            }
+            self.components("first-O-complex", &view.state.sr_opt.sr_opt_o);
+            self.components("first-HO-before", &view.state.sr_opt.sr_opt_ho);
+            self.values("first-HO-real-before", &view.state.sr_opt.sr_opt_ho_real);
+            self.components("first-overlap-energy", &[view.overlap, view.local_energy]);
+            self.values("first-weight", &[view.weight]);
+        }
+        fn accumulated(&self, view: OptimizationMeasurementView<'_>) {
+            if view.sample != 0 || self.4.replace(true) {
+                return;
+            }
+            self.values("first-O-real", &view.state.sr_opt.sr_opt_o_real);
+            self.values("first-HO-real-after", &view.state.sr_opt.sr_opt_ho_real);
+            self.components("first-HO-after", &view.state.sr_opt.sr_opt_ho);
+            self.values("first-OO-real-after", &view.state.sr_opt.sr_opt_oo_real);
+            self.components("first-OO-after", &view.state.sr_opt.sr_opt_oo);
+        }
+    }
+
+    #[test]
+    fn small_model_factor_diagnostic_is_first_sample_qp0_and_unwind_scoped() {
+        let data = ExpertModeData::default();
+        let state = VmcOptimizationState::zeros(2, 1, 1, 2, 1, 3, false, false);
+        let observer = std::rc::Rc::new(RunnerCgDiagnostics::default());
+        let installed = install_optimization_measurement_observer(observer.clone()).unwrap();
+        assert!(begin_first_real_factor(&data, &state, 1).is_none());
+        assert!(first_real_factor_observer(0).is_none());
+        let interrupted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _scope = begin_first_real_factor(&data, &state, 0).unwrap();
+            assert!(first_real_factor_observer(0).is_some());
+            assert!(first_real_factor_observer(1).is_none());
+            assert!(install_optimization_measurement_observer(observer.clone()).is_err());
+            panic!("controlled first-factor unwind");
+        }));
+        let payload = interrupted.expect_err("controlled scope must unwind");
+        assert_eq!(
+            payload.downcast_ref::<&str>().copied(),
+            Some("controlled first-factor unwind")
+        );
+        assert!(first_real_factor_observer(0).is_none());
+        assert!(begin_first_real_factor(&data, &state, 0).is_none());
+        drop(installed);
+        assert!(install_optimization_measurement_observer(observer).is_ok());
+    }
+
+    #[test]
+    fn small_model_diagnostic_records_only_first_walker_prefix() {
+        let data = ExpertModeData::default();
+        let state = VmcOptimizationState::zeros(2, 1, 1, 2, 1, 3, false, false);
+        let observer = RunnerCgDiagnostics::default();
+        let view = || OptimizationMeasurementView {
+            data: &data,
+            state: &state,
+            sample: 0,
+            overlap: Complex64::new(1.0, 0.0),
+            local_energy: Complex64::new(-0.25, 0.0),
+            weight: 1.0,
+        };
+        observer.measured(view());
+        observer.accumulated(view());
+        let first = observer.0.borrow().clone();
+        observer.measured(view());
+        observer.accumulated(view());
+        assert_eq!(*observer.0.borrow(), first);
+        assert!(first.contains("first-HO-real-before"));
+        assert!(first.contains("first-HO-real-after"));
+        assert!(!observer.5.get());
+    }
+
+    #[test]
+    fn small_model_diagnostic_quota_is_explicit_incomplete_not_success() {
+        let observer = RunnerCgDiagnostics::default();
+        observer.values("too-wide", &vec![0.0; 32_769]);
+        assert!(observer.5.get());
+        assert_eq!(&*observer.0.borrow(), "CAPTURE_INCOMPLETE quota\n");
+        observer.values("later", &[1.0]);
+        assert!(!observer.0.borrow().contains("later"));
+    }
+
+    #[test]
+    fn small_model_missing_cg_boundary_never_completes() {
+        let observer = RunnerCgDiagnostics::default();
+        assert!(!observer.cg_boundaries_complete());
+        for missing in 0..3 {
+            observer.8.set(missing != 0);
+            observer.9.set(missing != 1);
+            observer.10.set(missing != 2);
+            assert!(!observer.cg_boundaries_complete());
+        }
+        observer.8.set(true);
+        observer.9.set(true);
+        observer.10.set(false);
+        assert!(!observer.cg_boundaries_complete());
+        observer.10.set(true);
+        assert!(observer.cg_boundaries_complete());
+        observer.9.set(false);
+        assert!(!observer.cg_boundaries_complete());
+        observer.9.set(true);
+        observer.5.set(true);
+        assert!(!observer.cg_boundaries_complete());
+    }
+
+    #[test]
+    fn small_model_direct_missing_or_duplicate_records_are_incomplete() {
+        for (normalized, solved) in [(0, 0), (0, 1), (1, 0), (2, 1), (1, 2)] {
+            assert!(!RunnerCgDiagnostics::direct_record_counts_complete(
+                normalized, solved
+            ));
+        }
+        assert!(RunnerCgDiagnostics::direct_record_counts_complete(1, 1));
     }
 
     impl crate::sr_cg::CgObserver for RunnerCgDiagnostics {
@@ -4605,9 +4940,17 @@ mod callback_tests {
             op: &crate::sr_cg::SampledSrOperator,
             gradient: &[f64],
         ) {
-            self.0
-                .borrow_mut()
-                .push_str(&format!("mapping {mapping:?}\n"));
+            if self.5.get() {
+                return;
+            }
+            if mapping.len() > 128 {
+                self.5.set(true);
+                self.0
+                    .borrow_mut()
+                    .push_str("CAPTURE_INCOMPLETE active mapping quota\n");
+                return;
+            }
+            self.metadata(&format!("mapping {mapping:?}\n"));
             for (name, values) in [
                 ("mean", &op.mean),
                 ("diagonal", &op.diagonal),
@@ -4617,13 +4960,18 @@ mod callback_tests {
                 self.values(name, values);
             }
             self.values("gradient", gradient);
+            self.8.set(!self.5.get());
         }
         fn product(&self, phase: crate::sr_cg::CgProductPhase, search: &[f64], product: &[f64]) {
             self.values(&format!("{phase:?}-search"), search);
             self.values(&format!("{phase:?}-product"), product);
+            self.9.set(!self.5.get());
         }
         fn iteration(&self, state: crate::sr_cg::CgIterationView<'_>) {
-            self.0.borrow_mut().push_str(&format!(
+            if self.5.get() {
+                return;
+            }
+            self.metadata(&format!(
                 "iteration={} delta={:.17e} alpha={:?}\n",
                 state.iteration, state.delta, state.alpha
             ));
@@ -4632,11 +4980,13 @@ mod callback_tests {
             self.values("direction", state.direction);
         }
         fn finished(&self, result: &crate::sr_cg::CgSolution) {
-            self.0
-                .borrow_mut()
-                .push_str(&format!("finished iterations={}\n", result.iterations));
+            if self.5.get() {
+                return;
+            }
+            self.metadata(&format!("finished iterations={}\n", result.iterations));
             self.values("final-solution", &result.solution);
             self.values("final-residual", &result.residual);
+            self.10.set(!self.5.get());
         }
     }
 
@@ -4918,31 +5268,122 @@ mod callback_tests {
             };
             // Optional diagnostics retain ACTUAL operands/events before a
             // failing forward assertion. Never used as regenerated expectations.
-            let diagnostic =
-                (cg && steps == 1 && std::env::var_os("MVMC_CG_DIAGNOSTICS").is_some())
-                    .then(|| std::rc::Rc::new(RunnerCgDiagnostics::default()));
+            let diagnostic = (steps == 1 && std::env::var_os("MVMC_CG_DIAGNOSTICS").is_some())
+                .then(|| std::rc::Rc::new(RunnerCgDiagnostics::default()));
             let diagnostic_guard = diagnostic
                 .as_ref()
+                .filter(|_| cg)
                 .map(|observer| crate::sr_cg::install_cg_observer(observer.clone()).unwrap());
-            let result = vmc_para_opt(
-                &mut data,
-                &mut state,
-                &mut rng,
-                Some(&dir),
-                &SingleProcessReducer,
-                OptimizationOptions {
-                    callback: Some(&mut record_rbm),
-                    ..OptimizationOptions::default()
-                },
-            );
+            let factor_guard = diagnostic.as_ref().map(|observer| {
+                install_optimization_measurement_observer(observer.clone()).unwrap()
+            });
+            let mut direct_guard = diagnostic
+                .as_ref()
+                .filter(|_| !cg)
+                .map(|_| crate::sr_observer::capture_with_normalized().unwrap());
+            let mut run_once = || {
+                vmc_para_opt(
+                    &mut data,
+                    &mut state,
+                    &mut rng,
+                    Some(&dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions {
+                        callback: Some(&mut record_rbm),
+                        ..OptimizationOptions::default()
+                    },
+                )
+            };
+            let caught = if diagnostic.is_some() {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut run_once))
+            } else {
+                Ok(run_once())
+            };
+            let (result, panic_payload) = match caught {
+                Ok(result) => (result, None),
+                Err(payload) => (
+                    Err("diagnostic model panicked (no return status)".to_owned()),
+                    Some(payload),
+                ),
+            };
             drop(diagnostic_guard);
+            drop(factor_guard);
             if let Some(diagnostic) = diagnostic {
                 let path = dir.with_extension("cg-diagnostics.txt");
                 let mut text = format!("case={case} steps={steps} store={store} seed={} flags={:?}\ninitial_rng={initial_rng:?}\nfinal_rng={rng:?}\nweight={:?} result={result:?}\n",
                     initial_data.modpara.rnd_seed, initial_data.optimization_flags, state.energy.wc);
                 text.push_str(&diagnostic.0.borrow());
+                let mut direct_complete = false;
+                if let Some(mut guard) = direct_guard.take() {
+                    let normalized = guard.take_normalized();
+                    let solved = guard.finish();
+                    // These actual direct systems are a separate residual plan;
+                    // no residual/matrix product is calculated in the model.
+                    let within_shape = RunnerCgDiagnostics::direct_record_counts_complete(
+                        normalized.len(),
+                        solved.len(),
+                    ) && normalized.iter().all(|r| {
+                        r.oo.len() <= 32_768
+                            && r.ho.len() <= 32_768
+                            && r.oo_real.len() <= 32_768
+                            && r.ho_real.len() <= 32_768
+                    }) && solved.iter().all(|r| {
+                        r.matrix.len() <= 16_384
+                            && r.rhs.len() <= 128
+                            && r.increment.len() <= 128
+                            && r.active_indices.len() <= 128
+                            && r.flags.len() <= 256
+                    });
+                    if within_shape && text.len() < 2 * 1024 * 1024 {
+                        use std::fmt::Write;
+                        writeln!(
+                            text,
+                            "direct-normalized={normalized:?}\ndirect-solve={solved:?}"
+                        )
+                        .unwrap();
+                        // Transport completeness is not numerical acceptance.
+                        // Interrupted/early-return systems remain partial evidence.
+                        direct_complete = solved[0].status.is_some()
+                            && solved[0].factor_info.is_some()
+                            && solved[0].solve_info.is_some()
+                            && solved[0].not_solved.is_none();
+                    } else {
+                        text.push_str("CAPTURE_INCOMPLETE direct record quota\n");
+                        diagnostic.5.set(true);
+                    }
+                }
+                if !diagnostic.5.get()
+                    && diagnostic.6.get()
+                    && diagnostic.7.get()
+                    && diagnostic.3.get()
+                    && diagnostic.4.get()
+                    && if cg {
+                        diagnostic.cg_boundaries_complete()
+                    } else {
+                        direct_complete
+                    }
+                    && result.is_ok()
+                    && panic_payload.is_none()
+                    && text.len() <= 4 * 1024 * 1024
+                {
+                    text.push_str(
+                        "CAPTURE_FINISHED actual-model-return (not numerical acceptance)\n",
+                    );
+                } else {
+                    let mut end = text.len().min(4 * 1024 * 1024);
+                    while !text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    text.truncate(end);
+                    text.push_str(
+                        "\nCAPTURE_INCOMPLETE return-error/unwind/quota/missing-boundary\n",
+                    );
+                }
                 fs::write(&path, text).unwrap();
                 eprintln!("ACTUAL CG diagnostic: {}", path.display());
+            }
+            if let Some(payload) = panic_payload {
+                std::panic::resume_unwind(payload);
             }
             if steps > 10 {
                 if case != "rbm_fsz" && !case.starts_with("opt_") {

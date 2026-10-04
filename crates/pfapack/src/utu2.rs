@@ -327,7 +327,45 @@ pub fn utu2inv_real(
     m_work: &mut SqMat<'_, f64>,
 ) {
     // C sktdsmx uses direct division; retain the ordinary backend independently.
-    utu2inv_generic::<f64>(a, pivots, vt, m_work, None, Some(ordinary_real_divide));
+    utu2inv_generic::<f64>(
+        a,
+        pivots,
+        vt,
+        m_work,
+        None,
+        Some(ordinary_real_divide),
+        None,
+    );
+}
+
+/// Borrowed actual Step5 operands, after trtri/lacpy and tridiagonal extraction.
+pub struct InverseStep5View<'a, T> {
+    /// Matrix dimension; buffers below are column-major, with no padding.
+    pub dimension: usize,
+    /// Actual RHS passed to the skew-tridiagonal solve.
+    pub rhs: &'a [T],
+    /// Actual signed tridiagonal vector used by the solve.
+    pub tridiagonal: &'a [T],
+}
+
+/// Observe ordinary Real Step5 operands without changing its arithmetic.
+/// The callback borrows production buffers; no inverse or quotient is repeated.
+pub fn utu2inv_real_observed(
+    a: &mut SqMat<'_, f64>,
+    pivots: &[PivotIndex1Based],
+    vt: &mut [f64],
+    m_work: &mut SqMat<'_, f64>,
+    observer: &dyn Fn(InverseStep5View<'_, f64>),
+) {
+    utu2inv_generic::<f64>(
+        a,
+        pivots,
+        vt,
+        m_work,
+        None,
+        Some(ordinary_real_divide),
+        Some(observer),
+    );
 }
 
 /// Compute the inverse of a complex skew-symmetric matrix from its
@@ -338,7 +376,7 @@ pub fn utu2inv_complex(
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None, None);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None, None, None);
 }
 
 /// Inverse arithmetic used by Julia's FSZ runtime: direct tridiagonal
@@ -352,7 +390,7 @@ pub fn utu2inv_complex_fsz(
     m_work: &mut SqMat<'_, Complex64>,
     divide: fn(Complex64, Complex64) -> Complex64,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide), Some(divide));
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide), Some(divide), None);
 }
 
 fn solve_sktd_direct<T: BlasScalar>(
@@ -389,6 +427,7 @@ fn utu2inv_generic<T>(
     m: &mut SqMat<'_, T>,
     fsz: Option<fn(T, T) -> T>,
     solver_divide: Option<fn(T, T) -> T>,
+    observer: Option<&dyn Fn(InverseStep5View<'_, T>)>,
 ) where
     T: BlasScalar,
 {
@@ -453,6 +492,13 @@ fn utu2inv_generic<T>(
     //
     // We pass `m` by shared reference and `a` by mutable reference;
     // the helper only writes into the output (`a`).
+    if let Some(observer) = observer {
+        observer(InverseStep5View {
+            dimension: n,
+            rhs: m.as_slice(),
+            tridiagonal: vt,
+        });
+    }
     if let Some(divide) = solver_divide {
         solve_sktd_direct(vt, m, a, divide);
     } else {
@@ -510,6 +556,52 @@ fn ordinary_real_divide(x: f64, y: f64) -> f64 {
     #[cfg(test)]
     c_direct_solver_contract::record(x, y);
     x / y
+}
+
+#[cfg(test)]
+mod observed_real_inverse_contract {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    fn actual_pre_step5_literal_rhs_and_signs_preserve_inverse_passivity() {
+        let pivots = [PivotIndex1Based(1), PivotIndex1Based(2)];
+        let mut ordinary = [0.0, -2.0, 2.0, 0.0];
+        let mut observed = ordinary;
+        let mut ordinary_vt = [0.0];
+        let mut observed_vt = [0.0];
+        let mut ordinary_work = [0.0; 4];
+        let mut observed_work = [0.0; 4];
+        utu2inv_real(
+            &mut SqMat::new(&mut ordinary, 2),
+            &pivots,
+            &mut ordinary_vt,
+            &mut SqMat::new(&mut ordinary_work, 2),
+        );
+        let captured = RefCell::new(Vec::new());
+        utu2inv_real_observed(
+            &mut SqMat::new(&mut observed, 2),
+            &pivots,
+            &mut observed_vt,
+            &mut SqMat::new(&mut observed_work, 2),
+            &|view| {
+                captured.borrow_mut().push((
+                    view.dimension,
+                    view.rhs.to_vec(),
+                    view.tridiagonal.to_vec(),
+                ))
+            },
+        );
+        // Exact input/sign-copy literals; output equality is same-implementation
+        // observer neutrality, not an independent floating-point golden.
+        assert_eq!(
+            &*captured.borrow(),
+            &[(2, vec![1.0, 0.0, 0.0, 1.0], vec![-2.0])]
+        );
+        assert_eq!(observed, ordinary);
+        assert_eq!(observed_vt, ordinary_vt);
+        assert_eq!(observed_work, ordinary_work);
+    }
 }
 
 #[cfg(test)]
