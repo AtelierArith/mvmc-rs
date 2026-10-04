@@ -55,11 +55,45 @@ def fixture(root, packages, plan, family):
         put(evidence / name, {"synthetic": True})
     for name in ("linkage.txt", "rust-version.stdout", "nextest-version.stdout", "reference-revisions.stdout"):
         (evidence / name).write_text("synthetic infrastructure evidence only\n")
-    put(evidence / "artifacts.json", {str(path): audit.digest(path) for path in evidence.iterdir()})
+    if family == "mpi":
+        mpi_fixture(evidence)
+    put(evidence / "artifacts.json", {str(path): audit.digest(path)
+        for path in evidence.rglob("*") if path.is_file()})
     package = packages / audit.artifact_name(family, plan)
     with patch.object(audit, "checkout_head", return_value=plan["head"]):
         audit.seal(plan, family, evidence, package, "success", plan["head"], "never")
     return package
+
+
+def mpi_fixture(evidence):
+    """Synthetic dependency receipts, not an installed MPI or native run."""
+    prefix = Path("/synthetic/mpich")
+    receipt = evidence / "mpi-provider-receipt"
+    receipt.mkdir()
+    (receipt / "terminal.txt").write_text("prior=0 post=0\n")
+    (receipt / "ready.txt").write_text(audit.mpi_provider.READY)
+    (receipt / "mpichversion.txt").write_text(
+        f"MPICH Version: 4.2.0\nMPICH configure: --prefix={prefix} --with-pm=hydra --with-pmi=pmi1 --without-pmix\n")
+    for name in audit.mpi_provider.MANIFESTS:
+        (receipt / f"{name}.sha256").write_text("b" * 64 + "  /synthetic/source\n")
+        (receipt / f"{name}.post.log").write_text("")
+    for world in (2, 4):
+        (receipt / f"world-{world}.native.status").write_text("0\n")
+        (receipt / f"world-{world}.stdout").write_text("".join(
+            f"MPI_STARTUP rank={rank} size={world} required=1 provided=1 rank_sum={world*(world-1)//2} ok=1\n"
+            for rank in range(world)))
+    state = {str(prefix / path): "b" * 64 for path in
+             ("bin/mpicc", "bin/mpiexec.hydra", "include/mpi.h", "lib/libmpi.so.12.4.0")}
+    for suffix in ("before", "after"):
+        put(evidence / f"mpi-provider.{suffix}.json", state)
+    library = {"path": str(prefix / "lib/libmpi.so.12"),
+               "resolved": str(prefix / "lib/libmpi.so.12.4.0"), "sha256": "b" * 64}
+    (evidence / "mpi-linkage.txt").write_text(f"libmpi.so.12 => {library['path']} (0x123)\n")
+    put(evidence / "mpi-provider.json", {"schema": 1, "prefix": str(prefix),
+        "receipt_root": "/synthetic/receipt", "receipt_hashes": audit.mpi_provider.receipt_state(receipt),
+        "binary_sha256": "b" * 64, "library": library,
+        "tools": {"mpicc": {"path": str(prefix / "bin/mpicc"), "sha256": "b" * 64},
+                  "mpiexec": {"path": str(prefix / "bin/mpiexec.hydra"), "sha256": "b" * 64}}})
 
 
 def refresh(package):
@@ -74,6 +108,79 @@ def refresh(package):
 
 
 class AggregationContract(unittest.TestCase):
+    def test_failed_installer_sidecar_is_retained_not_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = root / "install-failure"
+            receipt.mkdir()
+            (receipt / "terminal.txt").write_text("prior=1 post=0\n")
+            plan = audit.make_plan("mpi", BINDING)
+            packages = root / "packages"
+            packages.mkdir()
+            package = packages / audit.artifact_name("mpi", plan)
+            with patch.object(audit, "checkout_head", return_value=plan["head"]):
+                audit.seal(plan, "mpi", root / "driver-not-run", package,
+                           "failure", plan["head"], "never", receipt)
+            self.assertEqual((package / "mpi-provider-install/terminal.txt").read_text(),
+                             "prior=1 post=0\n")
+            self.assertEqual(audit.aggregate(plan, packages, BINDING)["exit_status"], 1)
+
+    def test_mpi_provider_rehashed_semantic_failures_cannot_pass(self):
+        # Refresh artifact/envelope hashes after each deliberate mutation: the
+        # actual aggregate must reject semantic defects, not merely stale SHA.
+        cases = ("missing", "terminal", "startup-duplicate", "startup-world", "startup-thread",
+                 "startup-native", "receipt-tamper", "runtime", "library",
+                 "linkage", "binary", "tool", "header")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packages = root / "packages"
+                packages.mkdir()
+                plan = audit.make_plan("mpi", BINDING)
+                package = fixture(root, packages, plan, "mpi")
+                evidence = package / "evidence"
+                binding = audit.read_json(evidence / "mpi-provider.json")
+                receipt = evidence / "mpi-provider-receipt"
+                if case == "missing":
+                    (evidence / "mpi-provider.json").unlink()
+                elif case == "terminal":
+                    (receipt / "terminal.txt").write_text("prior=1 post=0\n")
+                elif case in ("startup-duplicate", "startup-world"):
+                    path = receipt / "world-2.stdout"
+                    path.write_text(path.read_text().replace(
+                        "rank=1" if case == "startup-duplicate" else "size=2",
+                        "rank=0" if case == "startup-duplicate" else "size=4"))
+                elif case == "startup-native":
+                    (receipt / "world-4.native.status").write_text("1\n")
+                elif case == "startup-thread":
+                    path = receipt / "world-2.stdout"
+                    path.write_text(path.read_text().replace("required=1 provided=1", "required=0 provided=0"))
+                elif case == "receipt-tamper":
+                    (receipt / "ready.txt").write_text("changed\n")
+                elif case == "runtime":
+                    put(evidence / "mpi-provider.after.json", {"/changed": "b" * 64})
+                elif case == "library":
+                    binding["library"]["resolved"] = "/system/libmpi.so"
+                elif case == "linkage":
+                    (evidence / "mpi-linkage.txt").write_text("libmpi.so.12 => /system/libmpi.so\n")
+                elif case == "binary":
+                    binding["binary_sha256"] = "c" * 64
+                elif case == "tool":
+                    binding["tools"]["mpiexec"]["path"] = "/system/mpiexec"
+                elif case == "header":
+                    for suffix in ("before", "after"):
+                        path = evidence / f"mpi-provider.{suffix}.json"
+                        state = audit.read_json(path)
+                        del state["/synthetic/mpich/include/mpi.h"]
+                        put(path, state)
+                if case not in ("missing", "receipt-tamper"):
+                    binding["receipt_hashes"] = audit.mpi_provider.receipt_state(receipt)
+                    put(evidence / "mpi-provider.json", binding)
+                refresh(package)
+                result = audit.aggregate(plan, packages, BINDING)
+                self.assertEqual(result["exit_status"], 1)
+                self.assertEqual(result["families"]["mpi"]["status"], "Failure")
+
     def test_actual_checkout_head_must_match_expected_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

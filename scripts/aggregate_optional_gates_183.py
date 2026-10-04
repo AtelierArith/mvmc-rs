@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import optional_mpi_provider_183 as mpi_provider
 
 from run_optional_gates_183 import FAMILIES, GENERAL, LANCZOS, MODELS, MPI, THREAD
 
@@ -99,13 +100,18 @@ def checkout_head():
         ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True).strip()
 
 
-def seal(plan, family, evidence, output, job_status, head, color):
+def seal(plan, family, evidence, output, job_status, head, color, mpi_receipt=None):
     actual_head = checkout_head()
     if family not in plan["selected"] or head != plan["head"] or actual_head != head:
         raise ValueError("job not selected or checkout head mismatch")
     if job_status not in ("success", "failure", "cancelled", "skipped") or color != "never":
         raise ValueError("invalid job status or gate color setting")
     output.mkdir(parents=False, exist_ok=False)
+    if family == "mpi" and mpi_receipt is not None and mpi_receipt.exists():
+        # Preserve failed startup/install receipts even if the driver never ran.
+        # This sidecar is not successful execution evidence.
+        safe_tree(mpi_receipt)
+        shutil.copytree(mpi_receipt, output / "mpi-provider-install")
     hashes = {}
     if evidence.exists():
         safe_tree(evidence)
@@ -230,6 +236,8 @@ def validate_package(package, family, plan):
             raise ValueError("unselected driver family masquerades as executed")
     for stem in ("source", "fixtures", "binary"):
         stable_closure(evidence, stem)
+    if family == "mpi":
+        mpi_provider.validate_package(evidence, read_json)
     backend = read_json(evidence / "backend.json")
     if type(backend.get("actual_threads")) is not int or backend["actual_threads"] != 1 or not re.match(r"^OpenBLAS \d+\.\d+\.\d+(?:\s|$)", backend.get("actual_config", "")) or not backend.get("actual_core"):
         raise ValueError("actual single-thread backend identity absent")
@@ -289,6 +297,7 @@ def main():
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--packages", type=Path)
     parser.add_argument("--job-status")
+    parser.add_argument("--mpi-provider-receipt", type=Path)
     args = parser.parse_args()
     try:
         binding = identity(args.head, args.run_id, args.attempt, args.workflow)
@@ -307,7 +316,7 @@ def main():
             if args.family is None or args.evidence is None or args.job_status is None:
                 raise ValueError("seal requires selected family/evidence/job status")
             seal(plan, args.family, args.evidence, args.output, args.job_status,
-                 args.head, os.environ.get("CARGO_TERM_COLOR"))
+                 args.head, os.environ.get("CARGO_TERM_COLOR"), args.mpi_provider_receipt)
             return 0
         if args.packages is None:
             raise ValueError("aggregate requires package download root")
