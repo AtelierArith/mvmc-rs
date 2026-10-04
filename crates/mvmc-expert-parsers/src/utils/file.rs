@@ -6,9 +6,11 @@
 //! exactly so round-tripping `examples/inputs/*/namelist.def` is
 //! byte-stable.
 
+use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use num_complex::Complex64;
 
@@ -76,6 +78,54 @@ pub fn julia_parse_float(token: &str) -> Option<f64> {
 /// Read a `.def` file in full. Mirrors `read_def_file` in upstream.
 pub fn read_def_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     fs::read_to_string(path.as_ref())
+}
+
+/// Filesystem metadata, distinct from content parsing or model validation.
+/// Paths retain their caller-supplied identity; regular symlinks follow targets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileInfo {
+    /// Final lexical path component, preserving non-UTF-8 bytes.
+    pub filename: OsString,
+    /// Caller-supplied path, without canonicalization or symlink resolution.
+    pub filepath: PathBuf,
+    /// Whether the target is a regular file, not merely an existing path.
+    pub exists: bool,
+    /// Regular-file byte length; zero for missing or non-regular paths.
+    pub size_bytes: u64,
+    /// Regular-file modification time; Unix epoch for missing or non-regular paths.
+    pub last_modified: SystemTime,
+}
+
+/// Query a regular file without reading or decoding its contents.
+/// Missing/broken-symlink and nonregular paths return false/zero/UNIX_EPOCH.
+/// Other metadata or modification-time errors propagate; this is not an atomic
+/// existence/open guarantee. Julia architecture, not a C numerical contract.
+pub fn get_file_info<P: AsRef<Path>>(path: P) -> io::Result<FileInfo> {
+    let path = path.as_ref();
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => Some(metadata),
+        Ok(_) => None,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let exists = metadata.is_some();
+    let (size_bytes, last_modified) = match metadata {
+        Some(metadata) => (metadata.len(), metadata.modified()?),
+        None => (0, UNIX_EPOCH),
+    };
+    Ok(FileInfo {
+        filename: path.file_name().unwrap_or_default().to_os_string(),
+        filepath: path.to_path_buf(),
+        exists,
+        size_bytes,
+        last_modified,
+    })
+}
+
+/// Conventional regular-file predicate: false for missing/nonregular/error.
+/// Following symlinks matches Julia's `isfile`; no file contents are loaded.
+pub fn validate_file_exists<P: AsRef<Path>>(path: P) -> bool {
+    path.as_ref().is_file()
 }
 
 /// Drop comments and trim whitespace. Equivalent to upstream
