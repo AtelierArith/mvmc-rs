@@ -64,6 +64,13 @@ jobs:
             --python /usr/bin/python3 python -B scripts/test_optional_gate_aggregation_183.py
           timeout -k 5s 120s uv run --offline --no-project --no-python-downloads \
             --python /usr/bin/python3 python -B scripts/test_optional_reference_provenance_183.py
+      - name: Check issue 179 P02 synthetic schemas
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        working-directory: scripts/issue179_p02
+        run: |
+          timeout -k 5s 120s uv run --offline --no-project --no-python-downloads \
+            --python /usr/bin/python3 python -B -m unittest -v \
+            test_p02_binding test_p02_cross_discrete test_p02_typed_fullpack test_rank_binding
       - name: Run unit and integration tests
         env:
           FEATURE_ARGS: ${{ matrix.configuration.args }}
