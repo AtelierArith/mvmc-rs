@@ -176,6 +176,110 @@ impl MpiContext {
     }
 }
 
+impl crate::parallel_scalar::ParallelScalarOperations for MpiContext {
+    fn sum_real(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: f64,
+    ) -> Result<f64, String> {
+        if domain != crate::parallel_scalar::ScalarCommunicator::World {
+            return Err("sampling/cross-group communicator requires split_groups".into());
+        }
+        let mut result = value;
+        self.world.all_reduce_into(
+            &value,
+            &mut result,
+            ::mpi::collective::SystemOperation::sum(),
+        );
+        Ok(result)
+    }
+
+    fn sum_complex(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: Complex64,
+    ) -> Result<Complex64, String> {
+        Ok(Complex64::new(
+            self.sum_real(domain, value.re)?,
+            self.sum_real(domain, value.im)?,
+        ))
+    }
+
+    fn max_integer(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: i32,
+    ) -> Result<i32, String> {
+        if domain != crate::parallel_scalar::ScalarCommunicator::World {
+            return Err("sampling/cross-group communicator requires split_groups".into());
+        }
+        let mut result = value;
+        self.world.all_reduce_into(
+            &value,
+            &mut result,
+            ::mpi::collective::SystemOperation::max(),
+        );
+        Ok(result)
+    }
+}
+
+impl crate::parallel_scalar::ParallelScalarOperations for MpiGroupContext {
+    fn sum_real(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: f64,
+    ) -> Result<f64, String> {
+        use crate::parallel_scalar::ScalarCommunicator;
+        let comm = match domain {
+            ScalarCommunicator::World => &self.global_communicator,
+            ScalarCommunicator::Sampling => &self.communicator,
+            ScalarCommunicator::CrossGroup => &self.cross_communicator,
+        };
+        let mut result = value;
+        comm.all_reduce_into(
+            &value,
+            &mut result,
+            ::mpi::collective::SystemOperation::sum(),
+        );
+        Ok(result)
+    }
+
+    fn sum_complex(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: Complex64,
+    ) -> Result<Complex64, String> {
+        Ok(Complex64::new(
+            self.sum_real(domain, value.re)?,
+            self.sum_real(domain, value.im)?,
+        ))
+    }
+
+    fn max_integer(
+        &self,
+        domain: crate::parallel_scalar::ScalarCommunicator,
+        value: i32,
+    ) -> Result<i32, String> {
+        use crate::parallel_scalar::ScalarCommunicator;
+        if domain == ScalarCommunicator::Sampling {
+            // Dependency: PR291's signed comm1 operation, not a second implementation.
+            return self.sampling_max_info(value);
+        }
+        let comm = match domain {
+            ScalarCommunicator::World => &self.global_communicator,
+            ScalarCommunicator::CrossGroup => &self.cross_communicator,
+            ScalarCommunicator::Sampling => unreachable!(),
+        };
+        let mut result = value;
+        comm.all_reduce_into(
+            &value,
+            &mut result,
+            ::mpi::collective::SystemOperation::max(),
+        );
+        Ok(result)
+    }
+}
+
 impl Reducer for MpiContext {
     fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
         if self.world.size() == 1 {
