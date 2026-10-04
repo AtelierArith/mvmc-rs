@@ -21,7 +21,44 @@ impl PairHopSection {
     }
 }
 
-/// Read an input file. Read failures are distinct from section-format errors.
+/// Read C-declared PairHop rows with site bounds and native directed expansion.
+///
+/// Native `NPairHopping` is twice the declared input count. Each accepted row
+/// emits forward then reverse, without a sign change, including diagonal rows.
+/// The shared pair reader preserves C scalar initialization/conversion rules;
+/// malformed inputs are rejected before any partial payload is published.
+pub fn parse_pairhop_definition<P: AsRef<Path>>(
+    path: P,
+    nsite: i64,
+) -> io::Result<Vec<PairHopTerm>> {
+    let rows = super::coulomb::parse_coulomb_inter_definition(path, nsite)?;
+    let length = rows.len().checked_mul(2).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PairHop: expanded count overflow",
+        )
+    })?;
+    let mut terms = Vec::new();
+    terms
+        .try_reserve_exact(length)
+        .map_err(|error| io::Error::new(io::ErrorKind::OutOfMemory, format!("PairHop: {error}")))?;
+    for row in rows {
+        terms.push(PairHopTerm {
+            site1: row.site1,
+            site2: row.site2,
+            value: row.value,
+        });
+        terms.push(PairHopTerm {
+            site1: row.site2,
+            site2: row.site1,
+            value: row.value,
+        });
+    }
+    Ok(terms)
+}
+
+/// Read a permissive Julia-style section, separate from the C file boundary.
+/// Read failures are distinct from section-format errors.
 pub fn parse_pairhop_def<P: AsRef<Path>>(path: P) -> io::Result<PairHopSection> {
     Ok(parse_pairhop_content(&read_def_file(path)?))
 }
