@@ -1,0 +1,15 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+description = "Workspace task runner (regression diff, fixture regen)"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]

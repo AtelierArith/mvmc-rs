@@ -1,0 +1,756 @@
+{
+  "schema": 1,
+  "scientificBase": "2fb451d63d1922797cfbd267f64412c12c931e0f",
+  "scope": "recorded native acquisition, not independent C parity; original pilot outer failure retained",
+  "jobs": [
+    {
+      "world": 2,
+      "width": 1,
+      "workers": 1,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width1/workers1/rank-0.json",
+          "sha256": "9d20cbe9c8422a1455e863bf981ec267d724f07dbcc4a329f8710e3b76f7bc39"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width1/workers1/rank-1.json",
+          "sha256": "8fe625fbf14cd5728a6b63e1332c6e7e19dd7b85b0d2e3d9c8fe7179881ee394"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 1,
+        "overall.status": 1,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 2,
+      "width": 1,
+      "workers": 2,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width1/workers2/rank-0.json",
+          "sha256": "10332e2105e8932308eb8a7d4023c73f9c8b25ffc5d9dd8887d7bff1ea22a029"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width1/workers2/rank-1.json",
+          "sha256": "11b4e8f113ceccfb824a73b87eb816915120a9daa0cc73823922bd48882a6eaa"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 2,
+      "width": 1,
+      "workers": 4,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width1/workers4/rank-0.json",
+          "sha256": "e362f514f36b4f7495a65c391a430cf62d90daf7038f737be474a87a8c3a5f0a"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width1/workers4/rank-1.json",
+          "sha256": "5f425e8422e7c3b2143df9b43d3a53bd5d2861744f1a5afbed85e8595b376bda"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 2,
+      "width": 2,
+      "workers": 1,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width2/workers1/rank-0.json",
+          "sha256": "52b591653e49e27579bc92acf35e47b4e599b58851fd1bb013a14ccf096322e4"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width2/workers1/rank-1.json",
+          "sha256": "7bbd9526eb16f594edb231fa700605a74676037e220099ffb213eaaeb8ef1173"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 2,
+      "width": 2,
+      "workers": 2,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width2/workers2/rank-0.json",
+          "sha256": "13a8d926195e5010642a911291b811a5c9614c31b79a75ad68e1a5c4b59e2c04"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width2/workers2/rank-1.json",
+          "sha256": "8a66f3ad4de92de4624f29e272e1ceb195190c31ac2e3631e6f14f3feb070907"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 2,
+      "width": 2,
+      "workers": 4,
+      "environment": {
+        "container": "73c57e563c61",
+        "shmMiB": 64
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world2/width2/workers4/rank-0.json",
+          "sha256": "2447f75d3a9e2e5586b1dc94b5d9ecce2f41e9d165adc1c6f839f5fa7aa9c990"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world2/width2/workers4/rank-1.json",
+          "sha256": "c32130938cc85f338dfc24b1cc600ccb5a8e1fd679ebc5fc89cbd55c62e1cce7"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 1,
+      "workers": 1,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width1/workers1/rank-0.json",
+          "sha256": "c2c1f492547488f4475806c3ec0d10b182c9bb452dc70fe0a2b86e9ee1d10a5f"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width1/workers1/rank-1.json",
+          "sha256": "6516893da0762aa4e286567403628bb4ec153b26ae46dd010c66b2778e7841cf"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width1/workers1/rank-2.json",
+          "sha256": "445616f00643517389c890bf43def00cf05bd9877d3ad240ac230eb38c20bf21"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width1/workers1/rank-3.json",
+          "sha256": "17ab1a1033898b23e4cba634cb0c41c40ded62204c97d688879addeb92d0c8ca"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 1,
+      "workers": 2,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width1/workers2/rank-0.json",
+          "sha256": "2963d170ca39c061976b5eaa53865abe2ec0f1252bd76fdc2869c2cfb7356bb7"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width1/workers2/rank-1.json",
+          "sha256": "46c48493b1f30d481fc48e6118274983daa293bcc9c7ce65604bc55a0d7691af"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width1/workers2/rank-2.json",
+          "sha256": "4b4aed7d4d889dd13c58d06769270c0e7cda067517d5f5b749156f22d185ff04"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width1/workers2/rank-3.json",
+          "sha256": "cf19c4a7169b91167795ee07f7be48cdd8f0990d5ff1da8118df4a9094965785"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 1,
+      "workers": 4,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width1/workers4/rank-0.json",
+          "sha256": "cbfee3f3ccd65f65eaaf84508af33162e5111268a55142557206779be1eb7415"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width1/workers4/rank-1.json",
+          "sha256": "0f2fc39b619f74c37d09d948ec173ad8c91e81ba8129e34408add6b7e0fb9e3a"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width1/workers4/rank-2.json",
+          "sha256": "7b244d63331d4a7d15e6a4c8ec6d5cac7d19f8c3b1ed7feb37cb369e3ef6ef76"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width1/workers4/rank-3.json",
+          "sha256": "eda1d32f88b9820e618b68ca719483ce6022ef5082a137eabd36a49a066666f5"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 2,
+      "workers": 1,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width2/workers1/rank-0.json",
+          "sha256": "47e580335750892b654212460d1bd29d914e6e5ac0c81d42fb261e9e6830d779"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width2/workers1/rank-1.json",
+          "sha256": "994b1fa5d8a74d1e461aed020b0345903cfaa18ab7d0451aea0ec12764f3ea58"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width2/workers1/rank-2.json",
+          "sha256": "7b252e13fb5b4f2186b0bc2c48644299e9083baae53f8d39334711308584b165"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width2/workers1/rank-3.json",
+          "sha256": "e1a5577e972bf2e293474e49183fd618a031e81471c85e407e8e51b377f69537"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 2,
+      "workers": 2,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width2/workers2/rank-0.json",
+          "sha256": "3474be46b92dbe36fdd0f4cabf474cbc919bb9cd78932524a73eb75a3781bf36"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width2/workers2/rank-1.json",
+          "sha256": "24d37fc73c128e5e09d7d59360cde1fe223ef6d5dfde03b3a1528bd0e0de147c"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width2/workers2/rank-2.json",
+          "sha256": "ae5b61a4142ec6516457a17499e5a411d1c1259ad981e9370270fde11a262310"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width2/workers2/rank-3.json",
+          "sha256": "293f78f6ca3cc155588d4ff6a7fb4580888e6b9c20df59c9d9763385fef61972"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    },
+    {
+      "world": 4,
+      "width": 2,
+      "workers": 4,
+      "environment": {
+        "container": "70444e0ff679",
+        "shmMiB": 256,
+        "cache": "READONLY"
+      },
+      "records": [
+        {
+          "rank": 0,
+          "path": "captures/world4/width2/workers4/rank-0.json",
+          "sha256": "b9c4fabe195892f040d646d7c3b2dac0268b1542eca2e6387a2f751d2415f832"
+        },
+        {
+          "rank": 1,
+          "path": "captures/world4/width2/workers4/rank-1.json",
+          "sha256": "ba7a975b4e994f0136a0730b62961ccc1a9c474e3ccd82c2d68a591d8be1ca3d"
+        },
+        {
+          "rank": 2,
+          "path": "captures/world4/width2/workers4/rank-2.json",
+          "sha256": "370c433e99cb2fea80da298f17af22f7ec7874c1535926465653a8547a5ba743"
+        },
+        {
+          "rank": 3,
+          "path": "captures/world4/width2/workers4/rank-3.json",
+          "sha256": "d49df39c5e1db71eaef0a7df4be983335e55dbbf0692e84fb755dcf2a44328a5"
+        }
+      ],
+      "statuses": {
+        "compiler-domain.post.status": 0,
+        "compiler-domain.pre.status": 0,
+        "fixtures.post.status": 0,
+        "fixtures.pre.status": 0,
+        "inventory.status": 0,
+        "native-packet.post.status": 0,
+        "native-packet.pre.status": 0,
+        "native.status": 0,
+        "original.status": 0,
+        "overall.status": 0,
+        "packet-complete.post.status": 0,
+        "packet-complete.pre.status": 0,
+        "registry-index.post.status": 0,
+        "registry-index.pre.status": 0,
+        "selected-providers.post.status": 0,
+        "selected-providers.pre.status": 0,
+        "selected.post.status": 0,
+        "selected.pre.status": 0,
+        "shm.post.status": 0,
+        "shm.pre.status": 0,
+        "source-complete.post.status": 0,
+        "source-complete.pre.status": 0,
+        "startup.post.status": 0,
+        "startup.pre.status": 0,
+        "tools-runtime.post.status": 0,
+        "tools-runtime.pre.status": 0
+      },
+      "owner": {
+        "adapter.post.status": 0,
+        "child.status": 0,
+        "command.status": 0,
+        "postempty.status": 0,
+        "stderr-writer.status": 0,
+        "stdout-writer.status": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+[package]
+name = "sfmt19937"
+version = "0.0.0"
+description = "Pure-Rust SFMT19937 PRNG, bit-identical to the C SFMT used by mVMC"
+license = "BSD-3-Clause"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+rand_core = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }

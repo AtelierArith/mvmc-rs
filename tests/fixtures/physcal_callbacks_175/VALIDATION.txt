@@ -1,0 +1,106 @@
+Captured validation, Linux x86_64, 2026-10-03
+Rust: rustc 1.99.0 (b940084d7 2026-09-28)
+Julia fixture environment: see each provenance.txt (Julia 1.13.1,
+OpenBLAS 0.3.30 ILP64, one thread, pinned reference/manifest hashes).
+
+Check                         Result
+Julia generation              PASSED, captured exit 0, all four workloads
+Prior callback nextest        PASSED, exit 0, 11 passed, 0 skipped, 249.584s
+Prior CLI reference nextest   PASSED, exit 0, 6 passed, 0 skipped, 77.792s
+Fresh targeted callback run  PASSED, exit 0, 3 passed, 8 filtered out, 0.300s
+Post-integration snapshot run PASSED, exit 0, 17 passed, 0 skipped, 284.971s
+Exact actual draw-count test PASSED, exit 0, 12 passed, 0 skipped, 260.539s
+Copied-input SHA-256 checks    PASSED, exit 0, all per-workload input records
+Owned Rust formatting checks  PASSED, exit 0
+Latest targeted clippy        FAILED, exit 101, out-of-scope library lint below
+Full workspace / MPI / macOS   NOT RUN by this agent for this milestone
+
+Prior unfiltered nextest commands (historical checkpoints, not claims of
+post-integration validation on the evolving shared tree):
+cargo nextest run -p mvmc-core --test physcal_callback_reference --cargo-profile test-fast --locked --no-fail-fast --retries 0 --status-level fail --final-status-level fail
+Run ID: 0eeb55c7-a5ed-446a-a567-e516e2a30582
+cargo nextest run -p mvmc-cli --test physcal_reference --cargo-profile test-fast --locked --no-fail-fast --retries 0 --status-level fail --final-status-level fail
+Run ID: 6194e54a-ea6d-4627-8e11-a849603ad6fb
+
+Fresh targeted command after adding explicit serial Reducer-wrapper coverage:
+cargo nextest run -p mvmc-core --test physcal_callback_reference --cargo-profile test-fast --locked --no-fail-fast --retries 0 -E 'test(callback_errors_retain_actual_rng) | test(original_six_first_callback_boundaries) | test(failing_callback_observes_completed_first_output)' --status-level fail --final-status-level fail
+Run ID: fd246965-c2ff-4e57-bbf0-def4aa6d50d2
+The three tests cover real/complex/FSZ actual borrowed error RNG/state,
+first-output completion/error/no-second-output, and the explicit serial
+Reducer callback API for all six original workloads. Eight filtered tests
+are NOT counted as passes or fresh Lanczos validation in this command.
+Handle 67406 exited 0 before the parent requested the shared-Cargo freeze.
+No owned validation/generation processes remained live at that notice.
+
+Parent finalized main #197 integration at shared HEAD 6cd0374 and authorized
+builds to resume. The preserved unstaged production drafts were captured in
+/tmp/mvmc-174175-snapshot.bP6gRX/source, with separate target
+/tmp/mvmc-174175-snapshot.bP6gRX/target. Handle 2783 completed both owned test
+binaries unfiltered, exit 0, run 084496bf-afef-44b4-be0d-32ef04e3fdb2.
+This is draft-snapshot evidence, not a claim of untouched main validation.
+The snapshot callback test hash at this run is
+466595a0de78a5fbcaeab225a17123636c0c9fc0cd8b86802121f91345e785ab.
+Subsequent parent-requested actual words_consumed assertions, fixed-flag
+preservation and explicit no-second-out/var assertions are implemented in the
+shared owned test, but are NOT included in handle 2783. They were captured
+byte-identically as the separate temporary snapshot test target
+physcal_callback_reference_counter_checkpoint, without modifying the earlier
+test target or production sources or interrupting that run. This temporary
+target is not a shared-tree file and is not intended for a commit.
+Captured test SHA-256:
+6c6267569280044c1c0dbbc61d8eb2357dea6401c261741974f609e7fb7f1fd9.
+Command (snapshot source working directory):
+cargo nextest run -p mvmc-core --test physcal_callback_reference_counter_checkpoint --cargo-profile test-fast --locked --no-fail-fast --retries 0 --target-dir /tmp/mvmc-174175-snapshot.bP6gRX/target --status-level pass --final-status-level fail
+Run ID: 032e99ef-5c40-4afd-a050-fb65da667bf4.
+Handle 21902 completed with exit 0: twelve passed, zero skipped, 260.539s.
+Actual words_consumed comparisons cover success and retained callback/output
+error boundaries; fixture-count reconstruction is only a consistency check.
+Full command success is established by its captured exit, not inferred.
+
+Frozen seventeen-test snapshot fingerprints (SHA-256):
+Cargo.toml: 1312a651cc84f8362e75e0789dd3dbbd9e305305fe68073f8b0116dd56a0f4fe
+Cargo.lock: 48bee8c0a7cb1da1b90e754eccab912f46d327ceb2fdd789b6fac84b1c006e0c
+CLI test: bd9405a2b3e08fd2ee6380a367e1bb42f7f2e3a655a1aeeeae81dd8a7fd2d977
+Callback test: 466595a0de78a5fbcaeab225a17123636c0c9fc0cd8b86802121f91345e785ab
+New exact-count callback target: 6c6267569280044c1c0dbbc61d8eb2357dea6401c261741974f609e7fb7f1fd9
+Generator: fac48ed3a1580da4916b7793c658c730de22d1cddaae1c132e2b2311870c6c24
+Rechecked all four workload input_sha256 records: exit 0. The new fixture
+tree matches the frozen copy byte-for-byte except this validation log.
+Existing #181 averaged/sample trajectory files used here also match the
+frozen copy byte-for-byte; its unrelated fixture files and provenance have
+since evolved and are not claimed to be the same complete tree.
+No owned validation processes remain live after these exits.
+
+Actual MPI callback-failure evidence is delegated to the MPI owner. The
+existing negative_clock_and_asymmetric_runner_failures test requires explicit
+2/4-rank launches and covers world/group-one/group-two reducers, an error on
+the last rank with absent callbacks on other ranks, completed first output
+and no second output. Inspection alone is not a launch/exit/no-deadlock proof;
+capture the exact source fingerprint, launch commands and exits separately.
+Fresh dependent production/full-workspace validation remains required before
+staging or merging this milestone; #185 API coverage is not declared complete.
+
+Generation command is in CONTRACT.txt. Earlier filtered runs established
+available cases while generation continued; they are NOT counted as full
+validation here. An early CLI run failed on terminal blank-line row counting;
+numerical comparison now trims only trailing whitespace, retaining all data
+rows/columns/discrete keys. Writer byte-format parity belongs to separate
+Goodall-owned tests. No numerical tolerance or sampling count was increased.
+
+Latest clippy command:
+cargo clippy -p mvmc-core --test physcal_callback_reference --profile test-fast --locked -- -D warnings
+Captured failure: crates/mvmc-core/src/sampling/candidate.rs:400,
+make_candidate_hopping_fsz_inner, clippy::too_many_arguments (8/7).
+This source is outside this agent's ownership and was not edited/suppressed.
+Earlier clippy passes predate that shared-source change and do not establish
+a current-tree lint pass. The dependency fetch_update deprecation warning
+was emitted separately and did not cause the failure.
+
+Scope is independent serial callback/reference tests, not closure of all
+#174/#175 acceptance criteria. Error RNG/config checks use caller-retained
+state from the actual vmc_phys_cal_in_place production core after Err;
+successful wrappers delegate to that same core. No sampler replay substitutes
+for those observations. CLI process tests assert only exported indexed output,
+fixed coefficients in var files, numerical values and supported file lifecycle;
+they do not claim unexported CLI RNG/configuration parity. Native-C trajectory
+generation and native macOS verification are not claimed.

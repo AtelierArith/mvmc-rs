@@ -1,0 +1,10 @@
+Actual C avevar.c auxiliary orbital branches; independent history unchanged; no Rust results
+iFlgOrbitalGeneral=0 iNOrbitalAntiParallel=12 iNOrbitalParallel=0
+compiler=GCC_13.3.0 flags=-O0,-ffp-contract=off,-lm backend=libm/libc_no_BLAS Linux_x86_64
+bf085a20ec0adfac0ce29b993c16845d5acadc4197dd30f2d33a6ca23da8e212  ../../../../../tmp/mvmc-dh-c-window.VOTXnv/dh4_real/c-window-input.txt
+9f1dc5c04e9c4a7003be69504a7978b6f6bed846d2200c4a8276db3ad7f354ae  ../../../../../tmp/mvmc-dh-c-window.VOTXnv/dh-probe
+919880c13ad3fb2c31de8b599a4d01cde6a0180b1cb5925669ddea151c2bc6dc  c_toolbox/ctest_dh_reaggregate.jl
+1f7d76289e5550170776f8009ef1c24d928e39432ddcdaab7098519a09345fae  c_toolbox/ctest_dh_opt_window.c
+4069961fb468957de87760db9e1a25a1587351f4c92b17c3d3e925698904e652  c_toolbox/ctest_opt_window.c
+47c801ea68d9bf40af967a3a0db6189125fd54ad146820b6470d63f9317a69da  c_toolbox/ctest_opt_window_upstream.inc
+509a573944a5eabde93864346902674faaff6c23d0c88f89867263f8372dd51a  extern/mVMC-1.3.0/src/mVMC/avevar.c

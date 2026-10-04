@@ -1,0 +1,185 @@
+# actual C AP/P header/row readers; Apple clang 17 -O0; readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
+ap_2_complete AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_complex AP 2 1 7 1 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 1|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_short_mapping AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|
+ap_2_empty_mapping AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|
+ap_2_short_flags AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|
+ap_2_empty_flags AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|
+ap_2_extra_flags AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|7 1|
+ap_2_extra_mapping AP 2 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_zero_header AP 2 0 0 0 1
+===|NOrbitalIdx 0|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_nonstandard_label AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|DeclaredWidth 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_folded_flags AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0 1 1 2 0 3 1 4 0 5 1 6 0|
+ap_2_split_flags AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0|0|1|1|2|0|3|1|4|0|5|1|6|0|
+ap_2_flag_whitespace AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1||	0 0||	1 1||	2 0||	3 1||	4 0||	5 1||	6 0|
+ap_2_three_column AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0|0 1 1|1 0 0|1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_reordered_mapping AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|1 1 1 1|1 0 0 1|0 1 1 1|0 0 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_2_duplicate_flag_labels AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|99 0|99 1|99 0|99 1|99 0|99 1|99 0|
+ap_2_reversed_flag_labels AP 2 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|6 0|5 1|4 0|3 1|2 0|1 1|0 0|
+ap_2_bad_site AP 2 1 7 0 -1
+===|NOrbitalIdx 7|ComplexType 0|===|===|2 0 0 1|0 1 1 1|1 0 0 1|1 1 1 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_complete AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_complex AP 3 1 7 1 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 1|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_short_mapping AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|
+ap_3_empty_mapping AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|
+ap_3_short_flags AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|
+ap_3_empty_flags AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|
+ap_3_extra_flags AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|7 1|
+ap_3_extra_mapping AP 3 1 7 0 1
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_zero_header AP 3 0 0 0 1
+===|NOrbitalIdx 0|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_nonstandard_label AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|DeclaredWidth 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_folded_flags AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0 1 1 2 0 3 1 4 0 5 1 6 0|
+ap_3_split_flags AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0|0|1|1|2|0|3|1|4|0|5|1|6|0|
+ap_3_flag_whitespace AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1||	0 0||	1 1||	2 0||	3 1||	4 0||	5 1||	6 0|
+ap_3_three_column AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0|0 1 1|0 2 0|1 0 1|1 1 0|1 2 1|2 0 0|2 1 1|2 2 0|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_reordered_mapping AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|2 2 0 1|2 1 1 1|2 0 0 1|1 2 1 1|1 1 0 1|1 0 1 1|0 2 0 1|0 1 1 1|0 0 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+ap_3_duplicate_flag_labels AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|99 0|99 1|99 0|99 1|99 0|99 1|99 0|
+ap_3_reversed_flag_labels AP 3 1 7 0 0 0 1 0 1 0 1 0
+===|NOrbitalIdx 7|ComplexType 0|===|===|0 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|6 0|5 1|4 0|3 1|2 0|1 1|0 0|
+ap_3_bad_site AP 3 1 7 0 -1
+===|NOrbitalIdx 7|ComplexType 0|===|===|3 0 0 1|0 1 1 1|0 2 0 1|1 0 1 1|1 1 0 1|1 2 1 1|2 0 0 1|2 1 1 1|2 2 0 1|0 0|1 1|2 0|3 1|4 0|5 1|6 0|
+p_2_complete P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 0|1 1|2 0|
+p_2_complex P 2 1 3 1 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 1|===|===|0 1 0 1|0 0|1 1|2 0|
+p_2_short_mapping P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|
+p_2_empty_mapping P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|
+p_2_short_flags P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 0|1 1|
+p_2_empty_flags P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|
+p_2_extra_flags P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 0|1 1|2 0|3 1|
+p_2_extra_mapping P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 1 0 1|0 0|1 1|2 0|
+p_2_zero_header P 2 0 0 0 1
+===|NOrbitalIdx 0|ComplexType 0|===|===|0 1 0 1|0 0|1 1|2 0|
+p_2_nonstandard_label P 2 1 3 0 0 0 0 1 1 0 0
+===|DeclaredWidth 3|ComplexType 0|===|===|0 1 0 1|0 0|1 1|2 0|
+p_2_folded_flags P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 0 1 1 2 0|
+p_2_split_flags P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0|0|1|1|2|0|
+p_2_flag_whitespace P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1||	0 0||	1 1||	2 0|
+p_2_three_column P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0|0 0|1 1|2 0|
+p_2_reordered_mapping P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 0|1 1|2 0|
+p_2_duplicate_flag_labels P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|99 0|99 1|99 0|
+p_2_reversed_flag_labels P 2 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|2 0|1 1|0 0|
+p_2_bad_site P 2 1 3 0 -1
+===|NOrbitalIdx 3|ComplexType 0|===|===|2 0 0 1|0 0|1 1|2 0|
+p_2_reversed_pair P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|1 0 0 1|0 0|1 1|2 0|
+p_2_diagonal P 2 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 0 0 1|0 0|1 1|2 0|
+p_3_complete P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_complex P 3 1 3 1 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 1|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_short_mapping P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|
+p_3_empty_mapping P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|
+p_3_short_flags P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|
+p_3_empty_flags P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|
+p_3_extra_flags P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|3 1|
+p_3_extra_mapping P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 1 0 1|0 0|1 1|2 0|
+p_3_zero_header P 3 0 0 0 1
+===|NOrbitalIdx 0|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_nonstandard_label P 3 1 3 0 0 0 0 1 1 0 0
+===|DeclaredWidth 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_folded_flags P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0 0 1 1 2 0|
+p_3_split_flags P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|0|0|1|1|2|0|
+p_3_flag_whitespace P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1||	0 0||	1 1||	2 0|
+p_3_three_column P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0|0 2 1|1 2 0|0 0|1 1|2 0|
+p_3_reordered_mapping P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|1 2 0 1|0 2 1 1|0 1 0 1|0 0|1 1|2 0|
+p_3_duplicate_flag_labels P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|99 0|99 1|99 0|
+p_3_reversed_flag_labels P 3 1 3 0 0 0 0 1 1 0 0
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 1|1 2 0 1|2 0|1 1|0 0|
+p_3_bad_site P 3 1 3 0 -1
+===|NOrbitalIdx 3|ComplexType 0|===|===|3 0 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_reversed_pair P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|1 0 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+p_3_diagonal P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 0 0 1|0 2 1 1|1 2 0 1|0 0|1 1|2 0|
+ap_headerless AP 2 0 0 0 1
+0 0 0 1|1 0 1 1|0 1 1 1|1 1 0 1|
+ap_illegal_header AP 2 0 0 0 1
+===|NOrbitalIdx illegal|ComplexType 0|===|===|0 0 0 1|
+fixture_ap_three AP 3 1 4 0 0 0 1 0 1
+=============================================|NOrbitalIdx 4|ComplexType 0|=============================================|=============================================|0 0 0|0 1 1|0 2 0 1|1 0 0 1|1 1 0 1|1 2 0 1|2 0 0 1|2 1 0 1|2 2 0 1|0 0|1 1|2 0|3 1|
+fixture_p_three P 3 1 3 0 0 0 0 1 1 1 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 -1|1 2 2 1|0 0|1 1|2 1|
+fixture_ap_four AP 4 1 4 0 0 1 1 0 1
+======================|NOrbitalIdx 4|ComplexType 0|======================|======================|0 0 0|0 1 1|1 2 2|2 3 3|0 2 2 1|0 3 2 1|1 0 2 1|1 1 2 1|1 3 2 1|2 0 2 1|2 1 2 1|2 2 2 1|3 0 2 1|3 1 2 1|3 2 2 1|3 3 2 1|0 1|1 1|2 0|3 1|
+fixture_ap_general_three AP 3 1 9 1 0 1 1 1 1 1 1 1 1 1
+===|NOrbitalIdx 9|ComplexType 1|===|===|0 0 0 1|0 1 1 -1|0 2 2 1|1 0 3 -1|1 1 4 1|1 2 5 -1|2 0 6 1|2 1 7 -1|2 2 8 1|0 1|1 1|2 1|3 1|4 1|5 1|6 1|7 1|8 1|
+fixture_p_general_three P 3 1 3 1 0 1 1 1 1 1 1
+===|NOrbitalIdx 3|ComplexType 1|===|===|0 1 0 1|0 2 1 -1|1 2 2 1|0 1|1 1|2 1|
+historical_dh2_orbital AP 3 1 4 0 -1
+=============================================|NOrbitalIdx 4|ComplexType 0|=============================================|=============================================|0 0 0|0 1 1|0 0|1 1|2 0|3 1|
+historical_dh4_orbital AP 3 1 4 0 -1
+=============================================|NOrbitalIdx 4|ComplexType 0|=============================================|=============================================|0 0 0|0 1 1|0 0|1 1|2 0|3 1|
+historical_rbm_orbital AP 3 1 4 0 -1
+=============================================|NOrbitalIdx 4|ComplexType 0|=============================================|=============================================|0 0 0|0 1 1|0 0|1 1|2 0|3 1|
+historical_dh4_parallel_orbital P 3 1 3 0 1
+===|NOrbitalIdx 3|ComplexType 0|===|===|0 1 0 1|0 2 1 -1|1 2 2 1|0 0|1 1|2 1|3 0|4 1|5 1|
+historical_interall_orbital AP 4 1 4 0 1
+======================|NOrbitalIdx 4|ComplexType 0|======================|======================|0 0 0|0 1 1|1 2 2|2 3 3|0 1|1 1|2 0|3 1|
+historical_orbital_general_ap AP 3 1 9 1 1
+===|NOrbitalIdx 9|ComplexType 1|===|===|0 0 0 1|0 1 1 -1|0 2 2 1|1 0 3 -1|1 1 4 1|1 2 5 -1|2 0 6 1|2 1 7 -1|2 2 8 1|
+historical_orbital_general_parallel P 3 1 3 1 1
+===|NOrbitalIdx 3|ComplexType 1|===|===|0 1 0 1|0 2 1 -1|1 2 2 1|
+fixture_ap_hubbard_six_complex AP 6 1 12 1 0 1 1 1 1 1 1 1 1 1 1 1 1
+=============================================|NOrbitalIdx         12|ComplexType          1|=============================================|=============================================|    0      0      0|    0      1      1|    0      2      2|    0      3      3|    0      4      4|    0      5      5|    1      0      6|    1      1      7|    1      2      8|    1      3      9|    1      4     10|    1      5     11|    2      0      4|    2      1      5|    2      2      0|    2      3      1|    2      4      2|    2      5      3|    3      0     10|    3      1     11|    3      2      6|    3      3      7|    3      4      8|    3      5      9|    4      0      2|    4      1      3|    4      2      4|    4      3      5|    4      4      0|    4      5      1|    5      0      8|    5      1      9|    5      2     10|    5      3     11|    5      4      6|    5      5      7|    0      1|    1      1|    2      1|    3      1|    4      1|    5      1|    6      1|    7      1|    8      1|    9      1|   10      1|   11      1|
+fixture_ap_hubbard_six_flag2 AP 6 1 12 0 0 2 2 2 2 2 2 2 2 2 2 2 2
+=============================================|NOrbitalIdx         12|ComplexType          0|=============================================|=============================================|    0      0      0|    0      1      1|    0      2      2|    0      3      3|    0      4      4|    0      5      5|    1      0      6|    1      1      7|    1      2      8|    1      3      9|    1      4     10|    1      5     11|    2      0      4|    2      1      5|    2      2      0|    2      3      1|    2      4      2|    2      5      3|    3      0     10|    3      1     11|    3      2      6|    3      3      7|    3      4      8|    3      5      9|    4      0      2|    4      1      3|    4      2      4|    4      3      5|    4      4      0|    4      5      1|    5      0      8|    5      1      9|    5      2     10|    5      3     11|    5      4      6|    5      5      7|0 2|1 2|2 2|3 2|4 2|5 2|6 2|7 2|8 2|9 2|10 2|11 2|

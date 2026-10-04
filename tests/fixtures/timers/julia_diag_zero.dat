@@ -1,0 +1,35 @@
+CalH1 GreenFunc1Real       [920]      0.00000
+  UpdateProjCnt            [921]      0.00000
+  ProjRatio                [922]      0.00000
+  CalculateNewPfM2_real    [923]      0.00000
+  CalculateIP_real         [924]      0.00000
+  CalH1 fast prep          [925]      0.00000
+  CalH1 fast term loop     [926]      0.00000
+  GreenFunc1 setup/check   [927]      0.00000
+  GreenFunc1 restore       [928]      0.00000
+  CalH1 threaded combine   [929]      0.00000
+SlaterElmDiff_fcmp         [930]      0.00000
+  Slater scratch reset     [931]      0.00000
+  Slater transOrb build    [932]      0.00000
+  Slater buffer accumulate [933]      0.00000
+  Slater srOptO store      [934]      0.00000
+  CalH1 direct proj ratio  [935]      0.00000
+  CalH1 PfM2/IP fused      [936]      0.00000
+VMCMainCal unmeasured      [940]      0.00000
+  accumulator init/reset   [941]      0.00000
+  sample copy/check        [942]      0.00000
+  post CalculateMAll       [943]      0.00000
+  CalculateIP              [944]      0.00000
+  weight/check             [945]      0.00000
+  energy accumulate/check  [946]      0.00000
+  Green measurement        [947]      0.00000
+  SR setup/proj/RBM        [948]      0.00000
+  optTrans diff            [949]      0.00000
+  clear/merge/final check  [950]      0.00000
+WeightAverage diagnostic   [960]      0.00000
+  WE allreduce             [961]      0.00000
+  WE normalize             [962]      0.00000
+  SR OO allreduce          [963]      0.00000
+  SR HO allreduce          [964]      0.00000
+  SR normalize             [965]      0.00000
+  ReduceCounter            [966]      0.00000

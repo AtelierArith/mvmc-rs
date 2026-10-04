@@ -1,0 +1,7 @@
+model=general_rbm_cmp mode=cmp seed=12395
+steps=50 window=50 NSRCG=0 NStore=1
+canonical_NSROptItrStep=1500 canonical_NSROptItrSmp=100
+effective_NSROptItrStep=50 effective_NSROptItrSmp=50 override=both_no_clamp
+initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
+initial.def sha256=a71c011d75380176881e48312d4235222f5b7d29ad7df85f1c979eec447eb79e
+In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256

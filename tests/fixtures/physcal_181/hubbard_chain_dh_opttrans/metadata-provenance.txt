@@ -1,0 +1,7 @@
+generator_sha256=3b9c7323ce050ccec3755316fb3b071c27f3d783ad76b2a8facbe2b0d665a35b
+julia=1.13.1
+reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
+stage=after fixed record and named In overlays; no initialization or sampling
+flags=independent C GetInfoOpt/OptTrans enumeration from definition records, not Julia Boolean flags or Rust state
+flags_written=exact C reader writes; unwritten cells are not independent expectations for native allocation contents
+C_flag_source_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9

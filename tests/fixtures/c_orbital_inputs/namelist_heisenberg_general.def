@@ -1,0 +1,12 @@
+ModPara ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/modpara.def
+LocSpin ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/locspn.def
+Trans ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/trans.def
+CoulombInter ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/coulombinter.def
+Hund ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/hund.def
+Exchange ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/exchange.def
+OneBodyG ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/greenone.def
+TwoBodyG ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/greentwo.def
+Gutzwiller ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/gutzwilleridx.def
+Jastrow ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/jastrowidx.def
+OrbitalGeneral general_heisenberg_six.def
+TransSym ../orbital_general/heisenberg/../../../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_fsz/qptransidx.def

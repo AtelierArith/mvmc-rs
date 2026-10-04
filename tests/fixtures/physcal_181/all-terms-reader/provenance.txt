@@ -1,0 +1,14 @@
+source=extern/mVMC-1.3.0/src/mVMC/readdef.c
+source_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
+generator_sha256=78e3299bcb9204e20a31f9949ee7726712d71901ec0b928487757a523a277b1d
+driver_sha256=2f1fef91424df61008a84faf864d414dc706363885dc1fbca3e0f4bf4ddf4258
+architecture=x86_64-linux-gnu
+julia=1.13.1
+compiler=cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+options=-std=c11 -O0
+boundaries=ReadPairHopValue through before ReadPairDValue; ReadPairDValue through before GetInfoOptOrbitalParalell
+scope=actual C pair readers, supplied literal records; PairHop expands both directions; no full definition reader, MPI, BLAS, RNG or Lanczos measurement
+count_authority=readdef.c:697 NPairHopping=2*declared count

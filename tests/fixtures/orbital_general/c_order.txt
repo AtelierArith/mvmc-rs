@@ -1,0 +1,25 @@
+# mVMC-1.3.0 actual C filename registry, keyword iteration and AP/P readers; readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; include/readdef.h sha256=7e7a4a85b759bbbbe61657a9cd67e82112bdbe3f08405c20e2223c59669cca0d
+Orbital 0
+ModPara LocSpin Orbital OrbitalParallel TransSym
+7 13
+0 7 0 1 7 0 1 0 0 1 0 8 1 0 8 0
+0 1 1 1 -1 0 1 1 -1 -1 0 1 -1 -1 -1 0
+0 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 1 0 0 0 0 0 1 0 1 0
+Orbital 1
+ModPara LocSpin Orbital OrbitalParallel TransSym
+7 13
+0 7 0 1 7 0 1 0 0 1 0 8 1 0 8 0
+0 -1 -1 1 1 0 -1 1 1 1 0 -1 -1 -1 1 0
+0 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 1 0 0 0 0 0 1 0 1 0
+OrbitalAntiParallel 0
+ModPara LocSpin OrbitalAntiParallel OrbitalParallel TransSym
+7 13
+0 7 0 1 7 0 1 0 0 1 0 8 1 0 8 0
+0 1 1 1 -1 0 1 1 -1 -1 0 1 -1 -1 -1 0
+0 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 1 0 0 0 0 0 1 0 1 0
+OrbitalAntiParallel 1
+ModPara LocSpin OrbitalAntiParallel OrbitalParallel TransSym
+7 13
+0 7 0 1 7 0 1 0 0 1 0 8 1 0 8 0
+0 -1 -1 1 1 0 -1 1 1 1 0 -1 -1 -1 1 0
+0 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 1 0 0 0 0 0 1 0 1 0

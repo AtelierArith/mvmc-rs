@@ -1,0 +1,13 @@
+ModPara modpara.def
+Gutzwiller gutz.def
+Jastrow jast.def
+Orbital orbital.def
+ChargeRBM_PhysLayer 2_empty_header.def
+SpinRBM_PhysLayer 2_empty_header.def
+GeneralRBM_PhysLayer 2_empty_header.def
+ChargeRBM_HiddenLayer 2_empty_header.def
+SpinRBM_HiddenLayer 2_empty_header.def
+GeneralRBM_HiddenLayer 2_empty_header.def
+ChargeRBM_PhysHidden 2_empty_header.def
+SpinRBM_PhysHidden 2_empty_header.def
+GeneralRBM_PhysHidden 2_empty_header.def

@@ -1,0 +1,49 @@
+[package]
+name = "pfapack"
+version = "0.0.0"
+description = "Pfaffian / LTL decomposition for skew-symmetric matrices (port of the pure-Julia subset of PfaPack.jl)"
+# Root license is BSD-3-Clause. Per-file MPL-2.0 headers apply to
+# src/utu2.rs (derived from xrq-phys/Pfaffine). See ../../THIRD_PARTY_LICENSES.md.
+license = "BSD-3-Clause AND MPL-2.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+num-complex = { workspace = true }
+pulp = { workspace = true, optional = true }
+blas = { workspace = true, optional = true }
+lapack = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+# Tests link a real BLAS / LAPACK backend only when the user enables
+# `--features blas-backend`. On macOS we link the system Accelerate
+# framework via a build script (see build.rs). On other platforms the
+# user must provide the symbols (e.g. via `LD_PRELOAD` or by adding
+# `openblas-src`).
+
+# ---------------------------------------------------------------------------
+# Feature flags
+#
+# default (no extra features):
+#   Pure-Rust scalar port matching the upstream Julia loop ordering. Bit
+#   deterministic across platforms.
+#
+# blas-backend:
+#   Dispatch the BLAS-2 rank-2 update (skr2 = two ger calls), trtri, and
+#   trmm to a real BLAS / LAPACK backend. This is what Julia-mVMC does
+#   by default via LinearAlgebra. Expects unresolved BLAS / LAPACK
+#   symbols to be satisfied by the leaf binary (e.g. mvmc-cli linking
+#   openblas-src or accelerate-src).
+#
+# simd-backend:
+#   Dispatch the complex upper-triangular rank-2 update in `zsktf2` to a
+#   pulp runtime-SIMD kernel. The scalar implementation remains the
+#   reference path and is used for real matrices.
+# ---------------------------------------------------------------------------
+[features]
+default = []
+blas-backend = ["dep:blas", "dep:lapack"]
+simd-backend = ["dep:pulp"]

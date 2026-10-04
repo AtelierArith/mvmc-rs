@@ -1,0 +1,12 @@
+# HISTORICAL UNSAFE JULIA BEHAVIOR, not the production C failure contract.
+# Julia 1.13.1; LBTConfig([ILP64] libopenblas64_.0.3.30.dylib); threads=1; positive potrf INFO was ignored by stochastic_opt!
+# C stcopt_dposv.c calls DPOSV, bypassing substitution after failed factorization;
+# stcopt.c permits parameter updates only with INFO=0. Original payload preserved.
+0 indefinite 0
+3fff9be02468acf1 0000000000000000 4008048d159e26af 0000000000000000
+0 singular 1
+4000000000000000 0000000000000000 4008000000000000 0000000000000000
+1 indefinite 0
+3fff9be02468acf1 0000000000000000 4008048d159e26af 0000000000000000
+1 singular 1
+4000000000000000 0000000000000000 4008000000000000 0000000000000000

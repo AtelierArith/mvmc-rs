@@ -1,0 +1,29 @@
+Independent Julia observer; C declared slots and pre-SR Etot/Etot2, post-SR synchronized Para; not full C execution
+Julia=1.13.1 BLAS=LBTConfig([ILP64] libopenblas64_.so) threads=1
+options=--case=rbm_reference_cmp --store=1 --steps=1,2,3,50 --c-kernel-order --write prefix=50 SR_failed=false
+successful_steps=50 effective_window=50 selected_rows=50 aggregatable_final_output=true
+modpara=MVMCExpertModeParsers.ModParaParameters(10, 5, 0, 10, 0, 0, 50, 50, 0, 10, 1, 100, 1.0e-10, 0.001, 0.003, 1.0e-10, 0, 0, 1, 0, 0, 12395, 1, 1, 0, 1, 0, 1, 1, "zvo", "zqp", 1, 0, 0, 40, 0, 0, 200, 0, 0, 0, 0, 10)
+/tmp/mvmc-history-retained.HHdjE0/scripts/check_sr_direct_runner_parity.jl sha256=7c5efce881ef69b079fbf4d92e27e9f1a0c5a51154a476f88323e4b5a3f7c346
+/tmp/mvmc-history-retained.HHdjE0/c_toolbox/runner_opt_windows.jl sha256=e13f5e2fbbd2ab7250e64fdd4041444c89e18152968efd2f91a561c32e226037
+/tmp/mvmc-history-retained.HHdjE0/extern/Julia-mVMC/MVMCOptimizers.jl/src/vmc_para_opt.jl sha256=a17e7cab2e3ce7e1e1046d621aead2743acc0a84a080df772c9a396b6260a316
+/tmp/mvmc-runner-retained-rbm_reference_cmp-direct-store1/step-50/c-window-input.txt sha256=5d0ed9ab2e952c6f93a0a4287a1a233f308ff05bb486d429c5388bdb17afc0a2
+namelist=/tmp/mvmc-history-retained.HHdjE0/extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/coulombintra.def sha256=363fa084ae10dab359433aa64c98ed705fa49300dc811c89bd4080387227182e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/greenone.def sha256=2787f3da60ea2916d2f628cb60d73822180683f6f9463ae0b3cc20bfdd48839b
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/greentwo.def sha256=af37ee680ed0d09fbde0b390400f329325a94f64005c4ff90129ccf9bc77232a
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/gutzwilleridx.def sha256=40d2374530dcdcf78491e382d829ccd6da2eb302017a77b86da2a49c45bb86bf
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/initial.def sha256=a71c011d75380176881e48312d4235222f5b7d29ad7df85f1c979eec447eb79e
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/jastrowidx.def sha256=3813fa96ebf393a867128671e74de050839575477348a6a7f91060c0b4427d8f
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/locspn.def sha256=a60cb05170495301ccc3d1dc1fd2c1365a73aa79b7a7319b6ab1330b3a51333f
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/modpara.def sha256=9bef39b9360ed77ff845f4d0b47d7c4960ce8678f6773312edc79b1352538ecb
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def sha256=2006026940a6deb81db3162336f27bc8faecb483ae9eff16c48e63906ba3dbe5
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/orbitalidx.def sha256=23dce7657994a11068a3e488084e83a1ec0c6fec275975bee4b795aee40ccbd9
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/qptransidx.def sha256=4db4acb5ca16a0901d6f28092699444c6e4091d4cf509110374d2a9ef133e1c4
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/rbm_hlayeridx.def sha256=6066ba8dea7e502af6506c2db93259b093d5caca679ca99c7cf7f6b1f2d7f708
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/rbm_phidx.def sha256=9f1298d0e6c70b126dbbf2ae8ba94e135cd57253bef11534a1341025bf40c08a
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/rbm_playeridx.def sha256=82459a6f42f2534c1913d39da7eedcf4ff9d174a68065c66808906590669d834
+/tmp/mvmc-history-retained.HHdjE0/scripts/../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/trans.def sha256=fe694cbecd31304bae6260365e36bef492e044dd1637484cbbdc136725bf4038
+JuliaProject sha256=7b71e96b08818d5b949a2f750186b86cf27d7ecb47f65580779fedd18874a8e4
+JuliaManifest sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+C kernel shim sha256=44521dbe2243ebd2b2f1f23a0d98bb74e397e1cdb07fd5d69ec3ddabde13438a
+Independent observer bridge, not Julia production repair; no Rust values. Snapshot digest=5ced54f40b7fc3be54aa29b15fb059e961650e2d2f8d2efc985488bb0d498cba. Actual C avevar aggregation; archived prefixes1/2/3/50 next624 RNG/configs exact. Failed SR prefixes have no final output aggregation. Canonical rbm_reference_cmp uses original --c-kernel-order and seed12395; rbm_fsz uses original seed1.

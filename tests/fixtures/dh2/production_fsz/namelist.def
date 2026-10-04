@@ -1,0 +1,13 @@
+ModPara ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/modpara.def
+LocSpin ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/locspn.def
+Trans ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/trans.def
+CoulombIntra ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/coulombintra.def
+OneBodyG ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/greenone.def
+TwoBodyG ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/greentwo.def
+Gutzwiller ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/gutzwilleridx.def
+Jastrow ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/jastrowidx.def
+DH2 dh2.def
+Orbital ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/orbitalidx.def
+OrbitalParallel ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/orbitalidxpara.def
+TransSym ../../../../extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_fsz/inputs/qptransidx.def
+InDH2 indh2.def

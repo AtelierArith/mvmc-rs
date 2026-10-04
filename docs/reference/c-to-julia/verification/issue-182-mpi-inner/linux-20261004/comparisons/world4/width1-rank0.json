@@ -1,0 +1,376 @@
+{
+  "scope": "same-world/group/rank workers1/2/4 only; initial/final raw boundaries not full per-proposal trace",
+  "metadata": {
+    "world": 4,
+    "rank": 0,
+    "groupWidth": 1,
+    "group": 0,
+    "groupRank": 0,
+    "seedOffset": 0,
+    "threshold": 32,
+    "frames": 2,
+    "originalOne": 2,
+    "originalDirect": 36,
+    "dimensions": {
+      "electronsPerSpin": 3,
+      "factored": 3,
+      "projection": 2,
+      "samples": 100,
+      "sites": 6
+    }
+  },
+  "burnStorage": [
+    {
+      "workers": 1,
+      "completePacked32": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4,
+        -1,
+        -1,
+        1,
+        0,
+        -1,
+        2,
+        1,
+        0,
+        -1,
+        -1,
+        2,
+        -1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "activeIndices6": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4
+      ],
+      "layout": {
+        "active": [
+          0,
+          6
+        ],
+        "cfg": [
+          6,
+          18
+        ],
+        "num": [
+          18,
+          30
+        ],
+        "proj": [
+          30,
+          32
+        ],
+        "spin": [
+          32,
+          32
+        ]
+      },
+      "separateCapturedInactiveBuffers": {
+        "cfg": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "num": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "proj": [
+          0,
+          0
+        ],
+        "spin": []
+      },
+      "padding": "no extra packed padding in this ordinary fixture; no captured content omitted"
+    },
+    {
+      "workers": 2,
+      "completePacked32": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4,
+        -1,
+        -1,
+        1,
+        0,
+        -1,
+        2,
+        1,
+        0,
+        -1,
+        -1,
+        2,
+        -1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "activeIndices6": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4
+      ],
+      "layout": {
+        "active": [
+          0,
+          6
+        ],
+        "cfg": [
+          6,
+          18
+        ],
+        "num": [
+          18,
+          30
+        ],
+        "proj": [
+          30,
+          32
+        ],
+        "spin": [
+          32,
+          32
+        ]
+      },
+      "separateCapturedInactiveBuffers": {
+        "cfg": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "num": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "proj": [
+          0,
+          0
+        ],
+        "spin": []
+      },
+      "padding": "no extra packed padding in this ordinary fixture; no captured content omitted"
+    },
+    {
+      "workers": 4,
+      "completePacked32": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4,
+        -1,
+        -1,
+        1,
+        0,
+        -1,
+        2,
+        1,
+        0,
+        -1,
+        -1,
+        2,
+        -1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "activeIndices6": [
+        3,
+        2,
+        5,
+        1,
+        0,
+        4
+      ],
+      "layout": {
+        "active": [
+          0,
+          6
+        ],
+        "cfg": [
+          6,
+          18
+        ],
+        "num": [
+          18,
+          30
+        ],
+        "proj": [
+          30,
+          32
+        ],
+        "spin": [
+          32,
+          32
+        ]
+      },
+      "separateCapturedInactiveBuffers": {
+        "cfg": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "num": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "proj": [
+          0,
+          0
+        ],
+        "spin": []
+      },
+      "padding": "no extra packed padding in this ordinary fixture; no captured content omitted"
+    }
+  ],
+  "discrete": "EXACT",
+  "numeric": {
+    "compared": 192,
+    "maximumError": 0,
+    "policy": "existing same-implementation1e-12 absolute/relative"
+  },
+  "observations": [
+    {
+      "workers": 1,
+      "parallelCalls": 0,
+      "parallelEntries": 0,
+      "serialCalls": 2689,
+      "serialEntries": 69800,
+      "workerEntries": 0,
+      "workerIds": []
+    },
+    {
+      "workers": 2,
+      "parallelCalls": 1800,
+      "parallelEntries": 64800,
+      "serialCalls": 889,
+      "serialEntries": 5000,
+      "workerEntries": 64800,
+      "workerIds": [
+        0,
+        1
+      ]
+    },
+    {
+      "workers": 4,
+      "parallelCalls": 1800,
+      "parallelEntries": 64800,
+      "serialCalls": 889,
+      "serialEntries": 5000,
+      "workerEntries": 64800,
+      "workerIds": [
+        0,
+        1,
+        2,
+        3
+      ]
+    }
+  ]
+}

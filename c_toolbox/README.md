@@ -1,0 +1,249 @@
+# C reference toolbox
+
+Reusable comparison programs and verbatim source excerpts from the authoritative
+`extern/mVMC-1.3.0/` snapshot live here. They are optional tools for investigating
+contracts and generating expected values. Cargo builds and Rust tests do not
+compile, invoke or read this directory. Checked-in expectations live separately
+under `tests/fixtures/`; normal Rust tests retain their usual Rust toolchain,
+linker and BLAS/LAPACK requirements. Historical Julia input-data dependencies
+are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
+
+| Program | What it checks | Reproduction command |
+| --- | --- | --- |
+| `projection_count.c` | C count/sign conversion and QP kernels, 10 cases | `python3 scripts/check_projection_count_c_parity.py` |
+| `orbital_order.c` | Filename registry, fixed keyword order and complete AP/P readers, 480 cases | `python3 scripts/check_orbital_order_c_parity.py` |
+| `orbital_contracts.c` | AP/P physical headers, mapping/flag counts and row-order real flags, 92 cases | `python3 scripts/check_orbital_contracts_c_parity.py` |
+| `general_orbital.c` | General spin-coordinate reader, counts/signs/flags, 184 cases; actual FSZ Slater and derivative kernels, 104 cases | `python3 scripts/check_general_orbital_c_parity.py` |
+| `orbital_initialization.c` | Declared Slater initialization, loading, normalization, native SFMT and shared coefficient matrix, 49 cases | `python3 scripts/check_orbital_initialization_c_parity.py` |
+| `integer_flags.c` | Production AP/P header normalization, raw integer flags, coefficient bits, native SFMT and SR selection, 70 cases | `python3 scripts/check_integer_flags_c_parity.py` |
+| `projection_flags.c` | Native DH2/DH4 raw-flag readers, 24 cases; real gauge eligibility, 86 cases | `python3 scripts/check_projection_flags_c_parity.py` |
+| `gutzwiller_contracts.c` | Physical headers, complete site mappings and raw ordered flags, 144 cases | `python3 scripts/check_gutzwiller_contracts_c_parity.py` |
+| `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
+| `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
+| `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
+| `interall_complex.c` | Actual complex Green/Pfaffian/projection/overlap kernels, 4,096 operators, four ordered InterAll sums and four PairHop sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_complex_c_parity.py` |
+| `fsz_green.c` | Actual complex FSZ Green/Pfaffian/projection/overlap kernels, 768 one-body and 49,152 two-body operators, 12 ordered InterAll sums with duplicates; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_fsz_green_c_parity.py` |
+| `fsz_green.c` (`--real`) | Separate scalar FSZ Green/Pfaffian/projection/overlap kernels, 384 one-body and 24,576 two-body operators, six ordered real InterAll sums with duplicates; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_fsz_green_c_parity.py --real` |
+| `fsz_green.c` (`--measurements`) | Complete serial C FSZ measurement and complex-weight normalization bodies: raw, ordered weighted and factored vectors across three weights, for 12 real/complex models | `uv run --no-project python scripts/check_fsz_green_c_parity.py --measurements` |
+| `fsz_green.c` (`--hamiltonian`) | Complete serial FSZ Hamiltonian bodies: 72 complex and 36 scalar evaluations of diagonal, Transfer, PairHop, Exchange, InterAll and combined terms, including duplicates | `uv run --no-project python scripts/check_fsz_green_c_parity.py --hamiltonian`; add `--real` for the scalar family |
+| `complex_division.c` | Actual compiler complex division: 373 normal/subnormal/range/nonfinite cases; pure Rust scaled quotient port | `uv run --no-project python scripts/check_complex_division_c_parity.py` |
+| `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
+| `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
+| `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
+| `orbital_flags.c` | Function-level row-order flags with supplied complex argument 2 (production normalizes orbital headers to 1) | `python3 scripts/check_c_reader_audits.py` |
+
+The `.inc` files contain extracted function bodies or specifically delimited
+reader blocks. Each records the original copyright/license notice and SHA-256
+of its upstream source. The scripts verify every stored excerpt against C before
+compiling it. Function extraction uses balanced braces (the General extractor
+ignores braces in comments and string literals); keyword-loop extraction
+ends before the upstream status print, and the AP header switch block ends at
+`KWOrbitalGeneral`. Driver files hold only the comparison environment and cases.
+The canonical C files are not modified. `.gitattributes` preserves trailing
+whitespace in these verbatim `.inc` excerpts; driver files follow normal checks.
+
+`llvm_divdc3.c` is the original LLVM 17 compiler-rt quotient reference from
+[`llvmorg-17.0.6`](https://github.com/llvm/llvm-project/blob/llvmorg-17.0.6/compiler-rt/lib/builtins/divdc3.c),
+under Apache-2.0 WITH LLVM-exception, with its original notice retained. It is
+not compiled into the probes or Rust. The division probe evaluates the C
+compiler's actual `/` operator, recording both driver/reference SHA-256 hashes
+with the expected fixture. The pure Rust derivative retains its SPDX notice
+and full license in `crates/mvmc-core/LICENSE-llvm.txt`.
+
+Both complex probes use `-O0 -ffp-contract=off`. The Green probe supplies only
+single-process overlap plumbing and disabled RBM stubs that must never execute.
+It checks restoration of the electron buffers and preserves the actual C
+accumulator order, but does not establish full C initialization, sampling/SR,
+FSZ runner, Lanczos or MPI execution. The separate FSZ probe extracts all four
+complex Green bodies and the actual serial `calham_fsz.c` InterAll loop. It uses
+three explicit-spin electron configurations with real/complex Slater inputs,
+two unequal QP weights and zero/nonzero real Gutzwiller/Jastrow parameters.
+Each call must restore electron indices, spins and occupations. The comparison
+also has a `--real` mode that extracts the separate `locgrn_fsz_real.c`,
+`pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `qp_real.c` and real Hamiltonian
+InterAll loop. This mode uses scalar Slater, inverse and Pfaffian arrays.
+The real Hamiltonian loop discards coefficient imaginary parts at each
+compound assignment to its `double` accumulator; this is a callee-level check,
+not proof of complete production mode selection for complex Hamiltonians.
+Neither mode covers RBM, DH or a complete sampling/SR runner.
+Details: `tests/fixtures/interall/README.md`.
+
+The InterAll reader driver overallocates bounded comparison storage to observe
+extra-row count errors without overrunning the declared production allocation.
+Unsafe integer overflow and invalid spin ranges are excluded from native
+execution and tested separately as Rust diagnostics. It establishes reader
+values and acceptance for the documented inputs, not full executable or
+sampling parity. See `tests/fixtures/interall/README.md` for the preserved
+historical Julia models and the C-valid spin-chain control.
+
+The scripts build into temporary directories with Apple clang 17 (`cc`) on
+Intel macOS. All use `-O0`; General, projection, initialization and initial-record checks use
+`-ffp-contract=off`, and both parameter checks also use `-DMEXP=19937` and the
+original `src/sfmt/SFMT.c`. The other reader programs need no BLAS, SFMT or MPI library.
+The fixed-width RBM/header and flag audits also work directly, for example:
+
+```sh
+cc -O0 c_toolbox/orbital_flags.c -o /tmp/mvmc-orbital-flags
+/tmp/mvmc-orbital-flags
+```
+
+The default commands verify existing excerpts and fixture contents. Add `--write`
+explicitly to refresh extracted source and, for the parity generators, expected
+fixtures; review both changes together. Writes preserve files whose contents
+have not changed. Generated executables and scratch inputs stay outside Git.
+
+These are standalone function checks, not a build or Monte Carlo run of the full
+C project. Drivers supply the dimensions, flags, arrays and disabled correlation
+shift plumbing needed for each check; no MPI execution is exercised. The flag
+audits use sentinels solely to identify defined writes, not to infer native
+initial values for untouched malloc storage. Legacy Julia RBM inputs are not
+claimed to satisfy C's complete-row contract. Native C all-zero Slater
+normalization and Rust's current zero guard remain a separate #46 discrepancy;
+the recorded all-zero normalized rows are not asserted as Rust parity. Reader
+audit differences remain tracked by #21/#26/#27 and are not completion claims.
+
+The General probe extracts `GetInfoOrbitalGeneral` from `readdef.c` and both
+`UpdateSlaterElm_fsz` and `SlaterElmDiff_fsz` from `slater_fsz.c`. It reuses the
+stored common header/flag/site-check functions, supplies two translations and
+one identity OptTrans, and serializes fixed binary coefficients, Pfaffians,
+inverse matrices and overlap. Matrix allocation is explicitly zeroed, including
+untouched diagonals and cells omitted by duplicate mappings: those values are
+probe plumbing, not evidence of upstream malloc initialization. Normal and
+antiperiodic reader signs, all spin blocks, declared unmapped slots and optional
+index/sign carry are checked. Unsafe incomplete coordinate scans and invalid
+spins/parameter indices are excluded from C execution; Rust diagnostics have
+separate tests. This probe does not establish multi-OptTrans derivative parity
+or the C CLI's activation policy (#27).
+
+The integer-flag probe extracts the actual rank-zero header-normalization block
+from `readdef.c`, `InitParameter` from `parameter.c`, and the selection block from
+`stcopt.c`. It checks raw flags -2/0/1/2/3, ignored printed labels, real/complex
+AP with and without P, positive nonbinary AP headers, both orbital headers set,
+and seeds 1/11272. Raw real flags greater than zero consume initialization draws;
+SR selects component flags equal to 1. Header sums are collapsed to 1 before
+orbital readers; the old argument-2 reader audit never proved production
+aggregate-2 SR behavior. P imaginary flags receive this normalized header even
+when their real flag is zero or negative. AP/General complex imaginary flags
+copy the raw real flag. Real-mode imaginary storage is explicitly zeroed in the
+probe and Rust; C leaves some cells untouched, so this is not a malloc claim.
+
+The projection-flag probe extracts actual `GetInfoDH2`, `GetInfoDH4`,
+`CheckQuadSite` and `SetFlagShift`. It supplies complete, bounded neighbor rows,
+raw flags -2/-1/0/1/2/3 and a nonzero parameter offset. Gauge cases vary each
+real flag and include missing-factor and nonbinary imaginary cases. Rust tests
+check the parsed DH arrays/flags and which factor gauges change. These establish
+gauge eligibility, not C gauge arithmetic or a full SR solver comparison. The
+Rust direct/CG solvers use separate controlled identity-covariance workloads to
+check exactly the component selection supplied by C. Remaining strict family
+readers, RBM widths/storage and OptTrans activation/offsets stay in #21/#26/#27;
+this milestone does not close those issues or prove full C sampling parity.
+
+The Gutzwiller probe extracts `ReadBuffIntCmpFlg`, `GetInfoGutzwiller`,
+`GetInfoOpt`, `CheckSite` and `ReadDefFileError` from `readdef.c`. It verifies
+144 cases (72 accepted / 72 rejected) at one, two, three and six sites with
+real and positive complex headers, unused declared slots, shared/reordered/
+duplicate site mappings, ignored/reversed printed flag labels, raw flags
+-2/-1/0/1/2/3, folded/split C whitespace, nonstandard header labels and missing/
+extra mapping or flag pairs. The original reader treats whitespace uniformly;
+it does not infer the flag boundary from repeated sites or line widths.
+
+All probe storage is zeroed. Duplicate mappings can leave sites untouched in C;
+those cells and real-mode imaginary flags are sentinels, not native malloc
+initialization claims. Rust deliberately keeps such unused storage deterministic.
+Bad site indices are excluded from native execution because C writes the site
+array before checking bounds. Malformed integer scans and out-of-range parameter
+indices also have separate bounded Rust diagnostics. These checks establish this
+reader's supported contract, not full C validation, initialization, MPI or
+sampling parity. RBM complete readers remain separate work in #21/#26.
+
+The Jastrow probe extracts the actual header, `GetInfoJastrow`, `GetInfoOpt`
+and site-check functions. Its 144 cases cover directed pairs, count errors,
+raw signed flags and a nonzero Gutzwiller offset. `jastrow_projection.c` adds
+actual `MakeProjCnt` and `UpdateProjCnt` bodies from `projection.c`, supplying
+two Gutzwiller slots, disabled DH factors and eight occupancy patterns. All
+1,795 initial/count-update workloads across 60 complete tables are serialized
+as checked-in Rust expectations; legal moves in both directions are included.
+The reader preserves asymmetric entries, while C's projection kernels always
+look up the upper-triangle index. Duplicate tables with unwritten cells are
+excluded from kernel execution. Unwritten index=-1 and imaginary=0 sentinels
+are documented, and neither driver establishes native malloc initialization,
+full sampling, MPI, global complex-header or OptTrans behavior. The script
+also reproduces the complete three-site historical replacement without editing
+its three original input files. Details: `tests/fixtures/jastrow/README.md`.
+
+The RBM readers preserve the actual header, nine geometry readers, flag and
+site-check functions from `readdef.c`. `rbm_parameters.c` adds actual
+`InitParameter`/`ReadInitParameter` and the upstream SFMT translation unit.
+The reader and parameter checks cover 1,307 inputs and 84 real-initialization/
+full-record workloads respectively. Full declared storage includes unused
+slots; the 97-slot case is not shrunk to its maximum mapped index. Initialization
+uses raw signed neuron totals including zero and negative divisors. Following
+Slater values and 624 native SFMT words are serialized with every case.
+
+`rbm_counters.c` adds verbatim `MakeRBMCnt` and `UpdateRBMCnt` from `rbm.c`.
+Its 66 completely assigned tables cover 4,994 full-counter/legal-hop/no-op
+workloads and verify both separate-output and in-place C updates. Coefficients
+are supplied as binary64 bits, with binary and cancellation-sensitive values.
+The counters distinguish C's separate coupling sum from adding each coupling
+directly to the hidden bias. They also distinguish subtract-then-add hopping
+arithmetic from mapping-row traversal. Total neuron count equals the sum of
+family dimensions; extra base neurons and FSZ are outside this counter oracle.
+
+```sh
+uv run --no-project python scripts/check_rbm_contracts_c_parity.py
+uv run --no-project python scripts/check_rbm_parameters_c_parity.py
+uv run --no-project python scripts/check_rbm_counters_c_parity.py
+```
+
+Each command independently verifies its extracted reader dependency; add
+`--write` to regenerate. Counter and parameter commands use
+`-O0 -ffp-contract=off`; the initializer also uses `-DMEXP=19937` and native
+SFMT. The accompanying Rust tests use checked-in data only. These probes do
+not establish complex transcendental arithmetic, parameter normalization,
+full executable/MPI execution or production sampling trajectories. The older
+Julia RBM definitions and numerical fixture bytes remain historical evidence.
+
+## GNU runtime reference
+
+`gcc_divdc3_reference.inc` preserves the GCC 13.3.0 double-mode macro branch and
+complete complex divide definition from `libgcc/libgcc2.c`, including the
+upstream license notice, whole-source SHA-256 and extraction boundaries.
+It is archival reference material; Cargo does not compile or invoke it. The
+Linux x86_64 quotient probe links its compiler's actual static libgcc routine,
+whose archive path/hash appear in the native fixture header. The Rust algorithm
+is a scalar port with the GPL/GCC Runtime Exception notice retained. See
+[Linux numerical contracts](../docs/LINUX_NUMERICAL_CONTRACTS.md) for native
+fixture reproduction and differences from the archived Apple compiler-rt
+contract.
+
+## Julia ILP64 / system LP64 BLAS adapter (#200)
+
+`blas_lp64_reference.c` is authored ABI plumbing, not extracted numerical
+source. It checks each signed 64-bit dimension/increment before conversion
+to a signed 32-bit OpenBLAS argument, forwards unchanged arrays and scalars,
+and widens LAPACK's returned status. It forwards the numerical routines
+unmodified and forces one BLAS thread. Cargo never builds or loads it.
+
+The complete file is the extraction boundary (no upstream numerical body is
+embedded). Compiler flags are `clang -O0 -ffp-contract=off -dynamiclib`, linked
+to the Homebrew system OpenBLAS. Source hashes, compiler/backend versions,
+compiled bridge hashes and independent oracle output hashes are retained in
+`tests/fixtures/macos_arm_julia/`. See
+[Apple Silicon parity](../docs/APPLE_SILICON_PARITY.md) for exact reproduction
+commands and the separate archived-reduction and native FSZ contracts.
+
+## Weighted complex SR accumulation (#200)
+
+`weighted_oo.c` embeds `calculateOO` verbatim from
+`extern/mVMC-1.3.0/src/mVMC/vmccal.c`, lines 769–794. Its header records the
+upstream SHA-256 and compiler command. The only harness additions supply
+weighted large, tiny and ordinary operands and print their binary values.
+Compile and generate independently:
+
+```sh
+clang -O0 -ffp-contract=off -Wno-unknown-pragmas c_toolbox/weighted_oo.c -o /tmp/weighted-oo
+/tmp/weighted-oo
+```
+
+The checked-in output is `tests/fixtures/sr_direct/c_weighted_oo.txt`;
+Rust tests read that fixture without compiling or invoking C.

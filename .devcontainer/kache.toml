@@ -1,0 +1,6 @@
+[cache]
+local_store = "/home/vscode/.cache/mvmc/kache"
+runtime_dir = "/tmp/mvmc-kache"
+local_only = true
+auto_clean_orphaned_targets = false
+auto_clean_unused_units_days = 0

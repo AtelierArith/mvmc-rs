@@ -1,0 +1,7 @@
+source=2fb451d6
+world=4
+groupWidth=1
+workers=4
+threshold=32
+frames=2 explicitoverlay
+seed=1 original

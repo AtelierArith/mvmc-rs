@@ -1,0 +1,7 @@
+suite	identity	serial_ordinal_of_971	mpi_ordinal_of_973	status
+mvmc-expert-parsers	utils::file::tests::safe_parse_complex_julia_literal	719	722	PASS_BOTH
+mvmc-expert-parsers	utils::file::tests::safe_parse_complex_real_only	721	723	PASS_BOTH
+mvmc-expert-parsers	utils::file::tests::safe_parse_complex_two_reals	722	724	PASS_BOTH
+mvmc-expert-parsers::issue184_complex_utility_contracts	complex_utility_default_does_not_change_valid_values	806	808	PASS_BOTH
+mvmc-expert-parsers::issue184_complex_utility_contracts	complex_utility_preserves_component_and_exponent_signs	807	809	PASS_BOTH
+mvmc-expert-parsers::issue184_complex_utility_contracts	complex_utility_returns_supplied_default_for_invalid_or_surplus_fields	808	810	PASS_BOTH

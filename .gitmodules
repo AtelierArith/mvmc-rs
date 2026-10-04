@@ -1,0 +1,9 @@
+[submodule "extern/PfaPack.jl"]
+	path = extern/PfaPack.jl
+	url = https://github.com/tmisawa/PfaPack.jl.git
+[submodule "extern/Julia-mVMC"]
+	path = extern/Julia-mVMC
+	url = https://github.com/terasakisatoshi/Julia-mVMC.git
+[submodule "extern/mVMC-1.3.0"]
+	path = extern/mVMC-1.3.0
+	url = https://github.com/issp-center-dev/mVMC.git

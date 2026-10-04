@@ -1,0 +1,35 @@
+generated_utc=2026-10-03T06:23:25.209
+architecture=x86_64-linux-gnu
+compiler=gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+compiler_options=-std=gnu11 -O0 -ffp-contract=off -DMEXP=19937 -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/sfmt -I/home/terasaki/work/atelierarith/mvmc-rs/extern/mVMC-1.3.0/src/mVMC/include -I/home/terasaki/work/atelierarith/mvmc-rs/c_toolbox -lm
+seed=1
+BLAS=none; scalar parameter-stage probe
+source_parameter_sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0
+source_readdef_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
+driver_sha256=2f69ae04d621e9581e468bd56715cfa4c94d99d1441d058a30f453d25f6aefe8
+excerpt_sha256=1a8978ee142630bf53e2a9b9692d82b44411cad9fb1f94d35c4417d6c8f70924
+scope=actual C initialization/fixed-record/overlay/synchronization functions, explicit dimensions/flags/keyword slots; NOT complete C reader/executable/MPI/sampling acceptance
+stage_order=InitParameter; ReadInitParameter; ReadInputParameters; SyncModifiedParameter, correlation shifts off as C Mode1
+rng=next624 non-consuming sfmt+idx save/restore; draw count derived from actual C InitParameter active-loop clauses and checked by stream position
+input_sha256=ceed84417be012feef9f8a395f291ae1e4f9447105047d2a6025e069df48b900 zqp_opt.dat
+input_sha256=2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae inputs/coulombintra.def
+input_sha256=2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273 inputs/dh2.def
+input_sha256=4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255 inputs/dh4.def
+input_sha256=b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a inputs/greenone.def
+input_sha256=691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b inputs/greentwo.def
+input_sha256=1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7 inputs/greentwoex.def
+input_sha256=ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528 inputs/gutzwilleridx.def
+input_sha256=a3a827426ef69c7ed50927084c8115aa5cba2f96eb9e27af20f5117312d969a4 inputs/indh2.def
+input_sha256=0b24777d1ae1581863dd0dee3556cbffa537d9fcb75601a866407f73d119ff97 inputs/indh4.def
+input_sha256=1328411cfa2a313837f698c7ce4f2a1e591890cd6901bedc01e46f05d97ccf10 inputs/inopttrans.def
+input_sha256=2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956 inputs/jastrowidx.def
+input_sha256=d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2 inputs/locspn.def
+input_sha256=f50a9df260591b7af7464b1e2eb6b0df37f126a0b75711772fb67b057c8b588f inputs/modpara.def
+input_sha256=d430e2ed630f2fe855dab87353cada0d91a9fa41baa886ccd2031dc0fed2d865 inputs/namelist.def
+input_sha256=22aa05e116cc28bba957ed994373de2e952422b282e6811ad668a7cd7052b77f inputs/opttrans.def
+input_sha256=c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6 inputs/orbitalidx.def
+input_sha256=c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d inputs/qptransidx.def
+input_sha256=0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6 inputs/trans.def

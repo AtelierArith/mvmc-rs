@@ -1,0 +1,5 @@
+declared_records=2
+count_after_mode2_dedup=1
+normal_reader_status=1
+with_gex_canonical_count=1
+indirect_reader_status=0

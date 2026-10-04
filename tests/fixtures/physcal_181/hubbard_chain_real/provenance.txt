@@ -1,0 +1,39 @@
+generator=scripts/generate_physcal_181.jl
+generated_utc=2026-10-03T05:58:35.797
+generator_sha256=cc6415df4dc70d3b0c5febb4abf325c14bbc48bae9496679a7586983b99f94a9
+julia=1.13.1
+reference_revision=8bb1b9e8ae47b1512c00b321be05664ddcac0fd1
+architecture=x86_64-linux-gnu
+blas=LBTConfig([ILP64] libopenblas64_.so)
+blas_threads=1
+julia_threads=1
+blas_version=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512
+julia_commit=96ca370cf0e339faf45a7ba863793f6c7c6980fb
+cpu=haswell
+seed=1
+mode=real
+manifest_sha256=09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc
+physcal_source_sha256=6dd6136057f1ed93a9e7d0b33518cd1b1d434b1595e3fb324b307a9bbebe03bf
+stages=seeded; initialized (single InitParameter, before fixed restoration); sample-0 (after all saved samples, before measurement)
+rng=next 624 UInt32 outputs, non-consuming C SFMT peek; draw-count=primitive UInt32 words since seed
+input_contract=explicit zqp; no automatic initial.def; unchanged sampling counts; serial; correlation shifts disabled
+trajectory_authority=Julia independently generated; C compatibility of trajectory requires a separate C trace
+C_output_check=zvo_cisajs_001.dat: ok=true, max_abs=8.326672684688674e-17, within tolerance (rtol=1.0e-10, atol=1.0e-12; max_abs=8.326672684688674e-17)
+C_output_check=zvo_cisajs_001.dat first_numerical_difference=row=3 column=5 actual=0.05521286926228842 expected=0.05521286926228844 delta=-2.0816681711721685e-17
+C_output_check=zvo_cisajscktalt_001.dat: ok=true, max_abs=9.71445146547012e-17, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=9.71445146547012e-17)
+C_output_check=zvo_cisajscktalt_001.dat first_numerical_difference=row=15 column=9 actual=-0.02463886900823012 expected=-0.024638869008230122 delta=3.469446951953614e-18
+C_output_check=zvo_cisajscktaltex_001.dat: ok=true, max_abs=2.220446049250313e-16, within tolerance (rtol=1.0e-9, atol=1.0e-12; max_abs=2.220446049250313e-16)
+C_output_check=zvo_cisajscktaltex_001.dat first_numerical_difference=row=1 column=3 actual=0.3861051828632471 expected=0.38610518286324713 delta=-5.551115123125783e-17
+input_sha256=2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae inputs/coulombintra.def
+input_sha256=b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a inputs/greenone.def
+input_sha256=691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b inputs/greentwo.def
+input_sha256=1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7 inputs/greentwoex.def
+input_sha256=ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528 inputs/gutzwilleridx.def
+input_sha256=2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956 inputs/jastrowidx.def
+input_sha256=d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2 inputs/locspn.def
+input_sha256=07f0f445f0e1a716c965ae244a87c9d7c3885bbdaa4de5e44e2f2328684c77f6 inputs/modpara.def
+input_sha256=17364bf19536df5ca8383186c67c5374dac019b9fae737c6cea2fb740fe256f5 inputs/namelist.def
+input_sha256=c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6 inputs/orbitalidx.def
+input_sha256=c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d inputs/qptransidx.def
+input_sha256=0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6 inputs/trans.def
+input_sha256=bc60804a5c6384785178d3db4ca8761a47a10165642f95dda4a5c02170d5aac9 zqp_opt.dat

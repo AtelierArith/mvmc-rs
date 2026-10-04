@@ -1,0 +1,10 @@
+===
+NParameter 3
+ComplexType 1
+===
+===
+2 .25 -.125
+1 2 3
+0 .125 -.0625
+1 bogus -.25 ignored
+-1 9 9

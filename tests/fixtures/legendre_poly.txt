@@ -1,0 +1,25 @@
+# Julia 1.13.1 legendre_poly; exponent n, input bits, output bits
+2 bfeccccccccccccd 3fe6e147ae147ae2
+2 bfd3333333333333 bfd75c28f5c28f5c
+2 3fd3333333333333 bfd75c28f5c28f5c
+2 3feccccccccccccd 3fe6e147ae147ae2
+3 bfeccccccccccccd bfde3d70a3d70a3e
+3 bfd3333333333333 3fd87ae147ae147a
+3 3fd3333333333333 bfd87ae147ae147a
+3 3feccccccccccccd 3fde3d70a3d70a3e
+4 bfeccccccccccccd 3fca9db22d0e5600
+4 bfd3333333333333 3fb2ac083126e97a
+4 3fd3333333333333 3fb2ac083126e97a
+4 3feccccccccccccd 3fca9db22d0e5600
+5 bfeccccccccccccd 3fa5107746887aad
+5 bfd3333333333333 bfd61aceee0f3cb4
+5 3fd3333333333333 3fd61aceee0f3cb4
+5 3feccccccccccccd bfa5107746887aad
+8 bfeccccccccccccd bfda384b394ed62c
+8 bfd3333333333333 bfce99ff06dbbc54
+8 3fd3333333333333 bfce99ff06dbbc54
+8 3feccccccccccccd bfda384b394ed62c
+12 bfeccccccccccccd 3fa4dd03f64ee5a5
+12 bfd3333333333333 bfc72b145523c06a
+12 3fd3333333333333 bfc72b145523c06a
+12 3feccccccccccccd 3fa4dd03f64ee5a5
