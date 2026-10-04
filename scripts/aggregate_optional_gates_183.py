@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import optional_mpi_provider_183 as mpi_provider
+import optional_fixture_metadata_183 as fixture_metadata
 
 from run_optional_gates_183 import FAMILIES, GENERAL, LANCZOS, MODELS, MPI, THREAD
 
@@ -244,6 +245,8 @@ def validate_package(package, family, plan):
     if not re.fullmatch(r"[0-9a-f]{64}", backend.get("library_sha256", "")):
         raise ValueError("backend library digest absent")
     if family == "lanczos":
+        fixture_metadata.validate(read_json(evidence / "metadata.json").get("fixture_modpara"),
+                                  read_json(evidence / "fixtures.before.json"))
         records = read_json(evidence / "dc-comparisons.json")["records"]
         expected = {(model, mode, file, status) for model in MODELS[1:] for mode in ("real", "cmp")
                     for file, status in (("zvo_ls_cisajs_001.dat", "REFERENCE_COMPARED"),

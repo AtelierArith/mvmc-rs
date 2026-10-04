@@ -49,6 +49,20 @@ def fixture(root, packages, plan, family):
     for stem in ("source", "fixtures", "binary"):
         put(evidence / f"{stem}.before.json", {"synthetic-path": "b" * 64})
         put(evidence / ("binary.json" if stem == "binary" else f"{stem}.after.json"), {"synthetic-path": "b" * 64})
+    if family == "lanczos":
+        report = {"schema": 1, "authority": "static fixture declaration; NOT runtime observation",
+                  "explicit_gate_overrides": {"seed": 1, "modes": ["real", "cmp"]},
+                  "fixtures": [{"model": model,
+                                "path": f"/synthetic/{model}/physcal_ref/inputs/modpara.def",
+                                "sha256": "b" * 64,
+                                "declared": audit.fixture_metadata.expected(model)}
+                               for model in audit.MODELS]}
+        metadata = audit.read_json(evidence / "metadata.json")
+        metadata["fixture_modpara"] = report
+        put(evidence / "metadata.json", metadata)
+        for suffix in ("before", "after"):
+            put(evidence / f"fixtures.{suffix}.json",
+                {row["path"]: row["sha256"] for row in report["fixtures"]})
     put(evidence / "backend.json", {"actual_threads": 1, "actual_config": "OpenBLAS 0.3.26 synthetic",
                                    "actual_core": "Haswell", "library_sha256": "c" * 64})
     for name in ("commands.json", "selection.json"):
