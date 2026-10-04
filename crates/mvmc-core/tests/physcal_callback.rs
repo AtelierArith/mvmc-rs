@@ -19,14 +19,13 @@ fn preparation(samples: i64) -> mvmc_core::PhysCalPreparation {
     let root = fixture();
     assert!(root.is_dir(), "Julia-mVMC PhysCal fixture is required");
     let namelist = root.join("inputs/namelist.def");
-    let parsed = mvmc_expert_parsers::parse_expert_mode_files(&namelist).unwrap();
-    let opt =
-        std::env::temp_dir().join(format!("mvmc-physcal-callback-{}.dat", std::process::id()));
-    let fields = 6 + 3 * parsed.count_variational_parameters();
-    fs::write(&opt, (0..fields).map(|_| "0").collect::<Vec<_>>().join(" ")).unwrap();
+    // Callback tests need a supported non-singular fixed wavefunction.
+    // An all-zero Slater input fails C's shared complex validation (INFO5)
+    // before any callback. Use the existing independent parameter fixture;
+    // no output values below are adopted as new numerical expectations.
+    let opt = root.join("zqp_opt.dat");
     let mut prepared =
         mvmc_core::prepare_phys_cal_from_namelist(namelist, &opt, "real", Some(1)).unwrap();
-    fs::remove_file(opt).unwrap();
     prepared.data.modpara.n_data_qty_smp = samples;
     prepared
 }
@@ -224,6 +223,11 @@ struct CallbackReducer {
 }
 
 impl Reducer for CallbackReducer {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        // Identical simulated comm1 peers: signed MAX(info, info) == info.
+        // Do not consume any_failure's separate output/callback ordinal.
+        Ok(info)
+    }
     fn allreduce_sum_f64(&self, _: &mut [f64]) {}
     fn allreduce_sum_c64(&self, _: &mut [Complex64]) {}
     fn allreduce_sum_i64(&self, _: &mut [i64]) {}
@@ -237,6 +241,23 @@ impl Reducer for CallbackReducer {
         let check = self.failure_checks.get();
         self.failure_checks.set(check + 1);
         failed || (check + 1 == self.remote_failure_at)
+    }
+}
+
+#[test]
+fn callback_reducer_signed_comm1_info_does_not_consume_failure_ordinals() {
+    let reducer = CallbackReducer {
+        rank: 1,
+        remote_failure_at: 5,
+        failure_checks: Cell::new(0),
+    };
+    for info in [i32::MIN, -3, 0, 4, i32::MAX] {
+        assert_eq!(reducer.sampling_max_info(info).unwrap(), info);
+        assert_eq!(reducer.failure_checks.get(), 0);
+    }
+    for ordinal in 1..=5 {
+        assert_eq!(reducer.any_failure(false), ordinal == 5);
+        assert_eq!(reducer.failure_checks.get(), ordinal);
     }
 }
 

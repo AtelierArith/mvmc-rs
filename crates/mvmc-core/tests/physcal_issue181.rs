@@ -1137,8 +1137,10 @@ fn check_independent_sampling_trajectory(model: Model) {
         "reference checkpoint coverage"
     );
     let stats = match (fsz, complex) {
-        (false, false) => mvmc_core::vmc_make_sample_real(data, &mut state, &mut preparation.rng),
-        (false, true) => mvmc_core::vmc_make_sample(data, &mut state, &mut preparation.rng),
+        (false, false) => mvmc_core::vmc_make_sample_real(data, &mut state, &mut preparation.rng)
+            .expect("normal real reference preparation"),
+        (false, true) => mvmc_core::vmc_make_sample(data, &mut state, &mut preparation.rng)
+            .expect("normal complex reference preparation"),
         (true, true) => {
             mvmc_core::sampling::driver::vmc_make_sample_fsz(data, &mut state, &mut preparation.rng)
         }

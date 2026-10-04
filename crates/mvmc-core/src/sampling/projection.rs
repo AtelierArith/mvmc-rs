@@ -79,6 +79,10 @@ fn recompute_dh_counts(
 
 /// Initialise `loc_spn[ri] = 1` for sites flagged as local-spin in
 /// `data.locspin_terms` (mirrors `init_loc_spn!`).
+///
+/// Raw integer definitions are not restricted to binary values. Only exactly
+/// `spin_value == 1` selects a local spin, matching C's placement predicate;
+/// the resulting internal flags are binary even for nonbinary public input.
 pub fn init_loc_spn(loc_spn: &mut [i64], data: &ExpertModeData) {
     for slot in loc_spn.iter_mut() {
         *slot = 0;
@@ -431,6 +435,40 @@ mod tests {
         let mut loc = vec![99_i64; 4];
         init_loc_spn(&mut loc, &data);
         assert_eq!(loc, vec![1, 0, 1, 0]);
+    }
+
+    #[test]
+    fn init_loc_spn_accepts_nonbinary_definition_values() {
+        let mut data = small_data();
+        data.locspin_terms = vec![
+            LocSpinTerm {
+                site: 0,
+                spin_value: 2,
+            },
+            LocSpinTerm {
+                site: 1,
+                spin_value: -1,
+            },
+            LocSpinTerm {
+                site: 2,
+                spin_value: 0,
+            },
+            LocSpinTerm {
+                site: 3,
+                spin_value: 1,
+            },
+        ];
+        let mut loc = [99; 4];
+        init_loc_spn(&mut loc, &data);
+        assert_eq!(loc, [0, 0, 0, 1]);
+        // Projection must not rewrite or reject the original definitions.
+        assert_eq!(
+            data.locspin_terms
+                .iter()
+                .map(|term| term.spin_value)
+                .collect::<Vec<_>>(),
+            [2, -1, 0, 1]
+        );
     }
 
     #[test]

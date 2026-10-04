@@ -1,0 +1,5 @@
+complex 1 2 2
+complex 2 0 4
+returned 0 2 4
+real-setup -7
+continued-after-real-setup

@@ -53,6 +53,11 @@ const MIN_ABS2: f64 = 1.0e-28;
 /// have to memorise the numeric meaning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CalcMAllError {
+    /// Checked native-normal input/storage precondition, not numeric INFO.
+    InputShape {
+        /// Invalid shape or range description.
+        reason: &'static str,
+    },
     /// `ele_idx` produced an `rsi` (or `rsj`) outside `[0, 2*n_site)`.
     SiteOutOfRange {
         /// QP plane that hit the error.
@@ -85,6 +90,9 @@ pub enum CalcMAllError {
 impl core::fmt::Display for CalcMAllError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            CalcMAllError::InputShape { reason } => {
+                write!(f, "calc_m_all: invalid native-normal shape: {reason}")
+            }
             CalcMAllError::SiteOutOfRange { qp, site } => {
                 write!(
                     f,
@@ -134,6 +142,62 @@ pub fn calc_m_all_real(
     n_elec: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    calc_m_all_real_with_status::<false>(
+        ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+    )
+}
+
+/// C's distinct real setup, including scalar partial publication on failure.
+/// Its caller ignores numeric INFO, not typed invalid-input errors.
+pub(crate) fn calc_m_all_real_native_info(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<f64>,
+    inv_m: &mut InvMColMajor<f64>,
+    pf_m: &mut [f64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<i32, CalcMAllError> {
+    native_normal_preflight(
+        ele_idx.len(),
+        slater_elm.n_site2(),
+        slater_elm.n_qp_full(),
+        inv_m.n_size(),
+        inv_m.n_qp_full(),
+        pf_m.len(),
+        qp_start,
+        qp_end,
+        n_site,
+        n_elec,
+        pool.n_size(),
+    )?;
+    // C passes N=LDA=0 to DSKTRF for an empty electron matrix. Its argument
+    // validation reports INFO=-5 before the N==0 quick return (and before
+    // utu2pfa/inverse). Do not call Rust inverse slices with n_size-1.
+    if n_elec == 0 {
+        return Ok(if qp_start < qp_end { -5 } else { 0 });
+    }
+    native_normal_info(
+        calc_m_all_real_with_status::<true>(
+            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+        ),
+        qp_start,
+    )
+}
+
+fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<f64>,
+    inv_m: &mut InvMColMajor<f64>,
+    pf_m: &mut [f64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
     let n_size = 2 * n_elec;
     debug_assert!(qp_start <= qp_end);
     debug_assert!(qp_end <= slater_elm.n_qp_full());
@@ -145,13 +209,13 @@ pub fn calc_m_all_real(
 
     let observed = crate::threading::observe_kernel(
         crate::threading::ObservedWork::Qp,
-        crate::threading::inner_parallel_enabled(qp_end - qp_start),
+        !NATIVE_STATUS && crate::threading::inner_parallel_enabled(qp_end - qp_start),
     );
-    if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+    if NATIVE_STATUS || !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
             let _entry = observed.enter_item();
-            calc_m_all_child_real(
+            calc_m_all_child_real::<NATIVE_STATUS>(
                 qp,
                 ele_idx,
                 slater_elm,
@@ -182,7 +246,7 @@ pub fn calc_m_all_real(
                 let mut local_pf = vec![0.0_f64; end];
                 let result = (start..end).try_for_each(|qp| {
                     let _entry = observed.enter_item();
-                    calc_m_all_child_real(
+                    calc_m_all_child_real::<NATIVE_STATUS>(
                         qp,
                         ele_idx,
                         slater_elm,
@@ -225,7 +289,7 @@ pub fn calc_m_all_complex(
     n_elec: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
-    calc_m_all_complex_with_kernel::<false>(
+    calc_m_all_complex_with_kernel::<false, false>(
         ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
     )
 }
@@ -245,12 +309,113 @@ pub(crate) fn calc_m_all_complex_c_compat(
     n_elec: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
-    calc_m_all_complex_with_kernel::<true>(
+    calc_m_all_complex_with_kernel::<true, false>(
         ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
     )
 }
 
-fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
+/// Native normal-complex validation status, without a Julia-only norm cutoff.
+///
+/// INFO is the factorization's code, or owned-range-relative QP+1 for a
+/// nonfinite Pfaffian. Invalid Rust/input preconditions remain typed errors.
+/// This does not promise C's timing-dependent choice among concurrent errors.
+/// Validation uses the scalar QP path so failed calls retain the same ordered
+/// partial publication as C with OMP_NUM_THREADS=1, not all-chunk rollback.
+pub(crate) fn calc_m_all_complex_native_info(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m: &mut InvMColMajor<Complex64>,
+    pf_m: &mut [Complex64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<i32, CalcMAllError> {
+    native_normal_preflight(
+        ele_idx.len(),
+        slater_elm.n_site2(),
+        slater_elm.n_qp_full(),
+        inv_m.n_size(),
+        inv_m.n_qp_full(),
+        pf_m.len(),
+        qp_start,
+        qp_end,
+        n_site,
+        n_elec,
+        pool.n_size(),
+    )?;
+    // Same ZSKTRF argument validation: LDA=0 is illegal even when N=0.
+    // This is a native signed status, not a successful zero-size Pfaffian.
+    if n_elec == 0 {
+        return Ok(if qp_start < qp_end { -5 } else { 0 });
+    }
+    native_normal_info(
+        calc_m_all_complex_with_kernel::<true, true>(
+            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+        ),
+        qp_start,
+    )
+}
+
+/// Validate before handling empty owned ranges or the N=0 native INFO.
+/// All failures leave Pf/Inv untouched and remain typed, not numeric status.
+#[allow(clippy::too_many_arguments)]
+fn native_normal_preflight(
+    ele_len: usize,
+    site2: usize,
+    slater_qp: usize,
+    inv_size: usize,
+    inv_qp: usize,
+    pf_len: usize,
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool_size: usize,
+) -> Result<(), CalcMAllError> {
+    let error = |reason| CalcMAllError::InputShape { reason };
+    let n_size = n_elec
+        .checked_mul(2)
+        .ok_or_else(|| error("Nsize overflow"))?;
+    let n_site2 = n_site
+        .checked_mul(2)
+        .ok_or_else(|| error("Nsite2 overflow"))?;
+    if n_elec > n_site {
+        return Err(error("normal Ne exceeds Nsite"));
+    }
+    if n_size >= i32::MAX as usize || slater_qp >= i32::MAX as usize || inv_qp >= i32::MAX as usize
+    {
+        return Err(error("native INFO dimension domain"));
+    }
+    if qp_start > qp_end || qp_end > slater_qp || qp_end > inv_qp || qp_end > pf_len {
+        return Err(error("owned QP range"));
+    }
+    if ele_len != n_size || inv_size != n_size || pool_size != n_size || site2 != n_site2 {
+        return Err(error("electron/slater/inverse/workspace dimensions"));
+    }
+    Ok(())
+}
+
+fn native_normal_info(
+    result: Result<(), CalcMAllError>,
+    qp_start: usize,
+) -> Result<i32, CalcMAllError> {
+    match result {
+        Ok(()) => Ok(0),
+        Err(error @ CalcMAllError::ZeroPivot { info, .. }) => {
+            i32::try_from(info).map_err(|_| error)
+        }
+        Err(error @ CalcMAllError::NonFinitePfaffian { qp }) => qp
+            .checked_sub(qp_start)
+            .and_then(|relative| relative.checked_add(1))
+            .and_then(|info| i32::try_from(info).ok())
+            .ok_or(error),
+        Err(error) => Err(error),
+    }
+}
+
+fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
     inv_m: &mut InvMColMajor<Complex64>,
@@ -272,13 +437,13 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
 
     let observed = crate::threading::observe_kernel(
         crate::threading::ObservedWork::Qp,
-        crate::threading::inner_parallel_enabled(qp_end - qp_start),
+        !NATIVE_STATUS && crate::threading::inner_parallel_enabled(qp_end - qp_start),
     );
-    if !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+    if NATIVE_STATUS || !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
             let _entry = observed.enter_item();
-            calc_m_all_child_complex::<C_COMPAT>(
+            calc_m_all_child_complex::<C_COMPAT, NATIVE_STATUS>(
                 qp,
                 ele_idx,
                 slater_elm,
@@ -309,7 +474,7 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool>(
                 let mut local_pf = vec![Complex64::default(); end];
                 let result = (start..end).try_for_each(|qp| {
                     let _entry = observed.enter_item();
-                    calc_m_all_child_complex::<C_COMPAT>(
+                    calc_m_all_child_complex::<C_COMPAT, NATIVE_STATUS>(
                         qp,
                         ele_idx,
                         slater_elm,
@@ -502,7 +667,7 @@ pub fn calc_m_all_fsz_real(
 // Per-QP child kernels
 // ---------------------------------------------------------------------------
 
-fn calc_m_all_child_real(
+fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     qp: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<f64>,
@@ -517,7 +682,7 @@ fn calc_m_all_child_real(
     let n_site2 = 2 * n_site;
 
     assemble_inv_m_real(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
-    if frobenius_norm_sqr_real(inv_m, qp) < MIN_ABS2 {
+    if !NATIVE_STATUS && frobenius_norm_sqr_real(inv_m, qp) < MIN_ABS2 {
         return Err(CalcMAllError::AllZero { qp });
     }
 
@@ -553,7 +718,7 @@ fn calc_m_all_child_real(
     Ok(())
 }
 
-fn calc_m_all_child_complex<const C_COMPAT: bool>(
+fn calc_m_all_child_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     qp: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
@@ -568,7 +733,7 @@ fn calc_m_all_child_complex<const C_COMPAT: bool>(
     let n_site2 = 2 * n_site;
 
     assemble_inv_m_complex(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
-    if frobenius_norm_sqr_complex(inv_m, qp) < MIN_ABS2 {
+    if !NATIVE_STATUS && frobenius_norm_sqr_complex(inv_m, qp) < MIN_ABS2 {
         return Err(CalcMAllError::AllZero { qp });
     }
 
@@ -584,7 +749,11 @@ fn calc_m_all_child_complex<const C_COMPAT: bool>(
         result.map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_complex(&a, &ws.pivots[..n_size])
     };
-    if !pf_value.re.is_finite() || !pf_value.im.is_finite() {
+    if if NATIVE_STATUS {
+        !(pf_value.re + pf_value.im).is_finite()
+    } else {
+        !pf_value.re.is_finite() || !pf_value.im.is_finite()
+    } {
         return Err(CalcMAllError::NonFinitePfaffian { qp });
     }
     *pf_slot = pf_value;
@@ -843,6 +1012,178 @@ fn ensure_workspace_complex(ws: &mut PfaPackWorkspace, n_size: usize) {
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
+
+    #[test]
+    fn native_normal_preflight_rejects_unsupported_dimensions_without_allocation() {
+        assert!(matches!(
+            native_normal_preflight(4, 2, 1, 4, 1, 1, 0, 1, 1, 2, 4,),
+            Err(CalcMAllError::InputShape {
+                reason: "normal Ne exceeds Nsite"
+            })
+        ));
+        let huge = i32::MAX as usize;
+        let ne = huge / 2 + 1;
+        let size = 2 * ne;
+        assert!(matches!(
+            native_normal_preflight(size, size, 1, size, 1, 1, 0, 0, ne, ne, size),
+            Err(CalcMAllError::InputShape {
+                reason: "native INFO dimension domain"
+            })
+        ));
+        assert!(matches!(
+            native_normal_preflight(0, 2, huge, 0, huge, huge, 0, 0, 1, 0, 0,),
+            Err(CalcMAllError::InputShape {
+                reason: "native INFO dimension domain"
+            })
+        ));
+        assert!(matches!(
+            native_normal_preflight(0, 2, 1, 0, 1, 1, 0, 0, 1, usize::MAX, 0,),
+            Err(CalcMAllError::InputShape {
+                reason: "Nsize overflow"
+            })
+        ));
+    }
+
+    #[test]
+    fn native_zero_electron_status_preserves_real_and_complex_storage() {
+        let pool = ThreadedPfaPackWorkspace::new(0, 1);
+        let real_slater = SlaterElmFlat::<f64>::zeros(2, 1);
+        let complex_slater = SlaterElmFlat::<Complex64>::zeros(2, 1);
+        let mut real_inv = InvMColMajor::<f64>::zeros(2, 0);
+        let mut complex_inv = InvMColMajor::<Complex64>::zeros(2, 0);
+        real_inv.as_mut_slice().fill(17.0);
+        complex_inv.as_mut_slice().fill(Complex64::new(17.0, -9.0));
+        let real_before = real_inv.as_slice().to_vec();
+        let complex_before = complex_inv.as_slice().to_vec();
+        let mut real_pf = [3.0, 5.0];
+        let mut complex_pf = [Complex64::new(3.0, 4.0), Complex64::new(5.0, 6.0)];
+        let complex_pf_before = complex_pf;
+        for (start, end, expected) in [(0, 2, -5), (1, 1, 0), (2, 2, 0)] {
+            assert_eq!(
+                calc_m_all_real_native_info(
+                    &[],
+                    &real_slater,
+                    &mut real_inv,
+                    &mut real_pf,
+                    start,
+                    end,
+                    1,
+                    0,
+                    &pool,
+                ),
+                Ok(expected)
+            );
+            assert_eq!(
+                calc_m_all_complex_native_info(
+                    &[],
+                    &complex_slater,
+                    &mut complex_inv,
+                    &mut complex_pf,
+                    start,
+                    end,
+                    1,
+                    0,
+                    &pool,
+                ),
+                Ok(expected)
+            );
+            assert_eq!(real_pf, [3.0, 5.0]);
+            assert_eq!(complex_pf, complex_pf_before);
+            assert_eq!(real_inv.as_slice(), real_before);
+            assert_eq!(complex_inv.as_slice(), complex_before);
+        }
+        for (start, end) in [(2, 1), (0, 3), (3, 3)] {
+            assert!(matches!(
+                calc_m_all_real_native_info(
+                    &[],
+                    &real_slater,
+                    &mut real_inv,
+                    &mut real_pf,
+                    start,
+                    end,
+                    1,
+                    0,
+                    &pool,
+                ),
+                Err(CalcMAllError::InputShape { .. })
+            ));
+            assert!(matches!(
+                calc_m_all_complex_native_info(
+                    &[],
+                    &complex_slater,
+                    &mut complex_inv,
+                    &mut complex_pf,
+                    start,
+                    end,
+                    1,
+                    0,
+                    &pool,
+                ),
+                Err(CalcMAllError::InputShape { .. })
+            ));
+        }
+        assert!(matches!(
+            calc_m_all_real_native_info(
+                &[],
+                &real_slater,
+                &mut real_inv,
+                &mut [],
+                0,
+                1,
+                1,
+                0,
+                &pool,
+            ),
+            Err(CalcMAllError::InputShape { .. })
+        ));
+        assert!(matches!(
+            calc_m_all_complex_native_info(
+                &[],
+                &complex_slater,
+                &mut complex_inv,
+                &mut [],
+                0,
+                1,
+                1,
+                0,
+                &pool,
+            ),
+            Err(CalcMAllError::InputShape { .. })
+        ));
+        // A malformed electron buffer must not turn into the zero-range OK.
+        assert!(matches!(
+            calc_m_all_real_native_info(
+                &[0],
+                &real_slater,
+                &mut real_inv,
+                &mut real_pf,
+                0,
+                0,
+                1,
+                0,
+                &pool,
+            ),
+            Err(CalcMAllError::InputShape { .. })
+        ));
+        assert!(matches!(
+            calc_m_all_complex_native_info(
+                &[0],
+                &complex_slater,
+                &mut complex_inv,
+                &mut complex_pf,
+                0,
+                0,
+                1,
+                0,
+                &pool,
+            ),
+            Err(CalcMAllError::InputShape { .. })
+        ));
+        assert_eq!(real_pf, [3.0, 5.0]);
+        assert_eq!(complex_pf, complex_pf_before);
+        assert_eq!(real_inv.as_slice(), real_before);
+        assert_eq!(complex_inv.as_slice(), complex_before);
+    }
 
     /// A 2-site, 2-electron, 1-QP example crafted so the assembled
     /// `inv_m` is the simple skew block `[[0, a], [-a, 0]]`. Tests the

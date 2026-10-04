@@ -13,6 +13,9 @@ struct FaultReducer<'a> {
 }
 
 impl Reducer for FaultReducer<'_> {
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        self.inner.sampling_max_info(info)
+    }
     fn broadcast_i64(&self, root: usize, values: &mut [i64]) -> Result<(), String> {
         self.inner.broadcast_i64(root, values)
     }

@@ -30,6 +30,7 @@ pub mod driver;
 mod fsz_real;
 pub mod initial;
 pub mod metropolis;
+pub mod normal_initial;
 pub mod one_move;
 pub mod projection;
 pub mod rbm;
