@@ -1,5 +1,22 @@
 # Original M0585: scoped LOCAL_ONLY shared-coefficient observation
 
+## CI successor checkpoint (original LOCAL section retained below)
+
+PR298 sourcehead e43a18c1102b5123d9d99d3c3e90628fd1ea1239 merged as
+main1ad3f582f0c6bd35ac522393e65b972a739234a1. Actual CI tested merge
+79253870277892c161ed2fe6cb93912304de0b37 into da979375739292e5e0c68a0413768a78094bee74.
+Original M0585 test PASS both Linux jobs ordinal433,0.005s/0.007s.
+Serial1120PASS41skip171.495s,allfeatures1122PASS60skip272.575s,
+run37190335659 jobs111400978419/111400978405. Lint/docs SUCCESS.
+Actual CI command cargo nextest run --workspace [allfeatures: --all-features]
+--locked --cargo-profile ci --no-fail-fast --retries 0.
+Raw logs SHA3e77b0937908d879d5ca0c7404bbf380d2c39251711882c0f0bf08273524f979
+and1bdfb7bae21c387d31268ee2cb10943063dd258c11f7c206adef2f6aade98850.
+See canonical row job links for durable provenance. LOCAL base9b6 and following
+historical draft/CI-pending wording describe that earlier checkpoint only.
+This CI successor remains one shared-coefficient condition, not M0586 repair,
+sign application, whole S121 or model parity.
+
 Related184/185. Executed base9b6ed40754e88eb2dd8c3c3978309540df19b32d.
 Draft publication base da979375739292e5e0c68a0413768a78094bee74 retains
 PR295's two aggregation scripts and PR296 diagnostic; this main update is not relabelled

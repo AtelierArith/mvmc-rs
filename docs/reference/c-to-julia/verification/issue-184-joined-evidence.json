@@ -76068,18 +76068,18 @@
       "rust_entry": "crates/mvmc-core/tests/issue184_original_shared_orbital.rs::original_m0585_unpack_assigns_shared_orbital_coefficients",
       "supported_rejected_conditions": "Original Heisenberg parse, duplicate idx exists; unpack(before + complex(0.1,-0.1)); every same-idx mapping observes independently expected assigned dense coefficient; all declared slots checked. No sign or independent shadow-repair claim.",
       "intentional_scope": "M0585 shared coefficient observation, representation-aware; M0586 repair and S121 parent remain unverified.",
-      "evidence_type": "SCOPED_ORDINARY_LOCAL",
+      "evidence_type": "SCOPED_ORDINARY_CI_WITH_RETAINED_LOCAL",
       "owner": "#184 inventory; implementation owner pending classification",
       "reference_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
       "settings": "Original8bb Heisenberg13-file literal closure unchanged; default features locked test-fast jobs2 BLAS/OMP/MKL1, executed base9b6; no initialization/RNG.",
-      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_shared_orbital --no-tests fail --no-fail-fast --retries 0",
-      "result": "LOCAL_ONLY: 1/1 PASS,0 skipped,0.006s; UUID43dd6e1b-bd40-4a08-9060-2b2aa4cee49d; LIST/Clippy/fmt/postLIST/source/tools/providers/ELF/runtime/cleanup/aggregate0. Exact publication-head CI pending.",
+      "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_shared_orbital --no-tests fail --no-fail-fast --retries 0; CI: cargo nextest run --workspace [allfeatures job: --all-features] --locked --cargo-profile ci --no-fail-fast --retries 0.",
+      "result": "Scoped original M0585 PASS PR298 serial0.005s/allfeatures0.007s ordinal433 each; full ordinary suites1120PASS41skip171.495s/1122PASS60skip272.575s. Retained LOCAL base9b6/UUID/receipt separate; no M0586/sign/model/S121 whole promotion.",
       "owner_text": "#184 inventory; implementation owner pending classification",
       "proposed_followup_owner": "#184 inventory; implementation owner pending classification",
       "reconciliation_coordinator": "Pauli / #185",
       "original_proof_gap": "Exact JuliaSyntax source byte span/full escaped assertion and ancestor loops inventoried; per-loop value expansion, scope block classification, equivalent Rust assertion/settings still pending; not execution proof",
       "scope_exclusion": "Original historical review flag retained in original_row; this shared-coefficient condition classified only.",
-      "status": "CoveredScopedOrdinaryLocal",
+      "status": "CoveredScopedOrdinaryCI",
       "pending_reasons": [],
       "original_row": {
         "audit_id": "M0585",
@@ -76119,8 +76119,45 @@
         "source_sha256": "d6364dbc35aa73837ec43290d85d4159b74594bd7bccfb88ee6f4369e44095e0",
         "raw_run_log_sha256": "320d1d265d73aa2e6742e63c523db2bb6f69a7a14098cb4785a5ae1d77312153",
         "receipt": "/tmp/mvmc-184-m0585-proof.20261004",
-        "scope": "LOCAL_ONLY",
-        "original_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1"
+        "scope": "SCOPED_CI_WITH_RETAINED_LOCAL",
+        "original_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1",
+        "ci": {
+          "pr": 298,
+          "source_head": "e43a18c1102b5123d9d99d3c3e90628fd1ea1239",
+          "tested_merge": "79253870277892c161ed2fe6cb93912304de0b37",
+          "base": "da979375739292e5e0c68a0413768a78094bee74",
+          "merged_main": "1ad3f582f0c6bd35ac522393e65b972a739234a1",
+          "run": 37190335659,
+          "jobs": [
+            111400978419,
+            111400978405
+          ],
+          "job_urls": [
+            "https://github.com/AtelierArith/mvmc-rs/actions/runs/37190335659/job/111400978419",
+            "https://github.com/AtelierArith/mvmc-rs/actions/runs/37190335659/job/111400978405"
+          ],
+          "raw_sha256": [
+            "3e77b0937908d879d5ca0c7404bbf380d2c39251711882c0f0bf08273524f979",
+            "1bdfb7bae21c387d31268ee2cb10943063dd258c11f7c206adef2f6aade98850"
+          ],
+          "profile": "ci",
+          "selected_condition": "original_m0585_unpack_assigns_shared_orbital_coefficients"
+        }
+      },
+      "local_evidence_history": {
+        "status": "CoveredScopedOrdinaryLocal",
+        "evidence_type": "SCOPED_ORDINARY_LOCAL",
+        "settings": "Original8bb Heisenberg13-file literal closure unchanged; default features locked test-fast jobs2 BLAS/OMP/MKL1, executed base9b6; no initialization/RNG.",
+        "command": "cargo nextest run --locked --cargo-profile test-fast -p mvmc-core --test issue184_original_shared_orbital --no-tests fail --no-fail-fast --retries 0",
+        "result": "LOCAL_ONLY: 1/1 PASS,0 skipped,0.006s; UUID43dd6e1b-bd40-4a08-9060-2b2aa4cee49d; LIST/Clippy/fmt/postLIST/source/tools/providers/ELF/runtime/cleanup/aggregate0. Exact publication-head CI pending.",
+        "evidence_reference": {
+          "doc": "issue-184-original-shared-orbital.md",
+          "source_sha256": "d6364dbc35aa73837ec43290d85d4159b74594bd7bccfb88ee6f4369e44095e0",
+          "raw_run_log_sha256": "320d1d265d73aa2e6742e63c523db2bb6f69a7a14098cb4785a5ae1d77312153",
+          "receipt": "/tmp/mvmc-184-m0585-proof.20261004",
+          "scope": "LOCAL_ONLY",
+          "original_revision": "8bb1b9e8ae47b1512c00b321be05664ddcac0fd1"
+        }
       }
     },
     {

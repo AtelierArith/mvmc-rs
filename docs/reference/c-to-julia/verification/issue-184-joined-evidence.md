@@ -1,5 +1,19 @@
 # Joined evidence for #184 / #185
 
+## M0585 scoped CI successor (SOURCE join proposal)
+
+Base main1ad3f582f0c6bd35ac522393e65b972a739234a1, PR298 merged.
+Only M0585 advances from scoped LOCAL_ONLY to scoped ordinary CI. Original
+rows/order/owners for all2342 remain unchanged; local base9b6/UUID/receipt
+retained verbatim in local_evidence_history. M0586 and S121 remain pending.
+PR298 sourcehead e43a18c1 tested as merge79253870277892c161ed2fe6cb93912304de0b37
+into da979375; Linux serial1120PASS41skip171.495s and allfeatures1122PASS60skip272.575s,
+original M0585 ordinal433 PASS0.005s/0.007s. Profile ci, not relabelled test-fast.
+Updated totals87 scoped CI,6 scoped local,1 intentional,1583 missing source,
+80 historical,585 exclusion-review pending =2342. Earlier counts remain history.
+Durable jobs/raw hashes and exact source head/merge/base recorded in JSON.
+No sign, independent orbital repair, model or umbrella completion claim.
+
 ## Proposed M0585 local and M0587 scoped CI additions
 
 Draft publication base da979375739292e5e0c68a0413768a78094bee74.
