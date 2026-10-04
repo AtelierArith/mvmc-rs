@@ -22,7 +22,7 @@ pub fn sync_modified_parameter<R: Reducer + ?Sized>(data: &mut ExpertModeData, r
     sync_modified_parameter_local(data, true);
 }
 
-fn pack_variational_parameters(data: &ExpertModeData) -> Vec<Complex64> {
+pub(crate) fn pack_variational_parameters(data: &ExpertModeData) -> Vec<Complex64> {
     let mut values = data.projection_parameters();
     values.extend(data.rbm_parameters());
     values.extend(data.slater_params.iter().copied());
@@ -30,7 +30,7 @@ fn pack_variational_parameters(data: &ExpertModeData) -> Vec<Complex64> {
     values
 }
 
-fn unpack_variational_parameters(data: &mut ExpertModeData, values: &[Complex64]) {
+pub(crate) fn unpack_variational_parameters(data: &mut ExpertModeData, values: &[Complex64]) {
     let projection_len = data.projection_layout().n_proj;
     let rbm_len = data.count_rbm_parameters();
     let slater_len = data.slater_params.len();

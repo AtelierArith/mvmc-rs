@@ -32,6 +32,7 @@ pub use pfapack::julia_complex;
 pub mod observables;
 pub mod parallel;
 pub mod parallel_scalar;
+pub mod parameters;
 pub mod pfaffian;
 pub mod qp;
 pub mod reducer;
@@ -49,6 +50,10 @@ pub mod validation;
 
 pub use initial_params::{read_initial_def, read_opt_para_file};
 pub use mvmc_expert_parsers::ExpertModeData;
+pub use parameters::{
+    get_parameter_value, pack_parameters, set_parameter_value, unpack_parameters,
+    ParameterAccessError,
+};
 pub use pfaffian::{
     calc_m_all_complex, calc_m_all_fsz_complex, calc_m_all_fsz_real, calc_m_all_real, CalcMAllError,
 };
