@@ -200,14 +200,15 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
     let sr_opt_size = state.sr_opt.sr_opt_size;
     let lda_oo = 2 * sr_opt_size;
     let mut s_diag = vec![0.0_f64; 2 * n_para];
-    for pi in 0..(2 * n_para) {
+    // C stcopt.c:83 `omp parallel for` over `pi`: one producer per element.
+    crate::threading::for_each_mut(&mut s_diag, |pi, value| {
         let oo_idx_diag = (pi + 2) * lda_oo + (pi + 2);
         let oo_idx_0 = pi + 2;
         if oo_idx_diag < state.sr_opt.sr_opt_oo.len() && oo_idx_0 < state.sr_opt.sr_opt_oo.len() {
-            s_diag[pi] = state.sr_opt.sr_opt_oo[oo_idx_diag].re
+            *value = state.sr_opt.sr_opt_oo[oo_idx_diag].re
                 - state.sr_opt.sr_opt_oo[oo_idx_0].re.powi(2);
         }
-    }
+    });
     let s_diag_max = if s_diag.iter().any(|v| v.is_nan()) {
         f64::NAN
     } else {
@@ -360,15 +361,15 @@ fn collect_active_real(
     sr_opt_size: usize,
 ) -> (Vec<f64>, Vec<usize>) {
     let mut s_diag = vec![0.0_f64; n_para];
-    for pi in 0..n_para {
+    crate::threading::for_each_mut(&mut s_diag, |pi, value| {
         let idx_diag = (pi + 1) * sr_opt_size + (pi + 1);
         let idx_0 = pi + 1;
         if idx_diag < state.sr_opt.sr_opt_oo_real.len() && idx_0 < state.sr_opt.sr_opt_oo_real.len()
         {
-            s_diag[pi] =
+            *value =
                 state.sr_opt.sr_opt_oo_real[idx_diag] - state.sr_opt.sr_opt_oo_real[idx_0].powi(2);
         }
-    }
+    });
     // Julia's real-to-complex layout includes zero imaginary variances.
     let s_diag_max = if s_diag.iter().any(|v| v.is_nan()) {
         f64::NAN
@@ -401,24 +402,26 @@ fn build_s_g_real(
 ) {
     let n_smat = smat_to_para_idx.len();
     let ratio_diag = 1.0 + sta_del;
-    for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-        let tmp = state.sr_opt.sr_opt_oo_real[pi + 1];
-        for (sj, &pj) in smat_to_para_idx.iter().enumerate() {
-            let idx = si + n_smat * sj;
+    // C stcopt.c:69 `omp parallel for` over the S entries; every entry has one
+    // producer, so the columns are filled independently (column `sj` of S).
+    crate::threading::for_each_chunk_mut(s, n_smat, |sj, column| {
+        let pj = smat_to_para_idx[sj];
+        for (si, &pi) in smat_to_para_idx.iter().enumerate() {
+            let tmp = state.sr_opt.sr_opt_oo_real[pi + 1];
             let oo_idx = (pi + 1) * sr_opt_size + (pj + 1);
-            let s_val =
+            column[si] =
                 state.sr_opt.sr_opt_oo_real[oo_idx] - tmp * state.sr_opt.sr_opt_oo_real[pj + 1];
-            s[idx] = s_val;
+            if si == sj {
+                column[si] *= ratio_diag;
+            }
         }
-        let diag = si + n_smat * si;
-        s[diag] *= ratio_diag;
-    }
+    });
     let ho_0 = state.sr_opt.sr_opt_ho_real[0];
-    for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-        let value =
-            state.sr_opt.sr_opt_ho_real[pi + 1] - ho_0 * state.sr_opt.sr_opt_oo_real[pi + 1];
-        g[si] = -2.0 * step_dt * value;
-    }
+    crate::threading::for_each_mut(g, |si, value| {
+        let pi = smat_to_para_idx[si];
+        let v = state.sr_opt.sr_opt_ho_real[pi + 1] - ho_0 * state.sr_opt.sr_opt_oo_real[pi + 1];
+        *value = -2.0 * step_dt * v;
+    });
 }
 
 fn build_s_g_complex(
@@ -433,25 +436,24 @@ fn build_s_g_complex(
     let n_smat = smat_to_para_idx.len();
     let lda_oo = 2 * sr_opt_size;
     let ratio_diag = 1.0 + sta_del;
-    for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-        let tmp = state.sr_opt.sr_opt_oo[pi + 2].re;
-        for (sj, &pj) in smat_to_para_idx.iter().enumerate() {
-            let idx = si + n_smat * sj;
+    crate::threading::for_each_chunk_mut(s, n_smat, |sj, column| {
+        let pj = smat_to_para_idx[sj];
+        for (si, &pi) in smat_to_para_idx.iter().enumerate() {
+            let tmp = state.sr_opt.sr_opt_oo[pi + 2].re;
             let oo_idx = (pi + 2) * lda_oo + (pj + 2);
             let oo_0j = pj + 2;
-            let s_val = state.sr_opt.sr_opt_oo[oo_idx].re - tmp * state.sr_opt.sr_opt_oo[oo_0j].re;
-            s[idx] = s_val;
+            column[si] = state.sr_opt.sr_opt_oo[oo_idx].re - tmp * state.sr_opt.sr_opt_oo[oo_0j].re;
+            if si == sj {
+                column[si] *= ratio_diag;
+            }
         }
-        let diag = si + n_smat * si;
-        s[diag] *= ratio_diag;
-    }
+    });
     let ho_0 = state.sr_opt.sr_opt_ho[0].re;
-    for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-        let ho_idx = pi + 2;
-        let oo_idx = pi + 2;
-        let value = state.sr_opt.sr_opt_ho[ho_idx].re - ho_0 * state.sr_opt.sr_opt_oo[oo_idx].re;
-        g[si] = -2.0 * step_dt * value;
-    }
+    crate::threading::for_each_mut(g, |si, value| {
+        let pi = smat_to_para_idx[si];
+        let v = state.sr_opt.sr_opt_ho[pi + 2].re - ho_0 * state.sr_opt.sr_opt_oo[pi + 2].re;
+        *value = -2.0 * step_dt * v;
+    });
 }
 
 fn apply_parameter_update(

@@ -164,22 +164,47 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     let mut operator = SampledSrOperator::new(mapping.len(), samples, complex);
     let mut gradient = vec![0.0; mapping.len()];
     let dt = 2.0 * data.modpara.dsr_opt_step_dt;
-    for (si, &pi) in mapping.iter().enumerate() {
-        let idx = pi + offset;
-        operator.mean[si] = oo[idx];
-        operator.diagonal[si] = variance[pi];
-        gradient[si] = -dt * (ho[idx] - ho[0] * oo[idx]);
-        for s in 0..samples {
-            let src = s * size + idx;
-            let dst = s * mapping.len() + si;
-            if complex {
-                if let Some(o) = state.sr_opt.sr_opt_o_store.get(src) {
-                    operator.real_samples[dst] = o.re;
-                    operator.imag_samples[dst] = o.im;
+    // stcopt_cg_impl.c:471-492 `omp parallel for` over the active components `si`.
+    crate::threading::for_each_mut(&mut operator.mean, |si, value| {
+        *value = oo[mapping[si] + offset]
+    });
+    crate::threading::for_each_mut(&mut operator.diagonal, |si, value| {
+        *value = variance[mapping[si]]
+    });
+    crate::threading::for_each_mut(&mut gradient, |si, value| {
+        let idx = mapping[si] + offset;
+        *value = -dt * (ho[idx] - ho[0] * oo[idx]);
+    });
+    let n_active = mapping.len();
+    if samples > 0 {
+        // Sample `s` owns the contiguous window `s * n_active ..` of the sample matrices.
+        let fill = |s: usize, real: &mut [f64], imag: &mut [f64]| {
+            for (si, &pi) in mapping.iter().enumerate() {
+                let src = s * size + pi + offset;
+                if complex {
+                    if let Some(o) = state.sr_opt.sr_opt_o_store.get(src) {
+                        real[si] = o.re;
+                        imag[si] = o.im;
+                    }
+                } else if let Some(&o) = state.sr_opt.sr_opt_o_store_real.get(src) {
+                    real[si] = o;
                 }
-            } else if let Some(&o) = state.sr_opt.sr_opt_o_store_real.get(src) {
-                operator.real_samples[dst] = o;
             }
+        };
+        if complex {
+            crate::threading::for_each_chunk_pair_mut(
+                &mut operator.real_samples,
+                n_active,
+                &mut operator.imag_samples,
+                n_active,
+                fill,
+            );
+        } else {
+            crate::threading::for_each_chunk_mut(
+                &mut operator.real_samples,
+                n_active,
+                |s, real| fill(s, real, &mut []),
+            );
         }
     }
     let max_iterations = if data.modpara.nsr_opt_cg_max_iter > 0 {
@@ -336,18 +361,19 @@ impl SampledSrOperator {
             self.apply_with_reducer(&mut product, &mut direction, inv_weight, shift, reducer)?;
             let dq = sequential_dot(&direction, &product);
             let alpha = delta / dq;
-            for i in 0..n {
-                solution[i] += alpha * direction[i];
-            }
+            // stcopt_cg_impl.c:313 `omp parallel for`: elementwise, one producer per entry.
+            crate::threading::for_each_mut(&mut solution, |i, value| {
+                *value += alpha * direction[i]
+            });
             if iteration % 20 == 0 {
                 self.apply_with_reducer(&mut residual, &mut solution, inv_weight, shift, reducer)?;
-                for i in 0..n {
-                    residual[i] = gradient[i] - residual[i];
-                }
+                crate::threading::for_each_mut(&mut residual, |i, value| {
+                    *value = gradient[i] - *value
+                });
             } else {
-                for i in 0..n {
-                    residual[i] -= alpha * product[i];
-                }
+                crate::threading::for_each_mut(&mut residual, |i, value| {
+                    *value -= alpha * product[i]
+                });
             }
             let delta_new = sequential_dot(&residual, &residual);
             let beta = delta_new / delta;
@@ -355,9 +381,9 @@ impl SampledSrOperator {
             // norm. Assigning delta_new changes subsequent alpha/stop tests.
             let recurrent_norm = beta * delta;
             delta = recurrent_norm;
-            for i in 0..n {
-                direction[i] = residual[i] + beta * direction[i];
-            }
+            crate::threading::for_each_mut(&mut direction, |i, value| {
+                *value = residual[i] + beta * *value
+            });
             observe(|observer| {
                 observer.iteration(CgIterationView {
                     iteration,
@@ -506,9 +532,11 @@ impl SampledSrOperator {
         reducer.allreduce_sum_f64(z);
         observe(|observer| observer.product(CgProductPhase::Global, x, z));
         let coef = sequential_dot(&self.mean, x);
-        for i in 0..n {
-            z[i] = inv_weight * z[i] - coef * self.mean[i] + shift * self.diagonal[i] * x[i];
-        }
+        let (mean, diagonal) = (&self.mean, &self.diagonal);
+        let x = &*x;
+        crate::threading::for_each_mut(z, |i, value| {
+            *value = inv_weight * *value - coef * mean[i] + shift * diagonal[i] * x[i]
+        });
         observe(|observer| observer.product(CgProductPhase::Corrected, x, z));
         Ok(())
     }

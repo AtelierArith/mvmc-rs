@@ -60,7 +60,7 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
 > - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:251`
 > - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:273`
 > - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:198`
-> - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:86`
+> - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:157`
 > - 整合性: 乱数の抽出順序(局在スピン、次にスピン0の電子、次にスピン1の電子)、100回の再試行の上限、およびランク間でのパフィアン状態の集団最大値(`MPI_Allreduce(..., MPI_MAX)`)が再現されています。型付き状態/協調のテストは `normal_initial.rs` にあります。
 
 ## 4.3 提案
@@ -114,8 +114,8 @@ Cマニュアルの目安は次のとおりです。`0` はホッピングのみ
 > - Rust: `make_candidate_exchange_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:606`
 > - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:555`
 > - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:480`
-> - Rust: `update_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:345`
-> - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:368`
+> - Rust: `update_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:416`
+> - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:439`
 > - 整合性: 乱数の抽出回数と順序は厳密に一致します。`gen_rand32() % n`(`Sfmt19937Rng::gen_rand32`、`crates/sfmt19937/src/lib.rs:138`)と `genrand_real2`(`crates/sfmt19937/src/lib.rs:182`)は、棄却された更新や再試行ループでの抽出も含めて、同じ順序で消費されます。テスト `rejected_candidate_consumes_no_rng_and_mutates_nothing`(`one_move.rs:640`)が、「`rejectFlag` では乱数を抽出しない」という規則を固定しています。
 
 ## 4.4 採択判定
@@ -194,14 +194,14 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
 > - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
-> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:64`
-> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:354`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:821`
-> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:166`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1085`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:519`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:933`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:570`
+> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:68`
+> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:385`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:853`
+> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:182`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1117`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:536`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:965`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:592`
 > - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
 
 ## 4.6 サンプラー内の並列化

@@ -246,7 +246,7 @@ $$
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
-> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:150`
+> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:126`
 > - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
@@ -275,10 +275,10 @@ C は $\operatorname{Re}\,\texttt{Proj}[k]$ だけを取ります (`LogProjVal`,
 > - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
 > - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
 > - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
-> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:106`
-> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:205`
-> - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:320`
-> - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:330`
+> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:177`
+> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:276`
+> - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
+> - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:401`
 > - Rust: `recompute_dh_counts` — `crates/mvmc-core/src/sampling/projection.rs:20`
 > - 整合性: `LogProjRatio` は $k=0..N_{\rm proj}-1$ にわたり、添字順に `z += creal(Proj[idx]) * (double)(projCntNew[idx]-projCntOld[idx])` を累積します。Rust の `log_proj_ratio` も同じ順序と精度で和を取ります (テスト `log_proj_val_and_ratio_align`、`update_proj_cnt_matches_make_proj_cnt_after_hop`)。`ProjRatio` は和の $\exp$ です。C は libm の `exp` を使い、Rust は `julia_exp::exp` (Julia の `exp` の移植) を使います。これは最下位ビットの差の文書化された原因であり、メトロポリス判定を反転させうるものです ([11.3](11-compatibility.md#113-cリファレンスとの既知の相違))。
 
@@ -326,7 +326,7 @@ $$
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
 > - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:461`
-> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:538`
+> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:554`
 > - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:453`
 > - 整合性: C は隠れニューロンごとに `clog(ccosh(theta))` と `cexp` を評価します (`rbm.c:30-60`)。Rust は数値的に安定な `log_cosh_stable` を使うため、$|\operatorname{Re}\theta|$ が大きい場合は `clog(ccosh)` と丸め誤差レベルで異なることがあります。メトロポリスの指数は、RBM の項を左結合の順序 `(proj + rbm.re + ip_new.re) - ip_old.re` で加えます (`metropolis.rs:41`、テスト `rbm_acceptance_preserves_julia_left_associative_log_additions`)。RBM ブロックのパーサーは、出力の前に「アーカイブされたスパース」RBM 定義を拒否します (`crates/mvmc-core/src/run.rs:2074`、テスト `public_runner_rejects_archived_sparse_rbm_definitions_before_output`)。
 

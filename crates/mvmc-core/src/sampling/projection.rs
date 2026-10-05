@@ -31,6 +31,49 @@ fn recompute_dh_counts(
         proj_cnt[layout.dh2_offset..stop].fill(0);
     }
     let n_site = data.modpara.nsite as usize;
+    // C `projection.c:97,123` `omp parallel for` over the DH definitions `xn`: each
+    // definition owns disjoint counters. The pooled path computes every definition's
+    // incremented slots concurrently and applies the +1 increments serially in
+    // definition order, which equals the serial counters exactly (integer adds). The
+    // serial loops below are the default path and are unchanged.
+    let definitions = data
+        .doublon_holon_2site_indices
+        .len()
+        .max(data.doublon_holon_4site_indices.len());
+    if crate::threading::inner_parallel_enabled(definitions) {
+        let two = crate::threading::collect_terms(
+            data.doublon_holon_2site_indices.len(),
+            || (),
+            |_, definition| {
+                dh_slots(
+                    &data.doublon_holon_2site_indices[definition].neighbors,
+                    ele_num,
+                    n_site,
+                    layout.dh2_offset + definition,
+                    layout.n_dh2,
+                )
+            },
+        );
+        let four = crate::threading::collect_terms(
+            data.doublon_holon_4site_indices.len(),
+            || (),
+            |_, definition| {
+                dh_slots(
+                    &data.doublon_holon_4site_indices[definition].neighbors,
+                    ele_num,
+                    n_site,
+                    layout.dh4_offset + definition,
+                    layout.n_dh4,
+                )
+            },
+        );
+        for touched in two.into_iter().chain(four).flatten().flatten() {
+            if touched < proj_cnt.len() {
+                proj_cnt[touched] += 1;
+            }
+        }
+        return;
+    }
     for (definition, table) in data.doublon_holon_2site_indices.iter().enumerate() {
         for site in 0..n_site {
             let occupation = ele_num[site] + ele_num[n_site + site];
@@ -75,6 +118,34 @@ fn recompute_dh_counts(
             }
         }
     }
+}
+
+/// Counter slots incremented by one DH definition, in site order.
+fn dh_slots<const K: usize>(
+    neighbors: &[[i64; K]],
+    ele_num: &[i64],
+    n_site: usize,
+    base: usize,
+    stride: usize,
+) -> Vec<usize> {
+    let mut touched = Vec::new();
+    for site in 0..n_site {
+        let occupation = ele_num[site] + ele_num[n_site + site];
+        if occupation == 1 {
+            continue;
+        }
+        let class = occupation / 2;
+        let wanted = if class == 0 { 1 } else { 0 };
+        let opposite = neighbors[site]
+            .iter()
+            .filter(|&&neighbor| {
+                let neighbor = neighbor as usize;
+                ele_num[neighbor] == wanted && ele_num[n_site + neighbor] == wanted
+            })
+            .count();
+        touched.push(base + (class as usize + 2 * opposite) * stride);
+    }
+    touched
 }
 
 /// Initialise `loc_spn[ri] = 1` for sites flagged as local-spin in

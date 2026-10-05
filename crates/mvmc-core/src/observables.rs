@@ -556,13 +556,15 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
     let (n0, n1) = ele_num.split_at(n_site);
     let n1 = &n1[..n_site];
     let mut e = Complex64::new(0.0, 0.0);
-    for term in &data.coulomb_intra_terms {
+    let intra = |term: &mvmc_expert_parsers::CoulombIntraTerm| -> Option<Complex64> {
         if term.site >= 0 && (term.site as usize) < n_site {
             let ri = term.site as usize;
-            e += Complex64::new(term.value * (n0[ri] * n1[ri]) as f64, 0.0);
+            Some(Complex64::new(term.value * (n0[ri] * n1[ri]) as f64, 0.0))
+        } else {
+            None
         }
-    }
-    for term in &data.coulomb_inter_terms {
+    };
+    let inter = |term: &mvmc_expert_parsers::CoulombInterTerm| -> Option<Complex64> {
         if term.site1 >= 0
             && term.site2 >= 0
             && (term.site1 as usize) < n_site
@@ -572,10 +574,12 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
             let rj = term.site2 as usize;
             let occ_i = (n0[ri] + n1[ri]) as f64;
             let occ_j = (n0[rj] + n1[rj]) as f64;
-            e += Complex64::new(term.value * occ_i * occ_j, 0.0);
+            Some(Complex64::new(term.value * occ_i * occ_j, 0.0))
+        } else {
+            None
         }
-    }
-    for term in &data.hund_terms {
+    };
+    let hund = |term: &mvmc_expert_parsers::HundTerm| -> Option<Complex64> {
         if term.site1 >= 0
             && term.site2 >= 0
             && (term.site1 as usize) < n_site
@@ -585,9 +589,33 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
             let rj = term.site2 as usize;
             let s_up = (n0[ri] * n0[rj]) as f64;
             let s_down = (n1[ri] * n1[rj]) as f64;
-            e -= Complex64::new(term.value * (s_up + s_down), 0.0);
+            Some(Complex64::new(term.value * (s_up + s_down), 0.0))
+        } else {
+            None
         }
+    };
+    // C `calculate_hamiltonian` reduces these index loops with OpenMP; the pooled
+    // path adds the per-term values serially in term order (same bits as serial).
+    macro_rules! accumulate {
+        ($terms:expr, $value:expr, $op:tt) => {
+            if let Some(values) =
+                crate::threading::collect_terms($terms.len(), || (), |_, i| $value(&$terms[i]))
+            {
+                for value in values.into_iter().flatten() {
+                    e $op value;
+                }
+            } else {
+                for term in &$terms {
+                    if let Some(value) = $value(term) {
+                        e $op value;
+                    }
+                }
+            }
+        };
     }
+    accumulate!(data.coulomb_intra_terms, intra, +=);
+    accumulate!(data.coulomb_inter_terms, inter, +=);
+    accumulate!(data.hund_terms, hund, -=);
     e
 }
 
@@ -2899,37 +2927,57 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     } else {
         green_func2
     };
-    for term in &data.pair_hop_terms {
+    let pair_hop_value = |term: &mvmc_expert_parsers::PairHopTerm| -> Option<Complex64> {
         if !(0..data.modpara.nsite).contains(&term.site1)
             || !(0..data.modpara.nsite).contains(&term.site2)
         {
-            continue;
+            return None;
         }
         let ri = term.site1 as usize;
         let rj = term.site2 as usize;
-        e += term.value
-            * pairhop_green(
-                ri,
-                rj,
-                ri,
-                rj,
-                0,
-                1,
-                ip,
-                data,
-                state,
-                ele_idx,
-                ele_cfg,
-                ele_num,
-                ele_proj_cnt,
-            );
+        Some(
+            term.value
+                * pairhop_green(
+                    ri,
+                    rj,
+                    ri,
+                    rj,
+                    0,
+                    1,
+                    ip,
+                    data,
+                    &*state,
+                    ele_idx,
+                    ele_cfg,
+                    ele_num,
+                    ele_proj_cnt,
+                ),
+        )
+    };
+    // C `calham*.c` runs these term loops under `omp for ... reduction(+:e)`. The
+    // pooled path evaluates the terms concurrently and adds them serially in term
+    // order, so the sum is bit-identical to the serial loop for any worker count.
+    if let Some(values) = crate::threading::collect_terms(
+        data.pair_hop_terms.len(),
+        || (),
+        |_, index| pair_hop_value(&data.pair_hop_terms[index]),
+    ) {
+        for value in values.into_iter().flatten() {
+            e += value;
+        }
+    } else {
+        for term in &data.pair_hop_terms {
+            if let Some(value) = pair_hop_value(term) {
+                e += value;
+            }
+        }
     }
     if !data.exchange_terms.is_empty() && ip.norm() > 0.0 {
-        for term in &data.exchange_terms {
+        let exchange_value = |term: &mvmc_expert_parsers::ExchangeTerm| -> Option<Complex64> {
             let ri = term.site1;
             let rj = term.site2;
             if ri < 0 || rj < 0 || (ri as usize) >= n_site || (rj as usize) >= n_site {
-                continue;
+                return None;
             }
             let g01 = green_func2(
                 ri as usize,
@@ -2940,7 +2988,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 1,
                 ip,
                 data,
-                state,
+                &*state,
                 ele_idx,
                 ele_cfg,
                 ele_num,
@@ -2955,23 +3003,39 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                 0,
                 ip,
                 data,
-                state,
+                &*state,
                 ele_idx,
                 ele_cfg,
                 ele_num,
                 ele_proj_cnt,
             );
-            e += term.value * (g01 + g10);
+            Some(term.value * (g01 + g10))
+        };
+        if let Some(values) = crate::threading::collect_terms(
+            data.exchange_terms.len(),
+            || (),
+            |_, index| exchange_value(&data.exchange_terms[index]),
+        ) {
+            for value in values.into_iter().flatten() {
+                e += value;
+            }
+        } else {
+            for term in &data.exchange_terms {
+                if let Some(value) = exchange_value(term) {
+                    e += value;
+                }
+            }
         }
     }
 
     // C accumulates InterAll after PairHop and Exchange in input order.
-    for term in &data.inter_all_terms {
+    let real_inter_all = !state.slater_matrix.pf_m_real.is_empty();
+    let inter_all_value = |term: &mvmc_expert_parsers::InterAllTerm| -> Option<Complex64> {
         if [term.site0, term.site1, term.site2, term.site3]
             .iter()
             .any(|&site| !(0..data.modpara.nsite).contains(&site))
         {
-            continue;
+            return None;
         }
         let (ri, rj, rk, rl) = (
             term.site0 as usize,
@@ -2980,27 +3044,30 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             term.site3 as usize,
         );
         let (s, t) = (term.spin1 as u8, term.spin3 as u8);
-        if !state.slater_matrix.pf_m_real.is_empty() {
+        Some(if real_inter_all {
             // Native CalculateHamiltonian_real stores its accumulator in a
             // double, so the imaginary coupling does not enter the energy.
-            e.re += term.value.re
-                * green_func2_real(
-                    ri,
-                    rj,
-                    rk,
-                    rl,
-                    s,
-                    t,
-                    ip.re,
-                    data,
-                    state,
-                    ele_idx,
-                    ele_cfg,
-                    ele_num,
-                    ele_proj_cnt,
-                );
+            Complex64::new(
+                term.value.re
+                    * green_func2_real(
+                        ri,
+                        rj,
+                        rk,
+                        rl,
+                        s,
+                        t,
+                        ip.re,
+                        data,
+                        &*state,
+                        ele_idx,
+                        ele_cfg,
+                        ele_num,
+                        ele_proj_cnt,
+                    ),
+                0.0,
+            )
         } else {
-            e += term.value
+            term.value
                 * green_func2_complex(
                     ri,
                     rj,
@@ -3010,12 +3077,34 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                     t,
                     ip,
                     data,
-                    state,
+                    &*state,
                     ele_idx,
                     ele_cfg,
                     ele_num,
                     ele_proj_cnt,
-                );
+                )
+        })
+    };
+    let accumulate = |e: &mut Complex64, value: Complex64| {
+        if real_inter_all {
+            e.re += value.re;
+        } else {
+            *e += value;
+        }
+    };
+    if let Some(values) = crate::threading::collect_terms(
+        data.inter_all_terms.len(),
+        || (),
+        |_, index| inter_all_value(&data.inter_all_terms[index]),
+    ) {
+        for value in values.into_iter().flatten() {
+            accumulate(&mut e, value);
+        }
+    } else {
+        for term in &data.inter_all_terms {
+            if let Some(value) = inter_all_value(term) {
+                accumulate(&mut e, value);
+            }
         }
     }
 

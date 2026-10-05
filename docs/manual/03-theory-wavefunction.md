@@ -247,7 +247,7 @@ $$
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
-> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:150`
+> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:126`
 > - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
@@ -276,10 +276,10 @@ C takes only $\operatorname{Re}\,\texttt{Proj}[k]$ (`LogProjVal`, `LogProjRatio`
 > - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
 > - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
 > - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
-> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:106`
-> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:205`
-> - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:320`
-> - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:330`
+> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:177`
+> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:276`
+> - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
+> - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:401`
 > - Rust: `recompute_dh_counts` — `crates/mvmc-core/src/sampling/projection.rs:20`
 > - Parity: `LogProjRatio` accumulates `z += creal(Proj[idx]) * (double)(projCntNew[idx]-projCntOld[idx])` over $k=0..N_{\rm proj}-1$ in index order; the Rust `log_proj_ratio` sums in the same order and precision (tests `log_proj_val_and_ratio_align`, `update_proj_cnt_matches_make_proj_cnt_after_hop`). `ProjRatio` is $\exp$ of the sum: C uses libm `exp`, Rust uses `julia_exp::exp` (a port of Julia's `exp`), a documented source of last-bit differences that can flip a Metropolis decision ([11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
@@ -325,7 +325,7 @@ the full complex ratio `RBMRatio` multiplies the amplitude ratio. `NBlockSize_RB
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
 > - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:461`
-> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:538`
+> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:554`
 > - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:453`
 > - Parity: the C code evaluates `clog(ccosh(theta))` and `cexp` per hidden neuron (`rbm.c:30-60`); Rust uses a numerically stable `log_cosh_stable`, so large $|\operatorname{Re}\theta|$ can differ from `clog(ccosh)` at round-off level. The Metropolis exponent adds the RBM term in the left-associative order `(proj + rbm.re + ip_new.re) - ip_old.re` (`metropolis.rs:41`, test `rbm_acceptance_preserves_julia_left_associative_log_additions`). The RBM block parsers reject "archived sparse" RBM definitions before output (`crates/mvmc-core/src/run.rs:2074` test `public_runner_rejects_archived_sparse_rbm_definitions_before_output`).
 

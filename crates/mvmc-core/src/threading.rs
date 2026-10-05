@@ -31,6 +31,13 @@ pub struct ExecutionSnapshot {
     pub parallel_term_items: usize,
     /// Transfer entries on the serial dispatch path.
     pub serial_term_items: usize,
+    /// Hamiltonian/projection/RBM term-region entries (C `omp for` regions of
+    /// `calham*.c`, `projection.c`, `rbm.c`) in total, including serial ones.
+    pub executed_region_items: usize,
+    /// Region entries actually dispatched through the inner pool.
+    pub parallel_region_items: usize,
+    /// Region entries on the serial dispatch path.
+    pub serial_region_items: usize,
     /// Independent copy/SR entries actually dispatched through the inner pool.
     pub parallel_entry_items: usize,
     /// Independent copy/SR entries on the serial dispatch path.
@@ -46,7 +53,7 @@ pub struct ExecutionSnapshot {
 #[derive(Default)]
 struct ExecutionCounters {
     calls: [AtomicUsize; 2],
-    items: [[AtomicUsize; 3]; 2],
+    items: [[AtomicUsize; 4]; 2],
     worker_entries: AtomicUsize,
     workers: Mutex<BTreeSet<usize>>,
 }
@@ -66,6 +73,9 @@ impl ExecutionCounters {
             executed_term_items: get(0, 1) + get(1, 1),
             serial_entry_items: get(0, 2),
             parallel_entry_items: get(1, 2),
+            serial_region_items: get(0, 3),
+            parallel_region_items: get(1, 3),
+            executed_region_items: get(0, 3) + get(1, 3),
             worker_entries: self.worker_entries.load(Ordering::Relaxed),
             distinct_workers: worker_ids.len(),
             worker_ids,
@@ -125,6 +135,7 @@ pub(crate) enum ObservedWork {
     Qp,
     Term,
     Entry,
+    Region,
 }
 
 pub(crate) struct KernelObservation {
@@ -257,6 +268,74 @@ pub fn for_each_mut<T: Send>(items: &mut [T], operation: impl Fn(usize, &mut T) 
     }
 }
 
+/// Visit consecutive `chunk_len`-long output windows (`chunk_len == 0` visits nothing).
+/// Each window has one producer; reductions inside a window stay serial.
+pub fn for_each_chunk_mut<T: Send>(
+    items: &mut [T],
+    chunk_len: usize,
+    operation: impl Fn(usize, &mut [T]) + Send + Sync,
+) {
+    if chunk_len == 0 {
+        return;
+    }
+    let count = items.len().div_ceil(chunk_len);
+    let parallel = inner_parallel_enabled(count);
+    let observed = observe_kernel(ObservedWork::Entry, parallel);
+    let operation = |i, window: &mut [T]| {
+        let _entry = observed.enter_item();
+        operation(i, window);
+    };
+    if parallel {
+        install(|| {
+            items
+                .par_chunks_mut(chunk_len)
+                .enumerate()
+                .for_each(|(i, window)| operation(i, window))
+        });
+    } else {
+        items
+            .chunks_mut(chunk_len)
+            .enumerate()
+            .for_each(|(i, window)| operation(i, window));
+    }
+}
+
+/// Like [`for_each_chunk_mut`] over two outputs with their own window lengths;
+/// the number of windows is that of the first slice (the second must have at least
+/// as many windows).
+pub fn for_each_chunk_pair_mut<A: Send, B: Send>(
+    left: &mut [A],
+    left_len: usize,
+    right: &mut [B],
+    right_len: usize,
+    operation: impl Fn(usize, &mut [A], &mut [B]) + Send + Sync,
+) {
+    if left_len == 0 || right_len == 0 {
+        return;
+    }
+    let count = left.len().div_ceil(left_len);
+    assert!(right.len().div_ceil(right_len) >= count);
+    let parallel = inner_parallel_enabled(count);
+    let observed = observe_kernel(ObservedWork::Entry, parallel);
+    let operation = |i, a: &mut [A], b: &mut [B]| {
+        let _entry = observed.enter_item();
+        operation(i, a, b);
+    };
+    if parallel {
+        install(|| {
+            left.par_chunks_mut(left_len)
+                .zip(right.par_chunks_mut(right_len))
+                .enumerate()
+                .for_each(|(i, (a, b))| operation(i, a, b))
+        });
+    } else {
+        left.chunks_mut(left_len)
+            .zip(right.chunks_mut(right_len))
+            .enumerate()
+            .for_each(|(i, (a, b))| operation(i, a, b));
+    }
+}
+
 /// Visit matching independent entries without aliasing either output slice.
 pub fn for_each_pair_mut<A: Send, B: Send>(
     left: &mut [A],
@@ -281,6 +360,123 @@ pub fn for_each_pair_mut<A: Send, B: Send>(
             .zip(right)
             .enumerate()
             .for_each(|(i, (a, b))| operation(i, a, b));
+    }
+}
+
+/// Fill `out[qp]` for `qp in qp_start..qp_end` (clamped to `out.len()`) with
+/// `body(scratch, qp)`. Each output element has exactly one producer, so the
+/// result is independent of the worker count. `init` builds the per-task scratch
+/// (the C `GetWorkSpaceThread*` buffers of a `#pragma omp for` over `qpidx`).
+/// Serial (no pool) when inner threading is off or `qp_end - qp_start` is below
+/// the threshold.
+pub(crate) fn qp_fill<T: Send, S>(
+    out: &mut [T],
+    qp_start: usize,
+    qp_end: usize,
+    init: impl Fn() -> S + Send + Sync,
+    body: impl Fn(&mut S, usize) -> T + Send + Sync,
+) {
+    let end = qp_end.min(out.len());
+    if qp_start >= end {
+        return;
+    }
+    let count = end - qp_start;
+    let parallel = inner_parallel_enabled(count);
+    let observed = observe_kernel(ObservedWork::Qp, parallel);
+    if parallel {
+        install(|| {
+            out[qp_start..end].par_iter_mut().enumerate().for_each_init(
+                &init,
+                |scratch, (i, slot)| {
+                    let _entry = observed.enter_item();
+                    *slot = body(scratch, qp_start + i);
+                },
+            )
+        });
+    } else {
+        let mut scratch = init();
+        for (qp, slot) in out.iter_mut().enumerate().take(end).skip(qp_start) {
+            let _entry = observed.enter_item();
+            *slot = body(&mut scratch, qp);
+        }
+    }
+}
+
+/// Evaluate independent Hamiltonian/Green terms in parallel and return their values
+/// in term order, or `None` when the serial path should run (threading off or fewer
+/// than the threshold terms). The caller reduces the returned values serially in
+/// index order, so the result is bit-identical for every worker count and equal to
+/// C's one-thread accumulation order (the `#pragma omp for ... reduction(+:e)` of
+/// `calham*.c` / `lslocgrn*.c`). `init` builds the per-task scratch (C's
+/// per-thread `myEleIdx`/`myBuffer` copies).
+pub(crate) fn collect_terms<T: Send, S>(
+    count: usize,
+    init: impl Fn() -> S + Send + Sync,
+    body: impl Fn(&mut S, usize) -> T + Send + Sync,
+) -> Option<Vec<T>> {
+    if !inner_parallel_enabled(count) {
+        return None;
+    }
+    let observed = observe_kernel(ObservedWork::Region, true);
+    Some(install(|| {
+        (0..count)
+            .into_par_iter()
+            .map_init(&init, |scratch, index| {
+                let _entry = observed.enter_item();
+                body(scratch, index)
+            })
+            .collect()
+    }))
+}
+
+/// Visit `qp in qp_start..qp_end` (clamped to `values.len()`), giving each QP its
+/// own `values[qp]` and its own `stride`-long window `inv[qp * stride ..]` of the
+/// flat inverse matrix (windows of different QPs never overlap because
+/// `stride >= min_len`). The C `#pragma omp for` over `qpidx` of `updateMAll*`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn qp_update<T: Send, U: Send, S>(
+    values: &mut [T],
+    inv: &mut [U],
+    stride: usize,
+    min_len: usize,
+    qp_start: usize,
+    qp_end: usize,
+    init: impl Fn() -> S + Send + Sync,
+    body: impl Fn(&mut S, usize, &mut T, &mut [U]) + Send + Sync,
+) {
+    let end = qp_end.min(values.len());
+    if qp_start >= end {
+        return;
+    }
+    assert!(
+        stride >= min_len.max(1),
+        "QP windows of the inverse must not overlap"
+    );
+    let count = end - qp_start;
+    let parallel = inner_parallel_enabled(count);
+    let observed = observe_kernel(ObservedWork::Qp, parallel);
+    let inv = &mut inv[qp_start * stride..];
+    if parallel {
+        install(|| {
+            values[qp_start..end]
+                .par_iter_mut()
+                .zip(inv.par_chunks_mut(stride))
+                .enumerate()
+                .for_each_init(&init, |scratch, (i, (value, window))| {
+                    let _entry = observed.enter_item();
+                    body(scratch, qp_start + i, value, window);
+                })
+        });
+    } else {
+        let mut scratch = init();
+        for (i, (value, window)) in values[qp_start..end]
+            .iter_mut()
+            .zip(inv.chunks_mut(stride))
+            .enumerate()
+        {
+            let _entry = observed.enter_item();
+            body(&mut scratch, qp_start + i, value, window);
+        }
     }
 }
 

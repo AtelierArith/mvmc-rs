@@ -113,7 +113,7 @@ mvmc namelist.def --physcal zqp_opt.dat --out-dir phys
 
 `mvmc-rs` は OpenMP を使用しません。サンプラーと測定のループはデフォルトでは逐次実行されるため、マルコフ連鎖は
 C コードとまったく同じように乱数を消費します。独立な作業項目に対するオプションの共有メモリ並列化(`calc_m_all_*` のパフィアン設定における射影セクター、
-`OO`/`HO` の累積と保存されたグラム積の行、実数波動関数に対するローカルエネルギーの遷移項、グリーン関数の要素)
+`OO`/`HO` の累積と保存されたグラム積の行、実数波動関数に対するローカルエネルギーの遷移項、対角項・PairHop・Exchange・InterAll のエネルギー項、`update_m_all_*`/`calculate_new_pf_m*` の QP ループ、Slater 要素の平面、doublon-holon カウンター、RBM の隠れユニット、SR 行列の構築と CG のベクトル更新、グリーン関数の要素)
 は
 `MVMC_RS_INNER_THREADS`([8.5](#85-環境変数))で有効になります。これはマルコフ連鎖や、各結果が形成される順序を変えません。
 密な線形代数(`dgemv`, `dpotrf`, パフィアンカーネル)は OpenBLAS で実行され、そのスレッド数は通常の
@@ -204,7 +204,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 
 > **実装**
 > - Rust: `TimerEnv::from_lookup` — `crates/mvmc-core/src/c_timer.rs:174`
-> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:190`
+> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:201`
 > - Rust: `LaunchContext::from_env` — `crates/mvmc-core/src/parallel.rs:20`
 
 ## 8.6 再現性
