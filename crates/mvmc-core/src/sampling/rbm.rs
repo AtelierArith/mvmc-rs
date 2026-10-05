@@ -710,6 +710,22 @@ pub fn set_rbm_diff(
         physical + neurons[0] + neurons[1],
     ];
     let imaginary = Complex64::new(0.0, 1.0);
+    // C `rbm.c` evaluates the per-neuron `tanh` under `omp parallel for`. The pooled
+    // path computes every hidden counter's `tanh` concurrently; the accumulation into
+    // `out` below stays serial in term order (shared indices add in input order), so
+    // the result is identical to the serial path, which evaluates `tanh` per term.
+    let hidden_counters = neurons.iter().sum::<usize>();
+    let pooled_tanh = crate::threading::collect_terms(
+        hidden_counters,
+        || (),
+        |_, k| cnt.get(physical + k).map(|&value| rbm_math::tanh(value)),
+    );
+    let tanh_of = |counter: usize, value: Complex64| -> Complex64 {
+        match &pooled_tanh {
+            Some(values) => values[counter - physical].unwrap_or_else(|| rbm_math::tanh(value)),
+            None => rbm_math::tanh(value),
+        }
+    };
     for (index, &value) in cnt.iter().take(physical).enumerate() {
         out[2 * index] = value;
         out[2 * index + 1] = imaginary * value;
@@ -723,7 +739,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = rbm_math::tanh(value);
+        let value = tanh_of(counter, value);
         let parameter = physical + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -737,7 +753,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = rbm_math::tanh(value);
+        let value = tanh_of(counter, value);
         let parameter = physical + widths[3] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -751,7 +767,7 @@ pub fn set_rbm_diff(
         let Some(&value) = cnt.get(counter) else {
             continue;
         };
-        let value = rbm_math::tanh(value);
+        let value = tanh_of(counter, value);
         let parameter = physical + widths[3] + widths[4] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -772,7 +788,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (ele_num[ri as usize] + ele_num[ri as usize + cfg.n_site] - 1) as f64;
-        let value = xi * rbm_math::tanh(value);
+        let value = xi * tanh_of(counter, value);
         let parameter = physical + hidden + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -793,7 +809,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (ele_num[ri as usize] - ele_num[ri as usize + cfg.n_site]) as f64;
-        let value = xi * rbm_math::tanh(value);
+        let value = xi * tanh_of(counter, value);
         let parameter = physical + hidden + widths[6] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;
@@ -815,7 +831,7 @@ pub fn set_rbm_diff(
             continue;
         };
         let xi = (2 * ele_num[ri as usize + term.spin as usize * cfg.n_site] - 1) as f64;
-        let value = xi * rbm_math::tanh(value);
+        let value = xi * tanh_of(counter, value);
         let parameter = physical + hidden + widths[6] + widths[7] + index as usize;
         out[2 * parameter] += value;
         out[2 * parameter + 1] += imaginary * value;

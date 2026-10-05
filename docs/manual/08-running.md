@@ -114,7 +114,7 @@ configuration arrays (`ele_idx.txt`, `ele_cfg.txt`, `ele_num.txt`, `ele_proj_cnt
 
 `mvmc-rs` does not use OpenMP. The sampler and measurement loops are sequential by default, so a Markov chain consumes
 random numbers exactly as the C code does. Optional shared-memory parallelism over independent work items (projection sectors in the `calc_m_all_*` Pfaffian setup,
-rows of the `OO`/`HO` accumulation and of the stored Gram product, transfer terms of the local energy for real wave functions, the diagonal/PairHop/Exchange/InterAll energy terms, the rank-one `update_m_all_*`/`calculate_new_pf_m*` QP loops, Slater-element planes, doublon-holon counters, RBM hidden units, the SR matrix assembly and the CG vector updates, Green-function entries)
+rows of the `OO`/`HO` accumulation and of the stored Gram product, transfer terms of the local energy for real wave functions, the diagonal/PairHop/Exchange/InterAll energy terms, the rank-one `update_m_all_*`/`calculate_new_pf_m*` QP loops, Slater-element planes, doublon-holon counters, RBM hidden units and their derivatives, the Lanczos Hamiltonian/Green terms, the SR matrix assembly and the CG vector updates, Green-function entries)
 is enabled with
 `MVMC_RS_INNER_THREADS` ([8.5](#85-environment-variables)); it does not change the chain or the order in which each result is formed.
 Dense linear algebra (`dgemv`, `dpotrf`, Pfaffian kernels) runs in OpenBLAS, whose own thread count is controlled by the usual

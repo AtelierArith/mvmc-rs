@@ -34,12 +34,9 @@ pub fn weight_average_sr_opt(state: &mut VmcOptimizationState) {
         return;
     }
     let inv = Complex64::new(1.0, 0.0) / wc;
-    for x in state.sr_opt.sr_opt_oo.iter_mut() {
-        *x *= inv;
-    }
-    for x in state.sr_opt.sr_opt_ho.iter_mut() {
-        *x *= inv;
-    }
+    // C `average.c:99-108` `omp parallel for`: one producer per element.
+    crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_oo, |_, x| *x *= inv);
+    crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_ho, |_, x| *x *= inv);
 }
 
 /// Normalize the active real SR buffers, preserving unused OO capacity.
@@ -59,12 +56,10 @@ pub fn weight_average_sr_opt_real(state: &mut VmcOptimizationState, nsrcg: bool)
     if !state.sr_opt.sr_opt_oo_real.is_empty() {
         let size = state.sr_opt.sr_opt_size;
         let active_oo = if nsrcg { 2 * size } else { size * size };
-        for x in &mut state.sr_opt.sr_opt_oo_real[..active_oo] {
-            *x *= inv;
-        }
-        for x in state.sr_opt.sr_opt_ho_real.iter_mut() {
-            *x *= inv;
-        }
+        crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_oo_real[..active_oo], |_, x| {
+            *x *= inv
+        });
+        crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_ho_real, |_, x| *x *= inv);
     }
 }
 

@@ -2262,6 +2262,20 @@ fn lanczos_apply_two_body_terms(
     result
 }
 
+/// Per-task evaluation state for the pooled Lanczos Green terms: the Slater matrices and
+/// Transfer cache the local energy reads, with every other buffer left empty.
+fn lanczos_task_state(
+    state: &VmcOptimizationState,
+    n_site: usize,
+    n_elec: usize,
+) -> VmcOptimizationState {
+    let mut task =
+        VmcOptimizationState::zeros(n_site, n_elec, 0, 0, 0, 0, state.all_complex, false);
+    task.slater_matrix = state.slater_matrix.clone();
+    task.transfer_cache = state.transfer_cache.clone();
+    task
+}
+
 fn lanczos_evaluate_moved(
     moved_idx: &[i64],
     moved_cfg: &[i64],
@@ -2375,10 +2389,13 @@ pub(crate) fn calculate_lanczos_green(
     for (index, value) in local_one_body.iter().copied().enumerate().take(n_one) {
         lslca[index] = lanczos_local_value(value, all_complex);
     }
-    for (index, term) in data.green_one_terms.iter().enumerate() {
-        let Some((create, annihilate, spin)) = lanczos_one_body_indices(term, n_site) else {
-            continue;
-        };
+    // C `lslocgrn*.c` evaluates the Green-function terms under `omp for`. Each term's
+    // moved-configuration sum stays serial; terms run concurrently on per-task copies of
+    // the (restored-after-use) Slater state and are stored by term index, so the result
+    // equals the serial loop for every worker count.
+    let one_body_value = |index: usize, task: &mut VmcOptimizationState| -> Option<Complex64> {
+        let term = &data.green_one_terms[index];
+        let (create, annihilate, spin) = lanczos_one_body_indices(term, n_site)?;
         let mut value = Complex64::new(0.0, 0.0);
         for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_one_body_terms(
             ele_idx,
@@ -2396,7 +2413,7 @@ pub(crate) fn calculate_lanczos_green(
                 &moved_num,
                 &moved_proj,
                 data,
-                state,
+                task,
                 &original_slater,
                 all_complex,
                 n_site,
@@ -2410,7 +2427,24 @@ pub(crate) fn calculate_lanczos_green(
                 value += local_one_body.get(index).copied().unwrap_or_default() * moved_h;
             }
         }
-        lslca[n_one + index] = lanczos_local_value(value, all_complex);
+        Some(lanczos_local_value(value, all_complex))
+    };
+    if let Some(values) = crate::threading::collect_terms(
+        n_one,
+        || lanczos_task_state(state, n_site, n_elec),
+        |task, index| one_body_value(index, task),
+    ) {
+        for (index, value) in values.into_iter().enumerate() {
+            if let Some(value) = value {
+                lslca[n_one + index] = value;
+            }
+        }
+    } else {
+        for index in 0..n_one {
+            if let Some(value) = one_body_value(index, state) {
+                lslca[n_one + index] = value;
+            }
+        }
     }
 
     for rq in 0..2 {
@@ -2444,21 +2478,14 @@ pub(crate) fn calculate_lanczos_green(
     }
 
     let mut hca_direct = vec![Complex64::new(0.0, 0.0); n_direct];
-    for (index, term) in data.green_two_terms.iter().enumerate() {
+    let direct_value = |index: usize, task: &mut VmcOptimizationState| -> Option<Complex64> {
+        let term = &data.green_two_terms[index];
         let first_spin = term.spin1.as_code();
         let second_spin = term.spin3.as_code();
-        let Some(first_create) = usize::try_from(term.site1).ok() else {
-            continue;
-        };
-        let Some(first_annihilate) = usize::try_from(term.site2).ok() else {
-            continue;
-        };
-        let Some(second_create) = usize::try_from(term.site3).ok() else {
-            continue;
-        };
-        let Some(second_annihilate) = usize::try_from(term.site4).ok() else {
-            continue;
-        };
+        let first_create = usize::try_from(term.site1).ok()?;
+        let first_annihilate = usize::try_from(term.site2).ok()?;
+        let second_create = usize::try_from(term.site3).ok()?;
+        let second_annihilate = usize::try_from(term.site4).ok()?;
         let mut value = Complex64::new(0.0, 0.0);
         for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_two_body_terms(
             ele_idx,
@@ -2479,7 +2506,7 @@ pub(crate) fn calculate_lanczos_green(
                 &moved_num,
                 &moved_proj,
                 data,
-                state,
+                task,
                 &original_slater,
                 all_complex,
                 n_site,
@@ -2496,7 +2523,24 @@ pub(crate) fn calculate_lanczos_green(
                     * moved_h;
             }
         }
-        hca_direct[index] = lanczos_local_value(value, all_complex);
+        Some(lanczos_local_value(value, all_complex))
+    };
+    if let Some(values) = crate::threading::collect_terms(
+        n_direct,
+        || lanczos_task_state(state, n_site, n_elec),
+        |task, index| direct_value(index, task),
+    ) {
+        for (index, value) in values.into_iter().enumerate() {
+            if let Some(value) = value {
+                hca_direct[index] = value;
+            }
+        }
+    } else {
+        for index in 0..n_direct {
+            if let Some(value) = direct_value(index, state) {
+                hca_direct[index] = value;
+            }
+        }
     }
     for rq in 0..2 {
         for rp in 0..2 {
@@ -2554,9 +2598,50 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_qp_full = state.slater_matrix.pf_m.len();
     let pool = crate::state::ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
-    let mut scratch = GreenScratch::default();
 
-    for term in &data.transfer_terms {
+    // Moved-configuration Pfaffians for the current `moved_idx`; `task` is restored
+    // by the caller after the local energy has been evaluated.
+    let moved_ip_of = |task: &mut VmcOptimizationState, moved_idx: &[i64]| -> Complex64 {
+        if all_complex {
+            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
+                moved_idx,
+                &task.slater_matrix.slater_elm,
+                &mut task.slater_matrix.inv_m,
+                &mut task.slater_matrix.pf_m,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+            calculate_ip_complex(&task.slater_matrix.pf_m, 0, n_qp_full, data)
+        } else {
+            let _ = crate::pfaffian::calc_m_all_real(
+                moved_idx,
+                &task.slater_matrix.slater_elm_real,
+                &mut task.slater_matrix.inv_m_real,
+                &mut task.slater_matrix.pf_m_real,
+                0,
+                n_qp_full,
+                n_site,
+                n_elec,
+                &pool,
+            );
+            Complex64::new(
+                calculate_ip_real(&task.slater_matrix.pf_m_real, 0, n_qp_full, data),
+                0.0,
+            )
+        }
+    };
+
+    // C `calham*.c` runs the Hamiltonian term loops under `omp for`. Each term's value is
+    // evaluated on a per-task copy of the Slater state (restored after every term) and
+    // the values are added to `h2` serially in term order, so the sum is bit-identical
+    // to the serial loops for every worker count.
+    let transfer_term = |term: &mvmc_expert_parsers::TransferTerm,
+                         task: &mut VmcOptimizationState,
+                         scratch: &mut GreenScratch|
+     -> Option<Complex64> {
         let ri = term.site1;
         let rj = term.site2;
         let spin_create = term.spin1.as_code();
@@ -2567,7 +2652,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             || rj as usize >= n_site
             || spin_create != spin_annihilate
         {
-            continue;
+            return None;
         }
         let green = green_func1_impl::<false, true, false>(
             ri as usize,
@@ -2576,16 +2661,16 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             spin_annihilate,
             ip,
             data,
-            state,
+            task,
             ele_idx,
             ele_cfg,
             ele_num,
             ele_proj_cnt,
-            &mut scratch,
+            scratch,
             &mut CTimer::<false>::new(),
         );
         if green.norm() == 0.0 {
-            continue;
+            return None;
         }
         let src = rj as usize + spin_annihilate as usize * n_site;
         let dst = ri as usize + spin_create as usize * n_site;
@@ -2593,50 +2678,16 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         let moved_num = scratch.ele_num.clone();
         let moved_proj = scratch.proj_new.clone();
         let mut moved_cfg = ele_cfg.to_vec();
-        let Some(electron) = ele_cfg[src].checked_abs().map(|v| v as usize) else {
-            continue;
-        };
+        let electron = ele_cfg[src].checked_abs().map(|v| v as usize)?;
         moved_cfg[src] = -1;
         moved_cfg[dst] = electron as i64;
-
-        if all_complex {
-            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
-                &moved_idx,
-                &state.slater_matrix.slater_elm,
-                &mut state.slater_matrix.inv_m,
-                &mut state.slater_matrix.pf_m,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
-            );
-        } else {
-            let _ = crate::pfaffian::calc_m_all_real(
-                &moved_idx,
-                &state.slater_matrix.slater_elm_real,
-                &mut state.slater_matrix.inv_m_real,
-                &mut state.slater_matrix.pf_m_real,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
-            );
-        }
-        let moved_ip = if all_complex {
-            calculate_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data)
-        } else {
-            Complex64::new(
-                calculate_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data),
-                0.0,
-            )
-        };
+        let moved_ip = moved_ip_of(task, &moved_idx);
+        let mut contribution = None;
         if moved_ip.norm() > 0.0 {
             let moved_h = calculate_local_energy(
                 moved_ip,
                 data,
-                state,
+                task,
                 &moved_idx,
                 &moved_cfg,
                 &moved_num,
@@ -2646,18 +2697,17 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             // the transfer coefficient.  The grouping is observable for the
             // ill-conditioned Full Lanczos alpha equation.
             let hca = moved_h * green;
-            h2 += (-term.value) * hca;
+            contribution = Some((-term.value) * hca);
         }
-        state.slater_matrix = original_slater.clone();
-    }
-
-    for term in &data.pair_hop_terms {
-        let destination = usize::try_from(term.site1).ok();
-        let source = usize::try_from(term.site2).ok();
-        let (Some(destination), Some(source)) = (destination, source) else {
-            continue;
-        };
-        let Some((moved_idx, moved_cfg, moved_num, moved_proj)) = lanczos_apply_pair_hop(
+        task.slater_matrix = original_slater.clone();
+        contribution
+    };
+    let pair_hop_term = |term: &mvmc_expert_parsers::PairHopTerm,
+                         task: &mut VmcOptimizationState|
+     -> Option<Complex64> {
+        let destination = usize::try_from(term.site1).ok()?;
+        let source = usize::try_from(term.site2).ok()?;
+        let (moved_idx, moved_cfg, moved_num, moved_proj) = lanczos_apply_pair_hop(
             ele_idx,
             ele_cfg,
             ele_num,
@@ -2665,9 +2715,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             destination,
             source,
             data,
-        ) else {
-            continue;
-        };
+        )?;
         let pairhop_green = if all_complex {
             green_func2_complex
         } else {
@@ -2682,70 +2730,38 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             1,
             ip,
             data,
-            state,
+            task,
             ele_idx,
             ele_cfg,
             ele_num,
             ele_proj_cnt,
         );
         if green.norm() == 0.0 {
-            continue;
+            return None;
         }
-        if all_complex {
-            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
-                &moved_idx,
-                &state.slater_matrix.slater_elm,
-                &mut state.slater_matrix.inv_m,
-                &mut state.slater_matrix.pf_m,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
-            );
-        } else {
-            let _ = crate::pfaffian::calc_m_all_real(
-                &moved_idx,
-                &state.slater_matrix.slater_elm_real,
-                &mut state.slater_matrix.inv_m_real,
-                &mut state.slater_matrix.pf_m_real,
-                0,
-                n_qp_full,
-                n_site,
-                n_elec,
-                &pool,
-            );
-        }
-        let moved_ip = if all_complex {
-            calculate_ip_complex(&state.slater_matrix.pf_m, 0, n_qp_full, data)
-        } else {
-            Complex64::new(
-                calculate_ip_real(&state.slater_matrix.pf_m_real, 0, n_qp_full, data),
-                0.0,
-            )
-        };
+        let moved_ip = moved_ip_of(task, &moved_idx);
+        let mut contribution = None;
         if moved_ip.norm() > 0.0 {
             let moved_h = calculate_local_energy(
                 moved_ip,
                 data,
-                state,
+                task,
                 &moved_idx,
                 &moved_cfg,
                 &moved_num,
                 &moved_proj,
             );
             let hcaca = moved_h * green;
-            h2 += term.value * hcaca;
+            contribution = Some(term.value * hcaca);
         }
-        state.slater_matrix = original_slater.clone();
-    }
-
-    for term in &data.exchange_terms {
-        let ri = usize::try_from(term.site1).ok();
-        let rj = usize::try_from(term.site2).ok();
-        let (Some(ri), Some(rj)) = (ri, rj) else {
-            continue;
-        };
+        task.slater_matrix = original_slater.clone();
+        contribution
+    };
+    let exchange_term = |term: &mvmc_expert_parsers::ExchangeTerm,
+                         task: &mut VmcOptimizationState|
+     -> Option<Complex64> {
+        let ri = usize::try_from(term.site1).ok()?;
+        let rj = usize::try_from(term.site2).ok()?;
         // C's calculateHW accumulates both exchange spin channels into a
         // temporary before applying ParaExchange. Preserve that grouping.
         let mut exchange = Complex64::new(0.0, 0.0);
@@ -2774,7 +2790,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 second_spin,
                 ip,
                 data,
-                state,
+                task,
                 ele_idx,
                 ele_cfg,
                 ele_num,
@@ -2789,7 +2805,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 &moved_num,
                 &moved_proj,
                 data,
-                state,
+                task,
                 &original_slater,
                 all_complex,
                 n_site,
@@ -2801,7 +2817,59 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 exchange += hcaca;
             }
         }
-        h2 += term.value * exchange;
+        Some(term.value * exchange)
+    };
+
+    if let Some(values) = crate::threading::collect_terms(
+        data.transfer_terms.len(),
+        || {
+            (
+                lanczos_task_state(state, n_site, n_elec),
+                GreenScratch::default(),
+            )
+        },
+        |(task, scratch), index| transfer_term(&data.transfer_terms[index], task, scratch),
+    ) {
+        for value in values.into_iter().flatten() {
+            h2 += value;
+        }
+    } else {
+        let mut scratch = GreenScratch::default();
+        for term in &data.transfer_terms {
+            if let Some(value) = transfer_term(term, state, &mut scratch) {
+                h2 += value;
+            }
+        }
+    }
+    if let Some(values) = crate::threading::collect_terms(
+        data.pair_hop_terms.len(),
+        || lanczos_task_state(state, n_site, n_elec),
+        |task, index| pair_hop_term(&data.pair_hop_terms[index], task),
+    ) {
+        for value in values.into_iter().flatten() {
+            h2 += value;
+        }
+    } else {
+        for term in &data.pair_hop_terms {
+            if let Some(value) = pair_hop_term(term, state) {
+                h2 += value;
+            }
+        }
+    }
+    if let Some(values) = crate::threading::collect_terms(
+        data.exchange_terms.len(),
+        || lanczos_task_state(state, n_site, n_elec),
+        |task, index| exchange_term(&data.exchange_terms[index], task),
+    ) {
+        for value in values.into_iter().flatten() {
+            h2 += value;
+        }
+    } else {
+        for term in &data.exchange_terms {
+            if let Some(value) = exchange_term(term, state) {
+                h2 += value;
+            }
+        }
     }
     state.slater_matrix = original_slater;
     h2

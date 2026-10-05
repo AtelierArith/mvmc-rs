@@ -138,7 +138,7 @@ two-body counterparts `calHCACA`.
 > - Rust: `accumulate_lanczos_qqqq` — `crates/mvmc-core/src/lanczos.rs:44`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Rust: `energy_by_alpha` — `crates/mvmc-core/src/lanczos.rs:128`
-> - Rust: `calculate_lanczos_h2_transfer` — `crates/mvmc-core/src/observables.rs:2540`
+> - Rust: `calculate_lanczos_h2_transfer` — `crates/mvmc-core/src/observables.rs:2584`
 > - Parity: the discriminant expression, the choice `if (ene_p > ene_m) alpha = alpha_m` and the tolerance `fabs(dnorm/H1) < pow(10.0,-12)` are reproduced literally (`lanczos.rs:61-114`, `lanczos.rs:117-143`); `QQQQ` uses the conjugate on the *left* factor for complex runs only (`all_complex`) and no conjugate for real runs, as `calculateQQQQ` vs `calculateQQQQ_real`. The Rust operator application follows Julia's order (PairHop applies its down-spin hop first, Exchange applies each spin channel in the order up-down then down-up; tests `lanczos_pair_hop_applies_down_then_up_like_julia`, `lanczos_exchange_applies_each_spin_channel_in_julia_order`). **Rust restriction:** Lanczos is accumulated only when there is no `InterAll` and the path is not FSZ (`run.rs:2779`), and validation additionally rejects spin-changing `Trans`, `NSplitSize > 1` and general orbitals (`crates/mvmc-core/src/validation.rs:255-291`), a subset of what C supports. **Failure behaviour differs:** when the quadratic has no admissible root C prints an error and writes nothing to the `zvo_ls_*` files; Rust still writes `zvo_ls_qqqq_NNN.dat` and writes `NaN, NaN, NaN` to `zvo_ls_out_NNN.dat` (`io.rs:311-316`).
 
 ## 6.3 Physical quantities after the Lanczos step
@@ -173,6 +173,6 @@ additionally writes the Lanczos one-body, direct two-body and factored two-body 
 > - C: `calculateQCAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:852`
 > - C: `calculateQCACAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:871`
 > - Rust: `lanczos_phys_values` — `crates/mvmc-core/src/io.rs:436`
-> - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2344`
+> - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2358`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
 > - Parity: `lanczos_phys_values` evaluates `(Q[i] + alpha*(Q[n+i] + Q[2n+i]) + alpha*alpha*Q[3n+i]) / dnorm` with `dnorm = (1 + 2*alpha*h1 + alpha*alpha*h2_1).re`, the same expression and association as C `CalculatePhysVal_fcmp` (`physcal_lanczos.c:336-358`). In real mode the imaginary parts are written as the literal `0.0` (as in C, which has a separate `_real` writer). The symbols $A_{1(01)}$/$A_{1(10)}$ in the C manual correspond to the two cross slots `Q[n+i]` and `Q[2n+i]`; the assignment of slots to the manual symbols follows `calculateQCAQ` (conjugated left factor) and was not re-derived here **(unverified)**.

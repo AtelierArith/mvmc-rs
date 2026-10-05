@@ -142,7 +142,7 @@ $$
 > - C: `CalculateHamiltonian1` (transfer part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:244`
 > - C: `CalculateHamiltonian2` (two-body part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:299`
 > - C: `CalculateHamiltonian_fsz` — `extern/mVMC-1.3.0/src/mVMC/calham_fsz.c:49`
-> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:2813`
+> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:2881`
 > - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:1913`
 > - Rust: `calculate_hamiltonian_diagonal` — `crates/mvmc-core/src/observables.rs:551`
 > - Rust: `calculate_local_energy_fsz` — `crates/mvmc-core/src/observables.rs:1246`

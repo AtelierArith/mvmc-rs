@@ -126,15 +126,17 @@ count and equal to C's one-thread order.
 | C region | Files | Status (#360) | Rust |
 |---|---|---|---|
 | Diagonal and two-body Hamiltonian terms (CoulombIntra/Inter, Hund, PairHop, Exchange, InterAll) | `calham*.c` | ported (pooled term values, serial in-order sum) | `observables.rs` `calculate_hamiltonian_diagonal`, `calculate_local_energy_timed` via `threading::collect_terms` |
-| Lanczos local Green (`lslocgrn*.c`) | `lslocgrn*.c` | **not ported**: the Rust Lanczos evaluator mutates and restores the shared Slater state per moved configuration; per-task state copies need a separate design | `observables.rs` `lanczos_*` (serial) |
+| Lanczos Hamiltonian/Green terms (`lslocgrn*.c`, Lanczos `calham*.c`) | `lslocgrn*.c` | ported (#360 follow-up): terms run concurrently on per-task copies of the Slater matrices/Transfer cache (restored after every term, as the serial evaluator restores the shared state), per-term moved-configuration sums stay serial, values are stored/added in term order | `observables.rs` `calculate_lanczos_green`, `calculate_lanczos_h2_transfer` via `collect_terms` and `lanczos_task_state` |
 | Green function accumulation | `calgrn*.c` | already pooled (superset of Julia) | `green_measurements.rs` |
 | Sampler updates | `pfupdate*.c` (`updateMAll*`, `calculateNewPfM*`) | ported: QP loops of 15 flat kernels | `sampling/updates.rs` via `threading::qp_fill` / `qp_update` |
 | Projection | `projection.c` DH2/DH4 loops | ported (definitions concurrent, integer increments applied in definition order) | `sampling/projection.rs` `recompute_dh_counts` |
-| RBM | `rbm.c` `LogWeightRBM`, `RBMRatio` | ported (per-hidden-unit values concurrent, serial `z`/`zz` fold in unit order); derivative accumulation (`set_rbm_diff`) and counter build left serial | `sampling/rbm.rs` `log_rbm_val`, `log_rbm_ratio` |
+| RBM | `rbm.c` `LogWeightRBM`, `RBMRatio` | ported (per-hidden-unit values concurrent, serial `z`/`zz` fold in unit order); `set_rbm_diff` computes each hidden counter's `tanh` concurrently and keeps the term-order accumulation serial; the counter build (`MakeRBMCnt`) is serial in C too | `sampling/rbm.rs` `log_rbm_val`, `log_rbm_ratio` |
 | Slater setup | `slater*.c` `UpdateSlaterElm*` | ported (one producer per QP plane, real shadow copy elementwise) | `slater_update.rs` |
 | SR/CG vector kernels | `stcopt.c`, `stcopt_cg_impl.c` | ported: S diagonal, S/g assembly (per column), CG axpy/residual/direction/product-correction loops and the sample-matrix fill; dot products and GEMV stay serial by design (Julia/C operation order) | `sr.rs`, `sr_cg.rs` |
-| `stcopt_pdposv.c`, `average.c`, `parameter.c` | | not ported: Rust uses its own Cholesky / sequential parameter updates (`update_parameter_value` mutates `ExpertModeData`) | |
-| Setup | `qp.c`, `gauleg.c`, `workspace.c`, `matrix.c` setup | not ported: one-time work | |
+| `average.c` | `average.c` | ported: the `1/Wc` scaling of the SR/energy buffers | `average.rs` |
+| `stcopt_pdposv.c` | | not applicable: it distributes the S matrix for ScaLAPACK `pdposv`; Rust factors with the serial-pinned LAPACK `dpotrf`/`dpotrs` (fixed operation order) and already pools the S/g assembly | `sr.rs` |
+| `parameter.c` | | not ported: `InitParameter` is one-time initialization whose loops interleave with RNG draws, and the zeroing/rescale loops live in `mvmc-expert-parsers`, which has no inner pool; `update_parameter_value` mutates `ExpertModeData` sequentially | |
+| Setup | `qp.c`, `gauleg.c`, `workspace.c`, `matrix.c` setup | not ported: one-time work per run (QP weights, Gauss-Legendre nodes, workspace allocation) whose cost does not scale with the sample or step count; the `matrix.c` QP loop is the already-pooled `calc_m_all_*` | |
 
 Proof: `crates/mvmc-core/tests/threaded_issue360.rs` runs every worker setting in
 its own process (threshold 1) and requires identical bits for the QP kernels
@@ -142,9 +144,10 @@ its own process (threshold 1) and requires identical bits for the QP kernels
 output files for short optimizations (Gutzwiller/Jastrow/DH, direct SR and
 NSRCG with stored samples, RBM with OptTrans, all Hamiltonian terms), plus the
 observed pooled-dispatch counters for 2 and 4 workers and none for one worker.
-InterAll is covered by the same code path as PairHop/Exchange but no
-optimization fixture contains InterAll terms; real and complex energies are not
-distinguished by the term collection.
+InterAll is exercised by dedicated cases that append an InterAll definition to the
+Hubbard fixtures (optimization with direct SR and CG, and PhysCal); the Lanczos
+Transfer/PairHop/Exchange terms and the Lanczos Green terms by the Lanczos 1 and 2
+PhysCal fixtures.
 
 ## Benchmark
 
