@@ -319,23 +319,13 @@ where
 // ---------------------------------------------------------------------------
 
 /// Compute the inverse of a real skew-symmetric matrix from its
-/// upper-triangular LTL form (in-place on `a`).
-pub fn utu2inv_real(
-    a: &mut SqMat<'_, f64>,
-    pivots: &[PivotIndex1Based],
-    vt: &mut [f64],
-    m_work: &mut SqMat<'_, f64>,
-) {
-    utu2inv_generic::<f64>(a, pivots, vt, m_work, None, false);
-}
-
-/// Real inverse following C `utu2inv`/`sktdsmx` (`ltl2inv/invert.tcc`).
+/// upper-triangular LTL form (in-place on `a`), following C
+/// `utu2inv`/`sktdsmx` (`ltl2inv/invert.tcc`).
 ///
 /// The tridiagonal solve divides directly instead of multiplying by Julia's
 /// reciprocal, and for `n > 64` the 64-column panel product and explicit skew
 /// restoration run before the permutations independently of the BLAS backend.
-/// [`utu2inv_real`] keeps Julia's arithmetic.
-pub fn utu2inv_real_c_compat(
+pub fn utu2inv_real(
     a: &mut SqMat<'_, f64>,
     pivots: &[PivotIndex1Based],
     vt: &mut [f64],

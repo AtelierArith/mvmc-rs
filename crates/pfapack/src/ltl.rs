@@ -27,20 +27,11 @@ use crate::PivotIndex1Based;
 
 /// LTL decomposition for real skew-symmetric matrices (`dsktf2`).
 ///
-/// Mirrors `julia_dsktf2!(A, iPiv)` from `ltl_decomposition.jl`.
+/// Follows the authoritative C `DSKR2` operation order: the upper rank-2
+/// update evaluates `(A + X*t1) - Y*t2` as in
+/// `extern/mVMC-1.3.0/src/pfapack/fortran/dskr2.f` (Julia's
+/// `A += (X*t1 - Y*t2)` grouping is intentionally not used).
 pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
-    sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, false)
-}
-
-/// Real LTL decomposition with C's `DSKR2` update order.
-///
-/// The upper rank-2 update evaluates `(A + X*t1) - Y*t2` as in
-/// `extern/mVMC-1.3.0/src/pfapack/fortran/dskr2.f`. [`dsktf2`] keeps Julia's
-/// `A += (X*t1 - Y*t2)` grouping, which can differ in the last bit.
-pub fn dsktf2_c_compat(
-    a: &mut SqMat<'_, f64>,
-    pivots: &mut [PivotIndex1Based],
-) -> Result<(), usize> {
     sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, true)
 }
 
@@ -240,17 +231,13 @@ impl UpperRank2Kernel for f64 {
         k0: usize,
         alpha: Self,
         _turbo: bool,
-        c_order: bool,
+        _c_order: bool,
     ) {
-        if c_order {
-            update_upper_rank2_f64_c_order(data, lda, kk0, k0, alpha);
-        } else {
-            update_upper_rank2_f64(data, lda, kk0, k0, alpha);
-        }
+        update_upper_rank2_f64_c_order(data, lda, kk0, k0, alpha);
     }
     #[inline]
     fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
-        update_upper_rank2_f64(data, lda, kk0, k0, alpha);
+        update_upper_rank2_f64_c_order(data, lda, kk0, k0, alpha);
     }
 }
 
@@ -553,6 +540,7 @@ fn check_update_upper_rank2_args<T>(data: &[T], lda: usize, kk0: usize, k0: usiz
 }
 
 #[inline]
+#[cfg(test)]
 fn update_upper_rank2_f64(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
     check_update_upper_rank2_args(data, lda, kk0, k0);
     let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);

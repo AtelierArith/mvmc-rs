@@ -34,3 +34,13 @@ all numerical routines remain authoritative Julia code.
 These checks establish exact parity for the recorded environment and
 inputs. Other architectures and BLAS implementations require their own
 source comparisons; these fixtures do not establish universal bit parity.
+
+## Historical Julia-order status (#358)
+
+The ordinary real Rust Pfaffian path now follows C's operation order. For the
+real, hubbard, opttrans, dh2/dh4/dh24, pairhop and rbm real CG/direct families
+these Julia-order trajectories are historical: only configurations, RNG, step-1
+energy and SR S-diagonal columns are still checked against them. Parameter
+trajectories are not a portable reference (finite-iteration CG amplifies
+last-bit differences; see `docs/NUMERICAL_COMPARISONS.md`). Native C step-1
+operands are in `../c_order_sr_operands/`.
