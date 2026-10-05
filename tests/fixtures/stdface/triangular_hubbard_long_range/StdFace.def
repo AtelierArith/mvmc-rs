@@ -1,0 +1,13 @@
+model = "Hubbard"
+lattice = "triangular"
+W = 3
+L = 3
+U = 4.0
+t = 1.0
+ncond = 9
+mu = -0.4
+t' = 0.3
+t'' = 0.1
+V = 0.5
+V' = 0.2
+V'' = 0.1

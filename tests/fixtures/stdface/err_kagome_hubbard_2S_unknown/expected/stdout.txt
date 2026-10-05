@@ -1,0 +1,14 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Hubbard 
+  KEYWORD : lattice              | VALUE : kagome 
+  KEYWORD : w                    | VALUE : 2 
+  KEYWORD : l                    | VALUE : 2 
+  KEYWORD : u                    | VALUE : 4.0 
+  KEYWORD : t                    | VALUE : 1.0 
+  KEYWORD : ncond                | VALUE : 12 
+  KEYWORD : 2s                   | VALUE : 1 
+ERROR ! Unsupported Keyword in Standard mode!

@@ -1,0 +1,8 @@
+model = "Kondo"
+lattice = "kagome"
+W = 2
+L = 2
+t = 1.0
+J = 2.0
+ncond = 12
+phase0 = 180

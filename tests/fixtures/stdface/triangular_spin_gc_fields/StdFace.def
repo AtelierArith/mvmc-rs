@@ -1,0 +1,8 @@
+model = "SpinGC"
+lattice = "triangular"
+W = 3
+L = 3
+J = 1.0
+h = 0.3
+Gamma = 0.2
+Gamma_y = -0.4

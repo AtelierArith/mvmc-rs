@@ -1,0 +1,12 @@
+model = "Spin"
+lattice = "square"
+W = 2
+L = 2
+J0 = 1.0
+J1x = 0.5
+J1y = 0.6
+J1z = 0.7
+J0' = 0.2
+J1' = 0.3
+2Sz = 0
+ComplexType = 1

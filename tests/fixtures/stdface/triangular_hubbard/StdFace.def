@@ -1,0 +1,7 @@
+model = "Hubbard"
+lattice = "triangular"
+W = 3
+L = 3
+U = 4.0
+t = 1.0
+ncond = 9
