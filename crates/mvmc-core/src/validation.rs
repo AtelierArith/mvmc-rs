@@ -92,9 +92,6 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
             p.lanczos_mode
         ));
     }
-    if p.nsrcg >= 2 {
-        return Err("NSRCG >= 2 is not supported by Julia-mVMC; use NSRCG = 0 or 1".into());
-    }
     if p.use_diag_scale != 0 {
         return Err("useDiagScale != 0 is not supported by Julia-mVMC".into());
     }
@@ -104,11 +101,31 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
     Ok(())
 }
 
+/// Reject the SR-CG storage combination that is undefined in C.
+///
+/// C selects the CG solver for any `NSRCG != 0` (vmcmain.c:461,485;
+/// vmccal.c:582,591) but allocates `SROptO_Store` only when
+/// `NSRCG == 1 || NStoreO != 0` (setmemory.c:394-416). `NSRCG >= 2` with
+/// `NStore == 0` therefore leaves the CG solver without its O storage, which is
+/// undefined behavior in C; Rust rejects it instead of imitating that.
+pub fn validate_sr_storage_contract(p: &ModParaParameters) -> Result<(), String> {
+    if p.nsrcg >= 2 && p.nstore_o == 0 {
+        return Err(format!(
+            "NSRCG={} with NStore=0 is undefined in mVMC C: any nonzero NSRCG selects the CG solver, \
+             but the SROptO storage it reads is allocated only when NSRCG == 1 or NStore != 0 \
+             (setmemory.c); use NStore != 0 or NSRCG = 1",
+            p.nsrcg
+        ));
+    }
+    Ok(())
+}
+
 /// Validate parameter-optimization entry points before initialization or IO.
 pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     crate::run::get_all_complex_flag(data)?;
     let p = &data.modpara;
     validate_supported_modpara(p)?;
+    validate_sr_storage_contract(p)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
     if p.lanczos_mode > 0 {
         return Err(
@@ -421,6 +438,46 @@ mod tests {
                 expected,
                 "{env:?}"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod nsrcg_contract_tests {
+    use super::{validate_sr_storage_contract, validate_supported_modpara};
+
+    fn modpara(nsrcg: i64, nstore: i64) -> mvmc_expert_parsers::ModParaParameters {
+        let mut p = mvmc_expert_parsers::ExpertModeData::new().modpara;
+        p.nmp_trans = 1;
+        p.nsrcg = nsrcg;
+        p.nstore_o = nstore;
+        p
+    }
+
+    #[test]
+    fn nonzero_nsrcg_is_accepted_when_c_allocates_o_storage() {
+        for (cg, store) in [
+            (0, 0),
+            (0, 1),
+            (1, 0),
+            (1, 1),
+            (2, 1),
+            (3, 1),
+            (-1, 1),
+            (2, -1),
+        ] {
+            let p = modpara(cg, store);
+            assert_eq!(validate_supported_modpara(&p), Ok(()), "{cg},{store}");
+            assert_eq!(validate_sr_storage_contract(&p), Ok(()), "{cg},{store}");
+        }
+    }
+
+    #[test]
+    fn nsrcg_two_or_more_without_store_is_rejected_as_c_undefined() {
+        for cg in [2, 3, 100] {
+            let error = validate_sr_storage_contract(&modpara(cg, 0)).unwrap_err();
+            assert!(error.contains("undefined in mVMC C"), "{error}");
+            assert!(error.contains(&format!("NSRCG={cg}")), "{error}");
         }
     }
 }

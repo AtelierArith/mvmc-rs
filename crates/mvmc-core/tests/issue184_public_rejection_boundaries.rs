@@ -163,8 +163,15 @@ fn s200_physcal_split_three_general_rejects_before_output_state_and_rng() {
     );
 }
 #[test]
-fn s205_paraopt_cg_two_rejects_before_output_state_and_rng() {
-    boundary(false, |d| d.modpara.nsrcg = 2, "NSRCG >= 2");
+fn s205_paraopt_cg_two_without_store_rejects_before_output_state_and_rng() {
+    boundary(
+        false,
+        |d| {
+            d.modpara.nsrcg = 2;
+            d.modpara.nstore_o = 0;
+        },
+        "undefined in mVMC C",
+    );
 }
 #[test]
 fn s214_paraopt_lanczos_one_rejects_before_output_state_and_rng() {
