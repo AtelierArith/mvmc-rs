@@ -13,6 +13,10 @@ This Cargo workspace is the Rust port of [Julia-mVMC](extern/Julia-mVMC) — a J
 
 See [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md) for the full phased plan, the module-by-module mapping, the bit-parity strategy, and the open / answered clarifications.
 
+## User manual
+
+A user manual that starts from the theory (variational Monte Carlo, the Pfaffian pair-product wave function with correlation factors and quantum-number projection, Metropolis sampling, stochastic reconfiguration, Green functions and the Lanczos correction) and maps every key equation to the C reference function and the Rust function that implements it is in [`docs/manual/`](docs/manual/README.md). It also documents the input files (with the supported/rejected matrix), the `mvmc` command line, serial/MPI/grouped (`NSplitSize`) execution, environment variables, every output file and which rank writes it, a worked tutorial and the differences from C and Julia.
+
 ## Crate layout
 
 | Crate | License | Upstream |
@@ -43,12 +47,20 @@ cargo run -p mvmc-cli -- <namelist.def> [options]
 
 Options:
   --nsteps <N>      SR steps (overrides NSROptItrStep in modpara.def)
+  --nsmp <N>        Final averaging window (overrides NSROptItrSmp)
   --out-dir <DIR>   Output directory (default: namelist parent / output/)
   --seed <N>        RNG seed (overrides RndSeed in modpara.def)
+  --mode <MODE>     Sanity label real/cmp/fsz (the mode comes from the inputs)
+  --initial-def <auto|none|PATH>  Starting parameter file (default: auto)
+  -o, --opt-trans   Enable the C OptTrans mode
+  --physcal <PATH>  Fixed-parameter PhysCal (requires NVMCCalMode=1)
+  --physcal-trace <NEW_DIR>  Nonconsuming serial PhysCal diagnostics
 
 Environment:
   MVMC_NSTEPS       Same as --nsteps (CLI flag takes precedence)
 ```
+
+`NVMCCalMode` in `modpara.def` selects the calculation (0: optimisation, 1: PhysCal) and must agree with `--physcal`. Serial, MPI (`--features mpi`) and grouped (`NSplitSize`) execution, the timer/diagnostic and inner-thread environment variables (`MVMC_C_TIMER`, `MVMC_*_DIAG`, `MVMC_RS_INNER_THREADS`, `MVMC_RS_INNER_THRESHOLD`) and every output file (`zvo_out.dat`, `zvo_var.dat`, `zqp_*_opt.dat`, `zvo_SRinfo.dat`, `zvo_cisajs*`, `zvo_ls_*`, `zvo_CalcTimer*.dat`) are described in the [user manual](docs/manual/README.md) ([running](docs/manual/08-running.md), [outputs](docs/manual/09-output-files.md)).
 
 ## PhysCal
 
@@ -58,9 +70,9 @@ In addition to SR optimisation, the `mvmc` binary can run fixed-parameter physic
 cargo run -p mvmc-cli -- <namelist.def> --physcal <zqp_opt.dat> [options]
 ```
 
-Use `--mode real`, `--mode cmp`, or `--mode fsz` to select the real, complex, or FSZ calculation path. The default mode is inferred from the namelist. For nonconsuming serial diagnostics, add `--physcal-trace <NEW_DIR>`.
+`modpara.def` must set `NVMCCalMode 1` for `--physcal` (and `--physcal` is required when it does). `--mode real|cmp|fsz` is only a sanity label: the real, complex or FSZ path is determined by the input declarations. For nonconsuming serial diagnostics, add `--physcal-trace <NEW_DIR>`.
 
-Reference comparisons are in `crates/mvmc-core/tests/physcal_issue181.rs` and `crates/mvmc-cli/tests/physcal_reference.rs`. Full Lanczos beyond step-0 comparison is not in scope for v0.1.
+Reference comparisons are in `crates/mvmc-core/tests/physcal_issue181.rs` and `crates/mvmc-cli/tests/physcal_reference.rs`. The single-step Lanczos correction (`NLanczosMode = 1, 2`, written to `zvo_ls_out_*`, `zvo_ls_qqqq_*` and, for mode 2, the `zvo_ls_cisajs*` files) is implemented for the sz-conserved path with `NSplitSize = 1`, without `InterAll` or spin-changing `Trans` terms (issues #31 and #32); see the [manual](docs/manual/06-theory-observables-lanczos.md) for the formulas and [the supported-input matrix](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) for the rejected combinations.
 
 ### PhysCal verification
 
@@ -227,10 +239,12 @@ cargo run --release -p mvmc-cli --example heisenberg_chain_real
 cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1
 ```
 
-## Out of scope for v0.1 (mirrors Julia-mVMC v0.1)
+## Out of scope
 
-- BackFlow correlation factor.
-- Full Lanczos (only step-0 comparison verified upstream).
+The authoritative list of rejected inputs is [the supported/rejected matrix in the manual](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) (`crates/mvmc-core/src/validation.rs`).
+
+- BackFlow correlation factor and `SpinJastrow` (rejected), `NSRCG >= 2`, `useDiagScale`, `RescaleSmat`.
+- Lanczos corrections for FSZ/general orbitals, with `InterAll` or spin-changing `Trans`, or with `NSplitSize > 1` (rejected). The single-step Lanczos correction itself (`NLanczosMode` 1/2) is implemented.
 - The `cimpl_utu2inv!` ccall path and `fimpl_zsktf2_/_dsktf2_` Fortran wrappers from `PfaPack.jl` — the optimizer's hot path uses the pure-Julia routines, so we port those directly and drop the FFI surface entirely (no `gfortran` / `g++` required).
 
 ## License
