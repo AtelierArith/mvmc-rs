@@ -150,7 +150,10 @@ fn run(name: &str, check_numbers: bool) {
                     .flatten()
                     .any(|e| e.file_name().to_string_lossy().starts_with("zvo_ls_"));
             assert!(!leaked, "{name}: rejected run produced Lanczos files");
-            let c_empty = fs::read_dir(dir.join("expected")).unwrap().next().is_none();
+            // Version control drops an empty directory, so a missing one also means
+            // "no C output".
+            let c_empty =
+                fs::read_dir(dir.join("expected")).map_or(true, |mut e| e.next().is_none());
             assert_eq!(
                 c_empty,
                 sc.class == "c_rejected",
