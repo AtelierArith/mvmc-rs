@@ -15,7 +15,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NLanczosMode 3", "NLanczosMode must be"),
         ("NLanczosMode -1", "NLanczosMode must be"),
         ("NLanczosMode 1", "parameter optimization"),
-        ("NSRCG 2", "NSRCG >= 2"),
+        ("NSRCG 2\nNStore 0", "undefined in mVMC C"),
         ("useDiagScale 1", "useDiagScale"),
         ("RescaleSmat 1", "RescaleSmat"),
         ("NVMCCalMode 1", "PhysCal"),

@@ -2606,7 +2606,9 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_proj = data.projection_layout().n_proj;
     let sr_opt_size = state.sr_opt.sr_opt_size;
-    let use_store = data.modpara.nstore_o != 0 || data.modpara.nsrcg != 0;
+    // C setmemory.c:394: SROptO storage exists iff NSRCG == 1 || NStoreO != 0.
+    // NSRCG >= 2 with NStore == 0 is rejected by validation (undefined in C).
+    let use_store = data.modpara.nstore_o != 0 || data.modpara.nsrcg == 1;
     state.sr_opt.sr_opt_o_store.fill(Complex64::new(0.0, 0.0));
     state.sr_opt.sr_opt_o_store_real.fill(0.0);
     let n_rbm = data.count_rbm_parameters();
@@ -5856,6 +5858,68 @@ mod callback_tests {
             assert_eq!(hash, julia_hash, "{case}: Julia SFMT block mismatch");
             fs::remove_dir_all(direct_dir).unwrap();
             fs::remove_dir_all(stored_dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn nsrcg_two_with_store_follows_nsrcg_one_control_path() {
+        // C treats every nonzero NSRCG as CG (vmcmain.c:461,485; vmccal.c:582,591)
+        // and allocates SROptO storage for NSRCG==1 || NStoreO!=0 (setmemory.c:394),
+        // so NSRCG=2,NStore=1 and NSRCG=1,NStore=1 execute identical code in C.
+        // This is a same-implementation equivalence, not a C numerical reference.
+        for case in [
+            "heisenberg_chain_real",
+            "heisenberg_chain_cmp",
+            "hubbard_chain_real",
+        ] {
+            let mut runs = Vec::new();
+            for cg in [1, 2] {
+                let (mut data, mut state, mut rng) = prepared_case(3, case);
+                data.modpara.nsrcg = cg;
+                data.modpara.nstore_o = 1;
+                let dir = fresh_output_directory().unwrap();
+                vmc_para_opt(
+                    &mut data,
+                    &mut state,
+                    &mut rng,
+                    Some(&dir),
+                    &SingleProcessReducer,
+                    OptimizationOptions::default(),
+                )
+                .unwrap();
+                runs.push((data, state, rng, dir));
+            }
+            let (a, b) = runs.split_at_mut(1);
+            let (da, sa, ra, dira) = &mut a[0];
+            let (db, sb, rb, dirb) = &mut b[0];
+            assert_eq!(da.slater_params, db.slater_params, "{case}");
+            assert_eq!(da.optimization_flags, db.optimization_flags, "{case}");
+            assert_eq!(sa.energy, sb.energy, "{case}");
+            assert_eq!(sa.sr_opt, sb.sr_opt, "{case}");
+            assert_eq!(sa.electron_config, sb.electron_config, "{case}");
+            assert_eq!(ra.words_consumed(), rb.words_consumed(), "{case}");
+            for _ in 0..624 {
+                assert_eq!(ra.gen_rand32(), rb.gen_rand32(), "{case}");
+            }
+            let names = |d: &Path| {
+                let mut v: Vec<_> = fs::read_dir(d)
+                    .unwrap()
+                    .map(|e| e.unwrap().file_name())
+                    .collect();
+                v.sort();
+                v
+            };
+            let files = names(dira);
+            assert_eq!(files, names(dirb), "{case}");
+            for f in files {
+                assert_eq!(
+                    fs::read(dira.join(&f)).unwrap(),
+                    fs::read(dirb.join(&f)).unwrap(),
+                    "{case}: {f:?}"
+                );
+            }
+            fs::remove_dir_all(dira).unwrap();
+            fs::remove_dir_all(dirb).unwrap();
         }
     }
 

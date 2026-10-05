@@ -166,11 +166,14 @@ fn rejected_case(case: &str, phys: bool, width: usize) -> (ExpertModeData, &'sta
             }
         }
         "invalid-cg" => {
+            // NSRCG >= 2 selects CG in C; without O storage it is undefined there.
+            // PhysCal never runs SR, so the case is only a ParaOpt rejection.
             data.modpara.nsrcg = 2;
+            data.modpara.nstore_o = 0;
             if width > 1 && !phys {
                 "NSplitSize > 1 with SR-CG is not supported"
             } else {
-                "NSRCG >= 2"
+                "undefined in mVMC C"
             }
         }
         other => panic!("unknown case {other}"),
@@ -255,6 +258,9 @@ fn shared_public_guards_reject_invalid_values_without_mutation() {
             "invalid-lanczos",
             "invalid-cg",
         ] {
+            if phys && case == "invalid-cg" {
+                continue; // PhysCal ignores SR controls (accepted, as in C).
+            }
             let (data, diagnostic) = rejected_case(case, phys, 1);
             rejection(
                 data,
@@ -322,6 +328,9 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                         "invalid-lanczos",
                         "invalid-cg",
                     ];
+                    if phys {
+                        cases.retain(|case| *case != "invalid-cg");
+                    }
                     if width == 2 {
                         cases.extend(if phys {
                             vec!["fsz-phys", "opttrans", "lanczos1", "lanczos2"]
