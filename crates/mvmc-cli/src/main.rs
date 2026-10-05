@@ -18,7 +18,10 @@
 //!   -v                Print the version and exit
 //!   -h                Print usage and exit
 //!   -s                Standard mode: StdFace generates the Expert files from <stan.in>
-//!   -m <N>            Rejected: MultiDef is not yet implemented (#348)
+//!   -m <N>            MultiDef mode: `mvmc -m N <dirlist> <namelist.def> [initpara]` splits the
+//!                     MPI world into N groups (div/mod rule), each running <namelist.def> in the
+//!                     directory named by its line of <dirlist> (#348). `-e` and `-s` after `-m`
+//!                     cancel it, as in C.
 //!
 //! Positional `initpara`: the fixed parameter file for NVMCCalMode=1 (optional, as in
 //! C) and the initial parameter file for NVMCCalMode=0.
@@ -49,7 +52,7 @@ const USAGE_LINE: &str = "Usage: {program} [option] NameListFile [OptParaFile]";
 fn print_usage(program: &str) {
     eprintln!("{}", USAGE_LINE.replace("{program}", program));
     eprintln!("  -b     binary mode (write _varbin_ files instead of _var_ text files)");
-    eprintln!("  -m N   multiDef mode (not yet implemented, #348)");
+    eprintln!("  -m N   multiDef mode: -m N DirListFile NameListFile [OptParaFile]");
     eprintln!("  -o     optTrans mode");
     eprintln!("  -F N   set interval of file flush");
     eprintln!(
@@ -191,6 +194,8 @@ fn main() {
     let mut physcal_trace_dir: Option<PathBuf> = None;
     let mut standard_mode = false;
     let mut dry_run = false;
+    // C `flagMultiDef`/`nMultiDef`: `-e` and `-s` clear the flag (vmcmain.c:151-157).
+    let mut multi_def: Option<i64> = None;
 
     let usage_error = |message: &str| -> ! {
         eprintln!("error: {message}");
@@ -220,7 +225,10 @@ fn main() {
                 pos += 1;
                 match option {
                     'b' => binary_arg = true,
-                    'e' => standard_mode = false,
+                    'e' => {
+                        standard_mode = false;
+                        multi_def = None;
+                    }
                     'o' => opt_trans_arg = true,
                     'h' => {
                         print_usage(program);
@@ -230,7 +238,10 @@ fn main() {
                         print_version();
                         process::exit(0);
                     }
-                    's' => standard_mode = true,
+                    's' => {
+                        standard_mode = true;
+                        multi_def = None;
+                    }
                     'm' | 'F' => {
                         let value: String = if pos < cluster.len() {
                             let rest: String = cluster[pos..].iter().collect();
@@ -249,11 +260,10 @@ fn main() {
                         };
                         if option == 'm' {
                             match parse_c_int('m', &value) {
-                                Ok(_) => {
-                                    usage_error("-m: MultiDef mode is not yet implemented (#348)")
-                                }
+                                Ok(n) => multi_def = Some(n),
                                 Err(error) => usage_error(&error),
                             }
+                            continue;
                         }
                         match parse_c_int('F', &value) {
                             Ok(n) if n >= 1 => flush_interval_arg = Some(n),
@@ -354,8 +364,14 @@ fn main() {
             "--opt-trans" => {
                 opt_trans_arg = true;
             }
-            "--standard" => standard_mode = true,
-            "--expert" => standard_mode = false,
+            "--standard" => {
+                standard_mode = true;
+                multi_def = None;
+            }
+            "--expert" => {
+                standard_mode = false;
+                multi_def = None;
+            }
             "--dry-run" => dry_run = true,
             "--physcal" => {
                 idx += 1;
@@ -380,6 +396,17 @@ fn main() {
         idx += 1;
     }
 
+    // MultiDef mode (vmcmain.c:172-190): the first positional is the directory-list file.
+    let dir_list: Option<PathBuf> = if multi_def.is_some() {
+        if positional.len() < 2 {
+            eprintln!("error: Argument count mismatch");
+            print_usage(program);
+            process::exit(2);
+        }
+        Some(positional.remove(0))
+    } else {
+        None
+    };
     if positional.len() > 2 {
         eprintln!("error: Argument count mismatch");
         print_usage(program);
@@ -426,7 +453,7 @@ fn main() {
     }
 
     #[cfg(feature = "mpi")]
-    let mpi_context = {
+    let mpi_world = {
         let launched = mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok());
         if launched.is_some_and(|context| context.world_size > 1) {
             Some(
@@ -440,12 +467,27 @@ fn main() {
         }
     };
 
+    // MultiDef mode (vmcmain.c:193-198): split the world, enter this group's directory.
+    // The group communicator then plays the role of MPI_COMM_WORLD for the whole run.
+    #[cfg(feature = "mpi")]
+    let mpi_group = match (multi_def, &dir_list) {
+        (Some(n), Some(list)) => init_multi_def(n, list, mpi_world.as_ref()),
+        _ => None,
+    };
+    #[cfg(feature = "mpi")]
+    let mpi_context: Option<&mvmc_core::mpi::MpiContext> =
+        mpi_group.as_ref().or(mpi_world.as_ref());
+    #[cfg(not(feature = "mpi"))]
+    if let (Some(n), Some(list)) = (multi_def, &dir_list) {
+        init_multi_def(n, list);
+    }
+
     // Standard mode (vmcmain.c -s): rank 0 runs StdFace_main, then every rank reads namelist.def.
     let mut namelist = namelist;
     if standard_mode {
         let gen_dir = out_dir_arg.clone().unwrap_or_else(|| PathBuf::from("."));
         #[cfg(feature = "mpi")]
-        let status = match &mpi_context {
+        let status = match mpi_context {
             Some(context) => {
                 let mut status = [if context.is_root() {
                     i64::from(run_stdface(&namelist, &gen_dir))
@@ -476,7 +518,7 @@ fn main() {
         .and_then(|s| s.parse().ok());
     let nsteps_override = nsteps_arg.or(nsteps_env);
     #[cfg(feature = "mpi")]
-    if let Some(context) = &mpi_context {
+    if let Some(context) = mpi_context {
         let controls = format!(
             "physcal={};nsteps={nsteps_override:?};mode={mode_arg:?};nsmp={nsmp_arg:?};seed={seed_arg:?};opt_trans={opt_trans_arg};initial={}",
             parameter_file.is_some(),
@@ -517,7 +559,7 @@ fn main() {
         Err(e) => Err(format!("could not parse Expert input: {e}")),
     })();
     #[cfg(feature = "mpi")]
-    let peek = match &mpi_context {
+    let peek = match mpi_context {
         Some(context) => agree_result(peek, context, "CLI parse/validation"),
         None => peek,
     };
@@ -553,7 +595,7 @@ fn main() {
         }
     }
     #[cfg(feature = "mpi")]
-    if let Some(context) = &mpi_context {
+    if let Some(context) = mpi_context {
         // ModPara determines loop counts and collective buffer shapes. Agree it
         // before dispatch, not merely whether each local value is valid.
         let controls = format!(
@@ -571,7 +613,7 @@ fn main() {
         });
     }
     #[cfg(feature = "mpi")]
-    let output_root = mpi_context.as_ref().is_none_or(|context| context.is_root());
+    let output_root = mpi_context.is_none_or(|context| context.is_root());
     #[cfg(not(feature = "mpi"))]
     let output_root = true;
     // readdef.c:749-752: rank 0 reports the negative-DSROptStepDt mode on stderr.
@@ -618,7 +660,7 @@ fn main() {
         Ok(())
     };
     #[cfg(feature = "mpi")]
-    let step_validation = match &mpi_context {
+    let step_validation = match mpi_context {
         Some(context) => agree_result(step_validation, context, "CLI step validation"),
         None => step_validation,
     };
@@ -662,7 +704,7 @@ fn main() {
             opt_trans_arg,
             binary_arg,
             #[cfg(feature = "mpi")]
-            mpi_context.as_ref(),
+            mpi_context,
         ) {
             Ok(result) => {
                 if let Some(trace) = &trace {
@@ -705,7 +747,7 @@ fn main() {
             &namelist,
             config,
             #[cfg(feature = "mpi")]
-            mpi_context.as_ref(),
+            mpi_context,
         ) {
             Ok(summary) => {
                 if output_root {
@@ -729,6 +771,129 @@ fn main() {
             }
         }
     }
+}
+
+/// C `initMultiDefMode` (`vmcmain.c:727-800`) for a serial launch: the world has one rank,
+/// so only `-m 1` is valid. Exits with C's status on every error.
+#[cfg(not(feature = "mpi"))]
+fn init_multi_def(n: i64, dir_list: &Path) {
+    if mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok())
+        .is_some_and(|context| context.world_size > 1)
+    {
+        eprintln!(
+            "error: MPI launcher detected; rebuild mvmc-cli with --features mpi to enable MPI execution"
+        );
+        process::exit(1);
+    }
+    if let Err(message) = mvmc_core::multidef::check_world(1, n) {
+        eprintln!("{message}");
+        process::exit(1);
+    }
+    let names = mvmc_core::multidef::read_dir_list(dir_list, 1).unwrap_or_else(|message| {
+        eprintln!("{message}");
+        process::exit(1)
+    });
+    if let Err(message) = mvmc_core::multidef::change_directory(&names[0]) {
+        eprintln!("{message}");
+        process::exit(1);
+    }
+}
+
+/// C `initMultiDefMode` (`vmcmain.c:727-800`): split the world into `n` groups, read the
+/// directory list on rank 0, give group `g` the `g`-th name and change into it. Returns
+/// the group communicator (`comm0`), or `None` for a serial launch (a one-rank world,
+/// where only `-m 1` is valid). Failures exit with status 1 on every rank, as C's
+/// `exit(EXIT_FAILURE)` / `MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE)`.
+#[cfg(feature = "mpi")]
+fn init_multi_def(
+    n: i64,
+    dir_list: &Path,
+    world: Option<&mvmc_core::mpi::MpiContext>,
+) -> Option<mvmc_core::mpi::MpiContext> {
+    use mvmc_core::multidef;
+    let (rank, size) = world.map_or((0, 1), |context| (context.rank(), context.world_size()));
+    match multidef::check_world(size, n) {
+        Ok(check) => {
+            if let (0, Some(warning)) = (rank, check.warning) {
+                eprintln!("{warning}");
+            }
+        }
+        Err(message) => {
+            if rank == 0 {
+                eprintln!("{message}");
+            }
+            process::exit(1);
+        }
+    }
+    let n = usize::try_from(n).expect("validated by check_world");
+    let group = world.map(|context| {
+        context.split_multi_def(n).unwrap_or_else(|error| {
+            eprintln!("error: {error}");
+            process::exit(1)
+        })
+    });
+
+    // Rank 0 reads the list; every rank learns the names (C scatters them to the group
+    // leaders only, see `change_directory`).
+    let mut names = Vec::new();
+    let mut failed = false;
+    if rank == 0 {
+        match multidef::read_dir_list(dir_list, n) {
+            Ok(list) => names = list,
+            Err(message) => {
+                eprintln!("{message}");
+                failed = true;
+            }
+        }
+    }
+    if let Some(context) = world {
+        let reducer: &dyn mvmc_core::Reducer = context;
+        let mut status = [i64::from(failed)];
+        let mut text = names.join("\n").into_bytes();
+        let mut length = [i64::try_from(text.len()).expect("directory list length")];
+        let broadcast = (|| -> Result<(), String> {
+            reducer.broadcast_i64(0, &mut status)?;
+            reducer.broadcast_i64(0, &mut length)?;
+            let mut bytes: Vec<i64> = text.iter().map(|&byte| i64::from(byte)).collect();
+            bytes.resize(
+                usize::try_from(length[0]).map_err(|error| error.to_string())?,
+                0,
+            );
+            reducer.broadcast_i64(0, &mut bytes)?;
+            text = bytes.into_iter().map(|byte| byte as u8).collect();
+            Ok(())
+        })();
+        if let Err(error) = broadcast {
+            eprintln!("error: {error}");
+            process::exit(1);
+        }
+        failed = status[0] != 0;
+        if !failed {
+            names = String::from_utf8_lossy(&text)
+                .split('\n')
+                .map(str::to_owned)
+                .collect();
+        }
+    }
+    if failed {
+        process::exit(1);
+    }
+
+    let group_index = multidef::group_of_rank(rank, size, n);
+    let changed = multidef::change_directory(&names[group_index]);
+    if let Err(message) = &changed {
+        if group.as_ref().is_none_or(|context| context.rank() == 0) {
+            eprintln!("{message}");
+        }
+    }
+    let any_failed = match world {
+        Some(context) => mvmc_core::Reducer::any_failure(context, changed.is_err()),
+        None => changed.is_err(),
+    };
+    if any_failed {
+        process::exit(1);
+    }
+    group
 }
 
 /// Validate the NVMCCalMode dispatch (`vmcmain.c:304-319`). The positional `initpara` is

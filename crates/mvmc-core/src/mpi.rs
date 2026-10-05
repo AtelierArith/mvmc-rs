@@ -19,9 +19,15 @@ use crate::reducer::Reducer;
 const MPI_REDUCTION_CHUNK_LEN: usize = 1 << 20;
 
 /// An initialized MPI world and its root-owned lifecycle token.
+///
+/// A MultiDef group context ([`MpiContext::split_multi_def`]) borrows the parent's
+/// lifecycle: it holds no `Universe` and must be dropped before its parent. Its "world"
+/// is the group communicator (`comm0` of `vmcmain.c`), so every rank/size/reduction
+/// method and `split_groups` act on the group only.
 pub struct MpiContext {
-    universe: ::mpi::environment::Universe,
+    // Field order is drop order: the communicator is freed before MPI_Finalize.
     world: ::mpi::topology::SimpleCommunicator,
+    universe: Option<::mpi::environment::Universe>,
 }
 
 /// MPI communicator for one Julia-compatible `NSplitSize` group.
@@ -72,7 +78,10 @@ impl MpiContext {
             return Err("MPI runtime did not provide MPI_THREAD_FUNNELED".into());
         }
         let world = universe.world();
-        Ok(Self { universe, world })
+        Ok(Self {
+            universe: Some(universe),
+            world,
+        })
     }
 
     /// Zero-based rank in `MPI_COMM_WORLD`.
@@ -117,8 +126,28 @@ impl MpiContext {
 
     /// Keep the lifecycle token observable to callers that need to enforce
     /// drop order; MPI finalization still happens through `Drop` of Universe.
-    pub fn universe(&self) -> &::mpi::environment::Universe {
-        &self.universe
+    pub fn universe(&self) -> Option<&::mpi::environment::Universe> {
+        self.universe.as_ref()
+    }
+
+    /// C `initMultiDefMode` communicator split (`vmcmain.c:752-762`): `n` groups by the
+    /// div/mod rule of [`crate::multidef::group_of_rank`], keyed by the parent rank. The
+    /// returned context is the group's `comm0`. `n` must satisfy
+    /// [`crate::multidef::check_world`].
+    pub fn split_multi_def(&self, n: usize) -> Result<MpiContext, String> {
+        let group = crate::multidef::group_of_rank(self.rank(), self.world_size(), n);
+        let color = Color::with_value(
+            i32::try_from(group).map_err(|_| "MultiDef group index exceeds MPI color")?,
+        );
+        let key = i32::try_from(self.rank()).map_err(|_| "MPI rank exceeds MPI key")?;
+        let world = self
+            .world
+            .split_by_color_with_key(color, key)
+            .ok_or_else(|| "MPI communicator split returned MPI_UNDEFINED".to_string())?;
+        Ok(MpiContext {
+            universe: None,
+            world,
+        })
     }
 
     /// Split `MPI_COMM_WORLD` into contiguous groups of width `nsplit`.

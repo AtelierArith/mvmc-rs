@@ -1,0 +1,8 @@
+generator=c_toolbox/multidef_348/generate_split.sh (standalone kernel check, no MPI)
+generated_utc=2026-10-05T17:14:16Z
+formula_source=extern/mVMC-1.3.0/src/mVMC/vmcmain.c lines 752-759 (verbatim)
+vmcmain.c_sha256=fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63
+split_probe.c_sha256=9252bc8699f1d270392219a9579390ef38ca3fa4d9a54c3368902d41b6d31396
+compiler=gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0  flags=-O0 -Wall
+arch=x86_64 kernel=Linux 6.8.0-146-generic
+split_c_probe.txt_sha256=b1eecdd477fac083de149b5eb854b834d3c6191735f686953faecca5504f3666

@@ -52,8 +52,9 @@ builds and tests do not need `c_toolbox/`.
 | Gutzwiller, Jastrow, 2-/4-site doublon-holon, charge/spin/general RBM, `OptTrans` | supported |
 | `InterAll` Hamiltonian terms | parsed and evaluated for optimization; ownership of this family is separate from this manual |
 | BackFlow (`BF`, `BFRange`), `SpinJastrow`, `NSRCG >= 2`, `useDiagScale`, `RescaleSmat` | rejected |
+| Multi-definition mode (`-m N`, one calculation per MPI group and directory) | supported with the `mpi` feature or serially with `-m 1` ([8.1](08-running.md#multidef-mode--m)) |
 | MPI, including grouped execution (`NSplitSize > 1`) | supported with the `mpi` feature, with restrictions ([8.4](08-running.md#84-mpi-and-grouped-execution)) |
-| Standard mode (`-s`, StdFace) for the 3D and Wannier90 lattices not yet ported, multi-definition mode (`-m`, #348) of the C driver | not provided ([7.6](07-input-files.md#76-standard-mode-stdface)) |
+| Standard mode (`-s`, StdFace) for the 3D and Wannier90 lattices not yet ported | not provided ([7.6](07-input-files.md#76-standard-mode-stdface)) |
 
 ## 1.4 Requirements
 

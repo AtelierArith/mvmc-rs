@@ -198,7 +198,6 @@ PhysCal の列は `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`)
 
 ### C プログラムの動作のうち Rust が提供しないもの
 
-複数定義モード(`-m`, #348)、
 バックフロー(`BF`)、および `InterAll` の Lanczos は利用できません([11.3](11-compatibility.md#113-cリファレンスとの既知の相違)を参照)。
 
 ## 7.6 Standard モード(StdFace)

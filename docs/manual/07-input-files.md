@@ -220,8 +220,7 @@ check; this asymmetry was observed with a release build and is listed in [11.5](
 
 ### Behaviour of the C program that Rust does not provide
 
-Multi-definition mode (`-m`, #348),
-back-flow (`BF`), and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
+Back-flow (`BF`) and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
 ## 7.6 Standard mode (StdFace)
 

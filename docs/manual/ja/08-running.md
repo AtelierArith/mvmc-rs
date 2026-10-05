@@ -29,15 +29,15 @@ mvmc [options] <namelist.def> [initpara]
 | `-h`, `--help` | 使用法(C のオプション一覧と Rust 拡張)を C と同じく標準エラー出力に表示し、終了ステータス `0` で終了します | |
 | `-s`, `--standard` | Standard モード: StdFace 入力から Expert ファイルを `--out-dir`(既定はカレントディレクトリ)に生成し、続けて `namelist.def` を実行します([7.6](07-input-files.md#76-standard-モードstdface)) | オフ |
 | `--dry-run` | StdFace 入力から Expert ファイルを生成して停止します(C の `vmcdry.out`) | オフ |
-| `-m <N>` | 終了ステータス `2` で**拒否されます**: 複数定義モードはまだ実装されていません(#348) | |
+| `-m <N>` | MultiDef モード: `mvmc -m N DirListFile NameListFile [OptParaFile]` は MPI グループとディレクトリごとに `N` 個の独立した計算を実行します([MultiDef モード](#multidef-モード-m)) | オフ |
 | `--physcal <PATH>` | `NVMCCalMode=1` における位置引数 `initpara`(固定パラメータファイル。[8.2](#82-固定パラメータでの物理量計算))の別名です。`NVMCCalMode=0` ではエラーで、位置引数のファイルと併用してもエラーです | – |
 | `--physcal-trace <NEW_DIR>` | 入力を消費しないシリアル PhysCal 診断(PhysCal 実行の段階ごとの記録)を*新しい*ディレクトリ `NEW_DIR` に書き出します。`NVMCCalMode=1` と明示的なパラメータファイル、単一プロセスでの起動が必要です | off |
 
 終了ステータス: `0` は成功、`1` は入力/検証/実行時エラー(メッセージは `error:` で始まります)、`2` は使用法エラー
-(不明なフラグ、値の欠落、引数個数の不一致、`-m`)です **(観測)**。デフォルトの出力
+(不明なフラグ、値の欠落、引数個数の不一致)です **(観測)**。デフォルトの出力
 ディレクトリは `<namelist parent>/output` で、`--help` もそのように表示します(以前は "namelist parent dir" と書かれていました)。C ドライバーは作業ディレクトリ相対の `output/` に書き出しますが、Rust のデフォルトは namelist 相対です。
 
-C の `getopt` 文字列は `"bhm:oF:esv"`(`vmcmain.c:83`)です。`-m` 以外はすべて実装されています。`-m` は無視されず、issue #348 を示すメッセージで失敗します。`-F` は C の `strtol` の規則に従います: 数字がない、または `int` の範囲外の値はエラー、数値の後ろの余分な文字は警告のみ、`N < 1` はエラーです。
+C の `getopt` 文字列は `"bhm:oF:esv"`(`vmcmain.c:83`)です。すべてのオプションが実装されています。`-F` は C の `strtol` の規則に従います: 数字がない、または `int` の範囲外の値はエラー、数値の後ろの余分な文字は警告のみ、`N < 1` はエラーです。
 
 ### 位置引数 `initpara` ファイル
 
@@ -45,6 +45,19 @@ C(`vmcmain.c:177-182`, `:252-260`)と同様に、省略可能な 2 番目の位�
 
 - `NVMCCalMode=0`: **初期**パラメータ。初期化の乱数の後、`In*` のオーバーレイの前に読み込まれます(C の `InitParameter` → `ReadInitParameter` → `ReadInputParameters`)。Rust では `--initial-def <path>` として読み込みます。両方を指定するとエラーで、ファイルが存在しない場合もエラーです(C はメッセージを出して続行します)。
 - `NVMCCalMode=1`: **固定**パラメータ([8.2](#82-固定パラメータでの物理量計算))。`--physcal <PATH>` は別名です。
+
+### MultiDef モード(`-m`)
+
+`mvmc -m N DirListFile NameListFile [OptParaFile]` は C の `vmc.out -m N` オプション(`initMultiDefMode`, `vmcmain.c:727-800`)の移植です。1 回の MPI 起動の中で `N` 個の独立した計算を、それぞれ別のディレクトリと別の定義ファイルで実行します。
+
+- **分割。** `size` 個のランクの world を `N` グループに分けます。`div = size / N`, `mod = size % N`, `threshold = (div+1)*mod` として、ランク `r` は `r < threshold` なら `r / (div+1)`、そうでなければ `mod + (r - threshold) / div` 番のグループに属します。先頭の `mod` グループは `div+1` ランク、残りは `div` ランクです。グループのコミュニケーターがその実行の world 全体(`comm0`)になります。グループ内のランク 0 が出力ルートでコンソールのバナーを表示し、`NSplitSize`(およびシードのオフセット `RndSeed + comm1 のグループ`、[4.6](04-theory-sampling.md#46-サンプラー内の並列化))はグループ内で働きます。グループ番号そのものはシードに入らないので、同じ入力を同じ幅で実行する 2 つのグループは同じチェインになります。
+- **ディレクトリ。** ランク 0 が `DirListFile` の空白区切りの先頭 `N` 個の名前を読みます(C の `fscanf("%s")`。パスは起動ディレクトリ相対)。グループ `g` は `g` 番目のディレクトリに入ります。`NameListFile` と `OptParaFile` はグループのディレクトリ**内**で解決され、既定の出力ディレクトリと相対の `--out-dir` も同様です。C はランクごとに 1 プロセスなので `chdir` でプロセスの作業ディレクトリを変えます。`mvmc` も同じ(ランクごとに 1 プロセス)です。
+- **`-e`/`-s`。** C と同様に `-e` と `-s` は複数定義フラグを解除するので、`-m 2 -e a b` は `a` を namelist として読み、`-e -m 2 dirs a` では `-m` が有効のままです。
+- **メッセージと終了ステータス**(終了ステータス `1`。C の `exit(EXIT_FAILURE)`/`MPI_Abort` と同じ): `error: -m: N should be smaller than MPI size.`(world が `N` より小さい。シリアル起動は 1 ランクの world なので `-m 1` だけが動きます)、`warning: load imbalance. MPI_size=<size> nMultiDef=<N>`(ランク 0、`size % N != 0`)、`error: DirListFile does not exist.`、`error: <file> is incomplete.`(名前が `N` 個未満)、`error: chdir(): <dir>: <strerror>`。引数個数のエラーは Rust の使用法エラーのステータス `2` です(C は使用法を表示して `1` で終了します)。オプションの `mpi` フィーチャーでは、失敗時に全ランクが集団的に終了します。
+
+C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` は `error: -m: N should be a positive integer.` で拒否されます(C は `N` で割るため、`0` では `SIGFPE`、`N < 0` では無効なコミュニケーターのカラーになります)。グループの全ランクがディレクトリを移動しますが、C はグループのランク 0(`group2 == 0`)だけが移動します(ファイルを読むのがそのランクだけなので C ではそれで足ります)。ランク 0 での失敗(リストファイル、ディレクトリ)は、以降の処理の前に全ランクを止めます。C では `MPI_Abort` が非同期なので、他のランクは初期化されていないディレクトリ名のまま続行します(`tests/fixtures/multidef_348/README.md`)。
+
+参照: ネイティブ C の `vmc.out -m 2` を 2、3、4 ランクで実行したもの(入力の異なる 2 グループ。`tests/fixtures/multidef_348/`、`c_toolbox/multidef_348/generate_c_runs.sh` で再生成)。分割の算術は、すべての `1 <= N <= size <= 48` について C の式そのものと照合しています。明示的な MPI ゲート `multidef_groups_match_own_single_runs_and_c_fixture`(`scripts/run_explicit_mpi_gates.sh`)は、各グループの出力が、そのディレクトリをグループの幅で単独実行した結果(スケール差 `<= 1e-12`)および C のフィクスチャ(`<= 1e-9`、#349 の PhysCal の許容値)と一致することを確認します。
 
 ### バイナリ出力(`-b`)
 
@@ -79,15 +92,19 @@ C(`vmcmain.c:177-182`, `:252-260`)と同様に、省略可能な 2 番目の位�
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:170`
-> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:144`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:736`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:968`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:752`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:921`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:173`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:147`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:901`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:1133`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:917`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:1086`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
-> - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `-m` オプションは実装されていません(#348)。
+> - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/main.rs:808`
+> - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
+> - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
+> - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `-m` オプションは [MultiDef モード](#multidef-モード-m) として移植されています(#348)。
 
 ### コンソール出力
 
@@ -200,8 +217,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 > **実装**
 > - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
-> - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:125`
-> - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:64`
+> - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:154`
+> - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:70`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`

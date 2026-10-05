@@ -29,15 +29,15 @@ The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`v
 | `-h`, `--help` | print usage (C option list plus the Rust extensions) to stderr and exit `0`, as C does | |
 | `-s`, `--standard` | Standard mode: generate the Expert files from the StdFace input into `--out-dir` (default: current directory), then run `namelist.def` ([7.6](07-input-files.md#76-standard-mode-stdface)) | off |
 | `--dry-run` | generate the Expert files from the StdFace input and stop (C `vmcdry.out`) | off |
-| `-m <N>` | **rejected** with exit `2`: multi-definition mode is not implemented yet (#348) | |
+| `-m <N>` | MultiDef mode: `mvmc -m N DirListFile NameListFile [OptParaFile]` runs `N` independent calculations, one per MPI group and directory ([MultiDef mode](#multidef-mode--m)) | off |
 | `--physcal <PATH>` | alias of the positional `initpara` for `NVMCCalMode=1` (the fixed parameter file, [8.2](#82-physical-quantities-with-fixed-parameters)); an error for `NVMCCalMode=0`, and an error together with a positional file | – |
 | `--physcal-trace <NEW_DIR>` | write non-consuming serial PhysCal diagnostics (stage-by-stage records of the PhysCal run) into the *new* directory `NEW_DIR`; requires `NVMCCalMode=1` with an explicit parameter file and a single-process launch | off |
 
 Exit status: `0` success, `1` input/validation/runtime error (the message starts with `error:`), `2` usage error
-(unknown flag, missing value, argument-count mismatch, `-m`) **(observed)**. The default output
+(unknown flag, missing value, argument-count mismatch) **(observed)**. The default output
 directory is `<namelist parent>/output` and `--help` now says so (it formerly said "namelist parent dir"). The C driver always writes `output/` relative to its working directory; the Rust default is relative to the namelist.
 
-The C `getopt` string is `"bhm:oF:esv"` (`vmcmain.c:83`). Everything but `-m` is implemented; `-m` fails with a message naming issue #348 rather than being ignored. `-F` follows C `strtol` rules: no digits or a value outside `int` is an error, trailing characters after the number only warn, and `N < 1` is an error.
+The C `getopt` string is `"bhm:oF:esv"` (`vmcmain.c:83`). Every option is implemented. `-F` follows C `strtol` rules: no digits or a value outside `int` is an error, trailing characters after the number only warn, and `N < 1` is an error.
 
 ### The positional `initpara` file
 
@@ -45,6 +45,19 @@ As in C (`vmcmain.c:177-182`, `:252-260`) the optional second positional argumen
 
 - `NVMCCalMode=0`: the **initial** parameters. They are loaded after the initialization draws and before the `In*` overlays (C `InitParameter` → `ReadInitParameter` → `ReadInputParameters`). Rust loads it as `--initial-def <path>`; giving both is an error, and a missing file is an error (C prints a message and continues).
 - `NVMCCalMode=1`: the **fixed** parameters ([8.2](#82-physical-quantities-with-fixed-parameters)); `--physcal <PATH>` is an alias.
+
+### MultiDef mode (`-m`)
+
+`mvmc -m N DirListFile NameListFile [OptParaFile]` ports the C `vmc.out -m N` option (`initMultiDefMode`, `vmcmain.c:727-800`). It runs `N` independent calculations inside one MPI launch, each in its own directory with its own definition files.
+
+- **Split.** The world of `size` ranks is split into `N` groups: with `div = size / N`, `mod = size % N`, `threshold = (div+1)*mod`, rank `r` belongs to group `r / (div+1)` if `r < threshold`, else `mod + (r - threshold) / div`. The first `mod` groups hold `div+1` ranks, the others `div` ranks. The group communicator is the whole world (`comm0`) of that run: its rank 0 is the output root and prints the console banner, and `NSplitSize` (and the seed offset `RndSeed + comm1 group`, [4.6](04-theory-sampling.md#46-parallelism-inside-the-sampler)) act inside the group. The group index itself does not enter the seed, so two groups that run the same input with the same width produce the same chain.
+- **Directories.** Rank 0 reads the first `N` whitespace-separated names of `DirListFile` (C `fscanf("%s")`; the paths are relative to the launch directory); group `g` enters the `g`-th directory. `NameListFile` and `OptParaFile` are resolved **inside** the group directory, and so are the default output directory and a relative `--out-dir`. C uses one process per rank, so it changes the process working directory with `chdir`; `mvmc` does the same (also one process per rank).
+- **`-e`/`-s`.** As in C, `-e` and `-s` clear the multi-definition flag, so `-m 2 -e a b` reads `a` as the namelist and `-e -m 2 dirs a` keeps `-m`.
+- **Messages and status** (exit status `1`, like C's `exit(EXIT_FAILURE)`/`MPI_Abort`): `error: -m: N should be smaller than MPI size.` (world smaller than `N`; a serial launch is a one-rank world, so only `-m 1` runs), `warning: load imbalance. MPI_size=<size> nMultiDef=<N>` (rank 0, `size % N != 0`), `error: DirListFile does not exist.`, `error: <file> is incomplete.` (fewer than `N` names), `error: chdir(): <dir>: <strerror>`. Argument-count errors use the Rust usage status `2` (C prints the usage and exits with `1`). With the optional `mpi` feature every rank leaves collectively on a failure.
+
+Differences from C, all defects or undefined behaviour there: `N <= 0` is rejected with `error: -m: N should be a positive integer.` (C divides by `N`: `SIGFPE` for `0`, an invalid communicator colour for `N < 0`); every rank of a group changes directory, whereas C changes it only on the group's rank 0 (`group2 == 0`), which is enough there because only that rank reads files; and a failure on rank 0 (list file, directory) stops all ranks before any further work, whereas in C `MPI_Abort` is asynchronous and the other ranks continue with uninitialized directory names (`tests/fixtures/multidef_348/README.md`).
+
+References: native C `vmc.out -m 2` at 2, 3 and 4 ranks (two groups with different inputs; `tests/fixtures/multidef_348/`, regenerated by `c_toolbox/multidef_348/generate_c_runs.sh`). The split arithmetic is checked against the verbatim C formula for every `1 <= N <= size <= 48`. The explicit MPI gate `multidef_groups_match_own_single_runs_and_c_fixture` (`scripts/run_explicit_mpi_gates.sh`) checks that each group's outputs equal a standalone run of its directory at the group's width (scaled difference `<= 1e-12`) and the C fixture (`<= 1e-9`, the PhysCal bound of #349).
 
 ### Binary output (`-b`)
 
@@ -80,15 +93,19 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:170`
-> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:144`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:736`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:968`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:752`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:921`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:173`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:147`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:901`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:1133`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:917`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:1086`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
-> - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `-m` option is not implemented (#348).
+> - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/main.rs:808`
+> - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
+> - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
+> - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `-m` option is ported as [MultiDef mode](#multidef-mode--m) (#348).
 
 ### Console output
 
@@ -201,8 +218,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 > **Implementation**
 > - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
-> - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:125`
-> - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:64`
+> - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:154`
+> - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:70`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
