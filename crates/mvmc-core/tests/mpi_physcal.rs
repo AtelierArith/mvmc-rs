@@ -232,9 +232,10 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
         &group,
     )
     .expect("prepare grouped PhysCal");
-    // Independent capability negative: grouped Lanczos, not valid normal Green.
+    // Independent input negative: an invalid NLanczosMode. Grouped Lanczos
+    // itself is defined in C and accepted (#349), so it is no longer a negative.
     grouped.data.modpara.nsplit_size = 2;
-    grouped.data.modpara.lanczos_mode = 1;
+    grouped.data.modpara.lanczos_mode = 3;
     let before_data = format!("{:?}", grouped.data);
     let before_fixed = fixed_parameters(&grouped.data);
     let before_rng = next624(&grouped.rng);
@@ -252,10 +253,7 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
         None,
     )
     .unwrap_err();
-    assert!(
-        error.contains("NSplitSize") && error.contains("NLanczosMode"),
-        "{error}"
-    );
+    assert!(error.contains("NLanczosMode must be"), "{error}");
     assert_eq!(format!("{:?}", grouped.data), before_data);
     assert_eq!(fixed_parameters(&grouped.data), before_fixed);
     assert_eq!(format!("{state:?}"), before_state);
@@ -266,7 +264,7 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
     report_gate(
         "mpi-physcal",
         GateStatus::Pass,
-        "MPI world/grouped normal PhysCal repeated fixed/discrete/indexed outputs; grouped Lanczos rejected before mutation",
+        "MPI world/grouped normal PhysCal repeated fixed/discrete/indexed outputs; invalid NLanczosMode rejected before mutation",
     );
 }
 

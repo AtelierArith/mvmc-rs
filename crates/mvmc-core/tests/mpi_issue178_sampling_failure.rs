@@ -383,10 +383,6 @@ mod mpi_phase2 {
             "physcal" => true,
             other => panic!("unknown API {other}"),
         };
-        assert!(
-            !physcal || width == 1,
-            "grouped FSZ PhysCal is intentionally unsupported"
-        );
         let bad_rank = match std::env::var("MPI_ISSUE178_FAIL_RANK").unwrap().as_str() {
             "root" => 0,
             "last-owner" => ranks - width,
@@ -514,12 +510,22 @@ mod mpi_phase2 {
             observer.barrier();
             assert_eq!(fs::read(parent.join("sentinel")).unwrap(), b"untouched");
             if output.exists() {
-                assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
+                // C InitFile (rank 0, before sampling) creates the run-log files
+                // `zvo_time_*.dat` and `zvo_SRinfo.dat` (#364); no numerical
+                // result file may be published after the sampling failure.
+                let published: Vec<_> = fs::read_dir(&output)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+                    .filter(|name| !name.starts_with("zvo_time_") && name != "zvo_SRinfo.dat")
+                    .collect();
+                assert!(published.is_empty(), "{published:?}");
             }
             observer.barrier();
         }
         if world.is_root() {
-            let expected = if physcal { 3 } else { 1 };
+            // sentinel plus one run-log directory per trial for both entry points
+            // (C InitFile creates the output files before sampling, #364).
+            let expected = 3;
             assert_eq!(fs::read_dir(&parent).unwrap().count(), expected);
         }
         observer.barrier();
