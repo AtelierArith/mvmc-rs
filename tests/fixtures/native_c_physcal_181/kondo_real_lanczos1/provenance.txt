@@ -1,0 +1,32 @@
+scenario kondo_real_lanczos1
+source tests/fixtures/physcal_181/two-samples/kondo_chain_real
+rust_mode real opttrans_flag 0
+stages NLanczosMode=1
+zqp_perturb 0.05 class compare variant []
+vmc.out sha256 48cf78a6ce464bc97ea771052892bd1ef02002870181d5ce91e25fae7bfe034b
+probe vmc.out sha256 0e6d1f9c9df1a39ddb587c95f2dda859600049201c6187afb891151a624e2363
+extern/mVMC-1.3.0 commit d73d06bd529d3b2573f38eb5817c4a5f52971006
+source sha256 mVMC/vmcmain.c fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63
+source sha256 mVMC/physcal_lanczos.c d0f537e49c25af59140d8a00f1b2532df243f6cc5657f96d41b1f74d44aced15
+source sha256 mVMC/vmcmake.c 8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed
+source sha256 mVMC/vmcmake_fsz.c 2b43a47a85ec13833d453a010962334147024a6d6aae01b99bb8b2a0b80c15db
+source sha256 sfmt/SFMT.c b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+host x86_64 Linux-6.8.0-146-generic-x86_64-with-glibc2.39
+gcc gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+mpi one rank, OMP_NUM_THREADS=1, build Release (CMake default flags), unmodified source
+plain stage 0 overrides [NLanczosMode=1] exit 0
+dump stage 0 overrides [NLanczosMode=1] exit 0
+probe output identical zvo_cisajs_007.dat True
+probe output identical zvo_cisajs_008.dat True
+probe output identical zvo_cisajscktalt_007.dat True
+probe output identical zvo_cisajscktalt_008.dat True
+probe output identical zvo_cisajscktaltex_007.dat True
+probe output identical zvo_cisajscktaltex_008.dat True
+probe output identical zvo_ls_out_007.dat True
+probe output identical zvo_ls_out_008.dat True
+probe output identical zvo_ls_qqqq_007.dat True
+probe output identical zvo_ls_qqqq_008.dat True
+probe output identical zvo_out_007.dat True
+probe output identical zvo_out_008.dat True
+probe output identical zvo_var_007.dat True
+probe output identical zvo_var_008.dat True

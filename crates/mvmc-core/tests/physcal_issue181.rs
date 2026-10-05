@@ -1041,11 +1041,14 @@ fn assert_saved_trajectory_at(stage: &Path, label: &str, state: &mvmc_core::VmcO
         ("ele_spn", config.ele_spn.as_slice()),
         ("counter", config.counter.as_slice()),
     ] {
-        assert_discrete(
-            &format!("{label} {name}"),
-            values,
-            &reference_integers(&stage.join(format!("{name}.txt"))),
-        );
+        let mut actual = values.to_vec();
+        let mut expected = reference_integers(&stage.join(format!("{name}.txt")));
+        if name == "counter" {
+            // Julia has no exchange counters (slots 2, 3); C and Rust count them and
+            // `mvmc-cli/tests/issue181_native_c_physcal.rs` compares them with native C.
+            (actual[2], actual[3], expected[2], expected[3]) = (0, 0, 0, 0);
+        }
+        assert_discrete(&format!("{label} {name}"), &actual, &expected);
     }
 }
 
@@ -1557,6 +1560,12 @@ fn duplicate_one_body_with_gex_matches_native_c_canonical_layout_fixture() {
                 continue;
             }
             let text = fs::read_to_string(out.join(format!("zvo_{suffix}_001.dat"))).unwrap();
+            if suffix == "ls_cisajs" && text.is_empty() {
+                // This exact-eigenstate fixed state has a negative-discriminant Lanczos
+                // step, for which C leaves every zvo_ls_* file empty; the ls row layout
+                // is covered by the perturbed native-C scenarios.
+                continue;
+            }
             let rows = text
                 .lines()
                 .filter(|row| !row.trim().is_empty())
@@ -2015,7 +2024,9 @@ fn energy_only_physcal_zero_green_file_sets_follow_native_c_all_lanczos_modes() 
     for mode in 0..=2 {
         let mut preparation = mvmc_core::prepare_phys_cal_from_namelist(
             fixture.join("namelist.def"),
-            root.join("heisenberg_chain_real/zqp_opt.dat"),
+            // Perturbed (non-eigenstate) fixed values: an exact eigenstate has a
+            // singular Lanczos alpha, for which C writes empty files instead.
+            root.join("../native_c_physcal_181/heisenberg_real_lanczos2/zqp_opt.dat"),
             "real",
             Some(1),
         )
