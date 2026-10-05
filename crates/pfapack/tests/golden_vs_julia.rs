@@ -13,17 +13,29 @@
 //! julia --startup-file=no --project=. tools/dump_pfapack_reference.jl
 //! ```
 //!
+//! Historical Julia-order comparison (issue #358). The fixtures come from
+//! PfaPack.jl. The Rust ordinary real `dsktf2`/`utu2inv_real` follow the
+//! authoritative C operation order (`DSKR2` evaluates `(A + X*t1) - Y*t2`,
+//! Julia `A += (X*t1 - Y*t2)`; direct-division tridiagonal solve; 64-column
+//! panel product for n > 64), so real results differ from Julia in the last
+//! bits. They are NOT bit-for-bit Julia parity.
+//!
 //! Tolerance policy:
-//! - LTL form: relative 1e-14 for real and 1e-11 for complex (one
-//!   DSKR2 / ZSKR2 rank-2 update per step; the larger benchmark-size
-//!   complex fixtures accumulate a little more order-of-operations
-//!   drift).
-//! - Pfaffian: relative 1e-13.
-//! - Inverse: relative 1e-11 -- looser because `utu2inv!` chains
-//!   trtri + skew-tridiagonal solve + trmm + two permutations, and the
-//!   Julia path runs `BLAS.trmm!` while the Rust port hand-rolls the
-//!   `M^T * A` loop. Order-of-summation differences fall well inside
-//!   the 1e-11 envelope at the sizes used here (n <= 16).
+//! - Real LTL form: max-norm bound `2 * n * eps * max|entry|`. One rank-2
+//!   update per elimination step contributes at most a few ulp of the largest
+//!   operand, so the grouping difference accumulates at most linearly in n.
+//!   Observed max-norm errors against the Julia fixtures (n = 4, 6, 16, 32,
+//!   64, 128, 256): 1.6e-16, 1.3e-16, 5.8e-16, 1.4e-15, 3.7e-15, 8.5e-15,
+//!   3.4e-14 of max|entry|, i.e. at most 0.6 * n * eps. Entrywise relative
+//!   error is meaningless here because tiny entries carry the same absolute
+//!   error (up to 6.6e-10 relative at n = 256).
+//! - Complex LTL form: relative 1e-11 (unchanged; complex follows Julia).
+//! - Pfaffian: relative `max(1e-13, 4 * n * eps)` (observed <= 9.0e-14).
+//! - Inverse: relative 1e-11 -- `utu2inv` chains trtri + skew-tridiagonal
+//!   solve + trmm + two permutations. Observed real max-norm error
+//!   <= 1.4e-13 of max|entry| (n = 256).
+//! - C-order references for these kernels are the hand-dyadic/analytic tests
+//!   in `src/rank2_real_regression.rs` and `tests/issue176_ordinary_panel.rs`.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -204,9 +216,11 @@ fn check_real_case(n: usize, seed: u64) {
         let mut sm = SqMat::new(&mut a_for_ltl, n);
         dsktf2(&mut sm, &mut pivots).expect("dsktf2 failed on golden case");
     }
+    let ltl_scale = ltl_expected.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let ltl_bound = 2.0 * n as f64 * f64::EPSILON * ltl_scale;
     for (idx, (got, want)) in a_for_ltl.iter().zip(ltl_expected.iter()).enumerate() {
         assert!(
-            rel_close_f64(*got, *want, 1e-14, 1e-15),
+            (got - want).abs() <= ltl_bound,
             "real LTL mismatch at idx {idx} (n={n}, seed={seed}): rust={got:.17e} julia={want:.17e}"
         );
     }
@@ -218,13 +232,14 @@ fn check_real_case(n: usize, seed: u64) {
     }
 
     // 2) Pfaffian via direct Parlett-Reid on a fresh copy.
+    let pf_rel = 1e-13f64.max(4.0 * n as f64 * f64::EPSILON);
     let mut a_for_pr = orig.clone();
     let pf_pr = {
         let mut sm = SqMat::new(&mut a_for_pr, n);
         pfaffian_ltl_real(&mut sm)
     };
     assert!(
-        rel_close_f64(pf_pr, pf_expected[0], 1e-13, 1e-15),
+        rel_close_f64(pf_pr, pf_expected[0], pf_rel, 1e-15),
         "real Pfaffian (Parlett-Reid) mismatch (n={n}, seed={seed}): rust={pf_pr:.17e} julia={julia:.17e}",
         julia = pf_expected[0]
     );
@@ -235,7 +250,7 @@ fn check_real_case(n: usize, seed: u64) {
         utu2pfa_real(&sm, &pivots)
     };
     assert!(
-        rel_close_f64(pf_utu2, pf_expected[0], 1e-13, 1e-15),
+        rel_close_f64(pf_utu2, pf_expected[0], pf_rel, 1e-15),
         "real Pfaffian (utu2pfa) mismatch (n={n}, seed={seed}): rust={pf_utu2:.17e} julia={julia:.17e}",
         julia = pf_expected[0]
     );

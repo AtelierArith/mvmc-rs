@@ -31,3 +31,9 @@ Use `scripts/check_sr_gram_small_parity.jl` for the small Gram fixture.
 
 These fixtures establish exact parity for these inputs and this environment;
 other architectures and BLAS providers require their own source checks.
+
+## Historical Julia-order status (#358)
+
+`real_runner` and `real_store_runner` parameter/output trajectories are
+historical Julia-order references; only sampling state, step-1 energy and
+operands (against `../c_order_sr_operands/`) gate the C-order Rust path.

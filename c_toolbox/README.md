@@ -269,3 +269,13 @@ uv run --no-project python scripts/check_modpara_reader_c_parity.py
 
 Results (71 accepted/rejected variants) and the input files are stored in
 `tests/fixtures/modpara_reader/`; Rust tests read them without invoking C.
+
+## SR operand dump (#358)
+
+`sr_operand_dump/` builds a copy of the authoritative `vmc.out` whose own
+`_DEBUG_DUMP_SROPTOO`/`_DEBUG_DUMP_SROPTO_STORE` dumps print `%.17e`
+(`dump_sr_operands.patch`; `build.sh`, `capture.py`). The vendored source is
+never modified. It generates `tests/fixtures/c_order_sr_operands/`; provenance
+(source/patch/binary SHA-256, compiler, BLAS, image, command) is recorded in
+that directory's `PROVENANCE.md`. This is a native single-rank operand check,
+distinct from the standalone fixed-operand CG oracle (`ctest_cg_refresh.c`).

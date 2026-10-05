@@ -140,3 +140,79 @@ nonfinite values, missing components/columns and changed discrete fields.
 Both native default and all-feature nextest suites use `test-fast`; optional
 ignored tests are included in the all-feature gate. Keep the separate
 formatting, Clippy and documentation checks.
+
+## C-order real kernels and CG amplification (#358)
+
+The ordinary real Pfaffian path (`dsktf2`, `utu2inv_real`, every backend)
+follows C's operation order: `DSKR2` evaluates `(A + X*t1) - Y*t2`, the
+skew-tridiagonal solve divides directly, and for `n > 64` the 64-column
+panel product with skew restoration runs before the permutations. Julia's
+grouping is kept only as a `#[cfg(test)]` witness of the difference.
+
+**Observation.** After the switch eight families (real CG and direct SR,
+hubbard, opttrans, dh2/dh4/dh24, pairhop, rbm real) stopped matching the
+Julia-order trajectories at the old 1e-11 bound, by 1e-10..1e-5 in step-1
+parameters. A real C `vmc.out` (Linux x86_64, GCC 13.3, OpenBLAS 0.3.26, see
+`tests/fixtures/c_order_sr_operands/PROVENANCE.md`) run on the same inputs and
+seed shows the converse: C's step-1 parameters also differ from the C-order
+Rust parameters (about 1e-4) and from the Julia fixtures (up to 6.4e-3, steps
+1/2/3: 6.4e-3, 5.7e-3, 5.4e-3), although step-1 energy, configurations and RNG
+are identical.
+
+**First divergence (`heisenberg_chain_real`, step 1, NSRCG=1).**
+
+- Sampled operands agree to the last bit or two. Against the instrumented C,
+  `<HO>` and `<O>` differ by at most 6e-16 and the S mean/diagonal/OO array by
+  at most 3e-16 in `|d| / (0.1 + |c|)`; e.g. S mean entry 2.08238631462278362e-1
+  (C) versus 2.08238631462278390e-1 (Rust). This is the summation order of the
+  sampled sums, not a defect.
+- The CG solve is the amplifier. `nSmat = 10`, so `max_iter = 10`, and the
+  threshold `tol^2 * nSmat^2 = 1e-18` is never met before the iteration cap.
+  C's squared residual norm is non-monotone: 5.8e-5, 5.4e-7, 2.4e-16, 8.0e-17,
+  1.6e-11, 6.8e-18, 6.2e-15, 4.0e-16, 2.3e-18, 1.0e-18. Cancellation to 1e-16
+  magnifies last-bit differences: Rust and C differ by 1e-16 (initial delta),
+  5e-15 (iteration 1) and 1e-10 (iteration 2, relative) before the 10-iteration
+  stop, giving parameter differences of 1e-4..1e-2.
+- Direct SR (Cholesky of the shifted S) is well conditioned for most families:
+  hubbard, dh and pairhop direct prefixes still match Julia at 1e-11.
+
+**Policy for these families** (`callback_tests::c_order_amplified_family`):
+
+- Step 1 sampled operands (`<O>`, `<HO>`, S/OO, stored O) against native C at
+  `abs = 1e-14`, `rel = 1e-13` (about 100 times the observed 6e-16, covering
+  other BLAS/compiler summation orders on macOS ARM), plus step-1 energy
+  (`1e-12` against C, `1e-11` against the Julia fixture) and the S-diagonal
+  extrema/size columns of `zvo_SRinfo.dat`.
+- Configurations, occupancy, projection counts and the next 624 RNG words
+  stay exact against the existing fixtures at steps 1, 2 and 3 (they are
+  unchanged), including one-step-ahead acceptance decisions. The single
+  exception is `pairhop_real` step 3: the amplified step-1/2 updates flip one
+  Metropolis acceptance, so that prefix is repeatability-only.
+- The parameter, energy (step >= 2), `zvo_var`, `zqp_*` and window outputs of
+  these runs are not compared with a reference. They are checked for
+  same-implementation repeatability (parameters, energy and configurations
+  identical on rerun), for finite values and for a nonzero SR update.
+  Window aggregation is covered by `ctest_window_fixtures`.
+- The old Julia fixtures in `tests/fixtures/sr_cg`, `sr_direct` and
+  `runner_opt_windows` remain as **historical Julia-order references**, used
+  only for the exact sampling and step-1 checks above and for families not
+  affected by this change.
+- The CG solve itself is verified at fixed operands against the C recurrence
+  (`c_toolbox/ctest_cg_refresh.c`, `tests/fixtures/sr_cg/c_refresh`,
+  `real.txt`/`complex.txt`).
+- `rbm_real` has no native C operand reference: its Rust model is the
+  historical sparse RBM control, which C does not run identically
+  (step-1 energy 5.9845 in C, 6.2287 here). It keeps the Julia-derived
+  step-1 energy, sampling and SRinfo checks.
+- `opt_real`: C's real-mode OptTrans derivatives are written through a complex
+  pointer offset (`vmccal.c`, `calculateOptTransDiff(SROptO + 2*NProj + ...)`),
+  so for `NQPOptTrans > 1` derivative 1 is dropped, derivative 2 lands in
+  slot 1 and the last slot stays zero. Rust and Julia keep the mathematical
+  layout; the last two entries per operand are excluded from the C comparison
+  and tracked as a separate issue. Entries before them agree at the bound above.
+
+**`golden_vs_julia`** is a historical Julia-order comparison. The real LTL
+bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for
+`n = 4..256`); see the test header for the table and the unchanged complex and
+inverse bounds. C-order correctness is covered by the hand-dyadic and analytic
+tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
