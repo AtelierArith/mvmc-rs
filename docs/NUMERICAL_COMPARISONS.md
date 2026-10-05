@@ -209,7 +209,10 @@ are identical.
   so for `NQPOptTrans > 1` derivative 1 is dropped, derivative 2 lands in
   slot 1 and the last slot stays zero. Rust and Julia keep the mathematical
   layout; the last two entries per operand are excluded from the C comparison
-  and tracked as a separate issue. Entries before them agree at the bound above.
+  (decision in #370: keep the correct layout; C defect reported as
+  tmisawa/Julia-mVMC#55). `real_mode_opttrans_derivatives_use_their_own_slots`
+  pins the correct layout via `sum_i w_i O_i = 1`, which C's layout violates.
+  Entries before them agree at the bound above. Complex mode was not examined.
 
 **`golden_vs_julia`** is a historical Julia-order comparison. The real LTL
 bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for

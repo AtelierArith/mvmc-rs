@@ -51,7 +51,7 @@ $$
 (DH2 は `NGutzwillerIdx + NJastrowIdx` から、DH4 は
 `NGutzwillerIdx + NJastrowIdx + 2*3*NDoublonHolon2siteIdx` から始まります。`readdef.c`)。Rust のレイアウトは
 `ProjectionLayout` (`projection_layout`,
-`crates/mvmc-expert-parsers/src/types.rs:1296`) で、`dh2_offset`、
+`crates/mvmc-expert-parsers/src/types.rs:1311`) で、`dh2_offset`、
 `dh4_offset`、`n_proj` を持ちます。各パラメータには 2 つの*最適化フラグ* (実部、
 虚部) が連続して格納されます (`OptFlag[2k]`, `OptFlag[2k+1]`)。パラメータ成分は、
 そのフラグが 1 のときに限り最適化されます。
@@ -63,7 +63,7 @@ $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\
 
 > **実装**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1296`
+> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1311`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2591`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
 
@@ -121,9 +121,9 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
 > - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:623`
 > - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:721`
-> - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:63`
+> - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
-> - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:349`
+> - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
 > - 整合性: C は、分解がゼロピボットを報告した場合、またはパフィアンが有限でない場合にサンプルを失敗とします (`info != 0`、`matrix.c:371-373`)。Rust は `CalcMAllError::{ZeroPivot, NonFinitePfaffian, AllZero}` を返します。通常の複素数オプティマイザは Julia の `zsktf2_turbo` の演算順序に従い、`c_compat` 版 (`calc_m_all_complex_c_compat`, `crates/mvmc-core/src/pfaffian.rs:301`) は C の PFAPACK カーネルに従います。実数パスは BLAS の `dger`/`dtrtri`/`dtrmm` を使います。パフィアンと逆行列の結果はビット単位ではなく、明示的な許容誤差で比較します ([11.4](11-compatibility.md#114-数値比較ポリシー) を参照)。
 
 ### 軌道モード

@@ -4884,6 +4884,43 @@ mod callback_tests {
         );
     }
 
+    /// Real-mode OptTrans derivatives occupy their own slots (#370).
+    ///
+    /// Each sample has `ipAll = sum_i w_i * ip_i` and derivative `O_i = ip_i / ipAll`,
+    /// so `sum_i w_i * O_i = 1` for every sample and for the weighted mean. Native C
+    /// writes these through a complex pointer offset in real mode (`vmccal.c`
+    /// `calculateOptTransDiff`), which drops derivative 1, stores derivative 2 in
+    /// slot 1 and leaves the last slot zero; that layout violates this identity.
+    /// Rust keeps the mathematically correct layout (tmisawa/Julia-mVMC#55).
+    #[test]
+    fn real_mode_opttrans_derivatives_use_their_own_slots() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/opttrans/run_opt_real/namelist.def");
+        let (mut data, mut state, mut rng) = prepared_namelist(1, &path);
+        data.modpara.nsrcg = 1;
+        data.modpara.nstore_o = 0;
+        assert!(!get_all_complex_flag(&data).unwrap());
+        let weights: Vec<f64> = data.opt_trans.iter().map(|w| w.re).collect();
+        assert_eq!(weights.len(), 3);
+        let dir = fresh_output_directory().unwrap();
+        vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            Some(&dir),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap();
+        fs::remove_dir_all(dir).unwrap();
+        let size = state.sr_opt.sr_opt_size;
+        let first = size - weights.len();
+        let derivatives = &state.sr_opt.sr_opt_o_real[first..size];
+        assert!(derivatives.iter().all(|d| *d != 0.0), "{derivatives:?}");
+        let sum: f64 = weights.iter().zip(derivatives).map(|(w, d)| w * d).sum();
+        assert!((sum - 1.0).abs() < 1e-12, "sum w_i O_i = {sum}");
+    }
+
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
         let reference_case = if case == "general" { "fsz" } else { case };
         // C's counter grouping and subthreshold Slater retention differ from
