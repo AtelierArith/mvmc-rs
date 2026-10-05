@@ -42,9 +42,9 @@ $\mathrm{IP}$. At $\beta=0$ this reduces to $O_k=-\sum_{i\uparrow,j\downarrow}(X
 > - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
 > - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:693`
-> - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:136`
-> - Rust: `slater_elm_diff_fsz_with_scratch` — `crates/mvmc-core/src/slater_derivative.rs:322`
-> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:996`
+> - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:176`
+> - Rust: `slater_elm_diff_fsz_with_scratch` — `crates/mvmc-core/src/slater_derivative.rs:473`
+> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:998`
 > - Parity: in C the per-sector buffer is accumulated with `buf[orbidx] += invM_i[msj]*cs*tOrbSgn_i[msj]` etc., summed over sectors with `QPFullWeight`, and finally multiplied by $1/\mathrm{IP}$ (`slater.c:194-238`). The Rust accumulation preserves this order (a tensor contraction helper is used for the sector sum, `qp_weighted_orbital_sum_einsum`, `observables.rs:537`; test `qp_weighted_orbital_sum_einsum_matches_manual_complex_reference`) and multiplies by `julia_complex::reciprocal(ip)` rather than dividing; results are compared with tolerances. The OptTrans layout differs between C and Rust, see [3.4](03-theory-wavefunction.md#34-quantum-number-projection).
 
 ## 5.2 The SR equations
@@ -119,11 +119,11 @@ are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 > - C: `calculateOO_Store_real` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:656`
 > - C: `WeightAverageSROpt` — `extern/mVMC-1.3.0/src/mVMC/average.c:78`
 > - C: `WeightAverageSROpt_real` — `extern/mVMC-1.3.0/src/mVMC/average.c:115`
-> - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:261`
+> - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:263`
 > - Rust: `calculate_oo_real` — `crates/mvmc-core/src/observables.rs:219`
 > - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:425`
-> - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:321`
-> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:446`
+> - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:322`
+> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:447`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
