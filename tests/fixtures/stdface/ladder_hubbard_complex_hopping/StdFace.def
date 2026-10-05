@@ -1,0 +1,10 @@
+model = "Hubbard"
+lattice = "ladder"
+W = 2
+L = 3
+U = 2.0
+t0 = 1.0
+t1 = 1.0, 0.4
+V1 = 0.3
+ncond = 6
+ComplexType = 1

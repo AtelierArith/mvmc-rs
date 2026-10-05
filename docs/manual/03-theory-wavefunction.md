@@ -122,8 +122,8 @@ formula in [4.5](04-theory-sampling.md#45-pfaffian-ratio-and-inverse-updates).
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:281`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:623`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:721`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:631`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:841`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`

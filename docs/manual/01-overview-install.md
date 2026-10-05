@@ -52,7 +52,7 @@ builds and tests do not need `c_toolbox/`.
 | `InterAll` Hamiltonian terms | parsed and evaluated for optimization; ownership of this family is separate from this manual |
 | BackFlow (`BF`, `BFRange`), `SpinJastrow`, `NSRCG >= 2`, `useDiagScale`, `RescaleSmat` | rejected |
 | MPI, including grouped execution (`NSplitSize > 1`) | supported with the `mpi` feature, with restrictions ([8.4](08-running.md#84-mpi-and-grouped-execution)) |
-| Standard mode (`-s`, StdFace), multi-definition mode (`-m`), binary output (`-b`) of the C driver | not provided |
+| Standard mode (`-s`, StdFace) for the 2D/3D lattices not yet ported, multi-definition mode (`-m`), binary output (`-b`) of the C driver | not provided ([7.6](07-input-files.md#76-standard-mode-stdface)) |
 
 ## 1.4 Requirements
 

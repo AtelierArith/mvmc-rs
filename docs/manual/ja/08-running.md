@@ -22,6 +22,9 @@ mvmc <namelist.def> [options]
 | `-o`, `--opt-trans` | C の OptTrans モードを有効にします(C ドライバーの `-o`) | off |
 | `--physcal <PATH>` | パラメータファイル `PATH` を用いて固定パラメータの PhysCal を実行します([8.2](#82-固定パラメータでの物理量計算)) | off |
 | `--physcal-trace <NEW_DIR>` | 入力を消費しないシリアル PhysCal 診断(PhysCal 実行の段階ごとの記録)を*新しい*ディレクトリ `NEW_DIR` に書き出します。`--physcal` と単一プロセスでの起動が必要です | off |
+| `-s`, `--standard` | Standard モード: StdFace 入力から Expert ファイルを `--out-dir`(既定はカレントディレクトリ)に生成し、続けて `namelist.def` を実行します([7.6](07-input-files.md#76-standard-モードstdface)) | オフ |
+| `--dry-run` | StdFace 入力から Expert ファイルを生成して停止します(C の `vmcdry.out`) | オフ |
+| `-e`, `--expert` | Expert モード(既定。C との互換のため受理) | オン |
 | `--help`, `-h` | 使用法を表示します | |
 
 終了ステータス: `0` は成功、`1` は入力/検証/実行時エラー(メッセージは `error:` で始まります)、`2` は使用法エラー
@@ -29,7 +32,7 @@ mvmc <namelist.def> [options]
 ディレクトリが "namelist parent dir" となっていますが、コードでは `<namelist parent>/output` を使います **(観測)**。
 
 C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異なり、`mvmc` には `-b`(バイナリ出力)、`-m`(複数定義モード)、
-`-F`(フラッシュ間隔)、`-e`/`-s`(Expert/Standardモード。Expert 入力のみ存在します)、`-v`(バージョン)、および位置引数の初期パラメータファイル(`--initial-def` を使います)がありません。
+`-F`(フラッシュ間隔)、`-v`(バージョン)、および位置引数の初期パラメータファイル(`--initial-def` を使います)がありません。
 
 ### 計算の選択
 
@@ -53,10 +56,10 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:54`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:449`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:647`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:468`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:114`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:560`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:758`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:579`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `getopt` オプションのうち `-o` 以外は実装されていません。
 

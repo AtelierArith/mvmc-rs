@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "ladder"
+W = 2
+L = 3
+U = 4.0
+t0 = 1.0
+t1 = 1.0
+ncond = 6
+t' = 1.0
