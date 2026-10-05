@@ -1,0 +1,121 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Spin 
+  KEYWORD : lattice              | VALUE : pyrochlore 
+  KEYWORD : l                    | VALUE : 2 
+  KEYWORD : w                    | VALUE : 2 
+  KEYWORD : height               | VALUE : 1 
+  KEYWORD : 2sz                  | VALUE : 0 
+  KEYWORD : j0x                  | VALUE : 1.0 
+  KEYWORD : j0y                  | VALUE : 1.0 
+  KEYWORD : j0z                  | VALUE : 0.5 
+  KEYWORD : j1                   | VALUE : 1.0 
+  KEYWORD : j2xy                 | VALUE : 0.2 
+  KEYWORD : j0'x                 | VALUE : 0.1 
+  KEYWORD : d                    | VALUE : 0.3 
+  KEYWORD : complextype          | VALUE : 1 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+  @ Lattice Size & Shape
+
+                a = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Wlength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Llength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Hlength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wx = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               Wy = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Wz = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Lx = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Ly = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               Lz = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Hx = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Hy = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Hz = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase2 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+                L = 2         
+                W = 2         
+           Height = 1         
+   Number of Cell = 4
+
+  @ Hamiltonian 
+
+                h = 0.00000     ######  DEFAULT VALUE IS USED  ######
+            Gamma = 0.00000     ######  DEFAULT VALUE IS USED  ######
+          Gamma_y = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               2S = 1           ######  DEFAULT VALUE IS USED  ######
+                D = 0.30000   
+              J0x = 1.00000   
+              J0y = 1.00000   
+              J0z = 0.50000   
+              J1x = 1.00000   
+              J1y = 1.00000   
+              J1z = 1.00000   
+              J2xy = 0.20000   
+             J0'x = 0.10000   
+
+  @ Numerical conditions
+
+
+######  Print Expert input files  ######
+
+    locspn.def is written.
+      trans.def is written.
+    coulombinter.def is written.
+    hund.def is written.
+    exchange.def is written.
+    interall.def is written.
+    CParaFileHead = zqp         ######  DEFAULT VALUE IS USED  ######
+      NVMCCalMode = 0           ######  DEFAULT VALUE IS USED  ######
+     NLanczosMode = 0           ######  DEFAULT VALUE IS USED  ######
+    NDataIdxStart = 1           ######  DEFAULT VALUE IS USED  ######
+      NDataQtySmp = 1           ######  DEFAULT VALUE IS USED  ######
+      NSPGaussLeg = 8           ######  DEFAULT VALUE IS USED  ######
+          NSPStot = 0           ######  DEFAULT VALUE IS USED  ######
+         NMPTrans = -1          ######  DEFAULT VALUE IS USED  ######
+    NSROptItrStep = 1000        ######  DEFAULT VALUE IS USED  ######
+     NSROptItrSmp = 100         ######  DEFAULT VALUE IS USED  ######
+       NVMCWarmUp = 10          ######  DEFAULT VALUE IS USED  ######
+     NVMCInterval = 1           ######  DEFAULT VALUE IS USED  ######
+       NVMCSample = 1000        ######  DEFAULT VALUE IS USED  ######
+    NExUpdatePath = 2         
+          RndSeed = 123456789   ######  DEFAULT VALUE IS USED  ######
+       NSplitSize = 1           ######  DEFAULT VALUE IS USED  ######
+           NStore = 1           ######  DEFAULT VALUE IS USED  ######
+            NSRCG = 0           ######  DEFAULT VALUE IS USED  ######
+     DSROptRedCut = 0.00100     ######  DEFAULT VALUE IS USED  ######
+     DSROptStaDel = 0.02000     ######  DEFAULT VALUE IS USED  ######
+     DSROptStepDt = 0.02000     ######  DEFAULT VALUE IS USED  ######
+              2Sz = 0  
+     modpara.def is written.
+      ComplexType = 1         
+           a0Wsub = 2           ######  DEFAULT VALUE IS USED  ######
+           a0Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a0Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Lsub = 2           ######  DEFAULT VALUE IS USED  ######
+           a1Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Hsub = 1           ######  DEFAULT VALUE IS USED  ######
+         Number of Cell in the sublattice: 4
+    qptransidx.def is written.
+    jastrowidx.def is written.
+    gutzwilleridx.def is written.
+    orbitalidx.def is written.
+      ioutputmode = 1           ######  DEFAULT VALUE IS USED  ######
+    greenone.def is written.
+    greentwo.def is written.
+    namelist.def is written.
+
+######  Input files are generated.  ######
+

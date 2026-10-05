@@ -1,0 +1,14 @@
+model = "Spin"
+lattice = "pyrochlore"
+L = 2
+W = 2
+Height = 1
+2Sz = 0
+J0x = 1.0
+J0y = 1.0
+J0z = 0.5
+J1 = 1.0
+J2xy = 0.2
+J0'x = 0.1
+D = 0.3
+ComplexType = 1

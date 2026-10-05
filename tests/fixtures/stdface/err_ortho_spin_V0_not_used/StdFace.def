@@ -1,0 +1,7 @@
+model = "Spin"
+lattice = "orthorhombic"
+L = 2
+W = 2
+Height = 2
+2Sz = 0
+V0 = 1.0

@@ -1,0 +1,14 @@
+model = "Hubbard"
+lattice = "orthorhombic"
+a0W = 2
+a0L = 0
+a0H = 0
+a1W = 1
+a1L = 2
+a1H = 0
+a2W = 0
+a2L = 0
+a2H = 2
+U = 4.0
+t = 1.0
+ncond = 8

@@ -9,12 +9,15 @@
 use crate::ccomplex::C64;
 use crate::cfmt;
 use crate::chain_lattice::std_face_chain;
+use crate::fcortho::std_face_fcortho;
 use crate::honeycomb_lattice::std_face_honeycomb;
 use crate::kagome::std_face_kagome;
 use crate::ladder::std_face_ladder;
 use crate::model_util as mu;
+use crate::orthorhombic::std_face_orthorhombic;
 use crate::out::{exit, Out, Res, StdFaceError};
 use crate::outf;
+use crate::pyrochlore::std_face_pyrochlore;
 use crate::square_lattice::std_face_tetragonal;
 use crate::triangular_lattice::std_face_triangular;
 use crate::vals::{StdIntList, NAN_I, UNSET_STR};
@@ -1659,13 +1662,12 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
         | "fco"
         | "face-centeredcubic"
         | "fccubic"
-        | "fcc"
-        | "orthorhombic"
-        | "simpleorthorhombic"
-        | "cubic"
-        | "simplecubic"
-        | "pyrochlore"
-        | "wannier90" => {
+        | "fcc" => std_face_fcortho(o, &mut s)?,
+        "orthorhombic" | "simpleorthorhombic" | "cubic" | "simplecubic" => {
+            std_face_orthorhombic(o, &mut s)?
+        }
+        "pyrochlore" => std_face_pyrochlore(o, &mut s)?,
+        "wannier90" => {
             outf!(
                 o,
                 "\nSorry, lattice {} is not ported to the Rust StdFace yet (issues #354-#357).\n",

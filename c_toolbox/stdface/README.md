@@ -8,6 +8,7 @@ directory; the Rust tests read only the checked-in fixtures.
 | --- | --- | --- |
 | `build_reference.sh <dir>` | Builds the unmodified C StdFace (`dry.c` + all `src/StdFace/src/*.c`) with `-D_mVMC -DMEXP=19937 -O3 -DNDEBUG -ffp-contract=off -w` into `<dir>/mvmc_dry.out` (`OPT=-O0` overrides the level). | Full C StdFace executable (the `mvmc_dry.out` target of `src/StdFace/src/CMakeLists.txt`); no MPI. |
 | `generate_fixtures.py <mvmc_dry.out>` | Runs every case (upstream `test/mvmc` chain inputs plus generated feature/error inputs) and stores generated files, `stdout.txt` and `exit_status` under `tests/fixtures/stdface/<case>/expected/`; writes `tests/fixtures/stdface/PROVENANCE.md` (source SHA-256, compiler, flags). | End to end, `uv run --no-project python ...`. |
+| `build_reference_3d_fixed.sh <dir>`, `3d_defects.patch`, `cases_3d.py` | 3D lattices (#356): builds a copy of the C StdFace with the 3D defect fixes (`mvmc_dry_3d_fixed.out`); `generate_fixtures.py <mvmc_dry.out> <mvmc_dry_3d_fixed.out>` stores the corrected output in `expected/` and, where it differs, the unmodified C output in `c_historical/`. Defects: `tests/fixtures/stdface/README_3d_defects.md`. | Full C StdFace executable, patched copy only; the vendored sources are not modified. |
 | `complex_expr.c`, `check_complex_expr.sh` | Standalone kernel probe: the compound `double complex` expressions of `StdFace_HubbardLocal`, `StdFace_MagField` and `StdFace_GeneralJ` on a grid with `-0.0`, as IEEE bit patterns (per-family FNV-1a digests in `tests/fixtures/stdface/complex_expr.digests`). | Not a full executable. |
 
 `vmcdry.out` (`src/mVMC/vmcdry.c`) only calls `StdFace_main`, as does `dry.c`; the mVMC
@@ -43,6 +44,7 @@ imaginary part, `real - complex` negates it, `complex * complex` is the textbook
 
 ```
 c_toolbox/stdface/build_reference.sh /tmp/stdface-c
-uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c/mvmc_dry.out
+c_toolbox/stdface/build_reference_3d_fixed.sh /tmp/stdface-c
+uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c/mvmc_dry.out /tmp/stdface-c/mvmc_dry_3d_fixed.out
 c_toolbox/stdface/check_complex_expr.sh
 ```

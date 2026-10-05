@@ -1,0 +1,11 @@
+model = "Hubbard"
+lattice = "orthorhombic"
+L = 2
+W = 2
+Height = 2
+U = 4.0
+t = 1.0
+ncond = 8
+phase0 = 180
+phase1 = 180
+phase2 = 180

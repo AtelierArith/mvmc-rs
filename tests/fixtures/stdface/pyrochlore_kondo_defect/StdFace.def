@@ -1,0 +1,8 @@
+model = "Kondo"
+lattice = "pyrochlore"
+L = 2
+W = 2
+Height = 1
+t = 1.0
+J = 2.0
+ncond = 16

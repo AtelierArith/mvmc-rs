@@ -1,0 +1,13 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Spin 
+  KEYWORD : lattice              | VALUE : orthorhombic 
+  KEYWORD : l                    | VALUE : 2 
+  KEYWORD : w                    | VALUE : 2 
+  KEYWORD : height               | VALUE : 2 
+  KEYWORD : 2sz                  | VALUE : 0 
+  KEYWORD : 2s                   | VALUE : 2 
+ERROR ! Unsupported Keyword in Standard mode!

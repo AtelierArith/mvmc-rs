@@ -244,7 +244,8 @@ zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 b
 | `chain` | supported |
 | `ladder` | supported (see the C defect below) |
 | `tetragonal`/`square`, `triangular`, `honeycomb`, `kagome` | supported |
-| orthorhombic/cubic, face-centered orthorhombic/cubic, pyrochlore, wannier90 | not yet ported (the run stops with a message) |
+| orthorhombic/cubic, face-centered orthorhombic/cubic (fcc), pyrochlore | supported, corrected C defects ([7.6.1](#761-three-dimensional-lattices)) |
+| `wannier90` | not yet ported (the run stops with a message) |
 
 C behaviour reproduced as is: for `lattice = ladder` the C code rejects `t`, `t'`, `V`, `V'`, `J`, `J'`
 (`NotUsed` checks that precede the reads), so a ladder needs `t0`, `t1`, `t2`, `t1'`, `t2'` (and `V*`, `J*`),
@@ -252,3 +253,33 @@ and the Kondo coupling `J` cannot be set; the printed `Wx` of a ladder is overwr
 The spin-model checks of the triangular, honeycomb and kagome lattices contain copy-paste slips that are
 reproduced as is (for example `t''` and `V''` are silently accepted for a spin model on a triangular or
 honeycomb lattice, and `J''` messages are labelled `J0'`).
+
+### 7.6.1 Three-dimensional lattices
+
+`lattice = orthorhombic` (aliases `simpleorthorhombic`, `cubic`, `simplecubic`), `lattice = fcorthorhombic`
+(`face-centeredorthorhombic`, `fco`, `face-centeredcubic`, `fccubic`, `fcc`) and `lattice = pyrochlore` (four sites
+per cell) port `Orthorhombic.c`, `FCOrtho.c` and `Pyrochlore.c`. The size is `L`, `W`, `Height` (a cuboid of cells) or the
+super-cell matrix `a0W` ... `a2H` (not both), the cell edges are `a`, `Wlength`, `Llength`, `Hlength` or the vectors
+`Wx` ... `Hz`, and `phase0`, `phase1`, `phase2` are the boundary phases in degrees. Output additionally contains
+`lattice.xsf` (XCrySDen; the file is empty if an input check stops the run, as in C).
+
+| Lattice | Bonds | Hubbard/Kondo parameters | Spin parameters |
+|---------|-------|--------------------------|-----------------|
+| orthorhombic | `t0`, `t1`, `t2` along W, L, H; `t0'`, `t1'`, `t2'` face diagonals (L-H, H-W, W-L); `t''` body diagonals | `t`, `t'` set the defaults of the three components, `t''` and `V''` are single values | `J0`..`J2`, `J0'`..`J2'`, `J''` (and the isotropic `J`, `J'`) |
+| fcc / fco | `t0`, `t1`, `t2` (two bonds each, the six nearest neighbours), `t0'`, `t1'`, `t2'` (along W, L, H: second neighbours) | `t`, `t'` as above | `J0`..`J2`, `J0'`..`J2'` |
+| pyrochlore | `t0`, `t1`, `t2` and `t0'`, `t1'`, `t2'` are the six bond directions of the tetrahedra (nearest neighbours only) | `t`, `V` only (`t0'` etc. default to `t`) | `J0`..`J2`, `J0'`..`J2'` (default to `J`) |
+
+**C defects that are not reproduced.** The 3D C sources contain clear errors; the Rust port implements the
+correct behaviour, keeps the unmodified C output as `c_historical/` in the fixtures and takes the expectation from a
+copy of the C source with `c_toolbox/stdface/3d_defects.patch` applied (`tests/fixtures/stdface/README_3d_defects.md`):
+
+* pyrochlore Kondo lattice: C couples every localized spin of a cell to conduction site 3 (`isite + 3`) and leaves
+  the conduction sites 0-2 without Kondo coupling; each conduction site now couples to its own localized spin;
+* face-centered orthorhombic Kondo lattice: the localized spin ignored `h`, `Gamma`, `Gamma_y` (the other lattices
+  apply them); they are applied now;
+* unused parameters were accepted silently and are rejected now with the usual `... is not used` error: `V2`, `V0'`,
+  `V1'`, `V2'`, `V''` in the spin model; `J'`, `J''` in the Hubbard/Kondo model of the orthorhombic and pyrochlore
+  lattices; `t''`, `V''`, `J0''`..`J2''` (and in the spin model `J''`, `J0''`..`J2''`, which C read and dropped) on
+  the face-centered lattice; `t'`, `t''`, `V'`, `V''`, `J'` (and in the spin model `J'`, `J''`) on the pyrochlore lattice;
+* `ntransMax` omits the `Gamma_y` terms of the itinerant-electron local term (six per site, four counted):
+  C overflows the heap (pyrochlore with `Gamma` and `Gamma_y` exits with SIGSEGV); the port needs no fixed bound.

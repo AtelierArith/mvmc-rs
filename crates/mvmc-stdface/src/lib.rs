@@ -9,10 +9,11 @@
 //! | [`stdface_main()`](fn@stdface_main) | `StdFace_main.c` (keyword reader, parameter checks, file writers) |
 //! | [`model_util`] | `StdFace_ModelUtil.c` (helpers, super-cell setup, Jastrow/orbital/projection) |
 //! | [`chain_lattice`] | `ChainLattice.c` |
+//! | [`orthorhombic`], [`fcortho`], [`pyrochlore`] | `Orthorhombic.c`, `FCOrtho.c`, `Pyrochlore.c` (with [`lattice3d`]) |
 //!
 //! Only the mVMC (`_mVMC`) solver branches are ported. Output text is byte-identical to the C
 //! program: see `tests/stdface_c_fixtures.rs` and `tests/fixtures/stdface/PROVENANCE.md`.
-//! Remaining lattices are tracked in issues #354-#357.
+//! Remaining lattices are tracked in issues #355 and #357.
 
 // The C loops are index loops over parallel arrays (`Cell`, `Orb`, `box`, ...); they are kept
 // as `for i in 0..n` so each routine can be audited line by line against the C source.
@@ -22,11 +23,15 @@ pub mod ccomplex;
 pub mod cexpr;
 pub mod cfmt;
 pub mod chain_lattice;
+pub mod fcortho;
 pub mod honeycomb_lattice;
 pub mod kagome;
 pub mod ladder;
+pub mod lattice3d;
 pub mod model_util;
+pub mod orthorhombic;
 pub mod out;
+pub mod pyrochlore;
 pub mod square_lattice;
 pub mod stdface_main;
 pub mod triangular_lattice;
