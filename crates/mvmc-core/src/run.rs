@@ -4791,7 +4791,19 @@ mod callback_tests {
                     .split_whitespace()
                     .map(|v| v.parse().unwrap())
                     .collect();
-                assert_eq!(actual, &expected, "step {steps} {name}");
+                let (mut actual, mut expected) = (actual.to_vec(), expected);
+                if name == "counters" {
+                    // Julia's complex FSZ sampler counts conduction spin flips as hoppings;
+                    // C (and Rust) keep them in Counter[4]/[5] (checked against native C in
+                    // `mvmc-cli/tests/issue181_native_c_physcal.rs`). Compare the folded sums.
+                    for counter in [&mut actual, &mut expected] {
+                        counter[0] += counter[4];
+                        counter[1] += counter[5];
+                        counter[4] = 0;
+                        counter[5] = 0;
+                    }
+                }
+                assert_eq!(actual, expected, "step {steps} {name}");
             }
         }
         if (case.starts_with("rbm_") || case.starts_with("opt_"))

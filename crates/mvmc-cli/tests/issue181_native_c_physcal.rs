@@ -104,6 +104,14 @@ fn tolerance(name: &str, file: &str) -> (f64, f64) {
 }
 
 fn run(name: &str, check_numbers: bool) {
+    run_with(name, check_numbers, 1, 1);
+}
+
+/// `threads` sets `MVMC_RS_INNER_THREADS` (with threshold 1 so the worker pool is used
+/// even for these small ranges); `ranks > 1` launches the binary through `mpiexec`
+/// (set `MVMC_RS_MPIEXEC` to select the launcher). The native-C reference is the same
+/// for every thread count; for ranks it is the C run with the same rank count.
+fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
     let sc = scenario(name);
     let dir = root().join(name);
     let work = Work::new(name);
@@ -123,7 +131,20 @@ fn run(name: &str, check_numbers: bool) {
             )
             .unwrap();
         }
-        let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+        let mut command = if ranks > 1 {
+            let mut launcher = Command::new(
+                std::env::var("MVMC_RS_MPIEXEC").unwrap_or_else(|_| "mpiexec".to_owned()),
+            );
+            launcher.args(["-n", &ranks.to_string(), env!("CARGO_BIN_EXE_mvmc")]);
+            launcher
+        } else {
+            Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        };
+        if threads > 1 {
+            command
+                .env("MVMC_RS_INNER_THREADS", threads.to_string())
+                .env("MVMC_RS_INNER_THRESHOLD", "1");
+        }
         command
             .arg(inputs.join("namelist.def"))
             .arg("--physcal")
@@ -135,7 +156,7 @@ fn run(name: &str, check_numbers: bool) {
         if sc.opt_trans {
             command.arg("--opt-trans");
         }
-        if index == last {
+        if index == last && ranks == 1 {
             command.arg("--physcal-trace").arg(&trace);
         }
         let result = command.output().unwrap();
@@ -204,47 +225,50 @@ fn run(name: &str, check_numbers: bool) {
         );
     }
 
-    // Saved state after every sample of the final stage: exact.
-    let mut frames: Vec<_> = fs::read_dir(dir.join("native-state"))
-        .unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap())
-        .collect();
-    frames.sort();
-    assert!(!frames.is_empty());
-    for frame in &frames {
-        let k: usize = frame["state_dump_".len()..frame.len() - 4].parse().unwrap();
-        let mut native = std::collections::HashMap::new();
-        for line in fs::read_to_string(dir.join("native-state").join(frame))
+    if ranks == 1 {
+        // Saved state after every sample of the final stage: exact.
+        // (--physcal-trace is serial-only; MPI cells are checked through their outputs.)
+        let mut frames: Vec<_> = fs::read_dir(dir.join("native-state"))
             .unwrap()
-            .lines()
-        {
-            let mut parts = line.split_whitespace();
-            let key = parts.next().unwrap().to_owned();
-            native.insert(key, parts.map(str::to_owned).collect::<Vec<_>>());
-        }
-        let stage = trace.join(format!("sample-{k}"));
-        for key in ["ele_idx", "ele_cfg", "ele_num", "ele_proj_cnt", "ele_spn"] {
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        frames.sort();
+        assert!(!frames.is_empty());
+        for frame in &frames {
+            let k: usize = frame["state_dump_".len()..frame.len() - 4].parse().unwrap();
+            let mut native = std::collections::HashMap::new();
+            for line in fs::read_to_string(dir.join("native-state").join(frame))
+                .unwrap()
+                .lines()
+            {
+                let mut parts = line.split_whitespace();
+                let key = parts.next().unwrap().to_owned();
+                native.insert(key, parts.map(str::to_owned).collect::<Vec<_>>());
+            }
+            let stage = trace.join(format!("sample-{k}"));
+            for key in ["ele_idx", "ele_cfg", "ele_num", "ele_proj_cnt", "ele_spn"] {
+                assert_eq!(
+                    words(stage.join(format!("{key}.txt"))),
+                    native[key],
+                    "{name} {frame} {key}"
+                );
+            }
             assert_eq!(
-                words(stage.join(format!("{key}.txt"))),
-                native[key],
-                "{name} {frame} {key}"
+                words(stage.join("counter.txt"))[..6],
+                native["counter"][..],
+                "{name} {frame}: C Counter[0..6]"
+            );
+            assert_eq!(
+                words(stage.join("draw-count.txt")),
+                native["draws"],
+                "{name} {frame}: primitive RNG draw count"
+            );
+            assert_eq!(
+                words(stage.join("next624.txt")),
+                native["next624"],
+                "{name} {frame}: next 624 SFMT words"
             );
         }
-        assert_eq!(
-            words(stage.join("counter.txt"))[..6],
-            native["counter"][..],
-            "{name} {frame}: C Counter[0..6]"
-        );
-        assert_eq!(
-            words(stage.join("draw-count.txt")),
-            native["draws"],
-            "{name} {frame}: primitive RNG draw count"
-        );
-        assert_eq!(
-            words(stage.join("next624.txt")),
-            native["next624"],
-            "{name} {frame}: next 624 SFMT words"
-        );
     }
 
     // Numerical outputs.
@@ -265,7 +289,10 @@ fn run(name: &str, check_numbers: bool) {
             }
             continue;
         }
-        if !check_numbers || (file.starts_with("zvo_ls_") && sc.class == "c_singular") {
+        if !check_numbers
+            || sc.class == "c_defect_fsz_rbm"
+            || (file.starts_with("zvo_ls_") && sc.class == "c_singular")
+        {
             continue;
         }
         let (absolute, relative) = tolerance(name, &file);
@@ -290,6 +317,15 @@ macro_rules! native_scenarios {
 }
 
 native_scenarios! {
+    hubbard_lanczos1_complex_path_matches_native_c => "hubbard_lanczos1_cmp",
+    fsz_dh2_matches_native_c => "fsz_dh2_physcal",
+    fsz_dh2_fixed_two_sz_matches_native_c => "fsz_dh2_csz_physcal",
+    fsz_dh2_dh4_matches_native_c => "fsz_dh24_physcal",
+    fsz_dh_opttrans_matches_native_c => "fsz_dh24_opttrans_physcal",
+    fsz_rbm_follows_c_trajectory_and_c_ignores_rbm_weight => "fsz_rbm_physcal",
+    fsz_dh_rbm_opttrans_follows_c_trajectory_and_c_ignores_rbm_weight => "fsz_dh24_rbm_opttrans_physcal",
+    fsz_zero_rbm_matches_native_c => "fsz_rbm_zero_physcal",
+    fsz_dh_zero_rbm_opttrans_matches_native_c => "fsz_dh24_rbm_opttrans_zero_physcal",
     heisenberg_real_matches_native_c => "heisenberg_chain_real",
     heisenberg_complex_matches_native_c => "heisenberg_chain_cmp",
     heisenberg_fsz_matches_native_c => "heisenberg_chain_fsz",
@@ -334,4 +370,73 @@ native_scenarios! {
     fsz_two_configurations_match_native_c => "fsz_warm0_sample2",
     fsz_ten_configurations_match_native_c => "fsz_warm0_sample10",
     fsz_fifty_configurations_match_native_c => "fsz_warm10_sample50",
+}
+
+macro_rules! native_threaded {
+    ($($test:ident => ($name:literal, $threads:literal)),* $(,)?) => {$(
+        #[test]
+        fn $test() {
+            run_with($name, true, $threads, 1);
+        }
+    )*};
+}
+
+native_threaded! {
+    heisenberg_real_workers2_match_native_c => ("heisenberg_chain_real", 2),
+    heisenberg_real_workers4_match_native_c => ("heisenberg_chain_real", 4),
+    heisenberg_complex_workers2_match_native_c => ("heisenberg_chain_cmp", 2),
+    heisenberg_complex_workers4_match_native_c => ("heisenberg_chain_cmp", 4),
+    heisenberg_fsz_workers2_match_native_c => ("heisenberg_chain_fsz", 2),
+    heisenberg_fsz_workers4_match_native_c => ("heisenberg_chain_fsz", 4),
+    hubbard_lanczos2_workers2_match_native_c => ("hubbard_chain_real", 2),
+    hubbard_lanczos2_workers4_match_native_c => ("hubbard_chain_real", 4),
+    hubbard_dh_workers2_match_native_c => ("hubbard_chain_dh_real", 2),
+    hubbard_dh_workers4_match_native_c => ("hubbard_chain_dh_real", 4),
+    kondo_workers2_match_native_c => ("kondo_chain_real", 2),
+    kondo_workers4_match_native_c => ("kondo_chain_real", 4),
+    hubbard_dh_rbm_opttrans_workers2_match_native_c => ("hubbard_chain_dh_rbm_opttrans", 2),
+    hubbard_dh_rbm_opttrans_workers4_match_native_c => ("hubbard_chain_dh_rbm_opttrans", 4),
+    fsz_dh_opttrans_workers2_match_native_c => ("fsz_dh24_opttrans_physcal", 2),
+    fsz_dh_opttrans_workers4_match_native_c => ("fsz_dh24_opttrans_physcal", 4),
+}
+
+/// Optional MPI gate: needs `--features mpi`, an MPI launcher (`MVMC_RS_MPIEXEC`, default
+/// `mpiexec`) and `MVMC_RS_NATIVE_C_MPI=1`. Selecting the ignored tests without the gate
+/// fails instead of passing silently.
+fn require_mpi_gate() {
+    if !cfg!(feature = "mpi") {
+        panic!("build mvmc-cli with --features mpi to run the native-C MPI gate");
+    }
+    assert_eq!(
+        std::env::var("MVMC_RS_NATIVE_C_MPI").as_deref(),
+        Ok("1"),
+        "set MVMC_RS_NATIVE_C_MPI=1 to run the native-C MPI gate"
+    );
+}
+
+macro_rules! native_mpi {
+    ($($test:ident => ($name:literal, $ranks:literal)),* $(,)?) => {$(
+        #[test]
+        #[ignore = "optional MPI gate: --features mpi, MVMC_RS_NATIVE_C_MPI=1, MPI launcher"]
+        fn $test() {
+            require_mpi_gate();
+            run_with($name, true, 1, $ranks);
+        }
+    )*};
+}
+
+native_mpi! {
+    heisenberg_real_two_ranks_match_native_c => ("heisenberg_chain_real_mpi2", 2),
+    heisenberg_complex_two_ranks_match_native_c => ("heisenberg_chain_cmp_mpi2", 2),
+    heisenberg_fsz_two_ranks_match_native_c => ("heisenberg_chain_fsz_mpi2", 2),
+    hubbard_lanczos2_two_ranks_match_native_c => ("hubbard_chain_real_mpi2", 2),
+    hubbard_dh_two_ranks_match_native_c => ("hubbard_chain_dh_real_mpi2", 2),
+    kondo_two_ranks_match_native_c => ("kondo_chain_real_mpi2", 2),
+    hubbard_dh_rbm_opttrans_two_ranks_match_native_c => ("hubbard_chain_dh_rbm_opttrans_mpi2", 2),
+    fsz_dh_opttrans_two_ranks_match_native_c => ("fsz_dh24_opttrans_physcal_mpi2", 2),
+    heisenberg_real_four_ranks_match_native_c => ("heisenberg_chain_real_mpi4", 4),
+    heisenberg_fsz_four_ranks_match_native_c => ("heisenberg_chain_fsz_mpi4", 4),
+    hubbard_lanczos2_four_ranks_match_native_c => ("hubbard_chain_real_mpi4", 4),
+    hubbard_dh_opttrans_four_ranks_match_native_c => ("hubbard_chain_dh_opttrans_mpi4", 4),
+    kondo_four_ranks_match_native_c => ("kondo_chain_real_mpi4", 4),
 }

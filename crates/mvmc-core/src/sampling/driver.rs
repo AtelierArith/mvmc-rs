@@ -1548,42 +1548,46 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     timer.stop(36);
                 }
                 UpdateType::Hopping => {
-                    state.electron_config.counter[0] += 1;
                     timer.start(31);
-                    // The complex source counts both proposals as hopping and,
-                    // unlike its real FSZ driver, flips conduction spins when
-                    // TwoSz is fixed. Preserve the short-circuit draw order.
-                    let cand =
-                        if two_sz == -1 && crate::sampling::driver::trace::draw_real2(rng) < 0.5 {
-                            make_candidate_hopping_fsz(
-                                &tmp_ele_idx,
-                                &tmp_ele_cfg,
-                                &tmp_ele_spn,
-                                &loc_spn,
-                                n_site,
-                                n_size,
-                                two_sz,
-                                rng,
-                            )
-                        } else {
-                            let flip = make_candidate_local_spin_flip_conduction(
-                                &tmp_ele_idx,
-                                &tmp_ele_cfg,
-                                &tmp_ele_spn,
-                                &loc_spn,
-                                n_site,
-                                n_size,
-                                rng,
-                            );
-                            FszHoppingCandidate {
-                                mi: flip.mi,
-                                ri: flip.ri,
-                                rj: flip.rj,
-                                spin: flip.spin,
-                                spin_to: flip.spin_to,
-                                reject: flip.reject,
-                            }
-                        };
+                    // C vmcmake_fsz.c: with TwoSz == -1 half of the proposals are
+                    // conduction spin flips (Counter[4]/[5]); with TwoSz fixed every
+                    // proposal is a hopping with unchanged spin (makeCandidate_hopping_csz,
+                    // which `make_candidate_hopping_fsz` reproduces for two_sz != -1).
+                    // The short-circuit keeps the draw order.
+                    let flag_hop =
+                        two_sz != -1 || crate::sampling::driver::trace::draw_real2(rng) < 0.5;
+                    let cand = if flag_hop {
+                        state.electron_config.counter[0] += 1;
+                        make_candidate_hopping_fsz(
+                            &tmp_ele_idx,
+                            &tmp_ele_cfg,
+                            &tmp_ele_spn,
+                            &loc_spn,
+                            n_site,
+                            n_size,
+                            two_sz,
+                            rng,
+                        )
+                    } else {
+                        state.electron_config.counter[4] += 1;
+                        let flip = make_candidate_local_spin_flip_conduction(
+                            &tmp_ele_idx,
+                            &tmp_ele_cfg,
+                            &tmp_ele_spn,
+                            &loc_spn,
+                            n_site,
+                            n_size,
+                            rng,
+                        );
+                        FszHoppingCandidate {
+                            mi: flip.mi,
+                            ri: flip.ri,
+                            rj: flip.rj,
+                            spin: flip.spin,
+                            spin_to: flip.spin_to,
+                            reject: flip.reject,
+                        }
+                    };
                     timer.stop(31);
                     if cand.reject {
                         continue;
@@ -1659,7 +1663,7 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
-                        state.electron_config.counter[1] += 1;
+                        state.electron_config.counter[if flag_hop { 1 } else { 5 }] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
                     } else {

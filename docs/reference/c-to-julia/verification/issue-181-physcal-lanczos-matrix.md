@@ -56,7 +56,7 @@ the Lanczos rows use a deterministic 0.05 perturbation of the fixed parameters.
 | Heisenberg complex | Pass | Pass | perturbed fixed state |
 | Heisenberg FSZ | Rejected | Rejected | C readdef.c: "Lanczos mode is not supported when orbital is general"; Rust now reports the same message |
 | Hubbard real | Pass | Pass | `hubbard_lanczos1`, `hubbard_chain_real` |
-| Hubbard real, complex path (`--mode cmp`) | NotRun | Pass | real fixed values through the complex arithmetic path (C runs real arithmetic) |
+| Hubbard real, complex path (`--mode cmp`) | Pass (`hubbard_lanczos1_cmp`, #397) | Pass | real fixed values through the complex arithmetic path (C runs real arithmetic) |
 | Hubbard DH real | Pass | Pass | |
 | Kondo real | Pass | Pass | perturbed fixed state |
 | All six non-InterAll terms (hopping, intra, inter, Hund, exchange, pair hop), real and `--mode cmp` | Pass | Pass | `all_terms_lanczos{1,2}_{real,cmp}` |
@@ -80,7 +80,12 @@ moments.
 | All nine RBM sections (`In*RBM*`) + OptTrans + DH overlays, complex, `-o` | Pass (7.1e-15) | `hubbard_chain_dh_rbm_opttrans` |
 | Real-mode RBM | NotRun | C ignores RBM in real mode (tmisawa/Julia-mVMC#59); not reproduced |
 | Real-mode OptTrans slot shift (#55) | Pass for the above fixture | the fixed file follows the C layout; defect handling stays as pinned in #370 |
-| FSZ with DH2/DH4/RBM/OptTrans | NotRun | no Julia PhysCal model; C FSZ + DH is covered by the optimization fixtures |
+| FSZ + DH2 (6-site Hubbard FSZ, `InDH2`) | Pass (2e-14) | `fsz_dh2_physcal` (#397) |
+| FSZ + DH2 with fixed `2Sz = 0` (C `makeCandidate_hopping_csz`) | Pass (7e-15) | `fsz_dh2_csz_physcal`; found a Rust defect, see below |
+| FSZ + DH2 + DH4 | Pass (2e-14) | `fsz_dh24_physcal` |
+| FSZ + DH2/DH4 + OptTrans (`-o`, `InOptTrans`) | Pass (9e-16) | `fsz_dh24_opttrans_physcal` |
+| FSZ + RBM (nine sections), FSZ + DH + RBM + OptTrans, RBM values as supplied | Rejected as a parity cell: C defect | trajectory exact, energies differ O(1) because C ignores RBM in every `*_fsz.c`; see below (`fsz_rbm_physcal`, `fsz_dh24_rbm_opttrans_physcal`) |
+| FSZ + RBM and FSZ + DH + RBM + OptTrans with all `In*RBM*` overlays zeroed | Pass (1.4e-14) | `fsz_rbm_zero_physcal`, `fsz_dh24_rbm_opttrans_zero_physcal` |
 
 ## Matrix 4: sample counts, indices, rerun behavior
 
@@ -94,6 +99,9 @@ moments.
 | Rerun with Lanczos switched off: stale `zvo_ls_*` kept untouched | Pass | `rerun_lanczos_off` |
 | Append mode | n/a | C `InitFilePhysCal` opens with `"w"`; there is no append path |
 | Binary output (`-b`), MultiDef (`-m`), `-F` flush | NotRun | outside this slice (#346 covers `-F` formatting) |
+| Threaded workers 2 and 4 (`MVMC_RS_INNER_THREADS`, threshold 1) vs the same serial C reference, state exact via `--physcal-trace` | Pass | 16 `*_workers{2,4}_match_native_c` tests: Heisenberg real/cmp/FSZ, Hubbard Lanczos 2, Hubbard DH, Kondo, DH+RBM+OptTrans, FSZ+DH+OptTrans (worker 1 is the serial cell; worker activation is requested, not counted by the CLI) |
+| MPI 2 ranks vs C `mpiexec -n 2` (outputs, inventory, zvo_time rows; the C counters sum over ranks) | Pass | `*_two_ranks_match_native_c`: Heisenberg real/cmp/FSZ, Hubbard Lanczos 2, Hubbard DH, Kondo, DH+RBM+OptTrans, FSZ+DH+OptTrans |
+| MPI 4 ranks vs C `mpiexec -n 4` | Pass | `*_four_ranks_match_native_c`: Heisenberg real/FSZ, Hubbard Lanczos 2, DH+OptTrans, Kondo |
 | One-configuration FSZ diagnostics (warm-up 0, 1/2/10 samples; 50 samples) | Pass (tol 3e-10 / 3e-10 / 3e-10 / 1e-11) | `fsz_*` |
 
 ## First-divergence analysis and tolerances
@@ -131,6 +139,15 @@ moments.
 * **`pow(H1, 3)`.** `CalculateEne` uses libm `pow`; Rust's `powi(3)` rounds
   twice, shifting the discriminant by one ulp and, through the ill-conditioned
   alpha, `zvo_ls_out` by up to 6.5e-8 relative. Fixed with `powf(3.0)`.
+* **Complex FSZ sampler with fixed `2Sz`** (#397). Rust took the conduction-spin-flip
+  branch for every proposal when `TwoSz != -1` (a Julia behavior); C proposes ordinary
+  spin-conserving hoppings (`makeCandidate_hopping_csz`). The trajectory diverged from
+  the first sample; now exact against native C (`fsz_dh2_csz_physcal`). The Julia
+  `fixed_sz` expectations in `complex_fsz_sampling` are therefore not valid for this
+  branch and are skipped (the fixture lines are still consumed).
+* **FSZ spin-flip counters** (#397). Rust (and Julia) counted conduction spin flips as
+  hoppings (`Counter[0]`/`[1]`); C uses `Counter[4]`/`[5]`, visible in `zvo_time`
+  (`acc_lsf`, `n_lsf`). Now equal to C; Julia-fixture comparisons fold the two groups.
 * **Lanczos failure writer.** When `CalculateEne` fails (negative discriminant or
   `|dnorm/H1| < 1e-12`) C returns -1 before any `fprintf`: every `zvo_ls_*` file
   is zero bytes and the run continues. Rust wrote a NaN triple and moments. Now
@@ -143,6 +160,14 @@ moments.
 * `readdef.c:610-617`: `if (NSPGaussLeg > 1) {...} else if (Lanczos != 0) error`.
   With a general orbital and `NSPGaussLeg > 1`, C accepts Lanczos and writes
   `-nan -nan -nan` moments (`heisenberg_fsz_lanczos1_gauss8`). Rust rejects.
+* FSZ ignores RBM (#397): `vmcmake_fsz.c`, `calham_fsz.c`, `locgrn_fsz.c`, `calgrn_fsz.c`,
+  `vmccal_fsz.c` and `slater_fsz.c` contain no RBM code (the complex `vmcmake.c` has 27
+  occurrences) although `FlagRBM` is set and the RBM parameters are read and counted.
+  Same class as real-mode RBM (tmisawa/Julia-mVMC#59). With RBM values as supplied Rust
+  follows C's trajectory exactly (configurations, counters, RNG) but its FSZ Hamiltonian
+  and Green functions apply the RBM weight, so energies differ by O(1); with the overlays
+  zeroed they agree to 1.4e-14. Rust keeps the correct measurement math. Note the
+  resulting asymmetry for a follow-up: the Rust FSZ sampler ignores RBM like C.
 * Singular alpha (exact eigenstate, zero energy variance): native C sample 007
   of `heisenberg_real_lanczos1_exact_state` writes uninitialised-memory denormals
   (`0 4.9e-324 1.7e-312`) and the complex model returns -1 depending on 1-ulp
@@ -153,10 +178,17 @@ moments.
 
 ## Not run / remaining
 
-* InterAll and its Lanczos (separate owner); FSZ + DH/RBM/OptTrans PhysCal;
-  real-mode RBM; `-b`, `-m`; MPI and threaded PhysCal (#182, #178/#179);
-  native macOS (Linux numerical reference only; the libm-dependent
-  Lanczos-formula test uses a 1e-6 bound off Linux/glibc, unverified on macOS).
+* InterAll and its Lanczos (separate owner); real-mode RBM (#59); `-b` (#347); `-m` (#348);
+  the full MPI matrix (#179: NSplitSize groups, CG, uneven splits); native macOS C
+  references (Linux numerical reference only; the libm-dependent Lanczos-formula test uses
+  a 1e-6 bound off Linux/glibc; the CI macOS runs of the serial and threaded cells pass).
+* MPI cells (#397) observe root output files only: `--physcal-trace` is serial-only, so
+  per-rank RNG/configuration states are not compared. The C 1/2/4-rank references differ
+  from each other by 1e-9 in the energy while the tolerance is 1e-13, so a trajectory
+  difference would fail the cells. They are `#[ignore]` optional gates
+  (`MVMC_RS_NATIVE_C_MPI=1`, `--features mpi`, launcher in `MVMC_RS_MPIEXEC`, run with
+  `-j1` because concurrent `mpiexec` launches collide) and were run in the Dev Container
+  (MPICH 4, 13/13 pass).
 * Julia-side: the historical Julia 1.13.1 references in `tests/fixtures/physcal_181`
   are unchanged. The Julia runner cannot preserve fixed RBM/OptTrans values (its
   restoration guard rejects them); native C accepts them, so those two models now
@@ -176,4 +208,7 @@ python3 c_toolbox/physcal_native/fsz_sensitivity.py fsz_warm0_sample1 fsz 1e-16
 # Rust tests (no C)
 cargo nextest run -p mvmc-cli --cargo-profile test-fast --test issue181_native_c_physcal
 cargo nextest run -p mvmc-core --cargo-profile test-fast --test issue181_lanczos_native_c
+# optional MPI cells (Dev Container, MPICH)
+MPICC=/opt/mpich/bin/mpicc MVMC_RS_NATIVE_C_MPI=1 cargo nextest run -j1 --locked -p mvmc-cli \
+  --cargo-profile test-fast --features mpi --test issue181_native_c_physcal --run-ignored only
 ```

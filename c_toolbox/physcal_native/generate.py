@@ -86,12 +86,23 @@ def main():
             if os.path.isfile(p):
                 shutil.copy(p, os.path.join(dest, "inputs", entry))
         shutil.copy(os.path.join(src, "zqp_opt.dat"), os.path.join(dest, "zqp_opt.dat"))
+        ranks = 1
         for item in filter(None, variant.split(";")):
             key, _, value = item.partition("=")
+            if key == "ranks":  # MPI ranks of the measured run (zqp=c_opt always uses one)
+                ranks = int(value)
+                continue
             if key == "drop":  # remove namelist keywords (e.g. DH4,InDH4)
                 path = os.path.join(dest, "inputs", "namelist.def")
                 kept = [l for l in open(path) if (l.split() or [""])[0] not in value.split(",")]
                 open(path, "w").write("".join(kept))
+            elif key == "zero_in":  # zero the value columns of overlay files (e.g. inrbm.def)
+                for fname in value.split(","):
+                    path = os.path.join(dest, "inputs", fname)
+                    lines = open(path).read().split("\n")
+                    out_lines = lines[:5] + [
+                        (f"{l.split()[0]} 0.0 0.0" if l.split() else l) for l in lines[5:]]
+                    open(path, "w").write("\n".join(out_lines))
             elif key == "zqp" and value == "c_opt":
                 # fixed parameters produced by one native-C optimization step (seed 1)
                 tmp = os.path.join("/tmp", f"physcal-native-opt-{name}")
@@ -140,7 +151,7 @@ def main():
                         open(os.path.join(dest, "inputs", "modpara.def"), "w").write(text)
                     else:
                         open(os.path.join(dest, f"modpara-stage{index}.def"), "w").write(text)
-                cmd = ["/opt/mpich/bin/mpiexec", "-n", "1", binary]
+                cmd = ["/opt/mpich/bin/mpiexec", "-n", str(ranks), binary]
                 if opttrans == "1":
                     cmd.append("-o")
                 cmd += ["namelist.def", "zqp_opt.dat"]
