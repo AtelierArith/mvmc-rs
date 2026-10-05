@@ -19,6 +19,16 @@ name: Explicit bounded optional gates
         required: false
         default: ''
         type: string
+      explicit_mpi_gates:
+        description: >-
+          Run the FULL set of explicit MPI gates (every ignored test of the mpi feature,
+          2 and 4 ranks, including the rank-wise native-C matrix of #179) with provenance.
+          Outside the bounded-family ledger: its own job status is the verdict (NotRun when
+          not selected; fails closed on any failing or missing cell). Use family=none to
+          dispatch only this job.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -177,6 +187,59 @@ jobs:
         with:
           name: optional-ctest-long-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ctest-long/
+          if-no-files-found: error
+
+  mpi-explicit:
+    # Outside the bounded-family aggregate ledger (like ctest-long): the job status is
+    # the verdict. Skipped (NotRun) unless explicitly selected. Fails closed.
+    name: Explicit full MPI gate set, 2 and 4 ranks (Linux x86_64)
+    if: inputs.explicit_mpi_gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: never
+      RUN_ID: ${{ github.run_id }}
+      ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: optional-mpi-explicit
+          tools: nextest
+      - name: Match MPI PMI1 and Hydra before compiling
+        run: |
+          sudo apt-get install -y libucx-dev gfortran build-essential
+          bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/explicit-mpich-$RUN_ID-$ATTEMPT" \
+            "$RUNNER_TEMP/explicit-mpi-provider-$RUN_ID-$ATTEMPT"
+      - name: Run every explicit MPI gate (fails closed)
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/optional-mpi-explicit
+        run: scripts/run_explicit_mpi_gates.sh "$RUNNER_TEMP/explicit-mpi-gates-$RUN_ID-$ATTEMPT"
+      - name: Report status (NotRun/Unverified are not Pass)
+        if: always()
+        run: |
+          dir="$RUNNER_TEMP/explicit-mpi-gates-$RUN_ID-$ATTEMPT"
+          if [ -f "$dir/summary.md" ]; then
+            cat "$dir/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Explicit MPI gates: no summary recorded (runner failed before gate execution)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain explicit MPI gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-mpi-explicit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/explicit-mpi-gates-${{ github.run_id }}-${{ github.run_attempt }}/provenance.txt
+            ${{ runner.temp }}/explicit-mpi-gates-${{ github.run_id }}-${{ github.run_attempt }}/cells.txt
+            ${{ runner.temp }}/explicit-mpi-gates-${{ github.run_id }}-${{ github.run_attempt }}/summary.md
+            ${{ runner.temp }}/explicit-mpi-gates-${{ github.run_id }}-${{ github.run_attempt }}/*.log
+            ${{ runner.temp }}/explicit-mpi-provider-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
 
   aggregate:

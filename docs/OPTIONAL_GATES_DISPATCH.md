@@ -317,3 +317,14 @@ All evidence remains under `/tmp/mvmc-optional183-thread-owner-v2-20261003`;
 it is an infrastructure failure, NOT the final immutable-worktree PASS.
 Historical Lanczos59780 and General77178 precede final driver666...;
 the final table above supersedes them for this implementation only.
+
+## Full explicit MPI gate set (#179)
+
+A separate dispatch input, `explicit_mpi_gates = true` (use `family = none` to run only
+it), starts the `mpi-explicit` job. It runs every explicit MPI gate (the ignored tests of
+the `mpi` feature) at 2 and 4 ranks through `scripts/run_explicit_mpi_gates.sh`, including
+the rank-wise native-C matrix (`docs/reference/c-to-julia/verification/issue-179-mpi-matrix.md`).
+Like the long ctest gate it sits outside the bounded-family ledger: not selected is NotRun,
+any failing cell or fewer cells than the enforced minimum fails the job, Julia comparisons are
+reported Unverified, and the uploaded artifact carries `provenance.txt`, `cells.txt`,
+`summary.md` and all cell logs.

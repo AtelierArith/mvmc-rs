@@ -1374,6 +1374,29 @@ pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ?Sized>(
             flags,
         )
     }
+    .map(|(summary, _, _)| summary)
+}
+
+/// Run the production optimization entry point and also return this rank's final
+/// sampler state and RNG, for rank-wise verification (#179). The numerical run
+/// is identical to [`run_para_opt_from_namelist_with_reducer`].
+pub fn run_para_opt_from_namelist_observed<R: Reducer + ?Sized>(
+    namelist_path: impl AsRef<Path>,
+    config: RunConfig,
+    reducer: &R,
+) -> Result<(RunSummary, VmcOptimizationState, Sfmt19937Rng), String> {
+    collective_result(
+        validate_run_options(&config),
+        reducer,
+        "optimization configuration",
+    )?;
+    run_para_opt_timed(
+        namelist_path,
+        config,
+        reducer,
+        &mut CTimer::<false>::new(),
+        TimerEnv::from_env(),
+    )
 }
 
 fn validate_run_options(config: &RunConfig) -> Result<(), String> {
@@ -1419,7 +1442,7 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     reducer: &R,
     timer: &mut CTimer<TIMED>,
     flags: TimerEnv,
-) -> Result<RunSummary, String> {
+) -> Result<(RunSummary, VmcOptimizationState, Sfmt19937Rng), String> {
     timer.reset();
     timer.diagnostics = flags;
     timer.start(0);
@@ -1590,7 +1613,8 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             })
         }
     })();
-    collective_result(final_result, reducer, "optimization final output/summary")
+    let summary = collective_result(final_result, reducer, "optimization final output/summary")?;
+    Ok((summary, state, rng))
 }
 
 fn fresh_output_directory() -> Result<std::path::PathBuf, String> {
