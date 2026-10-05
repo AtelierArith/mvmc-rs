@@ -197,3 +197,56 @@ For `NLanczosMode > 0` ([6.2](06-theory-observables-lanczos.md#62-the-single-ste
 | `zvo_SRinfo.dat` for the direct solver | see [9.4](#94-solver-information-zvo_srinfodat) | not written |
 | `zvo_ls_qcisajsq_*`, `zvo_ls_qcisajscktaltq_*` | `_DEBUG` builds only | not written |
 | `zvo_out_NNN.dat`/`zvo_var_NNN.dat` during optimization | index suffix | written as `zvo_out.dat`/`zvo_var.dat` |
+
+## 9.9 Post-processing: `greenr2k` (Fourier transform of the Green functions)
+
+C ships the Fortran utility `tool/greenr2k.F90` (installed as `bin/greenr2k`). The workspace provides a pure-Rust port, the binary `greenr2k` of the crate `mvmc-greenr2k`, with the same command line, input files and output files:
+
+```bash
+cargo run --release -p mvmc-greenr2k -- namelist.def geometry.dat   # or: greenr2k namelist.def geometry.dat
+```
+
+It works in the **current directory**, like the Fortran program: `namelist.def` and `geometry.dat` are the two arguments, and the correlation files are read from `output/` (the default `--out-dir` of `mvmc` is `<namelist directory>/output`, so run `greenr2k` in the directory of the NameList file). A missing argument prints a usage message and exits with status 2.
+
+Inputs:
+
+- **NameList** — keywords `OneBodyG`, `TwoBodyG`, `ModPara` and `CalcMod` (case-insensitive; other keywords are skipped). Without `CalcMod` the data are taken as mVMC (`calctype = 4`); a `CalcMod` file selects the HPhi modes by its `CalcType` (0 Lanczos, 1 TPQ, 2 FullDiag, 3 LOBCG).
+- **ModPara** — `NSite`, `CDataFileHead`, `NDataIdxStart`, `NDataQtySmp` (mVMC); `NumAve`, `Lanczos_max`, `ExpecInterval`, `Exct` (HPhi). The mVMC data files are `output/<CDataFileHead>_cisajs_NNN.dat` and `..._cisajscktalt_NNN.dat` for `NNN = NDataIdxStart .. NDataIdxStart+NDataQtySmp-1`, exactly the files of [9.6](#96-green-functions-zvo_cisajs_nnndat-zvo_cisajscktalt_nnndat-zvo_cisajscktaltex_nnndat) (names, `%03d` index and row layout are identical to C's).
+- **Geometry** — the `geometry.dat` of C StdFace (lattice vectors, boundary phase in degrees, supercell, one `R orbital` row per site), followed by the k path (`nnode nk_line`, then `label k1 k2 k3` for each node) and the k grid `nk1 nk2 nk3` that the user appends (`echo "..." >> geometry.dat`, [`format.rst`](../../extern/mVMC-1.3.0/doc/en/source/fourier/format.rst)). **Rust does not write `geometry.dat`**: Standard-mode input expansion is not part of the Rust CLI, so use the file produced by C StdFace (`mvmc_dry.out`/`vmc.out`) or write it by hand.
+
+Outputs (Fortran formats reproduced exactly, including the gfortran list-directed spacing):
+
+| File | Content |
+|------|---------|
+| `output/<head>_corr.dat` (mVMC, Lanczos), `_corr_stepN.dat` (TPQ), `_corr_eigenN.dat` (FullDiag/LOBCG) | four header lines per orbital pair, then per k point: `k-length` and, for mVMC/TPQ, the average and standard error over `NDataQtySmp` (resp. `NumAve`) samples of the real and imaginary parts of the up-up, down-down, density, $S^zS^z$, $S^+S^-$ and $\mathbf S\cdot\mathbf S$ correlations (`E15.5`); for HPhi modes the values without errors |
+| `output/<head>_corr<tail>.frmsf` | FermiSurfer file of the momentum distribution on the `nk1 x nk2 x nk3` grid (list-directed numbers) |
+| `kpath.gp` | gnuplot `xtics` labels of the k nodes |
+| standard output | the same progress messages as Fortran |
+
+The Fourier convention is that of the Fortran program: $\tilde C(\mathbf k)=\frac1{N_R}\sum_{\mathbf R}\big(\frac1{n_R}\sum e^{-i\mathbf k\cdot\mathbf R+i\phi}\big)C(\mathbf R)$, where the inner sum runs over the $n_R$ equivalent nearest images of the supercell vector $\mathbf R$ with boundary phase $\phi$; the one-body parts (up-up, down-down) are not divided by $N_R$. For mVMC the $S^+S^-$ terms are rebuilt from the two-body entries with the exchange of operators described in `greenr2k.F90`.
+
+Differences from the Fortran program (the Fortran behaviours are defects or compiler limitations and are not reproduced):
+
+- An unquoted file name containing `/` (e.g. `./modpara.def`) is read whole; gfortran's list-directed input stops at `/` and reads `.`.
+- After the error "Missing indices for the Green function." (printed after the list of missing indices) the Rust tool exits with status 1; the Fortran `STOP "..."` exits with status 0.
+- `CalcType 2` (FullDiag): gfortran cannot run the input format `("  MAX DIMENSION idim_max=1", i16)` (constant string in an input format). Rust skips the 26 characters of that string as other compilers do, reads the next 16 columns and then behaves like LOBCG. There is no Fortran reference for this branch.
+- Signed zeros of the reciprocal lattice vectors in the console output (`-0.0000000000` from LAPACK) are not reproduced.
+
+Other tools in `extern/mVMC-1.3.0/tool/` are not ported; they are independent of the Rust binaries and are used unchanged with Rust outputs:
+
+| Tool | Decision |
+|------|----------|
+| `wout2geom.sh` | Shell/`bc` converter from a Wannier90 `.wout` file to the lattice part of `geometry.dat` (Wannier90 mode). Not ported: it does not read any mVMC output and its result is an input of C StdFace and `greenr2k`. Use as `wout2geom.sh seed.wout > geometry.dat`. |
+| `respack2wan90.py` | Python/numpy converter from RESPACK output (`dir-wan`, `dir-intW`, `dir-intJ`) to the Wannier90-mode files `seed_hr.dat`, `seed_ur.dat`, `seed_jr.dat`, `seed_geom.dat`. Not ported: pre-processing for C StdFace. Use `uv run --with numpy extern/mVMC-1.3.0/tool/respack2wan90.py [seed]` in the RESPACK directory. |
+| `gen_frmsf.sh` | `awk` script that cuts FermiSurfer files out of a momentum-distribution table. Not ported: it only post-processes text columns (and expects a different column layout than the current `greenr2k` output; `greenr2k` already writes `.frmsf` files itself). |
+
+> **Implementation**
+> - C: `read_filename` — `extern/mVMC-1.3.0/tool/greenr2k.F90:95`
+> - C: `read_geometry` — `extern/mVMC-1.3.0/tool/greenr2k.F90:294`
+> - C: `read_corrindx` — `extern/mVMC-1.3.0/tool/greenr2k.F90:467`
+> - C: `fourier_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:782`
+> - C: `output_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:819`
+> - Rust: `run` — `crates/mvmc-greenr2k/src/lib.rs:1339`
+> - Rust: `fourier_cor` — `crates/mvmc-greenr2k/src/lib.rs:998`
+> - Rust: `list_real` — `crates/mvmc-greenr2k/src/fortran_fmt.rs:142`
+> - Parity: fixtures from the compiled Fortran tool (`tests/fixtures/greenr2k/PROVENANCE.md`); text layout exact, numbers within one unit of the printed digit plus a `1e-13` floor ([NUMERICAL_COMPARISONS.md](../NUMERICAL_COMPARISONS.md)).

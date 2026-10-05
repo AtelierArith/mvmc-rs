@@ -37,6 +37,7 @@ builds and tests do not need `c_toolbox/`.
 | `crates/mvmc-expert-parsers` | Expert-mode file parsers, `ExpertModeData`, parameter initialization, quantum-projection weights |
 | `crates/mvmc-core` | The VMC engine: sampling, observables, SR, Lanczos, output, MPI reducers, validation |
 | `crates/mvmc-cli` | The `mvmc` binary and four example programs |
+| `crates/mvmc-greenr2k` | The `greenr2k` binary: Fourier transform of the Green functions (port of `tool/greenr2k.F90`, [9.9](09-output-files.md#99-post-processing-greenr2k-fourier-transform-of-the-green-functions)) |
 | `xtask` | Benchmark and regression automation |
 
 ## 1.3 What is supported

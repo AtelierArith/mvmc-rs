@@ -196,3 +196,55 @@ PhysCal のサンプルごとに1度書き出され、ファイルはインデ�
 | 直接法ソルバーの `zvo_SRinfo.dat` | [9.4](#94-ソルバー情報-zvo_srinfodat) を参照 | 書き出さない |
 | `zvo_ls_qcisajsq_*`, `zvo_ls_qcisajscktaltq_*` | `_DEBUG` ビルドのみ | 書き出さない |
 | 最適化中の `zvo_out_NNN.dat`/`zvo_var_NNN.dat` | インデックス接尾辞 | `zvo_out.dat`/`zvo_var.dat` として書き出す |
+
+## 9.9 後処理: `greenr2k` (グリーン関数のフーリエ変換)
+
+C には Fortran ユーティリティ `tool/greenr2k.F90`(`bin/greenr2k` としてインストール)が付属します。このワークスペースには、同じコマンドライン・入力ファイル・出力ファイルを持つ純 Rust 版として、クレート `mvmc-greenr2k` のバイナリ `greenr2k` があります。
+
+```bash
+cargo run --release -p mvmc-greenr2k -- namelist.def geometry.dat   # または: greenr2k namelist.def geometry.dat
+```
+
+Fortran 版と同様に**カレントディレクトリ**で動作します。引数は `namelist.def` と `geometry.dat` の2つで、相関関数ファイルは `output/` から読み込まれます(`mvmc` の既定の `--out-dir` は `<NameList のディレクトリ>/output` なので、NameList のあるディレクトリで `greenr2k` を実行してください)。引数が足りない場合は使い方を表示して終了ステータス 2 で終了します。
+
+入力:
+
+- **NameList** — キーワード `OneBodyG`、`TwoBodyG`、`ModPara`、`CalcMod`(大文字小文字は区別しません。他のキーワードは読み飛ばします)。`CalcMod` がなければ mVMC のデータ(`calctype = 4`)として扱い、`CalcMod` ファイルがあればその `CalcType`(0 Lanczos、1 TPQ、2 FullDiag、3 LOBCG)で HPhi のモードを選びます。
+- **ModPara** — `NSite`、`CDataFileHead`、`NDataIdxStart`、`NDataQtySmp`(mVMC)、`NumAve`、`Lanczos_max`、`ExpecInterval`、`Exct`(HPhi)。mVMC のデータファイルは `NNN = NDataIdxStart .. NDataIdxStart+NDataQtySmp-1` に対する `output/<CDataFileHead>_cisajs_NNN.dat` と `..._cisajscktalt_NNN.dat` で、[9.6](#96-グリーン関数-zvo_cisajs_nnndat-zvo_cisajscktalt_nnndat-zvo_cisajscktaltex_nnndat) のファイルそのものです(ファイル名、`%03d` のインデックス、行の形式は C と同一です)。
+- **Geometry** — C の StdFace が出力する `geometry.dat`(格子ベクトル、度単位の境界位相、スーパーセル、サイトごとの `R orbital` 行)に、ユーザーが追記する k パス(`nnode nk_line`、続いて各ノードの `label k1 k2 k3`)と k グリッド `nk1 nk2 nk3` が続きます(`echo "..." >> geometry.dat`、[`format.rst`](../../../extern/mVMC-1.3.0/doc/ja/source/fourier/format.rst))。**Rust は `geometry.dat` を書き出しません**。Standard モードの入力展開は Rust CLI にはないため、C の StdFace(`mvmc_dry.out`/`vmc.out`)が作ったファイルを使うか、手で書いてください。
+
+出力(Fortran の書式を、gfortran のリスト指向出力の空白も含めて正確に再現します):
+
+| ファイル | 内容 |
+|------|---------|
+| `output/<head>_corr.dat`(mVMC、Lanczos)、`_corr_stepN.dat`(TPQ)、`_corr_eigenN.dat`(FullDiag/LOBCG) | 軌道対ごとに4行のヘッダー、続いて k 点ごとに `k-length` と、mVMC/TPQ では `NDataQtySmp`(TPQ では `NumAve`)個のサンプルについての up-up、down-down、密度、$S^zS^z$、$S^+S^-$、$\mathbf S\cdot\mathbf S$ 相関の実部・虚部の平均と標準誤差(`E15.5`)。HPhi のモードでは誤差なしの値 |
+| `output/<head>_corr<tail>.frmsf` | `nk1 x nk2 x nk3` グリッド上の運動量分布の FermiSurfer ファイル(リスト指向の数値) |
+| `kpath.gp` | k ノードの gnuplot `xtics` ラベル |
+| 標準出力 | Fortran 版と同じ進行メッセージ |
+
+フーリエ変換の規約は Fortran 版と同じです: $\tilde C(\mathbf k)=\frac1{N_R}\sum_{\mathbf R}\big(\frac1{n_R}\sum e^{-i\mathbf k\cdot\mathbf R+i\phi}\big)C(\mathbf R)$。内側の和はスーパーセルベクトル $\mathbf R$ の $n_R$ 個の等価な最近接像についてとり、$\phi$ は境界位相です。1体の部分(up-up、down-down)は $N_R$ で割りません。mVMC では $S^+S^-$ の項を、`greenr2k.F90` に記された演算子の入れ替えを用いて2体のエントリから再構成します。
+
+Fortran 版との違い(Fortran 側の挙動は欠陥またはコンパイラの制限であり、再現していません):
+
+- `/` を含む引用符なしのファイル名(例: `./modpara.def`)は全体を読み込みます。gfortran のリスト指向入力は `/` で止まり `.` を読みます。
+- エラー "Missing indices for the Green function."(欠けているインデックスの一覧の後に出力)の後、Rust 版は終了ステータス 1 で終了します。Fortran の `STOP "..."` は終了ステータス 0 です。
+- `CalcType 2`(FullDiag): gfortran は入力書式 `("  MAX DIMENSION idim_max=1", i16)`(入力書式中の定数文字列)を実行できません。Rust 版は他のコンパイラと同様にその文字列の 26 文字を読み飛ばし、続く 16 桁を読んで、以降は LOBCG と同じ動作をします。この分岐には Fortran の参照結果がありません。
+- コンソール出力の逆格子ベクトルの符号付きゼロ(LAPACK 由来の `-0.0000000000`)は再現しません。
+
+`extern/mVMC-1.3.0/tool/` の他のツールは移植していません。これらは Rust のバイナリとは独立で、Rust の出力に対してそのまま使えます。
+
+| ツール | 判断 |
+|------|----------|
+| `wout2geom.sh` | Wannier90 の `.wout` ファイルから `geometry.dat` の格子部分への変換を行うシェル/`bc` スクリプト(Wannier90 モード)。移植しない: mVMC の出力を読まず、結果は C StdFace と `greenr2k` の入力になります。`wout2geom.sh seed.wout > geometry.dat` のように使います。 |
+| `respack2wan90.py` | RESPACK の出力(`dir-wan`、`dir-intW`、`dir-intJ`)を Wannier90 モードのファイル `seed_hr.dat`、`seed_ur.dat`、`seed_jr.dat`、`seed_geom.dat` に変換する Python/numpy スクリプト。移植しない: C StdFace の前処理です。RESPACK のディレクトリで `uv run --with numpy extern/mVMC-1.3.0/tool/respack2wan90.py [seed]` のように使います。 |
+| `gen_frmsf.sh` | 運動量分布の表から FermiSurfer ファイルを切り出す `awk` スクリプト。移植しない: テキストの列を処理するだけで(現在の `greenr2k` の出力とは列の並びが異なる前提です)、`greenr2k` 自身がすでに `.frmsf` を出力します。 |
+
+> - C: `read_filename` — `extern/mVMC-1.3.0/tool/greenr2k.F90:95`
+> - C: `read_geometry` — `extern/mVMC-1.3.0/tool/greenr2k.F90:294`
+> - C: `read_corrindx` — `extern/mVMC-1.3.0/tool/greenr2k.F90:467`
+> - C: `fourier_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:782`
+> - C: `output_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:819`
+> - Rust: `run` — `crates/mvmc-greenr2k/src/lib.rs:1339`
+> - Rust: `fourier_cor` — `crates/mvmc-greenr2k/src/lib.rs:998`
+> - Rust: `list_real` — `crates/mvmc-greenr2k/src/fortran_fmt.rs:142`
+> - 整合性: コンパイルした Fortran ツールから作成したフィクスチャ(`tests/fixtures/greenr2k/PROVENANCE.md`)。テキストのレイアウトは完全一致、数値は出力桁の1単位と `1e-13` の下限の範囲内です([NUMERICAL_COMPARISONS.md](../../NUMERICAL_COMPARISONS.md))。

@@ -1,0 +1,68 @@
+
+ #####  Read HPhi/mVMC Input Files  #####
+
+   Read from namelist.def
+     OneBodyG file : greenone.def
+     TwoBodyG file : greentwo.def
+     ModPara file : modpara.def
+     CalcMod file : calcmod.def
+   Read from modpara.def
+     FileHead : zvo
+     Number of site :            8
+   Read from calcmod.def
+     CalcType :            0
+     Method : Lanczos
+     Number of States :            1
+
+ #####  Read Geometry Input File  #####
+
+   Read from geometry.dat
+     Direct LATTICE VECTOR :
+       1.0000000000   0.0000000000   0.0000000000
+       0.5000000000   0.8660254038   0.0000000000
+       0.0000000000   0.0000000000   1.0000000000
+     Boundary phase[degree] : 
+      30.0000000000  45.0000000000   0.0000000000
+     Supercell Index :
+       2       0       0
+       0       2       0
+       0       0       1
+     Number of orbitals :           2
+     Number of k-node, and k-points along lines :           3           4
+       k-node :
+      G   0.00000   0.00000   0.00000
+      M   0.50000   0.00000   0.00000
+      K   0.33333   0.33333   0.00000
+k-grid for momentum distribution :  4  4  1
+     Reciplocal lattice vector :
+       1.0000000000  -0.5773502692   0.0000000000
+      -0.0000000000   1.1547005384   0.0000000000
+      -0.0000000000  -0.0000000000   1.0000000000
+     Number of R-vector :           4
+    0    0    0   0.00, 
+   -1    0    0  -0.52,     1    0    0   0.00, 
+    0   -1    0  -0.79,     0    1    0   0.00, 
+   -1    1    0  -0.52,     1   -1    0  -0.79, 
+      Number of k :           25
+
+ #####  Read Correlation Index File  #####
+
+   Read from greenone.def
+     Number of Correlation Function (One body) :           32
+     Number of Up-Up Index :           16
+     Number of Down-Down Index :           16
+   Read from greentwo.def
+     Number of Correlation Function (Two body) :           96
+     Number of UpUpUpUp         Index :           16
+     Number of UpUpDownDown     Index :           16
+     Number of DownDownUpUp     Index :           16
+     Number of DownDownDownDown Index :           16
+     Number of Plus-Minus       Index :           16
+     Number of Minus-Plus       Index :           16
+
+ #####  Output Files  #####
+
+   Correlation in k-space : output/zvo_corr*.dat
+
+ #####  Done  #####
+

@@ -29,6 +29,7 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 | `crates/mvmc-expert-parsers` | Expertモードのファイルパーサー、`ExpertModeData`、パラメータ初期化、量子射影の重み |
 | `crates/mvmc-core` | VMC エンジン本体: サンプリング、物理量、SR、Lanczos、出力、MPI リデューサー、検証 |
 | `crates/mvmc-cli` | `mvmc` バイナリと 4 つのサンプルプログラム |
+| `crates/mvmc-greenr2k` | `greenr2k` バイナリ: グリーン関数のフーリエ変換(`tool/greenr2k.F90` の移植、[9.9](09-output-files.md#99-後処理-greenr2k-グリーン関数のフーリエ変換)) |
 | `xtask` | ベンチマークと回帰テストの自動化 |
 
 ## 1.3 サポート範囲
