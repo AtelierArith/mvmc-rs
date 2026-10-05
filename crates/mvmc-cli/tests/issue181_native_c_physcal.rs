@@ -7,6 +7,9 @@
 //! * exact: file inventory, `zvo_time` deterministic columns (acceptance counters),
 //!   saved configurations, projection counters, C `Counter[0..6]`, RNG draw count
 //!   and the next 624 SFMT words after every sample (probe build, see provenance);
+//! * class `c_defect_fsz_rbm` (issue #403): C's FSZ code has no RBM factor; Rust samples and
+//!   measures with it, so only the file inventory is compared (the RBM-zeroed scenarios
+//!   carry the numerical and exact-state comparison);
 //! * toleranced: every `zvo_*` numerical output, with bounds justified by the
 //!   first-divergence analysis in
 //!   `docs/reference/c-to-julia/verification/issue-181-physcal-lanczos-matrix.md`
@@ -210,7 +213,7 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
     assert_eq!(actual, expected, "{name}: exact C file inventory");
 
     // zvo_time: everything but the trailing ctime() stamp.
-    for file in &time_files {
+    for file in time_files.iter().filter(|_| sc.class != "c_defect_fsz_rbm") {
         let rows = |text: String| -> Vec<String> {
             text.lines()
                 .map(|l| l.rsplit_once(": ").map_or(l, |(head, _)| head).to_owned())
@@ -225,7 +228,7 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
         );
     }
 
-    if ranks == 1 {
+    if ranks == 1 && sc.class != "c_defect_fsz_rbm" {
         // Saved state after every sample of the final stage: exact.
         // (--physcal-trace is serial-only; MPI cells are checked through their outputs.)
         let mut frames: Vec<_> = fs::read_dir(dir.join("native-state"))
@@ -322,8 +325,8 @@ native_scenarios! {
     fsz_dh2_fixed_two_sz_matches_native_c => "fsz_dh2_csz_physcal",
     fsz_dh2_dh4_matches_native_c => "fsz_dh24_physcal",
     fsz_dh_opttrans_matches_native_c => "fsz_dh24_opttrans_physcal",
-    fsz_rbm_follows_c_trajectory_and_c_ignores_rbm_weight => "fsz_rbm_physcal",
-    fsz_dh_rbm_opttrans_follows_c_trajectory_and_c_ignores_rbm_weight => "fsz_dh24_rbm_opttrans_physcal",
+    fsz_rbm_inventory_matches_native_c_but_rust_applies_the_rbm_weight => "fsz_rbm_physcal",
+    fsz_dh_rbm_opttrans_inventory_matches_native_c_but_rust_applies_the_rbm_weight => "fsz_dh24_rbm_opttrans_physcal",
     fsz_zero_rbm_matches_native_c => "fsz_rbm_zero_physcal",
     fsz_dh_zero_rbm_opttrans_matches_native_c => "fsz_dh24_rbm_opttrans_zero_physcal",
     heisenberg_real_matches_native_c => "heisenberg_chain_real",

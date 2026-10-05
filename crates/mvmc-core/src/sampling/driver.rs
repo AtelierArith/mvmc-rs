@@ -1290,6 +1290,18 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
     let inv_stride = n_size * n_size + 1;
     let mut pf_m_new = vec![Complex64::new(0.0, 0.0); n_qp_full];
     let mut proj_cnt_new = vec![0_i64; tmp_ele_proj_cnt.len()];
+    // Issue #403: C's FSZ code has no RBM factor at all (a C defect, see the manual's
+    // compatibility chapter); Rust applies it, consistently with the FSZ Hamiltonian and
+    // Green-function kernels. Spin-changing moves are not supported by the incremental
+    // `update_rbm_cnt_hopping`, so the counters are rebuilt from the updated occupations.
+    let rbm_cfg = crate::sampling::rbm::RbmConfig::from(data);
+    let use_rbm = data.has_rbm_terms() && !legacy_fsz_sampler_without_rbm();
+    let mut rbm_cnt_old = if use_rbm {
+        crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg)
+    } else {
+        Vec::new()
+    };
+    let mut rbm_cnt_new = rbm_cnt_old.clone();
     let n_out_step = if burn_flag {
         n_vmc_sample + 1
     } else {
@@ -1398,13 +1410,14 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(67);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        log_ip_new,
-                        log_ip_old,
-                        rng,
-                    );
+                    let rbm_delta = if use_rbm {
+                        rbm_cnt_new = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                        crate::sampling::rbm::log_rbm_ratio(&rbm_cnt_new, &rbm_cnt_old, &rbm_cfg)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    let decision =
+                        metropolis_decision(log_proj_delta, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(68);
                         let _ = crate::pfaffian::calc_m_all_fsz_complex(
@@ -1422,6 +1435,9 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                         timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
+                        if use_rbm {
+                            rbm_cnt_old.clone_from(&rbm_cnt_new);
+                        }
                         state.electron_config.counter[3] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -1503,13 +1519,13 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     timer.start(602);
                     let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(602);
-                    let decision = metropolis_decision(
-                        0.0,
-                        Complex64::new(0.0, 0.0),
-                        log_ip_new,
-                        log_ip_old,
-                        rng,
-                    );
+                    let rbm_delta = if use_rbm {
+                        rbm_cnt_new = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                        crate::sampling::rbm::log_rbm_ratio(&rbm_cnt_new, &rbm_cnt_old, &rbm_cfg)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    let decision = metropolis_decision(0.0, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(603);
                         crate::sampling::updates::update_m_all_fsz_complex_flat(
@@ -1528,6 +1544,9 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                         );
                         timer.stop(603);
                         log_ip_old = log_ip_new;
+                        if use_rbm {
+                            rbm_cnt_old.clone_from(&rbm_cnt_new);
+                        }
                         state.electron_config.counter[5] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -1637,13 +1656,14 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     let log_ip_new = sampling_log_ip_complex(&pf_m_new, data, reducer);
                     timer.stop(62);
                     let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        log_ip_new,
-                        log_ip_old,
-                        rng,
-                    );
+                    let rbm_delta = if use_rbm {
+                        rbm_cnt_new = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                        crate::sampling::rbm::log_rbm_ratio(&rbm_cnt_new, &rbm_cnt_old, &rbm_cfg)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    let decision =
+                        metropolis_decision(log_proj_delta, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(63);
                         crate::sampling::updates::update_m_all_fsz_complex_flat(
@@ -1663,6 +1683,9 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
+                        if use_rbm {
+                            rbm_cnt_old.clone_from(&rbm_cnt_new);
+                        }
                         state.electron_config.counter[if flag_hop { 1 } else { 5 }] += 1;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -1699,6 +1722,9 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     &pool,
                 );
                 log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
+                if use_rbm {
+                    rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                }
                 n_accept_window = 0;
                 timer.stop(34);
             }
@@ -1745,4 +1771,23 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
         accepted: accepted_total,
         saved,
     }
+}
+
+// Unit-test hook: the Julia/C reference trajectories of `rbm_fsz` were generated by
+// samplers without the RBM factor (a C defect, issue #403). Tests that validate the
+// remaining kernels against them can switch the factor off for their own thread.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static LEGACY_FSZ_SAMPLER_WITHOUT_RBM: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn legacy_fsz_sampler_without_rbm() -> bool {
+    LEGACY_FSZ_SAMPLER_WITHOUT_RBM.with(std::cell::Cell::get)
+}
+
+#[cfg(not(test))]
+fn legacy_fsz_sampler_without_rbm() -> bool {
+    false
 }

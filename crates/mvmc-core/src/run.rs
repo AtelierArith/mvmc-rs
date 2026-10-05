@@ -5045,6 +5045,10 @@ mod callback_tests {
     }
 
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
+        // The `rbm_fsz` references come from Julia/C samplers that omit the RBM factor
+        // (issue #403); validate their other kernels with the factor switched off.
+        crate::sampling::driver::LEGACY_FSZ_SAMPLER_WITHOUT_RBM
+            .with(|flag| flag.set(case == "rbm_fsz"));
         let reference_case = if case == "general" { "fsz" } else { case };
         // C's counter grouping and subthreshold Slater retention differ from
         // Julia. These cases use a separately labelled mixed reference whose

@@ -84,7 +84,7 @@ moments.
 | FSZ + DH2 with fixed `2Sz = 0` (C `makeCandidate_hopping_csz`) | Pass (7e-15) | `fsz_dh2_csz_physcal`; found a Rust defect, see below |
 | FSZ + DH2 + DH4 | Pass (2e-14) | `fsz_dh24_physcal` |
 | FSZ + DH2/DH4 + OptTrans (`-o`, `InOptTrans`) | Pass (9e-16) | `fsz_dh24_opttrans_physcal` |
-| FSZ + RBM (nine sections), FSZ + DH + RBM + OptTrans, RBM values as supplied | Rejected as a parity cell: C defect | trajectory exact, energies differ O(1) because C ignores RBM in every `*_fsz.c`; see below (`fsz_rbm_physcal`, `fsz_dh24_rbm_opttrans_physcal`) |
+| FSZ + RBM (nine sections), FSZ + DH + RBM + OptTrans, RBM values as supplied | Rejected as a parity cell: C defect | C ignores RBM in every `*_fsz.c`. Since #403 Rust applies the RBM factor in the FSZ sampler too, so only the file inventory is compared (`fsz_rbm_physcal`, `fsz_dh24_rbm_opttrans_physcal`); RBM itself is validated by `issue403_fsz_rbm_sampler` (per-move replay against a full Pfaffian x projection x RBM recomputation) |
 | FSZ + RBM and FSZ + DH + RBM + OptTrans with all `In*RBM*` overlays zeroed | Pass (1.4e-14) | `fsz_rbm_zero_physcal`, `fsz_dh24_rbm_opttrans_zero_physcal` |
 
 ## Matrix 4: sample counts, indices, rerun behavior
@@ -163,11 +163,12 @@ moments.
 * FSZ ignores RBM (#397): `vmcmake_fsz.c`, `calham_fsz.c`, `locgrn_fsz.c`, `calgrn_fsz.c`,
   `vmccal_fsz.c` and `slater_fsz.c` contain no RBM code (the complex `vmcmake.c` has 27
   occurrences) although `FlagRBM` is set and the RBM parameters are read and counted.
-  Same class as real-mode RBM (tmisawa/Julia-mVMC#59). With RBM values as supplied Rust
-  follows C's trajectory exactly (configurations, counters, RNG) but its FSZ Hamiltonian
-  and Green functions apply the RBM weight, so energies differ by O(1); with the overlays
-  zeroed they agree to 1.4e-14. Rust keeps the correct measurement math. Note the
-  resulting asymmetry for a follow-up: the Rust FSZ sampler ignores RBM like C.
+  Same class as real-mode RBM (tmisawa/Julia-mVMC#59). Before #403 Rust
+  mirrored the sampling half of the defect (exact C trajectory, but measurement with RBM, so
+  energies differed by O(1)); now the sampler, Hamiltonian and Green functions all apply the
+  RBM factor, so trajectories differ from C when the RBM values are nonzero, while with the
+  overlays zeroed they agree with C to 1.4e-14 (exact state included). Rust keeps the correct measurement math. Note the
+  resulting asymmetry is fixed by #403: the Rust FSZ sampler now applies the RBM factor (it previously ignored it like C), so FSZ + RBM with nonzero values is correct math but has no native-C reference; the zeroed-overlay scenarios keep the exact native-C comparison.
 * Singular alpha (exact eigenstate, zero energy variance): native C sample 007
   of `heisenberg_real_lanczos1_exact_state` writes uninitialised-memory denormals
   (`0 4.9e-324 1.7e-312`) and the complex model returns -1 depending on 1-ulp
