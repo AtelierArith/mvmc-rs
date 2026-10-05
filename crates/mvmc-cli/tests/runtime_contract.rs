@@ -301,7 +301,7 @@ fn unsupported_projection_fails_before_creating_output_directory() {
     let namelist = dir.0.join("namelist.def");
     // Do not let the unrelated zero-valued Rust ModPara default mask the
     // unsupported-section boundary. C's no-projection setting is explicitly 1.
-    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(dir.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NMPTrans 1\n")).unwrap();
     fs::write(&namelist, "ModPara modpara.def\nSpinJastrow missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
@@ -485,7 +485,7 @@ fn missing_hamiltonian_input_cannot_run_a_different_model() {
     let namelist = dir.0.join("namelist.def");
     // Explicit accepted projection setting, leaving only the intended missing
     // Hamiltonian record as this negative fixture's diagnostic target.
-    fs::write(dir.0.join("modpara.def"), "NMPTrans 1\n").unwrap();
+    fs::write(dir.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NMPTrans 1\n")).unwrap();
     fs::write(&namelist, "ModPara modpara.def\nTrans missing.def\n").unwrap();
     let out_dir = dir.0.join("out");
     let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))

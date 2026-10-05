@@ -30,7 +30,7 @@ impl Input {
         .unwrap();
         fs::write(
             self.dir.join("modpara.def"),
-            format!("Nsite {nsite}\nNElec 1\nNMPTrans -1\nNneuronCharge {}\nNneuronSpin {}\nNneuronGeneral {}\n", h[3], h[3], h[3]),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 1\nNMPTrans -1\nNneuronCharge {}\nNneuronSpin {}\nNneuronGeneral {}\n", h[3], h[3], h[3]),
         )
         .unwrap();
         let maps: String = (0..nsite).map(|site| format!("{site} 0\n")).collect();

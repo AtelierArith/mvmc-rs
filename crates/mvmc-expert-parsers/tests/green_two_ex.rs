@@ -147,7 +147,7 @@ fn malformed_referenced_file_is_reported_by_expert_loader() {
     std::fs::create_dir(&dir).unwrap();
     let owned = OwnedDirectory(dir);
     let dir = &owned.0;
-    std::fs::write(dir.join("modpara.def"), "Nsite 4\nNElec 1\nNMPTrans 1\n").unwrap();
+    std::fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 4\nNe 1\nNMPTrans 1\n")).unwrap();
     std::fs::write(
         dir.join("bad.def"),
         "# header\nTwoBodyGEx 1\n# h3\n# h4\n# h5\n0 0 1\n",

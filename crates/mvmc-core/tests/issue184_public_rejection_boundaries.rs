@@ -255,12 +255,6 @@ fn s198_grouped_general_standard_projection_rejects_each_original_combination() 
     }
 }
 
-#[test]
-fn s204_unported_cg_submodes_reject_public_paraopt_before_mutation() {
-    boundary(false, |d| d.modpara.use_diag_scale = 1, "useDiagScale != 0");
-    boundary(false, |d| d.modpara.rescale_smat = 1, "RescaleSmat != 0");
-}
-
 #[derive(Default)]
 struct SeedObserver(Cell<usize>);
 impl Reducer for SeedObserver {

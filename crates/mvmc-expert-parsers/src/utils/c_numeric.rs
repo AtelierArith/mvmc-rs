@@ -24,6 +24,12 @@ impl<'a> Scan<'a> {
             self.position += 1;
         }
     }
+    /// `sscanf("%s")`: skip whitespace and return the next whitespace-free word.
+    pub(crate) fn token(&mut self) -> Option<&'a [u8]> {
+        self.skip_space();
+        let start = self.position;
+        self.word().then(|| &self.text[start..self.position])
+    }
     pub(crate) fn word(&mut self) -> bool {
         self.skip_space();
         let start = self.position;

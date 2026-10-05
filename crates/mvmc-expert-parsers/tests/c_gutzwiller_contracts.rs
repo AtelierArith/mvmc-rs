@@ -75,7 +75,7 @@ fn complete_gutzwiller_contract_is_enforced_by_namelist_loading() {
         let expected = header[6] == "0";
         fs::write(
             dir.join("modpara.def"),
-            format!("Nsite {}\nNElec 1\nNMPTrans -1\n", header[1]),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {}\nNe 1\nNMPTrans -1\n", header[1]),
         )
         .unwrap();
         fs::write(dir.join("g.def"), record[1].replace('|', "\n")).unwrap();

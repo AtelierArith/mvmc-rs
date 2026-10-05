@@ -1,0 +1,13 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+Nneuron 3
+NneuronCharge 4
+NneuronSpin 5
+NneuronGeneral 6
+NBlockSize_RBMRatio 64

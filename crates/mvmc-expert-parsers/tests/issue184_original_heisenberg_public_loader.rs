@@ -134,7 +134,7 @@ fn original_fixture_preflight_rejects_each_missing_reference_and_tampering() {
     fs::write(bundle.0.join("initial.def"), "unexpected overlay\n").unwrap();
     assert!(verify_closure(&bundle.0).is_err());
     fs::remove_file(bundle.0.join("initial.def")).unwrap();
-    fs::write(bundle.0.join("modpara.def"), "Nsite 2\n").unwrap();
+    fs::write(bundle.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\n")).unwrap();
     assert!(verify_closure(&bundle.0).is_err());
     fs::copy(root().join("modpara.def"), bundle.0.join("modpara.def")).unwrap();
     let manifest = fs::read_to_string(bundle.0.join("inputs.sha256")).unwrap();

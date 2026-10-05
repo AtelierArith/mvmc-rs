@@ -1,3 +1,11 @@
+--------------------
+Model_Parameters 0
+--------------------
+VMC_Cal_Parameters
+--------------------
+CDataFileHead zvo
+CParaFileHead zqp
+--------------------
 Nsite 2
-NElec 1
+Ne 1
 NMPTrans 1

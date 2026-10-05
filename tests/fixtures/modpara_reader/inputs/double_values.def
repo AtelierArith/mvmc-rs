@@ -1,0 +1,12 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+DSROptRedCut 2.5e-3
+DSROptStaDel 1.5e-5
+DSROptStepDt 0.125
+DSROptCGTol 2.5e-9

@@ -1,5 +1,13 @@
+--------------------
+Model_Parameters 0
+--------------------
+VMC_Cal_Parameters
+--------------------
+CDataFileHead zvo
+CParaFileHead zqp
+--------------------
 Nsite 4
-NElec 1
+Ne 1
 RndSeed 11272
 NVMCSample 2
 NVMCWarmUp 1

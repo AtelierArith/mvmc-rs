@@ -18,7 +18,7 @@ fn parsed(
 ) -> mvmc_expert_parsers::ExpertModeData {
     let dir = std::env::temp_dir().join(format!("mvmc-flags-{name}-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("modpara.def"), "Nsite 3\nNElec 1\n").unwrap();
+    fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 3\nNe 1\n")).unwrap();
     fs::write(
         dir.join("g.def"),
         definition("NGutzwillerIdx", 2, 0, "0 0\n1 0\n2 1\n0 1\n1 0\n"),

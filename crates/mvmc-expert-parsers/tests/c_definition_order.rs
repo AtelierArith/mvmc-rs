@@ -71,7 +71,7 @@ fn every_namelist_permutation_preserves_c_ap_parallel_layout_and_boundary_signs(
         fs::write(
             dir.join("modpara.def"),
             format!(
-                "Nsite 2\nNElec 1\nNMPTrans {}\n",
+                "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans {}\n",
                 if antiperiodic { -1 } else { 1 }
             ),
         )

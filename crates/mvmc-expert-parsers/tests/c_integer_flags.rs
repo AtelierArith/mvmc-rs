@@ -252,7 +252,7 @@ fn integer_component_flags_header_normalization_coefficients_and_rng_match_c() {
     for record in rows.as_chunks::<7>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let seed = header[1].parse().unwrap();
-        fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\nNMPTrans -1\n").unwrap();
+        fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\nNe 1\nNMPTrans -1\n")).unwrap();
         fs::write(dir.join("ap.def"), record[1].replace('|', "\n")).unwrap();
         let mut namelist = "ModPara modpara.def\nOrbitalAntiParallel ap.def\n".to_owned();
         if !record[2].is_empty() {

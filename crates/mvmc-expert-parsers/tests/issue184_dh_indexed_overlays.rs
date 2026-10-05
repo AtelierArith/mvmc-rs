@@ -29,7 +29,7 @@ fn load_original_finite_overlays() -> ExpertModeData {
     ));
     fs::create_dir(&path).unwrap();
     let bundle = Bundle(path);
-    fs::write(bundle.0.join("modpara.def"), "Nsite 2\nNElec 1\n").unwrap();
+    fs::write(bundle.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\nNe 1\n")).unwrap();
     fs::write(
         bundle.0.join("namelist.def"),
         "ModPara modpara.def\nDH2 dh2.def\nDH4 dh4.def\nInDH2 in2.def\nInDH4 in4.def\n",

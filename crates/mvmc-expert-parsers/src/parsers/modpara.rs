@@ -1,155 +1,196 @@
 //! `modpara.def` parser.
 //!
-//! Port of `MVMCExpertModeParsers.jl/src/parsers/modpara_parser.jl`.
+//! Pure-Rust port of C mVMC 1.3.0 `SetDefaultValuesModPara` and
+//! `GetInfoFromModPara` (`readdef.c`), including the NBlockSize_RBMRatio
+//! adjustment that `ReadDefFileNInt` applies after the read. Julia's
+//! `modpara_parser.jl` is the architectural reference only; its aliases,
+//! `name = value` syntax, `useDiagScale`/`RescaleSmat` and silent handling of
+//! unknown keywords are not C behavior and are not accepted.
+//!
+//! C contract reproduced here:
+//! * Every key starts at the C default (`ModParaParameters::default`), so a
+//!   key absent from the file keeps that default.
+//! * Lines are read with `fgets` into 256-byte buffers. Lines 1, 3, 4, 5 and 8
+//!   are skipped, line 2 is scanned and ignored, line 6 supplies
+//!   `CDataFileHead` and line 7 `CParaFileHead` (second word, positional).
+//! * Later lines are skipped when they begin with `\n` or `-`; otherwise
+//!   `sscanf("%s %lf")` is applied. As in C, a failed `%s` or `%lf` leaves the
+//!   previous keyword/value in place (so a stale value can be re-applied).
+//! * Keywords match ASCII case-insensitively and in full (`CheckWords`); an
+//!   unknown keyword is an error naming it. `2Sz -1` is rejected.
+//! * Values are `%lf` doubles converted with a C `(int)` cast, which truncates
+//!   toward zero (`1.0e2` is 100, `2.9` is 2). Out-of-range or NaN casts are
+//!   undefined in C; Rust uses the saturating `as i32`.
+//! * C replaces `RndSeed < 0` by `time(NULL)` here. Rust keeps the raw negative
+//!   value and resolves it once, in `mvmc_core::resolve_rnd_seed`.
+//! * The `output/` prefix C puts on both file heads is the Rust output
+//!   directory (default `<namelist dir>/output`, overridden by `--out-dir`), so
+//!   the heads are stored without it; see
+//!   `ModParaParameters::c_data_file_path_head`.
+//! * `NFileFlushInterval` is not a C modpara keyword and is rejected (flush
+//!   semantics are tracked separately in #346).
 
 use std::io;
 use std::path::Path;
 
 use crate::types::ModParaParameters;
-use crate::utils::file::{
-    clean_line, read_def_file, safe_parse_float, safe_parse_int, split_def_line,
-};
+use crate::utils::c_numeric::Scan;
+use crate::utils::file::read_def_file;
+
+/// `D_FileNameMax`: size of the C `fgets` line buffers.
+const C_LINE_BUFFER: usize = 256;
 
 /// Parse a `modpara.def` file from disk.
 pub fn parse_modpara_def<P: AsRef<Path>>(path: P) -> io::Result<ModParaParameters> {
     let content = read_def_file(path)?;
-    Ok(parse_modpara_content(&content))
+    parse_modpara_content(&content)
 }
 
-/// Parse a `modpara.def` payload from memory.
-pub fn parse_modpara_content(content: &str) -> ModParaParameters {
-    let mut params = ModParaParameters::default();
+fn invalid(message: String) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}
 
-    for line in content.lines() {
-        let tokens = split_def_line(line);
-        if tokens.len() < 2 {
+/// C `fgets(buf, 256, fp)`: at most 255 bytes, including a terminating newline.
+fn fgets_lines(content: &[u8]) -> Vec<&[u8]> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    while start < content.len() {
+        let limit = (start + C_LINE_BUFFER - 1).min(content.len());
+        let end = content[start..limit]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(limit, |i| start + i + 1);
+        lines.push(&content[start..end]);
+        start = end;
+    }
+    lines
+}
+
+/// C `CheckWords`: full-string equality after ASCII lowercasing.
+fn check_words(word: &[u8], keyword: &str) -> bool {
+    word.eq_ignore_ascii_case(keyword.as_bytes())
+}
+
+/// Parse a `modpara.def` payload from memory following C `GetInfoFromModPara`.
+pub fn parse_modpara_content(content: &str) -> io::Result<ModParaParameters> {
+    let mut p = ModParaParameters::default();
+    let incomplete = || invalid("ModPara file is incomplete (fewer than 8 header lines)".into());
+    let mut it = fgets_lines(content.as_bytes()).into_iter();
+    // Lines 1-5: 1, 3, 4, 5 skipped; 2 scanned for "%s %d" and ignored.
+    for _ in 0..5 {
+        it.next().ok_or_else(incomplete)?;
+    }
+    // Line 6: "%s %s" -> CDataFileHead; line 7: CParaFileHead.
+    let second_word = |line: &[u8]| -> String {
+        let mut scan = Scan::new(line);
+        scan.token();
+        scan.token()
+            .map(|w| String::from_utf8_lossy(w).into_owned())
+            .unwrap_or_default()
+    };
+    p.c_data_file_head = second_word(it.next().ok_or_else(incomplete)?);
+    p.c_para_file_head = second_word(it.next().ok_or_else(incomplete)?);
+    // Line 8 is skipped but remains in C's `ctmp` keyword buffer.
+    let mut keyword: Vec<u8> = it.next().ok_or_else(incomplete)?.to_vec();
+    // C's `dtmp` is uninitialized until the first successful `%lf`.
+    let mut value = 0.0_f64;
+
+    for line in it {
+        if line.first() == Some(&b'\n') || line.first() == Some(&b'-') {
             continue;
         }
-        // Support "param = value" too (upstream accepts both).
-        let (name, value) = if tokens.len() >= 3 && tokens[1] == "=" {
-            (tokens[0], tokens[2])
+        let mut scan = Scan::new(line);
+        if let Some(word) = scan.token() {
+            keyword = word.to_vec();
+            if let Some(number) = scan.float() {
+                value = number;
+            }
+        }
+        // `(int) dtmp`: truncation toward zero (saturating, see module docs).
+        let int = value as i32;
+        let int64 = i64::from(int);
+        let k = keyword.as_slice();
+        if check_words(k, "NVMCCalMode") {
+            p.vmc_calc_mode = int64;
+        } else if check_words(k, "NLanczosMode") {
+            p.lanczos_mode = int64;
+        } else if check_words(k, "NDataIdxStart") {
+            p.n_data_idx_start = int64;
+        } else if check_words(k, "NDataQtySmp") {
+            p.n_data_qty_smp = int64;
+        } else if check_words(k, "Nsite") {
+            p.nsite = int64;
+        } else if check_words(k, "Ne") || check_words(k, "Nelectron") {
+            p.nelec = int64;
+        } else if check_words(k, "Ncond") {
+            p.ncond = int64;
+        } else if check_words(k, "2Sz") {
+            p.two_sz = int64;
+            if int == -1 {
+                return Err(invalid(
+                    "2Sz must be even number (2Sz = -1 is rejected)".into(),
+                ));
+            }
+        } else if check_words(k, "NSPGaussLeg") {
+            p.nsp_gauss_leg = int64;
+        } else if check_words(k, "NSPStot") {
+            p.nsp_stot = int64;
+        } else if check_words(k, "NMPTrans") {
+            p.nmp_trans = int64;
+        } else if check_words(k, "NSROptItrStep") {
+            p.nsr_opt_itr_step = int64;
+        } else if check_words(k, "NSROptItrSmp") {
+            p.nsr_opt_itr_smp = int64;
+        } else if check_words(k, "DSROptRedCut") {
+            p.dsr_opt_red_cut = value;
+        } else if check_words(k, "DSROptStaDel") {
+            p.dsr_opt_sta_del = value;
+        } else if check_words(k, "DSROptStepDt") {
+            p.dsr_opt_step_dt = value;
+        } else if check_words(k, "NSROptCGMaxIter") {
+            p.nsr_opt_cg_max_iter = int64;
+        } else if check_words(k, "DSROptCGTol") {
+            p.dsr_opt_cg_tol = value;
+        } else if check_words(k, "NVMCWarmUp") {
+            p.nvmc_warmup = int64;
+        } else if check_words(k, "NVMCInterval") {
+            p.nvmc_interval = int64;
+        } else if check_words(k, "NVMCSample") {
+            p.nvmc_sample = int64;
+        } else if check_words(k, "NExUpdatePath") {
+            p.nex_update_path = int64;
+        } else if check_words(k, "RndSeed") {
+            p.rnd_seed = int64;
+        } else if check_words(k, "NSplitSize") {
+            p.nsplit_size = int64;
+        } else if check_words(k, "NStore") {
+            p.nstore_o = int64;
+        } else if check_words(k, "NSRCG") {
+            p.nsrcg = int64;
+        } else if check_words(k, "Nneuron") {
+            p.nneuron = int64;
+        } else if check_words(k, "NneuronCharge") {
+            p.nneuron_charge = int64;
+        } else if check_words(k, "NneuronSpin") {
+            p.nneuron_spin = int64;
+        } else if check_words(k, "NneuronGeneral") {
+            p.nneuron_general = int64;
+        } else if check_words(k, "NBlockSize_RBMRatio") {
+            p.nblock_size_rbm_ratio = int64;
         } else {
-            (tokens[0], tokens[1])
-        };
-        // Skip lines that look like section banners ("VMC_Cal_Parameters"
-        // has no value, but our 2-token guard already filtered those).
-        // Lines like `Nsite          6   ` end up with 2 tokens, which is
-        // what we want.
-        let _ = clean_line; // keep import in scope; clean_line is invoked via split_def_line.
-        apply_param(&mut params, name, value);
+            return Err(invalid(format!(
+                "keyword \" {} \" is incorrect in modpara.def",
+                String::from_utf8_lossy(k).trim_end_matches('\n')
+            )));
+        }
     }
 
-    params
-}
-
-fn apply_param(p: &mut ModParaParameters, name: &str, value: &str) {
-    match name {
-        // Basic system parameters
-        "NSite" | "Nsite" => p.nsite = safe_parse_int(value, 0),
-        "NElec" | "Nelec" => p.nelec = safe_parse_int(value, 0),
-        "NLocSpin" | "NlocalSpin" => p.nlocspin = safe_parse_int(value, 0),
-        "NCond" | "Ncond" => p.ncond = safe_parse_int(value, -1),
-        // Calculation modes
-        "VMCCalMode" | "NVMCCalMode" => p.vmc_calc_mode = safe_parse_int(value, 0),
-        "LanczosMode" | "NLanczosMode" => p.lanczos_mode = safe_parse_int(value, 0),
-        // VMC parameters
-        "NSROptItrStep" => p.nsr_opt_itr_step = safe_parse_int(value, 1000),
-        "NSROptItrSmp" => p.nsr_opt_itr_smp = safe_parse_int(value, 1000),
-        "NSROptFixSmp" => p.nsr_opt_fix_smp = safe_parse_int(value, 0),
-        "NVMCWarmUp" => p.nvmc_warmup = safe_parse_int(value, 1000),
-        "NVMCInterval" => p.nvmc_interval = safe_parse_int(value, 1),
-        "NVMCSample" => p.nvmc_sample = safe_parse_int(value, 10000),
-        // SR parameters
-        "DSROptRedCut" => p.dsr_opt_red_cut = safe_parse_float(value, 1e-6),
-        "DSROptStaDel" => p.dsr_opt_sta_del = safe_parse_float(value, 0.0),
-        "DSROptStepDt" => p.dsr_opt_step_dt = safe_parse_float(value, 0.01),
-        "DSROptCGTol" => p.dsr_opt_cg_tol = safe_parse_float(value, 1e-10),
-        "NSROptCGMaxIter" => p.nsr_opt_cg_max_iter = safe_parse_int(value, 0),
-        // SR solver selection
-        "NSRCG" => p.nsrcg = safe_parse_int(value, 0),
-        "useDiagScale" => p.use_diag_scale = safe_parse_int(value, 0),
-        "RescaleSmat" => p.rescale_smat = safe_parse_int(value, 0),
-        "NStore" => p.nstore_o = safe_parse_int(value, 1),
-        // RNG
-        "RndSeed" => p.rnd_seed = safe_parse_int(value, 11272),
-        "NSplitSize" => p.nsplit_size = safe_parse_int(value, 1),
-        // Quantum projection
-        "NSPGaussLeg" => p.nsp_gauss_leg = safe_parse_int(value, 1),
-        "NSPStot" => p.nsp_stot = safe_parse_int(value, 0),
-        "NMPTrans" => p.nmp_trans = safe_parse_int(value, 0),
-        "2Sz" => p.two_sz = safe_parse_int(value, -1),
-        // Data output
-        "NDataIdxStart" => p.n_data_idx_start = safe_parse_int(value, 0),
-        "NDataQtySmp" => p.n_data_qty_smp = safe_parse_int(value, 1),
-        "CDataFileHead" => p.c_data_file_head = value.to_string(),
-        "CParaFileHead" => p.c_para_file_head = value.to_string(),
-        // File control / flags
-        "NFileFlushInterval" => p.n_file_flush_interval = safe_parse_int(value, 1),
-        "ComplexType" => p.complex_flag = safe_parse_int(value, 0),
-        // RBM
-        "Nneuron" => p.nneuron = safe_parse_int(value, 0),
-        "NneuronGeneral" => p.nneuron_general = safe_parse_int(value, 0),
-        "NneuronCharge" => p.nneuron_charge = safe_parse_int(value, 0),
-        "NneuronSpin" => p.nneuron_spin = safe_parse_int(value, 0),
-        "NBlockSize_RBMRatio" => p.nblock_size_rbm_ratio = safe_parse_int(value, 200),
-        // Lanczos
-        "NOneBodyG" => p.n_one_body_g = safe_parse_int(value, 0),
-        "NTwoBodyG" => p.n_two_body_g = safe_parse_int(value, 0),
-        "NTwoBodyGEx" => p.n_two_body_g_ex = safe_parse_int(value, 0),
-        // Exchange update
-        "NExUpdatePath" => p.nex_update_path = safe_parse_int(value, 1),
-        // Section / version banners we silently ignore. The Julia parser
-        // emits a warning for unknown keys; we drop it to keep tests
-        // chatter-free.
-        _ => {}
+    // readdef.c:375-380: the RBM block size must be a multiple of 8. C `int`
+    // arithmetic: only positive remainders are adjusted; the quotient rounds
+    // down but never below one block.
+    let block = p.nblock_size_rbm_ratio as i32;
+    if block % 8 > 0 {
+        p.nblock_size_rbm_ratio = i64::from((block / 8).max(1) * 8);
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_heisenberg_chain_real_modpara() {
-        let content = "\
---------------------\n\
-Model_Parameters   0\n\
---------------------\n\
-VMC_Cal_Parameters\n\
---------------------\n\
-CDataFileHead  zvo\n\
-CParaFileHead  zqp\n\
---------------------\n\
-NVMCCalMode    0\n\
-NLanczosMode   0\n\
---------------------\n\
-NDataIdxStart  1\n\
-NDataQtySmp    1\n\
---------------------\n\
-Nsite          6\n\
-Ncond          0\n\
-2Sz            0\n\
-NSPGaussLeg    8\n\
-NSPStot        0\n\
-NMPTrans       -1\n\
-NSROptItrStep  1000\n\
-NSROptItrSmp   100\n\
-DSROptRedCut   0.0000000001\n\
-DSROptStaDel   0.0000100000\n\
-DSROptStepDt   0.0100000000\n";
-        let p = parse_modpara_content(content);
-        assert_eq!(p.nsite, 6);
-        assert_eq!(p.ncond, 0);
-        assert_eq!(p.two_sz, 0);
-        assert_eq!(p.nsp_gauss_leg, 8);
-        assert_eq!(p.nmp_trans, -1);
-        assert_eq!(p.nsr_opt_itr_step, 1000);
-        assert_eq!(p.nsr_opt_itr_smp, 100);
-        assert!((p.dsr_opt_red_cut - 1e-10).abs() < 1e-20);
-        assert!((p.dsr_opt_sta_del - 1e-5).abs() < 1e-15);
-        assert!((p.dsr_opt_step_dt - 0.01).abs() < 1e-15);
-        assert_eq!(p.c_data_file_head, "zvo");
-        assert_eq!(p.c_para_file_head, "zqp");
-        assert_eq!(p.vmc_calc_mode, 0);
-    }
+    Ok(p)
 }

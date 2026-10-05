@@ -122,7 +122,7 @@ fn zero_counts_and_incomplete_extra_or_unsafe_consumed_values_fail_atomically() 
 }
 
 fn combined(files: &Files, header2: i32, header4: i32, aliases: bool, reverse: bool) {
-    files.put("mod.def", "Nsite 2\nNcond -1\nNe 1\n");
+    files.put("mod.def", "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNcond -1\nNe 1\n");
     files.put("g.def", &definition(1, 0, "0 0 1 0 0 1"));
     files.put("j.def", &definition(1, 0, "0 1 0 1 0 0 0 -2"));
     files.put("dh2.def", &definition(1, header2, dh2_body()));
@@ -374,7 +374,7 @@ fn orbital_ap_parallel_signed_sum_is_bound_before_local_flag_normalization() {
                 [(1, -1, 0, 0), (-2, 1, -1, -1), (-1, 2, 1, 1), (2, 3, 5, 1)]
             {
                 let files = Files::new();
-                files.put("mod.def", "Nsite 2\nNcond 2\n");
+                files.put("mod.def", "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNcond 2\n");
                 files.put(
                     "ap.def",
                     &definition(1, ap, "0 0 0 1\n0 1 0 1\n1 0 0 1\n1 1 0 1\n0 -2"),
@@ -451,7 +451,7 @@ fn public_loader_rejects_missing_zero_and_truncated_dh_for_both_aliases() {
         ("DoublonHolon4Site", "dh4.def"),
     ] {
         let files = Files::new();
-        files.put("mod.def", "Nsite 2\nNcond -1\nNe 1\n");
+        files.put("mod.def", "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNcond -1\nNe 1\n");
         files.put(
             "namelist.def",
             &format!("ModPara mod.def\n{kind} {filename}\n"),

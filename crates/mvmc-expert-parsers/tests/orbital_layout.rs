@@ -16,7 +16,7 @@ fn definition(header: &str, width: usize, rows: &str) -> String {
 fn fixture(name: &str, namelist: &str, ap: &str, parallel: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("mvmc-orbital-{name}-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\n").unwrap();
+    fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\nNe 1\n")).unwrap();
     fs::write(
         dir.join("namelist.def"),
         format!("ModPara modpara.def\n{namelist}"),

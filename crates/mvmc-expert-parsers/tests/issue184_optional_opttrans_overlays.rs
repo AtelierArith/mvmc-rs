@@ -43,7 +43,7 @@ fn record(header: &str, count: usize, rows: &str) -> String {
 #[test]
 fn original_complex_gutzwiller_overlay_preserves_both_components() {
     let bundle = Bundle::new(
-        "Nsite 2\nNElec 1\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\n",
         "Gutzwiller g.def\nInGutzwiller in.def\n",
         &[
             ("g.def", record("NGutzwillerIdx", 1, "0 0\n1 0\n0 1\n")),
@@ -60,7 +60,7 @@ fn original_complex_gutzwiller_overlay_preserves_both_components() {
 fn julia_optional_missing_overlay_policy_preserves_existing_value() {
     // M0332 only; not a C acceptance/error contract or C parity claim.
     let bundle = Bundle::new(
-        "Nsite 2\nNElec 1\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\n",
         "Gutzwiller g.def\nInGutzwiller absent.def\n",
         &[("g.def", record("NGutzwillerIdx", 1, "0 0\n1 0\n0 1\n"))],
     );
@@ -79,7 +79,7 @@ fn original_opttrans_weights_swap_identity_and_periodic_signs_match_enabled_c_co
     // unlike existing valid.def fixture, first weight is .25, not signed zero.
     let definition = "=============================================\nNQPOptTrans          2\n=============================================\n=============================================\n=============================================\n0 0.25\n1 0.75\n0 0 1 -1\n0 1 0 -1\n1 0 0 1\n1 1 1 -1\n";
     let bundle = Bundle::new(
-        "Nsite 2\nNElec 1\nNMPTrans 1\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans 1\n",
         "OptTrans opt.def\n",
         &[("opt.def", definition.to_string())],
     );
@@ -101,7 +101,7 @@ fn original_parallel_and_opttrans_overlays_keep_ap_offset_and_declared_unused_sl
     // Original Julia synthetic same-spin diagonal terms are not valid C input.
     // Supply complete AP rows and one valid P upper pair for Nsite2 instead.
     // Two declared P indices reserve four slots even if only index0 is mapped.
-    let bundle = Bundle::new("Nsite 2\nNElec 1\nNMPTrans 1\n", "OrbitalAntiParallel ap.def\nOrbitalParallel p.def\nOptTrans opt.def\nInOrbitalParallel inp.def\nInOptTrans inopt.def\n", &[
+    let bundle = Bundle::new("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans 1\n", "OrbitalAntiParallel ap.def\nOrbitalParallel p.def\nOptTrans opt.def\nInOrbitalParallel inp.def\nInOptTrans inopt.def\n", &[
         ("ap.def",record("NOrbitalIdx",1,"0 0 0 1\n0 1 0 1\n1 0 0 1\n1 1 0 1\n0 1\n")),
         ("p.def",record("NOrbitalIdx",2,"0 1 0 1\n0 1\n1 1\n")),
         ("opt.def",record("NQPOptTrans",2,"0 1\n1 2\n0 0 0 1\n0 1 1 1\n1 0 1 1\n1 1 0 1\n")),

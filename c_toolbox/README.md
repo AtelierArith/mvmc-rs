@@ -247,3 +247,25 @@ clang -O0 -ffp-contract=off -Wno-unknown-pragmas c_toolbox/weighted_oo.c -o /tmp
 
 The checked-in output is `tests/fixtures/sr_direct/c_weighted_oo.txt`;
 Rust tests read that fixture without compiling or invoking C.
+
+## ModPara reader (#344)
+
+`modpara_reader_upstream.inc` embeds, verbatim and balanced-brace delimited,
+`CheckWords`, `ReadDefFileError`, `SetDefaultValuesModPara` and
+`GetInfoFromModPara` from `extern/mVMC-1.3.0/src/mVMC/readdef.c` (SHA-256
+`6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`), plus the
+NBlockSize_RBMRatio block of `ReadDefFileNInt` (lines 375-380) wrapped in
+`ApplyNBlockSizeRBMRatioAdjustment`. `modpara_reader.c` includes the unmodified
+`include/readdef.h`/`global.h`, replaces `time(NULL)` by a sentinel and prints
+every value the reader sets. This is a standalone reader-kernel check, not a
+full C executable, MPI or sampling validation. Header hashes, compiler and
+platform are recorded in the fixture header. Regenerate or verify (needs `cc`
+and the `extern/mVMC-1.3.0` checkout; compiled with `cc -O0`):
+
+```sh
+uv run --no-project python scripts/check_modpara_reader_c_parity.py --write
+uv run --no-project python scripts/check_modpara_reader_c_parity.py
+```
+
+Results (71 accepted/rejected variants) and the input files are stored in
+`tests/fixtures/modpara_reader/`; Rust tests read them without invoking C.

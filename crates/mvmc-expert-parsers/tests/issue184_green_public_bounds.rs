@@ -15,7 +15,7 @@ impl InputDirectory {
         fs::create_dir(&path).unwrap();
         fs::write(
             path.join("modpara.def"),
-            "# header\nModel_Parameters 0\n# h3\n# h4\n# h5\nNsite 2\nNcond 2\n",
+            "# header\nModel_Parameters 0\n# h3\n# h4\n# h5\nCDataFileHead zvo\nCParaFileHead zqp\n# h8\nNsite 2\nNcond 2\n",
         )
         .unwrap();
         Self(path)

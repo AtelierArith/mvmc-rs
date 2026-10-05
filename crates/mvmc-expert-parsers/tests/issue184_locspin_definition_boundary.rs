@@ -123,7 +123,7 @@ fn locspin_bounds_overflow_missing_header_reject_before_partial_publication() {
 #[test]
 fn public_locspin_loader_rejects_advertised_missing_or_incomplete_definition() {
     let input = Input::new();
-    fs::write(input.0.join("modpara.def"), "NSite 2\nNElec 1\n").unwrap();
+    fs::write(input.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NSite 2\nNe 1\n")).unwrap();
     let path = input.0.join("namelist.def");
     fs::write(&path, "ModPara modpara.def\nLocSpin locspin.def\n").unwrap();
     assert!(matches!(

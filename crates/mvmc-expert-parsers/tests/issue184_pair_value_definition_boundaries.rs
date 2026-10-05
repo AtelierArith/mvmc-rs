@@ -66,7 +66,7 @@ impl Input {
         );
     }
     fn namelist(&self, family: &str) -> PathBuf {
-        fs::write(self.0.join("modpara.def"), "NSite 4\nNElec 2\n").unwrap();
+        fs::write(self.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NSite 4\nNe 2\n")).unwrap();
         let path = self.0.join("namelist.def");
         fs::write(&path, format!("ModPara modpara.def\n{family} pair.def\n")).unwrap();
         path

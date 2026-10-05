@@ -1,0 +1,12 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+nSiTe 4
+NCOND 2
+nvmcsample 33
+DsrOptRedCut 1e-3

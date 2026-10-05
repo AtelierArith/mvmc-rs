@@ -36,7 +36,7 @@ impl Input {
         let input = Self(path);
         fs::write(
             input.0.join("modpara.def"),
-            format!("Nsite 4\nNElec 1\nNMPTrans {nmp}\nNSPGaussLeg 1\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 4\nNe 1\nNMPTrans {nmp}\nNSPGaussLeg 1\n"),
         )
         .unwrap();
         fs::write(

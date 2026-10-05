@@ -127,7 +127,7 @@ fn native_five_field_rows_retain_initialized_or_previous_imaginary_value() {
 #[test]
 fn public_loader_routes_transfer_definition_errors_instead_of_silent_success() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.join("modpara.def"), "NSite 2\nNElec 1\n").unwrap();
+    fs::write(fixture.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NSite 2\nNe 1\n")).unwrap();
     let namelist = fixture.0.join("namelist.def");
     fs::write(&namelist, "ModPara modpara.def\nTrans trans.def\n").unwrap();
     fixture.write(1, "0 0 1 0 0x1.4p0 -0x1p-1\n");
@@ -143,7 +143,7 @@ fn public_loader_routes_transfer_definition_errors_instead_of_silent_success() {
 #[test]
 fn public_loader_missing_transfer_is_required_not_an_incomplete_success() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.join("modpara.def"), "NSite 2\nNElec 1\n").unwrap();
+    fs::write(fixture.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NSite 2\nNe 1\n")).unwrap();
     let namelist = fixture.0.join("namelist.def");
     fs::write(&namelist, "ModPara modpara.def\nTrans absent.def\n").unwrap();
     match parse_expert_mode_files(namelist) {

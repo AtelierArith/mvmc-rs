@@ -1,6 +1,14 @@
+--------------------
+Model_Parameters 0
+--------------------
+VMC_Cal_Parameters
+--------------------
+CDataFileHead zvo
+CParaFileHead zqp
+--------------------
 Nsite 3
 NCond -1
-NElec 1
+Ne 1
 NMPTrans 1
 NVMCSample 1
 NVMCWarmUp 0

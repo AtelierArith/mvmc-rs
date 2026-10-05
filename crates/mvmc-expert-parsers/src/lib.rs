@@ -216,9 +216,11 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             &mut orbital_flags,
             &mut rbm_flags,
         ) {
+            // C aborts when GetInfoFromModPara fails (readdef.c:352-357).
             if matches!(
                 file_type.as_str(),
-                "DH2"
+                "ModPara"
+                    | "DH2"
                     | "CoulombIntra"
                     | "CoulombInter"
                     | "Hund"
@@ -309,7 +311,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
     if data.modpara.ncond != -1 {
         if data.modpara.ncond % 2 != 0 {
             tracing::warn!("NCond must be even, got {}", data.modpara.ncond);
-        } else if data.modpara.nelec == 0 {
+        } else {
             data.modpara.nelec = (data.modpara.nlocspin + data.modpara.ncond) / 2;
         }
     }

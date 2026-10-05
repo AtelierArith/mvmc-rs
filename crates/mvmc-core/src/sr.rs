@@ -1354,6 +1354,9 @@ mod tests {
             is_complex: false,
         });
         data.optimization_flags = vec![0, 0, 1, 0];
+        // Explicit step and shift: the C defaults are 0.02/0.02, not 0.01/0.
+        data.modpara.dsr_opt_step_dt = 0.01;
+        data.modpara.dsr_opt_sta_del = 0.0;
         let before_g = data.gutzwiller_terms.clone();
         let before_j = data.jastrow_terms[0].value;
         let mut state = VmcOptimizationState::zeros(2, 1, 2, 2, 1, 1, false, false);

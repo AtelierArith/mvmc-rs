@@ -1,0 +1,33 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+nvmccalmode    0
+nlanczosmode   0
+---
+ndataidxstart  1
+ndataqtysmp    1
+---
+nsite          6
+ncond          0
+2sz            0
+nspgaussleg    8
+nspstot        0
+nmptrans       -1
+nsroptitrstep  1000
+nsroptitrsmp   100
+dsroptredcut   0.0000000001
+dsroptstadel   0.0000100000
+dsroptstepdt   0.0100000000
+nvmcwarmup     10
+nvmcinterval   2
+nvmcsample     200
+nexupdatepath  0
+rndseed        11272
+nsplitsize     1
+nstore         1
+nsrcg          0

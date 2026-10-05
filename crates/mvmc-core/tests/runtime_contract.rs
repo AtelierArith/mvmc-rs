@@ -16,8 +16,6 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NLanczosMode -1", "NLanczosMode must be"),
         ("NLanczosMode 1", "parameter optimization"),
         ("NSRCG 2\nNStore 0", "undefined in mVMC C"),
-        ("useDiagScale 1", "useDiagScale"),
-        ("RescaleSmat 1", "RescaleSmat"),
         ("NVMCCalMode 1", "PhysCal"),
         ("NSplitSize 2", "issue #36"),
         ("NVMCSample -1", "NVMCSample must be positive"),
@@ -25,7 +23,9 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         let mut data = ExpertModeData::new();
         // A valid unrelated projection setting prevents default zero from
         // masking the deliberately invalid option under test.
-        data.modpara = parse_modpara_content(&format!("NMPTrans 1\n{text}"));
+        // C modpara files carry an eight-line positional header.
+        let header = "-\nModel_Parameters 0\n-\nVMC_Cal_Parameters\n-\nCDataFileHead zvo\nCParaFileHead zqp\n-\n";
+        data.modpara = parse_modpara_content(&format!("{header}NMPTrans 1\n{text}")).unwrap();
         let before = data.clone();
         let mut rng = Sfmt19937Rng::new(1);
         let mut probe = Sfmt19937Rng::new(1);
@@ -402,7 +402,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("modpara.def"),
-        "Nsite 2\nNElec 1\nNMPTrans 1\nNVMCSample 1\nNVMCInterval 1\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans 1\nNVMCSample 1\nNVMCInterval 1\n",
     )
     .unwrap();
     let mut namelist = "ModPara modpara.def\n".to_owned();
