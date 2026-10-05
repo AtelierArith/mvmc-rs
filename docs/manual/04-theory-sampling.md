@@ -68,7 +68,7 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 > - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:251`
 > - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:273`
 > - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:198`
-> - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:157`
+> - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:159`
 > - Parity: the draw order (local spins first, then spin 0 electrons, then spin 1 electrons), the retry limit of 100 and the collective maximum of the Pfaffian status across ranks (`MPI_Allreduce(..., MPI_MAX)`) are reproduced; the typed status/coordination tests are in `normal_initial.rs`.
 
 ## 4.3 Proposals
@@ -127,7 +127,7 @@ non-finite or zero.
 > - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:555`
 > - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:480`
 > - Rust: `update_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:416`
-> - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:439`
+> - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:441`
 > - Parity: draw counts and order are exact: `gen_rand32() % n` (`Sfmt19937Rng::gen_rand32`, `crates/sfmt19937/src/lib.rs:138`) and `genrand_real2` (`crates/sfmt19937/src/lib.rs:182`) are consumed in the same sequence, including draws on rejected moves and in retry loops. The test `rejected_candidate_consumes_no_rng_and_mutates_nothing` (`one_move.rs:640`) pins the "no draw on `rejectFlag`" rule.
 
 ## 4.4 Acceptance test
@@ -209,14 +209,14 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
 > - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
-> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:68`
-> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:385`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:853`
-> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:182`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1117`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:536`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:965`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:592`
+> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:69`
+> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:393`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:868`
+> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:186`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1132`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:980`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:605`
 > - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:227`, `pfupdate_two_real.c:227`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
 
 ## 4.6 Parallelism inside the sampler
@@ -234,5 +234,5 @@ made identically on every rank of the group. See [8.4](08-running.md#84-mpi-and-
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1864`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1976`
 > - Parity: `partition_range` reproduces `SplitLoop` including the "remainder to the last ranks" rule and the small-work branch. `resolve_rnd_seed` adds the group index to the base seed with wrapping `i64` arithmetic and then requires the result to fit in `u32` (`seeded_rng`, `run.rs:1799`); a negative `RndSeed` uses one clock value read on the output root and broadcast (Julia lifecycle).
