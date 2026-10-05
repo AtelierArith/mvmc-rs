@@ -123,7 +123,7 @@ $O(N_pN_{\rm smp})$ の追加メモリを要しますが、はるかに高速で
 > - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:318`
 > - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:437`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
-> - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:53`
+> - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - 整合性: C は保存するサンプルを `sqrt(w)` でスケールし(`SROptO_Store[...] = sqrtw*SROptO[...]`、`vmccal.c:241,248`)、グラム積はステップごとに一度だけ形成します。実数の保存行列については、Rust は Julia の SYRK ディスパッチと上三角コピーに従います。複素の保存積は逐次的なサンプル和を保ちます(`sr_store_gram_julia`、`observables.rs:497`。テスト `stored_direct_sr_gram_matches_sampled_julia_values`、`real_gram_matches_julia_generic_and_syrk_dispatch_boundary`)。これらの浮動小数点の総和順序は BLAS プロバイダーによって異なるため、許容誤差付きで比較されます。`vmcmain.c` が `WeightAverageSROpt` の一方の分岐を選ぶのと同様に、MPI で縮約されるのはアクティブな分岐(実または複素)だけです。
 

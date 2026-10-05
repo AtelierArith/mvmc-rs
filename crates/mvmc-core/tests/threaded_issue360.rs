@@ -144,6 +144,55 @@ fn all_hamiltonian_terms_are_worker_invariant() {
     );
 }
 
+#[test]
+fn interall_energy_is_worker_invariant_in_optimization() {
+    assert_worker_invariant(
+        "opt-interall:hubbard_all_terms_lanczos1:0",
+        &[
+            "parallel_qp_items",
+            "parallel_entry_items",
+            "parallel_term_items",
+            "parallel_region_items",
+        ],
+    );
+}
+
+#[test]
+fn interall_energy_is_worker_invariant_with_cg() {
+    assert_worker_invariant(
+        "opt-interall:hubbard_chain_dh_real:1",
+        &[
+            "parallel_qp_items",
+            "parallel_entry_items",
+            "parallel_region_items",
+        ],
+    );
+}
+
+#[test]
+fn interall_energy_is_worker_invariant_in_physcal() {
+    assert_worker_invariant(
+        "physcal-interall:hubbard_chain_dh_real",
+        &["parallel_qp_items", "parallel_region_items"],
+    );
+}
+
+#[test]
+fn lanczos_one_hamiltonian_terms_are_worker_invariant() {
+    assert_worker_invariant(
+        "physcal:hubbard_all_terms_lanczos1",
+        &["parallel_qp_items", "parallel_region_items"],
+    );
+}
+
+#[test]
+fn lanczos_two_green_terms_are_worker_invariant() {
+    assert_worker_invariant(
+        "physcal:hubbard_all_terms_lanczos2",
+        &["parallel_qp_items", "parallel_region_items"],
+    );
+}
+
 #[ignore = "child process of the worker-invariance tests"]
 #[test]
 fn issue360_child() {
@@ -152,10 +201,16 @@ fn issue360_child() {
     let observer = start_observation();
     if job == "qp-kernels" {
         qp_kernels();
-    } else {
-        let rest = job.strip_prefix("opt:").expect("known job");
+    } else if let Some(rest) = job.strip_prefix("opt:") {
         let (fixture, cg) = rest.split_once(':').unwrap();
-        optimization(fixture, cg == "1");
+        optimization(fixture, cg == "1", false);
+    } else if let Some(rest) = job.strip_prefix("opt-interall:") {
+        let (fixture, cg) = rest.split_once(':').unwrap();
+        optimization(fixture, cg == "1", true);
+    } else if let Some(fixture) = job.strip_prefix("physcal-interall:") {
+        physcal(fixture, true);
+    } else {
+        physcal(job.strip_prefix("physcal:").expect("known job"), false);
     }
     let snapshot = observer.finish();
     record("obs.parallel_calls", snapshot.parallel_calls);
@@ -178,14 +233,15 @@ fn fnv(bytes: &[u8]) -> u64 {
     })
 }
 
-fn optimization(fixture: &str, cg: bool) {
+fn optimization(fixture: &str, cg: bool, interall: bool) {
     let source = repo_root()
         .join("tests/fixtures/physcal_181/")
         .join(fixture);
     let root = std::env::temp_dir().join(format!(
-        "mvmc-issue360-{}-{fixture}-{}",
+        "mvmc-issue360-{}-{fixture}-{}-{}",
         std::process::id(),
-        u8::from(cg)
+        u8::from(cg),
+        u8::from(interall)
     ));
     let _ = std::fs::remove_dir_all(&root);
     let inputs = root.join("inputs");
@@ -193,6 +249,9 @@ fn optimization(fixture: &str, cg: bool) {
     for entry in std::fs::read_dir(source.join("inputs")).unwrap() {
         let entry = entry.unwrap();
         std::fs::copy(entry.path(), inputs.join(entry.file_name())).unwrap();
+    }
+    if interall {
+        add_interall(&inputs);
     }
     // Optimization mode with a few short SR steps; the sample loop stays serial.
     let modpara = std::fs::read_to_string(inputs.join("modpara.def")).unwrap();
@@ -243,20 +302,7 @@ fn optimization(fixture: &str, cg: bool) {
     let summary = mvmc_core::run_para_opt_from_namelist(inputs.join("namelist.def"), config)
         .unwrap_or_else(|e| panic!("{fixture}: {e}"));
     let _ = summary;
-    let mut names: Vec<_> = std::fs::read_dir(&output)
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    assert!(!names.is_empty());
-    for name in names {
-        // Wall-clock content (timers, per-step time stamps) is not a result.
-        if name.contains("Timer") || name.starts_with("zvo_time") {
-            continue;
-        }
-        let bytes = std::fs::read(output.join(&name)).unwrap();
-        record(&format!("file.{name}"), format!("{:016x}", fnv(&bytes)));
-    }
+    hash_outputs(&output);
 }
 
 // ---- direct QP kernels ------------------------------------------------------
@@ -429,4 +475,76 @@ fn qp_kernels() {
     );
     record("update2.fsz.real.inv", bits_real(&inv));
     record("update2.fsz.real.pf", bits_real(&pf));
+}
+
+/// Append an InterAll definition (density-density and spin-pair-exchange terms that
+/// conserve particle number and Sz) to the copied inputs.
+fn add_interall(inputs: &Path) {
+    std::fs::write(
+        inputs.join("interall.def"),
+        "======================\nNInterAll 3\n======================\n\
+         ======================\n======================\n\
+         0 0 0 0 1 1 1 1 0.30 0.0\n\
+         0 0 1 0 1 1 0 1 0.10 0.0\n\
+         2 0 3 0 3 1 2 1 -0.05 0.0\n",
+    )
+    .unwrap();
+    let mut namelist = std::fs::read_to_string(inputs.join("namelist.def")).unwrap();
+    if !namelist.ends_with('\n') {
+        namelist.push('\n');
+    }
+    namelist.push_str("InterAll interall.def\n");
+    std::fs::write(inputs.join("namelist.def"), namelist).unwrap();
+}
+
+fn hash_outputs(output: &Path) {
+    let mut names: Vec<_> = std::fs::read_dir(output)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert!(!names.is_empty());
+    for name in names {
+        // Wall-clock content (timers, per-step time stamps) is not a result.
+        if name.contains("Timer") || name.starts_with("zvo_time") {
+            continue;
+        }
+        let bytes = std::fs::read(output.join(&name)).unwrap();
+        record(&format!("file.{name}"), format!("{:016x}", fnv(&bytes)));
+    }
+}
+
+/// Fixed-parameter PhysCal on a copied fixture (Lanczos 1/2 fixtures exercise the
+/// Lanczos Hamiltonian and Green-function term regions).
+fn physcal(fixture: &str, interall: bool) {
+    let source = repo_root()
+        .join("tests/fixtures/physcal_181/")
+        .join(fixture);
+    let root = std::env::temp_dir().join(format!(
+        "mvmc-issue360-phys-{}-{fixture}-{}",
+        std::process::id(),
+        u8::from(interall)
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let inputs = root.join("inputs");
+    std::fs::create_dir_all(&inputs).unwrap();
+    for entry in std::fs::read_dir(source.join("inputs")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), inputs.join(entry.file_name())).unwrap();
+    }
+    if interall {
+        add_interall(&inputs);
+    }
+    std::fs::copy(source.join("zqp_opt.dat"), root.join("zqp_opt.dat")).unwrap();
+    let preparation = mvmc_core::prepare_phys_cal_from_namelist(
+        inputs.join("namelist.def"),
+        root.join("zqp_opt.dat"),
+        "real",
+        Some(1),
+    )
+    .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+    let output = root.join("output");
+    mvmc_core::vmc_phys_cal_to_dir(preparation, &output)
+        .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+    hash_outputs(&output);
 }
