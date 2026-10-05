@@ -743,9 +743,16 @@ fn analytic_qp_ranges(size: usize) {
     // spin-selected assembly and real-shadow publication, without pretending
     // the worker setting enables parallel FSZ computation.
     let mut fsz = SlaterMatrixData::zeros(count, 4, 2, false);
-    fsz.slater_elm
+    // C's real mode takes creal(SlaterElm); complex-valued Slater input is outside its
+    // contract, so the real FSZ kernel is checked on the real-valued table.
+    for (dst, &src) in fsz
+        .slater_elm
         .as_mut_slice()
-        .copy_from_slice(cmp.as_slice());
+        .iter_mut()
+        .zip(real.as_slice())
+    {
+        *dst = C::new(src, 0.0);
+    }
     fsz.inv_m.as_mut_slice().fill(C::new(sentinel, 0.0));
     fsz.inv_m_real.as_mut_slice().fill(sentinel);
     fsz.pf_m.fill(C::new(sentinel, 0.0));
@@ -763,29 +770,29 @@ fn analytic_qp_ranges(size: usize) {
     .unwrap();
     numerical_comparison::assert_values_close(
         fsz.inv_m.as_slice().iter().flat_map(|z| [z.re, z.im]),
-        ci.as_slice().iter().flat_map(|z| [z.re, z.im]),
+        ri.as_slice().iter().flat_map(|&v| [v, 0.0]),
         BOUND,
         BOUND,
         "analytic FSZ inverse",
     );
     numerical_comparison::assert_values_close(
         fsz.pf_m.iter().flat_map(|z| [z.re, z.im]),
-        cp.iter().flat_map(|z| [z.re, z.im]),
+        rp.iter().flat_map(|&v| [v, 0.0]),
         BOUND,
         BOUND,
         "analytic FSZ pf",
     );
-    for (qp, expected_pf) in cp.iter().enumerate().skip(1).take(size) {
+    for (qp, expected_pf) in rp.iter().enumerate().skip(1).take(size) {
         numerical_comparison::assert_close(
             fsz.pf_m_real[qp],
-            expected_pf.re,
+            *expected_pf,
             BOUND,
             BOUND,
             "FSZ real shadow",
         );
         numerical_comparison::assert_values_close(
             fsz.inv_m_real.qp_matrix_slice(qp).iter().copied(),
-            ci.qp_matrix_slice(qp).iter().map(|z| z.re),
+            ri.qp_matrix_slice(qp).iter().copied(),
             BOUND,
             BOUND,
             "FSZ inverse real shadow",
