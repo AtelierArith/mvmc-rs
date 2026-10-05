@@ -1,0 +1,8 @@
+model = "KondoGC"
+lattice = "fcc"
+L = 2
+W = 2
+Height = 2
+t = 1.0
+J = 1.0
+ncond = 8

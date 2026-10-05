@@ -1,0 +1,11 @@
+model = "Hubbard"
+lattice = "pyrochlore"
+L = 2
+W = 2
+Height = 1
+U = 4.0
+t = 1.0
+ncond = 16
+phase0 = 180
+phase1 = 90
+phase2 = 45

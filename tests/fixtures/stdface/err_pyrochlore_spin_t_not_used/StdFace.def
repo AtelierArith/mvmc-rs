@@ -1,0 +1,7 @@
+model = "Spin"
+lattice = "pyrochlore"
+L = 2
+W = 2
+Height = 1
+2Sz = 0
+t = 1.0

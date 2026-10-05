@@ -221,8 +221,37 @@ mVMC ビルドが知らないキーワードとして拒否されます。
 |---------------------|------|
 | `chain` | 対応 |
 | `ladder` | 対応(下記の C の不具合を参照) |
-| tetragonal/square、triangular、honeycomb、kagome、orthorhombic/cubic、face-centered orthorhombic/cubic、pyrochlore、wannier90 | 未移植(メッセージを表示して停止します) |
+| orthorhombic/cubic、face-centered orthorhombic/cubic(fcc)、pyrochlore | 対応、C の不具合を修正([7.6.1](#761-3-次元格子)) |
+| tetragonal/square、triangular、honeycomb、kagome、wannier90 | 未移植(メッセージを表示して停止します) |
 
 そのまま再現している C の挙動: `lattice = ladder` では C が `t`、`t'`、`V`、`V'`、`J`、`J'` を拒否する
 (読み取りの前に `NotUsed` 検査があるため)ので、ラダーでは `t0`、`t1`、`t2`、`t1'`、`t2'`(および `V*`、`J*`)を
 指定する必要があり、近藤結合 `J` は設定できません。表示される `Wx` はレッグ数で上書きされます。
+
+### 7.6.1 3 次元格子
+
+`lattice = orthorhombic`(別名 `simpleorthorhombic`、`cubic`、`simplecubic`)、`lattice = fcorthorhombic`
+(`face-centeredorthorhombic`、`fco`、`face-centeredcubic`、`fccubic`、`fcc`)、`lattice = pyrochlore`(1 セル 4 サイト)は
+`Orthorhombic.c`、`FCOrtho.c`、`Pyrochlore.c` の移植です。サイズは `L`、`W`、`Height`(直方体状のセル数)または
+スーパーセル行列 `a0W` ... `a2H`(両方は不可)、セルの辺は `a`、`Wlength`、`Llength`、`Hlength` またはベクトル
+`Wx` ... `Hz`、`phase0`、`phase1`、`phase2` は境界位相(度)です。出力には `lattice.xsf`(XCrySDen)が加わります
+(入力検査で停止した場合、C と同様に空ファイルになります)。
+
+| 格子 | ボンド | Hubbard/Kondo のパラメータ | スピンのパラメータ |
+|------|--------|------------------------------|--------------------|
+| orthorhombic | W、L、H 方向の `t0`、`t1`、`t2`、面対角(L-H、H-W、W-L)の `t0'`、`t1'`、`t2'`、体対角の `t''` | `t`、`t'` は 3 成分の既定値、`t''`、`V''` は単一値 | `J0`..`J2`、`J0'`..`J2'`、`J''`(および等方の `J`、`J'`) |
+| fcc / fco | `t0`、`t1`、`t2`(各 2 ボンド、最近接 6 本)、`t0'`、`t1'`、`t2'`(W、L、H 方向の第 2 近接) | `t`、`t'` は上と同じ | `J0`..`J2`、`J0'`..`J2'` |
+| pyrochlore | `t0`、`t1`、`t2` と `t0'`、`t1'`、`t2'` が四面体の 6 つのボンド方向(最近接のみ) | `t`、`V` のみ(`t0'` などは `t` が既定) | `J0`..`J2`、`J0'`..`J2'`(`J` が既定) |
+
+**再現しない C の不具合。** 3 次元格子の C ソースには明らかな誤りがあります。Rust 版は正しい動作を実装し、未修正 C の出力を
+フィクスチャの `c_historical/` に残し、期待値は `c_toolbox/stdface/3d_defects.patch` を当てた C ソースのコピーから取っています
+(`tests/fixtures/stdface/README_3d_defects.md`)。
+
+* パイロクロア近藤格子: C はセルの局在スピン 4 つすべてを伝導サイト 3(`isite + 3`)に結合し、伝導サイト 0-2 には近藤結合がありません。
+  今は各伝導サイトが自身の局在スピンに結合します。
+* 面心直方近藤格子: 局在スピンが `h`、`Gamma`、`Gamma_y` を受けていませんでした(他の格子は適用します)。適用するようにしました。
+* 使われないパラメータが黙って受理されていましたが、通常の `... is not used` エラーで拒否します: スピン模型の `V2`、`V0'`、`V1'`、`V2'`、
+  `V''`、orthorhombic と pyrochlore の Hubbard/Kondo の `J'`、`J''`、面心格子の `t''`、`V''`、`J0''`..`J2''`(スピン模型では C が読んで捨てていた
+  `J''`、`J0''`..`J2''`)、pyrochlore の `t'`、`t''`、`V'`、`V''`、`J'`(スピン模型では `J'`、`J''`)。
+* `ntransMax` が遍歴電子の局所項の `Gamma_y` 項を数えていません(1 サイト 6 項に対し 4 項)。C はヒープをあふれさせます(`Gamma` と `Gamma_y` を
+  指定した pyrochlore は SIGSEGV で終了)。Rust 版は固定の上限を必要としません。

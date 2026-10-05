@@ -1,0 +1,8 @@
+model = "Hubbard"
+lattice = "face-centeredcubic"
+L = 2
+W = 2
+Height = 2
+U = 4.0
+t = 1.0
+ncond = 8

@@ -1,0 +1,11 @@
+model = "Hubbard"
+lattice = "fcc"
+L = 2
+W = 2
+Height = 2
+U = 4.0
+t = 1.0
+ncond = 8
+phase0 = 180
+phase1 = 90
+phase2 = 45

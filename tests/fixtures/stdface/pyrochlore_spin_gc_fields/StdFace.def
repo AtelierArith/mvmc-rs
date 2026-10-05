@@ -1,0 +1,9 @@
+model = "SpinGC"
+lattice = "pyrochlore"
+L = 2
+W = 2
+Height = 1
+J = 1.0
+h = 0.3
+Gamma = 0.2
+Gamma_y = -0.4
