@@ -281,3 +281,26 @@ fn mpi_physcal_requires_feature() {
     );
     panic!("MPI PhysCal gate selected but the mpi feature is disabled");
 }
+
+/// Selecting the MPI gate without a multi-rank launch (or without the `mpi`
+/// feature) must fail with an explicit Unsupported status, never pass.
+#[test]
+fn selected_mpi_gate_without_launcher_fails_as_unsupported() {
+    let test = if cfg!(feature = "mpi") {
+        "mpi_physcal_reduces_fixed_parameter_samples"
+    } else {
+        "mpi_physcal_requires_feature"
+    };
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command.env_clear();
+    if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
+        command.env("LD_LIBRARY_PATH", path);
+    }
+    let output = command
+        .args(["--ignored", "--exact", test, "--nocapture"])
+        .env("MVMC_RS_MPI_PHYSICAL", "1")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Unsupported"));
+}

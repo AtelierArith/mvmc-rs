@@ -271,3 +271,19 @@ fn corrected_general_twenty_step_public_runner_is_repeatable() {
         data.modpara.nstore_o
     );
 }
+
+#[test]
+fn selected_general_gate_without_selector_or_bundle_cannot_pass() {
+    // Absent selector: the ignored test must panic instead of returning Ok.
+    assert!(std::panic::catch_unwind(|| {
+        support::require_gate("ctest-general", "MVMC_RS_183_ABSENT_GENERAL_SELECTOR")
+    })
+    .is_err());
+    // Selected but bundle absent: classified MissingFixture, not a silent pass.
+    let root = std::env::temp_dir().join(format!("mvmc-183-absent-general-{}", std::process::id()));
+    let error = fixture_status::verify_selected(&root, "archive.sha256", || {
+        panic!("verifier must not run without the bundle")
+    })
+    .unwrap_err();
+    assert_eq!(error.status, fixture_status::Status::MissingFixture);
+}

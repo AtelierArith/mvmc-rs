@@ -4,11 +4,21 @@ name: Explicit bounded optional gates
   workflow_dispatch:
     inputs:
       family:
-        description: Bounded scope (not full model/Julia coverage)
+        description: Bounded scope (not full model/Julia coverage); none leaves every bounded family NotRun
         required: true
         default: general
         type: choice
-        options: [general, lanczos, mpi, thread, all]
+        options: [general, lanczos, mpi, thread, all, none]
+      ctest_models:
+        description: >-
+          Optional explicit long (20-step) ctest gate: comma-separated model names or
+          "all". Empty leaves the long ctest gate NotRun. Unknown models are
+          Unsupported and models without independent references fail
+          (MissingFixture/UNVERIFIED); neither is reported as Pass. Model coverage
+          itself is tracked by #180.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +34,7 @@ env:
 jobs:
   plan:
     name: Validate explicit dispatch scope (no numerical execution)
+    if: inputs.family != 'none'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -120,10 +131,58 @@ jobs:
           path: ${{ runner.temp }}/optional-package-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
 
+  ctest-long:
+    # Outside the bounded-family aggregate ledger: its own job status is the
+    # verdict. Skipped (NotRun) unless a selection is dispatched explicitly.
+    name: Explicit long ctest 20-step gate (Linux x86_64)
+    if: inputs.ctest_models != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: never
+      CTEST_MODELS: ${{ inputs.ctest_models }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v6
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: optional-ctest-long
+          tools: nextest
+      - name: Run ONLY the selected long ctest gates and record provenance
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/optional-ctest-long
+          EXPECTED_HEAD: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_ID: ${{ github.workflow_ref }}
+        run: |
+          (cd scripts && uv run --no-project python test_ctest_long_183.py)
+          uv run --no-project python scripts/run_ctest_long_183.py \
+            "$CTEST_MODELS" "$RUNNER_TEMP/ctest-long"
+      - name: Report status (NotRun/Unsupported/MissingFixture are not Pass)
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/ctest-long/summary.md" ]; then
+            cat "$RUNNER_TEMP/ctest-long/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Long ctest gate: no status recorded (driver failed before gate execution)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain long ctest evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-ctest-long-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ctest-long/
+          if-no-files-found: error
+
   aggregate:
     name: Validate bounded evidence ledger (not full coverage)
     needs: [plan, bounded]
-    if: always()
+    if: always() && inputs.family != 'none'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

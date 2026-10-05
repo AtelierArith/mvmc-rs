@@ -3,9 +3,35 @@
 use std::fs;
 use std::path::Path;
 
+#[path = "support/fixture_status.rs"]
+mod fixture_status;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 mod support;
+
+const PREFIX_MODELS: &[&str] = &[
+    "heisenberg_chain_real",
+    "heisenberg_chain_cmp",
+    "hubbard_chain_real",
+    "hubbard_chain_cmp",
+    "heisenberg_chain_fsz",
+    "hubbard_chain_fsz",
+    "kondo_chain_real",
+    "kondo_chain_cmp",
+    "kondo_chain_stot1_cmp",
+    "hubbard_tetragonal_real",
+    "hubbard_tetragonal_momentum_projection_real",
+    "kondo_chain_fsz",
+    "general_rbm_cmp",
+    "general_rbm_cmp_cg",
+];
+
+/// Unknown, empty or duplicate selections are Unsupported, never an implicit pass.
+fn select_prefix_models(selected: &str) -> Vec<&str> {
+    fixture_status::selection(selected, PREFIX_MODELS).unwrap_or_else(|error| {
+        support::unsupported("ctest-oracles", error.to_string());
+    })
+}
 
 struct OutputDirectory(std::path::PathBuf);
 
@@ -33,20 +59,19 @@ fn canonical_models_match_independent_prefix_oracles() {
     } else {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ctest_model_prefixes")
     };
-    assert!(
-        references.join("provenance.txt").is_file(),
-        "independent provenance required"
-    );
-    let root = support::julia_mvmc_root().expect("Julia checkout required");
+    if !references.join("provenance.txt").is_file() {
+        support::missing_fixture(
+            "ctest-oracles",
+            references.join("provenance.txt").display().to_string(),
+        );
+    }
+    let root = support::julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("ctest-oracles", "Julia-mVMC checkout not found")
+    });
     let selected = std::env::var("MVMC_RS_CTEST_PREFIX_MODELS").unwrap();
-    let selected = if selected.trim() == "all" {
-        "heisenberg_chain_real,heisenberg_chain_cmp,hubbard_chain_real,hubbard_chain_cmp,heisenberg_chain_fsz,hubbard_chain_fsz,kondo_chain_real,kondo_chain_cmp,kondo_chain_stot1_cmp,hubbard_tetragonal_real,hubbard_tetragonal_momentum_projection_real,kondo_chain_fsz,general_rbm_cmp,general_rbm_cmp_cg".to_string()
-    } else {
-        selected
-    };
+    let selected = select_prefix_models(&selected);
     let mut failures = Vec::new();
-    for model in selected.split(',').map(str::trim) {
-        assert!(!model.is_empty() && !model.contains('/') && !model.contains('\\'));
+    for model in selected {
         let outcome = std::panic::catch_unwind(|| {
             let mut window_outputs = Vec::new();
             let input_model = if model == "general_rbm_cmp_cg" {
@@ -396,7 +421,9 @@ impl Drop for OutputDirectory {
 #[ignore = "20-step independent reference gate; MVMC_RS_CTEST_PREFIXES=1 required"]
 fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
     support::require_gate("ctest-prefixes", "MVMC_RS_CTEST_PREFIXES");
-    let root = support::julia_mvmc_root().expect("Julia reference checkout required");
+    let root = support::julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("ctest-prefixes", "Julia-mVMC checkout not found")
+    });
     let input = root.join("test/integration/reference/general_rbm_cmp/inputs/namelist.def");
     let fixtures =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/c_kernel_order");
@@ -576,4 +603,21 @@ fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
             eprintln!("GeneralRBM EXECUTED cg={cg} NStore={store} prefix={steps}: exact configs/RNG; independent parameters/energy/zvo_out (sampled SR at direct prefix 1)");
         }
     }
+}
+
+#[test]
+fn unsupported_prefix_model_selection_cannot_pass() {
+    for selection in [
+        "",
+        "unknown_model",
+        "hubbard_chain_real,hubbard_chain_real",
+        "../x",
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| select_prefix_models(selection)).is_err(),
+            "{selection:?}"
+        );
+    }
+    assert_eq!(select_prefix_models("all").len(), PREFIX_MODELS.len());
+    assert_eq!(select_prefix_models("kondo_chain_fsz"), ["kondo_chain_fsz"]);
 }
