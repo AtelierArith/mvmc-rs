@@ -40,7 +40,7 @@ step-20 references exist; none were fabricated from Rust and no 50-step data was
 
 Driver `scripts/run_ctest_long_183.py all <dir>` => status **Pass**. Intel Xeon E5-2699 v3,
 rustc 1.99.0 (b940084d7), OpenBLAS 0.3.26 Haswell, 1 thread (OPENBLAS/OMP/MKL/BLIS=1);
-mVMC v1.3.0 (`d73d06bd`), Julia-mVMC checkout `c0788c34`; Rust base `d2e01e23`.
+mVMC v1.3.0 (`d73d06bd`), Julia-mVMC checkout `c0788c34`. Re-run on main including #374 (C ModPara reader) and #371 (C-order real kernels), Rust head `9e325e79`; every calculated value, diff and diff/sigma is unchanged to the printed precision from the pre-#371 run on `d2e01e23`.
 Column 0 is the real energy window mean, column 1 the imaginary part. Zero-sigma columns
 (real models) are exactly 0 on both sides (diff 0).
 
