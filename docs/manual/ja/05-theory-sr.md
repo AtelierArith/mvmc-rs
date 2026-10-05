@@ -192,5 +192,5 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます(グ�
 > - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:984`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:441`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
 > - 整合性: ウィンドウは `step >= NSROptItrStep - NSROptItrSmp` です。Rust は `NSROptItrSmp > NSROptItrStep` を事前に拒否します("nsteps must be >= nsmp; C leaves oversized-window rows unwritten"、`validate_optimization_window`、`run.rs:1306`)。標準偏差の式は、どちらも `creal(data*conj(data))` の `sqrt(var/(n-1))` です。コマンドラインの `--nsteps`/`--nsmp` による上書きは、ウィンドウについて `NSROptItrStep`/`NSROptItrSmp` を変更します。

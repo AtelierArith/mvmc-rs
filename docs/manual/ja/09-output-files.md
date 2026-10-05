@@ -91,8 +91,8 @@ NGutzwillerIdx  4
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:441`
-> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:580`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
+> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:599`
 > - 整合性: ブロックの順序、ファイル名(`RBM_OUTPUT_BLOCKS`)、ヘッダーのテキスト、および `NSROptItrSmp = 1` に対する「ペアで補助ファイルなし」の規則は、`OutputOptData` をそのまま踏襲しています。ウィンドウ統計量は両者とも $\sqrt{\sum|x-\bar x|^2/(n-1)}$ です。
 
 ## 9.4 ソルバー情報: `zvo_SRinfo.dat`
@@ -184,7 +184,7 @@ PhysCal のサンプルごとに1度書き出され、ファイルはインデ�
 > **実装**
 > - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
-> - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:61`
+> - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - 整合性: デバッグ専用の C ファイル `zvo_ls_qcisajsq_NNN.dat` と `zvo_ls_qcisajscktaltq_NNN.dat`(`#ifdef _DEBUG`)は生成されません。$\alpha$ の決定に失敗した場合、C は何も書き出しませんが、Rust は `NaN` を書き出します([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 
 ## 9.8 Rust が書き出さない C のファイル
