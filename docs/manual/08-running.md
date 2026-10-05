@@ -181,7 +181,7 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
 > - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - Parity: communicator widths follow `vmcmain.c:239-256` (`NSplitSize` is the communicator *width*, not the number of chains); sample ranges follow `SplitLoop`; the C Green-function reduction goes to rank 0 only whereas Rust reduces the accumulators with an all-reduce and lets the root write, which yields the same file contents.
 
 ## 8.5 Environment variables

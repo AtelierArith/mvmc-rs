@@ -180,7 +180,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
 > - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - 整合性: コミュニケータの幅は `vmcmain.c:239-256` に従います(`NSplitSize` はコミュニケータの*幅*であり、連鎖の本数ではありません)。サンプルの範囲は `SplitLoop` に従います。C のグリーン関数のリダクションはランク 0 のみに集約されますが、Rust は累積量を all-reduce でリダクションしてルートが書き出すため、ファイルの内容は同じになります。
 
 ## 8.5 環境変数

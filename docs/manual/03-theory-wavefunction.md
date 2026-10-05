@@ -65,7 +65,7 @@ the identity: $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ 
 > **Implementation**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2692`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2716`
 > - Parity: Rust reserves the *declared* widths for each block even when the definition file lists fewer rows (the "sparse projection" rule, `ProjectionLayout` docs). The FSZ main-calculation places the Slater derivatives immediately after the projection block (no RBM slot), the normal path reserves all RBM slots first (`run.rs:2887-2900`).
 
 ## 3.2 The Pfaffian pair-product part
@@ -178,7 +178,7 @@ real and imaginary parts are $2N_{\rm para}$ independent real variables
 
 > **Implementation**
 > - C: `ReadInputParameters` (sets `AllComplexFlag`) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1814`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1838`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - Parity: real-mode runs hold `SlaterElm_real`/`InvM_real`/`PfM_real` copies in C; Rust keeps real buffers (`pf_m_real`, `sr_opt_oo_real`, ...) and a complex shadow where the shared code needs it.
 

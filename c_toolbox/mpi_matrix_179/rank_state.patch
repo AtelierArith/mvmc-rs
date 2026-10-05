@@ -1,0 +1,60 @@
+--- a/src/sfmt/SFMT.c
++++ b/src/sfmt/SFMT.c
+@@ -11,6 +11,7 @@
+  * The new BSD License is applied to this software, see LICENSE.txt
+  */
+ #include <string.h>
++#include <stdio.h>
+ #include <assert.h>
+ #include "SFMT.h"
+ #include "SFMT-params.h"
+@@ -618,3 +619,11 @@
+     period_certification();
+     initialized = 1;
+ }
++
++/* Issue #179 diagnostic: read-only dump of the generator state (no draws). */
++void mvmc179_dump_rng_state(FILE *f, int rank, int step) {
++    int i;
++    fprintf(f, "RNG rank=%d step=%d idx=%d", rank, step, idx);
++    for (i = 0; i < 624; i++) fprintf(f, " %u", (unsigned) psfmt32[i]);
++    fprintf(f, "\n");
++}
+--- a/src/mVMC/vmcmain.c
++++ b/src/mVMC/vmcmain.c
+@@ -327,6 +327,7 @@
+   return info;
+ }
+ 
++void mvmc179_dump_rng_state(FILE *f, int rank, int step);
+ /*-- VMC Parameter Optimization --*/
+ static int i; /* upstream debug dumps use an undeclared loop index */
+ int VMCParaOpt(MPI_Comm comm_parent, MPI_Comm comm_child1, MPI_Comm comm_child2) {
+@@ -435,6 +436,27 @@
+     StopTimer(25);
+     ReduceCounter(comm_child2);
+     StopTimer(21);
++#ifdef _MVMC179_RANKSTATE
++    {
++      /* Issue #179: rank-wise sampler state after the step (no draws, no changes). */
++      int k;
++      char name[64];
++      FILE *f;
++      sprintf(name, "mvmc179_rank%d.txt", rank);
++      f = fopen(name, "a");
++      fprintf(f, "COUNTER rank=%d step=%d", rank, step);
++      for(k=0;k<Counter_max;k++) fprintf(f, " %d", Counter[k]);
++      fprintf(f, "\n");
++      for(k=0;k<NVMCSample;k++){
++        int m;
++        fprintf(f, "ELEIDX rank=%d step=%d sample=%d", rank, step, k);
++        for(m=0;m<Nsize;m++) fprintf(f, " %d", EleIdx[k*Nsize+m]);
++        fprintf(f, "\n");
++      }
++      mvmc179_dump_rng_state(f, rank, step);
++      fclose(f);
++    }
++#endif
+     StartTimer(22);
+     /* output zvo_out and zvo_var */
+     if(rank==0) outputData();

@@ -126,7 +126,7 @@ are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 > - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:437`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:53`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - Parity: C scales stored samples by `sqrt(w)` (`SROptO_Store[...] = sqrtw*SROptO[...]`, `vmccal.c:241,248`); the Gram product is formed once per step. For the real stored matrix Rust follows Julia's SYRK dispatch and upper-triangle copy; the complex stored product preserves a sequential sample sum (`sr_store_gram_julia`, `observables.rs:497`; tests `stored_direct_sr_gram_matches_sampled_julia_values`, `real_gram_matches_julia_generic_and_syrk_dispatch_boundary`). These floating-point summation orders differ between BLAS providers and are compared with tolerances. Only the active branch (real or complex) is reduced over MPI, exactly as `vmcmain.c` selects one `WeightAverageSROpt` branch.
 
 ## 5.4 Conjugate-gradient solver (`NSRCG = 1`)
