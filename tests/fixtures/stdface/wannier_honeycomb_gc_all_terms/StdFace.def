@@ -1,0 +1,12 @@
+model = "HubbardGC"
+lattice = "wannier90"
+W = 2
+L = 2
+ncond = 8
+h = -0.5
+Gamma = 0.3
+Gamma_y = 0.2
+mu = 0.4
+cutoff_length_U = 1.0
+cutoff_length_J = 1.0
+doublecounting = full

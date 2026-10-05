@@ -1,0 +1,4 @@
+model = "Hubbard"
+lattice = "wannier90"
+W = 2
+L = 2

@@ -1,0 +1,165 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Hubbard 
+  KEYWORD : lattice              | VALUE : wannier90 
+  KEYWORD : w                    | VALUE : 2 
+  KEYWORD : l                    | VALUE : 2 
+  KEYWORD : ncond                | VALUE : 4 
+  KEYWORD : 2sz                  | VALUE : 0 
+  KEYWORD : cutoff_t             | VALUE : 1.5 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase2 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+                L = 2         
+                W = 2         
+           Height = 1           ######  DEFAULT VALUE IS USED  ######
+   Number of Cell = 4
+
+  @ Wannier90 Geometry 
+
+    Wannier90 Geometry file = zvo_geom.dat
+    Number of Correlated Sites = 1
+    Direct lattice vectors:
+         1.00000    0.00000    0.00000
+         0.00000    1.00000    0.00000
+         0.00000    0.00000    1.00000
+    Wannier centres:
+         0.00000    0.00000    0.00000
+         lambda_U = 1.00000     ######  DEFAULT VALUE IS USED  ######
+         lambda_J = 1.00000     ######  DEFAULT VALUE IS USED  ######
+            alpha = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Wannier90 hopping 
+
+         cutoff_t = 1.50000   
+  cutoff_length_t = -1.00000    ######  DEFAULT VALUE IS USED  ######
+     cutoff_tR[0] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_tR[1] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_tR[2] = 0           ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][0] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][1] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][2] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+      EFFECTIVE terms:
+           R0   R1   R2 band_i band_f Hamiltonian
+      Total number of EFFECTIVE term = 0
+
+  @ Wannier90 Coulomb 
+
+         cutoff_u = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_length_U = 0.30000     ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[0] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[1] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[2] = 0           ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][0] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][1] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][2] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+      EFFECTIVE terms:
+           R0   R1   R2 band_i band_f Hamiltonian
+            0    0    0    0    0    4.000000    0.000000
+      Total number of EFFECTIVE term = 1
+
+  @ Wannier90 Hund 
+
+         cutoff_j = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_length_J = 0.30000     ######  DEFAULT VALUE IS USED  ######
+     cutoff_JR[0] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_JR[1] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_JR[2] = 0           ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[0][0] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[0][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[0][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[1][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[1][1] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[1][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[2][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[2][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_JVec[2][2] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+  Skip to read the file zvo_jr.dat. 
+
+
+  @ Hamiltonian 
+
+                h = 0.00000     ######  DEFAULT VALUE IS USED  ######
+            Gamma = 0.00000     ######  DEFAULT VALUE IS USED  ######
+          Gamma_y = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               mu = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Numerical conditions
+
+
+######  Print Expert input files  ######
+
+    locspn.def is written.
+      trans.def is written.
+    coulombintra.def is written.
+    CParaFileHead = zqp         ######  DEFAULT VALUE IS USED  ######
+      NVMCCalMode = 0           ######  DEFAULT VALUE IS USED  ######
+     NLanczosMode = 0           ######  DEFAULT VALUE IS USED  ######
+    NDataIdxStart = 1           ######  DEFAULT VALUE IS USED  ######
+      NDataQtySmp = 1           ######  DEFAULT VALUE IS USED  ######
+      NSPGaussLeg = 8           ######  DEFAULT VALUE IS USED  ######
+          NSPStot = 0           ######  DEFAULT VALUE IS USED  ######
+         NMPTrans = -1          ######  DEFAULT VALUE IS USED  ######
+    NSROptItrStep = 1000        ######  DEFAULT VALUE IS USED  ######
+     NSROptItrSmp = 100         ######  DEFAULT VALUE IS USED  ######
+       NVMCWarmUp = 10          ######  DEFAULT VALUE IS USED  ######
+     NVMCInterval = 1           ######  DEFAULT VALUE IS USED  ######
+       NVMCSample = 1000        ######  DEFAULT VALUE IS USED  ######
+    NExUpdatePath = 0         
+          RndSeed = 123456789   ######  DEFAULT VALUE IS USED  ######
+       NSplitSize = 1           ######  DEFAULT VALUE IS USED  ######
+           NStore = 1           ######  DEFAULT VALUE IS USED  ######
+            NSRCG = 0           ######  DEFAULT VALUE IS USED  ######
+     DSROptRedCut = 0.00100     ######  DEFAULT VALUE IS USED  ######
+     DSROptStaDel = 0.02000     ######  DEFAULT VALUE IS USED  ######
+     DSROptStepDt = 0.02000     ######  DEFAULT VALUE IS USED  ######
+            ncond = 4  
+              2Sz = 0         
+     modpara.def is written.
+      ComplexType = 0           ######  DEFAULT VALUE IS USED  ######
+           a0Wsub = 2           ######  DEFAULT VALUE IS USED  ######
+           a0Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a0Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Lsub = 2           ######  DEFAULT VALUE IS USED  ######
+           a1Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Hsub = 1           ######  DEFAULT VALUE IS USED  ######
+         Number of Cell in the sublattice: 4
+    qptransidx.def is written.
+    jastrowidx.def is written.
+    gutzwilleridx.def is written.
+    orbitalidx.def is written.
+      ioutputmode = 1           ######  DEFAULT VALUE IS USED  ######
+    greenone.def is written.
+    greentwo.def is written.
+    namelist.def is written.
+
+######  Input files are generated.  ######
+

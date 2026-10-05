@@ -222,7 +222,18 @@ mVMC ビルドが知らないキーワードとして拒否されます。
 | `ladder` | 対応(下記の C の不具合を参照) |
 | `tetragonal`/`square`、`triangular`、`honeycomb`、`kagome` | 対応 |
 | orthorhombic/cubic、face-centered orthorhombic/cubic(fcc)、pyrochlore | 対応、C の不具合を修正([7.6.1](#761-3-次元格子)) |
-| `wannier90` | 未移植(メッセージを表示して停止します) |
+| `wannier90` | 対応(Hubbard 模型とスピン模型。データファイルは下記) |
+
+Wannier90 格子: `zvo_geom.dat`(必須)、`zvo_hr.dat`、`zvo_ur.dat`、`zvo_jr.dat`、および
+`doublecounting = hartree|hartree_u|full` のときは密度行列 `zvo_dr.dat` を、**カレントディレクトリ**から読み込みます
+(C と同じ。StdFace の mVMC ビルドには `CDataFileHead` キーワードがないため、接頭辞は常に `zvo` です)。通常のファイルに加えて
+`lattice.xsf`、`wan2site.dat`、二重計数ありのときは UHF の初期推定 `initial.def` を書き出します。`mvmc -s` は、
+`--initial-def` を指定しない限り、この `initial.def` を初期パラメータファイルとして最適化に渡しません。Wannier90 では近藤模型は
+使えません(C: "wannier + Kondo is not available !")。修正した C の挙動(初期化されていないメモリの読み出し): `zvo_hr.dat`/`zvo_ur.dat`/`zvo_jr.dat`
+が無い場合は C のメッセージを出して項なしとして扱います(C は未設定の配列を解放してクラッシュします)。UHF の初期推定は 0 から始め、
+`zvo_ur.dat` にある軌道のオンサイト U が無いスピン模型はエラーで停止します(C は初期化されていない値で割ります)。
+そのままの C の挙動: `cutoff_tR`、`cutoff_UR`、`cutoff_JR` は表示されるだけで効果がありません。箱型の `cutoff_*Vec` 判定が常に選ばれる
+ためです(C は `double` の `cutoff_*Vec[0][0]` を整数の標識 `2147483647` と比較します)。
 
 C プログラムとの相違(修正した不具合、issue #404)。C の StdFace の格子ルーチンには明らかな不具合があり、
 移植版はそれを再現**しません**。C の出力は履歴としてのフィクスチャ(`tests/fixtures/stdface/<case>/expected/`)に

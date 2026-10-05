@@ -32,10 +32,14 @@ pub mod model_util;
 pub mod orthorhombic;
 pub mod out;
 pub mod pyrochlore;
+pub mod scanner;
 pub mod square_lattice;
 pub mod stdface_main;
 pub mod triangular_lattice;
 pub mod vals;
+pub mod wannier90;
 
 pub use out::{Out, StdFaceError};
-pub use stdface_main::{stdface_main, stdface_main_bytes, StdFaceFailure, StdFaceReport};
+pub use stdface_main::{
+    stdface_main, stdface_main_bytes, stdface_main_bytes_in, StdFaceFailure, StdFaceReport,
+};

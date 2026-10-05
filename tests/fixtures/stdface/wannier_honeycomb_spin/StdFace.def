@@ -1,0 +1,6 @@
+model = "Spin"
+lattice = "wannier90"
+W = 2
+L = 2
+2Sz = 0
+cutoff_length_U = 1.0

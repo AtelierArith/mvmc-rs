@@ -14,6 +14,7 @@ import hashlib
 import cases_3d
 import cases_2d
 import cases_defects
+import cases_wannier
 import cases_ladder
 import os
 import platform
@@ -175,6 +176,7 @@ EXTRA_CASES.update(cases_ladder.CASES)
 EXTRA_CASES.update(cases_3d.CASES)
 EXTRA_CASES.update(cases_2d.CASES)
 EXTRA_CASES.update(cases_defects.CASES)
+EXTRA_CASES.update(cases_wannier.cases(STD))
 # Upstream sample (HPhi keywords: rejected by the mVMC build of StdFace).
 EXTRA_CASES["sample_hubbard_default_model"] = (STD / "samples/hubbard/default_model/stan.in").read_text()
 
@@ -190,8 +192,10 @@ def run_case(binary, case_dir, input_text, subdir="expected"):
     expected.mkdir(parents=True)
     with tempfile.TemporaryDirectory() as work:
         work = Path(work)
-        if input_text is not None:
-            shutil.copyfile(case_dir / "StdFace.def", work / "StdFace.def")
+        # StdFace.def plus any data files (e.g. Wannier90 zvo_*.dat) the case ships.
+        inputs = {p.name for p in case_dir.iterdir() if p.is_file()}
+        for name in inputs:
+            shutil.copyfile(case_dir / name, work / name)
         proc = subprocess.run(
             [str(binary), "StdFace.def"], cwd=work, capture_output=True, check=False
         )
@@ -200,7 +204,7 @@ def run_case(binary, case_dir, input_text, subdir="expected"):
         if proc.stderr:
             (expected / "stderr.txt").write_bytes(proc.stderr)
         for produced in sorted(work.iterdir()):
-            if produced.name == "StdFace.def":
+            if produced.name in inputs:
                 continue
             shutil.copyfile(produced, expected / produced.name)
     return proc.returncode
@@ -303,6 +307,11 @@ def main():
     for case, text in EXTRA_CASES.items():
         case_dir = FIXTURES / case
         case_dir.mkdir(exist_ok=True)
+        data_files = {}
+        if isinstance(text, tuple):  # (StdFace.def text, {data file name: text})
+            text, data_files = text
+        for name, content in data_files.items():
+            (case_dir / name).write_text(content)
         if text is None:
             (case_dir / "StdFace.def").unlink(missing_ok=True)
         else:
@@ -349,7 +358,9 @@ def main():
         "",
         "## Layout",
         "",
-        "`<case>/StdFace.def` is the input (absent for `err_missing_input_file`);",
+        "`<case>/StdFace.def` is the input (absent for `err_missing_input_file`); Wannier90 cases also",
+        "ship their data files (`zvo_geom.dat`, `zvo_hr.dat`, ...) next to it, read from the working",
+        "directory by C and from the case directory by the Rust test;",
         "`<case>/expected/` holds every file the C program wrote plus `stdout.txt` (the complete",
         "C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.",
         "`<case>/expected_fixed/` (only where it differs) is the output of the *corrected* build",

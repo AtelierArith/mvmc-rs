@@ -1,0 +1,9 @@
+model = "HubbardGC"
+lattice = "wannier90"
+W = 2
+L = 2
+ncond = 4
+h = -0.5
+Gamma = 0.3
+Gamma_y = 0.2
+mu = 0.4

@@ -29,6 +29,16 @@ byte-identical to the C program.
 | `Kagome.c` | duplicate `NotUsed_c("t0", t)`; `t''`, `V''`, `J''` silently ignored | duplicate removed; `t''`, `V''`, `J''` family rejected |
 | `StdFace_ModelUtil.c` (every lattice) | each lattice reserves 4 on-site transfers per site (`ntransMax`) but `HubbardLocal` appends 6 when `Gamma` and `Gamma_y` are both non-zero: heap overflow, SIGSEGV for the `gc_all_terms_*` cases (historical `exit_status` -11) | `MallocInteractions` reserves twice as much; the Rust lists grow on demand, so the port needed no change |
 | `SquareLattice.c`, `HoneycombLattice.c` | extra `PrintVal_d("V'")` console line | removed |
+| `Wannier90.c` | a missing `_hr`/`_ur`/`_jr` file prints "Skip to read" but leaves `tUJ`/`tUJindx` unset and later frees them: SIGSEGV / `free(): invalid pointer` (historical `exit_status` -11 / -6) | the arrays start as `NULL`: no terms, normal run |
+| `Wannier90.c` | `PrintUHFinitial`: `IniGuess` is `malloc`ed and partly read uninitialised | zero-initialised |
+| `Wannier90.c` | spin model: `Uspin` uninitialised when `_ur` lacks an on-site U | error exit (no C fixture: undefined in C) |
+
+Not corrected (documented only): in `Wannier90.c` the test `cutoff_Rvec[0][0] != NaN_i` compares a
+`double` with an integer marker and is always true, so `cutoff_tR`, `cutoff_UR`, `cutoff_JR` are printed
+but never used (the box-based `cutoff_*Vec` test always applies); the intended semantics are ambiguous.
+Out-of-bounds reads that depend on file contents (more bands than Wannier centres, density-matrix `R`
+range smaller than the `hr` range) are undefined in C and read 0 / are ignored in Rust; no fixture
+exercises them.
 
 Cases that differ (`expected_fixed/` present) are listed in PROVENANCE.md; cases added for the
 corrections are in `c_toolbox/stdface/cases_defects.py`.
