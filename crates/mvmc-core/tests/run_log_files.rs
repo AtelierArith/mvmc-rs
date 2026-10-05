@@ -162,6 +162,30 @@ fn init_creates_c_named_files_and_header() {
 }
 
 #[test]
+fn sr_info_header_follows_sr_flag_for_direct_and_cg_writers() {
+    // RunFiles owns the single header writer used by the direct and CG solvers;
+    // `sr_flag` is C's SRFlag (set when DSROptStepDt is negative).
+    for (sr_flag, header) in [
+        (false, "sDiagMax  sDiagMin"),
+        (true, "sEigenMax  sEigenMin"),
+    ] {
+        let mut data = ExpertModeData::new();
+        data.modpara.sr_flag = sr_flag;
+        let dir = scratch(&format!("header-{sr_flag}"));
+        RunFiles::init(&data, &dir, RunKind::ParaOpt, None)
+            .unwrap()
+            .close()
+            .unwrap();
+        let text = fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap();
+        assert_eq!(
+            text,
+            format!("#Npara Msize optCut diagCut {header}    absRmax       imax\n")
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
 fn flush_interval_must_be_a_natural_number() {
     let data = ExpertModeData::new();
     let dir = scratch("flush-invalid");
