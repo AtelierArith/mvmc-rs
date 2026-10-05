@@ -55,9 +55,9 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:429`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:627`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:448`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:433`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:631`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:452`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `getopt` options other than `-o` are not implemented.
 
@@ -153,14 +153,14 @@ measurement; $\mathrm{IP}$ is reduced inside the group. Grouped runs are therefo
 
 ### Restrictions
 
-Rust rejects the following before initialization (`validate_grouped_runtime`, [7.5](07-input-files.md#75-supported-and-rejected-inputs)); C supports some of them:
+Rust rejects only the one grouped combination that is undefined in C, before initialization (`validate_grouped_runtime`, [7.5](07-input-files.md#75-supported-and-rejected-inputs)):
 
-- `NSplitSize > 1` with the CG solver (`NSRCG != 0`);
-- `NSplitSize > 1` with `NLanczosMode > 0`;
-- `NSplitSize > 1` with `OptTrans`/`NQPOptTrans > 1`;
-- `NSplitSize > 1` with general (FSZ) orbitals for PhysCal, and for optimization when $N_{\rm GL}>1$ or $\lvert N_{\rm MP}\rvert>1$.
+- `NSplitSize > 1` with the CG solver (`NSRCG != 0`). `VMCMainCal` stores `sqrt(w) O` at the global sample slot (`vmccal.c:241,248`) but
+  `calculateOO_Store` reads the first `sampleEnd - sampleStart` columns from the base pointer (`vmccal.c:314-318`), so every rank after the first reads
+  unwritten `malloc` memory (`setmemory.c:419-421`). The same defect corrupts direct SR with `NStore != 0` and `NSplitSize > 1` in C; Rust computes that case correctly and therefore differs from C there.
 
-Supported: direct SR (`NSRCG = 0`) for any `NSplitSize`; SR-CG (`NSRCG = 1`) with `NSplitSize = 1`; PhysCal of the sz-conserved path with any `NSplitSize`.
+Supported (checked against native C at 2 and 4 ranks, `tests/fixtures/grouped_nsplit_349/`): direct SR (`NSRCG = 0`) for any `NSplitSize`; SR-CG (`NSRCG = 1`) with `NSplitSize = 1`;
+PhysCal and optimization with sz-conserved, FSZ/general orbitals and any `NQPFull`; OptTrans with `NQPOptTrans > 1`; `NLanczosMode = 1, 2` PhysCal.
 
 ### Which rank writes what
 

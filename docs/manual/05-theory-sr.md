@@ -155,7 +155,7 @@ with three rules that matter for reproducing C:
 
 The cut and the force are identical to the direct solver ([5.2](#52-the-sr-equations)); the diagonal elements used for the
 cut are $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$. The number of CG iterations is printed as the last column of `zvo_SRinfo.dat`.
-Only `NSplitSize = 1` is supported for CG in Rust ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
+Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C) ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
 
 > **Implementation**
 > - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg.c:42`
@@ -164,10 +164,10 @@ Only `NSplitSize = 1` is supported for CG in Rust ([7.5](07-input-files.md#75-su
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:107`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:334`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:447`
-> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:270`
-> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:294`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:337`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:450`
+> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:273`
+> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:297`
 > - Parity: this is where operation order matters most. C computes `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat` (`stcopt_cg_impl.c:265`), and the recurrence `beta = xdot(r,r)/delta; delta = beta*delta;` — the old $\delta$ is *not* replaced by $r\!\cdot\!r$ (`stcopt_cg_impl.c:333-336`). Rust reproduces both (`crates/mvmc-core/src/sr_cg.rs:346`, `crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm"). The dot products are sequential (`sequential_dot`) rather than BLAS `ddot`, and the products use the same `dgemv` pairs as C, which is why CG is sensitive to FMA and reduction order; truncated CG results therefore use a tolerance gate, not bit parity.
 > - Parity: the diagonal shift appears as `z += sdiag[si]*DSROptStaDel*x[si]` (`stcopt_cg_impl.c:420`) rather than a modified matrix; $\langle O\rangle\cdot x$ uses `xdot`. The MPI reduction of the sampled product is performed before the global weight, mean and shift corrections (`apply_with_reducer` docs).
 

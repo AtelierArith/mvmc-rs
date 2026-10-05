@@ -199,12 +199,12 @@ fn physcal_cli_rejects_grouped_lanczos_before_output() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("NSplitSize > 1 with NLanczosMode"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("MPI group communicator"));
     assert!(!out_dir.exists());
 }
 
 #[test]
-fn physcal_cli_rejects_grouped_fsz_before_output() {
+fn physcal_cli_grouped_fsz_requires_communicator_before_output() {
     let dir = TestDir::new("physcal-grouped-fsz");
     let (namelist, fixed) = copy_physcal_model_fixture(&dir, "heisenberg_chain_fsz");
     let modpara = dir.0.join("inputs/modpara.def");
@@ -222,7 +222,7 @@ fn physcal_cli_rejects_grouped_fsz_before_output() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("FSZ / general-orbital PhysCal"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("MPI group communicator"));
     assert!(!out_dir.exists());
 }
 

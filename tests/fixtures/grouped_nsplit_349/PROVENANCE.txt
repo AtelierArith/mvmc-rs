@@ -1,0 +1,20 @@
+generator=c_toolbox/grouped_nsplit_349/generate.sh
+generated_utc=2026-10-05T13:46:02Z
+source=extern/mVMC-1.3.0 (unmodified copy), submodule commit d73d06bd529d3b2573f38eb5817c4a5f52971006
+vmc_out_sha256=b0e5b08da51ff232df2900ce5e14a70778fe3edc25d8e8a0be73de4662e1365a
+arch=x86_64 kernel=Linux 6.8.0-146-generic
+gcc=gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+mpich=MPICH Version:      4.2.0
+openblas=0.3.26
+cmake_flags=-DCMAKE_BUILD_TYPE=Release -DTesting=OFF (CMake default C flags; no extra flags)
+threads=OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+configs(world:split)=1:1 2:1 2:2 4:1 4:2 4:4
+rust_input_sha256:
+386030f909ad8b8844e8cb8408b5d2d38f6ee50079fef5ef01ff5079f0cb39f6  cases.txt
+27c93080c70116abdb7e47cf7febef8f8e5bb7f9f55bf2ae724f51d44cc15f5d  fsz_opt_nqp2/overrides.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  fsz_phys_nqp1/overrides.txt
+fd082ce98b2dd6b9aa8397e5e831f70ad3df02ca56cac19a6e3b09f888d5d03f  fsz_phys_nqp2/overrides.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  lanczos1_phys/overrides.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  lanczos2_phys/overrides.txt
+fb8c80ba0b536358b9900e221ab61a89e557df9de8823d6ad0e5930cf4b08fc9  opttrans_opt/overrides.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  opttrans_phys/overrides.txt

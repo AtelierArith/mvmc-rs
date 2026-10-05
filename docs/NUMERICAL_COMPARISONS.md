@@ -74,6 +74,7 @@ range reduction, scaling and cache fingerprints is unchanged.
 | Fixed direct SR | Matrix/factor/solution regression budgets depend on dimension; independently check the solution against the original unfactored covariance/gradient |
 | Fixed CG prefixes | Iteration/GEMV-length epsilon budgets, plus an independently materialized covariance backward-residual check; forced prefix limits and tested termination controls remain exact |
 | Short SR prefixes / long-run repeatability | `1e-11` absolute and relative for computed parameters/energy; short independent checkpoints and long same-implementation discrete/RNG repeatability |
+| ComplexUHF Hartree-Fock (`mvmc uhf`) | Iteration counts, indices and headers exact; 10-decimal outputs `abs 2e-10 + rel 1e-10` (print quantum, contraction factor <= 0.9), residual `abs 2e-12 + rel 1e-8`, energy column `abs 1e-10`; orbital files only through eigenvector-gauge-invariant `F F^+` (`abs 3e-5`) and the SFMT noise (`abs 2e-6`); see `docs/COMPLEX_UHF.md` |
 | CLI numerical output | `1e-12` absolute and relative, exact indexed coordinates and parameter headers |
 
 These are regression envelopes for the supplied inputs, not forward-error
@@ -200,10 +201,15 @@ are identical.
 - The CG solve itself is verified at fixed operands against the C recurrence
   (`c_toolbox/ctest_cg_refresh.c`, `tests/fixtures/sr_cg/c_refresh`,
   `real.txt`/`complex.txt`).
-- `rbm_real` has no native C operand reference: its Rust model is the
-  historical sparse RBM control, which C does not run identically
-  (step-1 energy 5.9845 in C, 6.2287 here). It keeps the Julia-derived
-  step-1 energy, sampling and SRinfo checks.
+- `rbm_real` has no native C operand reference because native C ignores RBM in
+  real mode (#379, tmisawa/Julia-mVMC#59). `vmcmake_real.c` has no RBM code
+  (the complex `vmcmake.c` has 27 mentions) and C accepts `FlagRBM=1` for real
+  models without a message. On `c_orbital_inputs/namelist_rbm_real.def` (seed 1,
+  step 1) C has NPara = 55 (NProj 7, NRBM 36, NSlater 12) and energy
+  5.984544891656925, identical for RBM overlay 0.125/-0.25 and for all zeros, and
+  bit-identical to Rust with all RBM values zero. Rust applies the RBM weight
+  (6.228711216019723); initial parameters agree. Rust keeps the correct math and
+  the Julia-derived step-1 energy, sampling and SRinfo checks.
 - `opt_real`: C's real-mode OptTrans derivatives are written through a complex
   pointer offset (`vmccal.c`, `calculateOptTransDiff(SROptO + 2*NProj + ...)`),
   so for `NQPOptTrans > 1` derivative 1 is dropped, derivative 2 lands in

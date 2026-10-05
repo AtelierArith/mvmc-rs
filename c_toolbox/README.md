@@ -29,6 +29,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `complex_division.c` | Actual compiler complex division: 373 normal/subnormal/range/nonfinite cases; pure Rust scaled quotient port | `uv run --no-project python scripts/check_complex_division_c_parity.py` |
 | `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
 | `negative_stepdt.c` | Negative `DSROptStepDt` normalization and `SRFlag` header (readdef.c, initfile.c) plus actual `stcOptInit` + LAPACK `dposv` on fixed 3-parameter operands, 5 cases; standalone kernel check, no MPI/sampling | `uv run --no-project python scripts/check_negative_stepdt_c_parity.py` |
+| `complex_uhf/cases.py` | Full unmodified C `ComplexUHF` (`UHF`) executable (gcc, OpenBLAS) on 10 cases: Hubbard chain/square/triangular, InterAll, `Initial` file, all two-body families, AP/AP+P/General orbital output, no orbital file, non-converged run; case inputs only, the driver builds C from `extern/` | `uv run --no-project python scripts/check_complex_uhf_c_parity.py` (add `--write` to regenerate `tests/fixtures/complex_uhf/`) |
 | `rbm_header.c` | Declared width 97 with complete flags and sparse mappings | `python3 scripts/check_c_reader_audits.py` |
 | `opttrans_activation.c` | Explicit enabled/disabled state and defined flag writes | `python3 scripts/check_c_reader_audits.py` |
 | `orbital_flags.c` | Function-level row-order flags with supplied complex argument 2 (production normalizes orbital headers to 1) | `python3 scripts/check_c_reader_audits.py` |
@@ -280,3 +281,14 @@ never modified. It generates `tests/fixtures/c_order_sr_operands/`; provenance
 (source/patch/binary SHA-256, compiler, BLAS, image, command) is recorded in
 that directory's `PROVENANCE.md`. This is a native single-rank operand check,
 distinct from the standalone fixed-operand CG oracle (`ctest_cg_refresh.c`).
+
+## Grouped `NSplitSize` runs (#349)
+
+`grouped_nsplit_349/generate.sh` builds the unmodified `extern/mVMC-1.3.0`
+`vmc.out` and runs it on the `physcal_181` inputs at 1/2/4 ranks and
+`NSplitSize` 1/2/4 for FSZ PhysCal and ParaOpt (`NQPFull = 2`), Lanczos PhysCal
+and OptTrans (`-o`). Outputs go to `tests/fixtures/grouped_nsplit_349/` with
+`PROVENANCE.txt`; see that directory's `README.md` for the per-combination
+findings, including the C defect that keeps grouped SR-CG rejected. This is a
+full native C/MPI run, not a kernel check. Run inside the Dev Container:
+`SOURCE_COMMIT=$(git -C extern/mVMC-1.3.0 rev-parse HEAD) c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c`.
