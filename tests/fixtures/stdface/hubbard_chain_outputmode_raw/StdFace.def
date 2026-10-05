@@ -1,0 +1,7 @@
+model = "Hubbard"
+lattice = "chain"
+L = 2
+U = 4.0
+t = 1.0
+ncond = 2
+outputmode = "raw"

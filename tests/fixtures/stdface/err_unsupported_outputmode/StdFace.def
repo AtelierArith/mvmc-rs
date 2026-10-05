@@ -1,0 +1,7 @@
+model = "Hubbard"
+lattice = "chain"
+L = 6
+U = 4.0
+t = 1.0
+ncond = 6
+outputmode = bogus

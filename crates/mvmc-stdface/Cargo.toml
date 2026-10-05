@@ -1,0 +1,11 @@
+[package]
+name = "mvmc-stdface"
+version = "0.0.0"
+description = "Pure-Rust port of the mVMC StdFace (Standard mode) Expert-input generator"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]

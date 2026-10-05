@@ -1,0 +1,8 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+
+  ERROR !  "=" is NOT found !
+

@@ -9,6 +9,7 @@ members = [
     "crates/mvmc-expert-parsers",
     "crates/mvmc-core",
     "crates/mvmc-uhf",
+    "crates/mvmc-stdface",
     "crates/mvmc-cli",
     "xtask",
 ]
@@ -41,6 +42,7 @@ pfapack = { path = "crates/pfapack", version = "0.0.0" }
 mvmc-expert-parsers = { path = "crates/mvmc-expert-parsers", version = "0.0.0" }
 mvmc-core = { path = "crates/mvmc-core", version = "0.0.0" }
 mvmc-uhf = { path = "crates/mvmc-uhf", version = "0.0.0" }
+mvmc-stdface = { path = "crates/mvmc-stdface", version = "0.0.0" }
 
 # --- numerics / data ---
 num-complex = "0.4"

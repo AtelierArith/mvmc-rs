@@ -1,0 +1,8 @@
+model = "Hubbard"
+lattice = "chain"
+L = 6
+U = 4.0
+t = 1.0
+ncond = 6
+NSROptItrStep == 33
+RndSeed = 5 = 6

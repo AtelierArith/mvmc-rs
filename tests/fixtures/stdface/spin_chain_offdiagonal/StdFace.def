@@ -1,0 +1,14 @@
+model = "Spin"
+lattice = "chain"
+L = 4
+Jx = 1.0
+Jy = 1.0
+Jz = 1.0
+Jxy = 0.3
+Jyx = -0.2
+Jxz = 0.1
+Jyz = 0.4
+Jzx = -0.15
+Jzy = 0.35
+2Sz = 0
+ComplexType = 1

@@ -1,0 +1,3 @@
+model = "Boson"
+lattice = "chain"
+L = 6

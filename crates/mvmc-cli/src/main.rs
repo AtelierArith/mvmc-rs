@@ -35,8 +35,18 @@ mod physcal_trace;
 fn print_usage(program: &str) {
     eprintln!("Usage: {program} <namelist.def> [options]");
     eprintln!("       {program} uhf <namelist.def> [OptParaFile]");
+    eprintln!("       {program} -s <stan.in> [options]");
+    eprintln!("       {program} --dry-run <stan.in>");
     eprintln!();
     eprintln!("Options:");
+    eprintln!(
+        "  -s, --standard  Standard mode: generate the Expert files from <stan.in> (StdFace)"
+    );
+    eprintln!(
+        "                  into --out-dir (default: current directory), then run namelist.def"
+    );
+    eprintln!("  --dry-run       Generate the Expert files from <stan.in> and stop (vmcdry.out)");
+    eprintln!("  -e, --expert    Expert mode (default; accepted for C compatibility)");
     eprintln!("  --nsteps <N>    SR optimisation steps [default: NSROptItrStep in modpara.def]");
     eprintln!("  --out-dir <DIR> Output directory      [default: namelist parent dir]");
     eprintln!("  --seed <N>      RNG seed override     [default: RndSeed in modpara.def]");
@@ -73,6 +83,34 @@ fn run_uhf(args: &[String]) -> i32 {
     }
 }
 
+/// `StdFace_main(input)` writing the Expert files into `gen_dir`; prints what C prints to
+/// `stdout` and returns the process exit status (0, or C's `exit(-1)` status on failure).
+fn run_stdface(input: &Path, gen_dir: &Path) -> i32 {
+    if let Err(error) = std::fs::create_dir_all(gen_dir) {
+        eprintln!("error: cannot create {}: {error}", gen_dir.display());
+        return 1;
+    }
+    match mvmc_stdface::stdface_main(input, gen_dir) {
+        Ok(report) => {
+            print!("{}", report.log);
+            0
+        }
+        Err(failure) => {
+            print!("{}", failure.log);
+            match failure.error {
+                mvmc_stdface::StdFaceError::Exit(code) => {
+                    eprintln!("error: StdFace failed (exit status {code})");
+                    code
+                }
+                mvmc_stdface::StdFaceError::Io(message) => {
+                    eprintln!("error: {message}");
+                    1
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let program = args.first().map(String::as_str).unwrap_or("mvmc");
@@ -93,6 +131,8 @@ fn main() {
     let mut flush_interval_arg: Option<i64> = None;
     let mut physcal_params: Option<PathBuf> = None;
     let mut physcal_trace_dir: Option<PathBuf> = None;
+    let mut standard_mode = false;
+    let mut dry_run = false;
 
     let mut idx = 1;
     while idx < args.len() {
@@ -173,6 +213,15 @@ fn main() {
             "-o" | "--opt-trans" => {
                 opt_trans_arg = true;
             }
+            "-s" | "--standard" => {
+                standard_mode = true;
+            }
+            "-e" | "--expert" => {
+                standard_mode = false;
+            }
+            "--dry-run" => {
+                dry_run = true;
+            }
             "--physcal" => {
                 idx += 1;
                 physcal_params = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
@@ -213,6 +262,12 @@ fn main() {
         }
     };
 
+    // vmcdry.out: generate the Expert files from the Standard-mode input and stop.
+    if dry_run {
+        let gen_dir = out_dir_arg.clone().unwrap_or_else(|| PathBuf::from("."));
+        process::exit(run_stdface(&namelist, &gen_dir));
+    }
+
     if physcal_trace_dir.is_some()
         && (physcal_params.is_none()
             || mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok())
@@ -236,6 +291,36 @@ fn main() {
             None
         }
     };
+
+    // Standard mode (vmcmain.c -s): rank 0 runs StdFace_main, then every rank reads namelist.def.
+    let mut namelist = namelist;
+    if standard_mode {
+        let gen_dir = out_dir_arg.clone().unwrap_or_else(|| PathBuf::from("."));
+        #[cfg(feature = "mpi")]
+        let status = match &mpi_context {
+            Some(context) => {
+                let mut status = [if context.is_root() {
+                    i64::from(run_stdface(&namelist, &gen_dir))
+                } else {
+                    0
+                }];
+                context
+                    .broadcast_i64(0, &mut status)
+                    .unwrap_or_else(|error| {
+                        eprintln!("error: {error}");
+                        process::exit(1);
+                    });
+                status[0] as i32
+            }
+            None => run_stdface(&namelist, &gen_dir),
+        };
+        #[cfg(not(feature = "mpi"))]
+        let status = run_stdface(&namelist, &gen_dir);
+        if status != 0 {
+            process::exit(status);
+        }
+        namelist = gen_dir.join("namelist.def");
+    }
 
     // MVMC_NSTEPS env var (CLI flag takes precedence)
     let nsteps_env: Option<i64> = std::env::var("MVMC_NSTEPS")

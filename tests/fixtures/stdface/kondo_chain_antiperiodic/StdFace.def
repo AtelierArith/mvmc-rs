@@ -1,0 +1,8 @@
+model = "KondoLattice"
+lattice = "chain"
+L = 4
+t = 1.0
+J = 4.0
+ncond = 4
+phase0 = 180
+Lsub = 2

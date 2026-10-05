@@ -36,6 +36,7 @@ path = "examples/hubbard_chain.rs"
 mvmc-core = { workspace = true }
 mvmc-expert-parsers = { workspace = true }
 mvmc-uhf = { workspace = true }
+mvmc-stdface = { workspace = true }
 sfmt19937 = { workspace = true }
 tracing = { workspace = true }
 

@@ -1,0 +1,4 @@
+model = "Spin"
+lattice = "chain"
+L = 6
+J = 1.0

@@ -1,0 +1,7 @@
+model = "HubbardGC"
+lattice = "chain"
+L = 4
+U = 1.0
+t = 1.0
+ncond = 4
+2Sz = 0
