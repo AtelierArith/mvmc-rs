@@ -9,6 +9,16 @@ name: Explicit bounded optional gates
         default: general
         type: choice
         options: [general, lanczos, mpi, thread, all]
+      ctest_models:
+        description: >-
+          Optional explicit long (20-step) ctest gate: comma-separated model names or
+          "all". Empty leaves the long ctest gate NotRun. Unknown models are
+          Unsupported and models without independent references fail
+          (MissingFixture/UNVERIFIED); neither is reported as Pass. Model coverage
+          itself is tracked by #180.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -118,6 +128,63 @@ jobs:
         with:
           name: optional-family-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/optional-package-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+
+  ctest-long:
+    # Outside the bounded-family aggregate ledger: its own job status is the
+    # verdict. Skipped (NotRun) unless a selection is dispatched explicitly.
+    name: Explicit long ctest 20-step gate (Linux x86_64)
+    if: inputs.ctest_models != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: never
+      CTEST_MODELS: ${{ inputs.ctest_models }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: optional-ctest-long
+          tools: nextest
+      - name: Run ONLY the selected long ctest gates (fail on missing/unsupported)
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/optional-ctest-long
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/ctest-long"
+          {
+            MVMC_RS_CTEST_MODELS="$CTEST_MODELS" cargo nextest run -p mvmc-core \
+              --cargo-profile test-fast --test ctest_equivalent --run-ignored only \
+              -E 'test(rust_ctest_equivalent_selected_models)' \
+              --no-fail-fast --retries 0 --no-capture
+            MVMC_RS_CTEST_PREFIX_MODELS="$CTEST_MODELS" cargo nextest run -p mvmc-core \
+              --cargo-profile test-fast --test ctest_model_prefixes --run-ignored only \
+              -E 'test(canonical_models_match_independent_prefix_oracles)' \
+              --no-fail-fast --retries 0 --no-capture
+          } 2>&1 | tee "$RUNNER_TEMP/ctest-long/nextest.log"
+      - name: Report per-model status (NotRun/Unsupported/MissingFixture are not Pass)
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### Long ctest gate (selection: \`$CTEST_MODELS\`)"
+            echo "Job status: $JOB_STATUS (only Pass when every selected model executed)"
+            echo '```'
+            grep -E 'parity gate .*(NotRun|MissingFixture|Unsupported|Failure|Pass)|UNVERIFIED' \
+              "$RUNNER_TEMP/ctest-long/nextest.log" || echo "no gate status lines recorded"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain long ctest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-ctest-long-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ctest-long/
           if-no-files-found: error
 
   aggregate:
