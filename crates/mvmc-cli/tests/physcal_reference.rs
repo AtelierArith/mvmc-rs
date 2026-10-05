@@ -87,6 +87,9 @@ fn check(model: &str, mode: &str, opt_trans: bool) {
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect::<Vec<_>>();
+    // C InitFile always creates one `_time_` file (NDataIdxStart=7); its content
+    // ends with a wall-clock ctime string and is checked in run_log_files.rs.
+    expected_names.push("zvo_time_007.dat".to_string());
     expected_names.sort();
     actual_names.sort();
     assert_eq!(
@@ -382,6 +385,8 @@ fn all_hamiltonian_terms_cli_lanczos_matches_independent_base_and_corrected_outp
             .unwrap()
             .map(|entry| entry.unwrap().file_name().into_string().unwrap())
             .collect::<Vec<_>>();
+        // C InitFile always creates one `_time_` file (NDataIdxStart=1).
+        expected_names.push("zvo_time_001.dat".to_string());
         expected_names.sort();
         actual_names.sort();
         assert_eq!(

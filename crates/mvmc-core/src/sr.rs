@@ -17,6 +17,7 @@ use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 
 use crate::c_timer::CTimer;
+use crate::output_files::SrInfoRow;
 use crate::state::VmcOptimizationState;
 
 /// Select an SR component using either Rust's pair layout or C's native
@@ -79,6 +80,19 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
     state: &mut VmcOptimizationState,
     timer: &mut CTimer<TIMED>,
 ) -> i32 {
+    stochastic_opt_real_with_sr_info_timed(data, state, timer, &mut None)
+}
+
+/// Direct real SR that also reports the C `_SRinfo.dat` row (`stcopt.c:157`).
+///
+/// `sr_info` is set only when a system is solved (C reaches the print after the
+/// solve, before the finite check), and is left untouched otherwise.
+pub fn stochastic_opt_real_with_sr_info_timed<const TIMED: bool>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    timer: &mut CTimer<TIMED>,
+    sr_info: &mut Option<SrInfoRow>,
+) -> i32 {
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
     if n_para == 0 {
@@ -119,7 +133,6 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
             data.modpara.dsr_opt_sta_del,
             data.modpara.dsr_opt_step_dt,
         );
-        let _ = s_diag;
         timer.stop(56);
         timer.start(57);
         let observation =
@@ -131,12 +144,19 @@ pub fn stochastic_opt_real_timed<const TIMED: bool>(
         if result.is_err() {
             return 1;
         }
+        *sr_info = Some(direct_real_sr_info(
+            data,
+            &s_diag,
+            &smat_to_para_idx,
+            &g,
+            n_para,
+        ));
         timer.start(52);
         apply_parameter_update(data, &smat_to_para_idx, &g, n_proj);
         timer.stop(52);
         0
     } else {
-        stochastic_opt_complex_timed(data, state, timer)
+        stochastic_opt_complex_with_sr_info_timed(data, state, timer, sr_info)
     }
 }
 
@@ -153,6 +173,16 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     timer: &mut CTimer<TIMED>,
+) -> i32 {
+    stochastic_opt_complex_with_sr_info_timed(data, state, timer, &mut None)
+}
+
+/// Direct complex SR that also reports the C `_SRinfo.dat` row (`stcopt.c:157`).
+pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    timer: &mut CTimer<TIMED>,
+    sr_info: &mut Option<SrInfoRow>,
 ) -> i32 {
     let n_proj = data.projection_layout().n_proj;
     let n_para = data.count_variational_parameters();
@@ -237,6 +267,13 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
     if result.is_err() {
         return 1;
     }
+    *sr_info = Some(direct_complex_sr_info(
+        data,
+        &s_diag,
+        &smat_to_para_idx,
+        &g,
+        n_para,
+    ));
     timer.start(52);
     for (si, &pi) in smat_to_para_idx.iter().enumerate() {
         let r = g[si];
@@ -250,6 +287,70 @@ pub fn stochastic_opt_complex_timed<const TIMED: bool>(
     }
     timer.stop(52);
     0
+}
+
+/// C's search for the element of largest magnitude (strict `<` keeps the first).
+fn largest_magnitude(solution: &[f64]) -> (f64, usize) {
+    let mut imax = 0;
+    for i in 0..solution.len() {
+        if solution[imax].abs() < solution[i].abs() {
+            imax = i;
+        }
+    }
+    (solution[imax], imax)
+}
+
+/// Row for the complex layout: C index space is `0..2*NPara` (`stcopt.c:60-157`).
+fn direct_complex_sr_info(
+    data: &ExpertModeData,
+    s_diag: &[f64],
+    smat_to_para_idx: &[usize],
+    solution: &[f64],
+    n_para: usize,
+) -> SrInfoRow {
+    let s_max = s_diag
+        .iter()
+        .copied()
+        .fold(s_diag[0], |m, v| if v > m { v } else { m });
+    let s_min = s_diag
+        .iter()
+        .copied()
+        .fold(s_diag[0], |m, v| if v < m { v } else { m });
+    let cut = s_max * data.modpara.dsr_opt_red_cut;
+    let (mut opt_num, mut cut_num) = (0, 0);
+    for (pi, &diag) in s_diag.iter().enumerate() {
+        if !component_is_optimized(data, pi) {
+            opt_num += 1;
+        } else if diag < cut {
+            cut_num += 1;
+        }
+    }
+    let (r_max, imax) = largest_magnitude(solution);
+    SrInfoRow {
+        n_para: n_para as i64,
+        n_smat: smat_to_para_idx.len() as i64,
+        opt_num,
+        cut_num,
+        s_diag_max: s_max,
+        s_diag_min: s_min,
+        r_max,
+        i_max: smat_to_para_idx[imax] as i64,
+        cg_info: None,
+    }
+}
+
+/// Row for the real fast path. C expands the real matrix into the complex
+/// layout (index `2*pi` real, `2*pi+1` imaginary with zero variance).
+fn direct_real_sr_info(
+    data: &ExpertModeData,
+    s_diag: &[f64],
+    smat_to_para_idx: &[usize],
+    solution: &[f64],
+    n_para: usize,
+) -> SrInfoRow {
+    let expanded: Vec<f64> = s_diag.iter().flat_map(|&v| [v, 0.0]).collect();
+    let doubled: Vec<usize> = smat_to_para_idx.iter().map(|&pi| 2 * pi).collect();
+    direct_complex_sr_info(data, &expanded, &doubled, solution, n_para)
 }
 
 fn collect_active_real(

@@ -71,12 +71,20 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
     std::fs::create_dir_all(&dir).unwrap();
     data.modpara.c_data_file_head = "custom".into();
     let row = "    1     1     0     0  2.00000e+00  2.00000e+00 -5.00000e-01     0, 1\n";
+    let mut files = mvmc_core::output_files::RunFiles::init(
+        &data,
+        &dir,
+        mvmc_core::output_files::RunKind::ParaOpt,
+        None,
+    )
+    .unwrap();
     for _ in 0..2 {
         assert_eq!(
-            mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
+            mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&mut files)).unwrap(),
             0
         );
     }
+    files.close().unwrap();
     assert_eq!(
         std::fs::read_to_string(dir.join("custom_SRinfo.dat")).unwrap(),
         format!("#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n{row}{row}")
@@ -84,7 +92,7 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
     data.optimization_flags = vec![0, 0];
     let before = data.slater_params.clone();
     assert_eq!(
-        mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, Some(&dir)).unwrap(),
+        mvmc_core::sr_cg::stochastic_opt_cg(&mut data, &state, None).unwrap(),
         0
     );
     assert_eq!(data.slater_params, before);

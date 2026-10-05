@@ -176,6 +176,7 @@ fn public_call(
                 // Only the healthy control stops before SR. Failure cells leave
                 // SR enabled, proving that the sampler error prevents the update.
                 skip_sr: healthy_control,
+                file_flush_interval: None,
             },
         )
     };

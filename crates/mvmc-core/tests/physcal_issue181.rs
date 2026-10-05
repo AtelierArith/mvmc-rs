@@ -876,8 +876,10 @@ fn assert_reference(actual: &Path, expected: &Path) {
 fn snapshot(dir: &Path) -> BTreeSet<(String, String)> {
     fs::read_dir(dir)
         .unwrap()
+        .map(|entry| entry.unwrap())
+        // The `_time_` file ends each row with a wall-clock ctime string.
+        .filter(|entry| !entry.file_name().to_string_lossy().contains("_time_"))
         .map(|entry| {
-            let entry = entry.unwrap();
             (
                 entry.file_name().to_string_lossy().into_owned(),
                 fs::read_to_string(entry.path()).unwrap(),
@@ -1978,9 +1980,13 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
                 }
             }
         }
+        // C InitFile also creates one `_time_` file (NDataIdxStart=7); it is not
+        // part of the numerical reference set (its rows end in a ctime string).
+        let mut actual_names = names(&out);
+        assert!(actual_names.iter().any(|name| name == "zvo_time_007.dat"));
+        actual_names.retain(|name| !name.contains("_time_"));
         assert_eq!(
-            names(&out),
-            expected_names,
+            actual_names, expected_names,
             "{} two-frame exact file set",
             model.name
         );
@@ -2022,10 +2028,12 @@ fn energy_only_physcal_zero_green_file_sets_follow_native_c_all_lanczos_modes() 
         let out = output_dir("zero-green", &format!("mode-{mode}"));
         let result = mvmc_core::vmc_phys_cal_to_dir(preparation, &out).unwrap();
         assert_eq!(result.iterations, 1);
-        let actual = fs::read_dir(&out)
+        let mut actual = fs::read_dir(&out)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect::<BTreeSet<_>>();
+        // C InitFile creates one `_time_` file in PhysCal mode as well.
+        assert!(actual.remove("zvo_time_007.dat"));
         let expected = fs::read_to_string(fixture.join(format!("mode-{mode}-files.txt")))
             .unwrap()
             .lines()
