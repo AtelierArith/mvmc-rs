@@ -48,8 +48,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 
 | # | 領域 | C | Rust |
 |---|------|---|------|
-| 1 | ドライバーのオプション | `-b -h -m -o -F -e -s -v` | `-b`, `-m`, `-F`, `-e`, `-s`, `-v` なし。オプション名が異なります([8.1](08-running.md#81-mvmcコマンド)) |
-| 2 | Standardモード / StdFace | 組み込み(`-s`) | 提供されません |
+| 1 | ドライバーのオプション | `-b -h -m -o -F -e -s -v` | `-b`, `-m`, `-F`, `-v` なし(`-e`, `-s` は受理)。オプション名が異なります([8.1](08-running.md#81-mvmcコマンド)) |
+| 2 | Standardモード / StdFace | 組み込み(`-s`) | [7.6](07-input-files.md#76-standard-モードstdface)の格子について `mvmc -s` / `--dry-run`。他は未移植 |
 | 3 | 最適化中の `zvo_out`/`zvo_var` | `zvo_out_NNN.dat`, `zvo_var_NNN.dat` | `zvo_out.dat`, `zvo_var.dat` |
 | 4 | `zvo_SRinfo.dat` | 直接法とCGの両方のソルバーで書き出し | CGのみ |
 | 5 | `zvo_time_NNN.dat`, `zvo_varbin_NNN.dat` | 書き出し(`-b` でバイナリ) | 書き出されません |

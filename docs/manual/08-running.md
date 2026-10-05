@@ -22,6 +22,9 @@ mvmc <namelist.def> [options]
 | `-o`, `--opt-trans` | enable the C OptTrans mode (the C driver's `-o`) | off |
 | `--physcal <PATH>` | run fixed-parameter PhysCal using the parameter file `PATH` ([8.2](#82-physical-quantities-with-fixed-parameters)) | off |
 | `--physcal-trace <NEW_DIR>` | write non-consuming serial PhysCal diagnostics (stage-by-stage records of the PhysCal run) into the *new* directory `NEW_DIR`; requires `--physcal` and a single-process launch | off |
+| `-s`, `--standard` | Standard mode: generate the Expert files from the StdFace input into `--out-dir` (default: current directory), then run `namelist.def` ([7.6](07-input-files.md#76-standard-mode-stdface)) | off |
+| `--dry-run` | generate the Expert files from the StdFace input and stop (C `vmcdry.out`) | off |
+| `-e`, `--expert` | Expert mode (default; accepted for C compatibility) | on |
 | `--help`, `-h` | print usage | |
 
 Exit status: `0` success, `1` input/validation/runtime error (the message starts with `error:`), `2` usage error
@@ -29,7 +32,7 @@ Exit status: `0` success, `1` input/validation/runtime error (the message starts
 directory is "namelist parent dir"; the code uses `<namelist parent>/output` **(observed)**.
 
 Unlike the C driver (`getopt` string `"bhm:oF:esv"`, `vmcmain.c:46`), `mvmc` has no `-b` (binary output), `-m` (multi-definition mode),
-`-F` (flush interval), `-e`/`-s` (Expert/Standard mode; only Expert input exists), `-v` (version) or positional initial-parameter file (use `--initial-def`).
+`-F` (flush interval), `-v` (version) or positional initial-parameter file (use `--initial-def`).
 
 ### Selecting the calculation
 
@@ -54,10 +57,10 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:54`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:449`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:647`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:468`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:114`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:560`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:758`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:579`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `getopt` options other than `-o` are not implemented.
 

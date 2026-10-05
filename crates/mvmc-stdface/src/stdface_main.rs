@@ -9,6 +9,7 @@
 use crate::ccomplex::C64;
 use crate::cfmt;
 use crate::chain_lattice::std_face_chain;
+use crate::ladder::std_face_ladder;
 use crate::model_util as mu;
 use crate::out::{exit, Out, Res, StdFaceError};
 use crate::outf;
@@ -1642,6 +1643,7 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
     // Generate Hamiltonian definition files
     match s.lattice.as_str() {
         "chain" | "chainlattice" => std_face_chain(o, &mut s)?,
+        "ladder" | "ladderlattice" => std_face_ladder(o, &mut s)?,
         "face-centeredorthorhombic"
         | "fcorthorhombic"
         | "fco"
@@ -1652,8 +1654,6 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
         | "honeycomblattice"
         | "kagome"
         | "kagomelattice"
-        | "ladder"
-        | "ladderlattice"
         | "orthorhombic"
         | "simpleorthorhombic"
         | "cubic"

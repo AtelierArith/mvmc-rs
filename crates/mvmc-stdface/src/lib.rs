@@ -22,6 +22,7 @@ pub mod ccomplex;
 pub mod cexpr;
 pub mod cfmt;
 pub mod chain_lattice;
+pub mod ladder;
 pub mod model_util;
 pub mod out;
 pub mod stdface_main;

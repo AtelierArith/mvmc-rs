@@ -11,9 +11,9 @@ Rust implementation differs, and gives the supported/rejected matrix, which is
 taken directly from `crates/mvmc-core/src/validation.rs`.
 
 The Standard-mode front end of the C package (`vmcdry`/StdFace, the `-s` option)
-is **not** part of the Rust workspace: generate Expert-mode files with the C
-tools, or use the committed examples under `benchmark/hubbard_chain/inputs/`
-and `tests/fixtures/` (see the [tutorial](10-tutorial.md)).
+is available as `mvmc -s` / `mvmc --dry-run` for the lattices listed in [7.6](#76-standard-mode-stdface);
+otherwise generate Expert-mode files with the C tools, or use the committed examples under
+`benchmark/hubbard_chain/inputs/` and `tests/fixtures/` (see the [tutorial](10-tutorial.md)).
 
 ## 7.1 `namelist.def`
 
@@ -220,5 +220,32 @@ check; this asymmetry was observed with a release build and is listed in [11.5](
 
 ### Behaviour of the C program that Rust does not provide
 
-Binary output (`-b`, `NFileFlushInterval`/`-F`), multi-definition mode (`-m`), Standard mode (`-s`), `--version` (`-v`),
+Binary output (`-b`, `NFileFlushInterval`/`-F`), multi-definition mode (`-m`), `--version` (`-v`),
 the `zvo_time_NNN.dat` progress file, back-flow (`BF`), and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
+
+## 7.6 Standard mode (StdFace)
+
+`mvmc -s <stan.in>` ports the C `-s` option: the Standard-mode keyword file is read by the pure-Rust
+`mvmc-stdface` crate (a port of `extern/mVMC-1.3.0/src/StdFace/src`, mVMC solver branches only), the Expert
+files (`modpara.def`, `namelist.def`, `locspn.def`, `trans.def`, interaction files, `gutzwilleridx.def`,
+`jastrowidx.def`, `orbitalidx*.def`, `qptransidx.def`, `greenone.def`, `greentwo.def`, `geometry.dat`,
+`lattice.gp`) are written into `--out-dir` (default: the current directory, as in C), and the generated
+`namelist.def` is then run. `mvmc --dry-run <stan.in>` only generates the files (C `vmcdry.out`). The C text
+that goes to standard output is reproduced, and an error such as an unknown keyword exits with status 255 like
+C (`StdFace_exit(-1)`).
+
+The generated files and the console output are byte-identical to the C program for the checked-in fixtures
+(`tests/fixtures/stdface/`, provenance in `tests/fixtures/stdface/PROVENANCE.md`), including the sign of
+zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 bytes, `TrimSpaceQuote`,
+`strtok` on `=`, `sscanf` for numbers, duplicate detection), so for example `2S`, `method` and
+`CDataFileHead` are rejected because the mVMC build of StdFace does not know them.
+
+| Lattice (`lattice =`) | Status |
+|-----------------------|--------|
+| `chain` | supported |
+| `ladder` | supported (see the C defect below) |
+| tetragonal/square, triangular, honeycomb, kagome, orthorhombic/cubic, face-centered orthorhombic/cubic, pyrochlore, wannier90 | not yet ported (the run stops with a message) |
+
+C behaviour reproduced as is: for `lattice = ladder` the C code rejects `t`, `t'`, `V`, `V'`, `J`, `J'`
+(`NotUsed` checks that precede the reads), so a ladder needs `t0`, `t1`, `t2`, `t1'`, `t2'` (and `V*`, `J*`),
+and the Kondo coupling `J` cannot be set; the printed `Wx` of a ladder is overwritten by the number of legs.

@@ -6,7 +6,7 @@
 [`extern/mVMC-1.3.0/doc/en/source/expert.rst`](../../../extern/mVMC-1.3.0/doc/en/source/expert.rst)
 (日本語版: `doc/ja`)です。この章では構造を要約し、Rust 実装が異なる点を記録し、サポート/拒否の一覧を示します。この一覧は `crates/mvmc-core/src/validation.rs` から直接取ったものです。
 
-C パッケージの Standard モードのフロントエンド(`vmcdry`/StdFace、`-s` オプション)は Rust ワークスペースの一部では**ありません**。Expert モードのファイルは C のツールで生成するか、`benchmark/hubbard_chain/inputs/` および `tests/fixtures/` にコミットされている例を使ってください([チュートリアル](10-tutorial.md)を参照)。
+C パッケージの Standard モードのフロントエンド(`vmcdry`/StdFace、`-s` オプション)は、[7.6](#76-standard-モードstdface)に挙げた格子について `mvmc -s` / `mvmc --dry-run` として利用できます。それ以外では Expert モードのファイルは C のツールで生成するか、`benchmark/hubbard_chain/inputs/` および `tests/fixtures/` にコミットされている例を使ってください([チュートリアル](10-tutorial.md)を参照)。
 
 ## 7.1 `namelist.def`
 
@@ -198,5 +198,31 @@ PhysCal の列は `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`)
 
 ### C プログラムの動作のうち Rust が提供しないもの
 
-バイナリ出力(`-b`, `NFileFlushInterval`/`-F`)、複数定義モード(`-m`)、Standard モード(`-s`)、`--version` (`-v`)、
+バイナリ出力(`-b`, `NFileFlushInterval`/`-F`)、複数定義モード(`-m`)、`--version` (`-v`)、
 進捗ファイル `zvo_time_NNN.dat`、バックフロー(`BF`)、および `InterAll` の Lanczos は利用できません([11.3](11-compatibility.md#113-cリファレンスとの既知の相違)を参照)。
+
+## 7.6 Standard モード(StdFace)
+
+`mvmc -s <stan.in>` は C の `-s` オプションの移植です。Standard モードのキーワードファイルを純 Rust の
+`mvmc-stdface` クレート(`extern/mVMC-1.3.0/src/StdFace/src` の mVMC ソルバー分岐のみの移植)が読み、Expert
+ファイル(`modpara.def`、`namelist.def`、`locspn.def`、`trans.def`、相互作用ファイル、`gutzwilleridx.def`、
+`jastrowidx.def`、`orbitalidx*.def`、`qptransidx.def`、`greenone.def`、`greentwo.def`、`geometry.dat`、
+`lattice.gp`)を `--out-dir`(既定は C と同じくカレントディレクトリ)に書き出し、生成された `namelist.def`
+を実行します。`mvmc --dry-run <stan.in>` はファイル生成のみを行います(C の `vmcdry.out`)。C が標準出力に出す
+テキストを再現し、未知のキーワードなどのエラーは C と同様にステータス 255(`StdFace_exit(-1)`)で終了します。
+
+生成ファイルとコンソール出力は、チェックイン済みフィクスチャ(`tests/fixtures/stdface/`、来歴は
+`tests/fixtures/stdface/PROVENANCE.md`)に対して C プログラムとバイト単位で一致します(`-0.000000000000000`
+のような負のゼロの符号も含みます)。キーワードの解釈は C に従う(255 バイト単位の `fgets`、`TrimSpaceQuote`、
+`=` での `strtok`、数値の `sscanf`、重複検出)ため、たとえば `2S`、`method`、`CDataFileHead` は StdFace の
+mVMC ビルドが知らないキーワードとして拒否されます。
+
+| 格子(`lattice =`) | 状態 |
+|---------------------|------|
+| `chain` | 対応 |
+| `ladder` | 対応(下記の C の不具合を参照) |
+| tetragonal/square、triangular、honeycomb、kagome、orthorhombic/cubic、face-centered orthorhombic/cubic、pyrochlore、wannier90 | 未移植(メッセージを表示して停止します) |
+
+そのまま再現している C の挙動: `lattice = ladder` では C が `t`、`t'`、`V`、`V'`、`J`、`J'` を拒否する
+(読み取りの前に `NotUsed` 検査があるため)ので、ラダーでは `t0`、`t1`、`t2`、`t1'`、`t2'`(および `V*`、`J*`)を
+指定する必要があり、近藤結合 `J` は設定できません。表示される `Wx` はレッグ数で上書きされます。

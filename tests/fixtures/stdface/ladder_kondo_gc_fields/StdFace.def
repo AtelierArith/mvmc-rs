@@ -1,0 +1,10 @@
+model = "KondoGC"
+lattice = "ladder"
+W = 2
+L = 2
+t0 = 1.0
+t1 = 1.0
+ncond = 4
+h = -0.4
+Gamma = 0.3
+Gamma_y = 0.2

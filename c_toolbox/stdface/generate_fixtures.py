@@ -11,6 +11,7 @@ generated Expert files, the C `stdout` and the exit status are stored under
 source hashes, compiler, flags and commands.
 """
 import hashlib
+import cases_ladder
 import os
 import platform
 import shutil
@@ -163,6 +164,9 @@ EXTRA_CASES = {
     "err_zero_cell": 'model = "Hubbard"\nlattice = "chain"\nL = 0\nU = 1.0\nt = 1.0\nncond = 0\n',
     "err_missing_input_file": None,
 }
+
+
+EXTRA_CASES.update(cases_ladder.CASES)
 
 
 def sha256(path):
