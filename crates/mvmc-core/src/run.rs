@@ -6341,10 +6341,24 @@ mod callback_tests {
             };
             let files = names(dira);
             assert_eq!(files, names(dirb), "{case}");
+            // `_time_` rows end in a wall-clock ctime string (": Mon Oct  5 14:18:39 2026"),
+            // which differs between two runs that straddle a second boundary; compare the rest.
+            let strip_ctime = |bytes: Vec<u8>, name: &std::ffi::OsStr| -> Vec<u8> {
+                if !name.to_string_lossy().contains("_time_") {
+                    return bytes;
+                }
+                String::from_utf8(bytes)
+                    .unwrap()
+                    .lines()
+                    .map(|line| line.rsplit_once(": ").map_or(line, |(body, _)| body))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .into_bytes()
+            };
             for f in files {
                 assert_eq!(
-                    fs::read(dira.join(&f)).unwrap(),
-                    fs::read(dirb.join(&f)).unwrap(),
+                    strip_ctime(fs::read(dira.join(&f)).unwrap(), &f),
+                    strip_ctime(fs::read(dirb.join(&f)).unwrap(), &f),
                     "{case}: {f:?}"
                 );
             }
