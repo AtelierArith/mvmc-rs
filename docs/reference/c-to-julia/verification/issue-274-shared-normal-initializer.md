@@ -77,22 +77,48 @@ Earlier owner-guard failures likewise remain failures, not numerical passes.
 
 Publication incorporates main6689cd3e's test/doc-only PR287/288/289 delta without
 relabelling the frozen12c5 receipts. No performance/speedup claim is made.
-Independent native first-failure/retry/exhaustion operands, exact primitive
-trajectory at those boundaries and broader full20 sampling remain acceptance
-work under the related open issues.
+(Historical: native boundary operands were added later by PR #314; see the
+refreshed mapping below. Broader full20 sampling remains under #180.)
 
-## Acceptance mapping (keep #274 open)
+## Acceptance mapping (refreshed after PR #314)
 
-| Requirement | Actual coverage | Remaining independent evidence |
+Status refresh: PR #291 (initializer lifecycle), PR #304 (real zero-IP log, see
+`issue-274-real-zero-ip.md`) and PR #314 (ten native C-derived boundary fixtures)
+are merged. The earlier statement above that native first-failure/retry/exhaustion
+operands are missing is superseded by the table below. The frozen12c5 receipts
+earlier in this document remain historical and were not re-labelled.
+
+Native boundary fixtures: `tests/fixtures/issue274_native_boundaries/{first,retry,
+burn,recover,exhaust}.{real,complex}.json`, provenance in
+`tests/fixtures/issue274_native_boundaries.PROVENANCE.md`, consumed by
+`crates/mvmc-core/tests/native274_boundaries.rs` (`native274_{first,retry,burn,
+recover,exhaust}_{real,complex}`). Each case checks consumed primitive words,
+counts/cursor, defined configuration, final public caller state, INFO and
+collective ordinals against C checkpoint serialization (world1 caller prefixes,
+Linux x86_64, original `vmcmake.c`/`vmcmake_real.c`/`matrix.c`/`SFMT.c`). Caller-control
+fixtures: `tests/fixtures/issue274_caller_control/*.stdout`, consumed by the
+`sampling::normal_initial` unit tests. MPI: `mpi_issue274_normal_initialization.rs`
+(explicit ignored 2/4-rank gate).
+
+| Requirement | Coverage on main | Still absent |
 | --- | --- | --- |
-| First success | C `success.stdout`, `shared_loop_matches_independent_c_caller_controls`; public zero-preflight first-attempt test | Native C placement/kernel primitive/configuration fixture at this lifecycle boundary |
-| Rejected layout / retry | C `retry.stdout` and `peer-retry.stdout`, signed-MAX ordinal checks | Actual failing kernel operands and resulting native C/Rust primitive/configuration sequence |
-| Negative native INFO | C `negative.stdout`, `negative_info_is_not_a_boolean_retry`; MPI signed negative MAX | Native negative-kernel acquisition where supported (not synthetic status alone) |
-| Subsequent/nonfinite-IP recovery | Both caller paths use the shared initializer and distinct setup; ordinary full regressions pass | Source-pinned native recovery fixture, exact words/count/configuration at its first failure |
-| Burn restore | Storage/preflight regressions; MPI burn-shape/burn-kernel peer errors with raw624/cursor/count/future preserved | Native successful restore/recovery trajectory fixture at the relevant boundary |
-| Exhaustion | C `exhaustion.stdout` and `call101-success.stdout`, exact101 control calls and typed last INFO | Actual native placement/kernel/RNG/configuration exhaustion operands |
-| MPI ordering/propagation | Live worlds2/4, widths1/2, signed MAX and real/complex typed peer failures;80/160 markers | Native numeric failure/recovery model collective trajectory, distinct from synthetic preconditions |
+| First success | `native274_first_{real,complex}`; `shared_loop_matches_independent_c_caller_controls` (success.stdout) | none for the initializer prefix |
+| Rejected layout / retry | `native274_retry_{real,complex}` (primitive count 8); retry.stdout, peer-retry.stdout, `maximum_status_controls_retry_not_local_status` | none for world1 |
+| Negative native INFO | negative.stdout, `negative_info_is_not_a_boolean_retry`; MPI signed negative MAX | Caller-control only (stub kernel); no native-kernel negative-INFO acquisition |
+| Subsequent / nonfinite-IP recovery | `native274_recover_{real,complex}` (single C recovery, count 4); `native274_real_log_ip.rs` (4 analytic zero/negative/subnormal/reduction-order tests, `clog` semantics) | none for the prefix |
+| Burn restore | `native274_burn_{real,complex}` (count 0 restore); storage/preflight units; MPI burn-shape/burn-kernel peer errors | none for the prefix |
+| Exhaustion | `native274_exhaust_{real,complex}` (101 placement/factor attempts, count 202); exhaustion.stdout, `call101_exhausts_even_if_its_status_succeeds` | none |
+| MPI ordering / propagation | Live worlds 2/4 signed MAX and typed peer failures (80/160 markers) | Multi-rank native C trajectory; MPI protocol uses synthetic storage/status operands, and the native fixtures are world1 only |
 
-The six C fixtures establish independent caller order with stubs, not all native
-operands or primitive words. Passing full Rust suites does not fill those missing
-oracle requirements. This PR therefore uses Related to #274, not Closes #274.
+Scope notes. Intermediate configuration in the native fixtures is independently
+replayed placement, not live working-buffer observation; the full future624 tail
+comes from the common passive C observer pair. The ten fixtures are C
+initializer-prefix evidence only (zero proposal iterations), not a full sampling,
+FSZ, 13-model, thread or MPI trajectory. Broader full-model sampling trajectory
+parity is tracked by #180 (reference adoption by #185) and is not a #274
+deliverable. This refresh changes documentation only: no production code, fixture
+or tolerance changed. Verified on main36b1eb5a, Linux x86_64, `test-fast`:
+`native274_boundaries` 10 PASS, `native274_real_log_ip` 4 PASS,
+`sampling::normal_initial` unit tests and real FSZ regression binaries PASS
+(23 selected, 23 PASS); the MPI gate is explicit/ignored and was not rerun here.
+Related to #274, #180 and #185.
