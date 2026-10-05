@@ -330,3 +330,45 @@ fn trace_requires_physcal_and_rejects_mpi_before_initialization() {
     assert!(!trace.exists());
     assert!(!directory.0.join("out").exists());
 }
+
+#[test]
+fn trace_rejects_a_mode_that_contradicts_the_inputs_like_the_untraced_path() {
+    // The `--mode` label must agree with the input files on every CLI path; the trace
+    // path must not bypass the check. Real-declared inputs with `--mode cmp`.
+    let directory = OwnedDir::new();
+    let root = fixture("heisenberg_chain_real");
+    let trace = directory.0.join("trace");
+    let mut outcomes = Vec::new();
+    for traced in [false, true] {
+        let out = directory.0.join(format!("out-{traced}"));
+        let mut run = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+        run.arg(root.join("inputs/namelist.def"))
+            .arg("--physcal")
+            .arg(root.join("zqp_opt.dat"))
+            .args(["--seed", "1", "--mode", "cmp", "--out-dir"])
+            .arg(&out)
+            .env("OMP_NUM_THREADS", "1");
+        if traced {
+            run.arg("--physcal-trace").arg(&trace);
+        }
+        let result = run.output().unwrap();
+        assert_eq!(result.status.code(), Some(2), "traced={traced}");
+        let stderr = String::from_utf8_lossy(&result.stderr).into_owned();
+        assert!(
+            stderr.contains(
+                "--mode cmp contradicts the input files, which declare a real calculation"
+            ),
+            "traced={traced}: {stderr}"
+        );
+        assert!(
+            !out.exists(),
+            "no output before rejection (traced={traced})"
+        );
+        outcomes.push(stderr);
+    }
+    assert_eq!(
+        outcomes[0], outcomes[1],
+        "identical diagnostic on both paths"
+    );
+    assert!(!trace.exists(), "no trace directory before rejection");
+}
