@@ -1,0 +1,3 @@
+
+  Error: the value of lambda_U / lambda_J must be greater than or equal to 0. 
+

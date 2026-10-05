@@ -21,6 +21,7 @@ use crate::pyrochlore::std_face_pyrochlore;
 use crate::square_lattice::std_face_tetragonal;
 use crate::triangular_lattice::std_face_triangular;
 use crate::vals::{StdIntList, NAN_I, UNSET_STR};
+use crate::wannier90::std_face_wannier90;
 use std::path::Path;
 
 /// What a finished StdFace run printed.
@@ -28,6 +29,8 @@ use std::path::Path;
 pub struct StdFaceReport {
     /// Everything C prints to `stdout`.
     pub log: String,
+    /// Everything C prints to `stderr`.
+    pub stderr: String,
 }
 
 /// A failed StdFace run: the error plus everything printed before it.
@@ -37,6 +40,8 @@ pub struct StdFaceFailure {
     pub error: StdFaceError,
     /// Everything C prints to `stdout` before exiting.
     pub log: String,
+    /// Everything C prints to `stderr` before exiting.
+    pub stderr: String,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1535,29 +1540,43 @@ fn print_interactions(o: &mut Out, s: &mut StdIntList) -> Res<()> {
 // ---------------------------------------------------------------------------------------------
 
 /// `StdFace_main` on an in-memory input file (`name` is only echoed in the log). `None` stands
-/// for a file that cannot be opened.
+/// for a file that cannot be opened. Data files are read from the current directory, as in C.
 pub fn stdface_main_bytes(
     name: &str,
     input: Option<&[u8]>,
     out_dir: &Path,
 ) -> Result<StdFaceReport, StdFaceFailure> {
-    let mut o = Out::new(out_dir);
-    match run(&mut o, name, input) {
-        Ok(()) => Ok(StdFaceReport { log: o.log }),
-        Err(error) => Err(StdFaceFailure { error, log: o.log }),
+    stdface_main_bytes_in(name, input, Path::new("."), out_dir)
+}
+
+/// [`stdface_main_bytes`] reading the lattice data files (Wannier90 `zvo_*.dat`) from `data_dir`.
+pub fn stdface_main_bytes_in(
+    name: &str,
+    input: Option<&[u8]>,
+    data_dir: &Path,
+    out_dir: &Path,
+) -> Result<StdFaceReport, StdFaceFailure> {
+    let mut o = Out::new(out_dir).with_data_dir(data_dir);
+    let result = run(&mut o, name, input);
+    finish(&mut o, result)
+}
+
+fn finish(o: &mut Out, result: Res<()>) -> Result<StdFaceReport, StdFaceFailure> {
+    let (log, stderr) = (std::mem::take(&mut o.log), std::mem::take(&mut o.err));
+    match result {
+        Ok(()) => Ok(StdFaceReport { log, stderr }),
+        Err(error) => Err(StdFaceFailure { error, log, stderr }),
     }
 }
 
 /// `StdFace_main(fname)`: read the Standard-mode input `input` and write the Expert files into
-/// `out_dir`.
+/// `out_dir`. Data files are read from the current directory, as in C.
 pub fn stdface_main(input: &Path, out_dir: &Path) -> Result<StdFaceReport, StdFaceFailure> {
     let mut o = Out::new(out_dir);
     let data = std::fs::read(input).ok();
     let name = input.to_string_lossy().into_owned();
-    match run(&mut o, &name, data.as_deref()) {
-        Ok(()) => Ok(StdFaceReport { log: o.log }),
-        Err(error) => Err(StdFaceFailure { error, log: o.log }),
-    }
+    let result = run(&mut o, &name, data.as_deref());
+    finish(&mut o, result)
 }
 
 /// `fgets(buf, 256, fp)` over the whole file: chunks of at most 255 bytes ending at a newline.
@@ -1657,6 +1676,7 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
         "triangular" | "triangularlattice" => std_face_triangular(o, &mut s)?,
         "honeycomb" | "honeycomblattice" => std_face_honeycomb(o, &mut s)?,
         "kagome" | "kagomelattice" => std_face_kagome(o, &mut s)?,
+        "wannier90" => std_face_wannier90(o, &mut s)?,
         "face-centeredorthorhombic"
         | "fcorthorhombic"
         | "fco"
@@ -1667,14 +1687,6 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
             std_face_orthorhombic(o, &mut s)?
         }
         "pyrochlore" => std_face_pyrochlore(o, &mut s)?,
-        "wannier90" => {
-            outf!(
-                o,
-                "\nSorry, lattice {} is not ported to the Rust StdFace yet (issues #354-#357).\n",
-                s.lattice
-            );
-            return exit(-1);
-        }
         _ => unsupported_system(o, &s.model.clone(), &s.lattice.clone())?,
     }
 

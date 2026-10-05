@@ -1,0 +1,8 @@
+model = "Hubbard"
+lattice = "wannier90"
+W = 2
+L = 2
+ncond = 4
+2Sz = 0
+cutoff_t_a0w = 1.0
+cutoff_t_a1l = 1.0

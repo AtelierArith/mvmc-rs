@@ -1,0 +1,91 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Hubbard 
+  KEYWORD : lattice              | VALUE : wannier90 
+  KEYWORD : a0w                  | VALUE : 2 
+  KEYWORD : a0l                  | VALUE : 1 
+  KEYWORD : a1w                  | VALUE : -1 
+  KEYWORD : a1l                  | VALUE : 2 
+  KEYWORD : ncond                | VALUE : 5 
+  KEYWORD : 2sz                  | VALUE : 1 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase2 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+              a0W = 2         
+              a0L = 1         
+              a0H = 0           ######  DEFAULT VALUE IS USED  ######
+              a1W = -1        
+              a1L = 2         
+              a1H = 0           ######  DEFAULT VALUE IS USED  ######
+              a2W = 0           ######  DEFAULT VALUE IS USED  ######
+              a2L = 0           ######  DEFAULT VALUE IS USED  ######
+              a2H = 1           ######  DEFAULT VALUE IS USED  ######
+   Number of Cell = 5
+
+  @ Wannier90 Geometry 
+
+    Wannier90 Geometry file = zvo_geom.dat
+    Number of Correlated Sites = 1
+    Direct lattice vectors:
+         1.00000    0.00000    0.00000
+         0.00000    1.00000    0.00000
+         0.00000    0.00000    1.00000
+    Wannier centres:
+         0.00000    0.00000    0.00000
+         lambda_U = 1.00000     ######  DEFAULT VALUE IS USED  ######
+         lambda_J = 1.00000     ######  DEFAULT VALUE IS USED  ######
+            alpha = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Wannier90 hopping 
+
+         cutoff_t = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_length_t = -1.00000    ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][0] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][1] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[0][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][0] = -0.50000    ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][1] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[1][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_tVec[2][2] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+      EFFECTIVE terms:
+           R0   R1   R2 band_i band_f Hamiltonian
+           -1    0    0    0    0   -1.000000    0.000000
+            0   -1    0    0    0   -1.000000    0.000000
+      Total number of EFFECTIVE term = 2
+
+  @ Wannier90 Coulomb 
+
+         cutoff_u = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_length_U = 0.30000     ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[0] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[1] = 0           ######  DEFAULT VALUE IS USED  ######
+     cutoff_UR[2] = 0           ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][0] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][1] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[0][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][0] = -0.50000    ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][1] = 1.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[1][2] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][0] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][1] = 0.00000     ######  DEFAULT VALUE IS USED  ######
+  cutoff_UVec[2][2] = 0.50000     ######  DEFAULT VALUE IS USED  ######
+
+      EFFECTIVE terms:
+           R0   R1   R2 band_i band_f Hamiltonian
+            0    0    0    0    0    4.000000    0.000000
+      Total number of EFFECTIVE term = 1
+
+  @ Wannier9

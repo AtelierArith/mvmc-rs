@@ -47,14 +47,16 @@ uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c
 
 ## Layout
 
-`<case>/StdFace.def` is the input (absent for `err_missing_input_file`);
+`<case>/StdFace.def` is the input (absent for `err_missing_input_file`); Wannier90 cases also
+ship their data files (`zvo_geom.dat`, `zvo_hr.dat`, ...) next to it, read from the working
+directory by C and from the case directory by the Rust test;
 `<case>/expected/` holds every file the C program wrote plus `stdout.txt` (the complete
 C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 `<case>/expected_fixed/` (only where it differs) is the output of the *corrected* build
 (`build_reference.sh --fixed`: `lattice_defects.patch` applied to a copy of the C sources, see
 `tests/fixtures/stdface/README.md`). `expected/` stays the historical C output; the Rust
 port is compared with `expected_fixed/` when present, else with `expected/`.
-- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `9b044eecc4939a2c218b2df7b0b19d2cd4ef29094206141d3a9e87895624c415`
+- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `e016de226de80dad82fc466463f0b0a5cdaf715f413aef2f2c0701ada070b99a`
 
 ## Cases whose C output differs from the corrected build (`expected_fixed/`)
 
@@ -110,14 +112,7 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 - `err_triangular_spin_Jpp_conflict`
 - `err_triangular_spin_tpp_not_used`
 - `err_triangular_spin_tpp_not_used_c`
-- `gc_all_terms_chain`
-- `gc_all_terms_chain_kondo`
-- `gc_all_terms_honeycomb`
-- `gc_all_terms_kagome`
-- `gc_all_terms_ladder`
-- `gc_all_terms_square`
-- `gc_all_terms_square_kondo`
-- `gc_all_terms_triangular`
+- `err_wannier_missing_ncond`
 - `honeycomb_alias`
 - `honeycomb_hubbard`
 - `honeycomb_hubbard_antiperiodic`
@@ -168,6 +163,24 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 - `triangular_spin_Jpp_components`
 - `triangular_spin_Jpp_labels`
 - `triangular_spin_long_range`
+- `wannier_honeycomb_no_jr`
+- `wannier_honeycomb_spin`
+- `wannier_honeycomb_spin_gc`
+- `wannier_sample_mvmc_keywords`
+- `wannier_square_J_ignored`
+- `wannier_square_antiperiodic`
+- `wannier_square_box`
+- `wannier_square_cutoff_length_t`
+- `wannier_square_cutoff_t`
+- `wannier_square_cutoff_vec`
+- `wannier_square_gc_fields`
+- `wannier_square_height`
+- `wannier_square_hubbard`
+- `wannier_square_hubbard_no_ur`
+- `wannier_square_mu`
+- `wannier_square_nmptrans_0`
+- `wannier_square_sublattice`
+- `wannier_square_w3`
 
 ## Cases
 
@@ -509,12 +522,48 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 | `err_kagome_spin_Vpp_not_used` | generated | 0 | `82dc61c02ae7a72e555514424769bfb4963c245f197c33f131e62b5b9f96a375` |
 | `err_kagome_spin_Jpp_not_used` | generated | 0 | `90bdb2cd09623b65cf9762ea520b2fff600703690da9cb0a2b83668a05a8e9ca` |
 | `err_kagome_kondo_Jpp_not_used` | generated | 0 | `1c39e1995c2357708cc9e3c30fd199228cfe82bbdcba8d70d48d2d47d60d2e37` |
-| `gc_all_terms_chain` | generated | -11 | `5b00b10dcbee4ac65f18fe7a1ee6faef5443d49fb3bac9a2ac4c5b28dda51f92` |
-| `gc_all_terms_chain_kondo` | generated | -11 | `6bdd1f5f64f649ed6743e4ef7cfe6c87ce2288eb40a7fbce3f4ee07a8c3b86f2` |
-| `gc_all_terms_ladder` | generated | -11 | `ee9a0d3ea793a79dc4e6849e5aa4e85b49a22952a9c6161b49caf425b82630a9` |
-| `gc_all_terms_square` | generated | -11 | `01f50d086ede990c6285a12eaf139405cb9aaf1af269996d8c978146d484aff2` |
-| `gc_all_terms_triangular` | generated | -11 | `fdf043943cd52f033bb412b88365667f826653b29e568826becbeeef8e592120` |
-| `gc_all_terms_honeycomb` | generated | -11 | `6793b654dcacde70cb5b6422e1cf94093d4419e6bf137cfa10421a8b2f7c09e6` |
-| `gc_all_terms_kagome` | generated | -11 | `13301c6f865af62f4dc6b5a61cd8483bd07d88a59f1ac4b7da03743e890adb90` |
-| `gc_all_terms_square_kondo` | generated | -11 | `b552434eebb198c2e7ac324ace921c8202b36937754c137ef4e04eb874edc9e2` |
+| `sample_hubbard_wannier` | generated | 255 | `609fecaffff67657659f6fcbc52940146b722ab4c8e2a5c2bc48392d5cb78003` |
+| `wannier_sample_mvmc_keywords` | generated | -11 | `424a73f5de8d76b204af14819a6ab28f468e6a82abc7cfaf5a467da817fb6b0d` |
+| `wannier_square_hubbard` | generated | -11 | `e8f05c40edb6746a52a31911ca00a5f7a5d71e9d6360ec662233e545a53fc124` |
+| `wannier_square_hubbard_no_ur` | generated | -11 | `e8f05c40edb6746a52a31911ca00a5f7a5d71e9d6360ec662233e545a53fc124` |
+| `wannier_square_hubbard_UJ` | generated | 0 | `da4efd5baa381cc39f6372421efacaf0cb4ba0b86fd2314fe6d52f43ea36a35d` |
+| `wannier_square_lambda` | generated | 0 | `e0c868a6372a57b72bda709b122dcb082d18f2db63511daeb9c2cb284022427d` |
+| `wannier_square_lambda_UJ` | generated | 0 | `478858b9b39058a49057b5605adcfd4c6ecb7c3c6fc3fe6b4da202a431ba783e` |
+| `wannier_square_dc_hartree` | generated | 0 | `b9f425efd0e6bb8b5f89c3d4c0ba9305b5748f4f4bd0ecf034a8532144032834` |
+| `wannier_square_dc_hartree_u` | generated | 0 | `a16a47bd394b6e9feb4acba15396070305442c33111b88cc2dfa8ecb413d7009` |
+| `wannier_square_dc_full` | generated | 0 | `2ed320f846fcd813841fc92b1367fdcf3fe8595e973100d9d11ffbe986975e45` |
+| `wannier_square_dc_none` | generated | 0 | `f9a0eb1473ad4e19cf360822de7757327d621d64c29baebd9ec18a932bc7529f` |
+| `wannier_square_dc_full_alpha` | generated | 0 | `25c641e27ef7d2565a0c3a2cf7a15d28da32b8c0707ca0cee1149d3e1c3e2fbc` |
+| `wannier_square_cutoff_t` | generated | -11 | `41f571b5ba961bee862d2d83fa1ddb53f5e9ff61824e07d07ce2ce5b77f99bbf` |
+| `wannier_square_cutoff_length_t` | generated | -11 | `96a48b57bad4a7f4365f652207d490fc6b981d3fa9134dd4ecedb92ab293f90c` |
+| `wannier_square_cutoff_vec` | generated | -11 | `72c8906a992288257d3adf823f1133b88a290cc6a8df6a073eb8818e251751b8` |
+| `wannier_square_w3` | generated | -11 | `d60fefd6bd486c0725b2f3f9b1a20df0d55a95cb79914d532a2f9c52464552d0` |
+| `wannier_square_box` | generated | -11 | `83a25e418fb3e540012069be73bf797ed11cb0ebcbf947a9ec3e66d543cdfcbf` |
+| `wannier_square_height` | generated | -11 | `6ee3315c1b416380bb4e4dae9286fc7312c3559261ebc775281cc6a4b7165f3a` |
+| `wannier_square_antiperiodic` | generated | -11 | `deda35493626a6f5eadad942d7c16961537cac5fffbdaa43fa425f67d443ac09` |
+| `wannier_square_gc_fields` | generated | -11 | `6be18126ad2ad071307b2eaebea79990b5a9ce7c2d131c66331fa0ff326e58ec` |
+| `wannier_square_sublattice` | generated | -11 | `9e07f8b78bc4fd3d703d6131a77e9bc5fea7416df5289c43357cd3f3144cb8d8` |
+| `wannier_square_nmptrans_0` | generated | -11 | `549ec3cb6c8560ccc72337ed1466cc3b4d32c09b5db38461ca62a546b46d9208` |
+| `wannier_square_mu` | generated | -11 | `110403aaeddf45019c09952ec61c46bfe63408e957fc046ee3a8925a67a0477e` |
+| `wannier_honeycomb_hubbard` | generated | 0 | `ddd5c307cd3df81a838fd3817ab16ae6003873495057759935dde7eca0aad4de` |
+| `wannier_honeycomb_dc_full` | generated | 0 | `1e0e898bb718ed82f5b9ca34f4755ae85c85b5ae23a9cd303d828c8145de7c03` |
+| `wannier_honeycomb_dc_hartree` | generated | 0 | `72f4544244f02a13c5676c0fd461568b6072bb12f271e2588a52931f4e080662` |
+| `wannier_honeycomb_dc_hartree_u` | generated | 0 | `8b3bd2bd130bc858d5b5aa2c5da62261d952239dde53f63e01742a60964c0b7c` |
+| `wannier_honeycomb_no_jr` | generated | -6 | `7f5311b72271ae8280d016c35004e07a737d0b24fbbf33d2e78a6e8878bdbc98` |
+| `wannier_honeycomb_spin` | generated | -6 | `10cd0210d40bda464a036ac4272fd143ae17aed91402770e284a01d106ffc79d` |
+| `wannier_honeycomb_spin_s1` | generated | 0 | `10cd0210d40bda464a036ac4272fd143ae17aed91402770e284a01d106ffc79d` |
+| `wannier_honeycomb_spin_gc` | generated | -6 | `f531cd809d57b86e022be43359b72131c68c0cfa0c456593f8ffad72a9741259` |
+| `err_wannier_kondo` | generated | 255 | `f51f82334376859e73662704c6c65b54763c1a21d2cbc691ffe11ad6a66bd43d` |
+| `err_wannier_missing_geom` | generated | 255 | `e8f05c40edb6746a52a31911ca00a5f7a5d71e9d6360ec662233e545a53fc124` |
+| `err_wannier_lambda_negative` | generated | 255 | `882d0c46d2efcad55a8f5b8219a1c0ff84e83acc7b6809b1d31da1a93879fa6e` |
+| `err_wannier_lambda_J_negative` | generated | 255 | `9e45102ec9c4f21552872e828e635ce402d6a53ca9aa300f416a0e4bfb15d5a8` |
+| `err_wannier_bad_doublecounting` | generated | 255 | `15c38649411f4e5cfdaac49219faab89d52b3d2fd66bd356cdbc9ab19684a0bd` |
+| `err_wannier_alpha_range` | generated | 255 | `e34d336389243a7385f185d1f1d935c8b9fef396e7439b3a47097caecde0f50d` |
+| `err_wannier_missing_dr` | generated | 255 | `dfb41427f8b22f4db33dd1f3ffbb3911f738f35f0a4cf9f4699d8e0f87eec06b` |
+| `err_wannier_U_not_used` | generated | 255 | `3db72922038be2ef64994f5de1a37570727886a4745d1f7b48ef88b99f5b01f1` |
+| `err_wannier_K_not_used` | generated | 255 | `672d15919f12355e5143ea16ab63a90fad7c6e5d733cee9f5929dcf514c2c3f8` |
+| `err_wannier_missing_ncond` | generated | -11 | `ad70fa8e9cf94c1dea440b853b1cb6f7e6ad8c16aee11fcb2f4d30377947c24d` |
+| `err_wannier_L_box_conflict` | generated | 255 | `5e521bd2175dcd9d6ef0c2d617f18cd6ca4f7d93d75a91028098d23ca6cb5e5a` |
+| `err_wannier_zero_cell` | generated | 255 | `6d5d58e497341dc98a06c5edc025ca590fef21b4eb1dd106139c0221b6040503` |
+| `wannier_square_J_ignored` | generated | -11 | `0f4b48f985af8ceb721a22dec9dc9249ccfaf4933bec2567c59697410d63129b` |
 | `sample_hubbard_default_model` | generated | 255 | `0503aee770ac4a4f883db290b511edc9a9d7ec6c7d68060ed06441f051d345fa` |

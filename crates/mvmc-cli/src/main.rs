@@ -115,10 +115,12 @@ fn run_stdface(input: &Path, gen_dir: &Path) -> i32 {
     match mvmc_stdface::stdface_main(input, gen_dir) {
         Ok(report) => {
             print!("{}", report.log);
+            eprint!("{}", report.stderr);
             0
         }
         Err(failure) => {
             print!("{}", failure.log);
+            eprint!("{}", failure.stderr);
             match failure.error {
                 mvmc_stdface::StdFaceError::Exit(code) => {
                     eprintln!("error: StdFace failed (exit status {code})");
@@ -510,6 +512,12 @@ fn main() {
             process::exit(status);
         }
         namelist = gen_dir.join("namelist.def");
+        // StdFace may write `initial.def` (a UHF initial guess for Wannier90 double counting),
+        // which is not an mVMC initial-parameter file; C reads one only when it is given
+        // explicitly as the second argument.
+        if matches!(initial_def, mvmc_core::InitialDef::Auto) {
+            initial_def = mvmc_core::InitialDef::None;
+        }
     }
 
     // MVMC_NSTEPS env var (CLI flag takes precedence)

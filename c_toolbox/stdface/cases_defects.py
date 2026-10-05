@@ -1,5 +1,8 @@
 """Inputs that exercise the corrections of issue #404 (C defects reported as Julia-mVMC#66).
 
+(The Wannier90 corrections of #357 need data files and live in cases_wannier.py: every Wannier90
+case that lacks one of zvo_hr/ur/jr.dat crashes the unmodified C program.)
+
 For these the C program and the corrected build differ; the fixture directory keeps both
 (`expected/` = C, `expected_fixed/` = corrected build, see tests/fixtures/stdface/README.md).
 """

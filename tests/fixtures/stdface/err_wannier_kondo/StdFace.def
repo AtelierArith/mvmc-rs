@@ -1,0 +1,5 @@
+model = "Kondo"
+lattice = "wannier90"
+W = 2
+L = 2
+ncond = 4

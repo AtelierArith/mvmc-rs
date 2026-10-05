@@ -40,8 +40,13 @@ pub fn exit<T>(code: i32) -> Res<T> {
 pub struct Out {
     /// Everything C would have printed to `stdout`.
     pub log: String,
+    /// Everything C would have printed to `stderr`.
+    pub err: String,
     /// Directory receiving the generated files (C: the current directory).
     pub dir: PathBuf,
+    /// Directory the lattice data files (Wannier90 `zvo_*.dat`) are read from (C: the current
+    /// directory).
+    pub data_dir: PathBuf,
 }
 
 impl Out {
@@ -49,8 +54,21 @@ impl Out {
     pub fn new(dir: impl AsRef<Path>) -> Self {
         Self {
             log: String::new(),
+            err: String::new(),
             dir: dir.as_ref().to_path_buf(),
+            data_dir: PathBuf::from("."),
         }
+    }
+
+    /// Read data files from `data_dir` instead of the current directory.
+    pub fn with_data_dir(mut self, data_dir: impl AsRef<Path>) -> Self {
+        self.data_dir = data_dir.as_ref().to_path_buf();
+        self
+    }
+
+    /// Append to the `stderr` log.
+    pub fn eprint(&mut self, text: &str) {
+        self.err.push_str(text);
     }
 
     /// Append to the `stdout` log.

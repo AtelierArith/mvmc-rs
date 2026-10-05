@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mvmc_stdface::{stdface_main_bytes, StdFaceError};
+use mvmc_stdface::{stdface_main_bytes_in, StdFaceError};
 
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stdface")
@@ -54,11 +54,12 @@ fn check_case(case: &str) -> Vec<String> {
     };
     let work = TempDir::new(case);
     let input = fs::read(dir.join("StdFace.def")).ok();
-    let result = stdface_main_bytes("StdFace.def", input.as_deref(), &work.0);
-    let (status, log) = match &result {
-        Ok(report) => (0, report.log.clone()),
+    // Wannier90 cases ship their data files in the case directory (C reads the cwd).
+    let result = stdface_main_bytes_in("StdFace.def", input.as_deref(), &dir, &work.0);
+    let (status, log, stderr) = match &result {
+        Ok(report) => (0, report.log.clone(), report.stderr.clone()),
         Err(failure) => match failure.error {
-            StdFaceError::Exit(code) => (code & 0xff, failure.log.clone()),
+            StdFaceError::Exit(code) => (code & 0xff, failure.log.clone(), failure.stderr.clone()),
             StdFaceError::Io(ref message) => panic!("{case}: I/O failure: {message}"),
         },
     };
@@ -70,6 +71,14 @@ fn check_case(case: &str) -> Vec<String> {
         .unwrap();
     if status != expected_status {
         problems.push(format!("exit status {status} != C {expected_status}"));
+    }
+    let expected_stderr = fs::read(expected.join("stderr.txt")).unwrap_or_default();
+    if stderr.as_bytes() != expected_stderr.as_slice() {
+        problems.push(first_difference(
+            "stderr",
+            stderr.as_bytes(),
+            &expected_stderr,
+        ));
     }
     let expected_log = fs::read(expected.join("stdout.txt")).unwrap();
     if log.as_bytes() != expected_log.as_slice() {

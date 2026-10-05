@@ -235,3 +235,57 @@ diff -u a/TriangularLattice.c b/TriangularLattice.c
      StdFace_NotUsed_d("D", StdI->D[2][2]);
  
      if (strcmp(StdI->model, "hubbard") == 0 ) {
+diff -u a/Wannier90.c b/Wannier90.c
+--- a/Wannier90.c
++++ b/Wannier90.c
+@@ -466,7 +466,7 @@
+ 
+   IniGuess = (double complex **)malloc(sizeof(double complex*) * StdI->nsite);
+   for (isite = 0; isite < StdI->nsite; isite++) 
+-    IniGuess[isite] = (double complex *)malloc(sizeof(double complex) * StdI->nsite);
++    IniGuess[isite] = (double complex *)calloc(StdI->nsite, sizeof(double complex));
+ 
+   for (kCell = 0; kCell < StdI->NCell; kCell++) {
+     /**/
+@@ -562,6 +562,7 @@
+   FILE *fp;
+   double complex Cphase, DenMat0;
+   double dR[3], *Uspin;
++  int *Uset = NULL;
+   int NtUJ[3];
+   double complex **tUJ, *****DenMat;
+   int ***tUJindx;
+@@ -617,6 +618,7 @@
+   }
+   tUJ = (double complex **)malloc(sizeof(double complex*) * 3);
+   tUJindx = (int ***)malloc(sizeof(int**) * 3);
++  for (i = 0; i < 3; i++) { tUJ[i] = NULL; tUJindx[i] = NULL; }/*skipped files are freed below*/
+ 
+   /*
+   Read Hopping
+@@ -743,10 +745,13 @@
+   */
+   if (strcmp(StdI->model, "spin") == 0) {
+     Uspin = (double *)malloc(sizeof(double) * StdI->NsiteUC);
++    Uset = (int *)calloc(StdI->NsiteUC, sizeof(int));
+     for (it = 0; it < NtUJ[1]; it++)
+       if (tUJindx[1][it][0] == 0 && tUJindx[1][it][1] == 0 && tUJindx[1][it][2] == 0
+-        && tUJindx[1][it][3] == tUJindx[1][it][4])     
++        && tUJindx[1][it][3] == tUJindx[1][it][4]) {
+         Uspin[tUJindx[1][it][3]] = creal(tUJ[1][it]);
++        Uset[tUJindx[1][it][3]] = 1;
++      }
+   }/*if (strcmp(StdI->model, "spin") == 0)*/
+   /**@brief
+   (5) Set Transfer & Interaction
+@@ -799,6 +804,10 @@
+           tUJindx[0][it][0], tUJindx[0][it][1], tUJindx[0][it][2],
+           tUJindx[0][it][3], tUJindx[0][it][4], &isite, &jsite, &Cphase, dR);
+         if (strcmp(StdI->model, "spin") == 0) {
++          if (!Uset[tUJindx[0][it][3]] || !Uset[tUJindx[0][it][4]]) {
++            fprintf(stderr, "\n  Error: the on-site Coulomb U of a Wannier orbital is not found, but the spin model needs it for the super exchange. \n\n");
++            StdFace_exit(-1);
++          }
+           for (ii = 0; ii < 3; ii++) 
+             Jtmp[ii][ii] = 2.0 * tUJ[0][it] * conj(tUJ[0][it])
+             * (1.0 / Uspin[tUJindx[0][it][3]] + 1.0 / Uspin[tUJindx[0][it][4]]);

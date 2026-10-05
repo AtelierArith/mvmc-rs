@@ -245,7 +245,21 @@ zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 b
 | `ladder` | supported (see the C defect below) |
 | `tetragonal`/`square`, `triangular`, `honeycomb`, `kagome` | supported |
 | orthorhombic/cubic, face-centered orthorhombic/cubic (fcc), pyrochlore | supported, corrected C defects ([7.6.1](#761-three-dimensional-lattices)) |
-| `wannier90` | not yet ported (the run stops with a message) |
+| `wannier90` | supported (Hubbard and spin models; data files, see below) |
+
+Wannier90 lattice: `zvo_geom.dat` (required), `zvo_hr.dat`, `zvo_ur.dat`, `zvo_jr.dat` and, for
+`doublecounting = hartree|hartree_u|full`, the density matrix `zvo_dr.dat` are read from the **current
+directory** (as C does; the mVMC build of StdFace has no `CDataFileHead` keyword, so the prefix is always
+`zvo`). Besides the usual files StdFace writes `lattice.xsf`, `wan2site.dat` and, with double counting,
+the UHF initial guess `initial.def`; `mvmc -s` does not feed that `initial.def` to the optimizer as an
+initial-parameter file unless `--initial-def` is given. The Kondo model is not available for Wannier90
+(C: "wannier + Kondo is not available !"). Corrected C behaviour (reads of uninitialised memory):
+a missing `zvo_hr.dat`/`zvo_ur.dat`/`zvo_jr.dat` is skipped with the C message and yields no terms (C then
+crashes when it frees the unset arrays); the UHF initial guess starts from zero; a spin model whose
+`zvo_ur.dat` lacks the on-site U of an orbital stops with an error (C divides by an uninitialised value).
+Unchanged C behaviour worth knowing: the `cutoff_tR`, `cutoff_UR`, `cutoff_JR` keywords are printed but
+have no effect, because the box-based `cutoff_*Vec` test is always selected (C compares the `double`
+`cutoff_*Vec[0][0]` with the integer marker `2147483647`).
 
 Differences from the C program (corrected defects, issue #404). The C StdFace has clear defects in its
 lattice routines that the port does **not** reproduce; the C output is kept as the historical fixture

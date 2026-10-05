@@ -1,0 +1,7 @@
+model = "Hubbard"
+lattice = "wannier90"
+W = 2
+L = 2
+ncond = 4
+2Sz = 0
+doublecounting = bogus
