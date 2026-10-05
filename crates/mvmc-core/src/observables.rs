@@ -227,10 +227,11 @@ pub fn calculate_oo_real(
     let we = w * e;
     let lda = sr_opt_size;
     if lda > 0 {
-        let observed = crate::threading::observe_kernel(
-            crate::threading::ObservedWork::Entry,
-            crate::threading::inner_parallel_enabled(lda),
-        );
+        // One column is `lda` multiply-adds (about 1 ns each).
+        let parallel = crate::threading::inner_parallel_work(lda, lda);
+        let observed =
+            crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
+        let _scope = crate::threading::profile_scope(parallel, lda);
         let update = |j: usize, column: &mut [f64]| {
             let _entry = observed.enter_item();
             let oj = sr_opt_o[j];
@@ -238,8 +239,8 @@ pub fn calculate_oo_real(
                 column[i] += w * sr_opt_o[i] * oj;
             }
         };
-        if crate::threading::inner_parallel_enabled(lda) {
-            crate::threading::install(|| {
+        if parallel {
+            crate::threading::install_inner(|| {
                 sr_opt_oo[..lda * lda]
                     .par_chunks_mut(lda)
                     .enumerate()
@@ -252,7 +253,7 @@ pub fn calculate_oo_real(
                 .for_each(|(j, column)| update(j, column));
         }
     }
-    crate::threading::for_each_mut(&mut sr_opt_ho[..sr_opt_size], |i, ho| {
+    crate::threading::for_each_mut(&mut sr_opt_ho[..sr_opt_size], 2, |i, ho| {
         *ho += we * sr_opt_o[i]
     });
 }
@@ -270,6 +271,7 @@ pub fn calculate_oo(
     crate::threading::for_each_pair_mut(
         &mut sr_opt_oo[..size_2],
         &mut sr_opt_ho[..size_2],
+        4,
         |j, oo, ho| {
             let tmp = sr_opt_o[j] * w;
             *oo += tmp;
@@ -277,10 +279,11 @@ pub fn calculate_oo(
         },
     );
     if size_2 > 2 {
-        let observed = crate::threading::observe_kernel(
-            crate::threading::ObservedWork::Entry,
-            crate::threading::inner_parallel_enabled(size_2 - 2),
-        );
+        // One row is `size_2` complex multiply-adds (about 3 ns each).
+        let parallel = crate::threading::inner_parallel_work(size_2 - 2, 3 * size_2);
+        let observed =
+            crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
+        let _scope = crate::threading::profile_scope(parallel, size_2 - 2);
         let update = |offset: usize, row: &mut [Complex64]| {
             let _entry = observed.enter_item();
             let i = offset + 2;
@@ -291,8 +294,8 @@ pub fn calculate_oo(
             }
         };
         let rows = &mut sr_opt_oo[2 * size_2..size_2 * size_2];
-        if crate::threading::inner_parallel_enabled(size_2 - 2) {
-            crate::threading::install(|| {
+        if parallel {
+            crate::threading::install_inner(|| {
                 rows.par_chunks_mut(size_2)
                     .enumerate()
                     .for_each(|(i, row)| update(i, row))
@@ -327,10 +330,15 @@ pub fn calculate_oo_store_real(
     let we = w * e;
     let sqrtw = w.sqrt();
     let store = &mut sr_opt_o_store[sample * sr_opt_size..(sample + 1) * sr_opt_size];
-    crate::threading::for_each_pair_mut(store, &mut sr_opt_ho[..sr_opt_size], |i, stored, ho| {
-        *stored = sqrtw * sr_opt_o[i];
-        *ho += we * sr_opt_o[i];
-    });
+    crate::threading::for_each_pair_mut(
+        store,
+        &mut sr_opt_ho[..sr_opt_size],
+        3,
+        |i, stored, ho| {
+            *stored = sqrtw * sr_opt_o[i];
+            *ho += we * sr_opt_o[i];
+        },
+    );
 }
 
 /// Finalize real O*O^T with Julia's BLAS GEMM path, preserving extra buffer slots.
@@ -348,6 +356,7 @@ pub fn finalize_oo_store_real(
         crate::threading::for_each_pair_mut(
             mean_block,
             &mut rest[..n],
+            2 * sample_size,
             |i, mean_out, diagonal_out| {
                 let mut mean = 0.0;
                 let mut diagonal = 0.0;
@@ -426,7 +435,7 @@ pub fn calculate_oo_store(
     let sqrtw = w.sqrt();
     let size_2 = 2 * sr_opt_size;
     let store = &mut sr_opt_o_store[sample * size_2..(sample + 1) * size_2];
-    crate::threading::for_each_pair_mut(store, &mut sr_opt_ho[..size_2], |i, stored, ho| {
+    crate::threading::for_each_pair_mut(store, &mut sr_opt_ho[..size_2], 6, |i, stored, ho| {
         *stored = sqrtw * sr_opt_o[i];
         *ho += we * sr_opt_o[i];
     });
@@ -447,6 +456,7 @@ pub fn finalize_oo_store(
         crate::threading::for_each_pair_mut(
             mean_block,
             &mut rest[..size_2],
+            4 * sample_size,
             |i, mean_out, diagonal_out| {
                 let mut mean = Complex64::new(0.0, 0.0);
                 let mut diagonal = 0.0;
@@ -502,10 +512,11 @@ fn sr_store_gram_julia(
     let (n, samples) = (shape[0], shape[1]);
     let raw = store.host_data()?;
     let mut gram = vec![Complex64::new(0.0, 0.0); n * n];
-    let observed = crate::threading::observe_kernel(
-        crate::threading::ObservedWork::Entry,
-        crate::threading::inner_parallel_enabled(n),
-    );
+    // One column is `n * samples` complex multiply-adds (about 3 ns each).
+    let parallel = crate::threading::inner_parallel_work(n, 3 * n * samples);
+    let observed =
+        crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
+    let _scope = crate::threading::profile_scope(parallel, n);
     let update = |j: usize, column: &mut [Complex64]| {
         let _entry = observed.enter_item();
         for i in 0..n {
@@ -516,8 +527,8 @@ fn sr_store_gram_julia(
             column[i] = sum;
         }
     };
-    if crate::threading::inner_parallel_enabled(n) {
-        crate::threading::install(|| {
+    if parallel {
+        crate::threading::install_inner(|| {
             gram.par_chunks_mut(n)
                 .enumerate()
                 .for_each(|(j, column)| update(j, column))
@@ -599,7 +610,7 @@ fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Com
     macro_rules! accumulate {
         ($terms:expr, $value:expr, $op:tt) => {
             if let Some(values) =
-                crate::threading::collect_terms($terms.len(), || (), |_, i| $value(&$terms[i]))
+                crate::threading::collect_terms($terms.len(), 10, || (), |_, i| $value(&$terms[i]))
             {
                 for value in values.into_iter().flatten() {
                     e $op value;
@@ -2431,6 +2442,7 @@ pub(crate) fn calculate_lanczos_green(
     };
     if let Some(values) = crate::threading::collect_terms(
         n_one,
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| one_body_value(index, task),
     ) {
@@ -2527,6 +2539,7 @@ pub(crate) fn calculate_lanczos_green(
     };
     if let Some(values) = crate::threading::collect_terms(
         n_direct,
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| direct_value(index, task),
     ) {
@@ -2822,6 +2835,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
 
     if let Some(values) = crate::threading::collect_terms(
         data.transfer_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || {
             (
                 lanczos_task_state(state, n_site, n_elec),
@@ -2843,6 +2857,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     }
     if let Some(values) = crate::threading::collect_terms(
         data.pair_hop_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| pair_hop_term(&data.pair_hop_terms[index], task),
     ) {
@@ -2858,6 +2873,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     }
     if let Some(values) = crate::threading::collect_terms(
         data.exchange_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| exchange_term(&data.exchange_terms[index], task),
     ) {
@@ -2909,14 +2925,19 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         let parallel_transfer = real_transfer
             && !state.all_complex
             && !timer.diagnostics.calham1
-            && crate::threading::inner_parallel_enabled(state.transfer_cache.terms.len());
+            && crate::threading::inner_parallel_work(
+                state.transfer_cache.terms.len(),
+                crate::threading::green_cost_ns(ele_idx.len(), 1),
+            );
+        let _scope =
+            crate::threading::profile_scope(parallel_transfer, state.transfer_cache.terms.len());
         let observed = crate::threading::observe_kernel(
             crate::threading::ObservedWork::Term,
             parallel_transfer,
         );
         let parallel_green = if parallel_transfer {
             let shared_state = &*state;
-            Some(crate::threading::install(|| {
+            Some(crate::threading::install_inner(|| {
                 state
                     .transfer_cache
                     .terms
@@ -3027,6 +3048,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     // order, so the sum is bit-identical to the serial loop for any worker count.
     if let Some(values) = crate::threading::collect_terms(
         data.pair_hop_terms.len(),
+        crate::threading::green_cost_ns(ele_idx.len(), 1),
         || (),
         |_, index| pair_hop_value(&data.pair_hop_terms[index]),
     ) {
@@ -3081,6 +3103,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         };
         if let Some(values) = crate::threading::collect_terms(
             data.exchange_terms.len(),
+            crate::threading::green_cost_ns(ele_idx.len(), 1),
             || (),
             |_, index| exchange_value(&data.exchange_terms[index]),
         ) {
@@ -3162,6 +3185,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
     };
     if let Some(values) = crate::threading::collect_terms(
         data.inter_all_terms.len(),
+        crate::threading::green_cost_ns(ele_idx.len(), 1),
         || (),
         |_, index| inter_all_value(&data.inter_all_terms[index]),
     ) {

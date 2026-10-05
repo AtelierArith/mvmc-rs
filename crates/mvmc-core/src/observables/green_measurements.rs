@@ -211,12 +211,13 @@ pub(crate) fn validate_green_sample(
 // serial. No worker subtotal is merged into an aggregate. RBM stays serial.
 pub(crate) fn collect_green_values(
     len: usize,
+    cost_ns: usize,
     allow_parallel: bool,
     evaluate: impl Fn(usize) -> Complex64 + Send + Sync,
 ) -> Vec<Complex64> {
     let mut values = vec![Complex64::new(0.0, 0.0); len];
     if allow_parallel {
-        crate::threading::for_each_mut(&mut values, |i, value| *value = evaluate(i));
+        crate::threading::for_each_mut(&mut values, cost_ns, |i, value| *value = evaluate(i));
     } else {
         let observed =
             crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, false);
@@ -242,40 +243,50 @@ pub(crate) fn ordinary_green_values(
     if parallel {
         validate_green_sample(data, state, idx, cfg, num, cnt, None);
     }
-    let one = collect_green_values(data.green_one_terms.len(), parallel, |i| {
-        let term = &data.green_one_terms[i];
-        super::green_func1(
-            term.site1 as usize,
-            term.site2 as usize,
-            super::spin_code(term.spin1),
-            super::spin_code(term.spin2),
-            ip,
-            data,
-            state,
-            idx,
-            cfg,
-            num,
-            cnt,
-        )
-    });
-    let direct = collect_green_values(data.green_two_terms.len(), parallel, |i| {
-        let term = &data.green_two_terms[i];
-        super::green_func2(
-            term.site1 as usize,
-            term.site2 as usize,
-            term.site3 as usize,
-            term.site4 as usize,
-            super::spin_code(term.spin1),
-            super::spin_code(term.spin3),
-            ip,
-            data,
-            state,
-            idx,
-            cfg,
-            num,
-            cnt,
-        )
-    });
+    let one = collect_green_values(
+        data.green_one_terms.len(),
+        crate::threading::green_cost_ns(idx.len(), 1),
+        parallel,
+        |i| {
+            let term = &data.green_one_terms[i];
+            super::green_func1(
+                term.site1 as usize,
+                term.site2 as usize,
+                super::spin_code(term.spin1),
+                super::spin_code(term.spin2),
+                ip,
+                data,
+                state,
+                idx,
+                cfg,
+                num,
+                cnt,
+            )
+        },
+    );
+    let direct = collect_green_values(
+        data.green_two_terms.len(),
+        crate::threading::green_cost_ns(idx.len(), 2),
+        parallel,
+        |i| {
+            let term = &data.green_two_terms[i];
+            super::green_func2(
+                term.site1 as usize,
+                term.site2 as usize,
+                term.site3 as usize,
+                term.site4 as usize,
+                super::spin_code(term.spin1),
+                super::spin_code(term.spin3),
+                ip,
+                data,
+                state,
+                idx,
+                cfg,
+                num,
+                cnt,
+            )
+        },
+    );
     (one, direct)
 }
 
@@ -373,7 +384,12 @@ mod tests {
                     &[],
                 );
                 let snapshot = observer.finish();
-                let parallel = crate::threading::inner_parallel_enabled(m);
+                // Threshold 0 is invalid and selects the automatic work gate, under which
+                // these two-electron cells are far too cheap to pool (#361).
+                let parallel = crate::threading::inner_parallel_work(
+                    m,
+                    crate::threading::green_cost_ns(idx.len(), 1),
+                );
                 check_observation(snapshot, m, parallel);
                 // Independent occupation identity <n_0up>=1, <n_1up>=0;
                 // <n_0up*n_1down>=1. Not Rust-generated expected data.
@@ -435,7 +451,7 @@ mod tests {
         // of configured workers; does not claim a native RBM model comparison.
         let observer = crate::threading::start_observation();
         assert_eq!(
-            collect_green_values(33, false, |i| Complex64::new(i as f64, 0.0)).len(),
+            collect_green_values(33, 1, false, |i| Complex64::new(i as f64, 0.0)).len(),
             33
         );
         let snapshot = observer.finish();
@@ -586,7 +602,7 @@ mod tests {
             check_observation(
                 observer.finish(),
                 33,
-                crate::threading::inner_parallel_enabled(33),
+                crate::threading::inner_parallel_work(33, crate::threading::green_cost_ns(2, 1)),
             );
             for (i, value) in one.iter().enumerate() {
                 assert_eq!(
@@ -637,7 +653,7 @@ mod tests {
         let before = state.phys_quantities.clone();
         let observer = crate::threading::start_observation();
         let failure = std::panic::catch_unwind(|| {
-            collect_green_values(33, true, |i| {
+            collect_green_values(33, 1, true, |i| {
                 if i == 1 {
                     panic!("synthetic producer failure");
                 }

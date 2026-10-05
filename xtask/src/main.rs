@@ -48,6 +48,9 @@ const HUBBARD_MODELS: &[HubbardModel] = &[
     HubbardModel {
         name: "hubbard_chain_L32",
     },
+    HubbardModel {
+        name: "hubbard_chain_L64",
+    },
 ];
 
 #[derive(Debug, Clone, Copy)]
@@ -65,6 +68,7 @@ struct BenchConfig {
     csv: PathBuf,
     keep_output: bool,
     threads: Option<usize>,
+    inner: InnerEnv,
     julia_bin: PathBuf,
 }
 
@@ -130,6 +134,7 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
         Some(n) => println!("threads    : {n} (pinned on both Rust & Julia)"),
         None => println!("threads    : <inherit env> (consider --threads N for fairness)"),
     }
+    println!("rust inner : {}", config.inner.describe());
     println!("pfapack    : BLAS/LAPACK (required for Julia numerical parity)");
     println!("SR backend : BLAS GEMV for CG; LAPACK for the direct solver");
     println!("julia root : {}", config.julia_root.display());
@@ -168,6 +173,7 @@ fn bench_julia_vs_rust(args: &[String]) -> Result<(), String> {
     }
 
     write_csv(&config.csv, &measurements)?;
+    write_run_config(&config)?;
     print_comparison(&measurements);
 
     if config.keep_output {
@@ -191,6 +197,7 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
         .join("julia_vs_rust.csv");
     let mut keep_output = false;
     let mut threads: Option<usize> = None;
+    let mut inner = InnerEnv::default();
     let mut julia_bin = PathBuf::from("julia");
 
     let mut idx = 0;
@@ -246,7 +253,12 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
                 );
             }
             "--keep-output" => keep_output = true,
-            flag => return Err(format!("unknown bench-julia flag `{flag}`")),
+            flag => {
+                if !inner.parse_flag(flag, args.get(idx + 1))? {
+                    return Err(format!("unknown bench-julia flag `{flag}`"));
+                }
+                idx += 1;
+            }
         }
         idx += 1;
     }
@@ -283,6 +295,7 @@ fn parse_bench_args(args: &[String], workspace: &Path) -> Result<BenchConfig, St
         csv,
         keep_output,
         threads,
+        inner,
         julia_bin,
     })
 }
@@ -338,7 +351,7 @@ fn run_rust_model(
             .join("rust")
             .join(model.name)
             .join(format!("warmup-{}", warmup + 1));
-        run_rust_once(&binary, julia_root, &out, config.steps, config.threads)?;
+        run_rust_once(&binary, julia_root, &out, config)?;
     }
 
     let mut measurements = Vec::with_capacity(config.reps);
@@ -347,8 +360,7 @@ fn run_rust_model(
             .join("rust")
             .join(model.name)
             .join(format!("rep-{}", rep + 1));
-        let (duration, output) =
-            run_rust_once(&binary, julia_root, &out, config.steps, config.threads)?;
+        let (duration, output) = run_rust_once(&binary, julia_root, &out, config)?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         measurements.push(Measurement {
             implementation: "rust",
@@ -367,10 +379,10 @@ fn run_rust_once(
     binary: &Path,
     julia_root: &Path,
     out_root: &Path,
-    steps: usize,
-    threads: Option<usize>,
+    config: &BenchConfig,
 ) -> Result<(Duration, Output), String> {
-    let mut command = Command::new(binary);
+    let (steps, threads) = (config.steps, config.threads);
+    let mut command = config.inner.command(binary);
     command
         .env("JULIA_MVMC_ROOT", julia_root)
         .env("JULIA_MVMC_EXAMPLE_STEPS", steps.to_string())
@@ -379,6 +391,7 @@ fn run_rust_once(
     if let Some(n) = threads {
         apply_thread_env(&mut command, n);
     }
+    config.inner.apply(&mut command);
     timed_output(command, binary.as_os_str())
 }
 
@@ -586,6 +599,38 @@ fn ctest_failure(delta: f64, reference_std: f64) -> bool {
         && delta >= 1.0e-8
 }
 
+/// Sidecar `<csv>.config.txt` recording how the Rust side was configured, so a CSV
+/// of a threaded run is never mistaken for a serial one.
+fn write_run_config(config: &BenchConfig) -> Result<(), String> {
+    let path = config.csv.with_extension("config.txt");
+    let body = format!(
+        "steps={}\nreps={}\nwarmups={}\nthreads={}\nrust_inner={}\nhost_load={}\ncpu={}\n",
+        config.steps,
+        config.reps,
+        config.warmups,
+        config
+            .threads
+            .map_or("<inherit env>".to_string(), |n| n.to_string()),
+        config.inner.describe(),
+        command_output("cat", &["/proc/loadavg"]),
+        host_cpu_model(),
+    );
+    write_report(&path, &body)
+}
+
+/// CPU model string (Linux `/proc/cpuinfo`), or `unknown`.
+fn host_cpu_model() -> String {
+    fs::read_to_string("/proc/cpuinfo")
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find_map(|line| line.strip_prefix("model name"))
+                .and_then(|rest| rest.split_once(':'))
+                .map(|(_, model)| model.trim().to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 fn write_csv(path: &Path, measurements: &[Measurement]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -618,6 +663,7 @@ struct HubbardBenchConfig {
     reps: usize,
     warmups: usize,
     threads: usize,
+    inner: InnerEnv,
     keep_output: bool,
     julia_root: PathBuf,
     julia_bin: PathBuf,
@@ -638,6 +684,7 @@ fn bench_hubbard(args: &[String]) -> Result<(), String> {
         "threads    : {} (pinned on both Rust & Julia)",
         config.threads
     );
+    println!("rust inner : {}", config.inner.describe());
     println!("inputs     : benchmark/hubbard_chain/inputs");
     println!("julia root : {}", config.julia_root.display());
     println!("julia bin  : {}", config.julia_bin.display());
@@ -698,6 +745,7 @@ fn parse_hubbard_args(args: &[String], workspace: &Path) -> Result<HubbardBenchC
     let mut reps = 3usize;
     let mut warmups = 1usize;
     let mut threads = 1usize;
+    let mut inner = InnerEnv::default();
     let mut model_names: Vec<String> = Vec::new();
     let mut julia_root = workspace.join("extern/Julia-mVMC");
     let mut csv = workspace
@@ -771,7 +819,12 @@ fn parse_hubbard_args(args: &[String], workspace: &Path) -> Result<HubbardBenchC
                 );
             }
             "--keep-output" => keep_output = true,
-            flag => return Err(format!("unknown bench-hubbard flag `{flag}`")),
+            flag => {
+                if !inner.parse_flag(flag, args.get(idx + 1))? {
+                    return Err(format!("unknown bench-hubbard flag `{flag}`"));
+                }
+                idx += 1;
+            }
         }
         idx += 1;
     }
@@ -810,6 +863,7 @@ fn parse_hubbard_args(args: &[String], workspace: &Path) -> Result<HubbardBenchC
         reps,
         warmups,
         threads,
+        inner,
         keep_output,
         julia_root,
         julia_bin,
@@ -894,7 +948,7 @@ fn run_rust_hubbard_once(
     config: &HubbardBenchConfig,
 ) -> Result<(f64, Option<f64>, Output), String> {
     let namelist = hubbard_namelist(workspace, model);
-    let mut command = Command::new(binary);
+    let mut command = config.inner.command(binary);
     command
         .arg(&namelist)
         .arg("--mode")
@@ -906,6 +960,7 @@ fn run_rust_hubbard_once(
         .arg("--out-dir")
         .arg(out_root);
     apply_thread_env(&mut command, config.threads);
+    config.inner.apply(&mut command);
     let output = command
         .output()
         .map_err(|e| format!("failed to spawn {}: {e}", binary.display()))?;
@@ -1111,6 +1166,16 @@ fn build_hubbard_report(config: &HubbardBenchConfig, measurements: &[Measurement
         "- steps/reps/warmups/threads: {}/{}/{}/{}\n",
         config.steps, config.reps, config.warmups, config.threads
     ));
+    report.push_str(&format!(
+        "- rust inner kernels: {}\n",
+        config.inner.describe()
+    ));
+    report.push_str(&format!(
+        "- BLAS/OpenMP threads (both sides): {}; host load average at report time: {}\n",
+        config.threads,
+        command_output("cat", &["/proc/loadavg"])
+    ));
+    report.push_str(&format!("- cpu: {}\n", host_cpu_model()));
     report.push_str("- inputs: benchmark/hubbard_chain/inputs\n");
     report.push_str(
         "- timing: internal `run_para_opt_from_namelist` wall clock; Julia JIT and\n  process startup are excluded, and both sides are thread-pinned\n\n",
@@ -2198,6 +2263,79 @@ fn apply_thread_env(command: &mut Command, n: usize) {
         .env("RAYON_NUM_THREADS", &v);
 }
 
+/// Rust-only inner-kernel controls (`MVMC_RS_INNER_THREADS` / `MVMC_RS_INNER_THRESHOLD`).
+/// They never reach the Julia runner, whose thread count stays `--threads`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct InnerEnv {
+    workers: Option<usize>,
+    threshold: Option<usize>,
+    /// Linux CPU list (`taskset -c`) for the Rust process. Woken Rayon workers are
+    /// otherwise packed onto the waker's core or hyperthread sibling by the scheduler.
+    cpus: Option<String>,
+}
+
+impl InnerEnv {
+    fn apply(&self, command: &mut Command) {
+        if let Some(n) = self.workers {
+            command.env("MVMC_RS_INNER_THREADS", n.to_string());
+        }
+        if let Some(n) = self.threshold {
+            command.env("MVMC_RS_INNER_THRESHOLD", n.to_string());
+        }
+    }
+
+    /// The command that starts a Rust run: `binary`, or `taskset -c <cpus> binary`.
+    fn command(&self, binary: &Path) -> Command {
+        match &self.cpus {
+            Some(cpus) => {
+                let mut command = Command::new("taskset");
+                command.arg("-c").arg(cpus).arg(binary);
+                command
+            }
+            None => Command::new(binary),
+        }
+    }
+
+    fn describe(&self) -> String {
+        let show = |v: Option<usize>, default: &str| {
+            v.map_or_else(|| format!("{default} (default)"), |n| n.to_string())
+        };
+        format!(
+            "inner workers {}, inner threshold {}, cpu list {}",
+            show(self.workers, "1"),
+            show(self.threshold, "automatic work estimate"),
+            self.cpus.as_deref().unwrap_or("<any>")
+        )
+    }
+
+    /// Consume `--inner-workers` / `--inner-threshold`; returns whether `flag` was one.
+    fn parse_flag(&mut self, flag: &str, value: Option<&String>) -> Result<bool, String> {
+        if flag == "--inner-cpus" {
+            let list = value.ok_or_else(|| format!("{flag} requires a value"))?;
+            if list.is_empty() || !list.chars().all(|c| c.is_ascii_digit() || ",-".contains(c)) {
+                return Err(format!(
+                    "invalid value for {flag} (use a taskset list like 2,4-7)"
+                ));
+            }
+            self.cpus = Some(list.clone());
+            return Ok(true);
+        }
+        let slot = match flag {
+            "--inner-workers" => &mut self.workers,
+            "--inner-threshold" => &mut self.threshold,
+            _ => return Ok(false),
+        };
+        let n: usize = parse_value(value, flag)?;
+        if n == 0 {
+            return Err(format!("{flag} must be positive"));
+        }
+        *slot = Some(n);
+        Ok(true)
+    }
+}
+
+const INNER_HELP: &str = "  --inner-workers <N>  Rust MVMC_RS_INNER_THREADS (Rust only; BLAS stays at --threads)\n  --inner-threshold <N> Rust MVMC_RS_INNER_THRESHOLD: force the item-count gate (default: automatic work estimate)\n  --inner-cpus <LIST>  run the Rust process under `taskset -c LIST` (Linux; e.g. 2,4,6,8)";
+
 fn print_help() {
     println!("xtask -- workspace task runner");
     println!();
@@ -2218,6 +2356,7 @@ fn print_bench_help() {
     println!("  --reps <N>           measured repetitions [default: 3]");
     println!("  --warmups <N>        warmup repetitions [default: 1]");
     println!("  --threads <N>        pin BLAS / OpenMP / Julia threads on both sides");
+    println!("{INNER_HELP}");
     println!("  --model <NAME>       benchmark one model; repeatable");
     println!("  --julia-root <DIR>   Julia-mVMC checkout [default: ../extern/Julia-mVMC]");
     println!("  --julia-bin <PATH>   Julia executable or pinned binary [default: julia +1.13.1]");
@@ -2236,6 +2375,7 @@ fn print_hubbard_help() {
     println!("  --reps <N>           measured repetitions [default: 3]");
     println!("  --warmups <N>        warmup repetitions [default: 1]");
     println!("  --threads <N>        pin BLAS / OpenMP / Julia threads [default: 1]");
+    println!("{INNER_HELP}");
     println!("  --model <NAME>       benchmark one model; repeatable");
     println!("  --julia-root <DIR>   Julia-mVMC checkout [default: extern/Julia-mVMC]");
     println!("  --julia-bin <PATH>   Julia executable or pinned binary [default: julia +1.13.1]");
@@ -2391,6 +2531,7 @@ end
 mod tests {
     use super::{
         ctest_failure, parse_julia_bench_line, parse_rust_final_energy, parse_rust_seconds,
+        Command, InnerEnv,
     };
 
     #[test]
@@ -2399,6 +2540,36 @@ mod tests {
         assert!(!ctest_failure(2.0e-8, 1.0e-8));
         assert!(ctest_failure(3.1e-8, 1.0e-8));
         assert!(!ctest_failure(f64::NAN, 0.0));
+    }
+
+    #[test]
+    fn inner_env_parses_flags_and_rejects_zero() {
+        let mut inner = InnerEnv::default();
+        assert!(inner
+            .parse_flag("--inner-workers", Some(&"4".to_string()))
+            .unwrap());
+        assert!(inner
+            .parse_flag("--inner-threshold", Some(&"8".to_string()))
+            .unwrap());
+        assert!(!inner
+            .parse_flag("--threads", Some(&"2".to_string()))
+            .unwrap());
+        assert!(inner
+            .parse_flag("--inner-cpus", Some(&"2,4-7".to_string()))
+            .unwrap());
+        assert!(inner
+            .parse_flag("--inner-cpus", Some(&"2;rm".to_string()))
+            .is_err());
+        assert_eq!(inner.cpus.as_deref(), Some("2,4-7"));
+        assert_eq!(inner.workers, Some(4));
+        assert_eq!(inner.threshold, Some(8));
+        assert!(inner
+            .parse_flag("--inner-workers", Some(&"0".to_string()))
+            .is_err());
+        let mut command = Command::new("true");
+        inner.apply(&mut command);
+        let envs: Vec<_> = command.get_envs().collect();
+        assert_eq!(envs.len(), 2);
     }
 
     #[test]

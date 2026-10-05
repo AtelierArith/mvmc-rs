@@ -6,7 +6,9 @@ parameters used by the C-vs-Julia performance reports. They mirror the
 `docs/reference/c-to-julia/performance/2026-06-17-julia-mvmc-hubbard-locenergy-slater-calham1-optimization-record.md`
 and the roadmap `docs/reference/c-to-julia/roadmaps/2026-06-14-julia-mvmc-v0.4-summary-and-v0.5-roadmap.md`:
 
-- Hubbard chain, `L=16`, `L=24`, `L=32`
+- Hubbard chain, `L=16`, `L=24`, `L=32`, `L=64` (`L=64` was generated with the Rust StdFace
+  port `mvmc -s` from the same `StdFace.def` with `L`/`Ncond` changed; the other sizes come from C
+  StdFace as described below)
 - `Lsub=4`, `U=4.0`, `t=1.0`
 - half filling: `Ncond=L`, `2Sz=0`
 - `NSPGaussLeg=8`, `NSPStot=0`
@@ -61,6 +63,21 @@ without rebuilding StdFace or C.
 ```sh
 cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1
 ```
+
+Rust inner workers are selected separately from the BLAS/Julia thread count:
+
+```sh
+cargo run -p xtask -- bench-hubbard --steps 20 --reps 5 --threads 1 \
+  --inner-workers 4 --inner-cpus 2,4,6,8 --model hubbard_chain_L32
+```
+
+`--inner-workers` sets `MVMC_RS_INNER_THREADS`, `--inner-threshold` sets
+`MVMC_RS_INNER_THRESHOLD` (forcing the item-count gate; omit it to measure the
+default automatic gate) and `--inner-cpus` runs the Rust process under `taskset -c`.
+All three are recorded in the Markdown report (and in `<csv>.config.txt` for
+`bench-julia`). The default `hubbard_chain_L64` run is long; select models with
+`--model`. Results of the #361 investigation:
+`results/hubbard_chain_2026-10-06_inner_threads.md`.
 
 ## Results
 

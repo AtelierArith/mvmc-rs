@@ -104,6 +104,7 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
     timer.start(50);
     let one_body = super::green_measurements::collect_green_values(
         data.green_one_terms.len(),
+        crate::threading::green_cost_ns(idx.len(), 1),
         parallel,
         |index| {
             let term = &data.green_one_terms[index];
@@ -127,6 +128,7 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
     timer.start(51);
     let direct = super::green_measurements::collect_green_values(
         data.green_two_terms.len(),
+        crate::threading::green_cost_ns(idx.len(), 2),
         parallel,
         |index| {
             let term = &data.green_two_terms[index];

@@ -770,6 +770,34 @@ fn main() {
                 process::exit(1);
             }
         }
+        report_inner_profile();
+    }
+}
+
+/// `MVMC_RS_INNER_PROFILE=1`: print per-call-site inner-kernel counts and time.
+fn report_inner_profile() {
+    let sites = mvmc_core::threading::dispatch_profile();
+    if sites.is_empty() {
+        return;
+    }
+    eprintln!("inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):");
+    for site in sites {
+        let millis = site.nanos as f64 / 1e6;
+        let per_item = if site.items > 0 {
+            site.nanos as f64 / site.items as f64
+        } else {
+            0.0
+        };
+        eprintln!(
+            "  {:<44} {:<8} {:>9} {:>11} {:>9.1} {:>8.2} {:>8.1}",
+            site.site,
+            if site.parallel { "pool" } else { "serial" },
+            site.calls,
+            site.items,
+            millis,
+            millis * 1e3 / site.calls as f64,
+            per_item
+        );
     }
 }
 

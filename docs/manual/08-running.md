@@ -160,6 +160,11 @@ random numbers exactly as the C code does. Optional shared-memory parallelism ov
 rows of the `OO`/`HO` accumulation and of the stored Gram product, transfer terms of the local energy for real wave functions, the diagonal/PairHop/Exchange/InterAll energy terms, the rank-one `update_m_all_*`/`calculate_new_pf_m*` QP loops, Slater-element planes, doublon-holon counters, RBM hidden units and their derivatives, the Lanczos Hamiltonian/Green terms, the SR matrix assembly and the CG vector updates, Green-function entries)
 is enabled with
 `MVMC_RS_INNER_THREADS` ([8.5](#85-environment-variables)); it does not change the chain or the order in which each result is formed.
+Waking the worker pool costs about 20 us per region and moves the QP planes between caches, so by default (no
+`MVMC_RS_INNER_THRESHOLD`) a region uses the pool only when the electron matrices are large (`n_size` of at least 160 with
+4 workers, 240 with 2) and its estimated work is at least 100 us. Smaller runs execute serially even with workers configured;
+on the Hubbard chain, pooling every region made 4 workers 2.3x slower at 16 sites and 1.2x slower at 64, and 1.7x faster at
+256 sites ([benchmark results](../../benchmark/hubbard_chain/results/hubbard_chain_2026-10-06_inner_threads.md)).
 Dense linear algebra (`dgemv`, `dpotrf`, Pfaffian kernels) runs in OpenBLAS, whose own thread count is controlled by the usual
 `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` variables (not read by `mvmc-rs`; the project's benchmarks pin them to 1).
 
@@ -235,8 +240,11 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 | `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | any value other than `0` enables the C-compatible section timers; writes `zvo_CalcTimer.dat` ([9.5](09-output-files.md#95-timers)) |
 | `MVMC_TIMER` | same | deprecated alias; if set without `MVMC_C_TIMER` a warning recommends `MVMC_C_TIMER=1` |
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | same | enable the corresponding diagnostic timer family (IDs up to 966); any of them also enables the main timer and writes `zvo_CalcTimerDiag.dat` |
-| `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:190`) | number of worker threads for independent inner work items; default 1 (sequential); invalid or 0 falls back to 1. Read once per process. |
-| `MVMC_RS_INNER_THRESHOLD` | same | minimum number of work items before the worker pool is used; default 32; invalid or 0 falls back to 32 |
+| `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | number of worker threads for independent inner work items; default 1 (sequential); invalid or 0 falls back to 1. Read once per process. |
+| `MVMC_RS_INNER_THRESHOLD` | same | a positive value selects the plain item-count gate: a region uses the worker pool when it has at least this many items (used by the worker-invariance tests; small values force pooled execution of tiny inputs). Unset, empty, invalid or 0 selects the automatic gate below (reported `threshold` stays 32) |
+| `MVMC_RS_INNER_MIN_WORK_NS` | same | automatic gate: minimum estimated serial work of one region in nanoseconds; default 100000 |
+| `MVMC_RS_INNER_MIN_SIZE` | same | automatic gate: minimum electron-matrix dimension `n_size` (number of electrons) for regions that scale with the matrices; default `120*w/(w-1)` for `w` workers (160 for 4, 240 for 2) |
+| `MVMC_RS_INNER_PROFILE` | `threading::dispatch_profile` | `1` makes the CLI print, on stderr after the run, the calls, items and time of every inner-kernel call site, serial or pooled |
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | launcher detection ([8.4](#84-mpi-and-grouped-execution)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` programs only | location of `extern/Julia-mVMC` inputs, step count, output root (default `output/<model>/`) |
 | `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS (not read by `mvmc-rs`) | BLAS threading |
@@ -248,7 +256,7 @@ The values of `MVMC_C_TIMER` and the `*_DIAG` variables are compared with the li
 
 > **Implementation**
 > - Rust: `TimerEnv::from_lookup` — `crates/mvmc-core/src/c_timer.rs:174`
-> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:201`
+> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:260`
 > - Rust: `LaunchContext::from_env` — `crates/mvmc-core/src/parallel.rs:20`
 
 ## 8.6 Reproducibility
