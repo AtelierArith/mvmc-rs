@@ -43,3 +43,25 @@ hubbard_dh4_only_overlay	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh
 idx_negative_start	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NDataIdxStart=-1,NDataQtySmp=3	0	compare
 hubbard_dh_real_lanczos1	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_real	real	0	NLanczosMode=1	0	compare
 heisenberg_fsz_lanczos1_gauss8	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NLanczosMode=1,NSPGaussLeg=8	0	c_defect_not_reproduced
+fsz_dh2_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh2	fsz	0	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zqp=c_opt
+fsz_dh24_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh24	fsz	0	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zqp=c_opt
+fsz_dh24_opttrans_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh24_opttrans	fsz	1	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zqp=c_opt
+fsz_rbm_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_rbm	fsz	0	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	c_defect_fsz_rbm	zqp=c_opt
+fsz_dh24_rbm_opttrans_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh24_rbm_opttrans	fsz	1	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	c_defect_fsz_rbm	zqp=c_opt
+hubbard_lanczos1_cmp	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	cmp	0	NLanczosMode=1	0	compare
+fsz_dh2_csz_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh2	fsz	0	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100,2Sz=0	0	compare	zqp=c_opt
+fsz_rbm_zero_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_rbm	fsz	0	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zero_in=inrbm.def,inrbmhidden.def;zqp=c_opt
+fsz_dh24_rbm_opttrans_zero_physcal	tests/fixtures/native_c_physcal_181/_sources/fsz_dh24_rbm_opttrans	fsz	1	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zero_in=inrbm.def,inrbmhidden.def;zqp=c_opt
+heisenberg_chain_real_mpi2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0		0	compare	ranks=2
+heisenberg_chain_cmp_mpi2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_cmp	cmp	0		0	compare	ranks=2
+heisenberg_chain_fsz_mpi2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0		0	compare	ranks=2
+hubbard_chain_real_mpi2	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0		0	compare	ranks=2
+hubbard_chain_dh_real_mpi2	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_real	real	0		0	compare	ranks=2
+kondo_chain_real_mpi2	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0		0	compare	ranks=2
+hubbard_chain_dh_rbm_opttrans_mpi2	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_rbm_opttrans	cmp	1		0	compare	ranks=2
+fsz_dh24_opttrans_physcal_mpi2	tests/fixtures/native_c_physcal_181/_sources/fsz_dh24_opttrans	fsz	1	NVMCCalMode=1,NDataIdxStart=7,NDataQtySmp=2,NVMCSample=100	0	compare	zqp=c_opt;ranks=2
+heisenberg_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0		0	compare	ranks=4
+heisenberg_chain_fsz_mpi4	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0		0	compare	ranks=4
+hubbard_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0		0	compare	ranks=4
+hubbard_chain_dh_opttrans_mpi4	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_opttrans	real	1		0	compare	ranks=4
+kondo_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0		0	compare	ranks=4

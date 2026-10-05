@@ -30,4 +30,6 @@ deterministic fixed-parameter perturbation amplitude (used where the original
 fixed state is an exact eigenstate and Lanczos alpha is singular), class
 (`compare`, `c_rejected`, `c_singular`, `c_defect_not_reproduced`) and an
 optional variant (`drop=KEYWORD,...` removes namelist keywords; `zqp=c_opt`
-takes the fixed parameters from one native-C optimization step).
+takes the fixed parameters from one native-C optimization step; `zero_in=FILE,...` zeroes
+overlay values; `ranks=N` runs the measured stage under `mpiexec -n N`). `make_fsz_sources.py`
+assembles the FSZ + DH/RBM/OptTrans inputs under `tests/fixtures/native_c_physcal_181/_sources/`.
