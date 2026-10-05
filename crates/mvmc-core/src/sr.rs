@@ -201,7 +201,7 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
     let lda_oo = 2 * sr_opt_size;
     let mut s_diag = vec![0.0_f64; 2 * n_para];
     // C stcopt.c:83 `omp parallel for` over `pi`: one producer per element.
-    crate::threading::for_each_mut(&mut s_diag, |pi, value| {
+    crate::threading::for_each_mut(&mut s_diag, 3, |pi, value| {
         let oo_idx_diag = (pi + 2) * lda_oo + (pi + 2);
         let oo_idx_0 = pi + 2;
         if oo_idx_diag < state.sr_opt.sr_opt_oo.len() && oo_idx_0 < state.sr_opt.sr_opt_oo.len() {
@@ -361,7 +361,7 @@ fn collect_active_real(
     sr_opt_size: usize,
 ) -> (Vec<f64>, Vec<usize>) {
     let mut s_diag = vec![0.0_f64; n_para];
-    crate::threading::for_each_mut(&mut s_diag, |pi, value| {
+    crate::threading::for_each_mut(&mut s_diag, 3, |pi, value| {
         let idx_diag = (pi + 1) * sr_opt_size + (pi + 1);
         let idx_0 = pi + 1;
         if idx_diag < state.sr_opt.sr_opt_oo_real.len() && idx_0 < state.sr_opt.sr_opt_oo_real.len()
@@ -404,7 +404,7 @@ fn build_s_g_real(
     let ratio_diag = 1.0 + sta_del;
     // C stcopt.c:69 `omp parallel for` over the S entries; every entry has one
     // producer, so the columns are filled independently (column `sj` of S).
-    crate::threading::for_each_chunk_mut(s, n_smat, |sj, column| {
+    crate::threading::for_each_chunk_mut(s, n_smat, 3 * n_smat, |sj, column| {
         let pj = smat_to_para_idx[sj];
         for (si, &pi) in smat_to_para_idx.iter().enumerate() {
             let tmp = state.sr_opt.sr_opt_oo_real[pi + 1];
@@ -417,7 +417,7 @@ fn build_s_g_real(
         }
     });
     let ho_0 = state.sr_opt.sr_opt_ho_real[0];
-    crate::threading::for_each_mut(g, |si, value| {
+    crate::threading::for_each_mut(g, 3, |si, value| {
         let pi = smat_to_para_idx[si];
         let v = state.sr_opt.sr_opt_ho_real[pi + 1] - ho_0 * state.sr_opt.sr_opt_oo_real[pi + 1];
         *value = -2.0 * step_dt * v;
@@ -436,7 +436,7 @@ fn build_s_g_complex(
     let n_smat = smat_to_para_idx.len();
     let lda_oo = 2 * sr_opt_size;
     let ratio_diag = 1.0 + sta_del;
-    crate::threading::for_each_chunk_mut(s, n_smat, |sj, column| {
+    crate::threading::for_each_chunk_mut(s, n_smat, 3 * n_smat, |sj, column| {
         let pj = smat_to_para_idx[sj];
         for (si, &pi) in smat_to_para_idx.iter().enumerate() {
             let tmp = state.sr_opt.sr_opt_oo[pi + 2].re;
@@ -449,7 +449,7 @@ fn build_s_g_complex(
         }
     });
     let ho_0 = state.sr_opt.sr_opt_ho[0].re;
-    crate::threading::for_each_mut(g, |si, value| {
+    crate::threading::for_each_mut(g, 3, |si, value| {
         let pi = smat_to_para_idx[si];
         let v = state.sr_opt.sr_opt_ho[pi + 2].re - ho_0 * state.sr_opt.sr_opt_oo[pi + 2].re;
         *value = -2.0 * step_dt * v;

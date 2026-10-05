@@ -45,6 +45,7 @@ pub fn calculate_new_pf_m2_complex_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 8 * n_size),
         || (),
         |_, qp| {
             let inv_base = qp * inv_stride + msa * n_size;
@@ -87,6 +88,7 @@ pub fn calculate_new_pf_m2_real_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 4 * n_size),
         || (),
         |_, qp| {
             let inv_base = qp * inv_stride + msa * n_size;
@@ -128,6 +130,7 @@ pub fn calculate_new_pf_m2_fsz_complex_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 8 * n_size),
         || (),
         |_, qp| {
             let inv_base = qp * inv_stride + msa * n_size;
@@ -165,6 +168,7 @@ pub fn calculate_new_pf_m2_fsz_real_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 4 * n_size),
         || (),
         |_, qp| {
             let inv_base = qp * inv_stride + msa * n_size;
@@ -213,6 +217,7 @@ pub fn calculate_new_pf_m_two2_complex_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 16 * n_size),
         || {
             (
                 vec![Complex64::new(0.0, 0.0); n_size],
@@ -266,6 +271,7 @@ pub fn calculate_new_pf_m_two2_real_flat<const SCALAR: bool>(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 8 * n_size),
         || (vec![0.0; n_size], vec![0.0; n_size]),
         |(vec_a, vec_b), qp| {
             let inv_base = qp * inv_stride;
@@ -315,6 +321,7 @@ pub fn calculate_new_pf_m_two_fsz_complex_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 16 * n_size),
         || {
             (
                 vec![Complex64::new(0.0, 0.0); n_size],
@@ -368,6 +375,7 @@ pub fn calculate_new_pf_m_two_fsz_real_flat(
         pf_m_new,
         qp_start,
         end,
+        crate::threading::scaled_cost_ns(n_size, 8 * n_size),
         || (vec![0.0; n_size], vec![0.0; n_size]),
         |(vec_a, vec_b), qp| {
             let inv_base = qp * inv_stride;
@@ -405,6 +413,7 @@ pub fn update_m_all_complex_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, 2 * (n_size * n_size + 16 * n_size)),
         || {
             (
                 vec![Complex64::new(0.0, 0.0); n_size],
@@ -444,6 +453,7 @@ pub fn update_m_all_real_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, n_size * n_size + 16 * n_size),
         || (vec![0.0; n_size], vec![0.0; n_size], vec![0.0; n_size]),
         |(slt_vec, vec1, vec2), qp, pf, window| {
             fill_slt_vec_normal_real(qp, rsa, ele_idx, slater_elm, slt_vec, n_site, n_elec);
@@ -478,6 +488,7 @@ pub fn update_m_all_fsz_complex_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, 2 * (n_size * n_size + 16 * n_size)),
         || {
             (
                 vec![Complex64::new(0.0, 0.0); n_size],
@@ -518,6 +529,7 @@ pub fn update_m_all_fsz_real_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, n_size * n_size + 16 * n_size),
         || (vec![0.0; n_size], vec![0.0; n_size], vec![0.0; n_size]),
         |(slt_vec, vec1, vec2), qp, pf, window| {
             fill_slt_vec_fsz_real(qp, rsa, ele_idx, ele_spn, slater_elm, slt_vec, n_site);
@@ -564,6 +576,7 @@ pub fn update_m_all_two_complex_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, 4 * (n_size * n_size + 16 * n_size)),
         || TwoUpdateWorkComplex::new(n_size),
         |work, qp, pf, window| {
             let base = 0;
@@ -620,6 +633,7 @@ pub fn update_m_all_two_real_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, 2 * (n_size * n_size + 16 * n_size)),
         || TwoUpdateWorkReal::new(n_size),
         |work, qp, pf, window| {
             let base = 0;
@@ -677,6 +691,7 @@ pub fn update_m_all_two_fsz_real_flat(
         n_size * n_size,
         qp_start,
         qp_end,
+        crate::threading::scaled_cost_ns(n_size, 2 * (n_size * n_size + 16 * n_size)),
         || TwoUpdateWorkReal::new(n_size),
         |work, qp, pf, window| {
             let base = 0;

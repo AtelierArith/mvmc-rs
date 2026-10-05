@@ -53,6 +53,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     crate::threading::for_each_chunk_mut(
         &mut state.slater_matrix.slater_elm.as_mut_slice()[..n_qp_full * plane_len],
         plane_len,
+        crate::threading::scaled_cost_ns(n_site, 5 * n_site2 * n_site2),
         |qp, plane| {
             let n_qp_fix = n_sp_gauss_leg * n_mp_trans;
             let rem = qp % n_qp_fix;
@@ -113,6 +114,7 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
     let source = state.slater_matrix.slater_elm.as_slice();
     crate::threading::for_each_mut(
         state.slater_matrix.slater_elm_real.as_mut_slice(),
+        crate::threading::ELEMENT_COST_NS,
         |k, value| *value = source[k].re,
     );
 }
@@ -141,6 +143,7 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
     crate::threading::for_each_chunk_mut(
         &mut state.slater_matrix.slater_elm.as_mut_slice()[..n_qp_full * plane_len],
         plane_len,
+        crate::threading::scaled_cost_ns(n_site, 5 * n_site2 * n_site2),
         |qp, plane| {
             let rem = qp % n_qp_fix;
             let mpidx = rem / n_sp_gauss_leg;

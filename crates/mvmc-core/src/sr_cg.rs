@@ -165,13 +165,13 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     let mut gradient = vec![0.0; mapping.len()];
     let dt = 2.0 * data.modpara.dsr_opt_step_dt;
     // stcopt_cg_impl.c:471-492 `omp parallel for` over the active components `si`.
-    crate::threading::for_each_mut(&mut operator.mean, |si, value| {
+    crate::threading::for_each_mut(&mut operator.mean, 2, |si, value| {
         *value = oo[mapping[si] + offset]
     });
-    crate::threading::for_each_mut(&mut operator.diagonal, |si, value| {
+    crate::threading::for_each_mut(&mut operator.diagonal, 2, |si, value| {
         *value = variance[mapping[si]]
     });
-    crate::threading::for_each_mut(&mut gradient, |si, value| {
+    crate::threading::for_each_mut(&mut gradient, 4, |si, value| {
         let idx = mapping[si] + offset;
         *value = -dt * (ho[idx] - ho[0] * oo[idx]);
     });
@@ -197,12 +197,14 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
                 n_active,
                 &mut operator.imag_samples,
                 n_active,
+                6 * n_active,
                 fill,
             );
         } else {
             crate::threading::for_each_chunk_mut(
                 &mut operator.real_samples,
                 n_active,
+                3 * n_active,
                 |s, real| fill(s, real, &mut []),
             );
         }
@@ -362,16 +364,16 @@ impl SampledSrOperator {
             let dq = sequential_dot(&direction, &product);
             let alpha = delta / dq;
             // stcopt_cg_impl.c:313 `omp parallel for`: elementwise, one producer per entry.
-            crate::threading::for_each_mut(&mut solution, |i, value| {
+            crate::threading::for_each_mut(&mut solution, 2, |i, value| {
                 *value += alpha * direction[i]
             });
             if iteration % 20 == 0 {
                 self.apply_with_reducer(&mut residual, &mut solution, inv_weight, shift, reducer)?;
-                crate::threading::for_each_mut(&mut residual, |i, value| {
+                crate::threading::for_each_mut(&mut residual, 2, |i, value| {
                     *value = gradient[i] - *value
                 });
             } else {
-                crate::threading::for_each_mut(&mut residual, |i, value| {
+                crate::threading::for_each_mut(&mut residual, 2, |i, value| {
                     *value -= alpha * product[i]
                 });
             }
@@ -381,7 +383,7 @@ impl SampledSrOperator {
             // norm. Assigning delta_new changes subsequent alpha/stop tests.
             let recurrent_norm = beta * delta;
             delta = recurrent_norm;
-            crate::threading::for_each_mut(&mut direction, |i, value| {
+            crate::threading::for_each_mut(&mut direction, 2, |i, value| {
                 *value = residual[i] + beta * *value
             });
             observe(|observer| {
@@ -534,7 +536,7 @@ impl SampledSrOperator {
         let coef = sequential_dot(&self.mean, x);
         let (mean, diagonal) = (&self.mean, &self.diagonal);
         let x = &*x;
-        crate::threading::for_each_mut(z, |i, value| {
+        crate::threading::for_each_mut(z, 4, |i, value| {
             *value = inv_weight * *value - coef * mean[i] + shift * diagonal[i] * x[i]
         });
         observe(|observer| observer.product(CgProductPhase::Corrected, x, z));

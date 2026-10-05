@@ -95,11 +95,20 @@ fn internal_control_child_missing_selector_fails_closed() {
 fn control_child() {
     let name = std::env::var("ISSUE184_CONTROL_CASE")
         .expect("internal control child requires ISSUE184_CONTROL_CASE");
-    let (_, _, _, threads, threshold) = CASES
+    let (_, _, threshold_env, threads, threshold) = CASES
         .into_iter()
         .find(|case| case.0 == name)
         .expect("unknown internal control case");
-    let expected = InnerThreadConfig { threads, threshold };
+    // An invalid or zero `MVMC_RS_INNER_THRESHOLD` falls back to the default and is not
+    // explicit; the work-estimate gate (#361) is then used by the kernels.
+    let expected = InnerThreadConfig {
+        threads,
+        threshold,
+        threshold_explicit: threshold_env
+            .is_some_and(|value| value.parse::<usize>().is_ok_and(|v| v > 0)),
+        min_work_ns: mvmc_core::threading::DEFAULT_MIN_PARALLEL_WORK_NS,
+        min_size: mvmc_core::threading::default_min_size(threads),
+    };
     assert_eq!(inner_thread_config(), expected);
     // Only this single-test child mutates its env, before any pool is created.
     // Both config and subsequently built pool must retain the captured values.

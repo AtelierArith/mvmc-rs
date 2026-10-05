@@ -187,6 +187,13 @@ pub(crate) fn calc_m_all_real_native_info(
     )
 }
 
+/// Estimated serial cost (ns) of one QP plane of `calculate_m_all`: the Pfaffian
+/// factorization and inverse are O(`n_size^3`) with a large O(`n_size^2`) assembly share.
+/// Fit to `MVMC_RS_INNER_PROFILE=1` serial timings (7.4/29.5/145 us at `n_size` 16/32/64).
+fn pfaffian_qp_cost_ns(n_size: usize) -> usize {
+    crate::threading::scaled_cost_ns(n_size, 28 * n_size * n_size + n_size * n_size * n_size / 8)
+}
+
 fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<f64>,
@@ -207,11 +214,11 @@ fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
-    let observed = crate::threading::observe_kernel(
-        crate::threading::ObservedWork::Qp,
-        !NATIVE_STATUS && crate::threading::inner_parallel_enabled(qp_end - qp_start),
-    );
-    if NATIVE_STATUS || !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+    let parallel = !NATIVE_STATUS
+        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+    let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
+    let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
+    if !parallel {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
             let _entry = observed.enter_item();
@@ -232,46 +239,38 @@ fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
 
     let workers = crate::threading::inner_worker_count(qp_end - qp_start);
     pool.ensure_capacity(workers);
-    let chunk = (qp_end - qp_start).div_ceil(workers);
-    let ranges: Vec<_> = (qp_start..qp_end)
-        .step_by(chunk)
-        .map(|start| (start, (start + chunk).min(qp_end)))
-        .collect();
-    crate::threading::install(|| {
-        let chunks: Vec<Result<_, CalcMAllError>> = ranges
-            .into_par_iter()
-            .map(|(start, end)| {
-                let mut ws = pool.take();
-                let mut local_inv = InvMColMajor::zeros(end, n_elec);
-                let mut local_pf = vec![0.0_f64; end];
-                let result = (start..end).try_for_each(|qp| {
-                    let _entry = observed.enter_item();
-                    calc_m_all_child_real::<NATIVE_STATUS>(
-                        qp,
-                        ele_idx,
-                        slater_elm,
-                        &mut local_inv,
-                        &mut local_pf[qp],
-                        n_site,
-                        n_elec,
-                        &mut ws,
-                    )
-                });
-                pool.release(ws);
-                result.map(|()| (start, end, local_inv, local_pf))
-            })
-            .collect();
-        let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
-        let chunks = chunks?;
-        for (start, end, local_inv, local_pf) in chunks {
-            pf_m[start..end].copy_from_slice(&local_pf[start..end]);
-            for qp in start..end {
-                let source = local_inv.qp_matrix_slice(qp);
-                inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
-            }
+    let chunks: Vec<Result<_, CalcMAllError>> =
+        crate::threading::static_blocks(qp_end - qp_start, |first, last| {
+            let (start, end) = (qp_start + first, qp_start + last);
+            let mut ws = pool.take();
+            let mut local_inv = InvMColMajor::zeros(end, n_elec);
+            let mut local_pf = vec![0.0_f64; end];
+            let result = (start..end).try_for_each(|qp| {
+                let _entry = observed.enter_item();
+                calc_m_all_child_real::<NATIVE_STATUS>(
+                    qp,
+                    ele_idx,
+                    slater_elm,
+                    &mut local_inv,
+                    &mut local_pf[qp],
+                    n_site,
+                    n_elec,
+                    &mut ws,
+                )
+            });
+            pool.release(ws);
+            result.map(|()| (start, end, local_inv, local_pf))
+        });
+    let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
+    let chunks = chunks?;
+    for (start, end, local_inv, local_pf) in chunks {
+        pf_m[start..end].copy_from_slice(&local_pf[start..end]);
+        for qp in start..end {
+            let source = local_inv.qp_matrix_slice(qp);
+            inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
         }
-        Ok(())
-    })
+    }
+    Ok(())
 }
 
 /// Complex `calculate_m_all` over the half-open QP range `[qp_start, qp_end)`.
@@ -435,11 +434,11 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: boo
     debug_assert_eq!(inv_m.n_size(), n_size);
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
-    let observed = crate::threading::observe_kernel(
-        crate::threading::ObservedWork::Qp,
-        !NATIVE_STATUS && crate::threading::inner_parallel_enabled(qp_end - qp_start),
-    );
-    if NATIVE_STATUS || !crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+    let parallel = !NATIVE_STATUS
+        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+    let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
+    let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
+    if !parallel {
         let mut ws = pool.take();
         let result = (qp_start..qp_end).try_for_each(|qp| {
             let _entry = observed.enter_item();
@@ -465,7 +464,7 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: boo
         .step_by(chunk)
         .map(|start| (start, (start + chunk).min(qp_end)))
         .collect();
-    crate::threading::install(|| {
+    crate::threading::install_inner(|| {
         let chunks: Vec<Result<_, CalcMAllError>> = ranges
             .into_par_iter()
             .map(|(start, end)| {
@@ -536,11 +535,11 @@ pub fn calc_m_all_fsz_complex(
     }
     let mut inv_temp = InvMColMajor::zeros(qp_end, n_elec);
     let mut pf_temp = vec![Complex64::default(); qp_end];
-    let observed = crate::threading::observe_kernel(
-        crate::threading::ObservedWork::Qp,
-        crate::threading::inner_parallel_enabled(qp_end - qp_start),
-    );
-    if crate::threading::inner_parallel_enabled(qp_end - qp_start) {
+    let parallel =
+        crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+    let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
+    let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
+    if parallel {
         let workers = crate::threading::inner_worker_count(qp_end - qp_start);
         pool.ensure_capacity(workers);
         let chunk = (qp_end - qp_start).div_ceil(workers);
@@ -548,7 +547,7 @@ pub fn calc_m_all_fsz_complex(
             .step_by(chunk)
             .map(|start| (start, (start + chunk).min(qp_end)))
             .collect();
-        let chunks: Vec<Result<_, CalcMAllError>> = crate::threading::install(|| {
+        let chunks: Vec<Result<_, CalcMAllError>> = crate::threading::install_inner(|| {
             ranges
                 .into_par_iter()
                 .map(|(start, end)| {

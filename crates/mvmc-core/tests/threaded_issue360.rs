@@ -6,6 +6,12 @@
 //! Each worker setting runs in its own child process because the pool and its
 //! configuration are frozen per process. Runner jobs compare every output file
 //! byte for byte, which includes the RNG-driven sample trajectory.
+//!
+//! Issue #361 adds the work-estimate gate: without `MVMC_RS_INNER_THRESHOLD` a
+//! region is pooled only when its estimated work reaches
+//! `MVMC_RS_INNER_MIN_WORK_NS`. Every job therefore also runs with the threshold
+//! unset and `MVMC_RS_INNER_MIN_WORK_NS=1`, `MVMC_RS_INNER_MIN_SIZE=1` (everything
+//! with two or more items is pooled) and must stay bit-identical to the serial result.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -23,8 +29,9 @@ fn repo_root() -> PathBuf {
 /// Child output: label -> value, one `R|label|value` line each.
 type Records = BTreeMap<String, String>;
 
-fn child(job: &str, workers: usize) -> Records {
-    let output = Command::new(std::env::current_exe().unwrap())
+fn child(job: &str, workers: usize, auto_gate: bool) -> Records {
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
         .args([
             "--ignored",
             "--exact",
@@ -34,12 +41,18 @@ fn child(job: &str, workers: usize) -> Records {
         ])
         .env("ISSUE360_CHILD", job)
         .env("MVMC_RS_INNER_THREADS", workers.to_string())
-        .env("MVMC_RS_INNER_THRESHOLD", "1")
         .env("OPENBLAS_NUM_THREADS", "1")
         .env("OMP_NUM_THREADS", "1")
-        .env("RAYON_NUM_THREADS", "1")
-        .output()
-        .unwrap();
+        .env("RAYON_NUM_THREADS", "1");
+    if auto_gate {
+        command
+            .env_remove("MVMC_RS_INNER_THRESHOLD")
+            .env("MVMC_RS_INNER_MIN_WORK_NS", "1")
+            .env("MVMC_RS_INNER_MIN_SIZE", "1");
+    } else {
+        command.env("MVMC_RS_INNER_THRESHOLD", "1");
+    }
+    let output = command.output().unwrap();
     assert!(
         output.status.success(),
         "{job} workers={workers}\n{}\n{}",
@@ -59,9 +72,15 @@ fn child(job: &str, workers: usize) -> Records {
 
 /// Results must agree exactly; counters (`obs.*`) describe the dispatch.
 fn assert_worker_invariant(job: &str, expect_pooled: &[&str]) {
-    let serial = child(job, 1);
+    for auto_gate in [false, true] {
+        assert_worker_invariant_with(job, expect_pooled, auto_gate);
+    }
+}
+
+fn assert_worker_invariant_with(job: &str, expect_pooled: &[&str], auto_gate: bool) {
+    let serial = child(job, 1, auto_gate);
     for workers in [2usize, 4] {
-        let pooled = child(job, workers);
+        let pooled = child(job, workers, auto_gate);
         let strip = |records: &Records| -> Records {
             records
                 .iter()

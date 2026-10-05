@@ -159,6 +159,10 @@ C コードとまったく同じように乱数を消費します。独立な作
 `OO`/`HO` の累積と保存されたグラム積の行、実数波動関数に対するローカルエネルギーの遷移項、対角項・PairHop・Exchange・InterAll のエネルギー項、`update_m_all_*`/`calculate_new_pf_m*` の QP ループ、Slater 要素の平面、doublon-holon カウンター、RBM の隠れユニットとその微分、Lanczos のハミルトニアン・グリーン関数項、SR 行列の構築と CG のベクトル更新、グリーン関数の要素)
 は
 `MVMC_RS_INNER_THREADS`([8.5](#85-環境変数))で有効になります。これはマルコフ連鎖や、各結果が形成される順序を変えません。
+ワーカープールの起動には 1 領域あたり約 20 us かかり、QP 平面がキャッシュ間を移動するため、デフォルト(`MVMC_RS_INNER_THRESHOLD` なし)では
+電子行列が大きく(`n_size` が 4 ワーカーで 160 以上、2 ワーカーで 240 以上)、かつ推定作業量が 100 us 以上の領域だけがプールを使います。
+それより小さい実行は、ワーカーを設定していても逐次実行されます。Hubbard 鎖では、すべての領域をプール実行すると 4 ワーカーは 16 サイトで 2.3 倍、64 サイトで 1.2 倍遅く、
+256 サイトでは 1.7 倍速くなりました([ベンチマーク結果](../../../benchmark/hubbard_chain/results/hubbard_chain_2026-10-06_inner_threads.md))。
 密な線形代数(`dgemv`, `dpotrf`, パフィアンカーネル)は OpenBLAS で実行され、そのスレッド数は通常の
 `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` 変数で制御されます(`mvmc-rs` は読み取りません。プロジェクトのベンチマークでは 1 に固定しています)。
 
@@ -234,8 +238,11 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | `0` 以外の任意の値で、C 互換のセクションタイマーが有効になります。`zvo_CalcTimer.dat` を書き出します([9.5](09-output-files.md#95-タイマー)) |
 | `MVMC_TIMER` | 同上 | 非推奨のエイリアス。`MVMC_C_TIMER` なしで設定された場合、警告が `MVMC_C_TIMER=1` を推奨します |
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
-| `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:190`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
-| `MVMC_RS_INNER_THRESHOLD` | 同上 | ワーカープールを使用する最小の作業項目数。デフォルトは 32。不正な値や 0 は 32 にフォールバックします |
+| `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
+| `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
+| `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000 |
+| `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。デフォルトはワーカー数 `w` に対して `120*w/(w-1)`(4 で 160、2 で 240) |
+| `MVMC_RS_INNER_PROFILE` | `threading::dispatch_profile` | `1` にすると、CLI が実行後に stderr へ内部カーネルの各呼び出し箇所(逐次・プール)の呼び出し数・項目数・時間を出力します |
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | ランチャーの検出([8.4](#84-mpiとグループ実行)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |
 | `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS(`mvmc-rs` は読み取りません) | BLAS のスレッド設定 |
@@ -247,7 +254,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 
 > **実装**
 > - Rust: `TimerEnv::from_lookup` — `crates/mvmc-core/src/c_timer.rs:174`
-> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:201`
+> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:260`
 > - Rust: `LaunchContext::from_env` — `crates/mvmc-core/src/parallel.rs:20`
 
 ## 8.6 再現性

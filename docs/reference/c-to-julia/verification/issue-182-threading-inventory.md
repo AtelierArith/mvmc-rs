@@ -153,7 +153,8 @@ PhysCal fixtures.
 
 Purpose: record the effect of the existing inner threading on the report
 Hubbard-chain inputs. No speed claim is made. `xtask bench-hubbard --threads N`
-does not set `MVMC_RS_INNER_THREADS`, so it cannot exercise Rust inner workers;
+did not set `MVMC_RS_INNER_THREADS` when this was measured (it now takes `--inner-workers`, #361; see
+`benchmark/hubbard_chain/results/hubbard_chain_2026-10-06_inner_threads.md`);
 the runs below invoke the release CLI directly.
 
 Settings: `target/release/mvmc benchmark/hubbard_chain/inputs/hubbard_chain_L{16,32}/namelist.def

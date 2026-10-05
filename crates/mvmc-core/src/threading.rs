@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 
 use num_complex::Complex64;
 use rayon::prelude::*;
@@ -183,6 +184,55 @@ impl KernelObservation {
 /// worthwhile. The sequential path remains the default for small workloads.
 pub const DEFAULT_INNER_THRESHOLD: usize = 32;
 
+/// Default minimum estimated serial work (nanoseconds) of one region before the
+/// inner pool is used. Waking the pool and joining costs about 15-30 us per region
+/// on the reference host (`docs/reference/c-to-julia/performance/`), so a region
+/// must carry several times that to gain from two or more workers.
+pub const DEFAULT_MIN_PARALLEL_WORK_NS: u64 = 100_000;
+
+/// Estimated serial cost (ns) of one trivially cheap element (a copy or an axpy).
+pub const ELEMENT_COST_NS: usize = 2;
+
+/// Estimated serial cost (ns) of one Green-function evaluation with `bodies`
+/// creation/annihilation pairs for an `n_size`-electron configuration: the kernels read
+/// O(`n_size`) inverse entries per pair (fit to serial `MVMC_RS_INNER_PROFILE=1`
+/// timings of 0.26/0.43/0.76 us per term at `n_size` 16/32/64 on the reference host).
+pub fn green_cost_ns(n_size: usize, bodies: usize) -> usize {
+    scaled_cost_ns(n_size, bodies * (12 * n_size + 60))
+}
+
+/// Electron-matrix dimension (`n_size`) at which an infinitely fast pool would break
+/// even; the automatic gate requires `DEFAULT_MIN_PARALLEL_SIZE * w / (w - 1)` for `w`
+/// workers, because the benefit `(1 - 1/w) * work` has to pay a dispatch cost that does
+/// not shrink with `w`.
+///
+/// Dispatching a region wakes sleeping workers and moves the QP planes between their
+/// caches and the caller's. Pooling only some regions of a sample therefore loses
+/// (a region that is faster pooled slows the serial regions that follow it), while
+/// pooling every region only wins once the per-sample matrices are large. Measured on
+/// the Hubbard chain (`docs/reference/c-to-julia/performance/`): with 4 workers
+/// `n_size` 16..64 loses up to 2x, 128 is neutral, 160 is about 10% faster and 192
+/// about 15% faster; with 2 workers 192 still loses 10% while 256 is 1.35x faster
+/// (4 workers 1.7x, 8 workers 2.0x).
+pub const DEFAULT_MIN_PARALLEL_SIZE: usize = 120;
+
+/// Default `min_size` for `threads` workers: `DEFAULT_MIN_PARALLEL_SIZE * w / (w - 1)`.
+pub fn default_min_size(threads: usize) -> usize {
+    let w = threads.max(2);
+    (DEFAULT_MIN_PARALLEL_SIZE * w).div_ceil(w - 1)
+}
+
+/// Cost estimate of an `n_size`-dependent region: `cost_ns`, or 0 (always serial) when
+/// the automatic gate is active and the matrices are below `min_size`. An explicit
+/// `MVMC_RS_INNER_THRESHOLD` ignores costs, so it is unaffected.
+pub fn scaled_cost_ns(n_size: usize, cost_ns: usize) -> usize {
+    if n_size >= inner_thread_config().min_size {
+        cost_ns
+    } else {
+        0
+    }
+}
+
 /// Runtime configuration for independent inner work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InnerThreadConfig {
@@ -190,6 +240,15 @@ pub struct InnerThreadConfig {
     pub threads: usize,
     /// Minimum work items required to enable parallel execution.
     pub threshold: usize,
+    /// `MVMC_RS_INNER_THRESHOLD` was set to a valid value: regions then use the
+    /// plain item-count gate (`items >= threshold`) instead of the work estimate.
+    pub threshold_explicit: bool,
+    /// Minimum estimated region work in ns for the automatic gate
+    /// (`MVMC_RS_INNER_MIN_WORK_NS`, default [`DEFAULT_MIN_PARALLEL_WORK_NS`]).
+    pub min_work_ns: u64,
+    /// Minimum electron-matrix dimension for the automatic gate
+    /// (`MVMC_RS_INNER_MIN_SIZE`, default [`default_min_size`] of the worker count).
+    pub min_size: usize,
 }
 
 /// Read the process-wide inner-kernel controls once.
@@ -200,17 +259,29 @@ pub struct InnerThreadConfig {
 /// to those defaults.
 pub fn inner_thread_config() -> InnerThreadConfig {
     static CONFIG: OnceLock<InnerThreadConfig> = OnceLock::new();
-    *CONFIG.get_or_init(|| InnerThreadConfig {
-        threads: std::env::var("MVMC_RS_INNER_THREADS")
+    *CONFIG.get_or_init(|| {
+        let threshold = std::env::var("MVMC_RS_INNER_THRESHOLD")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .filter(|&value: &usize| value > 0);
+        let threads = std::env::var("MVMC_RS_INNER_THREADS")
             .ok()
             .and_then(|value| value.parse().ok())
             .filter(|&value: &usize| value > 0)
-            .unwrap_or(1),
-        threshold: std::env::var("MVMC_RS_INNER_THRESHOLD")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|&value: &usize| value > 0)
-            .unwrap_or(DEFAULT_INNER_THRESHOLD),
+            .unwrap_or(1);
+        InnerThreadConfig {
+            threads,
+            threshold: threshold.unwrap_or(DEFAULT_INNER_THRESHOLD),
+            threshold_explicit: threshold.is_some(),
+            min_work_ns: std::env::var("MVMC_RS_INNER_MIN_WORK_NS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(DEFAULT_MIN_PARALLEL_WORK_NS),
+            min_size: std::env::var("MVMC_RS_INNER_MIN_SIZE")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_else(|| default_min_size(threads)),
+        }
     })
 }
 
@@ -220,25 +291,152 @@ pub fn inner_parallel_enabled(work_items: usize) -> bool {
     config.threads > 1 && work_items >= config.threshold
 }
 
-/// Number of workers to provision for a work range.
+/// Return whether a region of `items` independent items, each costing about
+/// `cost_ns` nanoseconds serially, should use the worker pool.
+///
+/// With an explicit `MVMC_RS_INNER_THRESHOLD` this is the plain item-count gate
+/// [`inner_parallel_enabled`] (used by the worker-invariance tests to force pooled
+/// execution of small ranges). Otherwise the pool is used only when the estimated
+/// serial work `items * cost_ns` reaches `min_work_ns`: dispatching a tiny region to
+/// the pool costs more than running it (issue #361). The choice never changes any
+/// result, only which threads form it.
+pub fn inner_parallel_work(items: usize, cost_ns: usize) -> bool {
+    let config = inner_thread_config();
+    if config.threads <= 1 {
+        return false;
+    }
+    if config.threshold_explicit {
+        return items >= config.threshold;
+    }
+    items >= 2 && (items as u64).saturating_mul(cost_ns as u64) >= config.min_work_ns
+}
+
+/// Number of workers to provision for a work range already admitted by
+/// [`inner_parallel_enabled`] or [`inner_parallel_work`].
 pub fn inner_worker_count(work_items: usize) -> usize {
-    if inner_parallel_enabled(work_items) {
-        inner_thread_config().threads.min(work_items)
+    let config = inner_thread_config();
+    let admitted = if config.threshold_explicit {
+        inner_parallel_enabled(work_items)
+    } else {
+        config.threads > 1
+    };
+    if admitted {
+        config.threads.min(work_items).max(1)
     } else {
         1
     }
 }
 
+/// One kernel call site, as recorded by `MVMC_RS_INNER_PROFILE=1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DispatchSite {
+    /// `file:line` of the kernel entry.
+    pub site: String,
+    /// Whether these calls were dispatched to the inner pool (else serial).
+    pub parallel: bool,
+    /// Number of calls from that site.
+    pub calls: u64,
+    /// Total work items over those calls (0 when the site does not report it).
+    pub items: u64,
+    /// Total wall time of those calls, in nanoseconds.
+    pub nanos: u128,
+}
+
+type DispatchTable = Mutex<std::collections::BTreeMap<(&'static str, u32, bool), (u64, u64, u128)>>;
+
+fn dispatch_table() -> &'static DispatchTable {
+    static TABLE: OnceLock<DispatchTable> = OnceLock::new();
+    TABLE.get_or_init(Default::default)
+}
+
+fn profile_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("MVMC_RS_INNER_PROFILE").is_ok_and(|value| !value.is_empty() && value != "0")
+    })
+}
+
+/// Per-call-site counts and wall time of the inner kernels (empty unless
+/// `MVMC_RS_INNER_PROFILE=1`), sorted by descending time. Serial calls are recorded
+/// too, so a one-worker run calibrates per-item cost and a multi-worker run shows
+/// the pool dispatch overhead.
+pub fn dispatch_profile() -> Vec<DispatchSite> {
+    let mut sites: Vec<_> = dispatch_table()
+        .lock()
+        .unwrap()
+        .iter()
+        .map(
+            |(&(file, line, parallel), &(calls, items, nanos))| DispatchSite {
+                site: format!("{file}:{line}"),
+                parallel,
+                calls,
+                items,
+                nanos,
+            },
+        )
+        .collect();
+    sites.sort_by_key(|site| std::cmp::Reverse(site.nanos));
+    sites
+}
+
+/// Records one kernel call on drop when profiling is enabled.
+pub struct ProfileScope(Option<(&'static str, u32, bool, u64, Instant)>);
+
+impl ProfileScope {
+    #[track_caller]
+    fn start(parallel: bool, items: usize) -> Self {
+        // `Location::caller` must be read here: closures do not inherit `track_caller`.
+        let location = std::panic::Location::caller();
+        Self(profile_enabled().then(|| {
+            (
+                location.file(),
+                location.line(),
+                parallel,
+                items as u64,
+                Instant::now(),
+            )
+        }))
+    }
+}
+
+impl Drop for ProfileScope {
+    fn drop(&mut self) {
+        if let Some((file, line, parallel, items, start)) = self.0.take() {
+            let mut table = dispatch_table().lock().unwrap();
+            let entry = table.entry((file, line, parallel)).or_default();
+            entry.0 += 1;
+            entry.1 += items;
+            entry.2 += start.elapsed().as_nanos();
+        }
+    }
+}
+
+/// Profile a whole kernel call (serial or pooled) at the caller's location.
+#[track_caller]
+pub fn profile_scope(parallel: bool, items: usize) -> ProfileScope {
+    ProfileScope::start(parallel, items)
+}
+
 /// Execute a closure on the configured deterministic Rayon pool.
+#[track_caller]
 pub fn install<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
+    let _scope = ProfileScope::start(true, 0);
+    install_inner(operation)
+}
+
+fn pool() -> &'static ThreadPool {
     static POOL: OnceLock<ThreadPool> = OnceLock::new();
-    let pool = POOL.get_or_init(|| {
+    POOL.get_or_init(|| {
         ThreadPoolBuilder::new()
             .num_threads(inner_thread_config().threads.max(1))
             .thread_name(|index| format!("mvmc-inner-{index}"))
             .build()
             .expect("inner Rayon pool must build")
-    });
+    })
+}
+
+pub(crate) fn install_inner<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
+    let pool = pool();
     let observer = OBSERVER.with(|slot| slot.borrow().clone());
     pool.install(|| {
         let _binding = bind_observer(observer);
@@ -246,15 +444,47 @@ pub fn install<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
     })
 }
 
+/// Static block schedule on the inner pool (the C `omp for` default): worker `k` always
+/// handles the same contiguous block `k` of `0..count`, so per-QP data stays in that
+/// worker's cache from one call to the next. Returns `body(start, end)` of each
+/// non-empty block in block order. Which thread forms which block never affects results.
+pub(crate) fn static_blocks<R: Send>(
+    count: usize,
+    body: impl Fn(usize, usize) -> R + Send + Sync,
+) -> Vec<R> {
+    let blocks = inner_worker_count(count).min(count).max(1);
+    let block = count.div_ceil(blocks);
+    let results = Mutex::new(Vec::with_capacity(blocks));
+    let observer = OBSERVER.with(|slot| slot.borrow().clone());
+    pool().broadcast(|context| {
+        let start = context.index() * block;
+        if start < count {
+            let _binding = bind_observer(observer.clone());
+            let value = body(start, (start + block).min(count));
+            results.lock().unwrap().push((context.index(), value));
+        }
+    });
+    let mut results = results.into_inner().unwrap();
+    results.sort_by_key(|(index, _)| *index);
+    results.into_iter().map(|(_, value)| value).collect()
+}
+
 /// Visit independent output entries; reductions inside an entry remain serial.
-pub fn for_each_mut<T: Send>(items: &mut [T], operation: impl Fn(usize, &mut T) + Send + Sync) {
-    let observed = observe_kernel(ObservedWork::Entry, inner_parallel_enabled(items.len()));
+#[track_caller]
+pub fn for_each_mut<T: Send>(
+    items: &mut [T],
+    cost_ns: usize,
+    operation: impl Fn(usize, &mut T) + Send + Sync,
+) {
+    let parallel = inner_parallel_work(items.len(), cost_ns);
+    let _scope = ProfileScope::start(parallel, items.len());
+    let observed = observe_kernel(ObservedWork::Entry, parallel);
     let operation = |i, value| {
         let _entry = observed.enter_item();
         operation(i, value);
     };
-    if inner_parallel_enabled(items.len()) {
-        install(|| {
+    if parallel {
+        install_inner(|| {
             items
                 .par_iter_mut()
                 .enumerate()
@@ -270,23 +500,26 @@ pub fn for_each_mut<T: Send>(items: &mut [T], operation: impl Fn(usize, &mut T) 
 
 /// Visit consecutive `chunk_len`-long output windows (`chunk_len == 0` visits nothing).
 /// Each window has one producer; reductions inside a window stay serial.
+#[track_caller]
 pub fn for_each_chunk_mut<T: Send>(
     items: &mut [T],
     chunk_len: usize,
+    cost_ns: usize,
     operation: impl Fn(usize, &mut [T]) + Send + Sync,
 ) {
     if chunk_len == 0 {
         return;
     }
     let count = items.len().div_ceil(chunk_len);
-    let parallel = inner_parallel_enabled(count);
+    let parallel = inner_parallel_work(count, cost_ns);
+    let _scope = ProfileScope::start(parallel, count);
     let observed = observe_kernel(ObservedWork::Entry, parallel);
     let operation = |i, window: &mut [T]| {
         let _entry = observed.enter_item();
         operation(i, window);
     };
     if parallel {
-        install(|| {
+        install_inner(|| {
             items
                 .par_chunks_mut(chunk_len)
                 .enumerate()
@@ -303,11 +536,13 @@ pub fn for_each_chunk_mut<T: Send>(
 /// Like [`for_each_chunk_mut`] over two outputs with their own window lengths;
 /// the number of windows is that of the first slice (the second must have at least
 /// as many windows).
+#[track_caller]
 pub fn for_each_chunk_pair_mut<A: Send, B: Send>(
     left: &mut [A],
     left_len: usize,
     right: &mut [B],
     right_len: usize,
+    cost_ns: usize,
     operation: impl Fn(usize, &mut [A], &mut [B]) + Send + Sync,
 ) {
     if left_len == 0 || right_len == 0 {
@@ -315,14 +550,15 @@ pub fn for_each_chunk_pair_mut<A: Send, B: Send>(
     }
     let count = left.len().div_ceil(left_len);
     assert!(right.len().div_ceil(right_len) >= count);
-    let parallel = inner_parallel_enabled(count);
+    let parallel = inner_parallel_work(count, cost_ns);
+    let _scope = ProfileScope::start(parallel, count);
     let observed = observe_kernel(ObservedWork::Entry, parallel);
     let operation = |i, a: &mut [A], b: &mut [B]| {
         let _entry = observed.enter_item();
         operation(i, a, b);
     };
     if parallel {
-        install(|| {
+        install_inner(|| {
             left.par_chunks_mut(left_len)
                 .zip(right.par_chunks_mut(right_len))
                 .enumerate()
@@ -337,19 +573,23 @@ pub fn for_each_chunk_pair_mut<A: Send, B: Send>(
 }
 
 /// Visit matching independent entries without aliasing either output slice.
+#[track_caller]
 pub fn for_each_pair_mut<A: Send, B: Send>(
     left: &mut [A],
     right: &mut [B],
+    cost_ns: usize,
     operation: impl Fn(usize, &mut A, &mut B) + Send + Sync,
 ) {
     assert_eq!(left.len(), right.len());
-    let observed = observe_kernel(ObservedWork::Entry, inner_parallel_enabled(left.len()));
+    let parallel = inner_parallel_work(left.len(), cost_ns);
+    let _scope = ProfileScope::start(parallel, left.len());
+    let observed = observe_kernel(ObservedWork::Entry, parallel);
     let operation = |i, a, b| {
         let _entry = observed.enter_item();
         operation(i, a, b);
     };
-    if inner_parallel_enabled(left.len()) {
-        install(|| {
+    if parallel {
+        install_inner(|| {
             left.par_iter_mut()
                 .zip(right.par_iter_mut())
                 .enumerate()
@@ -369,10 +609,12 @@ pub fn for_each_pair_mut<A: Send, B: Send>(
 /// (the C `GetWorkSpaceThread*` buffers of a `#pragma omp for` over `qpidx`).
 /// Serial (no pool) when inner threading is off or `qp_end - qp_start` is below
 /// the threshold.
+#[track_caller]
 pub(crate) fn qp_fill<T: Send, S>(
     out: &mut [T],
     qp_start: usize,
     qp_end: usize,
+    cost_ns: usize,
     init: impl Fn() -> S + Send + Sync,
     body: impl Fn(&mut S, usize) -> T + Send + Sync,
 ) {
@@ -381,10 +623,11 @@ pub(crate) fn qp_fill<T: Send, S>(
         return;
     }
     let count = end - qp_start;
-    let parallel = inner_parallel_enabled(count);
+    let parallel = inner_parallel_work(count, cost_ns);
+    let _scope = ProfileScope::start(parallel, count);
     let observed = observe_kernel(ObservedWork::Qp, parallel);
     if parallel {
-        install(|| {
+        install_inner(|| {
             out[qp_start..end].par_iter_mut().enumerate().for_each_init(
                 &init,
                 |scratch, (i, slot)| {
@@ -409,16 +652,19 @@ pub(crate) fn qp_fill<T: Send, S>(
 /// C's one-thread accumulation order (the `#pragma omp for ... reduction(+:e)` of
 /// `calham*.c` / `lslocgrn*.c`). `init` builds the per-task scratch (C's
 /// per-thread `myEleIdx`/`myBuffer` copies).
+#[track_caller]
 pub(crate) fn collect_terms<T: Send, S>(
     count: usize,
+    cost_ns: usize,
     init: impl Fn() -> S + Send + Sync,
     body: impl Fn(&mut S, usize) -> T + Send + Sync,
 ) -> Option<Vec<T>> {
-    if !inner_parallel_enabled(count) {
+    if !inner_parallel_work(count, cost_ns) {
         return None;
     }
+    let _scope = ProfileScope::start(true, count);
     let observed = observe_kernel(ObservedWork::Region, true);
-    Some(install(|| {
+    Some(install_inner(|| {
         (0..count)
             .into_par_iter()
             .map_init(&init, |scratch, index| {
@@ -434,6 +680,7 @@ pub(crate) fn collect_terms<T: Send, S>(
 /// flat inverse matrix (windows of different QPs never overlap because
 /// `stride >= min_len`). The C `#pragma omp for` over `qpidx` of `updateMAll*`.
 #[allow(clippy::too_many_arguments)]
+#[track_caller]
 pub(crate) fn qp_update<T: Send, U: Send, S>(
     values: &mut [T],
     inv: &mut [U],
@@ -441,6 +688,7 @@ pub(crate) fn qp_update<T: Send, U: Send, S>(
     min_len: usize,
     qp_start: usize,
     qp_end: usize,
+    cost_ns: usize,
     init: impl Fn() -> S + Send + Sync,
     body: impl Fn(&mut S, usize, &mut T, &mut [U]) + Send + Sync,
 ) {
@@ -453,11 +701,12 @@ pub(crate) fn qp_update<T: Send, U: Send, S>(
         "QP windows of the inverse must not overlap"
     );
     let count = end - qp_start;
-    let parallel = inner_parallel_enabled(count);
+    let parallel = inner_parallel_work(count, cost_ns);
+    let _scope = ProfileScope::start(parallel, count);
     let observed = observe_kernel(ObservedWork::Qp, parallel);
     let inv = &mut inv[qp_start * stride..];
     if parallel {
-        install(|| {
+        install_inner(|| {
             values[qp_start..end]
                 .par_iter_mut()
                 .zip(inv.par_chunks_mut(stride))
@@ -481,22 +730,42 @@ pub(crate) fn qp_update<T: Send, U: Send, S>(
 }
 
 /// Copy the common prefix with disjoint writes; the destination tail is untouched.
+#[track_caller]
 pub fn copy_real_to_complex(dst: &mut [Complex64], src: &[f64]) {
     let n = dst.len().min(src.len());
-    for_each_mut(&mut dst[..n], |i, value| {
+    for_each_mut(&mut dst[..n], ELEMENT_COST_NS, |i, value| {
         *value = Complex64::new(src[i], 0.0)
     });
 }
 
 /// Copy real parts of the common prefix, preserving the destination tail.
+#[track_caller]
 pub fn copy_complex_realpart(dst: &mut [f64], src: &[Complex64]) {
     let n = dst.len().min(src.len());
-    for_each_mut(&mut dst[..n], |i, value| *value = src[i].re);
+    for_each_mut(&mut dst[..n], ELEMENT_COST_NS, |i, value| {
+        *value = src[i].re
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn static_blocks_cover_the_range_once_in_order() {
+        for count in [1usize, 2, 7, 8, 33] {
+            let blocks = static_blocks(count, |start, end| (start, end));
+            assert!(!blocks.is_empty());
+            assert!(blocks.len() <= inner_thread_config().threads.max(1));
+            let mut next = 0;
+            for (start, end) in blocks {
+                assert_eq!(start, next, "blocks are contiguous and ordered");
+                assert!(end > start);
+                next = end;
+            }
+            assert_eq!(next, count);
+        }
+    }
 
     #[test]
     fn sequential_default_is_safe_for_small_work() {
@@ -509,7 +778,7 @@ mod tests {
     fn observation_scopes_restore_after_nested_install_panics_and_errors() {
         let outer = start_observation();
         install(|| install(|| ()));
-        for_each_mut::<u8>(&mut [], |_, _| panic!("empty range must not enter"));
+        for_each_mut::<u8>(&mut [], 1, |_, _| panic!("empty range must not enter"));
         assert_eq!(outer.counters.snapshot(), ExecutionSnapshot::default());
         let failed = std::panic::catch_unwind(|| {
             install(|| {

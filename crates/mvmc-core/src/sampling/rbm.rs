@@ -532,7 +532,7 @@ pub fn log_rbm_ratio(
     // and `reduction(*:zz)` per block. The pooled path computes the per-unit values
     // concurrently and folds them serially in unit order (`z +=` difference, `zz *=`
     // factor, `z += log(zz)` per block), so the result equals the serial loop.
-    let pooled = crate::threading::collect_terms(n_hidden, || (), |_, hi| unit(hi));
+    let pooled = crate::threading::collect_terms(n_hidden, 60, || (), |_, hi| unit(hi));
     for iblk in 0..n_blk {
         let hist = iblk * block_size;
         let hiend = (hist + block_size).min(n_hidden);
@@ -657,15 +657,19 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
     // C `rbm.c:56` `omp parallel for ... reduction(+:z)` over the hidden units: the
     // pooled path evaluates log cosh per unit concurrently and sums the values
     // serially in unit order (charge, spin, general), equal to the serial loops.
-    if crate::threading::inner_parallel_enabled(n_charge + n_spin + n_general) {
+    if crate::threading::inner_parallel_work(n_charge + n_spin + n_general, 40) {
         let hidden: Vec<Complex64> = hidden_charge
             .into_iter()
             .chain(hidden_spin)
             .chain(hidden_general)
             .collect();
-        let values =
-            crate::threading::collect_terms(hidden.len(), || (), |_, i| log_cosh_stable(hidden[i]))
-                .expect("gate checked above");
+        let values = crate::threading::collect_terms(
+            hidden.len(),
+            40,
+            || (),
+            |_, i| log_cosh_stable(hidden[i]),
+        )
+        .expect("gate checked above");
         for value in values {
             z += value;
         }

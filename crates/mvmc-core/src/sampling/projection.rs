@@ -40,9 +40,10 @@ fn recompute_dh_counts(
         .doublon_holon_2site_indices
         .len()
         .max(data.doublon_holon_4site_indices.len());
-    if crate::threading::inner_parallel_enabled(definitions) {
+    if crate::threading::inner_parallel_work(definitions, 8 * n_site) {
         let two = crate::threading::collect_terms(
             data.doublon_holon_2site_indices.len(),
+            8 * n_site,
             || (),
             |_, definition| {
                 dh_slots(
@@ -56,6 +57,7 @@ fn recompute_dh_counts(
         );
         let four = crate::threading::collect_terms(
             data.doublon_holon_4site_indices.len(),
+            8 * n_site,
             || (),
             |_, definition| {
                 dh_slots(
