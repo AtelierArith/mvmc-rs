@@ -142,6 +142,9 @@ fn inventory(path: &Path) -> Vec<String> {
             entry.file_name().into_string().unwrap()
         })
         .collect::<Vec<_>>();
+    // C InitFile also creates the run-log `_time_` and `_SRinfo` files (formats are
+    // covered by run_log_files.rs); this inventory concerns the summary outputs.
+    names.retain(|name| !name.contains("_time_") && !name.contains("_SRinfo"));
     names.sort();
     names
 }

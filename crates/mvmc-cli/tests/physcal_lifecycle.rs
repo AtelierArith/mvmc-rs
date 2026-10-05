@@ -126,7 +126,8 @@ fn same_outputs(a: &Path, b: &Path) {
     };
     assert_eq!(names(a), names(b));
     for name in names(a) {
-        if name.to_string_lossy().contains("Timer") {
+        // `_time_` rows end in a wall-clock ctime string.
+        if name.to_string_lossy().contains("Timer") || name.to_string_lossy().contains("_time_") {
             continue;
         }
         assert_eq!(

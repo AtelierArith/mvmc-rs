@@ -2696,6 +2696,8 @@ fn independent_physcal(output_root: &Path) {
             std::fs::read_dir(path)
                 .unwrap()
                 .map(|entry| entry.unwrap().file_name())
+                // C InitFile's `_time_` file ends rows with a ctime string.
+                .filter(|name| !name.to_string_lossy().contains("_time_"))
                 .collect::<std::collections::BTreeSet<_>>()
         };
         assert_eq!(
