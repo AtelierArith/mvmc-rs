@@ -1,0 +1,23 @@
+--------------------
+Model_Parameters   0
+--------------------
+VMC_Cal_Parameters
+--------------------
+CDataFileHead  zvo
+CParaFileHead  zqp
+--------------------
+NVMCCalMode    0
+--------------------
+NDataIdxStart  1
+NDataQtySmp    1
+--------------------
+Nsite          8
+Ncond          8
+2Sz            0
+NMPTrans       1
+Mix            0.7
+EPS            8
+IterationMax   500
+EpsSlater      3
+RndSeed        4242
+Print          1

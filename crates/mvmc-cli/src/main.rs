@@ -6,6 +6,7 @@
 //!
 //! Usage:
 //!   mvmc <namelist.def> [options]
+//!   mvmc uhf <namelist.def> [OptParaFile]   (C ComplexUHF initial-orbital tool)
 //!
 //! Options:
 //!   --nsteps <N>      SR optimisation steps  [default: value in modpara.def]
@@ -33,6 +34,7 @@ mod physcal_trace;
 
 fn print_usage(program: &str) {
     eprintln!("Usage: {program} <namelist.def> [options]");
+    eprintln!("       {program} uhf <namelist.def> [OptParaFile]");
     eprintln!();
     eprintln!("Options:");
     eprintln!("  --nsteps <N>    SR optimisation steps [default: NSROptItrStep in modpara.def]");
@@ -51,9 +53,33 @@ fn print_usage(program: &str) {
     eprintln!("  MVMC_NSTEPS     Same as --nsteps (CLI flag takes precedence)");
 }
 
+/// `mvmc uhf namelist.def [OptParaFile]`: port of the C `UHF` executable.
+///
+/// Like C, definition files and outputs are resolved against the current
+/// directory and the optional second argument is accepted but unused. A
+/// non-converged run still writes its files and exits with 255 (C `return -1`).
+fn run_uhf(args: &[String]) -> i32 {
+    if args.is_empty() || args.len() > 2 {
+        eprintln!("ED Error: UHF NameListFile [OptParaFile]");
+        return 1;
+    }
+    match mvmc_uhf::run(Path::new(&args[0]), &mvmc_uhf::UhfOptions::default()) {
+        Ok(report) if report.converged => 0,
+        Ok(_) => 255,
+        Err(error) => {
+            eprintln!("error: {error}");
+            1
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let program = args.first().map(String::as_str).unwrap_or("mvmc");
+
+    if args.get(1).map(String::as_str) == Some("uhf") {
+        process::exit(run_uhf(&args[2..]));
+    }
 
     // ── argument parsing (no external crate dependency) ──────────────────────
     let mut namelist: Option<PathBuf> = None;
