@@ -333,6 +333,181 @@ fn rust_ctest_equivalent_selected_models() {
     );
 }
 
+/// Upstream C/Julia ctest contract at the upstream run length.
+///
+/// Mirrors `extern/mVMC-1.3.0/test/python/runtest.py` and Julia's
+/// `ctest_equivalent.jl`: run the unmodified input (`NSROptItrStep`/`NSROptItrSmp`
+/// from `modpara.def`, seed from the input) and compare the first two window-averaged
+/// summary values with `ref_mean.dat`/`ref_std.dat`. A model fails only when
+/// `|difference| >= 3*ref_std` and `|difference| >= 1e-8`. References are the C
+/// shipped `test/python/data/<Model>/ref` files (see
+/// `tests/fixtures/ctest_upstream_reference/PROVENANCE.md`). This is a statistical
+/// model-level contract; it is not deterministic trajectory parity.
+#[test]
+#[ignore = "upstream-length ctest gate: select MVMC_RS_CTEST_UPSTREAM_MODELS and use --run-ignored only"]
+fn rust_ctest_upstream_rule_selected_models() {
+    if let Err(std::env::VarError::NotUnicode(_)) = std::env::var("MVMC_RS_CTEST_UPSTREAM_MODELS") {
+        let error = fixture_status::GateError {
+            status: fixture_status::Status::Unsupported,
+            detail: "nonUnicode explicit MVMC_RS_CTEST_UPSTREAM_MODELS selector".into(),
+        };
+        report_classified("ctest-upstream", &error);
+        fixture_status::raise(error);
+    }
+    require_gate("ctest-upstream", "MVMC_RS_CTEST_UPSTREAM_MODELS");
+    let mut filter = std::env::var("MVMC_RS_CTEST_UPSTREAM_MODELS").expect("selection present");
+    let supported: Vec<_> = MODELS.iter().map(|model| model.fixture).collect();
+    if filter.trim() == "all" {
+        filter = supported.join(",");
+    }
+    let requested = fixture_status::selection(&filter, &supported).unwrap_or_else(|error| {
+        report_classified("ctest-upstream", &error);
+        fixture_status::raise(error)
+    });
+    let root = julia_mvmc_root().unwrap_or_else(|| {
+        support::missing_fixture("ctest-upstream", "Julia-mVMC checkout not found")
+    });
+    let references =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ctest_upstream_reference");
+    for model in MODELS {
+        if !requested.contains(&model.fixture) {
+            report_gate(
+                model.fixture,
+                GateStatus::NotRun,
+                "upstream ctest not selected; unverified",
+            );
+        }
+    }
+    let mut failures = Vec::new();
+    for name in requested {
+        let model = MODELS.iter().find(|model| model.fixture == name).unwrap();
+        let outcome = std::panic::catch_unwind(|| {
+            let input_root = root
+                .join("test/integration/reference")
+                .join(model.fixture)
+                .join("inputs");
+            let namelist = input_root.join("namelist.def");
+            fixture_status::require_files(&input_root, &["namelist.def"])
+                .unwrap_or_else(|error| fixture_status::raise(error));
+            let required = [
+                format!("{name}/ref_mean.dat"),
+                format!("{name}/ref_std.dat"),
+                format!("{name}/inputs.sha256"),
+            ];
+            let required: Vec<_> = required.iter().map(String::as_str).collect();
+            fixture_status::require_files(&references, &required)
+                .unwrap_or_else(|error| fixture_status::raise(error));
+            preflight_input_closure(&references.join(name), &input_root);
+            ctest_provenance::verify_inputs(
+                &references.join(name).join("inputs.sha256"),
+                &input_root,
+            );
+            let ref_mean = read_values(&references.join(name).join("ref_mean.dat"));
+            let ref_std = read_values(&references.join(name).join("ref_std.dat"));
+            assert!(ref_mean.len() >= 2 && ref_std.len() >= 2);
+            let parsed = mvmc_expert_parsers::parse_expert_mode_files(&namelist)
+                .unwrap_or_else(|error| panic!("{name}: parse failed: {error}"));
+            let nsteps = parsed.modpara.nsr_opt_itr_step;
+            let nsmp = parsed.modpara.nsr_opt_itr_smp;
+            let id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let output = std::env::temp_dir().join(format!(
+                "mvmc-rs-ctest-upstream-{name}-{}-{id}",
+                std::process::id()
+            ));
+            fs::create_dir(&output).expect("exclusive owned output directory creation");
+            let config = RunConfig {
+                nsmp: Some(nsmp),
+                seed: None,
+                output_dir: Some(output.clone()),
+                ..RunConfig::new(nsteps, model.mode)
+            };
+            let started = std::time::Instant::now();
+            let result = run_para_opt_from_namelist(&namelist, config)
+                .unwrap_or_else(|error| panic!("{name}: Rust run failed: {error}"));
+            let elapsed = started.elapsed().as_secs_f64();
+            assert_eq!(result.status, 0, "{name}: status");
+            assert_eq!(result.effective_nsteps as i64, nsteps);
+            assert_eq!(result.effective_nsmp as i64, nsmp);
+            let mut failed_columns = Vec::new();
+            for column in 0..2 {
+                let calculated = result.ctest_values[column];
+                let difference = (calculated - ref_mean[column]).abs();
+                let ok = passes(calculated, ref_mean[column], ref_std[column]);
+                let ratio = if ref_std[column] > 0.0 {
+                    difference / ref_std[column]
+                } else if difference == 0.0 {
+                    0.0
+                } else {
+                    f64::INFINITY
+                };
+                eprintln!(
+                    "ctest-upstream result model={name} column={column} nsteps={nsteps} nsmp={nsmp} calculated={calculated:.17e} expected={:.17e} sigma={:.17e} diff={difference:.17e} diff_over_sigma={ratio:.6} ok={ok} seconds={elapsed:.1}",
+                    ref_mean[column], ref_std[column],
+                );
+                if !ok {
+                    failed_columns.push(column);
+                }
+            }
+            fs::remove_dir_all(&output)
+                .expect("remove only this gate's exclusively created directory");
+            assert!(
+                failed_columns.is_empty(),
+                "{name}: upstream ctest rule failed in columns {failed_columns:?}"
+            );
+            report_gate(
+                "ctest-upstream",
+                GateStatus::Pass,
+                &format!(
+                    "{name}: upstream rule (>=3 sigma and >=1e-8) at nsteps={nsteps} nsmp={nsmp}"
+                ),
+            );
+        });
+        if let Err(payload) = outcome {
+            record_failed_case(name, payload.as_ref(), &mut failures);
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "failed upstream ctest models: {failures:?}"
+    );
+}
+
+#[test]
+fn upstream_references_cover_every_model_with_well_formed_values() {
+    let references =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ctest_upstream_reference");
+    let table = fs::read_to_string(references.join("models.tsv")).unwrap();
+    let listed: Vec<&str> = table
+        .lines()
+        .map(|line| line.split('\t').next().unwrap())
+        .collect();
+    let mut expected: Vec<&str> = MODELS.iter().map(|model| model.fixture).collect();
+    expected.sort_unstable();
+    assert_eq!(
+        listed, expected,
+        "models.tsv must list exactly the 13 ctest models"
+    );
+    for model in MODELS {
+        let mean = read_values(&references.join(model.fixture).join("ref_mean.dat"));
+        let std = read_values(&references.join(model.fixture).join("ref_std.dat"));
+        assert_eq!(mean.len(), std.len(), "{}: ref lengths", model.fixture);
+        assert!(
+            mean.len() >= 2,
+            "{}: need two compared values",
+            model.fixture
+        );
+        assert!(mean.iter().all(|v| v.is_finite()));
+        assert!(std.iter().all(|v| v.is_finite() && *v >= 0.0));
+        assert!(references
+            .join(model.fixture)
+            .join("inputs.sha256")
+            .is_file());
+    }
+}
+
 #[test]
 fn ctest_failure_requires_both_thresholds() {
     assert!(passes(1.0, 1.0 + 0.9e-8, 0.0));

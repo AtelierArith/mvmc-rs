@@ -107,6 +107,7 @@ Items noticed while writing this manual, to be handled by separate issues. "Obse
 10. **Rust `modpara.def` defaults** differ from C ([7.2](07-input-files.md#72-modparadef)); results of a run that omits keys are therefore not interchangeable between the two programs.
 11. **Negative `DSROptStepDt`** is turned into a positive step with a remark by C (`readdef.c:746-752`) but used unchanged by Rust (code reading, no use of `SRFlag` in `crates/`).
 12. **`Nelectron`/`Ne` are ignored by the Rust `modpara.def` parser** (observed: a model with `Nelectron 8` and no `Ncond` reports `Nelec=0` and fails with "normal initialization precondition: ..."); the C manual's own example uses `Nelectron`.
+13. **C ignores RBM parameters in real mode** (#379, reported as tmisawa/Julia-mVMC#59). With a real model (`ComplexType 0` orbitals) that declares RBM sections, C accepts `FlagRBM=1` silently, but the real sampler `vmcmake_real.c` contains no RBM code (0 occurrences of `RBM`; the complex `vmcmake.c` has 27), so the RBM weight is never applied. Observed on `tests/fixtures/c_orbital_inputs/namelist_rbm_real.def` (seed 1, step 1): C reports NPara = 55 (NProj 7, NRBM 36, NSlater 12) and a step-1 energy of 5.984544891656925, unchanged when the RBM overlay is changed from 0.125/-0.25 to all zeros and bit-identical to Rust with all RBM values zero. Rust applies the RBM weight (energy 6.228711216019723). Rust keeps the correct RBM math; `rbm_real` therefore has no native C operand reference.
 
 ## 11.6 What this manual did not verify
 

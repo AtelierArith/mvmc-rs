@@ -55,9 +55,9 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:429`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:627`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:448`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:433`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:631`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:452`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `getopt` options other than `-o` are not implemented.
 

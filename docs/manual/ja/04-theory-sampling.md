@@ -196,12 +196,12 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:64`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:354`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:816`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:821`
 > - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:166`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1080`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:514`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:928`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:565`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1085`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:519`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:933`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:570`
 > - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
 
 ## 4.6 サンプラー内の並列化

@@ -115,8 +115,15 @@ MVMC_RS_PHASE4_CMP_ZVO=1 cargo nextest run --locked -p mvmc-core --cargo-profile
 MVMC_RS_PHASE4_FSZ_ZVO=1 cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase4_zvo_gate_fsz --run-ignored only --no-fail-fast --retries 0
 MVMC_RS_PHASE5_HUBBARD_ZVO=1 cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase5_zvo_gate_hubbard --run-ignored only --no-fail-fast --retries 0
 MVMC_RS_LANCZOS_PHYSICAL=1 MVMC_RS_LANCZOS_MODEL=hubbard_chain_real MVMC_RS_LANCZOS_MODE=real cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test lanczos_transfer_physcal --run-ignored only --no-fail-fast --retries 0
-MVMC_RS_CTEST_MODELS=heisenberg_chain_real cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test ctest_equivalent --run-ignored only --no-fail-fast --retries 0
+MVMC_RS_CTEST_UPSTREAM_MODELS=heisenberg_chain_real cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test ctest_equivalent -E 'test(rust_ctest_upstream_rule_selected_models)' --run-ignored only --no-fail-fast --retries 0
+MVMC_RS_CTEST_MODELS=heisenberg_chain_real cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test ctest_equivalent -E 'test(rust_ctest_equivalent_selected_models)' --run-ignored only --no-fail-fast --retries 0
 ```
+
+`MVMC_RS_CTEST_UPSTREAM_MODELS` (names or `all`) selects the upstream-rule gate
+(see [ISSUE180_UPSTREAM_CTEST_RULE.md](ISSUE180_UPSTREAM_CTEST_RULE.md)); it is the
+verdict of the `ctest-long` dispatch. `MVMC_RS_CTEST_MODELS` selects the separate
+20-step independent-reference gate, which stays MissingFixture until independent
+step-20 references exist.
 
 Set `JULIA_MVMC_ROOT` to use a different reference checkout. An explicitly
 invalid root fails; it cannot silently fall back to another checkout.

@@ -4911,8 +4911,10 @@ mod callback_tests {
     /// (tests/fixtures/c_order_sr_operands, c_toolbox/sr_operand_dump).
     /// Operands depend only on the initial parameters and sampling, so they do
     /// not pass through the amplified CG solve. `rbm_real` has no native C
-    /// reference: its Rust model is the historical sparse RBM control, which C
-    /// does not run identically (step-1 energy 5.9845 in C, 6.2287 here).
+    /// reference: C ignores RBM in real mode (`vmcmake_real.c` has no RBM code),
+    /// so its step-1 energy 5.9845 equals Rust's with RBM zeroed, versus 6.2287
+    /// with RBM applied. See docs/NUMERICAL_COMPARISONS.md (#379) and
+    /// tmisawa/Julia-mVMC#59.
     fn assert_c_step_one_operands(case: &str, cg: bool, store: i64, state: &VmcOptimizationState) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../tests/fixtures/c_order_sr_operands/{case}-{}-store{store}.txt",
@@ -6339,10 +6341,24 @@ mod callback_tests {
             };
             let files = names(dira);
             assert_eq!(files, names(dirb), "{case}");
+            // `_time_` rows end in a wall-clock ctime string (": Mon Oct  5 14:18:39 2026"),
+            // which differs between two runs that straddle a second boundary; compare the rest.
+            let strip_ctime = |bytes: Vec<u8>, name: &std::ffi::OsStr| -> Vec<u8> {
+                if !name.to_string_lossy().contains("_time_") {
+                    return bytes;
+                }
+                String::from_utf8(bytes)
+                    .unwrap()
+                    .lines()
+                    .map(|line| line.rsplit_once(": ").map_or(line, |(body, _)| body))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .into_bytes()
+            };
             for f in files {
                 assert_eq!(
-                    fs::read(dira.join(&f)).unwrap(),
-                    fs::read(dirb.join(&f)).unwrap(),
+                    strip_ctime(fs::read(dira.join(&f)).unwrap(), &f),
+                    strip_ctime(fs::read(dirb.join(&f)).unwrap(), &f),
                     "{case}: {f:?}"
                 );
             }

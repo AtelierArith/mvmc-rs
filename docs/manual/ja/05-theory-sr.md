@@ -161,10 +161,10 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます([7.5
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:107`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:334`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:447`
-> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:270`
-> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:294`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:337`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:450`
+> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:273`
+> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:297`
 > - 整合性: ここは演算順序が最も重要になる箇所です。C は `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat`(`stcopt_cg_impl.c:265`)を計算し、漸化式は `beta = xdot(r,r)/delta; delta = beta*delta;` です。古い $\delta$ は $r\!\cdot\!r$ で置き換えられ*ません*(`stcopt_cg_impl.c:333-336`)。Rust は両方を再現します(`crates/mvmc-core/src/sr_cg.rs:346`、`crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm")。内積は BLAS の `ddot` ではなく逐次(`sequential_dot`)で、積は C と同じ `dgemv` の組を使います。このため CG は FMA と縮約順序に敏感であり、打ち切られた CG の結果はビット単位の整合ではなく許容誤差のゲートで検証します。
 > - 整合性: 対角シフトは、行列を修正するのではなく `z += sdiag[si]*DSROptStaDel*x[si]`(`stcopt_cg_impl.c:420`)として現れます。$\langle O\rangle\cdot x$ には `xdot` を使います。サンプル積の MPI 縮約は、大域的な重み、平均、シフトの補正より前に行われます(`apply_with_reducer` のドキュメント)。
 
