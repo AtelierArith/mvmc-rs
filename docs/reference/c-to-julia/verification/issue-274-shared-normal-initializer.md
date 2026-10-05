@@ -104,7 +104,7 @@ fixtures: `tests/fixtures/issue274_caller_control/*.stdout`, consumed by the
 | --- | --- | --- |
 | First success | `native274_first_{real,complex}`; `shared_loop_matches_independent_c_caller_controls` (success.stdout) | none for the initializer prefix |
 | Rejected layout / retry | `native274_retry_{real,complex}` (primitive count 8); retry.stdout, peer-retry.stdout, `maximum_status_controls_retry_not_local_status` | none for world1 |
-| Negative native INFO | negative.stdout, `negative_info_is_not_a_boolean_retry`; MPI signed negative MAX | Caller-control only (stub kernel); no native-kernel negative-INFO acquisition |
+| Negative native INFO | negative.stdout, `negative_info_is_not_a_boolean_retry`; MPI signed negative MAX | None: native kernel negative INFO (Ne=0, INFO -5) measured and fixture-covered by #342, see `issue-342-negative-info.md` |
 | Subsequent / nonfinite-IP recovery | `native274_recover_{real,complex}` (single C recovery, count 4); `native274_real_log_ip.rs` (4 analytic zero/negative/subnormal/reduction-order tests, `clog` semantics) | none for the prefix |
 | Burn restore | `native274_burn_{real,complex}` (count 0 restore); storage/preflight units; MPI burn-shape/burn-kernel peer errors | none for the prefix |
 | Exhaustion | `native274_exhaust_{real,complex}` (101 placement/factor attempts, count 202); exhaustion.stdout, `call101_exhausts_even_if_its_status_succeeds` | none |

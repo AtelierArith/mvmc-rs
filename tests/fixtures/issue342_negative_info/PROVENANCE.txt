@@ -1,0 +1,48 @@
+Issue #342 native negative-INFO fixtures (C-derived, not Rust-generated)
+
+Files: {real,complex}.{ne0,ne1}.stdout, byte-for-byte output of the optional probe
+c_toolbox/issue342_negative_info/probe.c. Consumed only by
+crates/mvmc-core/tests/native342_negative_info.rs. Cargo never builds or reads
+c_toolbox.
+
+scope=NATIVE_KERNEL_STANDALONE (original C initializer + original kernels + real
+pfapack Fortran + OpenBLAS XERBLA). Not a full vmc.out trajectory and not MPI
+multi-rank (#179). The full vmc.out observation for the same Ne=0 input is
+recorded in docs/reference/c-to-julia/verification/issue-342-negative-info.md
+(not a fixture).
+
+Platform: Linux x86_64 Dev Container image (vsc-mvmc-rs-...-uid)
+compiler: gcc 13.3.0-6ubuntu2~24.04.1 via /opt/mpich/bin/mpicc, gfortran 13.3.0
+BLAS: libopenblas0 0.3.26+ds-1ubuntu0.1 (XERBLA prints to stdout and RETURNS),
+  OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1
+MPI: MPICH (/opt/mpich), probe uses MPI_COMM_SELF
+compile: mpicc -O2 -fopenmp -DBLAS_EXTERNAL -DMEXP=19937 -D_lapack -D_mVMC -D_mpi_use
+  (see c_toolbox/issue342_negative_info/run_probe.sh), linked with the
+  CMake-built libpfapack.a, libltl2inv.a, libblis.a of extern/mVMC-1.3.0.
+
+Source authority (SHA-256):
+ extern/mVMC-1.3.0/src/mVMC/vmcmake.c   8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed
+   extracted makeInitialSample body    dd29bbd9e7ba3c9a5128e80a0c1bed63e4c295985bb3b418f0058f7b2c0b96e8 (1857 bytes)
+ extern/mVMC-1.3.0/src/mVMC/matrix.c    849488176375102fbc3bab7001e0dc27dfa7c8e049fd90ee1d6248ebfba10764
+ extern/mVMC-1.3.0/src/mVMC/projection.c 2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1
+ extern/mVMC-1.3.0/src/sfmt/SFMT.c      b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+ extern/mVMC-1.3.0/src/pfapack/fortran/dsktrf.f aeda208bcacdbda11ee2a184a840ee3719e576607a0a5bc25d04ff20e96aa5c9
+ extern/mVMC-1.3.0/src/pfapack/fortran/zsktrf.f 6335d352b368f9561b9f75114df2e78dd8be4c7c6beda597dc024efec2349b0c
+Probe tooling (SHA-256 at acquisition):
+ probe.c               4cf1940754d1c5f60fca76a95e27fbca5ff75f66d6d6ad8a21512bd4beef954c
+ extract_initializers.pl 58080a2b56e0bed2029dc884364bbebace8ff9058ddf6f1a109ceda06aa3ebdd
+ run_probe.sh          cbe890764bb2e60569e5c40366cce0103826b83f239a3dce8aa82af59c0d1d4d
+ probe ELF             21095180d337cf471ee4d133244b2f8b6c39c6fcabcb8cc4a6612c2ecc2c96bd
+
+Only passive observation was added: the shared loop's CalculateMAll_fcmp call is
+wrapped to log its INFO. Globals set directly with readdef.c:757-758 formulas;
+LapackLWork from the original getLWork_fcmp (vmcmake/vmcmain.c:259). MakeProjCnt is
+the original projection.c with NProj=0.
+
+Cases (Nsite=2, one QP, seed 1, itinerant electrons only):
+ ne0  Ne=0: Nsize=LDA=0 => ZSKTRF/DSKTRF INFO=-5 (argument 5), XERBLA returns,
+      makeInitialSample exits after one attempt (flag<=0), returns 0, draws no RNG
+      word, eleIdx empty, eleCfg all -1, eleNum all 0; PfM untouched (sentinel
+      12345). The separate caller setup (vmcmake.c:110 / vmcmake_real.c:102) also
+      returns -5 and is ignored.
+ ne1  Ne=1 control: INFO 0, two placement words consumed.
