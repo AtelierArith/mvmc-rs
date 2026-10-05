@@ -1,0 +1,212 @@
+# 8. 実行
+
+[目次](README.md) · 前へ: [7. 入力ファイル](07-input-files.md) · 次へ: [9. 出力ファイル](09-output-files.md)
+
+## 8.1 `mvmc`コマンド
+
+バイナリは `crates/mvmc-cli/src/main.rs` からビルドされます(`cargo build --release -p mvmc-cli` で
+`target/release/mvmc` が得られます。`cargo run -p mvmc-cli -- ...` でも動作します)。書式:
+
+```text
+mvmc <namelist.def> [options]
+```
+
+| オプション | 意味 | デフォルト |
+|--------|---------|---------|
+| `--nsteps <N>` | SR のステップ数。`NSROptItrStep` を上書きします | `modpara.def` の `NSROptItrStep`(最適化では $>0$ でなければなりません) |
+| `--nsmp <N>` | 最終平均化ウィンドウ。`NSROptItrSmp` を上書きします(ステップ数に対して $\le$ を満たす必要があります) | `NSROptItrSmp` |
+| `--out-dir <DIR>` | 出力ディレクトリ(存在しなければ作成されます) | `<directory of namelist.def>/output` |
+| `--seed <N>` | RNG のシード。`RndSeed` を置き換えます(グループ/ランクのオフセットは引き続き加算されます。[4.6](04-theory-sampling.md#46-サンプラー内の並列化)) | `RndSeed` |
+| `--mode real\|cmp\|fsz` | *サニティ確認用のラベルのみ*: `{real,cmp,fsz}` に対して検証されますが、数値モードを**選択しません**。数値モードは入力宣言から決まります([3.3](03-theory-wavefunction.md#33-実数モードと複素数モード)) | 推定(一般軌道なら `fsz`、複素の宣言があれば `cmp`、それ以外は `real`) |
+| `--initial-def auto\|none\|PATH` | 初期パラメータファイル([7.4](07-input-files.md#74-初期パラメータ値)): `auto` は隣接する `initial.def` があれば読み込み、`none` は読み込まず、`PATH` は存在が必須です | `auto` |
+| `-o`, `--opt-trans` | C の OptTrans モードを有効にします(C ドライバーの `-o`) | off |
+| `--physcal <PATH>` | パラメータファイル `PATH` を用いて固定パラメータの PhysCal を実行します([8.2](#82-固定パラメータでの物理量計算)) | off |
+| `--physcal-trace <NEW_DIR>` | 入力を消費しないシリアル PhysCal 診断(PhysCal 実行の段階ごとの記録)を*新しい*ディレクトリ `NEW_DIR` に書き出します。`--physcal` と単一プロセスでの起動が必要です | off |
+| `--help`, `-h` | 使用法を表示します | |
+
+終了ステータス: `0` は成功、`1` は入力/検証/実行時エラー(メッセージは `error:` で始まります)、`2` は使用法エラー
+(不明なフラグ、値の欠落、`namelist.def` の欠落)です **(観測)**。`--help` のテキストではデフォルトの出力
+ディレクトリが "namelist parent dir" となっていますが、コードでは `<namelist parent>/output` を使います **(観測)**。
+
+C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異なり、`mvmc` には `-b`(バイナリ出力)、`-m`(複数定義モード)、
+`-F`(フラッシュ間隔)、`-e`/`-s`(Expert/Standardモード。Expert 入力のみ存在します)、`-v`(バージョン)、および位置引数の初期パラメータファイル(`--initial-def` を使います)がありません。
+
+### 計算の選択
+
+計算の選択は C ドライバーとまったく同じく、`modpara.def` の `NVMCCalMode` によって行われ
+(`vmcmain.c`, `main`: `NVMCCalMode==0` → `VMCParaOpt`、`==1` → `VMCPhysCal`、それ以外はエラー)、コマンドラインオプションはこれと一致していなければなりません。
+解析後(初期化やファイル作成の前に、MPI ランク全体で集団的に)、CLI は次の確認を行います。
+
+| `NVMCCalMode` | `--physcal` | 結果 |
+|---------------|-------------|--------|
+| 0 | なし | パラメータ最適化 |
+| 1 | あり | 固定パラメータの PhysCal |
+| 0 | あり | エラー: "`--physcal` requires NVMCCalMode=1 in ModPara" |
+| 1 | なし | エラー: "NVMCCalMode=1 selects fixed-parameter PhysCal; supply the fixed parameter file with `--physcal <PATH>`" |
+| その他 | – | エラー: "unsupported NVMCCalMode=… the CLI supports 0 (optimization) and 1 (PhysCal)" |
+
+この振り分け規則は PR #340(`select_calculation`, `crates/mvmc-cli/src/main.rs`)で導入されました。CLI は振り分けの*前に*入力を解析・
+検証するため、`NVMCCalMode=1` の入力でのパラメータ最適化の実行は `select_calculation` のメッセージで拒否されます。検証メッセージ "cannot run parameter optimization; use fixed-parameter PhysCal"
+(`validate_para_opt`)は、ライブラリレベルでの対応物です。
+
+> **実装**
+> - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
+> - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
+> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:429`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:627`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:448`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
+> - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `getopt` オプションのうち `-o` 以外は実装されていません。
+
+### コンソール出力
+
+出力ルート(ワールドランク 0)のみが出力します。パラメータ最適化の実行では、モデルのバナー、解決されたパス、
+サマリーが出力されます。チュートリアルの実行での正確なテキストは[第10章](10-tutorial.md)に示します。サマリーのフィールド:
+
+- `Completed N SR steps in T s` — 実行フェーズの実時間。
+- `Final energy / site` — **最後のステップ**の $\langle H\rangle$ の実部を `Nsite` で割ったもの(ノイズを含みます。1 ステップのみ)。
+- `Final-window means (n steps): [a, b]` — `zvo_out.dat` の最後の `n = NSROptItrSmp` 行にわたる $\langle H\rangle$ の実部と虚部の平均。
+
+バナー行 `mode : NVMCCalMode=...` は `modpara.def` から読み込んだ値を表示します。
+
+## 8.2 固定パラメータでの物理量計算
+
+```bash
+mvmc namelist.def --physcal zqp_opt.dat --out-dir phys
+```
+
+`modpara.def` では `NVMCCalMode 1` とします。パラメータファイルは、最適化の実行で書き出された `zqp_opt.dat`(または
+`initial.def` 形式のファイル。[7.4](07-input-files.md#74-初期パラメータ値))です。動作(`prepare_phys_cal_from_namelist`, `vmc_phys_cal_in_place_timed`):
+
+1. Expert 入力が解析され、PhysCal 用に検証されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。パラメータファイルが存在しない場合はエラーです("fixed parameter file not found")。
+2. 固定パラメータは、乱数を**消費する前に**読み込まれます(テスト `physcal_preparation_loads_fixed_parameters_before_rng_consumption`)。続いてオーバーレイと同期が行われ、その後 `UpdateSlaterElm` が実行されます。
+3. `NDataQtySmp` 個のサンプルそれぞれについて、マルコフ連鎖のサンプリング、測定、ランク間の平均化が行われ、番号付きの 1 組のファイルとして
+   `zvo_*_NNN.dat` が書き出されます(`NNN = NDataIdxStart + sample`、書式は `%03d`。開始値が負の場合は例えば `-01` と表示されます)。
+4. パラメータは変更**されません**。各サンプルの `zvo_var_NNN.dat` には、読み込んだ値がそのまま繰り返し記録されます。
+
+`--nsteps`/`--nsmp` は PhysCal には影響しません。コンソールのサマリーは `Completed K PhysCal samples in T s` です。
+
+### 診断: `--physcal-trace`
+
+`--physcal-trace <NEW_DIR>` は `NEW_DIR`(存在してはいけません)を作成して `schema.txt` と `request.txt` を置き、続いて
+`fixed-loaded`, `overlaid`, `synchronized`, `seeded`, `initialized-clone`, `sample-0`, `sample-1`, ... の順に、段階ごとのサブディレクトリを 1 つずつ作成します。
+各段階のディレクトリには、`parameters.txt`, `resolved.txt`, `settings.txt`、RNG が*次に生成するはずの* 624 ワード
+(`next624.txt`。実行を乱さないようクローンから取得します)と `draw-count.txt`、そしてサンプリング段階では電子
+配置の配列(`ele_idx.txt`, `ele_cfg.txt`, `ele_num.txt`, `ele_proj_cnt.txt`, `ele_spn.txt`, `counter.txt`)が入ります。実行の最後に
+`stages.txt` と `terminal.txt` が書かれます。記録は Rust の境界に従っており、"not C chronological replay"(C の時系列の再現ではない)です
+(`crates/mvmc-cli/src/physcal_trace.rs`)。整合性のデバッグ用であり、本番用の出力ではなく、マルチランクでの起動では拒否されます。
+
+> **実装**
+> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
+> - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:512`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:775`
+> - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
+> - 整合性: `vmc_phys_cal_in_place_timed` は、C の PhysCal 分岐が暗黙に行うとおり、作業用コピー上で `vmc_calc_mode = 1` を強制します(`run.rs:811`)。
+
+## 8.3 スレッドとBLAS
+
+`mvmc-rs` は OpenMP を使用しません。サンプラーと測定のループはデフォルトでは逐次実行されるため、マルコフ連鎖は
+C コードとまったく同じように乱数を消費します。独立な作業項目に対するオプションの共有メモリ並列化(`calc_m_all_*` のパフィアン設定における射影セクター、
+`OO`/`HO` の累積と保存されたグラム積の行、実数波動関数に対するローカルエネルギーの遷移項、グリーン関数の要素)
+は
+`MVMC_RS_INNER_THREADS`([8.5](#85-環境変数))で有効になります。これはマルコフ連鎖や、各結果が形成される順序を変えません。
+密な線形代数(`dgemv`, `dpotrf`, パフィアンカーネル)は OpenBLAS で実行され、そのスレッド数は通常の
+`OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` 変数で制御されます(`mvmc-rs` は読み取りません。プロジェクトのベンチマークでは 1 に固定しています)。
+
+## 8.4 MPIとグループ実行
+
+### ビルドと起動
+
+```bash
+cargo build --release -p mvmc-cli --features mpi
+mpirun -np 4 target/release/mvmc namelist.def --out-dir out          # 4 independent chains
+mpirun -np 8 target/release/mvmc namelist.def --out-dir out          # with NSplitSize 2 in modpara.def: 4 groups of 2 ranks
+```
+
+起動は、MPI が初期化される前に環境から検出されます: `MVMC_RS_MPI_RANK`/`MVMC_RS_MPI_SIZE`(明示的なテスト用変数)、
+`OMPI_COMM_WORLD_RANK`/`_SIZE`(Open MPI)、`PMI_RANK`/`PMI_SIZE`(MPICH/PMI)、`PMIX_RANK`/`PMIX_SIZE`
+(`LaunchContext::from_env`, `crates/mvmc-core/src/parallel.rs:20`)。`world_size > 1` で、かつバイナリが `mpi` フィーチャーなしでビルドされている場合、実行は
+"MPI launcher detected; rebuild mvmc-cli with --features mpi to enable MPI execution" というメッセージで停止します。フィーチャーがある場合は、すべてのランクが
+入力を解析・検証し、CLI はオプションと `ModPara` の値がランク間で一致していることを集団的に確認します
+(`agree_controls`: "CLI run controls differ between MPI ranks")。したがって、すべてのランクが入力ファイルへの読み取りアクセスを必要とします。
+MPI の実行は本マニュアルの執筆中には実行して**いません**(MPI ランチャーが利用できませんでした) **(未検証)**。ここでの記述は、コードと
+`crates/mvmc-core/src/run_mpi_tests.rs` の `mpi` フィーチャーのテストに基づきます。
+
+### コミュニケータと`NSplitSize`
+
+ワールドコミュニケータは、C ドライバーと同様に分割されます(`vmcmain.c:239-256`)。
+
+- `comm1`: ランク `0..NSplitSize-1`、`NSplitSize..2*NSplitSize-1`、... 各グループは**1 本のマルコフ連鎖**を扱います。`group = rank / NSplitSize` です。
+  `NSplitSize` がワールドサイズを割り切らない場合、最後のグループは小さくなります(C は負荷不均衡の警告を出しますが、Rust は受け入れます)。
+- `comm2`: グループ内で同じ位置にあるランク。6 つのサンプラー統計カウンタのリダクションにのみ使われます。
+- [第2章](02-theory-vmc-hamiltonian.md)と[第5章](05-theory-sr.md)のすべての累積量は、**ワールド全体**で合計され、全
+  重み $W$ で割られます。したがって、有効なサンプル数は $(\text{number of groups})\times\texttt{NVMCSample}$ です。
+
+`NSplitSize = 1`(デフォルト)では、すべてのランクがそれぞれ 1 つのグループとなります。各ランクはシード
+`RndSeed + rank` で、自身の `NVMCSample` 個の配置をサンプリングして測定します。`NSplitSize = n > 1` では、グループの `n` 個のランクが同じシードを使い、同一の乱数列を生成します。射影セクター
+$[0,N_{\rm QP})$ はパフィアン更新のためにそれらの間で分割され(`SplitLoop`, `partition_range`)、グループの保存済みサンプルは測定のためにそれらの間で分割されます。
+$\mathrm{IP}$ はグループ内でリダクションされます。したがって、グループ実行は `NQPFull` が大きい場合(スピン/運動量射影)に有用です。
+
+### 制約
+
+Rust は初期化の前に次のものを拒否します(`validate_grouped_runtime`, [7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。C はそのうちいくつかをサポートします。
+
+- CG ソルバー(`NSRCG != 0`)での `NSplitSize > 1`。
+- `NLanczosMode > 0` での `NSplitSize > 1`。
+- `OptTrans`/`NQPOptTrans > 1` での `NSplitSize > 1`。
+- PhysCal での一般(FSZ)軌道に対する `NSplitSize > 1`、および最適化で $N_{\rm GL}>1$ または $\lvert N_{\rm MP}\rvert>1$ の場合。
+
+サポート: 任意の `NSplitSize` での直接SR(`NSRCG = 0`)、`NSplitSize = 1` でのSR-CG(`NSRCG = 1`)、任意の `NSplitSize` での sz 保存経路の PhysCal。
+
+### 各ランクの書き出し内容
+
+すべての出力ファイルは**ワールドランク 0 のみ**が書き出します(`Reducer::is_output_root`, `crates/mvmc-core/src/reducer.rs:134`。グループ化されたコミュニケータでは
+グループ 0 のローカルランク 0 で、同じプロセスです)。他のランクは計算とリダクションには参加しますが、書き出しは行いません。明示的な `--out-dir` は
+ルートだけがアクセスするため、ランクごとにローカルでもかまいません(`RunConfig` のドキュメント, `run.rs:1206`)。コンソール出力とタイマーファイルも同様です。
+失敗は集団的に合意されるため、いずれかのランクが失敗すると、ハングせずにすべてのランクが停止します。
+
+> **実装**
+> - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
+> - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
+> - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:125`
+> - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:64`
+> - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
+> - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
+> - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1254`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1513`
+> - 整合性: コミュニケータの幅は `vmcmain.c:239-256` に従います(`NSplitSize` はコミュニケータの*幅*であり、連鎖の本数ではありません)。サンプルの範囲は `SplitLoop` に従います。C のグリーン関数のリダクションはランク 0 のみに集約されますが、Rust は累積量を all-reduce でリダクションしてルートが書き出すため、ファイルの内容は同じになります。
+
+## 8.5 環境変数
+
+| 変数 | 読み取る側 | 効果 |
+|----------|---------|--------|
+| `MVMC_NSTEPS` | CLI, examples | `--nsteps` と同じ(フラグが優先されます) |
+| `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | `0` 以外の任意の値で、C 互換のセクションタイマーが有効になります。`zvo_CalcTimer.dat` を書き出します([9.5](09-output-files.md#95-タイマー)) |
+| `MVMC_TIMER` | 同上 | 非推奨のエイリアス。`MVMC_C_TIMER` なしで設定された場合、警告が `MVMC_C_TIMER=1` を推奨します |
+| `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
+| `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:190`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
+| `MVMC_RS_INNER_THRESHOLD` | 同上 | ワーカープールを使用する最小の作業項目数。デフォルトは 32。不正な値や 0 は 32 にフォールバックします |
+| `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | ランチャーの検出([8.4](#84-mpiとグループ実行)) |
+| `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |
+| `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS(`mvmc-rs` は読み取りません) | BLAS のスレッド設定 |
+
+元の issue で言及された Julia 固有のデバッグダンプ `MVMC_DEBUG_*` は Rust には実装されて**いません**。`MVMC_RS_PHASE`,
+`MVMC_RS_CTEST_*`, `MVMC_RS_THREADED_*`, `MVMC_CG_DIAGNOSTICS`, `MVMC_GREEN_INDEX_CHILD` などの変数はテストコードにのみ現れ、ユーザー向けオプションではありません。
+
+`MVMC_C_TIMER` と `*_DIAG` 変数の値は、リテラル文字列 `0` と比較されます。`MVMC_C_TIMER=0` で無効、それ以外の任意の文字列(空文字列を含む)で有効になります。
+
+> **実装**
+> - Rust: `TimerEnv::from_lookup` — `crates/mvmc-core/src/c_timer.rs:174`
+> - Rust: `inner_thread_config` — `crates/mvmc-core/src/threading.rs:190`
+> - Rust: `LaunchContext::from_env` — `crates/mvmc-core/src/parallel.rs:20`
+
+## 8.6 再現性
+
+同じバイナリを同じ入力、シード、プロセス配置で 2 回実行すると、バイト単位で同一の出力ファイルが得られます。チュートリアルの実行は
+`--seed 5` で繰り返され、`cmp` は `zvo_out.dat` が同一であると報告しました **(観測)**。BLAS プロバイダー、プラットフォーム、スレッド配置が異なると、
+浮動小数点の和の下位ビットが変わることがあり、メトロポリス判定を通じて後続の配置も変わりえます。これは想定された挙動であり、実装間の
+比較で許容誤差を用いる理由でもあります([11.4](11-compatibility.md#114-数値比較ポリシー))。

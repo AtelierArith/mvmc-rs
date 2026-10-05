@@ -1,5 +1,7 @@
 # mvmc-rs User Manual
 
+**Language:** English · [日本語](ja/README.md)
+
 This manual describes the Rust port of the many-variable variational Monte Carlo
 package mVMC (`mvmc-rs`). It starts from the theory and maps every key equation
 to the C function that defines the reference behaviour and to the Rust function
@@ -8,7 +10,8 @@ command line, parallel execution, output files, a worked tutorial and the
 differences from the C and Julia implementations.
 
 The manual is written in plain GitHub-rendered Markdown. Equations use
-`$...$` and `$$...$$` (rendered by GitHub). A Japanese translation will follow.
+`$...$` and `$$...$$` (rendered by GitHub). A Japanese translation is available in
+[`ja/`](ja/README.md) (same file names and structure).
 
 ## Contents
 
