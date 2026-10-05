@@ -135,11 +135,16 @@ pub fn output_path(filename: &str, output_dir: Option<&Path>) -> io::Result<Path
 
 /// Append (or overwrite, when `step == 0`) one `zvo_out.dat` row.
 /// Mirrors `output_data!(data, state, step; output_dir=...)`.
+///
+/// With `binary` (C `-b`, `FlagBinary`) no `_var` text file is written; the
+/// parameters go to `{head}_varbin_{NDataIdxStart:03}.dat` instead
+/// (see [`write_varbin_header`] and [`varbin_para_bytes`]).
 pub fn output_data(
     data: &ExpertModeData,
     state: &VmcOptimizationState,
     step: usize,
     output_dir: Option<&Path>,
+    binary: bool,
 ) -> io::Result<()> {
     let head = if data.modpara.c_data_file_head.is_empty() {
         "zvo".to_string()
@@ -174,6 +179,20 @@ pub fn output_data(
         format_c_double(sztot2).trim_start(),
     )?;
 
+    if binary {
+        // C initfile.c:58-66 writes the header at InitFile; outputData appends
+        // one Para block per step (vmcmain.c:658). Step 0 creates the file.
+        let index = data.modpara.n_data_idx_start;
+        let path = output_path(&format!("{head}_varbin_{index:03}.dat"), output_dir)?;
+        let mut file = open_step_file(&path, mode_first)?;
+        let parameters = all_parameters(data);
+        if mode_first {
+            write_varbin_header(&mut file, parameters.len(), data.modpara.nsr_opt_itr_step)?;
+        }
+        file.write_all(&varbin_para_bytes(&parameters))?;
+        return Ok(());
+    }
+
     let var_path = output_path(&format!("{head}_var.dat"), output_dir)?;
     let mut var_file = open_step_file(&var_path, mode_first)?;
     write!(
@@ -184,16 +203,10 @@ pub fn output_data(
         format_c_double(etot2.re),
         format_c_double(etot2.im),
     )?;
-    // C vmcmain.c:655–657 writes every Para[0..NPara] slot, not mapped
+    // C vmcmain.c:655-657 writes every Para[0..NPara] slot, not mapped
     // coefficient families. DH2/DH4 and inactive/reserved slots are data;
     // OptTrans follows the declared Slater block.
-    for value in data
-        .projection_parameters()
-        .into_iter()
-        .chain(data.rbm_parameters())
-        .chain(data.slater_params.iter().copied())
-        .chain(data.opt_trans.iter().copied())
-    {
+    for value in all_parameters(data) {
         write!(
             var_file,
             "{} {} 0.0 ",
@@ -206,12 +219,49 @@ pub fn output_data(
     Ok(())
 }
 
+/// Every C `Para[0..NPara]` slot in declared order.
+fn all_parameters(data: &ExpertModeData) -> Vec<Complex64> {
+    data.projection_parameters()
+        .into_iter()
+        .chain(data.rbm_parameters())
+        .chain(data.slater_params.iter().copied())
+        .chain(data.opt_trans.iter().copied())
+        .collect()
+}
+
+/// C `-b` header (`initfile.c:63-64`, `:88-89`): native-endian `int NPara`
+/// then `int NSROptItrStep` (PhysCal writes 1).
+pub fn write_varbin_header(out: &mut impl Write, n_para: usize, n_steps: i64) -> io::Result<()> {
+    let n_para = i32::try_from(n_para)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "NPara exceeds C int"))?;
+    let n_steps = i32::try_from(n_steps)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "step count exceeds C int"))?;
+    out.write_all(&n_para.to_ne_bytes())?;
+    out.write_all(&n_steps.to_ne_bytes())
+}
+
+/// Bytes of one `-b` parameter block: all `NPara` complex parameters as interleaved
+/// native-endian `f64` (re, im), `2 * NPara` doubles.
+///
+/// Intentional difference from C: `fwrite(Para, sizeof(double), NPara, FileVar)`
+/// (`vmcmain.c:658`) writes only `NPara` doubles of the `double complex Para[NPara]`
+/// array, i.e. the first `ceil(NPara/2)` parameters. The header shape is C's; the block
+/// is complete. The leading `NPara` doubles equal C's block.
+pub fn varbin_para_bytes(parameters: &[Complex64]) -> Vec<u8> {
+    parameters
+        .iter()
+        .flat_map(|value| [value.re, value.im])
+        .flat_map(f64::to_ne_bytes)
+        .collect()
+}
+
 /// Write one PhysCal sample using C's indexed, per-sample truncated files.
 pub fn output_phys_data(
     data: &ExpertModeData,
     state: &VmcOptimizationState,
     sample: usize,
     output_dir: Option<&Path>,
+    binary: bool,
 ) -> io::Result<()> {
     let Some(phys) = state.phys_quantities.as_ref() else {
         return Ok(());
@@ -261,28 +311,33 @@ pub fn output_phys_data(
         format_c_double(energy.sztot2.re).trim_start()
     )?;
     out.flush()?;
-    let mut var = io::BufWriter::new(File::create(path_of(&format!(
-        "{head}_var_{index:03}.dat"
-    )))?);
-    write!(
-        var,
-        "{} {} 0.0 {} {} 0.0 ",
-        CDouble(energy.etot.re),
-        CDouble(energy.etot.im),
-        CDouble(energy.etot2.re),
-        CDouble(energy.etot2.im)
-    )?;
-    for value in data
-        .projection_parameters()
-        .into_iter()
-        .chain(data.rbm_parameters())
-        .chain(data.slater_params.iter().copied())
-        .chain(data.opt_trans.iter().copied())
-    {
-        write!(var, "{} {} 0.0 ", CDouble(value.re), CDouble(value.im))?;
+    if binary {
+        // C InitFilePhysCal (initfile.c:86-90): header (NPara, 1), one Para block.
+        let mut var = io::BufWriter::new(File::create(path_of(&format!(
+            "{head}_varbin_{index:03}.dat"
+        )))?);
+        let parameters = all_parameters(data);
+        write_varbin_header(&mut var, parameters.len(), 1)?;
+        var.write_all(&varbin_para_bytes(&parameters))?;
+        var.flush()?;
+    } else {
+        let mut var = io::BufWriter::new(File::create(path_of(&format!(
+            "{head}_var_{index:03}.dat"
+        )))?);
+        write!(
+            var,
+            "{} {} 0.0 {} {} 0.0 ",
+            CDouble(energy.etot.re),
+            CDouble(energy.etot.im),
+            CDouble(energy.etot2.re),
+            CDouble(energy.etot2.im)
+        )?;
+        for value in all_parameters(data) {
+            write!(var, "{} {} 0.0 ", CDouble(value.re), CDouble(value.im))?;
+        }
+        writeln!(var)?;
+        var.flush()?;
     }
-    writeln!(var)?;
-    var.flush()?;
     let write_rows = |suffix: &str, rows: Vec<String>, terminal_blank: bool| -> io::Result<()> {
         let path = path_of(&format!("{head}_{suffix}_{index:03}.dat"));
         let mut file = io::BufWriter::new(File::create(path)?);
@@ -786,6 +841,28 @@ mod tests {
     }
 
     #[test]
+    fn varbin_block_holds_every_complex_parameter_interleaved() {
+        // C writes only the first NPara doubles; the port writes all 2*NPara.
+        let parameters = [
+            Complex64::new(1.0, 2.0),
+            Complex64::new(3.0, 4.0),
+            Complex64::new(5.0, 6.0),
+        ];
+        let doubles: Vec<f64> = varbin_para_bytes(&parameters)
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|chunk| f64::from_ne_bytes(*chunk))
+            .collect();
+        assert_eq!(doubles, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let mut header = Vec::new();
+        write_varbin_header(&mut header, 3, 4).unwrap();
+        assert_eq!(header[..4], 3_i32.to_ne_bytes());
+        assert_eq!(header[4..], 4_i32.to_ne_bytes());
+        assert!(write_varbin_header(&mut header, 1, i64::from(i32::MAX) + 1).is_err());
+    }
+
+    #[test]
     fn phys_data_uses_c_indexed_green_file_names_and_rows() {
         let mut data = ExpertModeData::new();
         data.modpara.c_data_file_head = "zvo".to_string();
@@ -829,7 +906,7 @@ mod tests {
         phys.phys_lanczos_qqqq[15] = Complex64::new(5.0, 0.0);
         state.phys_quantities = Some(phys);
         let output_dir = test_output_dir("phys-output");
-        output_phys_data(&data, &state, 2, Some(&output_dir)).unwrap();
+        output_phys_data(&data, &state, 2, Some(&output_dir), false).unwrap();
         let one = fs::read_to_string(output_dir.join("zvo_cisajs_009.dat")).unwrap();
         // Literal fixed-input expectations follow the C fprintf templates;
         // these byte checks do not assert bitwise computed numerical parity.
@@ -877,7 +954,7 @@ mod tests {
         state.energy.sztot = Complex64::new(0.5, 0.0);
         state.energy.sztot2 = Complex64::new(0.25, 0.0);
         let dir = test_output_dir("physcal-indexed-lifecycle");
-        output_phys_data(&data, &state, 0, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 0, Some(&dir), false).unwrap();
         let values = |path: PathBuf| {
             fs::read_to_string(path)
                 .unwrap()
@@ -907,11 +984,11 @@ mod tests {
         );
         let first = fs::read(dir.join("zvo_out_007.dat")).unwrap();
         state.energy.etot = Complex64::new(2.0, 0.0);
-        output_phys_data(&data, &state, 1, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 1, Some(&dir), false).unwrap();
         assert_eq!(fs::read(dir.join("zvo_out_007.dat")).unwrap(), first);
         assert_eq!(values(dir.join("zvo_out_008.dat"))[0], 2.0);
         // Every sample truncates its own files, even when replayed out of order.
-        output_phys_data(&data, &state, 0, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 0, Some(&dir), false).unwrap();
         assert_eq!(
             fs::read_to_string(dir.join("zvo_out_007.dat"))
                 .unwrap()
@@ -930,7 +1007,7 @@ mod tests {
             );
         }
         data.modpara.lanczos_mode = 2;
-        output_phys_data(&data, &state, 0, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 0, Some(&dir), false).unwrap();
         for suffix in ["ls_cisajs", "ls_cisajscktalt", "ls_cisajscktaltex"] {
             assert_eq!(
                 fs::read(dir.join(format!("zvo_{suffix}_007.dat"))).unwrap(),
@@ -947,16 +1024,16 @@ mod tests {
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, true, false);
         state.phys_quantities = Some(crate::state::PhysicalQuantities::zeros(0, 0, 0));
         let dir = test_output_dir("physcal-signed-index");
-        output_phys_data(&data, &state, 0, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 0, Some(&dir), false).unwrap();
         assert!(dir.join("zvo_out_-01.dat").is_file());
         assert!(dir.join("zvo_var_-01.dat").is_file());
         assert!(!dir.join("zvo_out_000.dat").exists());
-        output_phys_data(&data, &state, 1, Some(&dir)).unwrap();
+        output_phys_data(&data, &state, 1, Some(&dir), false).unwrap();
         assert!(dir.join("zvo_out_000.dat").is_file());
         let before = fs::read_dir(&dir).unwrap().count();
         data.modpara.n_data_idx_start = i64::MAX;
         assert_eq!(
-            output_phys_data(&data, &state, 1, Some(&dir))
+            output_phys_data(&data, &state, 1, Some(&dir), false)
                 .unwrap_err()
                 .kind(),
             io::ErrorKind::InvalidInput

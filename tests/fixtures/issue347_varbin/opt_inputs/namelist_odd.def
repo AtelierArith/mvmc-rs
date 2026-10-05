@@ -1,0 +1,9 @@
+         ModPara  modpara.def
+         LocSpin  locspn.def
+           Trans  trans.def
+    CoulombInter  coulombinter.def
+            Hund  hund.def
+        Exchange  exchange.def
+      Gutzwiller  gutzwilleridx.def
+         Orbital  orbitalidx.def
+        TransSym  qptransidx.def

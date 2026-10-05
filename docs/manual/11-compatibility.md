@@ -48,11 +48,11 @@ Differences that a user can observe:
 
 | # | Area | C | Rust |
 |---|------|---|------|
-| 1 | Driver options | `-b -h -m -o -F -e -s -v` | no `-b`, `-m`, `-F`, `-v`; `-e` and `-s` are accepted; different option names ([8.1](08-running.md#81-the-mvmc-command)) |
+| 1 | Driver options | `-b -h -m -o -F -e -s -v` | `-b -h -o -F -e -s -v` and the positional `initpara` are implemented; `-m` (#348) is rejected; extra Rust long options ([8.1](08-running.md#81-the-mvmc-command)) |
 | 2 | Standard mode / StdFace | built in (`-s`) | `mvmc -s` / `--dry-run` for the lattices in [7.6](07-input-files.md#76-standard-mode-stdface); the others are not yet ported |
 | 3 | `zvo_out`/`zvo_var` during optimization | `zvo_out_NNN.dat`, `zvo_var_NNN.dat` | `zvo_out.dat`, `zvo_var.dat` |
 | 4 | `zvo_SRinfo.dat` | written for the direct and CG solvers | CG only |
-| 5 | `zvo_time_NNN.dat`, `zvo_varbin_NNN.dat` | written (binary with `-b`) | not written |
+| 5 | `zvo_time_NNN.dat`, `zvo_varbin_NNN.dat` | written (binary with `-b`) | both written (`-b`: C header, complete `2*NPara` blocks instead of C's truncated ones, [8.1](08-running.md#binary-output--b)) |
 | 6 | Timer file prefix | `CDataFileHead` | always `zvo` |
 | 7 | Parser defaults of `modpara.def` | `SetDefaultValuesModPara` | `ModParaParameters::default` ([7.2](07-input-files.md#72-modparadef)) |
 | 8 | `NMPTrans = 0` | not rejected by the reader (the default 0 gives `NQPFix = 0`, `readdef.c:778`) | rejected |

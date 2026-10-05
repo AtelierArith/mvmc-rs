@@ -242,6 +242,7 @@ fn para_opt_run_writes_c_time_and_srinfo_files() {
                 nsmp: Some(steps),
                 output_dir: Some(dir.clone()),
                 file_flush_interval: Some(2),
+                binary_output: false,
                 ..mvmc_core::RunConfig::new(steps, mode)
             },
         )

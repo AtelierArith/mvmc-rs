@@ -6,7 +6,7 @@
 //! | Rust module | C source |
 //! | --- | --- |
 //! | [`vals`] | `StdFace_vals.h` and `StdFace_ResetVals` |
-//! | [`stdface_main`] | `StdFace_main.c` (keyword reader, parameter checks, file writers) |
+//! | [`stdface_main()`](fn@stdface_main) | `StdFace_main.c` (keyword reader, parameter checks, file writers) |
 //! | [`model_util`] | `StdFace_ModelUtil.c` (helpers, super-cell setup, Jastrow/orbital/projection) |
 //! | [`chain_lattice`] | `ChainLattice.c` |
 //!

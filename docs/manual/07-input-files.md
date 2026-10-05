@@ -220,8 +220,8 @@ check; this asymmetry was observed with a release build and is listed in [11.5](
 
 ### Behaviour of the C program that Rust does not provide
 
-Binary output (`-b`, `NFileFlushInterval`/`-F`), multi-definition mode (`-m`), `--version` (`-v`),
-the `zvo_time_NNN.dat` progress file, back-flow (`BF`), and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
+Multi-definition mode (`-m`, #348),
+back-flow (`BF`), and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
 ## 7.6 Standard mode (StdFace)
 

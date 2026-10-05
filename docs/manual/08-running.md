@@ -8,8 +8,10 @@ The binary is built from `crates/mvmc-cli/src/main.rs` (`cargo build --release -
 `target/release/mvmc`; `cargo run -p mvmc-cli -- ...` also works). Synopsis:
 
 ```text
-mvmc <namelist.def> [options]
+mvmc [options] <namelist.def> [initpara]
 ```
+
+The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`vmcmain.c:714-723`). Options may follow the positional arguments; short options can be clustered (`-bo`) and take their value attached or as the next word (`-F2`, `-F 2`), as with C `getopt`.
 
 | Option | Meaning | Default |
 |--------|---------|---------|
@@ -17,22 +19,44 @@ mvmc <namelist.def> [options]
 | `--nsmp <N>` | final averaging window; overrides `NSROptItrSmp` (must be $\le$ the number of steps) | `NSROptItrSmp` |
 | `--out-dir <DIR>` | output directory (created if missing) | `<directory of namelist.def>/output` |
 | `--seed <N>` | RNG seed; replaces `RndSeed` (the group/rank offset is still added, [4.6](04-theory-sampling.md#46-parallelism-inside-the-sampler)) | `RndSeed` |
-| `--mode real\|cmp\|fsz` | *sanity label only*: validated against `{real,cmp,fsz}` but **does not select** the numerical mode, which comes from the input declarations ([3.3](03-theory-wavefunction.md#33-real-and-complex-modes)) | inferred (`fsz` if general orbitals, else `cmp` if any complex declaration, else `real`) |
+| `--mode real\|cmp\|fsz` | *checked label*: it does **not select** the numerical mode, which comes from the input declarations ([3.3](03-theory-wavefunction.md#33-real-and-complex-modes)); a label that contradicts the inferred mode is an error (exit 2, before any file is created). Redundant with the inference, kept for scripts | inferred (`fsz` if general orbitals, else `cmp` if any complex declaration, else `real`) |
 | `--initial-def auto\|none\|PATH` | initial parameter file ([7.4](07-input-files.md#74-initial-parameter-values)): `auto` loads a neighbouring `initial.def` if present, `none` skips it, `PATH` is required to exist | `auto` |
 | `-o`, `--opt-trans` | enable the C OptTrans mode (the C driver's `-o`) | off |
-| `--physcal <PATH>` | run fixed-parameter PhysCal using the parameter file `PATH` ([8.2](#82-physical-quantities-with-fixed-parameters)) | off |
-| `--physcal-trace <NEW_DIR>` | write non-consuming serial PhysCal diagnostics (stage-by-stage records of the PhysCal run) into the *new* directory `NEW_DIR`; requires `--physcal` and a single-process launch | off |
+| `-b` | binary parameter output: `zvo_varbin_NNN.dat` replaces the `zvo_var` text file ([binary output](#binary-output--b)) | off |
+| `-F <N>`, `--flush-interval <N>` | flush the `_time_`/`_SRinfo` files every `N` steps; `N < 1` is an error ([9.5](09-output-files.md)) | 1 |
+| `-e`, `--expert` | Expert mode (default); accepted, a no-op | on |
+| `-v`, `--version` | print `mvmc-rs version <crate version> (follows C mVMC 1.3.0)` to stdout and exit `0` | |
+| `-h`, `--help` | print usage (C option list plus the Rust extensions) to stderr and exit `0`, as C does | |
 | `-s`, `--standard` | Standard mode: generate the Expert files from the StdFace input into `--out-dir` (default: current directory), then run `namelist.def` ([7.6](07-input-files.md#76-standard-mode-stdface)) | off |
 | `--dry-run` | generate the Expert files from the StdFace input and stop (C `vmcdry.out`) | off |
-| `-e`, `--expert` | Expert mode (default; accepted for C compatibility) | on |
-| `--help`, `-h` | print usage | |
+| `-m <N>` | **rejected** with exit `2`: multi-definition mode is not implemented yet (#348) | |
+| `--physcal <PATH>` | alias of the positional `initpara` for `NVMCCalMode=1` (the fixed parameter file, [8.2](#82-physical-quantities-with-fixed-parameters)); an error for `NVMCCalMode=0`, and an error together with a positional file | – |
+| `--physcal-trace <NEW_DIR>` | write non-consuming serial PhysCal diagnostics (stage-by-stage records of the PhysCal run) into the *new* directory `NEW_DIR`; requires `NVMCCalMode=1` with an explicit parameter file and a single-process launch | off |
 
 Exit status: `0` success, `1` input/validation/runtime error (the message starts with `error:`), `2` usage error
-(unknown flag, missing value, missing `namelist.def`) **(observed)**. The `--help` text says the default output
-directory is "namelist parent dir"; the code uses `<namelist parent>/output` **(observed)**.
+(unknown flag, missing value, argument-count mismatch, `-m`) **(observed)**. The default output
+directory is `<namelist parent>/output` and `--help` now says so (it formerly said "namelist parent dir"). The C driver always writes `output/` relative to its working directory; the Rust default is relative to the namelist.
 
-Unlike the C driver (`getopt` string `"bhm:oF:esv"`, `vmcmain.c:46`), `mvmc` has no `-b` (binary output), `-m` (multi-definition mode),
-`-F` (flush interval), `-v` (version) or positional initial-parameter file (use `--initial-def`).
+The C `getopt` string is `"bhm:oF:esv"` (`vmcmain.c:83`). Everything but `-m` is implemented; `-m` fails with a message naming issue #348 rather than being ignored. `-F` follows C `strtol` rules: no digits or a value outside `int` is an error, trailing characters after the number only warn, and `N < 1` is an error.
+
+### The positional `initpara` file
+
+As in C (`vmcmain.c:177-182`, `:252-260`) the optional second positional argument is a parameter file in the `zqp_opt.dat` layout, and `NVMCCalMode` decides its role:
+
+- `NVMCCalMode=0`: the **initial** parameters. They are loaded after the initialization draws and before the `In*` overlays (C `InitParameter` → `ReadInitParameter` → `ReadInputParameters`). Rust loads it as `--initial-def <path>`; giving both is an error, and a missing file is an error (C prints a message and continues).
+- `NVMCCalMode=1`: the **fixed** parameters ([8.2](#82-physical-quantities-with-fixed-parameters)); `--physcal <PATH>` is an alias.
+
+### Binary output (`-b`)
+
+With `-b` (C `FlagBinary`, `vmcmain.c:654-660`, `initfile.c:58-66`, `:82-90`) **no** `zvo_var` text file is written; every other output file is unchanged. The parameters go to `zvo_varbin_NNN.dat` (`NNN` = `NDataIdxStart`, one file for the optimizer; one file per sample for PhysCal):
+
+| Bytes | Content |
+|-------|---------|
+| 0–3 | native-endian `int32` `NPara` |
+| 4–7 | native-endian `int32` `NSROptItrStep` (PhysCal: `1`) |
+| then, once per step | `2*NPara` native-endian `f64` values: every parameter as (re, im) pairs |
+
+**Intentional difference from C (C defect).** C calls `fwrite(Para, sizeof(double), NPara, ...)` on a `double complex` array, so its block holds only the first `NPara` doubles of the interleaved storage: the first `ceil(NPara/2)` parameters, the last one cut to its real part when `NPara` is odd. The remaining parameters are never written. `mvmc` keeps C's header (`NPara`, step count) but writes the complete `2*NPara`-double block, so the file is `8 + steps*2*NPara*8` bytes (C: `8 + steps*NPara*8`) and every parameter is present; C's block equals the leading `NPara` doubles of the `mvmc` block. A reader written for C files that uses `NPara` as the block length will misparse `mvmc` files; read `2*NPara` doubles per step. Verified against the unmodified C `vmc.out` (`tests/fixtures/issue347_varbin/PROVENANCE.md`, tolerance policy in [`docs/NUMERICAL_COMPARISONS.md`](../NUMERICAL_COMPARISONS.md)): headers are byte-identical, PhysCal parameters and the optimizer's step-0 block match exactly on the leading `NPara` doubles, later optimizer blocks agree to about `5e-10` (SR solve operation order; test bound `1e-8`).
 
 ### Selecting the calculation
 
@@ -42,10 +66,9 @@ After parsing (before any initialization or file creation, and collectively acro
 
 | `NVMCCalMode` | `--physcal` | Result |
 |---------------|-------------|--------|
-| 0 | absent | parameter optimization |
-| 1 | present | fixed-parameter PhysCal |
-| 0 | present | error: "`--physcal` requires NVMCCalMode=1 in ModPara" |
-| 1 | absent | error: "NVMCCalMode=1 selects fixed-parameter PhysCal; supply the fixed parameter file with `--physcal <PATH>`" |
+| 0 | absent | parameter optimization (positional file = initial parameters) |
+| 1 | present or absent | PhysCal (positional file or `--physcal` = fixed parameters; none: C `InitParameter` draws, then `In*` overlays and synchronization) |
+| 0 | `--physcal` given | error: "`--physcal` requires NVMCCalMode=1 in ModPara" |
 | other | – | error: "unsupported NVMCCalMode=… the CLI supports 0 (optimization) and 1 (PhysCal)" |
 
 This dispatch rule was introduced by PR #340 (`select_calculation`, `crates/mvmc-cli/src/main.rs`). Because the CLI parses
@@ -57,12 +80,15 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:114`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:560`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:758`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:579`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
-> - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `getopt` options other than `-o` are not implemented.
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:170`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:144`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:736`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:968`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:752`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:921`
+> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
+> - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `-m` option is not implemented (#348).
 
 ### Console output
 
@@ -78,13 +104,13 @@ The banner line `mode : NVMCCalMode=...` prints the value read from `modpara.def
 ## 8.2 Physical quantities with fixed parameters
 
 ```bash
-mvmc namelist.def --physcal zqp_opt.dat --out-dir phys
+mvmc namelist.def zqp_opt.dat --out-dir phys    # same as: --physcal zqp_opt.dat
 ```
 
 with `NVMCCalMode 1` in `modpara.def`. The parameter file is the `zqp_opt.dat` written by an optimization run (or an
-`initial.def`-style file; [7.4](07-input-files.md#74-initial-parameter-values)). Behaviour (`prepare_phys_cal_from_namelist`, `vmc_phys_cal_in_place_timed`):
+`initial.def`-style file; [7.4](07-input-files.md#74-initial-parameter-values)). As in C it is optional: `mvmc namelist.def` with `NVMCCalMode 1` measures the parameters from the initialization draws (verified against C; `tests/fixtures/issue347_varbin`). Behaviour (`prepare_phys_cal_from_namelist`, `vmc_phys_cal_in_place_timed`):
 
-1. The Expert input is parsed and validated for PhysCal ([7.5](07-input-files.md#75-supported-and-rejected-inputs)); a missing parameter file is an error ("fixed parameter file not found").
+1. The Expert input is parsed and validated for PhysCal ([7.5](07-input-files.md#75-supported-and-rejected-inputs)); a parameter file that is given but missing is an error ("fixed parameter file not found").
 2. The fixed parameters are loaded **before** any random number is consumed (test `physcal_preparation_loads_fixed_parameters_before_rng_consumption`), overlays and synchronization follow, then `UpdateSlaterElm`.
 3. For each of `NDataQtySmp` samples the chain is sampled, measured, averaged over ranks and written as one numbered file set
    `zvo_*_NNN.dat` with `NNN = NDataIdxStart + sample` (`%03d`; a negative start prints e.g. `-01`).
@@ -105,8 +131,8 @@ configuration arrays (`ele_idx.txt`, `ele_cfg.txt`, `ele_num.txt`, `ele_proj_cnt
 > **Implementation**
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:512`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:775`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
 > - Parity: `vmc_phys_cal_in_place_timed` forces `vmc_calc_mode = 1` on its working copy (`run.rs:811`), as C's PhysCal branch implies.
 
@@ -180,8 +206,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1457`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
 > - Parity: communicator widths follow `vmcmain.c:239-256` (`NSplitSize` is the communicator *width*, not the number of chains); sample ranges follow `SplitLoop`; the C Green-function reduction goes to rank 0 only whereas Rust reduces the accumulators with an all-reduce and lets the root write, which yields the same file contents.
 
 ## 8.5 Environment variables

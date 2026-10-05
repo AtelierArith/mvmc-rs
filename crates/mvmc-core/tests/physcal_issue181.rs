@@ -143,7 +143,7 @@ fn original_io134_normal_writer_keeps_literal_canonical_row_and_complex_pair() {
     physical.phys_cis_ajs_ckt_alt[0] = Complex64::new(2.5, -1.0);
     state.phys_quantities = Some(physical);
     let out = output_dir("original-io134-normal-writer", "literal");
-    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out)).unwrap();
+    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out), false).unwrap();
     assert_eq!(
         read_values(&out.join("zvo_cisajs_001.dat")),
         [0.0, 0.0, 1.0, 0.0, 1.25, 0.0]
@@ -617,7 +617,7 @@ fn original_io134_four_output_indices_use_c_signed_start_plus_sample() {
     for (start, sample, expected) in [(1, 0, 1), (1, 3, 4), (7, 0, 7), (7, 2, 9)] {
         data.modpara.n_data_idx_start = start;
         let out = output_dir("original-io134-index", &format!("{start}-{sample}"));
-        mvmc_core::io::output_phys_data(&data, &state, sample, Some(&out)).unwrap();
+        mvmc_core::io::output_phys_data(&data, &state, sample, Some(&out), false).unwrap();
         assert!(out.join(format!("zvo_cisajs_{expected:03}.dat")).is_file());
         assert!(out.join(format!("zvo_out_{expected:03}.dat")).is_file());
         assert!(out.join(format!("zvo_var_{expected:03}.dat")).is_file());
@@ -686,7 +686,7 @@ fn original_io134_synthetic_lanczos_writes_energy_and_all_green_kinds() {
         let moments = physical.phys_lanczos_qqqq.clone();
         state.phys_quantities = Some(physical);
         let out = output_dir("original-io134-ls", &format!("mode{mode}"));
-        mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out)).unwrap();
+        mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out), false).unwrap();
         let energy = read_values(&out.join(format!("zvo_ls_out_{index:03}.dat")));
         assert_eq!(energy.len(), 3);
         assert_eq!(energy[0], -3.5);
@@ -1366,7 +1366,7 @@ fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
     fs::create_dir_all(&out).unwrap();
     // C GetInfoOneBodyG normal branch retains file order and duplicate rows;
     // outputData prints each entry, rather than deduplicating at the writer.
-    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out)).unwrap();
+    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out), false).unwrap();
     let rows = fs::read_to_string(out.join("zvo_cisajs_007.dat")).unwrap();
     let rows = rows
         .lines()
@@ -1413,7 +1413,7 @@ fn singular_lanczos_alpha_writes_nan_without_aborting() {
     fs::create_dir_all(&out).unwrap();
     // All-zero moments give 0/0 in C CalculateEne. This additionally guards
     // Julia/Rust's defined no-abort fallback; no generic nonfinite tolerance.
-    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out)).unwrap();
+    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out), false).unwrap();
     let values = read_values(&out.join("zvo_ls_out_007.dat"));
     assert_eq!(values.len(), 3);
     assert!(values.iter().all(|x| x.is_nan()));
@@ -2376,7 +2376,7 @@ fn fixed_records_overlays_and_normalization_follow_native_c_stages() {
             state.energy.etot = num_complex::Complex64::new(1.0, 0.0);
             state.energy.etot2 = num_complex::Complex64::new(2.0, 0.0);
             state.phys_quantities = Some(mvmc_core::state::PhysicalQuantities::zeros(0, 0, 0));
-            mvmc_core::io::output_phys_data(&prepared.data, &state, 0, Some(&out)).unwrap();
+            mvmc_core::io::output_phys_data(&prepared.data, &state, 0, Some(&out), false).unwrap();
             let record = read_values(&out.join("zvo_var_001.dat"));
             assert_eq!(record.len(), 6 + 3 * 6);
             assert_eq!(

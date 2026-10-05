@@ -144,15 +144,19 @@ fn physcal_flag_with_optimization_mode_is_rejected_before_output() {
 }
 
 #[test]
-fn physcal_mode_without_fixed_parameter_file_is_rejected_before_output() {
+fn physcal_mode_without_parameter_file_runs_like_c_vmc_out() {
+    // C treats the positional initpara as optional for NVMCCalMode=1 (#347); the
+    // C InitParameter draws then supply the parameters.
     let work = Work::new();
     let (namelist, _) = inputs(&work, Some(1));
     let out = work.0.join("out");
-    rejected(
-        run(&namelist, None, &out),
-        "supply the fixed parameter file",
-        &out,
+    let output = run(&namelist, None, &out);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
+    assert!(out.join("zvo_out_007.dat").is_file());
 }
 
 #[test]

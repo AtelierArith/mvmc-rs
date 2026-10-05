@@ -119,6 +119,7 @@ fn exercise(
             callback: Some(&mut callback),
             skip_sr: false,
             file_flush_interval: None,
+            binary_output: false,
         },
     );
     let records = capture.finish();

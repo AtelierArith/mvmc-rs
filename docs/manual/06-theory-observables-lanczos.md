@@ -43,13 +43,13 @@ and write one numbered set of output files (`NDataIdxStart`, `NDataIdxStart+1`, 
 > - C: `GreenFunc1` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:41`
 > - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
 > - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.3.0/src/mVMC/calgrn_fsz.c:33`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:775`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:512`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
 > - Rust: `ordinary_green_values` — `crates/mvmc-core/src/observables/green_measurements.rs:232`
 > - Rust: `accumulate_two_body_gex_sample` — `crates/mvmc-core/src/observables.rs:109`
 > - Rust: `normalize_physcal_green` — `crates/mvmc-core/src/run.rs:249`
 > - Rust: `calculate_green_func_fsz` — `crates/mvmc-core/src/observables/fsz_measurements.rs:17`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
 > - Parity: C accumulates `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` (`calgrn.c:110`); Rust `accumulate_two_body_gex_sample` forms `weight * one_body[first] * one_body[second].conj()` in the same order. The normalization multiplies by a precomputed reciprocal of $W$ (`const double complex invW = 1.0/Wc`, `average.c:278`, applied after `SafeMpiReduce_fcmp` on rank 0, `average.c:287-290`), and Rust uses the C99-style `c_complex::divide(1, wc)` and multiplies each value (`run.rs:249-278`), not a per-element division. In C the averaged Green functions exist only on the root rank (`weightAverageReduce` reduces to rank 0) and only the root writes the files. Per-sample results go to the *same* numbered file set; files are re-created (`"w"`) for each `NDataIdxStart + sample`.
 
 ## 6.2 The single-step Lanczos wave function

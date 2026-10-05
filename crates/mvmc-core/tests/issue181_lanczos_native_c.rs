@@ -134,7 +134,7 @@ fn lanczos_failure_leaves_every_ls_file_empty_like_c() {
     let out = std::env::temp_dir().join(format!("issue181-lanczos-fail-{}", std::process::id()));
     let _ = fs::remove_dir_all(&out);
     fs::create_dir_all(&out).unwrap();
-    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out)).unwrap();
+    mvmc_core::io::output_phys_data(&data, &state, 0, Some(&out), false).unwrap();
     for file in [
         "zvo_ls_out_007.dat",
         "zvo_ls_qqqq_007.dat",
