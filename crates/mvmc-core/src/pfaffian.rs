@@ -980,6 +980,11 @@ fn assemble_inv_m_real(
     n_size: usize,
     n_site2: usize,
 ) -> Result<(), CalcMAllError> {
+    // Plane/row slices instead of per-element `get`/`set` (each of which re-resolves
+    // the tensor storage); same visiting order, so an out-of-range site leaves the same
+    // partially written plane as before.
+    let slater = slater_elm.as_slice();
+    let plane = inv_m.qp_matrix_slice_mut(qp);
     for msi in 0..n_size {
         let si = msi / ne; // spin index (0 or 1)
         let ri = ele_idx[msi];
@@ -987,6 +992,8 @@ fn assemble_inv_m_real(
         if rsi < 0 || rsi >= n_site2 as i64 {
             return Err(CalcMAllError::SiteOutOfRange { qp, site: rsi });
         }
+        let start = (qp * n_site2 + rsi as usize) * n_site2;
+        let row = &slater[start..start + n_site2];
         for msj in 0..n_size {
             let sj = msj / ne;
             let rj = ele_idx[msj];
@@ -994,9 +1001,8 @@ fn assemble_inv_m_real(
             if rsj < 0 || rsj >= n_site2 as i64 {
                 return Err(CalcMAllError::SiteOutOfRange { qp, site: rsj });
             }
-            let value = slater_elm.get(qp, rsi as usize, rsj as usize);
             // Upstream stores column-major: inv_m[msj, msi] = -value.
-            inv_m.set(qp, msj, msi, -value);
+            plane[msj + msi * n_size] = -row[rsj as usize];
         }
     }
     Ok(())
@@ -1012,6 +1018,11 @@ fn assemble_inv_m_complex(
     n_size: usize,
     n_site2: usize,
 ) -> Result<(), CalcMAllError> {
+    // Plane/row slices instead of per-element `get`/`set` (each of which re-resolves
+    // the tensor storage); same visiting order, so an out-of-range site leaves the same
+    // partially written plane as before.
+    let slater = slater_elm.as_slice();
+    let plane = inv_m.qp_matrix_slice_mut(qp);
     for msi in 0..n_size {
         let si = msi / ne;
         let ri = ele_idx[msi];
@@ -1019,6 +1030,8 @@ fn assemble_inv_m_complex(
         if rsi < 0 || rsi >= n_site2 as i64 {
             return Err(CalcMAllError::SiteOutOfRange { qp, site: rsi });
         }
+        let start = (qp * n_site2 + rsi as usize) * n_site2;
+        let row = &slater[start..start + n_site2];
         for msj in 0..n_size {
             let sj = msj / ne;
             let rj = ele_idx[msj];
@@ -1026,8 +1039,8 @@ fn assemble_inv_m_complex(
             if rsj < 0 || rsj >= n_site2 as i64 {
                 return Err(CalcMAllError::SiteOutOfRange { qp, site: rsj });
             }
-            let value = slater_elm.get(qp, rsi as usize, rsj as usize);
-            inv_m.set(qp, msj, msi, -value);
+            // Upstream stores column-major: inv_m[msj, msi] = -value.
+            plane[msj + msi * n_size] = -row[rsj as usize];
         }
     }
     Ok(())
@@ -1065,27 +1078,18 @@ fn assemble_inv_m_fsz_complex(
 }
 
 fn frobenius_norm_sqr_real(inv_m: &InvMColMajor<f64>, qp: usize) -> f64 {
-    let n = inv_m.n_size();
-    let mut max_abs2 = 0.0_f64;
-    for col in 0..n {
-        for row in 0..n {
-            let v = inv_m.get(qp, row, col);
-            max_abs2 = max_abs2.max(v * v);
-        }
-    }
-    max_abs2
+    // Column-major plane order, as the former `(col, row)` loops.
+    inv_m
+        .qp_matrix_slice(qp)
+        .iter()
+        .fold(0.0_f64, |max_abs2, &v| max_abs2.max(v * v))
 }
 
 fn frobenius_norm_sqr_complex(inv_m: &InvMColMajor<Complex64>, qp: usize) -> f64 {
-    let n = inv_m.n_size();
-    let mut max_abs2 = 0.0_f64;
-    for col in 0..n {
-        for row in 0..n {
-            let v = inv_m.get(qp, row, col);
-            max_abs2 = max_abs2.max(v.norm_sqr());
-        }
-    }
-    max_abs2
+    inv_m
+        .qp_matrix_slice(qp)
+        .iter()
+        .fold(0.0_f64, |max_abs2, v| max_abs2.max(v.norm_sqr()))
 }
 
 // ---------------------------------------------------------------------------

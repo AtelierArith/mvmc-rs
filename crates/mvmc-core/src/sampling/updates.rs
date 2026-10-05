@@ -66,6 +66,10 @@ pub fn calculate_new_pf_m2_complex_flat(
 }
 
 /// Real normal-mode `calculate_new_pf_m2_real!`.
+///
+/// The `n_size`-term sum of each QP is a serial floating-point chain (its order is part
+/// of the C/Julia contract), so four QPs are advanced together to overlap the chains'
+/// add latency; every chain still adds the same products in the same order.
 pub fn calculate_new_pf_m2_real_flat(
     ma: usize,
     spin: u8,
@@ -80,30 +84,181 @@ pub fn calculate_new_pf_m2_real_flat(
     n_site: usize,
     n_elec: usize,
 ) {
+    const BLOCK: usize = 4;
     let n_size = 2 * n_elec;
     let msa = ma + (spin as usize) * n_elec;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let end = qp_end.min(pf_m.len());
-    crate::threading::qp_fill(
+    // Column of the Slater row for every electron slot (same for all QPs).
+    let mut rsj_stack = [0usize; 128];
+    let rsj_heap;
+    let rsj: &[usize] = if n_size <= rsj_stack.len() {
+        for (msj, slot) in rsj_stack[..n_size].iter_mut().enumerate() {
+            *slot = ele_idx[msj] as usize + if msj < n_elec { 0 } else { n_site };
+        }
+        &rsj_stack[..n_size]
+    } else {
+        rsj_heap = (0..n_size)
+            .map(|msj| ele_idx[msj] as usize + if msj < n_elec { 0 } else { n_site })
+            .collect::<Vec<_>>();
+        &rsj_heap
+    };
+    let n_site2 = slater_elm.n_site2();
+    let slater = slater_elm.as_slice();
+    let row_of = |qp: usize| {
+        let start = (qp * n_site2 + rsa) * n_site2;
+        &slater[start..start + n_site2]
+    };
+    let inv_of = |qp: usize| {
+        let start = qp * inv_stride + msa * n_size;
+        &inv_m_flat[start..start + n_size]
+    };
+    crate::threading::qp_fill_blocks(
         pf_m_new,
         qp_start,
         end,
         crate::threading::scaled_cost_ns(n_size, 4 * n_size),
-        || (),
-        |_, qp| {
-            let inv_base = qp * inv_stride + msa * n_size;
-            let mut ratio = 0.0;
-            for msj in 0..n_size {
-                let rsj = if msj < n_elec {
-                    ele_idx[msj] as usize
-                } else {
-                    ele_idx[msj] as usize + n_site
-                };
-                ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
+        BLOCK,
+        |first, out| {
+            if out.len() == BLOCK {
+                let rows = [
+                    row_of(first),
+                    row_of(first + 1),
+                    row_of(first + 2),
+                    row_of(first + 3),
+                ];
+                let invs = [
+                    inv_of(first),
+                    inv_of(first + 1),
+                    inv_of(first + 2),
+                    inv_of(first + 3),
+                ];
+                let mut ratio = [0.0_f64; BLOCK];
+                for (msj, &col) in rsj.iter().enumerate() {
+                    for k in 0..BLOCK {
+                        ratio[k] += invs[k][msj] * rows[k][col];
+                    }
+                }
+                for k in 0..BLOCK {
+                    out[k] = -ratio[k] * pf_m[first + k];
+                }
+            } else {
+                for (k, slot) in out.iter_mut().enumerate() {
+                    let qp = first + k;
+                    let (row, inv) = (row_of(qp), inv_of(qp));
+                    let mut ratio = 0.0;
+                    for (msj, &col) in rsj.iter().enumerate() {
+                        ratio += inv[msj] * row[col];
+                    }
+                    *slot = -ratio * pf_m[qp];
+                }
             }
-            -ratio * pf_m[qp]
         },
     );
+}
+
+/// Fused serial `calculate_new_pf_m2_real!` + `calculate_ip_real!` for one moved electron
+/// (the CalHamiltonian1 transfer terms): returns `sum_qp w_qp * new_pf_qp`, adding the
+/// terms in QP order exactly as the separate kernels do, without the `new_pf` buffer.
+///
+/// `moved = (msj, site)` is the electron slot whose site becomes `site` (the unmoved
+/// `ele_idx` is not copied); `ma`/`spin` select the same slot as in
+/// [`calculate_new_pf_m2_real_flat`]. QPs beyond `qp_weights` contribute nothing, as in
+/// `calculate_ip_real`.
+pub fn calculate_new_pf_m2_ip_real_flat(
+    ma: usize,
+    spin: u8,
+    moved: (usize, i64),
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<f64>,
+    inv_m_flat: &[f64],
+    inv_stride: usize,
+    pf_m: &[f64],
+    qp_weights: &[Complex64],
+    n_site: usize,
+    n_elec: usize,
+) -> f64 {
+    const BLOCK: usize = 4;
+    let n_size = 2 * n_elec;
+    let msa = ma + (spin as usize) * n_elec;
+    let site_of = |msj: usize| {
+        if msj == moved.0 {
+            moved.1
+        } else {
+            ele_idx[msj]
+        }
+    };
+    let rsa = site_of(msa) as usize + (spin as usize) * n_site;
+    let mut rsj_stack = [0usize; 128];
+    let rsj_heap;
+    let rsj: &[usize] = if n_size <= rsj_stack.len() {
+        for (msj, slot) in rsj_stack[..n_size].iter_mut().enumerate() {
+            *slot = site_of(msj) as usize + if msj < n_elec { 0 } else { n_site };
+        }
+        &rsj_stack[..n_size]
+    } else {
+        rsj_heap = (0..n_size)
+            .map(|msj| site_of(msj) as usize + if msj < n_elec { 0 } else { n_site })
+            .collect::<Vec<_>>();
+        &rsj_heap
+    };
+    let n_site2 = slater_elm.n_site2();
+    let slater = slater_elm.as_slice();
+    let row_of = |qp: usize| {
+        let start = (qp * n_site2 + rsa) * n_site2;
+        &slater[start..start + n_site2]
+    };
+    let inv_of = |qp: usize| {
+        let start = qp * inv_stride + msa * n_size;
+        &inv_m_flat[start..start + n_size]
+    };
+    let n_qp = pf_m.len();
+    let mut ip = 0.0;
+    let mut first = 0;
+    while first < n_qp {
+        let mut new_pf = [0.0_f64; BLOCK];
+        let count = (n_qp - first).min(BLOCK);
+        if count == BLOCK {
+            let rows = [
+                row_of(first),
+                row_of(first + 1),
+                row_of(first + 2),
+                row_of(first + 3),
+            ];
+            let invs = [
+                inv_of(first),
+                inv_of(first + 1),
+                inv_of(first + 2),
+                inv_of(first + 3),
+            ];
+            let mut ratio = [0.0_f64; BLOCK];
+            for (msj, &col) in rsj.iter().enumerate() {
+                for k in 0..BLOCK {
+                    ratio[k] += invs[k][msj] * rows[k][col];
+                }
+            }
+            for k in 0..BLOCK {
+                new_pf[k] = -ratio[k] * pf_m[first + k];
+            }
+        } else {
+            for (k, slot) in new_pf[..count].iter_mut().enumerate() {
+                let qp = first + k;
+                let (row, inv) = (row_of(qp), inv_of(qp));
+                let mut ratio = 0.0;
+                for (msj, &col) in rsj.iter().enumerate() {
+                    ratio += inv[msj] * row[col];
+                }
+                *slot = -ratio * pf_m[qp];
+            }
+        }
+        for (k, &value) in new_pf[..count].iter().enumerate() {
+            if let Some(weight) = qp_weights.get(first + k) {
+                ip += weight.re * value;
+            }
+        }
+        first += count;
+    }
+    ip
 }
 
 /// Complex FSZ `calculate_new_pf_m2_fsz!`.
@@ -825,13 +980,16 @@ fn fill_slt_vec_normal_real(
     n_elec: usize,
 ) {
     let n_size = 2 * n_elec;
-    for msj in 0..n_size {
+    let n_site2 = slater.n_site2();
+    let start = (qp * n_site2 + rsa) * n_site2;
+    let row = &slater.as_slice()[start..start + n_site2];
+    for (msj, slot) in slt_vec[..n_size].iter_mut().enumerate() {
         let rsj = if msj < n_elec {
             ele_idx[msj] as usize
         } else {
             ele_idx[msj] as usize + n_site
         };
-        slt_vec[msj] = slater.get(qp, rsa, rsj);
+        *slot = row[rsj];
     }
 }
 
@@ -913,31 +1071,35 @@ fn update_one_real(
     n_size: usize,
     pf: &mut f64,
 ) {
-    for i in 0..n_size {
-        vec1[i] = 0.0;
-    }
-    for msj in 0..n_size {
-        let slt = slt_vec[msj];
-        for msi in 0..n_size {
-            vec1[msi] += -inv[base + msj * n_size + msi] * slt;
+    // Slice-based loops (same operations and order as the indexed C loops) let the
+    // compiler drop bounds checks and vectorize the independent elements.
+    let inv = &mut inv[base..base + n_size * n_size];
+    let (vec1, vec2) = (&mut vec1[..n_size], &mut vec2[..n_size]);
+    vec1.fill(0.0);
+    for (column, &slt) in inv.chunks_exact(n_size).zip(slt_vec) {
+        for (v, &x) in vec1.iter_mut().zip(column) {
+            *v += -x * slt;
         }
     }
     let tmp = vec1[msa];
     *pf *= -tmp;
     let inv_vec1_a = -1.0 / tmp;
-    for msi in 0..n_size {
-        vec2[msi] = inv[base + msa * n_size + msi] * inv_vec1_a;
+    for (v2, &x) in vec2.iter_mut().zip(&inv[msa * n_size..(msa + 1) * n_size]) {
+        *v2 = x * inv_vec1_a;
     }
-    for msi in 0..n_size {
+    for (msi, row) in inv.chunks_exact_mut(n_size).enumerate() {
         let vec1_i = vec1[msi];
         let vec2_i = vec2[msi];
-        for msj in 0..n_size {
-            inv[base + msi * n_size + msj] += vec1_i * vec2[msj] - vec1[msj] * vec2_i;
+        for ((x, &vec1_j), &vec2_j) in row.iter_mut().zip(vec1.iter()).zip(vec2.iter()) {
+            *x += vec1_i * vec2_j - vec1_j * vec2_i;
         }
-        inv[base + msi * n_size + msa] -= vec2_i;
+        row[msa] -= vec2_i;
     }
-    for msj in 0..n_size {
-        inv[base + msa * n_size + msj] += vec2[msj];
+    for (x, &v2) in inv[msa * n_size..(msa + 1) * n_size]
+        .iter_mut()
+        .zip(vec2.iter())
+    {
+        *x += v2;
     }
 }
 
@@ -1228,6 +1390,203 @@ fn two_hop_bilinear_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64
 
 #[cfg(test)]
 mod tests {
+    /// Straight indexed transcription of the pre-#207 kernels (the C loop order); the
+    /// slice-based and QP-blocked versions must reproduce them bit for bit.
+    fn reference_update_one_real(
+        msa: usize,
+        inv: &mut [f64],
+        slt_vec: &[f64],
+        n_size: usize,
+        pf: &mut f64,
+    ) {
+        let mut vec1 = vec![0.0; n_size];
+        let mut vec2 = vec![0.0; n_size];
+        for msj in 0..n_size {
+            let slt = slt_vec[msj];
+            for msi in 0..n_size {
+                vec1[msi] += -inv[msj * n_size + msi] * slt;
+            }
+        }
+        let tmp = vec1[msa];
+        *pf *= -tmp;
+        let inv_vec1_a = -1.0 / tmp;
+        for msi in 0..n_size {
+            vec2[msi] = inv[msa * n_size + msi] * inv_vec1_a;
+        }
+        for msi in 0..n_size {
+            let vec1_i = vec1[msi];
+            let vec2_i = vec2[msi];
+            for msj in 0..n_size {
+                inv[msi * n_size + msj] += vec1_i * vec2[msj] - vec1[msj] * vec2_i;
+            }
+            inv[msi * n_size + msa] -= vec2_i;
+        }
+        for msj in 0..n_size {
+            inv[msa * n_size + msj] += vec2[msj];
+        }
+    }
+
+    fn pseudo_random(seed: &mut u64) -> f64 {
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((*seed >> 11) as f64 / (1u64 << 53) as f64) - 0.5
+    }
+
+    #[test]
+    fn slice_based_rank_one_update_matches_indexed_reference_bitwise() {
+        let mut seed = 7;
+        for n_size in [2, 6, 16] {
+            for msa in [0, n_size / 2, n_size - 1] {
+                let base: Vec<f64> = (0..n_size * n_size)
+                    .map(|_| pseudo_random(&mut seed))
+                    .collect();
+                let slt: Vec<f64> = (0..n_size).map(|_| pseudo_random(&mut seed)).collect();
+                let (mut expected, mut pf_expected) = (base.clone(), 1.25);
+                reference_update_one_real(msa, &mut expected, &slt, n_size, &mut pf_expected);
+                let (mut actual, mut pf_actual) = (base.clone(), 1.25);
+                let (mut vec1, mut vec2) = (vec![0.0; n_size], vec![0.0; n_size]);
+                update_one_real(
+                    0,
+                    msa,
+                    &mut actual,
+                    &slt,
+                    &mut vec1,
+                    &mut vec2,
+                    n_size,
+                    &mut pf_actual,
+                );
+                assert_eq!(pf_actual.to_bits(), pf_expected.to_bits());
+                assert!(actual
+                    .iter()
+                    .zip(&expected)
+                    .all(|(a, b)| a.to_bits() == b.to_bits()));
+            }
+        }
+    }
+
+    #[test]
+    fn fused_new_pf_m2_ip_matches_separate_kernels_bitwise() {
+        let (n_site, n_elec) = (5, 2);
+        let n_size = 2 * n_elec;
+        let mut seed = 23;
+        for n_qp in [1usize, 3, 4, 5, 8, 11] {
+            let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+            for value in slater.as_mut_slice() {
+                *value = pseudo_random(&mut seed);
+            }
+            let inv_stride = n_size * n_size + 1;
+            let inv: Vec<f64> = (0..n_qp * inv_stride)
+                .map(|_| pseudo_random(&mut seed))
+                .collect();
+            let pf: Vec<f64> = (0..n_qp).map(|_| pseudo_random(&mut seed)).collect();
+            // One weight fewer than QPs once, to cover the `calculate_ip_real` guard.
+            for n_weights in [n_qp, n_qp.saturating_sub(1)] {
+                let weights: Vec<Complex64> = (0..n_weights)
+                    .map(|_| Complex64::new(pseudo_random(&mut seed), 0.0))
+                    .collect();
+                let ele_idx = [4_i64, 0, 3, 1];
+                for (ma, spin, new_site) in [(0usize, 0u8, 2_i64), (1, 1, 4), (0, 1, 0)] {
+                    let msj = ma + spin as usize * n_elec;
+                    let mut moved_idx = ele_idx;
+                    moved_idx[msj] = new_site;
+                    let mut new_pf = vec![0.0; n_qp];
+                    calculate_new_pf_m2_real_flat(
+                        ma,
+                        spin,
+                        &mut new_pf,
+                        &moved_idx,
+                        &slater,
+                        &inv,
+                        inv_stride,
+                        &pf,
+                        0,
+                        n_qp,
+                        n_site,
+                        n_elec,
+                    );
+                    let mut expected = 0.0;
+                    for (qp, value) in new_pf.iter().enumerate() {
+                        if qp < weights.len() {
+                            expected += weights[qp].re * value;
+                        }
+                    }
+                    let actual = calculate_new_pf_m2_ip_real_flat(
+                        ma,
+                        spin,
+                        (msj, new_site),
+                        &ele_idx,
+                        &slater,
+                        &inv,
+                        inv_stride,
+                        &pf,
+                        &weights,
+                        n_site,
+                        n_elec,
+                    );
+                    assert_eq!(
+                        actual.to_bits(),
+                        expected.to_bits(),
+                        "n_qp {n_qp}, weights {n_weights}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn blocked_new_pf_m2_matches_per_qp_reference_for_every_qp_count() {
+        let (n_site, n_elec) = (4, 2);
+        let n_size = 2 * n_elec;
+        let n_site2 = 2 * n_site;
+        let mut seed = 11;
+        for n_qp in [1usize, 3, 4, 5, 8, 9] {
+            let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+            for value in slater.as_mut_slice() {
+                *value = pseudo_random(&mut seed);
+            }
+            let inv_stride = n_size * n_size + 1;
+            let inv: Vec<f64> = (0..n_qp * inv_stride)
+                .map(|_| pseudo_random(&mut seed))
+                .collect();
+            let pf: Vec<f64> = (0..n_qp).map(|_| pseudo_random(&mut seed)).collect();
+            let ele_idx = [2_i64, 0, 3, 1];
+            for (ma, spin) in [(0usize, 0u8), (1, 1)] {
+                let mut actual = vec![0.0; n_qp];
+                calculate_new_pf_m2_real_flat(
+                    ma,
+                    spin,
+                    &mut actual,
+                    &ele_idx,
+                    &slater,
+                    &inv,
+                    inv_stride,
+                    &pf,
+                    0,
+                    n_qp,
+                    n_site,
+                    n_elec,
+                );
+                let msa = ma + spin as usize * n_elec;
+                let rsa = ele_idx[msa] as usize + spin as usize * n_site;
+                for qp in 0..n_qp {
+                    let mut ratio = 0.0;
+                    for msj in 0..n_size {
+                        let rsj = ele_idx[msj] as usize + if msj < n_elec { 0 } else { n_site };
+                        ratio +=
+                            inv[qp * inv_stride + msa * n_size + msj] * slater.get(qp, rsa, rsj);
+                    }
+                    assert_eq!(
+                        actual[qp].to_bits(),
+                        (-ratio * pf[qp]).to_bits(),
+                        "qp {qp}/{n_qp}"
+                    );
+                }
+                assert!(n_site2 > rsa);
+            }
+        }
+    }
+
     use super::*;
 
     #[test]

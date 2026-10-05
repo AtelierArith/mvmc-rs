@@ -10,6 +10,9 @@ use crate::state::SlaterMatrixData;
 type ComplexTensor = TypedTensor<Complex64>;
 
 pub(crate) struct SlaterDerivativeScratch {
+    /// Real-mode QP/orbital accumulation (`[qp][orbital]`): the real main
+    /// calculation has no imaginary parts, so it never touches `qp_orbital`.
+    qp_orbital_real: Vec<f64>,
     qp_orbital: Option<ComplexTensor>,
     weighted_orbital: Option<ComplexTensor>,
     n_slater: usize,
@@ -19,6 +22,7 @@ pub(crate) struct SlaterDerivativeScratch {
 impl SlaterDerivativeScratch {
     pub(crate) fn new() -> Self {
         Self {
+            qp_orbital_real: Vec::new(),
             qp_orbital: None,
             weighted_orbital: None,
             n_slater: 0,
@@ -57,6 +61,41 @@ impl SlaterDerivativeScratch {
             .host_data_mut()
             .expect("SlaterDerivativeScratch requires host-backed storage");
         data.fill(Complex64::new(0.0, 0.0));
+    }
+
+    pub(crate) fn zero_qp_orbital_real(&mut self, len: usize) {
+        self.qp_orbital_real.clear();
+        self.qp_orbital_real.resize(len, 0.0);
+    }
+
+    /// Real-mode counterpart of [`Self::reduce_qp_weighted_julia_into`]. The weights have
+    /// zero imaginary parts (checked by the caller) and the buffer is real, so each
+    /// complex term `w * b` has the real part `w.re * b` exactly and a zero imaginary
+    /// part; folding the QP terms in the same order gives the identical real parts.
+    pub(crate) fn reduce_qp_weighted_real_into(
+        &self,
+        weights: &[Complex64],
+        ip: Complex64,
+        sr_opt_o: &mut [Complex64],
+    ) {
+        if self.n_slater == 0 || self.n_qp_full == 0 || ip.norm() == 0.0 {
+            return;
+        }
+        assert!(
+            sr_opt_o.len() >= 2 * self.n_slater,
+            "Slater derivative output must have real/imag slots for every orbital"
+        );
+        assert_eq!(weights.len(), self.n_qp_full);
+        let inv_ip = crate::julia_complex::reciprocal(ip);
+        for orbidx in 0..self.n_slater {
+            let mut acc = 0.0;
+            for (qpidx, weight) in weights.iter().enumerate() {
+                acc += weight.re * self.qp_orbital_real[qpidx * self.n_slater + orbidx];
+            }
+            let acc = Complex64::new(acc, 0.0) * inv_ip;
+            sr_opt_o[2 * orbidx] = acc;
+            sr_opt_o[2 * orbidx + 1] = acc * Complex64::new(0.0, 1.0);
+        }
     }
 
     pub(crate) fn add_qp_orbital(&mut self, qpidx: usize, orbidx: usize, value: Complex64) {
@@ -133,12 +172,14 @@ impl Default for SlaterDerivativeScratch {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     sr_opt_o: &mut [Complex64],
     ip: Complex64,
     ele_idx: &[i64],
     data: &ExpertModeData,
     slater_matrix: &SlaterMatrixData,
+    use_real: bool,
     scratch: &mut SlaterDerivativeScratch,
     timer: &mut CTimer<TIMED>,
 ) {
@@ -162,36 +203,49 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
 
     let diag = timer.diagnostics.slater;
     timer.start_diag(932, diag);
-    let (orbital_idx, orbital_sgn) = data.build_orbital_matrices();
+    // The orbital index/sign matrices are fixed by the input; reuse the cached ones
+    // instead of rebuilding them from the term list for every sample.
+    let built;
+    let (orbital_idx, orbital_sgn): (&[Vec<i64>], &[Vec<i64>]) =
+        match (&data.orbital_idx_matrix, &data.orbital_sgn_matrix) {
+            (Some(idx), Some(sgn)) if idx.len() >= n_site && sgn.len() >= n_site => (idx, sgn),
+            _ => {
+                built = data.build_orbital_matrices();
+                (&built.0, &built.1)
+            }
+        };
 
     let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
     let mut trans_orb_idx = vec![-1_i64; n_trans * n_size * n_size];
     let mut trans_orb_sgn = vec![1_i64; n_trans * n_size * n_size];
+    // Translation of every electron site, once per sector (not per matrix entry).
+    let mut translated: Vec<Option<(usize, i64)>> = vec![None; n_size];
     for trans_idx in 0..n_trans {
         let mpidx = trans_idx % n_mp_trans.max(1);
         let optidx = trans_idx / n_mp_trans.max(1);
-        for msi in 0..n_size {
+        for (msi, slot) in translated.iter_mut().enumerate() {
             let ri = ele_idx.get(msi).copied().unwrap_or(-1);
-            if ri < 0 || ri as usize >= n_site {
+            *slot = if ri < 0 || ri as usize >= n_site {
+                None
+            } else {
+                let (tri, sgni) =
+                    crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
+                (tri < n_site).then_some((tri, sgni))
+            };
+        }
+        let base = trans_idx * n_size * n_size;
+        for msi in 0..n_size {
+            let Some((tri, sgni)) = translated[msi] else {
                 continue;
-            }
-            let (tri, sgni) = crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
-            if tri >= n_site {
-                continue;
-            }
-            for msj in 0..n_size {
-                let rj = ele_idx.get(msj).copied().unwrap_or(-1);
-                if rj < 0 || rj as usize >= n_site {
+            };
+            let (row_idx, row_sgn) = (&orbital_idx[tri], &orbital_sgn[tri]);
+            for (msj, entry) in translated.iter().enumerate() {
+                let Some((trj, sgnj)) = *entry else {
                     continue;
-                }
-                let (trj, sgnj) =
-                    crate::qp::translated_site(data, rj as usize, optidx, mpidx, false);
-                if trj >= n_site {
-                    continue;
-                }
-                let idx = trans_idx * n_size * n_size + msi * n_size + msj;
-                trans_orb_idx[idx] = orbital_idx[tri][trj];
-                trans_orb_sgn[idx] = sgni * sgnj * orbital_sgn[tri][trj];
+                };
+                let idx = base + msi * n_size + msj;
+                trans_orb_idx[idx] = row_idx[trj];
+                trans_orb_sgn[idx] = sgni * sgnj * row_sgn[trj];
             }
         }
     }
@@ -229,6 +283,26 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
                         && matrix.iter().take(n_site).all(|row| row.len() >= n_site)
                 })
             });
+    if use_real
+        && !slater_matrix.pf_m_real.is_empty()
+        && real_slater_weights(weights, n_qp_full, n_sp_gauss_leg)
+    {
+        scratch.zero_qp_orbital_real(n_slater * n_qp_full);
+        accumulate_slater_diff_real(
+            scratch,
+            weights,
+            slater_matrix,
+            &trans_orb_idx,
+            &trans_orb_sgn,
+            (n_qp_full, n_sp_gauss_leg, n_mp_trans, n_slater, n_elec),
+            complete_maps,
+        );
+        timer.stop_diag(933, diag);
+        timer.start_diag(934, diag);
+        scratch.reduce_qp_weighted_real_into(&weights.qp_full_weight[..n_qp_full], ip, sr_opt_o);
+        timer.stop_diag(934, diag);
+        return;
+    }
     for qpidx in 0..n_qp_full {
         let trans_idx = qpidx / n_sp_gauss_leg;
         // Julia's generic fallback drops later OptTrans sectors; its complete
@@ -300,6 +374,83 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     timer.start_diag(934, diag);
     scratch.reduce_qp_weighted_julia_into(&weights.qp_full_weight[..n_qp_full], ip, sr_opt_o);
     timer.stop_diag(934, diag);
+}
+
+/// Whether the real main calculation can run the Slater derivative on the real inverse
+/// and Pfaffian tables alone (the complex tables then need not be refreshed).
+pub(crate) fn real_slater_derivative_available(data: &ExpertModeData, n_qp_full: usize) -> bool {
+    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
+    data.qp_weights
+        .as_ref()
+        .is_none_or(|weights| real_slater_weights(weights, n_qp_full, n_sp_gauss_leg))
+}
+
+/// The real fast path needs every weight it multiplies to be purely real.
+fn real_slater_weights(
+    weights: &mvmc_expert_parsers::types::QuantumProjectionWeights,
+    n_qp_full: usize,
+    n_sp_gauss_leg: usize,
+) -> bool {
+    let real = |values: &[Complex64], n: usize| values.iter().take(n).all(|z| z.im == 0.0);
+    real(&weights.qp_full_weight, n_qp_full)
+        && real(&weights.spgl_cos_sin, n_sp_gauss_leg)
+        && real(&weights.spgl_cos_cos, n_sp_gauss_leg)
+        && real(&weights.spgl_sin_sin, n_sp_gauss_leg)
+}
+
+/// Real-mode `accumulate_slater_diff` over all QPs: same loop order and the same
+/// per-term products as the complex path on real data (`(+-inv) * c * sign`).
+fn accumulate_slater_diff_real(
+    scratch: &mut SlaterDerivativeScratch,
+    weights: &mvmc_expert_parsers::types::QuantumProjectionWeights,
+    slater_matrix: &SlaterMatrixData,
+    trans_orb_idx: &[i64],
+    trans_orb_sgn: &[i64],
+    dims: (usize, usize, usize, usize, usize),
+    complete_maps: bool,
+) {
+    let (n_qp_full, n_sp_gauss_leg, n_mp_trans, n_slater, n_elec) = dims;
+    let n_size = 2 * n_elec;
+    for qpidx in 0..n_qp_full {
+        let trans_idx = qpidx / n_sp_gauss_leg;
+        if !complete_maps && trans_idx >= n_mp_trans {
+            continue;
+        }
+        let spidx = qpidx % n_sp_gauss_leg;
+        if spidx >= weights.spgl_cos_sin.len()
+            || spidx >= weights.spgl_cos_cos.len()
+            || spidx >= weights.spgl_sin_sin.len()
+        {
+            continue;
+        }
+        let pf = slater_matrix.pf_m_real[qpidx];
+        let cs = pf * weights.spgl_cos_sin[spidx].re;
+        let cc = pf * weights.spgl_cos_cos[spidx].re;
+        let ss = pf * weights.spgl_sin_sin[spidx].re;
+        let tbase = trans_idx * n_size * n_size;
+        let inv_plane = slater_matrix.inv_m_real.qp_matrix_slice(qpidx);
+        let out = &mut scratch.qp_orbital_real[qpidx * n_slater..(qpidx + 1) * n_slater];
+        for msi in 0..n_size {
+            let idx_row = &trans_orb_idx[tbase + msi * n_size..tbase + (msi + 1) * n_size];
+            let sgn_row = &trans_orb_sgn[tbase + msi * n_size..tbase + (msi + 1) * n_size];
+            // Block coefficients (C `SlaterElmDiff`): up-up cs, up-down -cc,
+            // down-up ss, down-down -cs.
+            let (first, second) = if msi < n_elec { (cs, cc) } else { (ss, cs) };
+            for msj in 0..n_size {
+                let orbidx = idx_row[msj];
+                if orbidx < 0 || orbidx as usize >= n_slater {
+                    continue;
+                }
+                let inv = inv_plane[msj + msi * n_size];
+                let value = if msj < n_elec {
+                    inv * first
+                } else {
+                    -inv * second
+                };
+                out[orbidx as usize] += value * sgn_row[msj] as f64;
+            }
+        }
+    }
 }
 
 fn accumulate_slater_diff(
@@ -427,6 +578,67 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
 
 #[cfg(test)]
 mod tests {
+    /// On real data the real fast path must equal the complex path exactly (real
+    /// parts bit for bit): it only drops the multiplications by zero imaginary parts.
+    #[test]
+    fn real_fast_path_matches_complex_path_on_real_data() {
+        let namelist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L16/namelist.def");
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files(namelist).unwrap();
+        crate::qp::init_qp_weight(&mut data);
+        let weights = data.qp_weights.as_ref().expect("QP weights");
+        assert!(real_slater_weights(
+            weights,
+            weights.qp_full_weight.len(),
+            data.modpara.nsp_gauss_leg.max(1) as usize
+        ));
+        let n_site = data.modpara.nsite as usize;
+        let n_elec = data.modpara.nelec as usize;
+        let n_size = 2 * n_elec;
+        let n_qp_full = weights.qp_full_weight.len();
+        let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(&data);
+        let mut matrix = SlaterMatrixData::zeros(n_qp_full, n_site, n_elec, false);
+        let mut seed = 99_u64;
+        let mut next = || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((seed >> 11) as f64 / (1u64 << 53) as f64) - 0.5
+        };
+        for qp in 0..n_qp_full {
+            matrix.pf_m_real[qp] = next();
+            matrix.pf_m[qp] = Complex64::new(matrix.pf_m_real[qp], 0.0);
+            for k in 0..n_size * n_size {
+                let value = next();
+                matrix.inv_m_real.qp_matrix_slice_mut(qp)[k] = value;
+                matrix.inv_m.qp_matrix_slice_mut(qp)[k] = Complex64::new(value, 0.0);
+            }
+        }
+        let ele_idx: Vec<i64> = (0..n_size).map(|m| ((m * 5 + 3) % n_site) as i64).collect();
+        let ip = Complex64::new(1.375, 0.0);
+        let mut complex_out = vec![Complex64::new(0.0, 0.0); 2 * n_slater];
+        let mut real_out = complex_out.clone();
+        let mut timer = CTimer::<false>::new();
+        for (use_real, out) in [(false, &mut complex_out), (true, &mut real_out)] {
+            let mut scratch = SlaterDerivativeScratch::new();
+            slater_elm_diff_with_scratch_timed::<false>(
+                out,
+                ip,
+                &ele_idx,
+                &data,
+                &matrix,
+                use_real,
+                &mut scratch,
+                &mut timer,
+            );
+        }
+        assert!(complex_out.iter().any(|z| z.re != 0.0));
+        for (k, (a, b)) in complex_out.iter().zip(&real_out).enumerate() {
+            assert_eq!(a.re.to_bits(), b.re.to_bits(), "component {k} real part");
+            assert_eq!(a.im, b.im, "component {k} imaginary part");
+        }
+    }
+
     use super::*;
 
     #[test]
