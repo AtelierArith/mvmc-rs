@@ -371,8 +371,6 @@ pub fn finalize_oo_store_real(
     }
     let active =
         &sr_opt_o_store[options.sample_start * n..(options.sample_start + sample_size) * n];
-    #[cfg(test)]
-    crate::run::issue179_weighted_store(active, n, sample_size);
     let dim = i32::try_from(n).expect("SR Gram dimension must fit BLAS LP64");
     let samples = i32::try_from(sample_size).expect("sample count must fit BLAS LP64");
     // Julia mul!(C, O, transpose(O)) recognizes the shared operand and

@@ -1,5 +1,5 @@
 // SOURCE only; independent algebra, not recorded Rust/C golden output.
-use pfapack::{utu2inv_real, PivotIndex1Based, SqMat};
+use pfapack::{utu2inv_real_c_compat, PivotIndex1Based, SqMat};
 #[test]
 fn ordinary_real_public_boundary_and_pivot_contracts() {
     for n in [64usize, 66, 128] {
@@ -19,7 +19,7 @@ fn ordinary_real_public_boundary_and_pivot_contracts() {
             }
             let mut vt = vec![0.; n - 1];
             let mut work = vec![91.; n * n];
-            utu2inv_real(
+            utu2inv_real_c_compat(
                 &mut SqMat::new(&mut factor, n),
                 &piv,
                 &mut vt,

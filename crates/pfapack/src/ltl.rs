@@ -19,10 +19,6 @@
 #[path = "rank2_real_regression.rs"]
 mod rank2_real_regression;
 
-#[cfg(test)]
-#[path = "factor_acquisition.rs"]
-mod factor_acquisition;
-
 use num_complex::Complex64;
 
 use crate::backend::{self, BlasScalar};
@@ -34,6 +30,18 @@ use crate::PivotIndex1Based;
 /// Mirrors `julia_dsktf2!(A, iPiv)` from `ltl_decomposition.jl`.
 pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
     sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, false)
+}
+
+/// Real LTL decomposition with C's `DSKR2` update order.
+///
+/// The upper rank-2 update evaluates `(A + X*t1) - Y*t2` as in
+/// `extern/mVMC-1.3.0/src/pfapack/fortran/dskr2.f`. [`dsktf2`] keeps Julia's
+/// `A += (X*t1 - Y*t2)` grouping, which can differ in the last bit.
+pub fn dsktf2_c_compat(
+    a: &mut SqMat<'_, f64>,
+    pivots: &mut [PivotIndex1Based],
+) -> Result<(), usize> {
+    sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, true)
 }
 
 /// LTL decomposition for complex skew-symmetric matrices (`zsktf2`).
@@ -71,8 +79,6 @@ where
     Mag: Fn(T) -> f64,
 {
     let n = a.n();
-    #[cfg(test)]
-    let capture_lda = a.lda();
     assert_eq!(pivots.len(), n, "pivots length must equal matrix side");
 
     let mut info: Option<usize> = None;
@@ -93,16 +99,6 @@ where
     while k0 > 1 {
         k0 -= 1;
         let kk0 = k0 - 1; // Julia's kk = k - 1, 0-based
-        #[cfg(test)]
-        T::capture_factor_stage(
-            factor_acquisition::observer::Kind::BeforePivot,
-            a.as_mut_slice(),
-            capture_lda,
-            n,
-            k0,
-            None,
-            info,
-        );
 
         // Pivot search: argmax_{j in 0..kk0+1} |A[j, k0]| via the
         // appropriate 1-norm. Julia uses IDAMAX / IZAMAX which return
@@ -127,27 +123,6 @@ where
                 info = Some(kk0 + 1);
             }
             pivots[kk0] = PivotIndex1Based((kk0 as u32) + 1);
-            #[cfg(test)]
-            {
-                T::capture_factor_stage(
-                    factor_acquisition::observer::Kind::AfterSwap,
-                    a.as_mut_slice(),
-                    capture_lda,
-                    n,
-                    k0,
-                    Some(kk0),
-                    info,
-                );
-                T::capture_factor_stage(
-                    factor_acquisition::observer::Kind::AfterUpdate,
-                    a.as_mut_slice(),
-                    capture_lda,
-                    n,
-                    k0,
-                    Some(kk0),
-                    info,
-                );
-            }
             continue;
         }
 
@@ -184,16 +159,6 @@ where
         }
 
         pivots[kk0] = PivotIndex1Based((kp as u32) + 1);
-        #[cfg(test)]
-        T::capture_factor_stage(
-            factor_acquisition::observer::Kind::AfterSwap,
-            a.as_mut_slice(),
-            capture_lda,
-            n,
-            k0,
-            Some(kp),
-            info,
-        );
 
         // Skew-symmetric rank-2 update of A[0..kk0, 0..kk0].
         // Julia: if k >= 3 ... (kk = k-1 >= 2, i.e. kk0 >= 1 in 0-based).
@@ -227,16 +192,6 @@ where
             let col_k0 = k0 * lda;
             T::scale_column_mode(&mut data[col_k0..col_k0 + n_sub], n_sub, alpha, turbo);
         }
-        #[cfg(test)]
-        T::capture_factor_stage(
-            factor_acquisition::observer::Kind::AfterUpdate,
-            a.as_mut_slice(),
-            capture_lda,
-            n,
-            k0,
-            Some(kp),
-            info,
-        );
     }
 
     match info {
@@ -257,18 +212,6 @@ fn update_upper_rank2<T: UpperRank2Kernel>(
 }
 
 trait UpperRank2Kernel: BlasScalar {
-    #[cfg(test)]
-    #[allow(clippy::too_many_arguments)]
-    fn capture_factor_stage(
-        _kind: factor_acquisition::observer::Kind,
-        _data: &[Self],
-        _lda: usize,
-        _n: usize,
-        _k: usize,
-        _kp: Option<usize>,
-        _info: Option<usize>,
-    ) {
-    }
     fn ltl_alpha(pivot: Self, _turbo: bool) -> Self {
         Self::pfaf_one().julia_div(pivot)
     }
@@ -290,27 +233,20 @@ trait UpperRank2Kernel: BlasScalar {
 }
 
 impl UpperRank2Kernel for f64 {
-    #[cfg(test)]
-    fn capture_factor_stage(
-        kind: factor_acquisition::observer::Kind,
-        data: &[Self],
+    fn update_rank2_mode(
+        data: &mut [Self],
         lda: usize,
-        n: usize,
-        k: usize,
-        kp: Option<usize>,
-        info: Option<usize>,
+        kk0: usize,
+        k0: usize,
+        alpha: Self,
+        _turbo: bool,
+        c_order: bool,
     ) {
-        factor_acquisition::observer::borrow(
-            factor_acquisition::observer::Event {
-                kind,
-                n,
-                k,
-                kp,
-                info,
-            },
-            data,
-            lda,
-        );
+        if c_order {
+            update_upper_rank2_f64_c_order(data, lda, kk0, k0, alpha);
+        } else {
+            update_upper_rank2_f64(data, lda, kk0, k0, alpha);
+        }
     }
     #[inline]
     fn update_upper_rank2(data: &mut [Self], lda: usize, kk0: usize, k0: usize, alpha: Self) {
@@ -618,6 +554,23 @@ fn check_update_upper_rank2_args<T>(data: &[T], lda: usize, kk0: usize, k0: usiz
 
 #[inline]
 fn update_upper_rank2_f64(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
+    check_update_upper_rank2_args(data, lda, kk0, k0);
+    let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
+
+    for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+        let temp1 = alpha * col_kk0_data[j];
+        let temp2 = alpha * col_k0_data[j];
+
+        for i in 0..j {
+            col_j[i] += col_k0_data[i] * temp1 - col_kk0_data[i] * temp2;
+        }
+        col_j[j] = 0.0;
+    }
+}
+
+/// C `DSKR2` column update: first addition, then subtraction.
+#[inline]
+fn update_upper_rank2_f64_c_order(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
     check_update_upper_rank2_args(data, lda, kk0, k0);
     let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
 

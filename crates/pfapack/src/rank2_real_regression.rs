@@ -20,7 +20,7 @@ fn real_rank2_c_order_preserves_storage() {
             a[i + kk0 * lda] = 1.0;
         }
         let before = a.clone();
-        <f64 as UpperRank2Kernel>::update_upper_rank2(&mut a, lda, kk0, k0, 1.0);
+        update_upper_rank2_f64_c_order(&mut a, lda, kk0, k0, 1.0);
         for index in 0..a.len() {
             let i = index % lda;
             let j = index / lda;
@@ -74,6 +74,26 @@ fn real_factor_hand_dyadic_first_pivot_has_strict_margin() {
         a[j + i * n] = -v;
     }
     let mut pivots = vec![PivotIndex1Based(0); n];
-    dsktf2(&mut SqMat::new(&mut a, n), &mut pivots).expect("hand matrix Pf=12 is nonzero");
+    dsktf2_c_compat(&mut SqMat::new(&mut a, n), &mut pivots).expect("hand matrix Pf=12 is nonzero");
     assert_eq!(pivots[2], PivotIndex1Based(3));
+}
+
+#[test]
+fn real_rank2_julia_grouping_differs_from_c_order_on_dyadic_input() {
+    // Same tree as above for kk0=2, entry (0, 1): with p = 2^53,
+    // C evaluates (p + (-p)) - 1 = -1 while Julia's p + (-p - 1) ties to p - p = 0.
+    let p = 9_007_199_254_740_992.0;
+    let (kk0, k0, lda) = (2, 3, 4);
+    let mut base = vec![3.0; lda * lda];
+    base[lda] = p;
+    base[k0 * lda] = -p;
+    base[kk0 * lda] = 1.0;
+    base[1 + k0 * lda] = 1.0;
+    base[1 + kk0 * lda] = 1.0;
+    let mut julia = base.clone();
+    let mut c_order = base;
+    update_upper_rank2_f64(&mut julia, lda, kk0, k0, 1.0);
+    update_upper_rank2_f64_c_order(&mut c_order, lda, kk0, k0, 1.0);
+    assert_eq!(julia[lda], 0.0);
+    assert_eq!(c_order[lda], -1.0);
 }

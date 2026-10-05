@@ -682,18 +682,6 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     let n_site2 = 2 * n_site;
 
     assemble_inv_m_real(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
-    let observer = crate::run::first_real_factor_observer(qp);
-    if let Some(observer) = &observer {
-        observer.real_factor(crate::run::RealFactorView {
-            stage: "assembled",
-            qp,
-            dimension: n_size,
-            matrix: inv_m.qp_matrix_slice(qp),
-            pivots: &[],
-            factor_error: None,
-            pf: None,
-        });
-    }
     if !NATIVE_STATUS && frobenius_norm_sqr_real(inv_m, qp) < MIN_ABS2 {
         return Err(CalcMAllError::AllZero { qp });
     }
@@ -701,36 +689,11 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     ensure_workspace_real(ws, n_size);
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let factor_result = {
-            let mut a = SqMat::new(qp_buf, n_size);
-            dsktf2(&mut a, &mut ws.pivots[..n_size])
-        };
-        if let Some(observer) = &observer {
-            observer.real_factor(crate::run::RealFactorView {
-                stage: "factorized",
-                qp,
-                dimension: n_size,
-                matrix: qp_buf,
-                pivots: &ws.pivots[..n_size],
-                factor_error: factor_result.as_ref().err().copied(),
-                pf: None,
-            });
-        }
-        factor_result.map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
-        let a = SqMat::new(qp_buf, n_size);
+        let mut a = SqMat::new(qp_buf, n_size);
+        dsktf2(&mut a, &mut ws.pivots[..n_size])
+            .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_real(&a, &ws.pivots[..n_size])
     };
-    if let Some(observer) = &observer {
-        observer.real_factor(crate::run::RealFactorView {
-            stage: "pf",
-            qp,
-            dimension: n_size,
-            matrix: inv_m.qp_matrix_slice(qp),
-            pivots: &ws.pivots[..n_size],
-            factor_error: None,
-            pf: Some(pf_value),
-        });
-    }
     if !pf_value.is_finite() {
         return Err(CalcMAllError::NonFinitePfaffian { qp });
     }
@@ -740,50 +703,17 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
         let mut m_work = SqMat::new(&mut ws.m_work_real[..n_size * n_size], n_size);
-        if let Some(observer) = &observer {
-            pfapack::utu2::utu2inv_real_observed(
-                &mut a,
-                &ws.pivots[..n_size],
-                &mut ws.v_t_real[..n_size - 1],
-                &mut m_work,
-                &|view| observer.real_step5(view),
-            );
-        } else {
-            utu2inv_real(
-                &mut a,
-                &ws.pivots[..n_size],
-                &mut ws.v_t_real[..n_size - 1],
-                &mut m_work,
-            );
-        }
-    }
-
-    if let Some(observer) = &observer {
-        observer.real_factor(crate::run::RealFactorView {
-            stage: "inverse-before-sign",
-            qp,
-            dimension: n_size,
-            matrix: inv_m.qp_matrix_slice(qp),
-            pivots: &ws.pivots[..n_size],
-            factor_error: None,
-            pf: Some(pf_value),
-        });
+        utu2inv_real(
+            &mut a,
+            &ws.pivots[..n_size],
+            &mut ws.v_t_real[..n_size - 1],
+            &mut m_work,
+        );
     }
 
     // `M_DSCAL(&nsq, &minus_one, invM, &one)` -- final sign flip.
     for x in inv_m.qp_matrix_slice_mut(qp) {
         *x = -*x;
-    }
-    if let Some(observer) = &observer {
-        observer.real_factor(crate::run::RealFactorView {
-            stage: "inverse-published",
-            qp,
-            dimension: n_size,
-            matrix: inv_m.qp_matrix_slice(qp),
-            pivots: &ws.pivots[..n_size],
-            factor_error: None,
-            pf: Some(pf_value),
-        });
     }
     Ok(())
 }
