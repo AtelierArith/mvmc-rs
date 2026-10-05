@@ -226,3 +226,21 @@ bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for
 `n = 4..256`); see the test header for the table and the unchanged complex and
 inverse bounds. C-order correctness is covered by the hand-dyadic and analytic
 tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
+
+## C `-b` varbin parameter blocks (#347)
+
+C's `-b` output (`vmcmain.c:658`) is `fwrite(Para, sizeof(double), NPara, FileVar)` on a
+`double complex` array, which writes only `NPara` doubles: the first `ceil(NPara/2)`
+parameters (the last cut to its real part for odd `NPara`). Rust deliberately differs and
+writes all `2*NPara` doubles per block under the same header. The comparison against the
+unmodified C `vmc.out` therefore uses:
+
+- header (`NPara`, step count): bytes exact;
+- block data: C's `NPara` doubles against the leading `NPara` doubles of Rust's block. PhysCal
+  blocks (file-read or `InitParameter` values, no accumulated arithmetic) and the optimizer's
+  step-0 block are compared exactly; later optimizer steps depend on the SR solve (BLAS
+  operation order, #358) and use an absolute bound of `1e-8` (observed maximum about `5e-10`,
+  parameters O(1)) with RNG-driven control paths identical;
+- completeness: the Rust block must contain every parameter of the text `zvo_var` output.
+
+Evidence and the C run: `tests/fixtures/issue347_varbin/PROVENANCE.md`.

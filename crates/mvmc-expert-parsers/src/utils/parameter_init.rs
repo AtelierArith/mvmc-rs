@@ -5,7 +5,7 @@
 //!
 //! Preserve the upstream RNG draw order and exact subsequent RNG state.
 //! Computed declared Slater values use explicit numerical bounds against C. The
-//! caller MUST seed the SFMT RNG before calling [`init_parameter`].
+//! caller MUST seed the SFMT RNG before calling `init_parameter`.
 //!
 //! Real/complex Slater initialization includes Gutzwiller/Jastrow/DH2/DH4 declarations.
 //! RBM coefficients consume draws in canonical section/index order before Slater.

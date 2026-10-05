@@ -191,9 +191,9 @@ the input of a later PhysCal run ([chapter 6](06-theory-observables-lanczos.md),
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
-> - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1005`
-> - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:984`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
+> - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1113`
+> - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1092`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:515`
 > - Parity: the window is `step >= NSROptItrStep - NSROptItrSmp`; Rust rejects `NSROptItrSmp > NSROptItrStep` up front ("nsteps must be >= nsmp; C leaves oversized-window rows unwritten", `validate_optimization_window`, `run.rs:1306`). The standard-deviation formula is `sqrt(var/(n-1))` of `creal(data*conj(data))` in both. The `--nsteps`/`--nsmp` command-line overrides change `NSROptItrStep`/`NSROptItrSmp` for the window.

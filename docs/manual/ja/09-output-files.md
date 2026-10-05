@@ -51,8 +51,8 @@ C の書式は `"% .18e % .18e  % .18e % .18e %.18e %.18e\n"` で、3列目の�
 > **実装**
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
 > - C: `InitFile` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
-> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:89`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
+> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
 > - 整合性: (**命名の違い**) 最適化では、C はデータインデックス付きでファイルを書き出します(`zvo_out_001.dat` と `zvo_var_001.dat`、`initfile.c:55,59`、`NDataIdxStart`)。Rust は**インデックスなしの `zvo_out.dat` と `zvo_var.dat`** を書き出します(Julia の規約、`io.rs:113,128`)。PhysCal のファイルは両者ともインデックス付きです。最適化出力の分散列は、$\lvert\langle H\rangle\rvert\le10^{-14}$ のとき `0.0` になります(`io.rs:103`)。
 
 ## 9.2 ステップごとのパラメータ: `zvo_var.dat` と `zvo_var_NNN.dat`
@@ -91,8 +91,8 @@ NGutzwillerIdx  4
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
-> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:599`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:515`
+> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:654`
 > - 整合性: ブロックの順序、ファイル名(`RBM_OUTPUT_BLOCKS`)、ヘッダーのテキスト、および `NSROptItrSmp = 1` に対する「ペアで補助ファイルなし」の規則は、`OutputOptData` をそのまま踏襲しています。ウィンドウ統計量は両者とも $\sqrt{\sum|x-\bar x|^2/(n-1)}$ です。
 
 ## 9.4 ソルバー情報: `zvo_SRinfo.dat`
@@ -169,7 +169,7 @@ PhysCal のサンプルごとに1度書き出され、ファイルはインデ�
 > **実装**
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
 > - 整合性: 行のテキスト、および `ex` ファイルの末尾の空行/1行レイアウトが再現されています(`io.rs:244-301`、コメント "C vmcmain.c:671-675 emits pairs in term order, newline after the loop")。
 
 ## 9.7 Lanczos ファイル
@@ -183,7 +183,7 @@ PhysCal のサンプルごとに1度書き出され、ファイルはインデ�
 
 > **実装**
 > - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - 整合性: デバッグ専用の C ファイル `zvo_ls_qcisajsq_NNN.dat` と `zvo_ls_qcisajscktaltq_NNN.dat`(`#ifdef _DEBUG`)は生成されません。$\alpha$ の決定に失敗した場合、C は何も書き出しませんが、Rust は `NaN` を書き出します([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 
@@ -192,7 +192,7 @@ PhysCal のサンプルごとに1度書き出され、ファイルはインデ�
 | C のファイル | 内容 | Rust |
 |--------|---------|------|
 | `zvo_time_NNN.dat` | ステップごとのサンプリング進捗、採択率、タイムスタンプ(`OutputTime`) | 書き出さない |
-| `zvo_varbin_NNN.dat` | `zvo_var` のバイナリ版(`-b`) | 書き出さない |
+| `zvo_varbin_NNN.dat` | `zvo_var` のバイナリ版(`-b`) | `-b` で書き出す([8.1](08-running.md#バイナリ出力-b)) |
 | 直接法ソルバーの `zvo_SRinfo.dat` | [9.4](#94-ソルバー情報-zvo_srinfodat) を参照 | 書き出さない |
 | `zvo_ls_qcisajsq_*`, `zvo_ls_qcisajscktaltq_*` | `_DEBUG` ビルドのみ | 書き出さない |
 | 最適化中の `zvo_out_NNN.dat`/`zvo_var_NNN.dat` | インデックス接尾辞 | `zvo_out.dat`/`zvo_var.dat` として書き出す |

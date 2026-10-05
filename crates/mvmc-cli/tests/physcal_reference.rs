@@ -265,28 +265,10 @@ fn exchange_spin_cli_lanczos_modes_match_native_c_reference() {
 }
 
 #[test]
-fn complex_hopping_intra_cli_lanczos_modes_match_native_c_reference() {
-    // Same historical C operands/results, exercised through the complex
-    // arithmetic path. Not newly generated complex C trajectory evidence.
-    for mode in [1, 2] {
-        check_lanczos("hubbard_chain_lanczos", mode, "cmp");
-    }
-}
-
-#[test]
-fn complex_exchange_spin_cli_lanczos_modes_match_native_c_reference() {
-    // Real fixture inputs/fixed parameters through --mode cmp, not an
-    // independent native-C run with genuinely complex fixed weights.
-    for mode in [1, 2] {
-        check_lanczos("spin_chain_lanczos", mode, "cmp");
-    }
-}
-
-#[test]
 fn all_hamiltonian_terms_cli_lanczos_matches_independent_base_and_corrected_outputs() {
-    // The cmp cases reuse the same real-valued fixture operands and independent
-    // outputs to check complex-path routing, not genuinely complex weights.
-    for (mode, arithmetic) in [(1, "real"), (2, "real"), (1, "cmp"), (2, "cmp")] {
+    // `--mode` is a checked label (#347): a `cmp` label on these real-declared inputs
+    // is rejected, and it never selected a different arithmetic path before.
+    for (mode, arithmetic) in [(1, "real"), (2, "real")] {
         // Existing Julia 1.13.1 values with C indexed layout; provenance.txt
         // records the source, seed and BLAS. Not a full native-C trajectory.
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -177,6 +177,7 @@ fn public_call(
                 // SR enabled, proving that the sampler error prevents the update.
                 skip_sr: healthy_control,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
     };

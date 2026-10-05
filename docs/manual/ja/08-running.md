@@ -8,8 +8,10 @@
 `target/release/mvmc` が得られます。`cargo run -p mvmc-cli -- ...` でも動作します)。書式:
 
 ```text
-mvmc <namelist.def> [options]
+mvmc [options] <namelist.def> [initpara]
 ```
+
+書式は C ドライバーの `vmc.out [option] NameListFile [OptParaFile]`(`vmcmain.c:714-723`)です。オプションは位置引数の後ろにも置けます。短いオプションはまとめて指定でき(`-bo`)、値は直後に続けても(`-F2`)次の語としても(`-F 2`)渡せます。C の `getopt` と同じです。
 
 | オプション | 意味 | デフォルト |
 |--------|---------|---------|
@@ -17,22 +19,44 @@ mvmc <namelist.def> [options]
 | `--nsmp <N>` | 最終平均化ウィンドウ。`NSROptItrSmp` を上書きします(ステップ数に対して $\le$ を満たす必要があります) | `NSROptItrSmp` |
 | `--out-dir <DIR>` | 出力ディレクトリ(存在しなければ作成されます) | `<directory of namelist.def>/output` |
 | `--seed <N>` | RNG のシード。`RndSeed` を置き換えます(グループ/ランクのオフセットは引き続き加算されます。[4.6](04-theory-sampling.md#46-サンプラー内の並列化)) | `RndSeed` |
-| `--mode real\|cmp\|fsz` | *サニティ確認用のラベルのみ*: `{real,cmp,fsz}` に対して検証されますが、数値モードを**選択しません**。数値モードは入力宣言から決まります([3.3](03-theory-wavefunction.md#33-実数モードと複素数モード)) | 推定(一般軌道なら `fsz`、複素の宣言があれば `cmp`、それ以外は `real`) |
+| `--mode real\|cmp\|fsz` | *検査されるラベル*: 数値モードを**選択しません**。数値モードは入力宣言から決まります([3.3](03-theory-wavefunction.md#33-実数モードと複素数モード))。推定されたモードと矛盾するラベルはエラー(終了ステータス 2、ファイル作成前)です。推定と重複しますがスクリプトのために残してあります | 推定(一般軌道なら `fsz`、複素の宣言があれば `cmp`、それ以外は `real`) |
 | `--initial-def auto\|none\|PATH` | 初期パラメータファイル([7.4](07-input-files.md#74-初期パラメータ値)): `auto` は隣接する `initial.def` があれば読み込み、`none` は読み込まず、`PATH` は存在が必須です | `auto` |
 | `-o`, `--opt-trans` | C の OptTrans モードを有効にします(C ドライバーの `-o`) | off |
-| `--physcal <PATH>` | パラメータファイル `PATH` を用いて固定パラメータの PhysCal を実行します([8.2](#82-固定パラメータでの物理量計算)) | off |
-| `--physcal-trace <NEW_DIR>` | 入力を消費しないシリアル PhysCal 診断(PhysCal 実行の段階ごとの記録)を*新しい*ディレクトリ `NEW_DIR` に書き出します。`--physcal` と単一プロセスでの起動が必要です | off |
+| `-b` | バイナリのパラメータ出力: `zvo_var` テキストファイルの代わりに `zvo_varbin_NNN.dat` を書き出します([バイナリ出力](#バイナリ出力-b)) | off |
+| `-F <N>`, `--flush-interval <N>` | `_time_`/`_SRinfo` ファイルを `N` ステップごとにフラッシュします。`N < 1` はエラーです([9.5](09-output-files.md)) | 1 |
+| `-e`, `--expert` | Expert モード(既定)。受理されますが何もしません | on |
+| `-v`, `--version` | `mvmc-rs version <crate version> (follows C mVMC 1.3.0)` を標準出力に出して終了ステータス `0` で終了します | |
+| `-h`, `--help` | 使用法(C のオプション一覧と Rust 拡張)を C と同じく標準エラー出力に表示し、終了ステータス `0` で終了します | |
 | `-s`, `--standard` | Standard モード: StdFace 入力から Expert ファイルを `--out-dir`(既定はカレントディレクトリ)に生成し、続けて `namelist.def` を実行します([7.6](07-input-files.md#76-standard-モードstdface)) | オフ |
 | `--dry-run` | StdFace 入力から Expert ファイルを生成して停止します(C の `vmcdry.out`) | オフ |
-| `-e`, `--expert` | Expert モード(既定。C との互換のため受理) | オン |
-| `--help`, `-h` | 使用法を表示します | |
+| `-m <N>` | 終了ステータス `2` で**拒否されます**: 複数定義モードはまだ実装されていません(#348) | |
+| `--physcal <PATH>` | `NVMCCalMode=1` における位置引数 `initpara`(固定パラメータファイル。[8.2](#82-固定パラメータでの物理量計算))の別名です。`NVMCCalMode=0` ではエラーで、位置引数のファイルと併用してもエラーです | – |
+| `--physcal-trace <NEW_DIR>` | 入力を消費しないシリアル PhysCal 診断(PhysCal 実行の段階ごとの記録)を*新しい*ディレクトリ `NEW_DIR` に書き出します。`NVMCCalMode=1` と明示的なパラメータファイル、単一プロセスでの起動が必要です | off |
 
 終了ステータス: `0` は成功、`1` は入力/検証/実行時エラー(メッセージは `error:` で始まります)、`2` は使用法エラー
-(不明なフラグ、値の欠落、`namelist.def` の欠落)です **(観測)**。`--help` のテキストではデフォルトの出力
-ディレクトリが "namelist parent dir" となっていますが、コードでは `<namelist parent>/output` を使います **(観測)**。
+(不明なフラグ、値の欠落、引数個数の不一致、`-m`)です **(観測)**。デフォルトの出力
+ディレクトリは `<namelist parent>/output` で、`--help` もそのように表示します(以前は "namelist parent dir" と書かれていました)。C ドライバーは作業ディレクトリ相対の `output/` に書き出しますが、Rust のデフォルトは namelist 相対です。
 
-C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異なり、`mvmc` には `-b`(バイナリ出力)、`-m`(複数定義モード)、
-`-F`(フラッシュ間隔)、`-v`(バージョン)、および位置引数の初期パラメータファイル(`--initial-def` を使います)がありません。
+C の `getopt` 文字列は `"bhm:oF:esv"`(`vmcmain.c:83`)です。`-m` 以外はすべて実装されています。`-m` は無視されず、issue #348 を示すメッセージで失敗します。`-F` は C の `strtol` の規則に従います: 数字がない、または `int` の範囲外の値はエラー、数値の後ろの余分な文字は警告のみ、`N < 1` はエラーです。
+
+### 位置引数 `initpara` ファイル
+
+C(`vmcmain.c:177-182`, `:252-260`)と同様に、省略可能な 2 番目の位置引数は `zqp_opt.dat` 形式のパラメータファイルで、その役割は `NVMCCalMode` で決まります。
+
+- `NVMCCalMode=0`: **初期**パラメータ。初期化の乱数の後、`In*` のオーバーレイの前に読み込まれます(C の `InitParameter` → `ReadInitParameter` → `ReadInputParameters`)。Rust では `--initial-def <path>` として読み込みます。両方を指定するとエラーで、ファイルが存在しない場合もエラーです(C はメッセージを出して続行します)。
+- `NVMCCalMode=1`: **固定**パラメータ([8.2](#82-固定パラメータでの物理量計算))。`--physcal <PATH>` は別名です。
+
+### バイナリ出力(`-b`)
+
+`-b`(C の `FlagBinary`, `vmcmain.c:654-660`, `initfile.c:58-66`, `:82-90`)では `zvo_var` テキストファイルは**書き出されず**、他の出力ファイルは変わりません。パラメータは `zvo_varbin_NNN.dat`(`NNN` = `NDataIdxStart`。最適化では 1 ファイル、PhysCal ではサンプルごとに 1 ファイル)に書き出されます。
+
+| バイト | 内容 |
+|-------|---------|
+| 0–3 | ネイティブエンディアンの `int32` `NPara` |
+| 4–7 | ネイティブエンディアンの `int32` `NSROptItrStep`(PhysCal では `1`) |
+| 以降、ステップごとに | ネイティブエンディアンの `f64` を `2*NPara` 個: 全パラメータを (re, im) の組で |
+
+**C との意図的な相違(C の不具合)。** C は `double complex` 配列に対して `fwrite(Para, sizeof(double), NPara, ...)` を呼ぶため、ブロックには交互配置された記憶領域の先頭 `NPara` 個の double、すなわち先頭 `ceil(NPara/2)` 個のパラメータ(`NPara` が奇数なら最後の 1 つは実部のみ)しか入らず、残りのパラメータは書き出されません。`mvmc` は C のヘッダー(`NPara`、ステップ数)を保ったまま、完全な `2*NPara` 個の double のブロックを書き出します。したがってファイルサイズは `8 + steps*2*NPara*8` バイト(C は `8 + steps*NPara*8`)で、すべてのパラメータが含まれ、C のブロックは `mvmc` のブロックの先頭 `NPara` 個の double と一致します。`NPara` をブロック長として使う C ファイル用のリーダーは `mvmc` のファイルを誤って解釈するため、ステップごとに `2*NPara` 個を読んでください。未改変の C `vmc.out` で検証済みです(`tests/fixtures/issue347_varbin/PROVENANCE.md`、許容の方針は [`docs/NUMERICAL_COMPARISONS.md`](../../NUMERICAL_COMPARISONS.md)): ヘッダーはバイト単位で一致し、PhysCal のパラメータと最適化のステップ 0 のブロックは先頭 `NPara` 個の double で厳密に一致し、以降の最適化ブロックは約 `5e-10` で一致します(SR の求解における演算順序。テストの許容は `1e-8`)。
 
 ### 計算の選択
 
@@ -42,10 +66,9 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 
 | `NVMCCalMode` | `--physcal` | 結果 |
 |---------------|-------------|--------|
-| 0 | なし | パラメータ最適化 |
-| 1 | あり | 固定パラメータの PhysCal |
-| 0 | あり | エラー: "`--physcal` requires NVMCCalMode=1 in ModPara" |
-| 1 | なし | エラー: "NVMCCalMode=1 selects fixed-parameter PhysCal; supply the fixed parameter file with `--physcal <PATH>`" |
+| 0 | なし | パラメータ最適化(位置引数のファイル = 初期パラメータ) |
+| 1 | あり/なし | PhysCal(位置引数のファイルまたは `--physcal` = 固定パラメータ。なし: C の `InitParameter` の乱数、続いて `In*` のオーバーレイと同期) |
+| 0 | `--physcal` 指定 | エラー: "`--physcal` requires NVMCCalMode=1 in ModPara" |
 | その他 | – | エラー: "unsupported NVMCCalMode=… the CLI supports 0 (optimization) and 1 (PhysCal)" |
 
 この振り分け規則は PR #340(`select_calculation`, `crates/mvmc-cli/src/main.rs`)で導入されました。CLI は振り分けの*前に*入力を解析・
@@ -56,12 +79,15 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:114`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:560`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:758`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:579`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
-> - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `getopt` オプションのうち `-o` 以外は実装されていません。
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:170`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:144`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:736`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:968`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:752`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:921`
+> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
+> - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `-m` オプションは実装されていません(#348)。
 
 ### コンソール出力
 
@@ -77,13 +103,13 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 ## 8.2 固定パラメータでの物理量計算
 
 ```bash
-mvmc namelist.def --physcal zqp_opt.dat --out-dir phys
+mvmc namelist.def zqp_opt.dat --out-dir phys    # --physcal zqp_opt.dat と同じ
 ```
 
 `modpara.def` では `NVMCCalMode 1` とします。パラメータファイルは、最適化の実行で書き出された `zqp_opt.dat`(または
-`initial.def` 形式のファイル。[7.4](07-input-files.md#74-初期パラメータ値))です。動作(`prepare_phys_cal_from_namelist`, `vmc_phys_cal_in_place_timed`):
+`initial.def` 形式のファイル。[7.4](07-input-files.md#74-初期パラメータ値))です。C と同様に省略可能で、`NVMCCalMode 1` で `mvmc namelist.def` とすると初期化の乱数によるパラメータで測定します(C で検証済み。`tests/fixtures/issue347_varbin`)。動作(`prepare_phys_cal_from_namelist`, `vmc_phys_cal_in_place_timed`):
 
-1. Expert 入力が解析され、PhysCal 用に検証されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。パラメータファイルが存在しない場合はエラーです("fixed parameter file not found")。
+1. Expert 入力が解析され、PhysCal 用に検証されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。指定されたパラメータファイルが存在しない場合はエラーです("fixed parameter file not found")。
 2. 固定パラメータは、乱数を**消費する前に**読み込まれます(テスト `physcal_preparation_loads_fixed_parameters_before_rng_consumption`)。続いてオーバーレイと同期が行われ、その後 `UpdateSlaterElm` が実行されます。
 3. `NDataQtySmp` 個のサンプルそれぞれについて、マルコフ連鎖のサンプリング、測定、ランク間の平均化が行われ、番号付きの 1 組のファイルとして
    `zvo_*_NNN.dat` が書き出されます(`NNN = NDataIdxStart + sample`、書式は `%03d`。開始値が負の場合は例えば `-01` と表示されます)。
@@ -104,8 +130,8 @@ mvmc namelist.def --physcal zqp_opt.dat --out-dir phys
 > **実装**
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:512`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:775`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
 > - 整合性: `vmc_phys_cal_in_place_timed` は、C の PhysCal 分岐が暗黙に行うとおり、作業用コピー上で `vmc_calc_mode = 1` を強制します(`run.rs:811`)。
 
@@ -179,8 +205,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1457`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
 > - 整合性: コミュニケータの幅は `vmcmain.c:239-256` に従います(`NSplitSize` はコミュニケータの*幅*であり、連鎖の本数ではありません)。サンプルの範囲は `SplitLoop` に従います。C のグリーン関数のリダクションはランク 0 のみに集約されますが、Rust は累積量を all-reduce でリダクションしてルートが書き出すため、ファイルの内容は同じになります。
 
 ## 8.5 環境変数
