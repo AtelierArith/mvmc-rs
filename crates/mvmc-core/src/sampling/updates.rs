@@ -511,6 +511,11 @@ pub fn update_m_all_fsz_real_flat(
 }
 
 /// Complex normal-mode `update_m_all_two!`.
+///
+/// C (`pfupdate_two_fcmp.c:227`) defines `rsbOld = raOld + t*Nsite`, whereas this function uses
+/// `rb_old + t*n_site`. The old `(a,b)` element only enters through `vec_s[msb]`, and the
+/// updated Pfaffian and inverse do not depend on it beyond roundoff, so the difference is
+/// unobservable; see `tests/two_electron_rsbold.rs` for the equivalence check (#365).
 pub fn update_m_all_two_complex_flat(
     ma: usize,
     spin: u8,
