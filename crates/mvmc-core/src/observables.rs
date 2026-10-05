@@ -2442,6 +2442,7 @@ pub(crate) fn calculate_lanczos_green(
     };
     if let Some(values) = crate::threading::collect_terms(
         n_one,
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| one_body_value(index, task),
     ) {
@@ -2538,6 +2539,7 @@ pub(crate) fn calculate_lanczos_green(
     };
     if let Some(values) = crate::threading::collect_terms(
         n_direct,
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| direct_value(index, task),
     ) {
@@ -2833,6 +2835,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
 
     if let Some(values) = crate::threading::collect_terms(
         data.transfer_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || {
             (
                 lanczos_task_state(state, n_site, n_elec),
@@ -2854,6 +2857,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     }
     if let Some(values) = crate::threading::collect_terms(
         data.pair_hop_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| pair_hop_term(&data.pair_hop_terms[index], task),
     ) {
@@ -2869,6 +2873,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     }
     if let Some(values) = crate::threading::collect_terms(
         data.exchange_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
         || lanczos_task_state(state, n_site, n_elec),
         |task, index| exchange_term(&data.exchange_terms[index], task),
     ) {

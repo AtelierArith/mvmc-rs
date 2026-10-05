@@ -721,6 +721,7 @@ pub fn set_rbm_diff(
     let hidden_counters = neurons.iter().sum::<usize>();
     let pooled_tanh = crate::threading::collect_terms(
         hidden_counters,
+        20,
         || (),
         |_, k| cnt.get(physical + k).map(|&value| rbm_math::tanh(value)),
     );

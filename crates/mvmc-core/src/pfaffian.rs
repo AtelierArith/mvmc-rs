@@ -190,7 +190,7 @@ pub(crate) fn calc_m_all_real_native_info(
 /// Estimated serial cost (ns) of one QP plane of `calculate_m_all`: the Pfaffian
 /// factorization and inverse are O(`n_size^3`) with a large O(`n_size^2`) assembly share.
 /// Fit to `MVMC_RS_INNER_PROFILE=1` serial timings (7.4/29.5/145 us at `n_size` 16/32/64).
-fn pfaffian_qp_cost_ns(n_size: usize) -> usize {
+pub(crate) fn pfaffian_qp_cost_ns(n_size: usize) -> usize {
     crate::threading::scaled_cost_ns(n_size, 28 * n_size * n_size + n_size * n_size * n_size / 8)
 }
 

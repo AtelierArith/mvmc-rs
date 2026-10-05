@@ -45,6 +45,10 @@ Related to #185, #360 (C OpenMP regions ported to the inner Rayon pool) and #182
   with the threshold unset (automatic gate). Runs alternate
   `rep -> workers (1, 2, 4) -> binary (before, after)`, so slow phases of the host hit
   all cells alike.
+* The branch was rebased onto `6eac9ef9` (PR #409 Lanczos/RBM-diff/average regions and
+  PR #410) after the measurements; those regions use the same gate (Lanczos terms are
+  gated by the size gate with the Pfaffian-plane cost, `average` by 2-4 ns per element)
+  and are not exercised by the optimization runs below, so the tables were not repeated.
 * Workload: `mvmc <namelist.def> --mode real --nsteps S --nsmp S`, RndSeed=1,
   1 MPI rank, Hubbard chain at half filling (`n_size` = number of sites).
   `S` shrinks with the size so a run takes 1-13 s: 20, 10, 4, 2, 1, 1 steps for
