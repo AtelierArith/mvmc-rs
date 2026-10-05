@@ -21,7 +21,7 @@ fn orbital_headers_mapping_rows_and_flag_fields_match_c_acceptance() {
         accepted += usize::from(expected);
         fs::write(
             dir.join("modpara.def"),
-            format!("Nsite {nsite}\nNElec 1\nNMPTrans -1\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 1\nNMPTrans -1\n"),
         )
         .unwrap();
         fs::write(dir.join("tested.def"), record[1].replace('|', "\n")).unwrap();

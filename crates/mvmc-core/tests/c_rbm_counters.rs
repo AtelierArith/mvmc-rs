@@ -50,7 +50,7 @@ fn check_native_counters(update: bool) {
         let count: usize = header[4].parse().unwrap();
         let widths: Vec<usize> = header[5..].iter().map(|v| v.parse().unwrap()).collect();
         fs::write(dir.0.join("modpara.def"), format!(
-            "Nsite {nsite}\nNElec 1\nNMPTrans -1\nNneuronCharge {hidden}\nNneuronSpin {hidden}\nNneuronGeneral {hidden}\n"
+            "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 1\nNMPTrans -1\nNneuronCharge {hidden}\nNneuronSpin {hidden}\nNneuronGeneral {hidden}\n"
         )).unwrap();
         let mut namelist = "ModPara modpara.def\n".to_owned();
         for (section, payload) in lines.next().unwrap().split('~').enumerate() {

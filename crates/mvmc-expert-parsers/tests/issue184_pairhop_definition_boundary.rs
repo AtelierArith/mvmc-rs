@@ -144,7 +144,7 @@ fn pairhop_invalid_rows_and_input_count_mismatch_return_no_partial_payload() {
 #[test]
 fn public_pairhop_loader_rejects_missing_and_invalid_required_definition() {
     let input = Input::new();
-    fs::write(input.0.join("modpara.def"), "NSite 4\nNElec 2\n").unwrap();
+    fs::write(input.0.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "NSite 4\nNe 2\n")).unwrap();
     let namelist = input.0.join("namelist.def");
     fs::write(&namelist, "ModPara modpara.def\nPairHop pairhop.def\n").unwrap();
     assert!(matches!(

@@ -34,8 +34,10 @@ fn interall_headers_counts_sites_spins_and_scan_values_match_native_c() {
         fs::write(
             directory.join("modpara.def"),
             format!(
-                "Nsite {}\nNElec 1\nNMPTrans 1\n2Sz {}\n",
-                header[1], header[2]
+                "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {}\nNe 1\nNMPTrans 1\n{}",
+                header[1],
+                // C modpara rejects an explicit `2Sz -1`; FSZ (-1) is the default.
+                if header[2] == "-1" { String::new() } else { format!("2Sz {}\n", header[2]) }
             ),
         )
         .unwrap();
@@ -157,7 +159,7 @@ fn generic_loader_rejects_duplicate_keyword_and_reports_single_entry_errors() {
     .unwrap();
     fs::write(
         directory.join("modpara.def"),
-        "Nsite 4\nNElec 1\nNMPTrans 1\n2Sz 0\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 4\nNe 1\nNMPTrans 1\n2Sz 0\n",
     )
     .unwrap();
     fs::write(

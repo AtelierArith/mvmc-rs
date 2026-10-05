@@ -39,7 +39,7 @@ impl Bundle {
     fn loader(&self, alias: &str, nmp: i64) -> PathBuf {
         fs::write(
             self.0.join("modpara.def"),
-            format!("Nsite 2\nNElec 1\nNMPTrans {nmp}\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans {nmp}\n"),
         )
         .unwrap();
         let path = self.0.join("namelist.def");

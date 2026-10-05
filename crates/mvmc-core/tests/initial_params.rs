@@ -193,7 +193,7 @@ fn parsed_fixed_correlations_and_rng_match_three_canonical_sr_sync_steps() {
     let definition = |name: &str, width: usize, complex: usize, rows: &str| {
         format!("===\n{name} {width}\nComplexType {complex}\n===\n===\n{rows}")
     };
-    fs::write(dir.join("modpara.def"), "Nsite 3\nNElec 1\n").unwrap();
+    fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 3\nNe 1\n")).unwrap();
     fs::write(
         dir.join("g.def"),
         definition("NGutzwillerIdx", 2, 0, "0 0\n1 0\n2 1\n0 1\n1 0\n"),

@@ -23,7 +23,7 @@ impl Input {
                 Err(e) => panic!("exclusive input: {e}"),
             }
         };
-        fs::write(path.join("modpara.def"), "Nsite 2\nNMPTrans 1\n").unwrap();
+        fs::write(path.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\nNMPTrans 1\n")).unwrap();
         fs::write(
             path.join("namelist.def"),
             format!("ModPara modpara.def\n{keyword} projection.def\n"),

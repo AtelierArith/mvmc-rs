@@ -42,7 +42,7 @@ fn all_declared_rbm_slots_and_following_slater_values_match_native_c_and_rng() {
         let seed: u32 = header[4].parse().unwrap();
         let mode = header[5];
         let widths: Vec<usize> = header[6..].iter().map(|v| v.parse().unwrap()).collect();
-        fs::write(dir.0.join("modpara.def"),format!("Nsite 3\nNElec 1\nNMPTrans -1\nNneuron {}\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",neurons-6)).unwrap();
+        fs::write(dir.0.join("modpara.def"),format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 3\nNe 1\nNMPTrans -1\nNneuron {}\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",neurons-6)).unwrap();
         // Reverse namelist order verifies canonical section offsets.
         let mut namelist = "Orbital orbital.def\nGutzwiller gutz.def\n".to_owned();
         let definitions: Vec<_> = record[1].split('~').collect();

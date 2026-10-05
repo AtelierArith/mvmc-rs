@@ -341,28 +341,6 @@ fn global_lanczos_validator_expands_original_valid_and_invalid_modes() {
 }
 
 #[test]
-fn original_cg_option_loop_rejects_each_nonzero_submode_independently() {
-    // Synthetic Julia validation contract: no solver run or C numerical
-    // equivalence is implied by these unsupported-option diagnostics.
-    for diagonal in [true, false] {
-        let mut data = ExpertModeData::new();
-        data.modpara.nmp_trans = 1; // Isolate the intended unsupported solver option.
-        let label = if diagonal {
-            data.modpara.use_diag_scale = 1;
-            "useDiagScale != 0"
-        } else {
-            data.modpara.rescale_smat = 1;
-            "RescaleSmat != 0"
-        };
-        let error = mvmc_core::validation::validate_supported_modpara(&data.modpara).unwrap_err();
-        assert!(error.contains(label));
-        assert!(error.contains("not supported"));
-        assert_eq!(data.modpara.use_diag_scale, i64::from(diagonal));
-        assert_eq!(data.modpara.rescale_smat, i64::from(!diagonal));
-    }
-}
-
-#[test]
 fn spin_flip_transfer_lanczos_rejection_has_mode_independent_wording() {
     // S213's Transfer branch only. Its separate InterAll branch is excluded.
     // Julia says "spin-flip Transfer"; Rust says "spin-changing". This test

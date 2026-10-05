@@ -131,7 +131,7 @@ fn input_manifest_requires_every_definition_and_initial_overlay() {
     let namelist = b"# input bundle\nModPara modpara.def\nOrbital orbital.def\nInGutzwiller initial.def\nInOrbital initial.def // shared overlay source\n";
     let files: [(&str, &[u8]); 4] = [
         ("namelist.def", namelist),
-        ("modpara.def", b"NSite 2\n"),
+        ("modpara.def", b"--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNSite 2\n"),
         ("orbital.def", b"mapping\n"),
         ("initial.def", b"0 0.25 0\n1 0.5 0\n"),
     ];

@@ -26,7 +26,7 @@ impl Bundle {
         fs::create_dir(&path).unwrap();
         fs::write(
             path.join("modpara.def"),
-            format!("Nsite {nsite}\nNElec 1\nNMPTrans -1\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 1\nNMPTrans -1\n"),
         )
         .unwrap();
         fs::write(path.join("definition.def"), definition).unwrap();

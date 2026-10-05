@@ -33,7 +33,7 @@ impl Bundle {
         let bundle = Self(path);
         fs::write(
             bundle.0.join("modpara.def"),
-            format!("Nsite 4\nNElec 1\nNMPTrans {nmp}\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 4\nNe 1\nNMPTrans {nmp}\n"),
         )
         .unwrap();
         fs::write(

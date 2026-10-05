@@ -38,7 +38,7 @@ fn six_column_general_slater_and_derivatives_match_actual_c_fsz_kernels() {
         fs::write(
             dir.join("modpara.def"),
             format!(
-                "Nsite {nsite}\nNElec 2\nNSPGaussLeg 1\nNMPTrans {}2\n",
+                "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 2\nNSPGaussLeg 1\nNMPTrans {}2\n",
                 if anti { "-" } else { "" }
             ),
         )

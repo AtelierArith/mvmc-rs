@@ -170,10 +170,6 @@ pub struct ModParaParameters {
 
     /// `NSRCG` (0 = direct, non-zero = CG).
     pub nsrcg: i64,
-    /// `useDiagScale` (unsupported preconditioned CG mode).
-    pub use_diag_scale: i64,
-    /// `RescaleSmat` (unsupported S-matrix rescaling).
-    pub rescale_smat: i64,
     /// `NStore`.
     pub nstore_o: i64,
 
@@ -230,29 +226,48 @@ pub struct ModParaParameters {
     pub n_orbital_idx: i64,
 }
 
+impl ModParaParameters {
+    /// C `CDataFileHead` after `GetInfoFromModPara`: `output/<head>`.
+    ///
+    /// Rust stores the head without the prefix and writes below the output
+    /// directory (`output` next to the namelist, or `--out-dir`).
+    pub fn c_data_file_path_head(&self) -> String {
+        format!("output/{}", self.c_data_file_head)
+    }
+
+    /// C `CParaFileHead` after `GetInfoFromModPara`: `output/<head>`.
+    pub fn c_para_file_path_head(&self) -> String {
+        format!("output/{}", self.c_para_file_head)
+    }
+}
+
+/// C defaults of `SetDefaultValuesModPara` (`readdef.c:1756-1823`).
+///
+/// Fields without a modpara keyword in C keep these values. The file heads
+/// have no C default (zero-initialized globals); `zvo`/`zqp` apply only to
+/// programmatically built data.
 impl Default for ModParaParameters {
     fn default() -> Self {
         Self {
-            nsite: 0,
-            nelec: 0,
+            nsite: 16,
+            nelec: 8,
             nlocspin: 0,
             ncond: -1,
             vmc_calc_mode: 0,
             lanczos_mode: 0,
             nsr_opt_itr_step: 1000,
-            nsr_opt_itr_smp: 1000,
-            nsr_opt_fix_smp: 0,
-            nvmc_warmup: 1000,
+            // C: bufInt[IdxSROptItrStep] / 10, evaluated before any read.
+            nsr_opt_itr_smp: 100,
+            nsr_opt_fix_smp: 1,
+            nvmc_warmup: 10,
             nvmc_interval: 1,
-            nvmc_sample: 10000,
-            dsr_opt_red_cut: 1e-6,
-            dsr_opt_sta_del: 0.0,
-            dsr_opt_step_dt: 0.01,
+            nvmc_sample: 10,
+            dsr_opt_red_cut: 0.001,
+            dsr_opt_sta_del: 0.02,
+            dsr_opt_step_dt: 0.02,
             dsr_opt_cg_tol: 1e-10,
             nsr_opt_cg_max_iter: 0,
             nsrcg: 0,
-            use_diag_scale: 0,
-            rescale_smat: 0,
             nstore_o: 1,
             rnd_seed: 11272,
             nsplit_size: 1,
@@ -274,7 +289,7 @@ impl Default for ModParaParameters {
             n_one_body_g: 0,
             n_two_body_g: 0,
             n_two_body_g_ex: 0,
-            nex_update_path: 1,
+            nex_update_path: 0,
             n_orbital_idx: 0,
         }
     }

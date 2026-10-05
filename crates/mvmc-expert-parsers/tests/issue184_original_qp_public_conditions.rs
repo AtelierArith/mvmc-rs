@@ -26,12 +26,24 @@ impl Bundle {
         let bundle = Self(path);
         fs::write(
             bundle.0.join("modpara.def"),
-            format!("Nsite {nsite}\nNElec {nelec}\nNLocSpin {nlocspin}\nNMPTrans {nmp}\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe {nelec}\nNMPTrans {nmp}\n"),
         )
         .unwrap();
+        // C reads NLocSpin from locspn.def, not from modpara.def.
+        let locspin = if nlocspin > 0 {
+            let rows: String = (0..nsite).map(|site| format!("{site} 1\n")).collect();
+            fs::write(
+                bundle.0.join("locspn.def"),
+                format!("====\nNlocalSpin {nlocspin}\n====\n====\n====\n{rows}"),
+            )
+            .unwrap();
+            "LocSpin locspn.def\n"
+        } else {
+            ""
+        };
         fs::write(
             bundle.0.join("namelist.def"),
-            "ModPara modpara.def\nTransSym qptransidx.def\n",
+            format!("ModPara modpara.def\n{locspin}TransSym qptransidx.def\n"),
         )
         .unwrap();
         fs::write(bundle.0.join("qptransidx.def"), definition).unwrap();

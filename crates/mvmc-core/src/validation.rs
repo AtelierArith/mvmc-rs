@@ -92,12 +92,6 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
             p.lanczos_mode
         ));
     }
-    if p.use_diag_scale != 0 {
-        return Err("useDiagScale != 0 is not supported by Julia-mVMC".into());
-    }
-    if p.rescale_smat != 0 {
-        return Err("RescaleSmat != 0 is not supported by Julia-mVMC".into());
-    }
     Ok(())
 }
 
@@ -366,7 +360,7 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(
             directory.join("modpara.def"),
-            "Nsite 3\nNElec 1\nNMPTrans 1\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",
+            "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 3\nNe 1\nNMPTrans 1\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",
         )
         .unwrap();
         for (section, name) in mvmc_expert_parsers::parsers::rbm::SECTION_NAMES

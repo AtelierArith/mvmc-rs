@@ -19,7 +19,7 @@ fn direct_and_cg_sr_update_exactly_the_components_selected_by_c() {
     for record in rows.as_chunks::<7>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
         let complex = header[5] != "0";
-        fs::write(dir.join("modpara.def"), "Nsite 2\nNElec 1\nNMPTrans -1\n").unwrap();
+        fs::write(dir.join("modpara.def"), concat!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\n", "Nsite 2\nNe 1\nNMPTrans -1\n")).unwrap();
         fs::write(dir.join("ap.def"), record[1].replace('|', "\n")).unwrap();
         let mut namelist = "ModPara modpara.def\nOrbitalAntiParallel ap.def\n".to_owned();
         if !record[2].is_empty() {

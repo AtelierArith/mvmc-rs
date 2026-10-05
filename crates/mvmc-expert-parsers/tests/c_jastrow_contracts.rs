@@ -116,7 +116,7 @@ fn namelist_jastrow_geometry_and_declared_flag_count_match_c_acceptance() {
         let expected = header[6] == "0";
         fs::write(
             dir.join("modpara.def"),
-            format!("Nsite {nsite}\nNElec 1\nNMPTrans -1\n"),
+            format!("--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite {nsite}\nNe 1\nNMPTrans -1\n"),
         )
         .unwrap();
         let maps: String = (0..nsite).map(|site| format!("{site} 0\n")).collect();

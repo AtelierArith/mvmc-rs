@@ -1,5 +1,13 @@
+--------------------
+Model_Parameters 0
+--------------------
+VMC_Cal_Parameters
+--------------------
+CDataFileHead zvo
+CParaFileHead zqp
+--------------------
 Nsite 3
-NElec 1
+Ne 1
 NMPTrans 1
 Nneuron 1
 NneuronCharge 2

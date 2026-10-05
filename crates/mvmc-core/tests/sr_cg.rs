@@ -101,11 +101,12 @@ fn cg_step_reads_real_store_and_normalizes_by_weight_count() {
 #[test]
 fn cg_controls_default_to_julia_tolerance_and_active_dimension_limit() {
     use mvmc_expert_parsers::parsers::modpara::parse_modpara_content;
-    for input in ["", "DSROptCGTol bad\nNSROptCGMaxIter bad"] {
-        let p = parse_modpara_content(input);
-        assert_eq!(p.dsr_opt_cg_tol, 1e-10);
-        assert_eq!(p.nsr_opt_cg_max_iter, 0);
-    }
+    // C SetDefaultValuesModPara: DSROptCGTol=1e-10, NSROptCGMaxIter=0. The
+    // eight-line header is part of the C file contract.
+    let header = "-\nModel_Parameters 0\n-\nVMC_Cal_Parameters\n-\nCDataFileHead zvo\nCParaFileHead zqp\n-\n";
+    let p = parse_modpara_content(header).unwrap();
+    assert_eq!(p.dsr_opt_cg_tol, 1e-10);
+    assert_eq!(p.nsr_opt_cg_max_iter, 0);
 }
 
 #[test]

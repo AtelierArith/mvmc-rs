@@ -26,8 +26,8 @@ impl Input {
             }
         };
         fs::write(path.join("namelist.def"), namelist).unwrap();
-        fs::write(path.join("first.def"), "Nsite 2\nNElec 1\n").unwrap();
-        fs::write(path.join("second.def"), "Nsite 4\nNElec 2\n").unwrap();
+        fs::write(path.join("first.def"), "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\n").unwrap();
+        fs::write(path.join("second.def"), "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 4\nNe 2\n").unwrap();
         Self(path)
     }
     fn parse(&self, entry: usize) -> Result<ExpertModeData, ParseError> {
@@ -64,11 +64,11 @@ fn every_public_loader_rejects_same_and_mixed_case_c_keyword_slots() {
             assert_duplicate(input.parse(entry).unwrap_err(), "ModPara");
             assert_eq!(
                 fs::read_to_string(input.0.join("first.def")).unwrap(),
-                "Nsite 2\nNElec 1\n"
+                "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\n"
             );
             assert_eq!(
                 fs::read_to_string(input.0.join("second.def")).unwrap(),
-                "Nsite 4\nNElec 2\n"
+                "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 4\nNe 2\n"
             );
         }
     }

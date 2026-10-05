@@ -1,0 +1,12 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+NStore 0
+NSRCG 1
+NSROptCGMaxIter 41
+DSROptCGTol 2.5e-9

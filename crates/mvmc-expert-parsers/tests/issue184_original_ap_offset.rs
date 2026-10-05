@@ -26,7 +26,7 @@ impl Bundle {
                 Err(error) => panic!("exclusive AP-offset fixture: {error}"),
             }
         };
-        fs::write(path.join("mod.def"), "NSite 2\nNElec 1\nNMPTrans 1\n").unwrap();
+        fs::write(path.join("mod.def"), "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNSite 2\nNe 1\nNMPTrans 1\n").unwrap();
         fs::write(path.join("ap.def"), definition(ap_count, ap_rows)).unwrap();
         // C consumes only the upper-triangle physical pair; the two spin
         // sectors are expanded by the public parser, not supplied as rows.
