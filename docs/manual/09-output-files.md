@@ -114,7 +114,7 @@ The C manual notes that imaginary components of real-mode parameters are counted
 > - C: `fn_StochasticOptCG` (writes the CG row) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:73`
 > - C: `StochasticOpt` (writes the direct-solver row) — `extern/mVMC-1.3.0/src/mVMC/stcopt.c:33`
 > - C: `InitFile` (header, opened for every optimization) — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
-> - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:107`
+> - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
 > - Parity (**difference**): C also writes `zvo_SRinfo.dat` for the *direct* solver (`stcopt.c:157`, columns without the iteration count); Rust writes it only in the CG path (`crates/mvmc-core/src/sr_cg.rs:208-241`, prefix from `CDataFileHead`). A direct-solver run produces no `zvo_SRinfo.dat` **(observed)**. In Rust the header line is written only if the file is new or empty.
 
 ## 9.5 Timers

@@ -54,11 +54,11 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:433`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:631`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:452`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:54`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:449`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:647`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:468`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `getopt` options other than `-o` are not implemented.
 
 ### Console output
@@ -177,8 +177,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1254`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1513`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
 > - Parity: communicator widths follow `vmcmain.c:239-256` (`NSplitSize` is the communicator *width*, not the number of chains); sample ranges follow `SplitLoop`; the C Green-function reduction goes to rank 0 only whereas Rust reduces the accumulators with an all-reduce and lets the root write, which yields the same file contents.
 
 ## 8.5 Environment variables

@@ -6356,6 +6356,10 @@ mod callback_tests {
                     .into_bytes()
             };
             for f in files {
+                // Wall-clock timer files differ between any two runs.
+                if f.to_string_lossy().contains("_time_") {
+                    continue;
+                }
                 assert_eq!(
                     strip_ctime(fs::read(dira.join(&f)).unwrap(), &f),
                     strip_ctime(fs::read(dirb.join(&f)).unwrap(), &f),
