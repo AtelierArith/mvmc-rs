@@ -614,12 +614,20 @@ pub fn calc_m_all_fsz_complex(
     Ok(())
 }
 
-/// Julia's `calculate_m_all_fsz_real!`: calculate through the complex FSZ
-/// kernel, then copy real parts into the real Pfaffian and inverse shadows.
+/// Real FSZ `CalculateMAll_fsz_real` over `[qp_start, qp_end)`.
 ///
-/// The complex Slater table is authoritative even in real mode. Only the
-/// half-open QP range is copied; inverse scratch pads are left untouched.
-/// Failed calculations publish neither complex nor real results.
+/// The real Pfaffian/inverse shadows follow C `matrix.c:182-278`: they are computed by
+/// the real kernels (spin-indexed assembly, DSKTRF, `utu2pfa_d`, `utu2inv_d`, sign
+/// flip) from `creal(SlaterElm)`, exactly as C's `vmcmain.c` refreshes `SlaterElm_real`
+/// before the call. C returns the DSKTRF `INFO` for a zero pivot, so a singular matrix
+/// is a failure here too (`CalcMAllError::ZeroPivot`) and initialization retries.
+///
+/// The complex `pf_m`/`inv_m` planes are the Julia-compatible complex computation, kept
+/// for consumers of the complex arrays (C does not maintain them in real mode). A
+/// complex-valued Slater table is outside C's real-mode input contract: only its real
+/// part enters the real shadows. Only the half-open QP range is written, inverse
+/// scratch pads are left untouched, and a failure publishes neither the complex planes
+/// nor the real shadows.
 pub fn calc_m_all_fsz_real(
     ele_idx: &[i64],
     ele_spn: &[i64],
@@ -633,6 +641,9 @@ pub fn calc_m_all_fsz_real(
     assert!(qp_start <= qp_end && qp_end <= matrix.pf_m_real.len());
     assert!(qp_end <= matrix.inv_m_real.n_qp_full());
     assert_eq!(matrix.inv_m_real.n_size(), 2 * n_elec);
+    let stride = (2 * n_elec).pow(2) + 1;
+    let backup_pf = matrix.pf_m[qp_start..qp_end].to_vec();
+    let backup_inv = matrix.inv_m.as_slice()[qp_start * stride..qp_end * stride].to_vec();
     calc_m_all_fsz_complex(
         ele_idx,
         ele_spn,
@@ -645,21 +656,130 @@ pub fn calc_m_all_fsz_real(
         n_elec,
         pool,
     )?;
-    crate::threading::copy_complex_realpart(
-        &mut matrix.pf_m_real[qp_start..qp_end],
-        &matrix.pf_m[qp_start..qp_end],
-    );
-    let stride = (2 * n_elec).pow(2) + 1;
-    let src = matrix.inv_m.as_slice();
-    let start = qp_start * stride;
-    crate::threading::for_each_mut(
-        &mut matrix.inv_m_real.as_mut_slice()[start..qp_end * stride],
-        |i, dst| {
-            if i % stride != stride - 1 {
-                *dst = src[start + i].re;
+    let real = if qp_start == qp_end {
+        Ok(None)
+    } else {
+        calc_m_all_fsz_real_kernel(
+            ele_idx,
+            ele_spn,
+            &matrix.slater_elm,
+            qp_start,
+            qp_end,
+            n_site,
+            n_elec,
+            pool,
+        )
+        .map(Some)
+    };
+    let (inv_temp, pf_temp) = match real {
+        Ok(Some(published)) => published,
+        Ok(None) => return Ok(()),
+        Err(error) => {
+            matrix.pf_m[qp_start..qp_end].copy_from_slice(&backup_pf);
+            matrix.inv_m.as_mut_slice()[qp_start * stride..qp_end * stride]
+                .copy_from_slice(&backup_inv);
+            return Err(error);
+        }
+    };
+    for qp in qp_start..qp_end {
+        matrix.pf_m_real[qp] = pf_temp[qp];
+        matrix
+            .inv_m_real
+            .qp_matrix_slice_mut(qp)
+            .copy_from_slice(inv_temp.qp_matrix_slice(qp));
+    }
+    Ok(())
+}
+
+/// Serial C real-FSZ kernel into temporaries; nothing is published on failure.
+fn calc_m_all_fsz_real_kernel(
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(InvMColMajor<f64>, Vec<f64>), CalcMAllError> {
+    let mut inv_temp = InvMColMajor::<f64>::zeros(qp_end, n_elec);
+    let mut pf_temp = vec![0.0; qp_end];
+    let mut ws = pool.take();
+    let result = (qp_start..qp_end).try_for_each(|qp| {
+        calc_m_all_child_fsz_real(
+            qp,
+            ele_idx,
+            ele_spn,
+            slater_elm,
+            &mut inv_temp,
+            &mut pf_temp[qp],
+            n_site,
+            n_elec,
+            &mut ws,
+        )
+    });
+    pool.release(ws);
+    result.map(|()| (inv_temp, pf_temp))
+}
+
+/// `calculateMAll_child_fsz_real` (`matrix.c:223-278`) on `creal(SlaterElm)`.
+fn calc_m_all_child_fsz_real(
+    qp: usize,
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m: &mut InvMColMajor<f64>,
+    pf_slot: &mut f64,
+    n_site: usize,
+    n_elec: usize,
+    ws: &mut PfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    let n_size = 2 * n_elec;
+    let n_site2 = 2 * n_site;
+    for msi in 0..n_size {
+        let rsi = ele_idx[msi] + ele_spn[msi] * (n_site as i64);
+        if rsi < 0 || rsi >= n_site2 as i64 {
+            return Err(CalcMAllError::SiteOutOfRange { qp, site: rsi });
+        }
+        for msj in 0..n_size {
+            let rsj = ele_idx[msj] + ele_spn[msj] * (n_site as i64);
+            if rsj < 0 || rsj >= n_site2 as i64 {
+                return Err(CalcMAllError::SiteOutOfRange { qp, site: rsj });
             }
-        },
-    );
+            inv_m.set(
+                qp,
+                msj,
+                msi,
+                -slater_elm.get(qp, rsi as usize, rsj as usize).re,
+            );
+        }
+    }
+    ensure_workspace_real(ws, n_size);
+    let pf_value = {
+        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
+        let mut a = SqMat::new(qp_buf, n_size);
+        dsktf2(&mut a, &mut ws.pivots[..n_size])
+            .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
+        utu2pfa_real(&a, &ws.pivots[..n_size])
+    };
+    if !pf_value.is_finite() {
+        return Err(CalcMAllError::NonFinitePfaffian { qp });
+    }
+    *pf_slot = pf_value;
+    {
+        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
+        let mut a = SqMat::new(qp_buf, n_size);
+        let mut m_work = SqMat::new(&mut ws.m_work_real[..n_size * n_size], n_size);
+        utu2inv_real(
+            &mut a,
+            &ws.pivots[..n_size],
+            &mut ws.v_t_real[..n_size - 1],
+            &mut m_work,
+        );
+    }
+    for x in inv_m.qp_matrix_slice_mut(qp) {
+        *x = -*x;
+    }
     Ok(())
 }
 

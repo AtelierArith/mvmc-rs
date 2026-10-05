@@ -162,3 +162,36 @@ output transcription is `/tmp/mvmc-issue176-selected-runs-retained-tool-output.t
 SHA-256 `2fbe0ee2286cce0528518841e2da9c2d8c7c6d5963cabebe723a812d968dc4f0`.
 It identifies both commands, run IDs, terminal sessions/chunks and captured
 post-run source hashes; it is not a native logfile or before/after source freeze.
+
+## Issue #176 resolution: native C real-FSZ reference
+
+`c_setup.txt` holds native C results (provenance and source hashes in its header; generator
+`c_toolbox/issue176_real_fsz/`, explicit developer command) for all 16 setup matrix cases
+and the retry/failure/zero/localspin/magnetized initializer cases with the complete next
+624 SFMT words. It is generated from the unmodified C `CalculateMAll_fsz_real` and
+`makeInitialSample_fsz_real`, not from Rust.
+
+Findings. The original bit mismatch (factor checkpoint, frame 0 / walker 0, cell 6 imaginary part,
+`-0.09055053281437893` vs `-0.09055053281437894`, `1.39e-17`) arose in the complex ZSKTRF
+pipeline that Julia (and Rust) ran for "real" FSZ. C's real FSZ path never forms an imaginary part:
+it factors `creal(SlaterElm)` with the real `DSKTRF`, `utu2pfa_d`, `utu2inv_d`. Real-mode
+inputs are real, so the complex pipeline only added rounding of exact zeros (signed zero versus
+1e-17); this is an implementation deviation from C's operation sequence, not an RNG or fixture
+defect. `calc_m_all_fsz_real` now computes the real shadows with the C real kernel; Rust reproduces
+the native pivoted factorization, Pfaffian and inverse exactly on Linux (difference 0 in all 16
+cases). The test budget is `8*n*eps` relative plus the same multiple of the largest entry as an
+absolute floor, justified by the O(n*eps) factor/inverse error with n = 2*Ne <= 8 and kept for other
+BLAS providers; it is not a bitwise comparison and not a relaxation of any earlier bound.
+
+Contract differences kept explicit:
+
+- Complex-valued Slater input in real mode is outside C's contract (C applies `creal`). The Julia
+  real-shadow expectations (real part of a complex computation) therefore apply only to the
+  real-input cases (`complex_input=0`), where they agree with C within the same budget; the
+  native reference covers every case.
+- Zero matrix: C's `DSKTRF` returns `INFO>0`, so C retries 101 times and aborts. Julia accepts the
+  zero matrix at the first attempt. Rust follows C: `ZeroPivot` and 101 attempts, RNG block equal to C's.
+- Retry/failure/localspin/magnetized: native configurations, spins and RNG blocks equal the Julia
+  fixture and Rust exactly.
+- A failure publishes neither the complex planes nor the real shadows (Rust transaction; C writes in
+  place, which is unobservable after an abort or retry).
