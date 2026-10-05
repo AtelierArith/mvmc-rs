@@ -50,13 +50,10 @@ pub mod ltl;
 pub mod pfaffian;
 pub mod utu2;
 
-pub use ltl::{dsktf2, dsktf2_c_compat, zsktf2, zsktf2_c_compat, zsktf2_turbo};
+pub use ltl::{dsktf2, zsktf2, zsktf2_c_compat, zsktf2_turbo};
 pub use mat::SqMat;
 pub use pfaffian::{pfaffian_ltl_complex, pfaffian_ltl_real};
-pub use utu2::{
-    utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2inv_real_c_compat, utu2pfa_complex,
-    utu2pfa_real,
-};
+pub use utu2::{utu2inv_complex, utu2inv_complex_fsz, utu2inv_real, utu2pfa_complex, utu2pfa_real};
 
 /// One-based pivot index newtype.
 ///

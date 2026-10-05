@@ -74,7 +74,7 @@ fn real_factor_hand_dyadic_first_pivot_has_strict_margin() {
         a[j + i * n] = -v;
     }
     let mut pivots = vec![PivotIndex1Based(0); n];
-    dsktf2_c_compat(&mut SqMat::new(&mut a, n), &mut pivots).expect("hand matrix Pf=12 is nonzero");
+    dsktf2(&mut SqMat::new(&mut a, n), &mut pivots).expect("hand matrix Pf=12 is nonzero");
     assert_eq!(pivots[2], PivotIndex1Based(3));
 }
 
