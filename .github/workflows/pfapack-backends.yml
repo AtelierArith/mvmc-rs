@@ -1,0 +1,60 @@
+name: PfaPack backend coverage
+on:
+  pull_request:
+    paths:
+      - 'crates/pfapack/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - '.github/workflows/pfapack-backends.yml'
+      - '.github/actions/setup-rust-ci/**'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/pfapack/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/pfapack-backends.yml'
+permissions:
+  contents: read
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
+  OPENBLAS_CORETYPE: HASWELL
+jobs:
+  pfapack:
+    name: PfaPack Linux ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            features: ''
+          - name: simd-backend
+            features: 'simd-backend'
+          - name: blas-backend
+            features: 'blas-backend'
+          - name: simd-backend + blas-backend
+            features: 'simd-backend blas-backend'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: X64
+          platform: linux-x86_64
+          cache-key: pfapack-backends-${{ matrix.name }}
+          tools: nextest
+      # Ignored golden_vs_julia cases are historical Julia benchmark-size
+      # fixtures with a different operation order than C; they stay opt-in.
+      - name: Run pfapack tests
+        env:
+          FEATURES: ${{ matrix.features }}
+        run: |
+          cargo nextest run -p pfapack --locked --cargo-profile test-fast \
+            ${FEATURES:+--features "$FEATURES"} --no-fail-fast --retries 0 --no-tests fail

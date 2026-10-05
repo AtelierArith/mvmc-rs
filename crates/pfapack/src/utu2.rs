@@ -297,9 +297,9 @@ where
 }
 
 #[inline]
-fn should_use_panel_trmmt(n: usize) -> bool {
+fn should_use_panel_trmmt(n: usize, c_real: bool) -> bool {
     const PANEL: usize = 64;
-    cfg!(not(feature = "blas-backend")) && PANEL > 1 && PANEL < n
+    (c_real || cfg!(not(feature = "blas-backend"))) && PANEL > 1 && PANEL < n
 }
 
 fn fill_lower_from_upper_skew<T>(a: &mut [T], n: usize)
@@ -326,7 +326,22 @@ pub fn utu2inv_real(
     vt: &mut [f64],
     m_work: &mut SqMat<'_, f64>,
 ) {
-    utu2inv_generic::<f64>(a, pivots, vt, m_work, None);
+    utu2inv_generic::<f64>(a, pivots, vt, m_work, None, false);
+}
+
+/// Real inverse following C `utu2inv`/`sktdsmx` (`ltl2inv/invert.tcc`).
+///
+/// The tridiagonal solve divides directly instead of multiplying by Julia's
+/// reciprocal, and for `n > 64` the 64-column panel product and explicit skew
+/// restoration run before the permutations independently of the BLAS backend.
+/// [`utu2inv_real`] keeps Julia's arithmetic.
+pub fn utu2inv_real_c_compat(
+    a: &mut SqMat<'_, f64>,
+    pivots: &[PivotIndex1Based],
+    vt: &mut [f64],
+    m_work: &mut SqMat<'_, f64>,
+) {
+    utu2inv_generic::<f64>(a, pivots, vt, m_work, None, true);
 }
 
 /// Compute the inverse of a complex skew-symmetric matrix from its
@@ -337,7 +352,7 @@ pub fn utu2inv_complex(
     vt: &mut [Complex64],
     m_work: &mut SqMat<'_, Complex64>,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None);
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, None, false);
 }
 
 /// Inverse arithmetic used by Julia's FSZ runtime: direct tridiagonal
@@ -351,7 +366,7 @@ pub fn utu2inv_complex_fsz(
     m_work: &mut SqMat<'_, Complex64>,
     divide: fn(Complex64, Complex64) -> Complex64,
 ) {
-    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide));
+    utu2inv_generic::<Complex64>(a, pivots, vt, m_work, Some(divide), false);
 }
 
 fn solve_sktd_direct<T: BlasScalar>(
@@ -387,6 +402,7 @@ fn utu2inv_generic<T>(
     vt: &mut [T],
     m: &mut SqMat<'_, T>,
     fsz: Option<fn(T, T) -> T>,
+    c_real: bool,
 ) where
     T: BlasScalar,
 {
@@ -453,11 +469,13 @@ fn utu2inv_generic<T>(
     // the helper only writes into the output (`a`).
     if let Some(divide) = fsz {
         solve_sktd_direct(vt, m, a, divide);
+    } else if c_real {
+        solve_sktd_direct(vt, m, a, |x: T, y: T| x / y);
     } else {
         solve_sktd::<T>(vt, m, a);
     }
 
-    let panel_trmmt = should_use_panel_trmmt(n);
+    let panel_trmmt = should_use_panel_trmmt(n, c_real);
     if panel_trmmt {
         // Mirrors deps/invert.tcc::utu2inv: for large matrices, compute only
         // the upper-triangular part of M^T * A by 64-column panels, then
