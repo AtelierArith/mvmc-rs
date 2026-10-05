@@ -108,6 +108,7 @@ fn call(
             reducer,
             OptimizationOptions {
                 skip_sr: true,
+                file_flush_interval: None,
                 callback: None,
             },
         )
@@ -429,6 +430,7 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                     &group,
                     OptimizationOptions {
                         skip_sr: false,
+                        file_flush_interval: None,
                         callback: if world.rank() == bad_rank {
                             Some(&mut callback)
                         } else {
@@ -505,6 +507,7 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                 &group,
                 OptimizationOptions {
                     skip_sr: false,
+                    file_flush_interval: None,
                     callback: Some(&mut callback),
                 },
             );

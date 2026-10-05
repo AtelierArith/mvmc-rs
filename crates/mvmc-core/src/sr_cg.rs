@@ -1,9 +1,8 @@
 //! Sampled matrix operator for Julia's standard stochastic-reconfiguration CG.
 
+use crate::output_files::{RunFiles, SrInfoRow};
 use crate::{reducer::Reducer, ExpertModeData, VmcOptimizationState};
-use std::fs::OpenOptions;
-use std::io::{self, Write};
-use std::path::Path;
+use std::io;
 use std::{cell::RefCell, rc::Rc};
 
 /// Actual sampled-product boundary within the production CG operator.
@@ -93,21 +92,16 @@ fn observe(f: impl FnOnce(&dyn CgObserver)) {
 pub fn stochastic_opt_cg(
     data: &mut ExpertModeData,
     state: &VmcOptimizationState,
-    output_dir: Option<&Path>,
+    files: Option<&mut RunFiles>,
 ) -> io::Result<i32> {
-    stochastic_opt_cg_with_reducer(
-        data,
-        state,
-        output_dir,
-        &crate::reducer::SingleProcessReducer,
-    )
+    stochastic_opt_cg_with_reducer(data, state, files, &crate::reducer::SingleProcessReducer)
 }
 
 /// Apply sampled SR-CG with the global accumulator communicator.
 pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     data: &mut ExpertModeData,
     state: &VmcOptimizationState,
-    output_dir: Option<&Path>,
+    files: Option<&mut RunFiles>,
     reducer: &R,
 ) -> io::Result<i32> {
     let n_proj = data.projection_layout().n_proj;
@@ -205,40 +199,25 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
         )
         .map_err(io::Error::other)?;
     let info = i32::from(result.solution.iter().any(|x| !x.is_finite()));
-    if let Some(dir) = output_dir {
-        let prefix = if data.modpara.c_data_file_head.is_empty() {
-            "zvo"
-        } else {
-            &data.modpara.c_data_file_head
-        };
-        let path = dir.join(format!("{prefix}_SRinfo.dat"));
-        let header = !path.exists() || path.metadata()?.len() == 0;
-        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-        if header {
-            // initfile.c:47-54: SRFlag selects the sEigen* spelling.
-            let header = if data.modpara.sr_flag {
-                "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax"
-            } else {
-                "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax"
-            };
-            writeln!(file, "{header}")?;
-        }
+    if let Some(files) = files {
         let mut imax = 0;
         for i in 1..result.solution.len() {
             if result.solution[imax].abs() < result.solution[i].abs() {
                 imax = i;
             }
         }
-        writeln!(
-            file,
-            "{full:5} {:5} {opt_cut:5} {diag_cut:5} {} {} {} {:5}, {}",
-            mapping.len(),
-            cg_number(maximum),
-            cg_number(minimum),
-            cg_number(result.solution[imax]),
-            mapping[imax],
-            result.iterations
-        )?;
+        // C stcopt_cg_impl.c:202 prints the global NPara, not OFFSET*NPara.
+        files.write_sr_info(&SrInfoRow {
+            n_para: n_para as i64,
+            n_smat: mapping.len() as i64,
+            opt_num: opt_cut,
+            cut_num: diag_cut,
+            s_diag_max: maximum,
+            s_diag_min: minimum,
+            r_max: result.solution[imax],
+            i_max: mapping[imax] as i64,
+            cg_info: Some(result.iterations as i64),
+        })?;
     }
     if info == 0 {
         for (&pi, &x) in mapping.iter().zip(&result.solution) {
@@ -252,21 +231,6 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
         }
     }
     Ok(info)
-}
-
-fn cg_number(x: f64) -> String {
-    let raw = format!("{x:+.5e}");
-    let signed = if let Some(rest) = raw.strip_prefix('+') {
-        format!(" {rest}")
-    } else {
-        raw
-    };
-    if let Some((mantissa, exp)) = signed.split_once('e') {
-        let exponent: i32 = exp.parse().expect("numeric exponent");
-        format!("{mantissa}e{exponent:+03}")
-    } else {
-        signed
-    }
 }
 
 /// Dot product with Julia/C's explicit sequential accumulation order.

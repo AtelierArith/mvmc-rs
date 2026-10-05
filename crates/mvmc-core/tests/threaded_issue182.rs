@@ -1587,6 +1587,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                     OptimizationOptions {
                         callback: Some(&mut callback),
                         skip_sr: false,
+                        file_flush_interval: None,
                     },
                 );
                 if diagnostic_collect_all {
@@ -1921,6 +1922,7 @@ fn transfer_site(output_root: &Path) {
             OptimizationOptions {
                 callback: None,
                 skip_sr: true,
+                file_flush_interval: None,
             },
         )
         .unwrap();
@@ -2089,6 +2091,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
                 OptimizationOptions {
                     callback: None,
                     skip_sr: true,
+                    file_flush_interval: None,
                 },
             )
             .unwrap();
@@ -2693,6 +2696,8 @@ fn independent_physcal(output_root: &Path) {
             std::fs::read_dir(path)
                 .unwrap()
                 .map(|entry| entry.unwrap().file_name())
+                // C InitFile's `_time_` file ends rows with a ctime string.
+                .filter(|name| !name.to_string_lossy().contains("_time_"))
                 .collect::<std::collections::BTreeSet<_>>()
         };
         assert_eq!(
@@ -2948,6 +2953,7 @@ fn independent_real_fsz(output_root: &Path) {
             OptimizationOptions {
                 callback: None,
                 skip_sr,
+                file_flush_interval: None,
             },
         )
         .unwrap();

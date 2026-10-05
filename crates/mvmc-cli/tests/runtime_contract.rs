@@ -702,7 +702,7 @@ fn physcal_timer_environment_controls_report_without_changing_output() {
             .unwrap()
             .flatten()
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| !name.starts_with("zvo_CalcTimer"))
+            .filter(|name| !name.starts_with("zvo_CalcTimer") && !name.contains("_time_"))
             .collect();
         names.sort();
         names

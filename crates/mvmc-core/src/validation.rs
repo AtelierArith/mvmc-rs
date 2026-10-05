@@ -106,6 +106,65 @@ pub fn validate_sr_storage_contract(p: &ModParaParameters) -> Result<(), String>
     Ok(())
 }
 
+/// Mode-independent namelist admission shared by optimization and PhysCal.
+///
+/// C readdef.c rejects unsupported sections (BF/BFRange, "Back Flow is not
+/// supported") and unknown keywords while reading the namelist, before
+/// `NVMCCalMode` selects a calculation. `TwoBodyGEx` is read in every mode
+/// and only consumed by PhysCal, so optimization accepts and ignores it.
+fn validate_namelist_sections(data: &ExpertModeData) -> Result<(), String> {
+    for (kind, _) in &data.namelist {
+        match kind.as_str() {
+            "SpinJastrow" => {
+                return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
+            }
+            // C reads TwoBodyGEx in every mode and only uses it for PhysCal.
+            "PairHop"
+            | "InterAll"
+            | "DH2"
+            | "DoublonHolon2Site"
+            | "InDH2"
+            | "DH4"
+            | "DoublonHolon4Site"
+            | "InDH4"
+            | "OptTrans"
+            | "InOptTrans"
+            | "TwoBodyGEx"
+            | "InGutzwiller"
+            | "InJastrow"
+            | "InOrbital"
+            | "InOrbitalAntiParallel"
+            | "InOrbitalParallel"
+            | "InOrbitalGeneral"
+            | "ModPara"
+            | "LocSpin"
+            | "Trans"
+            | "CoulombIntra"
+            | "CoulombInter"
+            | "Hund"
+            | "Exchange"
+            | "Gutzwiller"
+            | "Jastrow"
+            | "Orbital"
+            | "OrbitalAntiParallel"
+            | "OrbitalParallel"
+            | "OrbitalGeneral"
+            | "OneBodyG"
+            | "TwoBodyG"
+            | "TransSym"
+            | "QPTrans" => {}
+            k if k.starts_with("ChargeRBM_")
+                || k.starts_with("SpinRBM_")
+                || k.starts_with("GeneralRBM_")
+                || k.starts_with("InChargeRBM_")
+                || k.starts_with("InSpinRBM_")
+                || k.starts_with("InGeneralRBM_") => {}
+            k => return Err(format!("unsupported namelist section {k}")),
+        }
+    }
+    Ok(())
+}
+
 /// Validate parameter-optimization entry points before initialization or IO.
 pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     crate::run::get_all_complex_flag(data)?;
@@ -162,54 +221,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             }
         }
     }
-    for (kind, _) in &data.namelist {
-        match kind.as_str() {
-            "SpinJastrow" => {
-                return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
-            }
-            "PairHop"
-            | "InterAll"
-            | "DH2"
-            | "DoublonHolon2Site"
-            | "InDH2"
-            | "DH4"
-            | "DoublonHolon4Site"
-            | "InDH4"
-            | "OptTrans"
-            | "InOptTrans"
-            | "TwoBodyGEx"
-            | "InGutzwiller"
-            | "InJastrow"
-            | "InOrbital"
-            | "InOrbitalAntiParallel"
-            | "InOrbitalParallel"
-            | "InOrbitalGeneral"
-            | "ModPara"
-            | "LocSpin"
-            | "Trans"
-            | "CoulombIntra"
-            | "CoulombInter"
-            | "Hund"
-            | "Exchange"
-            | "Gutzwiller"
-            | "Jastrow"
-            | "Orbital"
-            | "OrbitalAntiParallel"
-            | "OrbitalParallel"
-            | "OrbitalGeneral"
-            | "OneBodyG"
-            | "TwoBodyG"
-            | "TransSym"
-            | "QPTrans" => {}
-            k if k.starts_with("ChargeRBM_")
-                || k.starts_with("SpinRBM_")
-                || k.starts_with("GeneralRBM_")
-                || k.starts_with("InChargeRBM_")
-                || k.starts_with("InSpinRBM_")
-                || k.starts_with("InGeneralRBM_") => {}
-            k => return Err(format!("unsupported namelist section {k}")),
-        }
-    }
+    validate_namelist_sections(data)?;
     if !data.input_errors.is_empty() {
         return Err(format!(
             "incomplete Expert input: {}",
@@ -248,6 +260,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
             data.input_errors.join("; ")
         ));
     }
+    validate_namelist_sections(data)?;
     validate_supported_modpara(p)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::PhysCal)?;
     if p.lanczos_mode > 0 {

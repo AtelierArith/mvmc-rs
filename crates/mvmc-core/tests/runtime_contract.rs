@@ -118,6 +118,26 @@ fn unported_sections_cannot_silently_change_the_model() {
 }
 
 #[test]
+fn physcal_applies_the_same_namelist_admission_as_optimization() {
+    // C readdef.c rejects BF/BFRange and unknown keywords regardless of NVMCCalMode.
+    for kind in ["BF", "BFRange", "SpinJastrow", "BogusSection", "InBogus"] {
+        let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
+        data.namelist.push((kind.into(), "missing.def".into()));
+        let physcal = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+        let optimization = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+        assert!(physcal.contains(kind), "{kind}: {physcal}");
+        assert_eq!(physcal, optimization, "{kind}: modes must agree");
+    }
+    // TwoBodyGEx is consumed only by PhysCal and stays admitted there.
+    let mut data = ExpertModeData::new();
+    data.modpara.nmp_trans = 1;
+    data.namelist
+        .push(("TwoBodyGEx".into(), "greentwoex.def".into()));
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
+}
+
+#[test]
 fn active_serial_opttrans_passes_validation_including_single_sector_payloads() {
     for count in [1, 2] {
         let mut data = ExpertModeData::new();

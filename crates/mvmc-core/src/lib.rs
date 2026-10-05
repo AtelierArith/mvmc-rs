@@ -30,6 +30,7 @@ pub mod lanczos;
 pub mod mpi;
 pub use pfapack::julia_complex;
 pub mod observables;
+pub mod output_files;
 pub mod parallel;
 pub mod parallel_scalar;
 pub mod parameter_diagnostics;

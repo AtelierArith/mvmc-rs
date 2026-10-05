@@ -788,9 +788,21 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
         reducer,
         "PhysCal validation",
     )?;
+    // C InitFile (NVMCCalMode==1) creates only the `_time_` file on rank 0; its
+    // failure joins the directory-setup agreement so no extra collective is added.
+    let mut run_files = None;
+    let mut io_error: Option<String> = None;
     let output_setup = if reducer.is_output_root() {
         output_dir.map_or(Ok(()), |path| {
-            std::fs::create_dir_all(path).map_err(|error| error.to_string())
+            std::fs::create_dir_all(path).map_err(|error| error.to_string())?;
+            crate::output_files::RunFiles::init(
+                data,
+                path,
+                crate::output_files::RunKind::PhysCal,
+                None,
+            )
+            .map(|files| run_files = Some(files))
+            .map_err(|error| error.to_string())
         })
     } else {
         Ok(())
@@ -821,6 +833,15 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
     timer.stop(20);
     let iterations = data.modpara.n_data_qty_smp.max(0) as usize;
     for sample in 0..iterations {
+        // C: OutputTime(ismp); FlushFile(0) (always a flush) before sampling.
+        if let Some(files) = run_files.as_mut() {
+            if let Err(error) = files
+                .output_time(sample as i64, &state.electron_config.counter)
+                .and_then(|()| files.flush_file(0))
+            {
+                io_error.get_or_insert(error.to_string());
+            }
+        }
         timer.start(3);
         let sample_result = if use_fsz {
             if all_complex {
@@ -888,6 +909,7 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
         } else {
             None
         };
+        let output_error = output_error.or_else(|| io_error.take());
         timer.stop(22);
         if reducer.any_failure(output_error.is_some()) {
             return Err(output_error
@@ -904,6 +926,12 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
                     .unwrap_or_else(|| "PhysCal callback failed on another rank".into()));
             }
         }
+    }
+    if let Some(mut files) = run_files.take() {
+        files
+            .output_time(iterations as i64, &state.electron_config.counter)
+            .and_then(|()| files.close())
+            .map_err(|error| error.to_string())?;
     }
     Ok(iterations)
 }
@@ -942,6 +970,9 @@ pub struct OptimizationOptions<'a> {
     pub callback: Option<&'a mut StepCallback<'a>>,
     /// Stop after the first sample/output step, before SR, sync and final output.
     pub skip_sr: bool,
+    /// C `NFileFlushInterval` (`-F`, default 1): flush the `_time_` and
+    /// `_SRinfo` files when `step % interval == 0`. Values below 1 are rejected.
+    pub file_flush_interval: Option<i64>,
 }
 
 /// Run `nsteps` SR steps starting from `data` and the seeded `rng`.
@@ -998,6 +1029,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         reducer,
         "optimization validation",
     )?;
+    let mut run_files: Option<crate::output_files::RunFiles> = None;
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     // Validation excludes C's unwritten leading rows for oversized windows.
     // Freeze the explicitly selected supported window before callbacks run.
@@ -1011,8 +1043,37 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     // C VMCMakeSample(comm_child1) generates NVMCSample saved configurations
     // on every chain. Only VMCMainCal partitions those saved configurations
     // within comm_child1; partitioning this count changes the RNG trajectory.
+    // C InitFile: rank 0 creates the `_time_`/`_SRinfo` files before the loop.
+    // A creation failure is reported through the first output agreement.
+    if options
+        .file_flush_interval
+        .is_some_and(|interval| interval < 1)
+    {
+        return Err("FileFlushInterval should be natural number".into());
+    }
+    let mut io_error: Option<String> = None;
+    if reducer.is_output_root() {
+        if let Some(dir) = output_dir {
+            match crate::output_files::RunFiles::init(
+                data,
+                dir,
+                crate::output_files::RunKind::ParaOpt,
+                options.file_flush_interval,
+            ) {
+                Ok(files) => run_files = Some(files),
+                Err(error) => io_error = Some(error.to_string()),
+            }
+        }
+    }
     timer.start(2);
     for step in 0..n_steps {
+        // C OutputTime(step) precedes the sample; Counter still holds the
+        // previous step's reduced statistics (step 0 prints the title row).
+        if let Some(files) = run_files.as_mut() {
+            if let Err(error) = files.output_time(step as i64, &state.electron_config.counter) {
+                io_error.get_or_insert(error.to_string());
+            }
+        }
         timer.start(20);
         // 1. Slater table refresh.
         if use_fsz {
@@ -1098,6 +1159,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             output_data(data, state, step, output_dir)
                 .err()
                 .map(|error| error.to_string())
+                .or_else(|| io_error.take())
         } else {
             None
         };
@@ -1125,19 +1187,30 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         // SR kernels apply their update locally. Restore successful ranks too
         // when a peer fails, before synchronization can publish that update.
         let before_sr = (reducer.reduction_size() > 1).then(|| data.clone());
+        let mut direct_sr_info = None;
         let sr_result = if data.modpara.nsrcg != 0 {
-            let sr_output = if reducer.is_output_root() {
-                output_dir
-            } else {
-                None
-            };
-            crate::sr_cg::stochastic_opt_cg_with_reducer(data, state, sr_output, reducer)
+            crate::sr_cg::stochastic_opt_cg_with_reducer(data, state, run_files.as_mut(), reducer)
                 .map_err(|e| e.to_string())
         } else if all_complex {
-            Ok(crate::sr::stochastic_opt_complex_timed(data, state, timer))
+            Ok(crate::sr::stochastic_opt_complex_with_sr_info_timed(
+                data,
+                state,
+                timer,
+                &mut direct_sr_info,
+            ))
         } else {
-            Ok(crate::sr::stochastic_opt_real_timed(data, state, timer))
+            Ok(crate::sr::stochastic_opt_real_with_sr_info_timed(
+                data,
+                state,
+                timer,
+                &mut direct_sr_info,
+            ))
         };
+        if let (Some(files), Some(row)) = (run_files.as_mut(), direct_sr_info.as_ref()) {
+            files
+                .write_sr_info(row)
+                .map_err(|error| error.to_string())?;
+        }
         let sr_error = sr_result.as_ref().err().cloned();
         let info = sr_result.unwrap_or(1);
         timer.stop(5);
@@ -1163,6 +1236,12 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         if step >= window_start {
             store_opt_data(data, state, step - window_start);
         }
+        // C FlushFile(step) closes each VMCParaOpt iteration.
+        if let Some(files) = run_files.as_mut() {
+            if let Err(error) = files.flush_file(step as i64) {
+                io_error.get_or_insert(error.to_string());
+            }
+        }
         let callback_result = options.callback.as_mut().map_or(Ok(()), |callback| {
             callback(step, data, state.energy.etot, info)
         });
@@ -1173,10 +1252,16 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         )?;
     }
 
+    if let Some(files) = run_files.as_mut() {
+        if let Err(error) = files.output_time(n_steps as i64, &state.electron_config.counter) {
+            io_error.get_or_insert(error.to_string());
+        }
+    }
     let output_error = if reducer.is_output_root() {
         output_opt_data(data, state, output_dir)
             .err()
             .map(|error| error.to_string())
+            .or_else(|| io_error.take())
     } else {
         None
     };
@@ -1184,6 +1269,10 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         return Err(
             output_error.unwrap_or_else(|| "final output failed on another MPI rank".into())
         );
+    }
+    // C CloseFile after the optimization returns.
+    if let Some(files) = run_files.take() {
+        files.close().map_err(|error| error.to_string())?;
     }
     timer.stop(2);
     Ok(())
@@ -1220,6 +1309,8 @@ pub struct RunConfig {
     /// C-style OptTrans activation. `None` preserves the library's Julia
     /// definition-file default; `Some(false)` ignores OptTrans definitions.
     pub enable_opt_trans: Option<bool>,
+    /// C `-F` / `NFileFlushInterval`; `None` is C's default of 1.
+    pub file_flush_interval: Option<i64>,
 }
 
 impl RunConfig {
@@ -1233,6 +1324,7 @@ impl RunConfig {
             seed: None,
             initial_def: InitialDef::Auto,
             enable_opt_trans: None,
+            file_flush_interval: None,
         }
     }
 }
@@ -1298,6 +1390,12 @@ fn validate_run_options(config: &RunConfig) -> Result<(), String> {
         return Err(format!(
             "nsmp must be positive when provided; got {}",
             config.nsmp.unwrap()
+        ));
+    }
+    if config.file_flush_interval.is_some_and(|value| value < 1) {
+        return Err(format!(
+            "file_flush_interval must be a natural number when provided; got {}",
+            config.file_flush_interval.unwrap()
         ));
     }
     Ok(())
@@ -1458,7 +1556,10 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         &mut rng,
         Some(&output_dir),
         reducer,
-        OptimizationOptions::default(),
+        OptimizationOptions {
+            file_flush_interval: config.file_flush_interval,
+            ..OptimizationOptions::default()
+        },
         timer,
     )?;
     timer.stop(0);
@@ -3481,6 +3582,7 @@ mod callback_tests {
             OptimizationOptions {
                 callback: Some(&mut callback),
                 skip_sr: false,
+                file_flush_interval: None,
             },
         )
         .unwrap();
@@ -3547,6 +3649,7 @@ mod callback_tests {
             &SingleProcessReducer,
             OptimizationOptions {
                 skip_sr: true,
+                file_flush_interval: None,
                 ..OptimizationOptions::default()
             },
         )
@@ -3564,6 +3667,7 @@ mod callback_tests {
                 &MeasurementRank(rank),
                 OptimizationOptions {
                     skip_sr: true,
+                    file_flush_interval: None,
                     ..OptimizationOptions::default()
                 },
             )
@@ -3602,6 +3706,7 @@ mod callback_tests {
             OptimizationOptions {
                 callback: Some(&mut callback),
                 skip_sr: true,
+                file_flush_interval: None,
             },
         )
         .unwrap();
@@ -3656,6 +3761,7 @@ mod callback_tests {
             OptimizationOptions {
                 callback: Some(&mut callback),
                 skip_sr: false,
+                file_flush_interval: None,
             },
         )
         .unwrap_err();
@@ -3676,7 +3782,8 @@ mod callback_tests {
             &SingleProcessReducer,
             OptimizationOptions {
                 callback: Some(&mut callback),
-                skip_sr: false
+                skip_sr: false,
+                file_flush_interval: None,
             }
         )
         .is_err());
@@ -3714,6 +3821,7 @@ mod callback_tests {
                 OptimizationOptions {
                     callback: Some(&mut callback),
                     skip_sr: false,
+                    file_flush_interval: None,
                 },
             )
             .unwrap();
@@ -4344,6 +4452,7 @@ mod callback_tests {
                         OptimizationOptions {
                             callback: Some(&mut callback),
                             skip_sr: false,
+                            file_flush_interval: None,
                         },
                     )
                     .unwrap();
@@ -4802,8 +4911,10 @@ mod callback_tests {
     /// (tests/fixtures/c_order_sr_operands, c_toolbox/sr_operand_dump).
     /// Operands depend only on the initial parameters and sampling, so they do
     /// not pass through the amplified CG solve. `rbm_real` has no native C
-    /// reference: its Rust model is the historical sparse RBM control, which C
-    /// does not run identically (step-1 energy 5.9845 in C, 6.2287 here).
+    /// reference: C ignores RBM in real mode (`vmcmake_real.c` has no RBM code),
+    /// so its step-1 energy 5.9845 equals Rust's with RBM zeroed, versus 6.2287
+    /// with RBM applied. See docs/NUMERICAL_COMPARISONS.md (#379) and
+    /// tmisawa/Julia-mVMC#59.
     fn assert_c_step_one_operands(case: &str, cg: bool, store: i64, state: &VmcOptimizationState) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../tests/fixtures/c_order_sr_operands/{case}-{}-store{store}.txt",
@@ -4882,6 +4993,43 @@ mod callback_tests {
             1e-12,
             format!("{case} step-1 native C energy"),
         );
+    }
+
+    /// Real-mode OptTrans derivatives occupy their own slots (#370).
+    ///
+    /// Each sample has `ipAll = sum_i w_i * ip_i` and derivative `O_i = ip_i / ipAll`,
+    /// so `sum_i w_i * O_i = 1` for every sample and for the weighted mean. Native C
+    /// writes these through a complex pointer offset in real mode (`vmccal.c`
+    /// `calculateOptTransDiff`), which drops derivative 1, stores derivative 2 in
+    /// slot 1 and leaves the last slot zero; that layout violates this identity.
+    /// Rust keeps the mathematically correct layout (tmisawa/Julia-mVMC#55).
+    #[test]
+    fn real_mode_opttrans_derivatives_use_their_own_slots() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/opttrans/run_opt_real/namelist.def");
+        let (mut data, mut state, mut rng) = prepared_namelist(1, &path);
+        data.modpara.nsrcg = 1;
+        data.modpara.nstore_o = 0;
+        assert!(!get_all_complex_flag(&data).unwrap());
+        let weights: Vec<f64> = data.opt_trans.iter().map(|w| w.re).collect();
+        assert_eq!(weights.len(), 3);
+        let dir = fresh_output_directory().unwrap();
+        vmc_para_opt(
+            &mut data,
+            &mut state,
+            &mut rng,
+            Some(&dir),
+            &SingleProcessReducer,
+            OptimizationOptions::default(),
+        )
+        .unwrap();
+        fs::remove_dir_all(dir).unwrap();
+        let size = state.sr_opt.sr_opt_size;
+        let first = size - weights.len();
+        let derivatives = &state.sr_opt.sr_opt_o_real[first..size];
+        assert!(derivatives.iter().all(|d| *d != 0.0), "{derivatives:?}");
+        let sum: f64 = weights.iter().zip(derivatives).map(|(w, d)| w * d).sum();
+        assert!((sum - 1.0).abs() < 1e-12, "sum w_i O_i = {sum}");
     }
 
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
@@ -5168,6 +5316,8 @@ mod callback_tests {
                     let mut names: Vec<_> = fs::read_dir(path)
                         .unwrap()
                         .map(|entry| entry.unwrap().file_name())
+                        // `_time_` rows end in a wall-clock ctime string.
+                        .filter(|name| !name.to_string_lossy().contains("_time_"))
                         .collect();
                     names.sort();
                     names
@@ -5374,8 +5524,27 @@ mod callback_tests {
                 // Diagnostics print only five digits after the decimal point.
                 // One final printed quantum can differ at a rounding boundary.
                 // Dimensions, cuts, index and iteration count remain exact.
+                // The Julia fixtures print OFFSET*NPara in column 0; C prints NPara
+                // (stcopt_cg_impl.c:202), which the Rust writer follows.
+                let offset = if get_all_complex_flag(&data).unwrap() {
+                    2
+                } else {
+                    1
+                };
+                let rust_srinfo = fs::read_to_string(dir.join("zvo_SRinfo.dat"))
+                    .unwrap()
+                    .lines()
+                    .map(
+                        |line| match line.get(..5).map(str::trim).map(str::parse::<usize>) {
+                            Some(Ok(n_para)) if !line.starts_with('#') => {
+                                format!("{:5}{}\n", n_para * offset, &line[5..])
+                            }
+                            _ => format!("{line}\n"),
+                        },
+                    )
+                    .collect::<String>();
                 crate::numerical_comparison::assert_numeric_text(
-                    &fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap(),
+                    &rust_srinfo,
                     &read("SRinfo"),
                     1e-12,
                     1e-5,
@@ -5769,6 +5938,7 @@ mod callback_tests {
                     let mut files: Vec<_> = fs::read_dir(directory)
                         .unwrap()
                         .map(|entry| entry.unwrap().file_name())
+                        .filter(|name| !name.to_string_lossy().contains("_time_"))
                         .collect();
                     files.sort();
                     files
@@ -5835,6 +6005,25 @@ mod callback_tests {
             .unwrap();
             let info = fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap();
             assert_eq!(info.lines().count(), 4, "{case}");
+            for row in info.lines().skip(1) {
+                // C CG rows end with ", info" and print the global NPara (not 2*NPara).
+                let fields: Vec<&str> = row
+                    .split([' ', ','])
+                    .filter(|field| !field.is_empty())
+                    .collect();
+                assert_eq!(fields.len(), 9, "{case}: {row}");
+                assert!(row.contains(", "), "{case}: {row}");
+                assert_eq!(
+                    fields[0].parse::<usize>().unwrap(),
+                    data.count_variational_parameters(),
+                    "{case}: {row}"
+                );
+            }
+            let time = fs::read_to_string(
+                dir.join(format!("zvo_time_{:03}.dat", data.modpara.n_data_idx_start)),
+            )
+            .unwrap();
+            assert_eq!(time.lines().count(), 4, "{case}\n{time}");
             assert_eq!(state.opt_data.len(), 3);
             assert!(data
                 .slater_params
@@ -5872,6 +6061,7 @@ mod callback_tests {
                 &SingleProcessReducer,
                 OptimizationOptions {
                     skip_sr: true,
+                    file_flush_interval: None,
                     ..OptimizationOptions::default()
                 },
             )
@@ -5953,6 +6143,7 @@ mod callback_tests {
                 &SingleProcessReducer,
                 OptimizationOptions {
                     skip_sr: true,
+                    file_flush_interval: None,
                     ..OptimizationOptions::default()
                 },
             )
@@ -6181,6 +6372,7 @@ mod callback_tests {
                 &SingleProcessReducer,
                 OptimizationOptions {
                     skip_sr: true,
+                    file_flush_interval: None,
                     ..OptimizationOptions::default()
                 },
             )
@@ -6203,6 +6395,7 @@ mod callback_tests {
                 &SingleProcessReducer,
                 OptimizationOptions {
                     skip_sr: true,
+                    file_flush_interval: None,
                     ..OptimizationOptions::default()
                 },
                 &mut timer,
@@ -6400,6 +6593,14 @@ mod physcal_green_observer_tests {
         let files = |directory: &Path| {
             let mut files: Vec<_> = fs::read_dir(directory)
                 .unwrap()
+                .filter(|entry| {
+                    !entry
+                        .as_ref()
+                        .unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .contains("_time_")
+                })
                 .map(|entry| {
                     let entry = entry.unwrap();
                     (entry.file_name(), fs::read(entry.path()).unwrap())

@@ -102,11 +102,12 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 5. **`--mode`** は検証されるだけのラベルであり、一致しないラベル(たとえば実数モデルでの `--mode fsz`)も黙って受け付けられます(観測)。
 6. **タイマーのファイル名**は `CDataFileHead` を無視します([9.5](09-output-files.md#95-タイマー))。
 7. **直接法ソルバーの `zvo_SRinfo.dat`** は書き出されません([9.4](09-output-files.md#94-ソルバー情報-zvo_srinfodat))。
-8. **OptTransの微分のレイアウト**は、`calculateOptTransDiff`(`vmccal.c:639`)と `opt_trans_diff`(`observables.rs:957`)で異なります。フィクスチャは `tests/fixtures/opttrans` にありますが、本マニュアルではOptTransをこれ以上対応づけていません(コード読解)。
+8. **実数モードでのOptTransの微分のレイアウト**(決定は #370 に記録)。C の `calculateOptTransDiff`(`vmccal.c:639`)は `double complex *` のポインタオフセット付きで呼ばれる(`vmccal.c:466`)ため、微分 *i* はパラメータスロット *i* ではなく複素スロット `offset + i` に書かれます。`NQPOptTrans = 3` の実数モード実行では、ネイティブCのステップ1オペランド(`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`、観測)で、微分1が欠落し、微分2が微分1のスロットに入り、最後のスロットは0になります。Rust の `opt_trans_diff`(`observables.rs:957`)は数学的に正しいレイアウトを保ち、`real_mode_opttrans_derivatives_use_their_own_slots`(`sum_i w_i O_i = 1`)で固定されています。この欠陥は tmisawa/Julia-mVMC#55 として報告済みで、各オペランド配列の影響を受ける末尾2要素はC比較から除外しています([NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md))。複素モードは調べていません。
 9. **Lanczos法の失敗時の出力**が異なります([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 10. **Rustの `modpara.def` の既定値**はCと異なります([7.2](07-input-files.md#72-modparadef))。したがって、キーを省略した実行の結果は、2つのプログラム間で互換ではありません。
 11. **負の `DSROptStepDt`** は、Cでは注記つきで正のステップに変換されます(`readdef.c:746-752`)が、Rustではそのまま使われます(コード読解、`crates/` に `SRFlag` の使用なし)。
 12. **`Nelectron`/`Ne` はRustの `modpara.def` パーサーに無視されます**(観測: `Nelectron 8` を持ち `Ncond` のないモデルは `Nelec=0` と報告し、「normal initialization precondition: ...」で失敗します)。Cマニュアル自身の例は `Nelectron` を使っています。
+13. **Cは実数モードでRBMパラメータを無視します**(#379、tmisawa/Julia-mVMC#59 として報告済み)。実数モデル(軌道が `ComplexType 0`)がRBMセクションを宣言しても、Cは `FlagRBM=1` を黙って受理しますが、実数用サンプラー `vmcmake_real.c` にはRBMのコードがなく(`RBM` の出現は0回。複素用の `vmcmake.c` には27回)、RBMの重みは一度も適用されません。`tests/fixtures/c_orbital_inputs/namelist_rbm_real.def`(シード1、ステップ1)での観測:Cは NPara = 55(NProj 7、NRBM 36、NSlater 12)、ステップ1のエネルギー 5.984544891656925 を報告し、RBMの初期値を 0.125/-0.25 から全て0に変えても変化せず、RBM値を全て0にしたRustとビット単位で一致します。Rustは(エネルギー 6.228711216019723 のように)RBMの重みを適用します。RustはRBMの正しい数学を維持し、そのため `rbm_real` にはネイティブCのオペランド参照がありません。
 
 ## 11.6 本マニュアルで検証しなかったこと
 

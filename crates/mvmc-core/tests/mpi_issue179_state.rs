@@ -455,6 +455,7 @@ fn issue179_state() {
         mvmc_core::OptimizationOptions {
             callback: Some(&mut callback),
             skip_sr: false,
+            file_flush_interval: None,
         },
     );
     let trace = mvmc_core::sampling::driver::trace::finish();

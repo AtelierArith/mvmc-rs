@@ -181,6 +181,10 @@ fn callback_is_called_for_each_sample_after_average_without_changing_run() {
     assert_eq!(baseline_files.len(), callback_files.len());
     for ((name, expected), (actual_name, actual)) in baseline_files.iter().zip(&callback_files) {
         assert_eq!(name, actual_name);
+        // `_time_` rows end in a wall-clock ctime string (format: run_log_files.rs).
+        if name.contains("_time_") {
+            continue;
+        }
         // Indexed Green output retains its coordinates exactly; scalar output
         // has no index columns. Formatting has separate writer tests.
         let indices: &[usize] = if name.contains("cisajscktaltex") {

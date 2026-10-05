@@ -585,6 +585,8 @@ fn failing_callback_observes_completed_first_output_and_prevents_second_output()
         "output-error fixed flags retained"
     );
     assert!(!expected_names.is_empty());
+    // C InitFile creates the single `_time_` file before the first sample.
+    expected_names.push("zvo_time_007.dat".to_string());
     let mut actual_names = fs::read_dir(&output.0)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
@@ -677,7 +679,12 @@ fn actual_output_error_retains_first_averaged_state_rng_flags_and_no_second_samp
         files.sort();
         assert_eq!(
             files,
-            ["zvo_cisajs_007.dat", "zvo_out_007.dat", "zvo_var_007.dat"]
+            [
+                "zvo_cisajs_007.dat",
+                "zvo_out_007.dat",
+                "zvo_time_007.dat",
+                "zvo_var_007.dat"
+            ]
         );
         assert!(output.0.join("zvo_cisajs_007.dat").is_dir());
     }

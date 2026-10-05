@@ -196,9 +196,11 @@ fn serial_callback_preserves_raw_rng_fixed_bits_and_all_weight_buffers() {
                 .map(|stem| format!("zvo_{stem}_{index:03}.dat"))
         })
         .collect::<Vec<_>>();
+    // C InitFile also creates one `_time_` file; its rows end in a ctime string.
+    expected_names.push("zvo_time_007.dat".to_string());
     expected_names.sort();
     assert_eq!(names, expected_names);
-    for name in names {
+    for name in names.into_iter().filter(|name| !name.contains("_time_")) {
         let indices: &[usize] = if name.starts_with("zvo_cisajscktalt_") {
             &[0, 1, 2, 3, 4, 5, 6, 7]
         } else if name.starts_with("zvo_cisajs_") {

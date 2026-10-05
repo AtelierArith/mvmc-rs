@@ -241,7 +241,7 @@ fn corrected_general_twenty_step_public_runner_is_repeatable() {
     };
     assert_eq!(names(&output.0), names(&repeat.0));
     for name in names(&output.0) {
-        if !name.to_string_lossy().contains("Timer") {
+        if !name.to_string_lossy().contains("Timer") && !name.to_string_lossy().contains("_time_") {
             assert_eq!(
                 fs::read(output.0.join(&name)).unwrap(),
                 fs::read(repeat.0.join(&name)).unwrap()

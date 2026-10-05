@@ -119,6 +119,10 @@ fn physcal_mode_one_with_fixed_file_matches_direct_library_call() {
     assert!(lib_names.iter().any(|name| name == "zvo_cisajs_008.dat"));
     assert_eq!(names(&cli_out), lib_names);
     for name in &lib_names {
+        // `_time_` rows end in a wall-clock ctime string.
+        if name.to_string_lossy().contains("_time_") {
+            continue;
+        }
         assert_eq!(
             fs::read(cli_out.join(name)).unwrap(),
             fs::read(lib_out.join(name)).unwrap(),

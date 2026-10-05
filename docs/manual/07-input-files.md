@@ -162,7 +162,7 @@ initialization or output; a rejected input exits with `error: ...` and non-zero 
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | accepted | accepted |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | accepted | accepted |
 | `TwoBodyGEx` | accepted and ignored | accepted **(observed)** |
-| any other `In…` keyword | rejected ("not implemented yet (issue #20)") | not checked |
+| any other `In…` keyword | rejected ("unsupported namelist section") | not checked |
 | `SpinJastrow` | rejected ("projection layout would be wrong") | not checked |
 | `BF`, `BFRange` (BackFlow) and any unknown keyword | rejected ("unsupported namelist section …") | **not checked: a `BF` entry is accepted and BackFlow is not applied (observed on current `main`)** |
 

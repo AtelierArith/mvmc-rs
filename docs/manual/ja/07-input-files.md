@@ -141,7 +141,7 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | 受理 | 受理 |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | 受理 | 受理 |
 | `TwoBodyGEx` | 受理され無視される | 受理 **(観測)** |
-| その他の `In…` キーワード | 拒否("not implemented yet (issue #20)") | チェックされない |
+| その他の `In…` キーワード | 拒否("unsupported namelist section") | チェックされない |
 | `SpinJastrow` | 拒否("projection layout would be wrong") | チェックされない |
 | `BF`, `BFRange` (BackFlow) および未知のキーワード | 拒否("unsupported namelist section …") | **チェックされない: `BF` エントリは受理され、BackFlow は適用されません(現在の `main` で観測)** |
 

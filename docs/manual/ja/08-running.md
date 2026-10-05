@@ -54,9 +54,9 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:429`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:627`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:448`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:433`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:631`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:452`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
 > - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `getopt` オプションのうち `-o` 以外は実装されていません。
 

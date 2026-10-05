@@ -17,6 +17,7 @@
 //!   -o / --opt-trans  Enable C optimized-translation mode [default: disabled]
 //!   --physcal <PATH>  Run fixed-parameter PhysCal with this parameter file
 //!                     (requires NVMCCalMode=1 in ModPara; NVMCCalMode=1 requires --physcal)
+//!   -F, --flush-interval <N>  Flush _time_/_SRinfo files every N steps (C -F)
 //!   --help / -h       Print this help text
 //!
 //! Environment:
@@ -40,6 +41,7 @@ fn print_usage(program: &str) {
     eprintln!("  --nsmp <N>      Final averaging window [default: NSROptItrSmp]");
     eprintln!("  --mode <MODE>   Sanity label: real, cmp or fsz [default: inferred]");
     eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
+    eprintln!("  -F, --flush-interval <N> Flush _time_/_SRinfo files every N steps [default: 1]");
     eprintln!("  -o, --opt-trans Enable C OptTrans mode [default: disabled]");
     eprintln!("  --physcal <PATH> Run fixed-parameter PhysCal using PATH");
     eprintln!("  --physcal-trace <NEW_DIR> Nonconsuming serial PhysCal diagnostics");
@@ -62,6 +64,7 @@ fn main() {
     let mut mode_arg: Option<String> = None;
     let mut initial_def = mvmc_core::InitialDef::Auto;
     let mut opt_trans_arg = false;
+    let mut flush_interval_arg: Option<i64> = None;
     let mut physcal_params: Option<PathBuf> = None;
     let mut physcal_trace_dir: Option<PathBuf> = None;
 
@@ -128,6 +131,18 @@ fn main() {
                         process::exit(2)
                     }
                 };
+            }
+            "-F" | "--flush-interval" => {
+                idx += 1;
+                flush_interval_arg = Some(
+                    args.get(idx)
+                        .and_then(|s| s.parse().ok())
+                        .filter(|&n| n >= 1)
+                        .unwrap_or_else(|| {
+                            eprintln!("error: -F: FileFlushInterval should be natural number.");
+                            process::exit(2)
+                        }),
+                );
             }
             "-o" | "--opt-trans" => {
                 opt_trans_arg = true;
@@ -397,6 +412,7 @@ fn main() {
             output_dir: Some(out_dir),
             initial_def,
             enable_opt_trans: Some(opt_trans_arg),
+            file_flush_interval: flush_interval_arg,
             ..mvmc_core::RunConfig::new(nsteps, mode_arg.as_deref().unwrap_or(inferred_mode))
         };
         match run_with_selected_backend(
