@@ -64,7 +64,7 @@ $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\
 > **実装**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2692`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2716`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
 
 ## 3.2 パフィアンペア積部分
@@ -119,8 +119,8 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:281`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:623`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:721`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:631`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:841`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
@@ -173,7 +173,7 @@ $$
 
 > **実装**
 > - C: `ReadInputParameters` (`AllComplexFlag` を設定) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1814`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1838`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - 整合性: 実数モードの実行では、C は `SlaterElm_real`/`InvM_real`/`PfM_real` のコピーを保持します。Rust は実数バッファ (`pf_m_real`, `sr_opt_oo_real`, ...) を保持し、共有コードが必要とする箇所では複素数のシャドウも保持します。
 

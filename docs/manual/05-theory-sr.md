@@ -126,7 +126,7 @@ are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 > - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:437`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:53`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - Parity: C scales stored samples by `sqrt(w)` (`SROptO_Store[...] = sqrtw*SROptO[...]`, `vmccal.c:241,248`); the Gram product is formed once per step. For the real stored matrix Rust follows Julia's SYRK dispatch and upper-triangle copy; the complex stored product preserves a sequential sample sum (`sr_store_gram_julia`, `observables.rs:497`; tests `stored_direct_sr_gram_matches_sampled_julia_values`, `real_gram_matches_julia_generic_and_syrk_dispatch_boundary`). These floating-point summation orders differ between BLAS providers and are compared with tolerances. Only the active branch (real or complex) is reduced over MPI, exactly as `vmcmain.c` selects one `WeightAverageSROpt` branch.
 
 ## 5.4 Conjugate-gradient solver (`NSRCG = 1`)
@@ -195,5 +195,5 @@ the input of a later PhysCal run ([chapter 6](06-theory-observables-lanczos.md),
 > - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:984`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:441`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
 > - Parity: the window is `step >= NSROptItrStep - NSROptItrSmp`; Rust rejects `NSROptItrSmp > NSROptItrStep` up front ("nsteps must be >= nsmp; C leaves oversized-window rows unwritten", `validate_optimization_window`, `run.rs:1306`). The standard-deviation formula is `sqrt(var/(n-1))` of `creal(data*conj(data))` in both. The `--nsteps`/`--nsmp` command-line overrides change `NSROptItrStep`/`NSROptItrSmp` for the window.
