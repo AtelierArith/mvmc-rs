@@ -67,8 +67,8 @@ fn chain_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<(
         mu::print_val_d(o, "D", &mut s.D[2][2], 0.0);
         mu::input_spin_nn(o, &s.J, s.JAll, &mut s.J0, s.J0All, "J0")?;
         mu::input_spin_nn(o, &s.Jp, s.JpAll, &mut s.J0p, s.J0pAll, "J0'")?;
-        // C passes the name "J0'" for the third neighbour as well (a copy-paste quirk).
-        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J0pp, s.J0ppAll, "J0'")?;
+        // C labels the third neighbour "J0'" (copy-paste slip); corrected to "J0''" (#404).
+        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J0pp, s.J0ppAll, "J0''")?;
         mu::not_used_d(o, "mu", s.mu)?;
         mu::not_used_d(o, "U", s.U)?;
         mu::not_used_c(o, "t", s.t)?;

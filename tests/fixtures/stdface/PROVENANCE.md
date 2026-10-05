@@ -50,6 +50,116 @@ uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c
 `<case>/StdFace.def` is the input (absent for `err_missing_input_file`);
 `<case>/expected/` holds every file the C program wrote plus `stdout.txt` (the complete
 C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
+`<case>/expected_fixed/` (only where it differs) is the output of the *corrected* build
+(`build_reference.sh --fixed`: `lattice_defects.patch` applied to a copy of the C sources, see
+`tests/fixtures/stdface/README.md`). `expected/` stays the historical C output; the Rust
+port is compared with `expected_fixed/` when present, else with `expected/`.
+- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `e096c8b221846b48c50b39a6ff32f6534ec967da4842c67f9baee75156167f53`
+
+## Cases whose C output differs from the corrected build (`expected_fixed/`)
+
+- `HubbardTetragonal`
+- `HubbardTetragonal_MomentumProjection`
+- `chain_spin_Jpp_labels`
+- `err_honeycomb_hubbard_D_not_used`
+- `err_honeycomb_hubbard_J0_not_used`
+- `err_honeycomb_hubbard_J0p_not_used`
+- `err_honeycomb_hubbard_J2pp_not_used`
+- `err_honeycomb_hubbard_J_not_used`
+- `err_honeycomb_hubbard_Jpp_not_used`
+- `err_honeycomb_missing_ncond`
+- `err_honeycomb_spin_V0pp_not_used`
+- `err_honeycomb_spin_Vpp_not_used`
+- `err_honeycomb_spin_t1pp_not_used`
+- `err_honeycomb_spin_tpp_Vpp_not_used_c`
+- `err_honeycomb_spin_tpp_not_used`
+- `err_honeycomb_sublattice_conflict`
+- `err_honeycomb_sublattice_incommensurate`
+- `err_kagome_hubbard_Jpp_not_used`
+- `err_kagome_hubbard_Vpp_not_used`
+- `err_kagome_hubbard_tpp_not_used`
+- `err_kagome_hubbard_tpp_not_used_c`
+- `err_kagome_kondo_Jpp_not_used`
+- `err_kagome_spin_Jpp_not_used`
+- `err_kagome_spin_Vpp_not_used`
+- `err_kagome_spin_tpp_not_used`
+- `err_ladder_a0H_not_used`
+- `err_ladder_a1H_not_used`
+- `err_ladder_a2H_not_used`
+- `err_ladder_a2W_not_used`
+- `err_ladder_hubbard_J1p_not_used`
+- `err_ladder_hubbard_J1p_not_used_label`
+- `err_ladder_hubbard_J_not_used`
+- `err_ladder_hubbard_V_with_V1_not_used`
+- `err_ladder_hubbard_t_not_used`
+- `err_ladder_kondo_Vp_not_used`
+- `err_ladder_kondo_tp_not_used`
+- `err_ladder_spin_J_not_used`
+- `err_ladder_spin_J_not_used_fixed`
+- `err_ladder_spin_V_not_used`
+- `err_ladder_spin_t_V_J_not_used_t`
+- `err_ladder_spin_t_not_used`
+- `err_square_hubbard_D_not_used`
+- `err_square_hubbard_J0_not_used`
+- `err_square_hubbard_J_not_used`
+- `err_square_missing_ncond`
+- `err_square_sublattice_conflict`
+- `err_square_sublattice_incommensurate`
+- `err_triangular_hubbard_Jp_not_used`
+- `err_triangular_hubbard_Jpp_not_used`
+- `err_triangular_spin_Jpp_conflict`
+- `err_triangular_spin_tpp_not_used`
+- `err_triangular_spin_tpp_not_used_c`
+- `honeycomb_alias`
+- `honeycomb_hubbard`
+- `honeycomb_hubbard_antiperiodic`
+- `honeycomb_hubbard_antiperiodic_w`
+- `honeycomb_hubbard_bond_specific`
+- `honeycomb_hubbard_box_negative_det`
+- `honeycomb_hubbard_box_tilted`
+- `honeycomb_hubbard_complex_hopping`
+- `honeycomb_hubbard_gc_fields`
+- `honeycomb_hubbard_long_range`
+- `honeycomb_hubbard_nmptrans_0`
+- `honeycomb_hubbard_sub`
+- `honeycomb_kondo`
+- `honeycomb_kondo_anisotropic_j`
+- `honeycomb_kondo_antiperiodic`
+- `honeycomb_kondo_gc_fields`
+- `honeycomb_spin_Jpp_labels`
+- `honeycomb_spin_long_range`
+- `ladder_hubbard_V_with_bonds`
+- `ladder_hubbard_a_scaled`
+- `ladder_hubbard_isotropic_t_V`
+- `ladder_hubbard_wx_given`
+- `ladder_hubbard_wx_overridden`
+- `ladder_hubbard_wy`
+- `ladder_kondo_J_components`
+- `ladder_kondo_J_given`
+- `ladder_kondo_J_with_bonds`
+- `ladder_kondo_Jx_given`
+- `ladder_kondo_isotropic`
+- `spin_chain_long_range`
+- `square_hubbard`
+- `square_hubbard_aliases`
+- `square_hubbard_anisotropic_lengths`
+- `square_hubbard_antiperiodic`
+- `square_hubbard_antiperiodic_w`
+- `square_hubbard_box_negative_det`
+- `square_hubbard_box_tilted`
+- `square_hubbard_complex_hopping`
+- `square_hubbard_gc_fields`
+- `square_hubbard_long_range`
+- `square_hubbard_nmptrans_0`
+- `square_hubbard_sub`
+- `square_kondo`
+- `square_kondo_anisotropic_j`
+- `square_kondo_antiperiodic`
+- `square_kondo_gc_fields`
+- `tetragonal_hubbard_3x2`
+- `triangular_spin_Jpp_components`
+- `triangular_spin_Jpp_labels`
+- `triangular_spin_long_range`
 
 ## Cases
 
@@ -152,11 +262,11 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `err_ladder_spin_J1_conflict` | generated | 255 | `b8bc0ea5794b0e676dc44bb3f47300b18d1008ebb8793fc3d74cb27c9d2b486d` |
 | `ladder_kondo` | generated | 0 | `668e6657939f8b2daf4afb2f414cd947f276d222398e25c173dfb40d21f98459` |
 | `ladder_kondo_gc_fields` | generated | 0 | `b374265328765f9daf12c1a0be85d8c711c991835d8734327af0a6d79dd433e4` |
-| `err_ladder_kondo_J_not_used` | generated | 255 | `ce7f4b1e4d5bf11ea634711a52714e90407de13f22d333d6c2b1371a22de6453` |
-| `err_ladder_kondo_Jx_not_used` | generated | 255 | `3451097203de2935c01e46b5f200264813e068acdd85026ffc17b3fc962c162c` |
+| `ladder_kondo_J_given` | generated | 255 | `ce7f4b1e4d5bf11ea634711a52714e90407de13f22d333d6c2b1371a22de6453` |
+| `ladder_kondo_Jx_given` | generated | 255 | `3451097203de2935c01e46b5f200264813e068acdd85026ffc17b3fc962c162c` |
 | `err_ladder_hubbard_t_not_used` | generated | 255 | `5081c186195348e545eda98336f4d929f64ba2bfe69583cc52945ecc54529e1d` |
 | `err_ladder_hubbard_tp_not_used` | generated | 255 | `f91716adedce0802feef503fbd664f442fd940b94a102d891dfe9d86b14c0961` |
-| `err_ladder_hubbard_V_not_used` | generated | 255 | `ab2f20b2a1185a6d7fc3a9cf6c27674274c72e4cd165e7ad4cc80b05e55b9a17` |
+| `ladder_hubbard_V_with_bonds` | generated | 255 | `ab2f20b2a1185a6d7fc3a9cf6c27674274c72e4cd165e7ad4cc80b05e55b9a17` |
 | `err_ladder_missing_W` | generated | 255 | `270dcae2b9f4d8e5ef269d259d42c470c77695edb6bc4697eb035bb5d5e97797` |
 | `err_ladder_missing_L` | generated | 255 | `0dca3408108d45e350b8d9e7297f46d19a15e5a5bf493cec7c0370c3d402eb8e` |
 | `err_ladder_a0W_not_used` | generated | 255 | `7cad4743fbb2eadfe44d319d0d3705713f295de0acefa9c8a6fbc67fc99f2f9f` |
@@ -173,7 +283,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `err_ladder_missing_ncond` | generated | 255 | `a8aab7fc1a624ffcad186509178cb9d165d227e910f4f4d8d861e49165d27ed2` |
 | `square_hubbard` | generated | 0 | `f0cd7c96860b7d2895df10771c87dd16045365747cbf3309380cfd6bd1b04f55` |
 | `square_hubbard_sub` | generated | 0 | `499b907f1fa3d483f763167045a90c49f85aa23e8de4f6f9faa7c5725c10a893` |
-| `square_hubbard_long_range` | generated | 0 | `3f3bba783228c8e73e78baea5d7e0626a9ca43fa04a71fbfd2dd8f0b4977a4b3` |
+| `square_hubbard_long_range` | generated | 0 | `93154669784307464e1c6416e48535280d6f371deb8048b70db80cce9481d9ed` |
 | `square_hubbard_complex_hopping` | generated | 0 | `67fbed6992c52d89a39fb7c033fd6ed0b568197e7ba20954459729412a281b27` |
 | `square_hubbard_gc_fields` | generated | 0 | `d22c7e32c0b57105b45dcc9890c5490fb792f9939f823055452031e02b9bb467` |
 | `square_hubbard_antiperiodic` | generated | 0 | `efd19879e696e36a41b4d640626172100b356dc70dc416966a978ff6b4b98ba9` |
@@ -213,7 +323,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `err_square_sublattice_conflict` | generated | 255 | `d1d8ec0cb81fa327aa0360655e3ba77e5d389cd5404adad9dda0003e9528f3eb` |
 | `triangular_hubbard` | generated | 0 | `f4a270be351e20d516990b6998778608e6e504a9dcf28f3ea71723a3330c0bac` |
 | `triangular_hubbard_sub` | generated | 0 | `e7949a5b6eb8eac10976f8c23ed5518d5c73d6aeebcbf52a6450419965dc3d07` |
-| `triangular_hubbard_long_range` | generated | 0 | `219d8b758f67cdb1a334f00bf834f5b473d345bbb4464b664e6f246c904dc633` |
+| `triangular_hubbard_long_range` | generated | 0 | `e5d603e7a6b3e16718ec6986665627fa53c2d0d26343fcf9bc2e5a60f08c8bac` |
 | `triangular_hubbard_complex_hopping` | generated | 0 | `e47bc90d13f41d0d570212223a271c410718d1330241785f611288ad34ed109b` |
 | `triangular_hubbard_gc_fields` | generated | 0 | `d4665462c16f623104e2d4a699beab6e290532c43071ab2f57dac24ac69ee53b` |
 | `triangular_hubbard_antiperiodic` | generated | 0 | `f869aa3fc0db7bc8185ccb6005f1c7291ded53174907a6cfab25f0814e69342c` |
@@ -253,7 +363,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `err_triangular_sublattice_conflict` | generated | 255 | `4fd8d9910a558bc8969ab8723ed03f7505b7f24c333b64e0560bf8f1fe9f984c` |
 | `honeycomb_hubbard` | generated | 0 | `0de062f1fc054ec855f665005a6d2b44fdad68b7a01af2ae10e9220e7d0d949c` |
 | `honeycomb_hubbard_sub` | generated | 0 | `62181367bf36255503615d2088239f051c82f753770800278161e72da0debd2a` |
-| `honeycomb_hubbard_long_range` | generated | 0 | `c545fa21409d7bbf157b4d65cb944ade7bccb3ad92d8b374274209dfb7d4d505` |
+| `honeycomb_hubbard_long_range` | generated | 0 | `06b27727d333c35947f11e059b3d61b6ce5256d40980b8fa54b46cf2cf467e37` |
 | `honeycomb_hubbard_complex_hopping` | generated | 0 | `7e41566c2b01dfea1de76d4c2c3c21d5225bb5418ae15221a81a041fd35b755f` |
 | `honeycomb_hubbard_gc_fields` | generated | 0 | `009b53fa4a8036f61fcc1b8bf026e165ad5144dd0f4d572635d053b822b5b8ed` |
 | `honeycomb_hubbard_antiperiodic` | generated | 0 | `3b56e5ba051697295cb5421ba19208e9c290a575049dd7e0ebcaa9d71a5c1a38` |
@@ -293,7 +403,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `err_honeycomb_sublattice_conflict` | generated | 255 | `2a24843a1e221bf90f76ef8cab191330f2cb399e3b0312a7701ed4a563c7d865` |
 | `kagome_hubbard` | generated | 0 | `9f9bda107b7ff774b6104791f1be8c4b73f9da66fc635d7a36eefd96727fbf60` |
 | `kagome_hubbard_sub` | generated | 0 | `4484af24c696889659716d225979cfc8729544dd17f24631ced6df1adcaa971e` |
-| `kagome_hubbard_long_range` | generated | 0 | `e1ef6f924490bf832ec0fd52e48d92c8aa5bf8301532c846a29261f8040cbd86` |
+| `kagome_hubbard_long_range` | generated | 0 | `09ef7085e1c69b8bb2c4f9081454d18debca64e7b1c6630f4126f2c20ceb93eb` |
 | `kagome_hubbard_complex_hopping` | generated | 0 | `6a71bf26a72403d817a816091a3797a94640cce69b5f876dc17d339023d72088` |
 | `kagome_hubbard_gc_fields` | generated | 0 | `a95eb80d052126ed5ae22e41ae4910d25436f1ca8892526ecd169b79ee283027` |
 | `kagome_hubbard_antiperiodic` | generated | 0 | `0c68888b8f807364140e3ae2b6a26240246aa2268766a8052b28d5c186ababba` |
@@ -302,7 +412,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `kagome_hubbard_box_negative_det` | generated | 0 | `78fb9847896f26735f8e5e115fa5dcca004afde931945eb8a2c88b3303edda93` |
 | `kagome_hubbard_nmptrans_0` | generated | 0 | `90952b13f0b62f9c0fb5dca7566f71d58581502cdf8f5799cc627fdfb99a391c` |
 | `kagome_spin` | generated | 0 | `fda317d17cb871adfd922b363cc696e50093850163f04164d4b06bc46c3cdb77` |
-| `kagome_spin_long_range` | generated | 0 | `c225b2950582c0f9a37a783e2ade599a2b3198ca160100330d49d9695d61d4a8` |
+| `kagome_spin_long_range` | generated | 0 | `8eddb26bfccba4234066975b1d3bfad053cbcae842dc606e5a59eb49c6d463a7` |
 | `kagome_spin_anisotropic` | generated | 0 | `63af98f205b5bd86c0f8361232a7ee63bad20e362818e739f1f93221d4e60cc5` |
 | `kagome_spin_bonds` | generated | 0 | `6cd442c39c1044c9d2417c2551a1a6ec21550965852b89b80b7a3a616d054112` |
 | `kagome_spin_gc_fields` | generated | 0 | `ed111d9f7eed68848984c07818bf7d40d4fc4a5dec9aebbaa6d69349610913b8` |
@@ -338,9 +448,9 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `triangular_hubbard_bond_specific` | generated | 0 | `26e79dc7c7cd44c6162c07b18011109b531839d477109e29a408aae9a04efc25` |
 | `honeycomb_hubbard_bond_specific` | generated | 0 | `ff04d3039a2e65bc6aa7ab8d08eaf7e13362a3ba3e65ff9fbf215c6482d3b293` |
 | `kagome_hubbard_bond_specific` | generated | 0 | `f62c4964940ed06bf71e81c0a468fcdfa73df2f0274948721a880d3df5ad59db` |
-| `triangular_spin_tpp_unchecked` | generated | 0 | `4d121a3f740a08883ff8074eec29b7ee91e3f35c110ec67ed8f45b14f97a72ac` |
-| `honeycomb_spin_tpp_Vpp_unchecked` | generated | 0 | `63849f872329519844b1230a9b4bf5f7fd4fcdcc5c3535b4396514b9d4e1ca29` |
-| `kagome_hubbard_tpp_unknown_to_lattice` | generated | 0 | `06a051499eaa6e419c848ba073db85a5e8d1550b0e282ba69e0509d13e0e71cf` |
+| `err_triangular_spin_tpp_not_used_c` | generated | 0 | `4d121a3f740a08883ff8074eec29b7ee91e3f35c110ec67ed8f45b14f97a72ac` |
+| `err_honeycomb_spin_tpp_Vpp_not_used_c` | generated | 0 | `63849f872329519844b1230a9b4bf5f7fd4fcdcc5c3535b4396514b9d4e1ca29` |
+| `err_kagome_hubbard_tpp_not_used_c` | generated | 0 | `06a051499eaa6e419c848ba073db85a5e8d1550b0e282ba69e0509d13e0e71cf` |
 | `square_hubbard_aliases` | generated | 0 | `5908e60125672afc202b8d62981f513a655c1b336825b82fe605400a37aabd25` |
 | `triangular_alias` | generated | 0 | `b836ce33bc04617b2ff582ff7ef1094e1dd98ce201c188106daedde1cd4d03d7` |
 | `honeycomb_alias` | generated | 0 | `2a5f0461b3138a8f4f4e094bb782ea1e617359b8a54933d4ed4cf733e4f0e746` |
@@ -350,4 +460,45 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 | `tetragonal_hubbard_3x2` | generated | 0 | `b097c30e32a8d0490e0962630a3b5eff0a72eebc33723b3d17e8f4a3476bd8ad` |
 | `tetragonal_spin_3x2` | generated | 0 | `c8d5afdba4a9a7137879e70f113fbbbe4e7a460578f3338de42a48837c06b403` |
 | `err_unknown_lattice_2d` | generated | 255 | `187bb59ddb3b64e518a85ae8928e3b14b2beab42f15a14a6adb06d303a6274e1` |
+| `ladder_hubbard_isotropic_t_V` | generated | 255 | `e9b131a7b5dbd3f500763e7a12f78923875d6a7e63624797e32733290ffe8a24` |
+| `ladder_kondo_isotropic` | generated | 255 | `3839f2a8cdfe62c99449a9bf48afc9913dd742d6044134f92e6fbe9b96643d3a` |
+| `ladder_kondo_J_components` | generated | 255 | `1f5c86085261da72cabe9a9d7cfcab3962abf77bb7d8484beb7cd539057bfd63` |
+| `ladder_kondo_J_with_bonds` | generated | 255 | `ce814510336b3476943f9671c17cf87f7a76b8b4ce5d1baaa64dfa8076d82218` |
+| `err_ladder_spin_t_V_J_not_used_t` | generated | 255 | `5c3500edbe7b69b985d892346a75d57251b3e7e36ab04cb00965903bd87b50a9` |
+| `err_ladder_spin_V_not_used` | generated | 255 | `6911e6b8255560df8cd33b2146cd1d68122606e6674bd7185ff22bb82e5914dd` |
+| `err_ladder_spin_J_not_used_fixed` | generated | 255 | `a1b689b8d9294c630554de539401eec44c4a7dc823eb88c18e916970c5100bab` |
+| `err_ladder_kondo_tp_not_used` | generated | 255 | `d4ce7d78226d6f544966b2e649335f98d80d55405a1f7707ae54bbac459eed19` |
+| `err_ladder_kondo_Vp_not_used` | generated | 255 | `0d541663b272a63f79e6f41934faeb38b7cf0e505ce4b7fbbd9d3627a43d3ade` |
+| `err_ladder_kondo_Jp_not_used` | generated | 255 | `e6bd9409cec867d53dc7ef897745dececead9a803ca19ce6c181d36c5f7faef3` |
+| `ladder_hubbard_a_scaled` | generated | 0 | `c1c3e91a2ddb752719510f32a9e5cb328ef1eb7dd42ff7ba6b711f43d27afb57` |
+| `ladder_hubbard_wy` | generated | 0 | `c3a3c46021e5d3e9799a9a7f4e13efd0227c77e1d75c1c418b201675f8a89409` |
+| `ladder_hubbard_wx_given` | generated | 0 | `cab1ffc9cd2cc18421463c617ee855179fba05224157df5426cd94e83e4a67fe` |
+| `err_ladder_a0H_not_used` | generated | 255 | `c70bcbf3f6540e2e375bb803ccb06e1859c0eff9c1694ec74dc60e8872c7ea43` |
+| `err_ladder_a1H_not_used` | generated | 255 | `538e3b0ce30aa8e5938df6feb5f7e9cc56072ee59beebde0b0f4fe68bcc30fac` |
+| `err_ladder_a2W_not_used` | generated | 255 | `3e0ae23210228e81d277da966ce89bf75957f864d458ad7c430811e9e2afd63b` |
+| `err_ladder_a2H_not_used` | generated | 255 | `19ac25b8bf3c4dfb238ab09208ba177af0574ed7e7e5e664da6872711d86ab9d` |
+| `err_ladder_hubbard_J1p_not_used_label` | generated | 255 | `45d9693730740a6e1cc979639e622cfdd5c72961b0420d857b9ffcb119032914` |
+| `chain_spin_Jpp_labels` | generated | 0 | `c2deb8461a88f3b6fd47eabd72b1ae458695ac61c1139401a9274ddf5e82e7b3` |
+| `triangular_spin_Jpp_labels` | generated | 0 | `429e569d7c741c4207b30c0dd7e0d256f4d1fb5128f4e8501db2cd33fc7866b0` |
+| `honeycomb_spin_Jpp_labels` | generated | 0 | `4cdbed93030b3ea680db55097d269b5f953b0de25695f32cfa52e06311219437` |
+| `triangular_spin_Jpp_components` | generated | 0 | `8a6091a1b2bbf28097b136d7a10e82449263ef18d4c74c1115f214bd1c456f11` |
+| `err_triangular_spin_Jpp_conflict` | generated | 255 | `a7425e021c335f080666e1c85352c04c487c48b40af57363c7221572c63b401d` |
+| `err_triangular_spin_tpp_not_used` | generated | 0 | `4d121a3f740a08883ff8074eec29b7ee91e3f35c110ec67ed8f45b14f97a72ac` |
+| `err_triangular_spin_t2pp_not_used` | generated | 255 | `247e8b7eae3f73308ca1714d107e8ac19e9e31853ee6007153a723be7b184c87` |
+| `err_triangular_hubbard_Jp_not_used` | generated | 0 | `00a5143530bad1ccb7d264e7831674a7d9d51555a448efe0f40f2805a972b485` |
+| `err_triangular_hubbard_Jpp_not_used` | generated | 0 | `11fb17f10f52cac90f4ddb524e4614e98893b321085ad836fef71a43c1d12245` |
+| `err_honeycomb_spin_tpp_not_used` | generated | 0 | `f952ab441232a6ca359b0403c59e6e35c3d4bce347e3c266730192b34ae73c45` |
+| `err_honeycomb_spin_t1pp_not_used` | generated | 0 | `b7337b9694d483386e371369cc10bb2b0b1e4c2d04c9f9898d45dcd5118fb58f` |
+| `err_honeycomb_spin_Vpp_not_used` | generated | 0 | `b2185176bfc94e971a4e4495e9e06876af672d35b4e467a2024e1cb20a63d024` |
+| `err_honeycomb_spin_V0pp_not_used` | generated | 0 | `33e678a90f7608b00e3cd784b510d0df7b152356ef5e763706d80badcfe2b3ee` |
+| `err_honeycomb_hubbard_J0p_not_used` | generated | 0 | `4d1b10e966cb51fedc5433597131579e87e016ed87a7de85f90f313707978970` |
+| `err_honeycomb_hubbard_Jpp_not_used` | generated | 0 | `54cb240a16310eb6a60b36a21d2e2202e633268e37980e96a57abacefc260dc8` |
+| `err_honeycomb_hubbard_J2pp_not_used` | generated | 0 | `e9e5ba714f7a2ee8b2fb9ef98b9f18499e36b4c2bb96ba1561868ee532273f50` |
+| `err_kagome_hubbard_tpp_not_used` | generated | 0 | `06a051499eaa6e419c848ba073db85a5e8d1550b0e282ba69e0509d13e0e71cf` |
+| `err_kagome_hubbard_Vpp_not_used` | generated | 0 | `c69c83bb187ca898afb5fb74e2e542a4d7e77c92a0269de387a8f99ae678ab67` |
+| `err_kagome_hubbard_Jpp_not_used` | generated | 0 | `ec11c3bf66773a6dc88b37a972e1b1fbe44876db891eb67f0cac9ade902db348` |
+| `err_kagome_spin_tpp_not_used` | generated | 0 | `19cca29914f5d5a4f02936022f43fc1862a931574ea12cee0e071bc8da1a0e51` |
+| `err_kagome_spin_Vpp_not_used` | generated | 0 | `82dc61c02ae7a72e555514424769bfb4963c245f197c33f131e62b5b9f96a375` |
+| `err_kagome_spin_Jpp_not_used` | generated | 0 | `90bdb2cd09623b65cf9762ea520b2fff600703690da9cb0a2b83668a05a8e9ca` |
+| `err_kagome_kondo_Jpp_not_used` | generated | 0 | `1c39e1995c2357708cc9e3c30fd199228cfe82bbdcba8d70d48d2d47d60d2e37` |
 | `sample_hubbard_default_model` | generated | 255 | `0503aee770ac4a4f883db290b511edc9a9d7ec6c7d68060ed06441f051d345fa` |

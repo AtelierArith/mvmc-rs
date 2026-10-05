@@ -1,0 +1,84 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Hubbard 
+  KEYWORD : lattice              | VALUE : honeycomb 
+  KEYWORD : w                    | VALUE : 2 
+  KEYWORD : l                    | VALUE : 2 
+  KEYWORD : u                    | VALUE : 4.0 
+  KEYWORD : t                    | VALUE : 1.0 
+  KEYWORD : ncond                | VALUE : 8 
+  KEYWORD : wsub                 | VALUE : 1 
+  KEYWORD : a0wsub               | VALUE : 1 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+  @ Lattice Size & Shape
+
+                a = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Wlength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Llength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wx = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wy = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               Lx = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Ly = 0.86603     ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+                L = 2         
+                W = 2         
+           Height = 1           ######  DEFAULT VALUE IS USED  ######
+   Number of Cell = 4
+
+  @ Hamiltonian 
+
+                h = 0.00000     ######  DEFAULT VALUE IS USED  ######
+            Gamma = 0.00000     ######  DEFAULT VALUE IS USED  ######
+          Gamma_y = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               mu = 0.00000     ######  DEFAULT VALUE IS USED  ######
+                U = 4.00000   
+               t0 = 1.00000    0.00000   
+               t1 = 1.00000    0.00000   
+               t2 = 1.00000    0.00000   
+
+  @ Numerical conditions
+
+
+######  Print Expert input files  ######
+
+    locspn.def is written.
+      trans.def is written.
+    coulombintra.def is written.
+    CParaFileHead = zqp         ######  DEFAULT VALUE IS USED  ######
+      NVMCCalMode = 0           ######  DEFAULT VALUE IS USED  ######
+     NLanczosMode = 0           ######  DEFAULT VALUE IS USED  ######
+    NDataIdxStart = 1           ######  DEFAULT VALUE IS USED  ######
+      NDataQtySmp = 1           ######  DEFAULT VALUE IS USED  ######
+      NSPGaussLeg = 8           ######  DEFAULT VALUE IS USED  ######
+          NSPStot = 0           ######  DEFAULT VALUE IS USED  ######
+         NMPTrans = -1          ######  DEFAULT VALUE IS USED  ######
+    NSROptItrStep = 1000        ######  DEFAULT VALUE IS USED  ######
+     NSROptItrSmp = 100         ######  DEFAULT VALUE IS USED  ######
+       NVMCWarmUp = 10          ######  DEFAULT VALUE IS USED  ######
+     NVMCInterval = 1           ######  DEFAULT VALUE IS USED  ######
+       NVMCSample = 1000        ######  DEFAULT VALUE IS USED  ######
+    NExUpdatePath = 0         
+          RndSeed = 123456789   ######  DEFAULT VALUE IS USED  ######
+       NSplitSize = 1           ######  DEFAULT VALUE IS USED  ######
+           NStore = 1           ######  DEFAULT VALUE IS USED  ######
+            NSRCG = 0           ######  DEFAULT VALUE IS USED  ######
+     DSROptRedCut = 0.00100     ######  DEFAULT VALUE IS USED  ######
+     DSROptStaDel = 0.02000     ######  DEFAULT VALUE IS USED  ######
+     DSROptStepDt = 0.02000     ######  DEFAULT VALUE IS USED  ######
+            ncond = 8  
+              2Sz = 0           ######  DEFAULT VALUE IS USED  ######
+     modpara.def is written.
+      ComplexType = 0           ######  DEFAULT VALUE IS USED  ######
+
+ERROR ! (Lsub, Wsub, Hsub) and (a0Wsub, ..., a2Hsub) conflict !
+

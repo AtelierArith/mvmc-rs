@@ -13,6 +13,7 @@ source hashes, compiler, flags and commands.
 import hashlib
 import cases_3d
 import cases_2d
+import cases_defects
 import cases_ladder
 import os
 import platform
@@ -173,6 +174,7 @@ EXTRA_CASES = {
 EXTRA_CASES.update(cases_ladder.CASES)
 EXTRA_CASES.update(cases_3d.CASES)
 EXTRA_CASES.update(cases_2d.CASES)
+EXTRA_CASES.update(cases_defects.CASES)
 # Upstream sample (HPhi keywords: rejected by the mVMC build of StdFace).
 EXTRA_CASES["sample_hubbard_default_model"] = (STD / "samples/hubbard/default_model/stan.in").read_text()
 
@@ -264,10 +266,31 @@ def run_case_3d(historical, fixed, case_dir, text, declared_defect):
     return status
 
 
+def same_tree(a, b):
+    names_a = sorted(p.name for p in a.iterdir())
+    names_b = sorted(p.name for p in b.iterdir())
+    return names_a == names_b and all((a / n).read_bytes() == (b / n).read_bytes() for n in names_a)
+
+
+def run_both(binary, fixed, case_dir, input_text):
+    """C output in `expected/`; if the corrected build differs, also `expected_fixed/` (#404)."""
+    status = run_case(binary, case_dir, input_text)
+    fixed_dir = case_dir / "expected_fixed"
+    if fixed_dir.exists():
+        shutil.rmtree(fixed_dir)
+    if fixed is not None:
+        run_case(fixed, case_dir, input_text, "expected_fixed")
+        if same_tree(case_dir / "expected", fixed_dir):
+            shutil.rmtree(fixed_dir)
+    return status
+
+
 def main():
     binary = Path(sys.argv[1]).resolve()
-    # Second argument: the build with 3d_defects.patch (build_reference_3d_fixed.sh), see #356.
+    # Argument 2: the build with 3d_defects.patch (build_reference_3d_fixed.sh), see #356.
     fixed_3d = Path(sys.argv[2]).resolve()
+    # Argument 3 (optional): the build with lattice_defects.patch (`build_reference.sh --fixed`).
+    fixed = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else None
     FIXTURES.mkdir(parents=True, exist_ok=True)
     rows = []
     rows_3d = []
@@ -275,7 +298,7 @@ def main():
         case_dir = FIXTURES / case
         case_dir.mkdir(exist_ok=True)
         shutil.copyfile(UPSTREAM / case / "StdFace.def", case_dir / "StdFace.def")
-        status = run_case(binary, case_dir, "present")
+        status = run_both(binary, fixed, case_dir, "present")
         rows.append((case, "upstream test/mvmc", status))
     for case, text in EXTRA_CASES.items():
         case_dir = FIXTURES / case
@@ -288,7 +311,7 @@ def main():
             status = run_case_3d(binary, fixed_3d, case_dir, text, case in cases_3d.DEFECT_CASES)
             rows_3d.append((case, "generated (3D, #356)", status))
             continue
-        status = run_case(binary, case_dir, text)
+        status = run_both(binary, fixed, case_dir, text)
         rows.append((case, "generated", status))
 
     sources = sorted((STD / "src").glob("*.[ch]"))
@@ -329,12 +352,24 @@ def main():
         "`<case>/StdFace.def` is the input (absent for `err_missing_input_file`);",
         "`<case>/expected/` holds every file the C program wrote plus `stdout.txt` (the complete",
         "C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.",
+        "`<case>/expected_fixed/` (only where it differs) is the output of the *corrected* build",
+        "(`build_reference.sh --fixed`: `lattice_defects.patch` applied to a copy of the C sources, see",
+        "`tests/fixtures/stdface/README.md`). `expected/` stays the historical C output; the Rust",
+        "port is compared with `expected_fixed/` when present, else with `expected/`.",
+        f"- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `{sha256(ROOT / 'c_toolbox/stdface/lattice_defects.patch')}`",
         "",
         "## Cases",
         "",
         "| case | origin | C exit status | input SHA-256 |",
         "| --- | --- | --- | --- |",
     ]
+    corrected = sorted(r[0] for r in rows if (FIXTURES / r[0] / "expected_fixed").exists())
+    lines.insert(
+        lines.index("## Cases"),
+        "## Cases whose C output differs from the corrected build (`expected_fixed/`)\n\n"
+        + "\n".join(f"- `{c}`" for c in corrected)
+        + "\n",
+    )
     for case, origin, status in rows:
         input_path = FIXTURES / case / "StdFace.def"
         digest = sha256(input_path) if input_path.exists() else "(no input file)"

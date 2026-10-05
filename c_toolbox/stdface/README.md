@@ -40,11 +40,21 @@ and `-O3`. gcc 13.3.0 on Linux x86-64 was used; signed zeros in complex expressi
 GCC's lowering (`real * complex` scales both components, `real + complex` copies the
 imaginary part, `real - complex` negates it, `complex * complex` is the textbook formula).
 
+## Corrected build (issue #404)
+
+`build_reference.sh <dir> --fixed` copies the vendored sources to a temporary directory, applies
+`lattice_defects.patch` (corrections of the C lattice defects reported as Julia-mVMC#66; the patch is
+a plain unified diff against `extern/mVMC-1.3.0/src/StdFace/src`) and builds `mvmc_dry_fixed.out`.
+`generate_fixtures.py <mvmc_dry.out> <mvmc_dry_fixed.out>` stores the C output in `expected/` and, where the
+corrected build differs, `expected_fixed/` (see `tests/fixtures/stdface/README.md`).
+`cases_defects.py` holds the inputs added for the corrections.
+
 ## Reproduction
 
 ```
 c_toolbox/stdface/build_reference.sh /tmp/stdface-c
+c_toolbox/stdface/build_reference.sh /tmp/stdface-c --fixed
 c_toolbox/stdface/build_reference_3d_fixed.sh /tmp/stdface-c
-uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c/mvmc_dry.out /tmp/stdface-c/mvmc_dry_3d_fixed.out
+uv run --no-project python c_toolbox/stdface/generate_fixtures.py /tmp/stdface-c/mvmc_dry.out /tmp/stdface-c/mvmc_dry_3d_fixed.out /tmp/stdface-c/mvmc_dry_fixed.out
 c_toolbox/stdface/check_complex_expr.sh
 ```

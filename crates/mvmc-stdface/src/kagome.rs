@@ -1,6 +1,7 @@
 //! Port of `Kagome.c` (`StdFace_Kagome`, mVMC branch): the kagome lattice.
 //!
-//! Generated from the C source by a mechanical statement-by-statement translation and then
+//! Generated from the C source with the corrections of issue #404
+//! (`c_toolbox/stdface/lattice_defects.patch`) by a mechanical statement-by-statement translation and then
 //! reviewed; the output is checked byte for byte against the C program (see
 //! `tests/stdface_c_fixtures.rs`). The HPhi-only boost routines are not ported.
 #![allow(non_snake_case)]
@@ -64,7 +65,6 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::not_used_d(o, "mu", s.mu)?;
         mu::not_used_d(o, "U", s.U)?;
         mu::not_used_c(o, "t", s.t)?;
-        mu::not_used_c(o, "t0", s.t)?;
         mu::not_used_c(o, "t0", s.t0)?;
         mu::not_used_c(o, "t1", s.t1)?;
         mu::not_used_c(o, "t2", s.t2)?;
@@ -80,6 +80,18 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::not_used_d(o, "V0'", s.V0p)?;
         mu::not_used_d(o, "V1'", s.V1p)?;
         mu::not_used_d(o, "V2'", s.V2p)?;
+        mu::not_used_c(o, "t''", s.tpp)?;
+        mu::not_used_c(o, "t0''", s.t0pp)?;
+        mu::not_used_c(o, "t1''", s.t1pp)?;
+        mu::not_used_c(o, "t2''", s.t2pp)?;
+        mu::not_used_d(o, "V''", s.Vpp)?;
+        mu::not_used_d(o, "V0''", s.V0pp)?;
+        mu::not_used_d(o, "V1''", s.V1pp)?;
+        mu::not_used_d(o, "V2''", s.V2pp)?;
+        mu::not_used_j(o, "J''", s.JppAll, &s.Jpp)?;
+        mu::not_used_j(o, "J0''", s.J0ppAll, &s.J0pp)?;
+        mu::not_used_j(o, "J1''", s.J1ppAll, &s.J1pp)?;
+        mu::not_used_j(o, "J2''", s.J2ppAll, &s.J2pp)?;
     } else {
         mu::print_val_d(o, "mu", &mut s.mu, 0.0);
         mu::print_val_d(o, "U", &mut s.U, 0.0);
@@ -102,6 +114,18 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::not_used_j(o, "J0'", s.J0pAll, &s.J0p)?;
         mu::not_used_j(o, "J1'", s.J1pAll, &s.J1p)?;
         mu::not_used_j(o, "J2'", s.J2pAll, &s.J2p)?;
+        mu::not_used_j(o, "J''", s.JppAll, &s.Jpp)?;
+        mu::not_used_j(o, "J0''", s.J0ppAll, &s.J0pp)?;
+        mu::not_used_j(o, "J1''", s.J1ppAll, &s.J1pp)?;
+        mu::not_used_j(o, "J2''", s.J2ppAll, &s.J2pp)?;
+        mu::not_used_c(o, "t''", s.tpp)?;
+        mu::not_used_c(o, "t0''", s.t0pp)?;
+        mu::not_used_c(o, "t1''", s.t1pp)?;
+        mu::not_used_c(o, "t2''", s.t2pp)?;
+        mu::not_used_d(o, "V''", s.Vpp)?;
+        mu::not_used_d(o, "V0''", s.V0pp)?;
+        mu::not_used_d(o, "V1''", s.V1pp)?;
+        mu::not_used_d(o, "V2''", s.V2pp)?;
         mu::not_used_d(o, "D", s.D[2][2])?;
         if s.model == "hubbard" {
             mu::not_used_i(o, "2S", s.S2)?;

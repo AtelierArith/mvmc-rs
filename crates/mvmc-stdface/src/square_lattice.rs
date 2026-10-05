@@ -1,6 +1,7 @@
 //! Port of `SquareLattice.c` (`StdFace_Tetragonal`, mVMC branch): the tetragonal (square) lattice.
 //!
-//! Generated from the C source by a mechanical statement-by-statement translation and then
+//! Generated from the C source with the corrections of issue #404
+//! (`c_toolbox/stdface/lattice_defects.patch`) by a mechanical statement-by-statement translation and then
 //! reviewed; the output is checked byte for byte against the C program (see
 //! `tests/stdface_c_fixtures.rs`). The HPhi-only boost routines are not ported.
 #![allow(non_snake_case)]
@@ -95,7 +96,6 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::input_coulomb_v(o, s.Vp, &mut s.V1p, "V1'")?;
         mu::input_coulomb_v(o, s.Vpp, &mut s.V0pp, "V0''")?;
         mu::input_coulomb_v(o, s.Vpp, &mut s.V1pp, "V1''")?;
-        mu::print_val_d(o, "V'", &mut s.Vp, 0.0);
         mu::not_used_j(o, "J0", s.J0All, &s.J0)?;
         mu::not_used_j(o, "J1", s.J1All, &s.J1)?;
         mu::not_used_j(o, "J'", s.JpAll, &s.Jp)?;

@@ -20,9 +20,9 @@ for key, (lat, w, l, nc) in LATTICES.items():
     K = head("Kondo", lat, w, l) + f"t = 1.0\nJ = 2.0\nncond = {nc}\n"
     CASES[f"{key}_hubbard"] = H
     CASES[f"{key}_hubbard_sub"] = H + f"Wsub = 1\nLsub = {l}\n"
-    CASES[f"{key}_hubbard_long_range"] = (
-        H + "mu = -0.4\nt' = 0.3\nt'' = 0.1\nV = 0.5\nV' = 0.2\nV'' = 0.1\n"
-    )
+    # Kagome has no third-neighbour (t'', V'', J'') bonds: they are rejected (#404).
+    pp = "" if key == "kagome" else "t'' = 0.1\nV'' = 0.1\n"
+    CASES[f"{key}_hubbard_long_range"] = H + "mu = -0.4\nt' = 0.3\nV = 0.5\nV' = 0.2\n" + pp
     CASES[f"{key}_hubbard_complex_hopping"] = (
         head("Hubbard", lat, w, l)
         + f"U = 2.0\nt = 1.0, 0.5\nt' = -0.3, 0.2\nncond = {nc}\nComplexType = 1\n"
@@ -43,7 +43,7 @@ for key, (lat, w, l, nc) in LATTICES.items():
     )
     CASES[f"{key}_hubbard_nmptrans_0"] = H + "NMPTrans = 0\nWsub = 1\nLsub = 1\n"
     CASES[f"{key}_spin"] = S + f"Wsub = 1\nLsub = {l}\n"
-    CASES[f"{key}_spin_long_range"] = S + "J' = 0.4\nJ'' = 0.1\n"
+    CASES[f"{key}_spin_long_range"] = S + "J' = 0.4\n" + ("" if key == "kagome" else "J'' = 0.1\n")
     CASES[f"{key}_spin_anisotropic"] = (
         head("Spin", lat, w, l) + "Jx = 1.0\nJy = 0.5\nJz = 2.0\nD = 0.2\n2Sz = 0\n"
     )
@@ -122,14 +122,14 @@ CASES["kagome_hubbard_bond_specific"] = (
     "V0 = 0.3\nV1' = 0.1\nV2' = 0.2\nncond = 12\n"
 )
 # C quirks (see PR): copy-paste bugs in the NotUsed checks of the spin branch.
-CASES["triangular_spin_tpp_unchecked"] = (
+CASES["err_triangular_spin_tpp_not_used_c"] = (
     head("Spin", "triangular", 3, 3) + "J = 1.0\n2Sz = 1\nt'' = 1.0\n"
 )
-CASES["honeycomb_spin_tpp_Vpp_unchecked"] = (
+CASES["err_honeycomb_spin_tpp_Vpp_not_used_c"] = (
     head("Spin", "honeycomb", 2, 2) + "J = 1.0\n2Sz = 0\nt'' = 1.0\nV'' = 0.5\n"
 )
 CASES["err_kagome_spin_t0_not_used"] = head("Spin", "kagome", 2, 2) + "J = 1.0\n2Sz = 0\nt0 = 1.0\n"
-CASES["kagome_hubbard_tpp_unknown_to_lattice"] = (
+CASES["err_kagome_hubbard_tpp_not_used_c"] = (
     head("Hubbard", "kagome", 2, 2) + "U = 4.0\nt = 1.0\nt'' = 0.5\nncond = 12\n"
 )
 CASES["square_hubbard_aliases"] = (
