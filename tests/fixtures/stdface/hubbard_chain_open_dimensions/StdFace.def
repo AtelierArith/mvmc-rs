@@ -1,0 +1,7 @@
+model = "FermionHubbard"
+lattice = "ChainLattice"
+L = 5
+U = 1
+t = 2
+ncond = 5
+2Sz = 1

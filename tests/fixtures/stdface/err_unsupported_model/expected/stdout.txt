@@ -1,0 +1,18 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Boson 
+  KEYWORD : lattice              | VALUE : chain 
+  KEYWORD : l                    | VALUE : 6 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+
+Sorry, specified combination, 
+    MODEL : boson  
+  LATTICE : chain, 
+is unsupported in the STANDARD MODE...
+Please use the EXPART MODE, or write a NEW FUNCTION and post us.

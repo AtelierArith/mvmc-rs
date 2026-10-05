@@ -1,0 +1,10 @@
+// leading comment
+
+   MODEL = "hubbard" ;
+LATTICE = chain
+  L=6
+u = 4.0
+T = 1.0
+NCOND = 6
+  // another comment
+CParaFileHead = "MixedCase"

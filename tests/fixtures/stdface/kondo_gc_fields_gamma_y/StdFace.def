@@ -1,0 +1,11 @@
+model = "KondoGC"
+lattice = "chain"
+L = 3
+t = 1.0
+J = 1.0
+ncond = 3
+h = -0.4
+Gamma = 0.3
+Gamma_y = 0.2
+U = 2.0
+mu = 0.1

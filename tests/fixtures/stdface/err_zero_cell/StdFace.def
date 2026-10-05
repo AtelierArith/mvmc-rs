@@ -1,0 +1,6 @@
+model = "Hubbard"
+lattice = "chain"
+L = 0
+U = 1.0
+t = 1.0
+ncond = 0

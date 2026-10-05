@@ -1,0 +1,12 @@
+model = "Hubbard"
+lattice = "chain"
+L = 6
+U = 4.0
+t = 1.0
+ncond = 6
+mu = -0.5
+t' = 0.5
+t'' = 0.2
+V = 1.0
+V' = 0.3
+V'' = 0.1

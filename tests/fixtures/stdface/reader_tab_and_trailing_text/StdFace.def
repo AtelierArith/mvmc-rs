@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "chain"
+L = 6
+U = 4.0
+t = 1.0
+ncond = 6
+NSROptItrStep = 12abc
+RndSeed = 7 # trailing
+NVMCSample = 3.9

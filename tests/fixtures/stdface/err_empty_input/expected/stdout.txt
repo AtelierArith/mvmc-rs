@@ -1,0 +1,15 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+
+Sorry, specified combination, 
+    MODEL : ****  
+  LATTICE : ****, 
+is unsupported in the STANDARD MODE...
+Please use the EXPART MODE, or write a NEW FUNCTION and post us.
