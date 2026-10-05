@@ -22,6 +22,19 @@ class LongCtestDriver(unittest.TestCase):
         self.assertFalse(entry["reference_present"])
         self.assertFalse(driver.model_provenance("no_such_model")["reference_present"])
 
+    def test_verdict_gate_is_upstream_rule_and_supplementary_never_decides(self):
+        self.assertEqual(driver.VERDICT_GATE[1], "rust_ctest_upstream_rule_selected_models")
+        self.assertEqual(driver.VERDICT_GATE[2], "MVMC_RS_CTEST_UPSTREAM_MODELS")
+        self.assertNotIn(driver.VERDICT_GATE, driver.SUPPLEMENTARY_GATES)
+        self.assertEqual(driver.classify(["MissingFixture"], [101]), "MissingFixture")
+
+    def test_every_known_model_has_upstream_reference(self):
+        models = driver.known_models()
+        self.assertEqual(len(models), 13)
+        for model in models:
+            self.assertTrue(driver.upstream_provenance(model)["upstream_reference_present"], model)
+        self.assertFalse(driver.upstream_provenance("../etc")["upstream_reference_present"])
+
 
 if __name__ == "__main__":
     unittest.main()
