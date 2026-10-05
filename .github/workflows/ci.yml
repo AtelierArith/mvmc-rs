@@ -203,6 +203,8 @@ jobs:
         run: cargo fmt --all --check
       - name: Run Clippy with all features
         run: cargo clippy --workspace --all-targets --all-features --locked --profile ci -- -D warnings
+      - name: Check manual citations and links
+        run: python3 scripts/check_manual_citations.py
 
   documentation:
     name: Documentation — doctests and build (${{ matrix.platform.name }})

@@ -234,5 +234,5 @@ made identically on every rank of the group. See [8.4](08-running.md#84-mpi-and-
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1739`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1840`
 > - Parity: `partition_range` reproduces `SplitLoop` including the "remainder to the last ranks" rule and the small-work branch. `resolve_rnd_seed` adds the group index to the base seed with wrapping `i64` arithmetic and then requires the result to fit in `u32` (`seeded_rng`, `run.rs:1799`); a negative `RndSeed` uses one clock value read on the output root and broadcast (Julia lifecycle).

@@ -89,8 +89,8 @@ $W$, $\sum wF$, $\sum w|F|^2$ and the SR accumulators before the division by $W$
 > - C: `VMCMainCal` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:82`
 > - C: `WeightAverageWE` — `extern/mVMC-1.3.0/src/mVMC/average.c:41`
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2591`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1513`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2692`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
 > - Rust: `weight_average_we` — `crates/mvmc-core/src/average.rs:18`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:89`
 > - Parity: `Etot2 += w * conj(e) * e` (`vmccal.c:191`) is `etot2 += w * e.conj() * e` in `run.rs:2771`, the same product order. In `output_data` the relative variance is computed only when $|\langle H\rangle|>10^{-14}$ and is written as `0.0` otherwise (Julia's guard); C divides unconditionally. The complex division in the optimization output uses `julia_complex::divide`, while the PhysCal output (`output_phys_data`, `io.rs:161`) uses the C99-style `c_complex::divide`.

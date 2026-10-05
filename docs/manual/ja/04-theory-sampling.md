@@ -219,5 +219,5 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1739`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1840`
 > - 整合性: `partition_range` は、「余りを最後のランクに割り当てる」規則と少量の仕事量の場合の分岐を含めて `SplitLoop` を再現します。`resolve_rnd_seed` は基本シードにグループ番号を `i64` のラップアラウンド演算で加え、その結果が `u32` に収まることを要求します(`seeded_rng`、`run.rs:1799`)。負の `RndSeed` では、出力ルートで読み取った1つの時計の値を用い、ブロードキャストします(Juliaのライフサイクル)。

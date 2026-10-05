@@ -113,7 +113,7 @@ C のマニュアルによれば、実数モードのパラメータの虚部成
 > - C: `fn_StochasticOptCG` (writes the CG row) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:73`
 > - C: `StochasticOpt` (writes the direct-solver row) — `extern/mVMC-1.3.0/src/mVMC/stcopt.c:33`
 > - C: `InitFile` (header, opened for every optimization) — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
-> - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:107`
+> - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
 > - 整合性: (**相違**) C は*直接法*ソルバーでも `zvo_SRinfo.dat` を書き出します(`stcopt.c:157`、反復回数の列なし)。Rust は CG の経路でのみ書き出します(`crates/mvmc-core/src/sr_cg.rs:208-241`、接頭辞は `CDataFileHead`)。直接法ソルバーの実行では `zvo_SRinfo.dat` は生成されません **(観測)**。Rust では、ヘッダー行はファイルが新規または空の場合にのみ書き出されます。
 
 ## 9.5 タイマー

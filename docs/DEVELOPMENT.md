@@ -215,3 +215,20 @@ exact gates. See [NUMERICAL_COMPARISONS.md](NUMERICAL_COMPARISONS.md) for the
 comparison inventory, operation budgets, residual checks and nonfinite rules.
 Use `cargo nextest run --workspace --locked --cargo-profile test-fast` for
 full checks; include `--all-features --run-ignored all` for optional coverage.
+
+## Manual citations
+
+The manual (`docs/manual/` and `docs/manual/ja/`) cites code as `path:LINE`. The
+Lint job runs `python3 scripts/check_manual_citations.py` (standard library only,
+needs the `extern/mVMC-1.3.0` submodule for C citations) and fails on stale
+citations, broken relative links and missing anchors. When you move or edit code
+that the manual cites, run
+
+```sh
+python3 scripts/check_manual_citations.py --fix   # rewrite line numbers of bullet citations whose symbol moved nearby
+python3 scripts/check_manual_citations.py         # verify
+```
+
+`--fix` only moves a citation to the nearest line (within `--window`, default
+400) that defines or contains the cited symbol; anything else is reported and
+must be corrected by hand. Review the resulting diff.

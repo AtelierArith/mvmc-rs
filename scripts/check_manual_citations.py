@@ -19,8 +19,15 @@ This is an optional developer tool; it is not run by the Rust build or tests.
 
 Usage (from the repository root):
 
-    uv run --no-project scripts/check_manual_citations.py \
-        [--c-root extern/mVMC-1.3.0]
+    python3 scripts/check_manual_citations.py \
+        [--c-root extern/mVMC-1.3.0] [--fix]
+
+The script uses only the Python standard library (``uv run --no-project`` also
+works). CI runs it in the Lint job and fails on any stale citation. With
+``--fix``, a bullet citation whose symbol is no longer on the cited line is
+rewritten to the nearest line within ``--window`` lines (default 400) that
+defines or contains the symbol; the corrected lines are listed and the check is
+re-run. Citations whose symbol is not found nearby remain errors.
 
 ``extern/mVMC-1.3.0`` is a git submodule. When it is not checked out, pass its
 location with ``--c-root`` or the citations into it are skipped with a warning.
@@ -116,10 +123,26 @@ def check_links(md: Path, md_name: str, errors: list[str]) -> int:
     return count
 
 
+DEFINITION = re.compile(r"\b(?:fn|struct|enum|trait|type|const|static|mod)\s+{ident}\b")
+
+
+def nearest_symbol_line(body: list[str], ident: str, start: int, window: int) -> int | None:
+    """Nearest 1-based line within ``window`` of ``start`` defining (else containing) ``ident``."""
+    definition = re.compile(DEFINITION.pattern.format(ident=re.escape(ident)))
+    for matcher in (lambda l: definition.search(l), lambda l: ident in l):
+        hits = [i + 1 for i, l in enumerate(body) if matcher(l) and abs(i + 1 - start) <= window]
+        if hits:
+            return min(hits, key=lambda h: abs(h - start))
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--c-root", default=None)
+    ap.add_argument("--fix", action="store_true",
+                    help="rewrite stale bullet-citation line numbers when the symbol is found nearby")
+    ap.add_argument("--window", type=int, default=400)
     args = ap.parse_args()
     repo = Path(args.repo)
     c_root = Path(args.c_root) if args.c_root else repo / "extern" / "mVMC-1.3.0"
@@ -146,6 +169,7 @@ def main() -> int:
         return cache[p]
 
     errors: list[str] = []
+    fixes: list[tuple[Path, int, str, int, int]] = []
     checked = skipped = 0
     manual = repo / "docs" / "manual"
     en_files = sorted(manual.glob("*.md"))
@@ -180,6 +204,10 @@ def main() -> int:
                             ident = IDENT.findall(symbol.split("::")[-1] if "::" in symbol.split("(")[0] else symbol)
                             ident = ident[0] if ident else symbol
                             if ident not in body[start - 1]:
+                                near = nearest_symbol_line(body, ident, start, args.window)
+                                if args.fix and near is not None:
+                                    fixes.append((md, lineno, path, start, near))
+                                    continue
                                 errors.append(
                                     f"{md_name}:{lineno}: `{ident}` not on {path}:{start}: "
                                     f"{body[start - 1].strip()[:80]!r}"
@@ -203,6 +231,19 @@ def main() -> int:
                 end = int(m.group(3)) if m.group(3) else start
                 if start < 1 or end > n or end < start:
                     errors.append(f"{md_name}:{lineno}: {path}:{start}-{end} outside 1..{n}")
+    for md, lineno, path, old_line, new_line in fixes:
+        lines = md.read_text().split("\n")
+        lines[lineno - 1] = re.sub(
+            rf"{re.escape(path)}:{old_line}(?:-(\d+))?`",
+            lambda m: f"{path}:{new_line}"
+            + (f"-{int(m.group(1)) + new_line - old_line}" if m.group(1) else "")
+            + "`",
+            lines[lineno - 1],
+        )
+        md.write_text("\n".join(lines))
+        print(f"fixed {md.relative_to(manual)}:{lineno}: {path}:{old_line} -> {new_line}")
+    if fixes:
+        print(f"rewrote {len(fixes)} citation(s); re-run to verify")
     print(f"checked {checked} citations, {links} relative links, skipped {skipped}, "
           f"{len(errors)} problem(s)")
     for e in errors:

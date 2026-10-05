@@ -53,11 +53,11 @@ C ドライバー(`getopt` 文字列 `"bhm:oF:esv"`, `vmcmain.c:46`)とは異な
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:52`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:433`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:631`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:452`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1241`
+> - Rust: `main` — `crates/mvmc-cli/src/main.rs:54`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:449`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:647`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:468`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1333`
 > - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `getopt` オプションのうち `-o` 以外は実装されていません。
 
 ### コンソール出力
@@ -176,8 +176,8 @@ Rust は初期化の前に次のものを拒否します(`validate_grouped_runti
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1254`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1513`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1346`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1614`
 > - 整合性: コミュニケータの幅は `vmcmain.c:239-256` に従います(`NSplitSize` はコミュニケータの*幅*であり、連鎖の本数ではありません)。サンプルの範囲は `SplitLoop` に従います。C のグリーン関数のリダクションはランク 0 のみに集約されますが、Rust は累積量を all-reduce でリダクションしてルートが書き出すため、ファイルの内容は同じになります。
 
 ## 8.5 環境変数
