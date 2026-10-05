@@ -26,6 +26,18 @@ pub enum LanczosEnergyError {
     SingularEquation,
     /// A stationary point or its energy is not finite or has an illegal norm.
     InvalidStationaryPoint,
+    /// C `CalculateEneByAlpha` rejected `|dnorm / H1| < 1e-12` (returns -1).
+    NormTooSmall,
+}
+
+impl LanczosEnergyError {
+    /// Failures for which C `PhysCalLanczos_*` returns -1 before writing anything:
+    /// every `zvo_ls_*` file stays empty and the run continues (`physcal_lanczos.c`
+    /// lines 175 and 316-317). Other errors correspond to non-finite arithmetic,
+    /// which C propagates into NaN/inf output values.
+    pub fn is_c_early_return(self) -> bool {
+        matches!(self, Self::NegativeDiscriminant | Self::NormTooSmall)
+    }
 }
 
 /// Accumulate one sample's 16 flattened QQQQ moments.
@@ -69,10 +81,13 @@ pub fn lanczos_energy(qqqq: &[Complex64]) -> Result<LanczosEnergy, LanczosEnergy
     let h3 = qqqq[11].re;
     let h4 = qqqq[15].re;
 
+    // C `CalculateEne` evaluates `pow(H1, 3)` through libm, which can differ by
+    // one ulp from the two multiplications of `powi(3)`; the discriminant then
+    // feeds an ill-conditioned alpha (issue #181). Squares are exact either way.
     let tmp_aa = h2_1 * (h2_1 + h2_2) - 2.0 * h1 * h3;
     let tmp_bb = -h1 * h2_1 + h3;
     let tmp_cc = h2_1 * (h2_1 + h2_2).powi(2) - h1.powi(2) * h2_1 * (h2_1 + 2.0 * h2_2)
-        + 4.0 * h1.powi(3) * h3
+        + 4.0 * h1.powf(3.0) * h3
         - 2.0 * h1 * (2.0 * h2_1 + h2_2) * h3
         + h3.powi(2);
     if !(tmp_aa.is_finite() && tmp_bb.is_finite() && tmp_cc.is_finite()) {
@@ -92,12 +107,8 @@ pub fn lanczos_energy(qqqq: &[Complex64]) -> Result<LanczosEnergy, LanczosEnergy
         return Err(LanczosEnergyError::InvalidStationaryPoint);
     }
 
-    let energy_p = energy_by_alpha(h1, h2_1, h2_2, h3, h4, alpha_p);
-    let energy_m = energy_by_alpha(h1, h2_1, h2_2, h3, h4, alpha_m);
-    let (energy_p, energy_m) = match (energy_p, energy_m) {
-        (Some(p), Some(m)) => (p, m),
-        _ => return Err(LanczosEnergyError::InvalidStationaryPoint),
-    };
+    let energy_p = energy_by_alpha(h1, h2_1, h2_2, h3, h4, alpha_p)?;
+    let energy_m = energy_by_alpha(h1, h2_1, h2_2, h3, h4, alpha_m)?;
 
     if energy_p.0 > energy_m.0 {
         Ok(LanczosEnergy {
@@ -121,23 +132,26 @@ fn energy_by_alpha(
     h3: f64,
     h4: f64,
     alpha: f64,
-) -> Option<(f64, f64)> {
+) -> Result<(f64, f64), LanczosEnergyError> {
     let tmp_ene = h1 + alpha * (h2_1 + h2_2) + alpha.powi(2) * h3;
     let dnorm = 1.0 + 2.0 * alpha * h1 + alpha.powi(2) * h2_1;
     let tmp_ene_v = h2_1 + 2.0 * alpha * h3 + alpha.powi(2) * h4;
     if !h1.is_finite() || h1.abs() < f64::EPSILON {
-        return None;
+        return Err(LanczosEnergyError::InvalidStationaryPoint);
     }
     let norm_ratio = dnorm / h1;
-    if !norm_ratio.is_finite() || norm_ratio.abs() < 1.0e-12 {
-        return None;
+    if norm_ratio.is_finite() && norm_ratio.abs() < 1.0e-12 {
+        return Err(LanczosEnergyError::NormTooSmall);
+    }
+    if !norm_ratio.is_finite() {
+        return Err(LanczosEnergyError::InvalidStationaryPoint);
     }
     let ene = tmp_ene / dnorm;
     let ene_v = ((tmp_ene_v / dnorm) - ene.powi(2)) / ene.powi(2);
     if !ene.is_finite() || !ene_v.is_finite() {
-        return None;
+        return Err(LanczosEnergyError::InvalidStationaryPoint);
     }
-    Some((ene, ene_v))
+    Ok((ene, ene_v))
 }
 
 #[cfg(test)]

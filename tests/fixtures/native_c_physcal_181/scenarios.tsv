@@ -1,0 +1,45 @@
+# name	source	rust_mode	opttrans	stages(;-separated, modpara Key=Value,...)	zqp_perturb	class
+heisenberg_chain_real	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0		0	compare
+heisenberg_chain_cmp	tests/fixtures/physcal_181/two-samples/heisenberg_chain_cmp	cmp	0		0	compare
+heisenberg_chain_fsz	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0		0	compare
+hubbard_chain_real	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0		0	compare
+hubbard_chain_dh_real	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_real	real	0		0	compare
+kondo_chain_real	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0		0	compare
+hubbard_chain_dh_overlays	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_overlays	real	0		0	compare
+hubbard_chain_dh_opttrans	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_opttrans	real	1		0	compare
+hubbard_chain_dh_rbm_opttrans	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_rbm_opttrans	cmp	1		0	compare
+hubbard_lanczos1	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0	NLanczosMode=1	0	compare
+hubbard_lanczos2_cmp	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	cmp	0	NLanczosMode=2	0	compare
+heisenberg_real_lanczos1	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NLanczosMode=1	0.05	compare
+heisenberg_real_lanczos2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NLanczosMode=2	0.05	compare
+heisenberg_cmp_lanczos1	tests/fixtures/physcal_181/two-samples/heisenberg_chain_cmp	cmp	0	NLanczosMode=1	0.05	compare
+heisenberg_cmp_lanczos2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_cmp	cmp	0	NLanczosMode=2	0.05	compare
+heisenberg_fsz_lanczos1	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NLanczosMode=1	0	c_rejected
+heisenberg_fsz_lanczos2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NLanczosMode=2	0	c_rejected
+kondo_real_lanczos1	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0	NLanczosMode=1	0.05	compare
+kondo_real_lanczos2	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0	NLanczosMode=2	0.05	compare
+hubbard_dh_real_lanczos2	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_real	real	0	NLanczosMode=2	0	compare
+all_terms_lanczos1_real	tests/fixtures/physcal_181/hubbard_all_terms_lanczos1	real	0		0	compare
+all_terms_lanczos2_real	tests/fixtures/physcal_181/hubbard_all_terms_lanczos2	real	0		0	compare
+all_terms_lanczos1_cmp	tests/fixtures/physcal_181/hubbard_all_terms_lanczos1	cmp	0		0	compare
+all_terms_lanczos2_cmp	tests/fixtures/physcal_181/hubbard_all_terms_lanczos2	cmp	0		0	compare
+hubbard_chain_lanczos1	extern/Julia-mVMC/test/integration/reference/hubbard_chain_lanczos/physcal_ref	real	0	NLanczosMode=1	0	compare
+hubbard_chain_lanczos2	extern/Julia-mVMC/test/integration/reference/hubbard_chain_lanczos/physcal_ref	real	0	NLanczosMode=2	0	compare
+spin_chain_lanczos1	extern/Julia-mVMC/test/integration/reference/spin_chain_lanczos/physcal_ref	real	0	NLanczosMode=1	0	compare
+spin_chain_lanczos2	extern/Julia-mVMC/test/integration/reference/spin_chain_lanczos/physcal_ref	real	0	NLanczosMode=2	0	compare
+idx_start3_qty3	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NDataIdxStart=3,NDataQtySmp=3	0	compare
+idx_start1_qty3_lanczos2	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0	NDataIdxStart=1,NDataQtySmp=3,NLanczosMode=2	0	compare
+rerun_truncate	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NDataIdxStart=1,NDataQtySmp=3;NDataIdxStart=2,NDataQtySmp=2	0	compare
+rerun_lanczos_off	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0	NLanczosMode=2,NDataIdxStart=1,NDataQtySmp=2;NLanczosMode=0,NDataIdxStart=2,NDataQtySmp=2	0	compare
+heisenberg_real_lanczos1_exact_state	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NLanczosMode=1	0	c_singular
+heisenberg_cmp_lanczos1_exact_state	tests/fixtures/physcal_181/two-samples/heisenberg_chain_cmp	cmp	0	NLanczosMode=1	0	c_singular
+fsz_warm0_sample1	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NVMCWarmUp=0,NVMCSample=1,NDataQtySmp=1	0	compare
+fsz_warm0_sample2	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NVMCWarmUp=0,NVMCSample=2,NDataQtySmp=1	0	compare
+fsz_warm0_sample10	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NVMCWarmUp=0,NVMCSample=10,NDataQtySmp=1	0	compare
+fsz_warm10_sample50	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NVMCSample=50,NDataQtySmp=1	0	compare
+heisenberg_overlays_gjo	tests/fixtures/native_c_physcal_181/_sources/heisenberg_overlay	real	0		0	compare
+hubbard_dh2_only_overlay	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_overlays	real	0		0	compare	drop=DH4,InDH4;zqp=c_opt
+hubbard_dh4_only_overlay	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_overlays	real	0		0	compare	drop=DH2,InDH2;zqp=c_opt
+idx_negative_start	tests/fixtures/physcal_181/two-samples/heisenberg_chain_real	real	0	NDataIdxStart=-1,NDataQtySmp=3	0	compare
+hubbard_dh_real_lanczos1	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_real	real	0	NLanczosMode=1	0	compare
+heisenberg_fsz_lanczos1_gauss8	tests/fixtures/physcal_181/two-samples/heisenberg_chain_fsz	fsz	0	NLanczosMode=1,NSPGaussLeg=8	0	c_defect_not_reproduced

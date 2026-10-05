@@ -281,7 +281,10 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     if p.lanczos_mode > 0 {
         if data.i_flg_orbital_general != 0 {
             return Err(
-                "Lanczos PhysCal for FSZ/general orbitals is not implemented yet (issue #31)"
+                // C readdef.c rejects this combination ("Lanczos mode is not supported
+                // when orbital is general") unless NSPGaussLeg > 1 reaches its
+                // `else if` defect, which only produces NaN moments.
+                "Lanczos mode is not supported when orbital is general (FSZ/general orbitals, issue #31)"
                     .into(),
             );
         }

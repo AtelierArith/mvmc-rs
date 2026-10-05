@@ -302,17 +302,36 @@ pub fn output_phys_data(
 
     if data.modpara.lanczos_mode > 0 {
         let qqqq_path = output_path(&format!("{head}_ls_qqqq_{index:03}.dat"), output_dir)?;
+        let lanczos = crate::lanczos::lanczos_energy(&phys.phys_lanczos_qqqq);
+        if let Err(error) = lanczos {
+            if error.is_c_early_return() {
+                // C PhysCalLanczos_* returns -1 ("illegal value of alpha") before
+                // any fprintf: InitFilePhysCal already created every zvo_ls_* file,
+                // so all of them stay empty and the run continues.
+                File::create(qqqq_path)?;
+                let mut names = vec!["ls_out"];
+                if data.modpara.lanczos_mode > 1 {
+                    names.extend(["ls_cisajs", "ls_cisajscktalt", "ls_cisajscktaltex"]);
+                }
+                for suffix in names {
+                    File::create(output_path(
+                        &format!("{head}_{suffix}_{index:03}.dat"),
+                        output_dir,
+                    )?)?;
+                }
+                return Ok(());
+            }
+        }
         let mut qqqq_file = File::create(qqqq_path)?;
         for value in &phys.phys_lanczos_qqqq {
             write!(qqqq_file, "{}  ", format_c_double(value.re))?;
         }
         writeln!(qqqq_file)?;
 
-        let (energy, variance, alpha) =
-            match crate::lanczos::lanczos_energy(&phys.phys_lanczos_qqqq) {
-                Ok(result) => (result.energy, result.variance, result.alpha),
-                Err(_) => (f64::NAN, f64::NAN, f64::NAN),
-            };
+        let (energy, variance, alpha) = match lanczos {
+            Ok(result) => (result.energy, result.variance, result.alpha),
+            Err(_) => (f64::NAN, f64::NAN, f64::NAN),
+        };
         let ls_path = output_path(&format!("{head}_ls_out_{index:03}.dat"), output_dir)?;
         let mut ls_file = File::create(ls_path)?;
         write!(

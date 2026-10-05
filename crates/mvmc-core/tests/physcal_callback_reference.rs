@@ -145,11 +145,14 @@ fn check_samples(model: &str, mode: &str, opt_trans: bool, fail: bool, samples: 
         ("ele_spn", config.ele_spn.as_slice()),
         ("counter", config.counter.as_slice()),
     ] {
-        assert_eq!(
-            actual,
-            values::<i64>(&stage.join(format!("{name}.txt"))),
-            "{model} {name}"
-        );
+        let mut expected = values::<i64>(&stage.join(format!("{name}.txt")));
+        let mut actual = actual.to_vec();
+        if name == "counter" {
+            // Julia omits exchange counters (slots 2, 3); C and Rust count them and
+            // `mvmc-cli/tests/issue181_native_c_physcal.rs` checks them against native C.
+            (actual[2], actual[3], expected[2], expected[3]) = (0, 0, 0, 0);
+        }
+        assert_eq!(actual, expected, "{model} {name}");
     }
     let expected = values::<u32>(&stage.join("next624.txt"));
     assert_eq!(expected.len(), 624);
@@ -250,11 +253,13 @@ fn assert_retained_boundary(
         } else {
             root.join(format!("sample-{index}"))
         };
-        assert_eq!(
-            actual,
-            values::<i64>(&path.join(format!("{name}.txt"))),
-            "{name} boundary {index}"
-        );
+        let mut expected = values::<i64>(&path.join(format!("{name}.txt")));
+        let mut actual = actual.to_vec();
+        if name == "counter" {
+            // See the sample comparison above: Julia has no exchange counters.
+            (actual[2], actual[3], expected[2], expected[3]) = (0, 0, 0, 0);
+        }
+        assert_eq!(actual, expected, "{name} boundary {index}");
     }
     let energy = &state.energy;
     numerical_comparison::assert_values_close(

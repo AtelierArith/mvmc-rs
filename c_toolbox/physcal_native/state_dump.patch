@@ -1,0 +1,80 @@
+--- a/src/sfmt/SFMT.c	2026-10-05 23:14:51.774688139 +0900
++++ b/src/sfmt/SFMT.c	2026-10-05 23:15:05.875762115 +0900
+@@ -407,8 +407,10 @@
+  * init_gen_rand or init_by_array must be called before this function.
+  * @return 32-bit pseudorandom number
+  */
++unsigned long long mvmc_draw_count = 0; /* issue #181 probe: primitive draws */
+ uint32_t gen_rand32(void) {
+     uint32_t r;
++    mvmc_draw_count++;
+ 
+     assert(initialized);
+     if (idx >= N32) {
+@@ -419,6 +421,23 @@
+     return r;
+ }
+ #endif
++/* issue #181 probe: print draw count and the next 624 outputs without
++ * disturbing the generator (state, index and count are saved and restored). */
++#include <stdio.h>
++#include <string.h>
++void mvmc_dump_rng(FILE *fp) {
++    w128_t save[N];
++    int save_idx = idx;
++    unsigned long long save_count = mvmc_draw_count;
++    int i;
++    memcpy(save, sfmt, sizeof(sfmt));
++    fprintf(fp, "draws %llu\nnext624", save_count);
++    for (i = 0; i < 624; i++) fprintf(fp, " %u", gen_rand32());
++    fprintf(fp, "\n");
++    memcpy(sfmt, save, sizeof(sfmt));
++    idx = save_idx;
++    mvmc_draw_count = save_count;
++}
+ /**
+  * This function generates and returns 64-bit pseudorandom number.
+  * init_gen_rand or init_by_array must be called before this function.
+--- a/src/mVMC/vmcmain.c	2026-10-05 23:14:51.777688154 +0900
++++ b/src/mVMC/vmcmain.c	2026-10-05 23:15:05.875762115 +0900
+@@ -528,6 +528,32 @@
+ }
+ 
+ /*-- VMC Physical Quantity Calculation --*/
++extern void mvmc_dump_rng(FILE *fp);
++/* issue #181 probe: saved configurations, counters and RNG after each sample */
++static void mvmc_dump_state(int ismp) {
++  char name[64];
++  int i, n;
++  FILE *fp;
++  snprintf(name, sizeof(name), "state_dump_%03d.txt", ismp);
++  fp = fopen(name, "w");
++  fprintf(fp, "ele_idx");
++  for (i = 0; i < NVMCSample * Nsize; i++) fprintf(fp, " %d", EleIdx[i]);
++  fprintf(fp, "\nele_cfg");
++  for (i = 0; i < NVMCSample * Nsite2; i++) fprintf(fp, " %d", EleCfg[i]);
++  fprintf(fp, "\nele_num");
++  for (i = 0; i < NVMCSample * Nsite2; i++) fprintf(fp, " %d", EleNum[i]);
++  fprintf(fp, "\nele_proj_cnt");
++  for (i = 0; i < NVMCSample * NProj; i++) fprintf(fp, " %d", EleProjCnt[i]);
++  fprintf(fp, "\nele_spn");
++  if (iFlgOrbitalGeneral != 0)
++    for (i = 0; i < NVMCSample * Nsize; i++) fprintf(fp, " %d", EleSpn[i]);
++  fprintf(fp, "\ncounter");
++  for (i = 0; i < Counter_max; i++) fprintf(fp, " %d", Counter[i]);
++  fprintf(fp, "\n");
++  mvmc_dump_rng(fp);
++  fclose(fp);
++}
++
+ int VMCPhysCal(MPI_Comm comm_parent, MPI_Comm comm_child1, MPI_Comm comm_child2) {
+   int ismp, tmp_i;
+   int rank;
+@@ -620,6 +646,7 @@
+     WeightAverageWE(comm_parent);
+     WeightAverageGreenFunc(comm_parent);
+     ReduceCounter(comm_child2);
++    if(rank==0) mvmc_dump_state(ismp);
+ 
+     StopTimer(21);
+     StartTimer(22);

@@ -387,6 +387,7 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                     timer.stop(32);
                 }
                 UpdateType::Exchange => {
+                    state.electron_config.counter[2] += 1;
                     timer.start(31);
                     let candidate = make_candidate_exchange(
                         &tmp_ele_idx,
@@ -499,6 +500,7 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
+                        state.electron_config.counter[3] += 1;
                     } else {
                         revert_ele_config(
                             candidate.mj,
@@ -884,6 +886,7 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
                     timer.stop(32);
                 }
                 UpdateType::Exchange => {
+                    state.electron_config.counter[2] += 1;
                     timer.start(31);
                     let candidate = make_candidate_exchange(
                         &tmp_ele_idx,
@@ -1016,6 +1019,7 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
+                        state.electron_config.counter[3] += 1;
                     } else {
                         revert_ele_config(
                             candidate.mj,
