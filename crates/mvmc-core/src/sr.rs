@@ -1479,3 +1479,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "sr_negative_stepdt_tests.rs"]
+mod negative_stepdt_tests;

@@ -27,6 +27,8 @@
 //!   directory (default `<namelist dir>/output`, overridden by `--out-dir`), so
 //!   the heads are stored without it; see
 //!   `ModParaParameters::c_data_file_path_head`.
+//! * A negative `DSROptStepDt` sets `sr_flag` (C `SRFlag`, "Diagonalization
+//!   Mode") and is negated before use (readdef.c:749-755).
 //! * `NFileFlushInterval` is not a C modpara keyword and is rejected (flush
 //!   semantics are tracked separately in #346).
 
@@ -191,6 +193,15 @@ pub fn parse_modpara_content(content: &str) -> io::Result<ModParaParameters> {
     let block = p.nblock_size_rbm_ratio as i32;
     if block % 8 > 0 {
         p.nblock_size_rbm_ratio = i64::from((block / 8).max(1) * 8);
+    }
+    // readdef.c:749-755: a negative DSROptStepDt selects "Diagonalization Mode"
+    // (SRFlag = 1) and is negated; non-negative values (including -0.0) keep
+    // SRFlag = 0. Only the SRinfo header differs in C.
+    if p.dsr_opt_step_dt < 0.0 {
+        p.sr_flag = true;
+        p.dsr_opt_step_dt *= -1.0;
+    } else {
+        p.sr_flag = false;
     }
     Ok(p)
 }
