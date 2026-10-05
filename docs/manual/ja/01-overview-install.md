@@ -37,7 +37,7 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 |------------|---------------------|
 | 直接SR(`NSRCG = 0`)またはCG SR(`NSRCG = 1`)によるパラメータ最適化(`NVMCCalMode = 0`) | サポート |
 | 固定パラメータでの物理量計算(`NVMCCalMode = 1`): `OneBodyG`, `TwoBodyG`, `TwoBodyGEx` | サポート |
-| 単一ステップ Lanczos法(`NLanczosMode = 1, 2`) | `NSplitSize = 1` で `InterAll` なし、スピンを変える `Trans` なしの sz 保存経路でサポート([7.5](07-input-files.md#75-サポートされる入力と拒否される入力)を参照) |
+| 単一ステップ Lanczos法(`NLanczosMode = 1, 2`) | 任意の `NSplitSize` で `InterAll` なし、スピンを変える `Trans` なしの sz 保存経路でサポート([7.5](07-input-files.md#75-サポートされる入力と拒否される入力)を参照) |
 | 実数および複素数の波動関数 | サポート(入力宣言により決まります。[3.3](03-theory-wavefunction.md#33-実数モードと複素数モード)を参照) |
 | `Orbital`/`OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral` (FSZ) | サポート |
 | Gutzwiller因子、Jastrow因子、2/4サイトのダブロン-ホロン相関因子、電荷/スピン/一般のRBM、`OptTrans` | サポート |

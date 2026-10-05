@@ -1,0 +1,5 @@
+NVMCCalMode 0
+NSROptItrStep 3
+NSROptItrSmp 2
+NStore 0
+NVMCSample 2000

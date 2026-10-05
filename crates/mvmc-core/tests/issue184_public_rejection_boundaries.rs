@@ -148,18 +148,18 @@ fn s200_paraopt_split_three_cg_one_rejects_before_output_state_and_rng() {
             d.modpara.nsplit_size = 3;
             d.modpara.nsrcg = 1;
         },
-        "NSplitSize > 1 with SR-CG",
+        "NSRCG != 0 is undefined in mVMC C",
     );
 }
 #[test]
-fn s200_physcal_split_three_general_rejects_before_output_state_and_rng() {
+fn s200_physcal_split_three_general_needs_communicator_before_output_state_and_rng() {
     boundary(
         true,
         |d| {
             d.modpara.nsplit_size = 3;
             d.i_flg_orbital_general = 1;
         },
-        "FSZ / general-orbital PhysCal",
+        "MPI group communicator",
     );
 }
 #[test]
@@ -194,9 +194,9 @@ fn s214_physcal_lanczos_two_general_rejects_before_output_state_and_rng() {
 }
 
 #[test]
-fn s195_s196_grouped_opttrans_public_entries_reject_before_mutation() {
-    // Original payloads, not a count-only synthetic rejection. These are
-    // current Rust/Julia feature guards, not proof of C-invalid input.
+fn s195_s196_grouped_opttrans_public_entries_need_communicator_before_mutation() {
+    // Original payloads, not a count-only synthetic rejection. C defines
+    // grouped OptTrans, so only the missing group communicator rejects.
     for physcal in [false, true] {
         boundary(
             physcal,
@@ -210,13 +210,13 @@ fn s195_s196_grouped_opttrans_public_entries_reject_before_mutation() {
                 d.opt_trans = vec![Complex64::new(1.0, 0.0), Complex64::new(0.5, 0.0)];
                 d.qp_opt_trans = vec![vec![0], vec![0]];
             },
-            "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans",
+            "MPI group communicator",
         );
     }
 }
 
 #[test]
-fn s197_grouped_physcal_general_and_lanczos_reject_before_mutation() {
+fn s197_grouped_physcal_general_and_lanczos_need_communicator_before_mutation() {
     boundary(
         true,
         |d| {
@@ -224,7 +224,7 @@ fn s197_grouped_physcal_general_and_lanczos_reject_before_mutation() {
             d.modpara.lanczos_mode = 0;
             d.i_flg_orbital_general = 1;
         },
-        "FSZ / general-orbital PhysCal",
+        "MPI group communicator",
     );
     boundary(
         true,
@@ -233,12 +233,12 @@ fn s197_grouped_physcal_general_and_lanczos_reject_before_mutation() {
             d.modpara.lanczos_mode = 2;
             d.i_flg_orbital_general = 0;
         },
-        "NSplitSize > 1 with NLanczosMode > 0",
+        "MPI group communicator",
     );
 }
 
 #[test]
-fn s198_grouped_general_standard_projection_rejects_each_original_combination() {
+fn s198_grouped_general_standard_projection_needs_communicator_for_each_combination() {
     for (nsp, nmp) in [(2, 1), (1, 2), (1, -2)] {
         boundary(
             false,
@@ -250,7 +250,7 @@ fn s198_grouped_general_standard_projection_rejects_each_original_combination() 
                 d.n_qp_opt_trans = 1;
                 d.i_flg_orbital_general = 1;
             },
-            "NSplitSize > 1 with FSZ standard-projection NQPFull > 1",
+            "MPI group communicator",
         );
     }
 }

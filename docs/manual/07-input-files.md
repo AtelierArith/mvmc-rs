@@ -161,8 +161,8 @@ initialization or output; a rejected input exits with `error: ...` and non-zero 
 |----------|-----------------------|---------|
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | accepted | accepted |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | accepted | accepted |
-| `TwoBodyGEx` | **rejected** ("not implemented yet (issue #30)") | accepted **(observed)** |
-| any other `In…` keyword | rejected ("not implemented yet (issue #20)") | not checked |
+| `TwoBodyGEx` | accepted and ignored | accepted **(observed)** |
+| any other `In…` keyword | rejected ("unsupported namelist section") | not checked |
 | `SpinJastrow` | rejected ("projection layout would be wrong") | not checked |
 | `BF`, `BFRange` (BackFlow) and any unknown keyword | rejected ("unsupported namelist section …") | **not checked: a `BF` entry is accepted and BackFlow is not applied (observed on current `main`)** |
 
@@ -199,16 +199,15 @@ check; this asymmetry was observed with a release build and is listed in [11.5](
 | `NLanczosMode > 0` with any `InterAll` term | rejected |
 | `NLanczosMode = 2` without `TwoBodyGEx` and with duplicate `OneBodyG` entries | rejected |
 
-### Grouped execution (`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-55`; applies when `NSplitSize > 1`)
+### Grouped execution (`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-44`; applies when `NSplitSize > 1`)
 
 | Condition | Result |
 |-----------|--------|
-| PhysCal with general (FSZ) orbitals | rejected |
-| Optimization with `NSRCG != 0` (CG) | rejected |
-| Optimization with general orbitals and ($N_{\rm GL}>1$ or $\lvert N_{\rm MP}\rvert>1$) | rejected |
-| `NLanczosMode > 0` | rejected |
-| `NQPOptTrans > 1` or more than one `OptTrans`/`QPOptTrans` entry | rejected |
-| `NSplitSize > 1` but the reducer is not a group communicator (`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:58`) | rejected ("requires an MPI group communicator") |
+| Optimization with `NSRCG != 0` (CG) | rejected: undefined in C (`vmccal.c:241,248` writes the stored `O` at the global sample slot, `vmccal.c:314-318` reads it from column 0 with the local count) |
+| PhysCal / optimization with general (FSZ) orbitals, any `NQPFull` | accepted (C defines it; checked against native C at 2 and 4 ranks, #349) |
+| `NLanczosMode > 0` PhysCal | accepted (C defines it) |
+| `NQPOptTrans > 1` / `OptTrans` | accepted (C defines it) |
+| `NSplitSize > 1` but the reducer is not a group communicator (`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:47-66`) | rejected ("requires an MPI group communicator") |
 
 ### Command-line level (`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/main.rs`)
 

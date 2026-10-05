@@ -155,7 +155,7 @@ with three rules that matter for reproducing C:
 
 The cut and the force are identical to the direct solver ([5.2](#52-the-sr-equations)); the diagonal elements used for the
 cut are $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$. The number of CG iterations is printed as the last column of `zvo_SRinfo.dat`.
-Only `NSplitSize = 1` is supported for CG in Rust ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
+Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C) ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
 
 > **Implementation**
 > - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg.c:42`

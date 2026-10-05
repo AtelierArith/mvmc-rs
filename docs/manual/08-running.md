@@ -153,14 +153,14 @@ measurement; $\mathrm{IP}$ is reduced inside the group. Grouped runs are therefo
 
 ### Restrictions
 
-Rust rejects the following before initialization (`validate_grouped_runtime`, [7.5](07-input-files.md#75-supported-and-rejected-inputs)); C supports some of them:
+Rust rejects only the one grouped combination that is undefined in C, before initialization (`validate_grouped_runtime`, [7.5](07-input-files.md#75-supported-and-rejected-inputs)):
 
-- `NSplitSize > 1` with the CG solver (`NSRCG != 0`);
-- `NSplitSize > 1` with `NLanczosMode > 0`;
-- `NSplitSize > 1` with `OptTrans`/`NQPOptTrans > 1`;
-- `NSplitSize > 1` with general (FSZ) orbitals for PhysCal, and for optimization when $N_{\rm GL}>1$ or $\lvert N_{\rm MP}\rvert>1$.
+- `NSplitSize > 1` with the CG solver (`NSRCG != 0`). `VMCMainCal` stores `sqrt(w) O` at the global sample slot (`vmccal.c:241,248`) but
+  `calculateOO_Store` reads the first `sampleEnd - sampleStart` columns from the base pointer (`vmccal.c:314-318`), so every rank after the first reads
+  unwritten `malloc` memory (`setmemory.c:419-421`). The same defect corrupts direct SR with `NStore != 0` and `NSplitSize > 1` in C; Rust computes that case correctly and therefore differs from C there.
 
-Supported: direct SR (`NSRCG = 0`) for any `NSplitSize`; SR-CG (`NSRCG = 1`) with `NSplitSize = 1`; PhysCal of the sz-conserved path with any `NSplitSize`.
+Supported (checked against native C at 2 and 4 ranks, `tests/fixtures/grouped_nsplit_349/`): direct SR (`NSRCG = 0`) for any `NSplitSize`; SR-CG (`NSRCG = 1`) with `NSplitSize = 1`;
+PhysCal and optimization with sz-conserved, FSZ/general orbitals and any `NQPFull`; OptTrans with `NQPOptTrans > 1`; `NLanczosMode = 1, 2` PhysCal.
 
 ### Which rank writes what
 

@@ -1,0 +1,11 @@
+# id model mode opttrans compare_c   (mode: phys = fixed-parameter PhysCal, opt = ParaOpt)
+# compare_c=0: C run is kept as evidence that grouped C equals ungrouped C, but
+# the Rust-vs-C check is skipped (known OptTrans derivative-layout difference,
+# docs/manual/11-compatibility.md item 8, independent of NSplitSize).
+fsz_phys_nqp1 heisenberg_chain_fsz phys 0 1
+fsz_phys_nqp2 heisenberg_chain_fsz phys 0 1
+fsz_opt_nqp2 heisenberg_chain_fsz opt 0 1
+lanczos1_phys hubbard_all_terms_lanczos1 phys 0 1
+lanczos2_phys hubbard_all_terms_lanczos2 phys 0 1
+opttrans_phys hubbard_chain_dh_opttrans phys 1 1
+opttrans_opt hubbard_chain_dh_opttrans opt 1 0
