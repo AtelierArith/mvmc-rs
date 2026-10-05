@@ -1,5 +1,10 @@
 # Julia-mVMC → Rust evidence matrix (issue #184)
 
+> Current consolidated matrix: [issue-184-complete-matrix.md](issue-184-complete-matrix.md)
+> (generated, one row per Julia API name, scenario family and C defect, with verified test names and a
+> recorded nextest result). This file and the other `issue-184-*` records below keep their historical
+> identities and checkpoints.
+
 ## Current joined reconciliation
 
 Main checkpoint: `eaa5db6254c721b95e8e63096287cdb74d5124e2`.
