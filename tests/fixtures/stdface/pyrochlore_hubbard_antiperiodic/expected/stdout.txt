@@ -12,8 +12,8 @@
   KEYWORD : t                    | VALUE : 1.0 
   KEYWORD : ncond                | VALUE : 16 
   KEYWORD : phase0               | VALUE : 180 
-  KEYWORD : phase1               | VALUE : 90 
-  KEYWORD : phase2               | VALUE : 45 
+  KEYWORD : phase1               | VALUE : 180 
+  KEYWORD : phase2               | VALUE : 180 
 
 #######  Construct Model  #######
 
@@ -34,8 +34,8 @@
                Hy = 0.50000     ######  DEFAULT VALUE IS USED  ######
                Hz = 0.00000     ######  DEFAULT VALUE IS USED  ######
            phase0 = 180.00000 
-           phase1 = 90.00000  
-           phase2 = 45.00000  
+           phase1 = 180.00000 
+           phase2 = 180.00000 
 
   @ Super-Lattice setting
 

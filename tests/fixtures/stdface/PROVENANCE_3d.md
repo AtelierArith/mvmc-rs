@@ -26,7 +26,7 @@ uv run --no-project python c_toolbox/stdface/generate_fixtures.py \
 | `ortho_hubbard` | generated (3D, #356) | 0 | no | `afcf0734a199001052194144a2e50cdf3611698904e60a55cf8388deabc61a61` |
 | `ortho_hubbard_anisotropic` | generated (3D, #356) | 0 | no | `c73aa42a45d8722e25c59a1a4beb4209c2c235d90618868018b1758744ff0f8f` |
 | `ortho_hubbard_isotropic_defaults` | generated (3D, #356) | 0 | no | `5889fd480e1b8db2f256ccf098ba26bb18a557865d7972381c97e67f7e3e56f5` |
-| `ortho_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `b23ee76bdf1f5e9bb3c005cc8401ed3e51d864e0fefa42d37f10b473d885c5ae` |
+| `ortho_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `62baa7ac54b600e3a32782de260a482b8955802b7fcc89e2a31f4244dba95eaa` |
 | `ortho_hubbard_complex_hopping` | generated (3D, #356) | 0 | no | `a19b5e97d59157032a04fc5a8d1a38710095c5744db846f1fd4b04b2bc1b9206` |
 | `ortho_hubbard_gc_fields_gamma_y` | generated (3D, #356) | 0 | no | `a43ad25cde7de9b7b6201d53c035db22f1dda7f64ddcc0241dac084b8239849c` |
 | `ortho_hubbard_box_skewed` | generated (3D, #356) | 0 | no | `193ccbd6ff049a0b109865d42438d2d13ed6743b747da496763fc264058f9aad` |
@@ -69,7 +69,7 @@ uv run --no-project python c_toolbox/stdface/generate_fixtures.py \
 | `ortho_kondo_Jp_accepted_by_c` | generated (3D, #356) | 255 | yes | `82800bda5001f7295b4833834212d03767e8b6eec29e6534363e9ef1bbf3b759` |
 | `fcc_hubbard` | generated (3D, #356) | 0 | no | `a46a796a11618e795508501db5ad21c34119edd18ec6817c059f72d19e27de7f` |
 | `fcc_hubbard_anisotropic` | generated (3D, #356) | 0 | no | `94b3f7ccc9f7137c9e8aef39761de051c72c81238e4a4dbbcb57876660e1fa04` |
-| `fcc_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `6dcdf0773b6d9f1db9a1e13d3f8145b49bc0465c634c133df4bfd89f9a0242a5` |
+| `fcc_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `26f0d0fc7afa8b58b5b4dbfe320299225c00e78d1448aac1159eefbde7ba8727` |
 | `fcc_hubbard_complex_hopping` | generated (3D, #356) | 0 | no | `6b44b030b2c64dc9d8443249a21ca43bf5b9cabfe3001f2343dbc44ca8dd1810` |
 | `fcc_hubbard_gc_fields_gamma_y` | generated (3D, #356) | 0 | no | `50877204222552726ed9b1a296ff3ed9a9fc2d9f26fa81fee5dbeaff0febda98` |
 | `fcc_hubbard_box_skewed` | generated (3D, #356) | 0 | no | `72a67e3d1d8d58108d4d93f1af88fd3ec8ceeb791c11d773ff152093fbf7c6f0` |
@@ -98,7 +98,7 @@ uv run --no-project python c_toolbox/stdface/generate_fixtures.py \
 | `fcc_spin_Vpp_accepted_by_c` | generated (3D, #356) | 255 | yes | `dd14971e2114877d438d898937fb509974b47a81be563ceb3ad58cda86936fc6` |
 | `pyrochlore_hubbard` | generated (3D, #356) | 0 | no | `ffada906d09d496217f09f38badb0ad2452b443a821183930cc53cf372a4232e` |
 | `pyrochlore_hubbard_anisotropic` | generated (3D, #356) | 0 | no | `57628eb9a5b488e31dc19280a6a984dc398fad093835b558a0a8699e2a8199a7` |
-| `pyrochlore_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `29765f8f98310077746df17a1f47b3d996700880a35f86af6d27347ed6333c68` |
+| `pyrochlore_hubbard_antiperiodic` | generated (3D, #356) | 0 | no | `3614b8e699a53d17ac19d10df2a764e90ad4e721f4dfb30d06a66e50d5cc8cb4` |
 | `pyrochlore_hubbard_complex_hopping` | generated (3D, #356) | 0 | no | `59ebc5638a56fb976308848de0fc2731bfb26f63ac4c87ffb0daaa249c8fe6f2` |
 | `pyrochlore_hubbard_gc_fields_gamma_y` | generated (3D, #356) | 0 | yes | `df89bb8ff888545a8ca38dbce3e5e088208210c5d2365998abfd08de4f593f3d` |
 | `pyrochlore_spin` | generated (3D, #356) | 0 | no | `e5f392115db40959038830fec623d19868650f6d7b4ba8a6fc7033d7544e2acb` |

@@ -56,7 +56,7 @@ CASES.update({
         "mu = -0.3\nWlength = 1.5\nLlength = 2.0\nHlength = 0.8\n",
     ),
     "ortho_hubbard_isotropic_defaults": H("orthorhombic", "t' = 0.3\nV = 0.5\nV' = 0.2\n"),
-    "ortho_hubbard_antiperiodic": H("orthorhombic", "phase0 = 180\nphase1 = 90\nphase2 = 45\n"),
+    "ortho_hubbard_antiperiodic": H("orthorhombic", "phase0 = 180\nphase1 = 180\nphase2 = 180\n"),
     "ortho_hubbard_complex_hopping": H(
         "orthorhombic", "ComplexType = 1\n", ncond=8
     ).replace("t = 1.0", "t = 1.0, 0.4"),
@@ -131,7 +131,7 @@ CASES.update({
         "V0 = 0.5\nV1 = 0.4\nV2 = 0.3\nV0' = 0.2\nV1' = 0.1\nV2' = 0.05\n"
         "mu = -0.3\nWlength = 1.5\nLlength = 2.0\nHlength = 0.8\n",
     ),
-    "fcc_hubbard_antiperiodic": H("fcc", "phase0 = 180\nphase1 = 90\nphase2 = 45\n"),
+    "fcc_hubbard_antiperiodic": H("fcc", "phase0 = 180\nphase1 = 180\nphase2 = 180\n"),
     "fcc_hubbard_complex_hopping": H("fcc", "ComplexType = 1\n").replace("t = 1.0", "t = 1.0, 0.4"),
     "fcc_hubbard_gc_fields_gamma_y": (
         'model = "HubbardGC"\nlattice = "fcc"\n' + BOX3 + "U = 3.0\nt = 1.0\nh = -0.7\n"
@@ -191,7 +191,7 @@ CASES.update({
         ncond=16,
     ),
     "pyrochlore_hubbard_antiperiodic": H(
-        "pyrochlore", "phase0 = 180\nphase1 = 90\nphase2 = 45\n", size=PYRO, ncond=16
+        "pyrochlore", "phase0 = 180\nphase1 = 180\nphase2 = 180\n", size=PYRO, ncond=16
     ),
     "pyrochlore_hubbard_complex_hopping": H(
         "pyrochlore", "ComplexType = 1\n", size=PYRO, ncond=16

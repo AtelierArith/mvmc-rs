@@ -7,5 +7,5 @@ U = 4.0
 t = 1.0
 ncond = 8
 phase0 = 180
-phase1 = 90
-phase2 = 45
+phase1 = 180
+phase2 = 180
