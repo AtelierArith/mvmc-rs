@@ -6342,6 +6342,10 @@ mod callback_tests {
             let files = names(dira);
             assert_eq!(files, names(dirb), "{case}");
             for f in files {
+                // Wall-clock timer files differ between any two runs.
+                if f.to_string_lossy().contains("_time_") {
+                    continue;
+                }
                 assert_eq!(
                     fs::read(dira.join(&f)).unwrap(),
                     fs::read(dirb.join(&f)).unwrap(),
