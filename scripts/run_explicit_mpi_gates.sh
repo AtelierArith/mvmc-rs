@@ -113,6 +113,14 @@ echo "mvmc-cli runtime_contract --ignored rc=$rc" | tee -a "$out/cells.txt"
 cells=$((cells + 1))
 [[ $rc -eq 0 ]] || status=1
 
+# MultiDef mode (`-m N`, #348): launches mpirun at 2, 3 and 4 ranks itself.
+cargo test --locked -p mvmc-cli --features mpi --profile $profile --test issue348_multidef \
+  -- --ignored > "$out/cli-multidef-348.log" 2>&1
+rc=$?
+echo "mvmc-cli issue348_multidef --ignored rc=$rc" | tee -a "$out/cells.txt"
+cells=$((cells + 1))
+[[ $rc -eq 0 ]] || status=1
+
 if [[ $cells -lt $min_cells ]]; then
   echo "only $cells cells ran (expected at least $min_cells): failing closed" >&2
   status=1

@@ -174,7 +174,7 @@ fn help_flag_lists_c_options_and_states_the_real_default_output_directory() {
         for needle in [
             "NameListFile [OptParaFile]",
             "-b     binary mode",
-            "-m N   multiDef mode (not yet implemented, #348)",
+            "-m N   multiDef mode",
             "-o     optTrans mode",
             "-F N   set interval of file flush",
             "-s     Standard mode",
@@ -216,19 +216,25 @@ fn expert_flag_is_an_accepted_no_op() {
 }
 
 #[test]
-fn multidef_flag_is_rejected_before_any_io() {
+fn multidef_flag_parses_like_c_and_needs_its_two_positionals() {
+    // Full MultiDef behaviour: tests/issue348_multidef.rs. Here only the option parsing.
     let work = Work::new();
     let opt = opt_inputs(&work);
     let namelist = opt.join("namelist.def");
     let namelist = namelist.to_str().unwrap();
     let out = work.path("out");
     let out = out.to_str().unwrap();
-    for (flags, needle) in [(vec!["-m", "2"], "#348"), (vec!["-m2"], "#348")] {
+    // `-m` takes DirListFile and NameListFile; a lone namelist is an argument-count error.
+    for flags in [vec!["-m", "2"], vec!["-m2"]] {
         let mut args = flags;
         args.extend([namelist, "--out-dir", out]);
         let output = mvmc(&work.0, &args);
         assert!(!output.status.success());
-        assert!(stderr(&output).contains(needle), "{}", stderr(&output));
+        assert!(
+            stderr(&output).contains("Argument count mismatch"),
+            "{}",
+            stderr(&output)
+        );
         assert!(!work.path("out").exists());
     }
     let output = mvmc(&work.0, &["-m", "x", namelist]);

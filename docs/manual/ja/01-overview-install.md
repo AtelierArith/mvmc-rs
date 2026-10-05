@@ -44,8 +44,9 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 | Gutzwiller因子、Jastrow因子、2/4サイトのダブロン-ホロン相関因子、電荷/スピン/一般のRBM、`OptTrans` | サポート |
 | `InterAll` ハミルトニアン項 | パース済みで最適化時に評価されます。この項目群の所有は本マニュアルとは別です |
 | BackFlow(`BF`, `BFRange`)、`SpinJastrow`、`NSRCG >= 2`、`useDiagScale`、`RescaleSmat` | 拒否 |
+| 複数定義モード(`-m N`、MPI グループとディレクトリごとに 1 計算) | `mpi` フィーチャー、またはシリアルでの `-m 1` でサポート([8.1](08-running.md#multidef-モード-m)) |
 | グループ実行(`NSplitSize > 1`)を含む MPI | `mpi` フィーチャーでサポート。制約あり([8.4](08-running.md#84-mpiとグループ実行)) |
-| 未移植の格子(3 次元・Wannier90)に対する C ドライバーの Standardモード(`-s`, StdFace)、複数定義モード(`-m`, #348) | 未提供([7.6](07-input-files.md#76-standard-モードstdface)) |
+| 未移植の格子(3 次元・Wannier90)に対する C ドライバーの Standardモード(`-s`, StdFace) | 未提供([7.6](07-input-files.md#76-standard-モードstdface)) |
 
 ## 1.4 動作要件
 

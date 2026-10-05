@@ -28,6 +28,7 @@ pub mod io;
 pub mod lanczos;
 #[cfg(feature = "mpi")]
 pub mod mpi;
+pub mod multidef;
 pub use pfapack::julia_complex;
 pub mod observables;
 pub mod output_files;
