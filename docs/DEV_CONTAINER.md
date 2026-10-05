@@ -179,3 +179,11 @@ all-feature tests with ignored tests enabled (zero skipped), using Apple Clang
 callback arithmetic therefore remain verified separately from Linux.
 The previous Julia editor project setting `JULIA_PROJECT=@.` is preserved;
 Julia threads default to one for deterministic reference work.
+
+## Explicit MPI gates (#392)
+
+The `#[ignore]`d MPI tests are invisible to ordinary CI. Run all of them (2 and 4
+ranks, every parameter cell they need, plus the `mvmc-cli` MPI tests) inside the
+container with `scripts/run_explicit_mpi_gates.sh /tmp/new-scratch-dir`; every line
+must end in `rc=0`. Run it after changing validation, initialization, run-log output
+files or the grouped (`NSplitSize`) paths.

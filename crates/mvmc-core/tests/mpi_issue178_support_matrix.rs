@@ -58,6 +58,11 @@ fn loaded(model: &str, phys: bool) -> ExpertModeData {
     data.modpara.nvmc_sample = 3;
     data.modpara.nvmc_interval = 1;
     data.modpara.n_data_qty_smp = 1;
+    if !phys {
+        // The low-level ParaOpt runner refreshes existing QP weights but does
+        // not create them (PhysCal does); complete the caller-owned preparation.
+        mvmc_core::qp::init_qp_weight(&mut data);
+    }
     data
 }
 fn owned() -> PathBuf {
@@ -445,7 +450,7 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                     if world.rank() == bad_rank {
                         "issue178 actual ParaOpt callback failure"
                     } else {
-                        "optimization callback failed on another MPI rank"
+                        "optimization callback/declaration failed on another MPI rank"
                     }
                 );
                 assert_eq!(calls, usize::from(world.rank() == bad_rank));

@@ -10,7 +10,7 @@ entries; unselected numerical jobs are not instantiated or reported green.
 | --- | --- | --- |
 | general | Two exact ignored tests; General1/2/3/20 and public20 repeat | All13 models or fresh whole-matrix Julia validation |
 | lanczos | One ignored test six times, explicit three models x real/cmp; eight DC references + four empty GEx contracts | Empty contracts are not numerical comparisons; InterAll, full Lanczos coverage |
-| mpi | One exact test executable, actual worlds2/4, groups1/2, fixed Heisenberg real PhysCal and grouped Lanczos rejection | Full MPI model/solver matrix or independent fullC sampling |
+| mpi | One exact test executable, actual worlds2/4, groups1/2, fixed Heisenberg real PhysCal and invalid-NLanczosMode rejection | Full MPI model/solver matrix or independent fullC sampling |
 | thread | Existing wrapper selects ONE primary runner test; workers1/2/4, steps2/samples200 | New long20/45-case outcome matrix or all threaded gates |
 
 Lanczos models are `hubbard_chain_real`, `hubbard_chain_lanczos`,

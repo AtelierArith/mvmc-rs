@@ -394,7 +394,7 @@ def run(family, output, excluded=()):
             "family": family, "scope": {
                 "general": "one General model, independent prefixes1/2/3/20 plus public20 repeat",
                 "lanczos": "three historical models x real/cmp; eight DC references and four empty GEx contracts (not numeric comparisons)",
-                "mpi": "one fixed Heisenberg real PhysCal, actual worlds2/4, groups1/2 and Lanczos rejection",
+                "mpi": "one fixed Heisenberg real PhysCal, actual worlds2/4, groups1/2 and invalid-NLanczosMode rejection",
                 "thread": "ONE primary runner test; workers1/2/4, steps2/samples200; NOT long45",
             }[family], "oracle_execution": "none; checked-in fixtures only",
             "profile": "test-fast", "features": "mpi" if family == "mpi" else "default",
