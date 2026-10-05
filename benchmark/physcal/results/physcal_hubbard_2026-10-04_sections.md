@@ -72,3 +72,29 @@ The Rust timer is the `mvmc-cli --physcal` implementation added for issue
 - Single machine, one thread, 3 runs per side.
 
 Related to issue #251; the `CalHamiltonian1` location repeats issue #207.
+
+## Addendum: `outputData [22]` after issue #337 (2026-10-06)
+
+Same-session, same-host A/B of the Rust `mvmc --physcal` binary (test-fast profile,
+`MVMC_C_TIMER=1`, one thread, inputs `benchmark/physcal/inputs/hubbard_chain_L{16,32}`,
+`NDataQtySmp=100`, runs alternated before/after). The host was shared and heavily loaded
+by other jobs (`All [0]` is 4-5x the table above), so only the before/after ratio of the
+`outputData [22]` section is meaningful; no absolute Julia comparison is made here.
+
+Cause (confirmed by `strace -c`): C `outputData` writes through stdio buffers, but the Rust
+writer issued one `write(2)` per formatted fragment (68,014 `write` calls for 100 L16
+samples), allocated four temporary strings per number in `format_c_double`, and called
+`create_dir_all` for every file. Fixes, byte-identical by construction and by test: one
+`BufWriter` per file with an explicit flush (514 `write` calls), an allocation-free
+`format_c_double`/`CDouble` (verified against the original implementation on 200,000
+random bit patterns plus specials), and a single directory creation per sample.
+
+| input | `outputData [22]` before (s) | after (s) | ratio |
+|---|---:|---:|---:|
+| L16 (3 alternated runs) | 0.118, 0.120, 0.114 | 0.040, 0.039, 0.056 | about 2.4-3.0x faster |
+| L32 (2 alternated runs) | 0.212, 0.203 | 0.066, 0.110 | about 1.9-3.2x faster |
+
+Output bytes: all 50 native-C PhysCal/Lanczos scenario outputs of #181/#397 and the L16/L32
+benchmark outputs are byte-identical before and after (`diff -r`, excluding the wall-clock
+`zvo_time_*`/`zvo_CalcTimer.dat`); RNG draw order is untouched. The Julia-relative
+acceptance (within about 1.5x) needs a quiet-host rerun of the table above and is left open.

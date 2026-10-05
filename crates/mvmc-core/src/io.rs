@@ -48,29 +48,78 @@ pub fn store_opt_data(data: &ExpertModeData, state: &mut VmcOptimizationState, s
 /// and pads the exponent to at least two digits (C uses two by default
 /// for IEEE-754 doubles).
 pub fn format_c_double(value: f64) -> String {
-    let mut s = format!("{:+.18e}", value);
-    if let Some(stripped) = s.strip_prefix('+') {
-        s = format!(" {stripped}");
-    }
-    // Pad single-digit exponents to two digits so the byte width matches C.
-    if let Some(e_pos) = s.find('e') {
-        let (mantissa, exp_with_e) = s.split_at(e_pos);
-        let exp = &exp_with_e[1..];
-        let (sign, digits) = if let Some(rest) = exp.strip_prefix('-') {
-            ("-", rest)
-        } else if let Some(rest) = exp.strip_prefix('+') {
-            ("+", rest)
-        } else {
-            ("+", exp)
-        };
-        let digits_padded = if digits.len() < 2 {
-            format!("{:0>2}", digits)
-        } else {
-            digits.to_string()
-        };
-        s = format!("{mantissa}e{sign}{digits_padded}");
-    }
+    let mut s = String::with_capacity(26);
+    push_c_double(&mut s, value);
     s
+}
+
+/// Append the bytes of [`format_c_double`] without intermediate allocations.
+pub fn push_c_double(out: &mut String, value: f64) {
+    let (bytes, len) = c_double_bytes(value);
+    out.push_str(std::str::from_utf8(&bytes[..len]).expect("ASCII"));
+}
+
+/// Allocation-free `Display` adapter for [`format_c_double`] (use inside `format!`/`write!`).
+pub struct CDouble(pub f64);
+
+impl std::fmt::Display for CDouble {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (bytes, len) = c_double_bytes(self.0);
+        f.write_str(std::str::from_utf8(&bytes[..len]).expect("ASCII"))
+    }
+}
+
+/// Render `value` as C's `"% .18e"` (two-digit minimum exponent) into a stack buffer.
+fn c_double_bytes(value: f64) -> ([u8; 40], usize) {
+    use std::fmt::Write as _;
+    // Longest finite rendering: sign + 19 digits + point + "e-308" = 26 bytes.
+    struct Stack {
+        bytes: [u8; 40],
+        len: usize,
+    }
+    impl std::fmt::Write for Stack {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            let end = self.len + text.len();
+            self.bytes
+                .get_mut(self.len..end)
+                .ok_or(std::fmt::Error)?
+                .copy_from_slice(text.as_bytes());
+            self.len = end;
+            Ok(())
+        }
+    }
+    let mut raw = Stack {
+        bytes: [0; 40],
+        len: 0,
+    };
+    write!(raw, "{value:+.18e}").expect("float rendering fits in 40 bytes");
+    // A leading '+' becomes a space (same width, C's "% .18e").
+    if raw.bytes[0] == b'+' {
+        raw.bytes[0] = b' ';
+    }
+    let text = &raw.bytes[..raw.len];
+    let Some(e_pos) = text.iter().position(|&b| b == b'e') else {
+        // NaN / inf: unchanged apart from the sign handling above.
+        return (raw.bytes, raw.len);
+    };
+    let mut out = [0_u8; 40];
+    out[..e_pos].copy_from_slice(&text[..e_pos]);
+    out[e_pos] = b'e';
+    let exp = &text[e_pos + 1..];
+    let (sign, digits) = match exp.split_first() {
+        Some((b'-', rest)) => (b'-', rest),
+        Some((b'+', rest)) => (b'+', rest),
+        _ => (b'+', exp),
+    };
+    out[e_pos + 1] = sign;
+    let mut len = e_pos + 2;
+    // Pad single-digit exponents to two digits so the byte width matches C.
+    if digits.len() < 2 {
+        out[len] = b'0';
+        len += 1;
+    }
+    out[len..len + digits.len()].copy_from_slice(digits);
+    (out, len + digits.len())
 }
 
 /// Resolve `filename` against `output_dir`, creating the directory if
@@ -183,37 +232,45 @@ pub fn output_phys_data(
     // C InitFilePhysCal opens out/var with "w" for EVERY indexed sample;
     // outputData writes all declared coefficients, including DH/RBM/OptTrans.
     // Do not route this through the Julia optimizer's shared append files.
+    // Create the directory once (not once per file); file names resolve against it.
+    if let Some(dir) = output_dir {
+        fs::create_dir_all(dir)?;
+    }
+    let path_of = |name: &str| -> PathBuf {
+        output_dir.map_or_else(|| PathBuf::from(name), |dir| dir.join(name))
+    };
     let energy = &state.energy;
     let variance = crate::c_complex::divide(
         energy.etot2 - energy.etot * energy.etot,
         energy.etot * energy.etot,
     )
     .re;
-    let mut out = File::create(output_path(
-        &format!("{head}_out_{index:03}.dat"),
-        output_dir,
-    )?)?;
+    // C writes through stdio buffers; one buffered writer per file keeps the bytes
+    // identical while avoiding a write(2) per formatted fragment.
+    let mut out = io::BufWriter::new(File::create(path_of(&format!(
+        "{head}_out_{index:03}.dat"
+    )))?);
     writeln!(
         out,
         "{} {}  {} {} {} {}",
-        format_c_double(energy.etot.re),
-        format_c_double(energy.etot.im),
-        format_c_double(energy.etot2.re),
-        format_c_double(variance),
+        CDouble(energy.etot.re),
+        CDouble(energy.etot.im),
+        CDouble(energy.etot2.re),
+        CDouble(variance),
         format_c_double(energy.sztot.re).trim_start(),
         format_c_double(energy.sztot2.re).trim_start()
     )?;
-    let mut var = File::create(output_path(
-        &format!("{head}_var_{index:03}.dat"),
-        output_dir,
-    )?)?;
+    out.flush()?;
+    let mut var = io::BufWriter::new(File::create(path_of(&format!(
+        "{head}_var_{index:03}.dat"
+    )))?);
     write!(
         var,
         "{} {} 0.0 {} {} 0.0 ",
-        format_c_double(energy.etot.re),
-        format_c_double(energy.etot.im),
-        format_c_double(energy.etot2.re),
-        format_c_double(energy.etot2.im)
+        CDouble(energy.etot.re),
+        CDouble(energy.etot.im),
+        CDouble(energy.etot2.re),
+        CDouble(energy.etot2.im)
     )?;
     for value in data
         .projection_parameters()
@@ -222,24 +279,20 @@ pub fn output_phys_data(
         .chain(data.slater_params.iter().copied())
         .chain(data.opt_trans.iter().copied())
     {
-        write!(
-            var,
-            "{} {} 0.0 ",
-            format_c_double(value.re),
-            format_c_double(value.im)
-        )?;
+        write!(var, "{} {} 0.0 ", CDouble(value.re), CDouble(value.im))?;
     }
     writeln!(var)?;
+    var.flush()?;
     let write_rows = |suffix: &str, rows: Vec<String>, terminal_blank: bool| -> io::Result<()> {
-        let path = output_path(&format!("{head}_{suffix}_{index:03}.dat"), output_dir)?;
-        let mut file = File::create(path)?;
+        let path = path_of(&format!("{head}_{suffix}_{index:03}.dat"));
+        let mut file = io::BufWriter::new(File::create(path)?);
         for row in rows {
             writeln!(file, "{row}")?;
         }
         if terminal_blank {
             writeln!(file)?;
         }
-        Ok(())
+        file.flush()
     };
     let one_rows = data
         .green_one_terms
@@ -252,8 +305,8 @@ pub fn output_phys_data(
                 crate::observables::spin_code(term.spin1),
                 term.site2,
                 crate::observables::spin_code(term.spin2),
-                format_c_double(value.re),
-                format_c_double(value.im)
+                CDouble(value.re),
+                CDouble(value.im)
             )
         })
         .collect::<Vec<_>>();
@@ -264,13 +317,7 @@ pub fn output_phys_data(
         .green_two_ex_terms
         .iter()
         .zip(&phys.phys_cis_ajs_ckt_alt)
-        .map(|(_term, value)| {
-            format!(
-                "{}  {} ",
-                format_c_double(value.re),
-                format_c_double(value.im)
-            )
-        })
+        .map(|(_term, value)| format!("{}  {} ", CDouble(value.re), CDouble(value.im)))
         .collect::<Vec<_>>();
     // C vmcmain.c:671–675 emits pairs in term order, newline after the loop.
     if !ex_pairs.is_empty() {
@@ -291,8 +338,8 @@ pub fn output_phys_data(
                 crate::observables::spin_code(term.spin3),
                 term.site4,
                 crate::observables::spin_code(term.spin4),
-                format_c_double(value.re),
-                format_c_double(value.im)
+                CDouble(value.re),
+                CDouble(value.im)
             )
         })
         .collect::<Vec<_>>();
@@ -301,7 +348,7 @@ pub fn output_phys_data(
     }
 
     if data.modpara.lanczos_mode > 0 {
-        let qqqq_path = output_path(&format!("{head}_ls_qqqq_{index:03}.dat"), output_dir)?;
+        let qqqq_path = path_of(&format!("{head}_ls_qqqq_{index:03}.dat"));
         let lanczos = crate::lanczos::lanczos_energy(&phys.phys_lanczos_qqqq);
         if let Err(error) = lanczos {
             if error.is_c_early_return() {
@@ -314,33 +361,32 @@ pub fn output_phys_data(
                     names.extend(["ls_cisajs", "ls_cisajscktalt", "ls_cisajscktaltex"]);
                 }
                 for suffix in names {
-                    File::create(output_path(
-                        &format!("{head}_{suffix}_{index:03}.dat"),
-                        output_dir,
-                    )?)?;
+                    File::create(path_of(&format!("{head}_{suffix}_{index:03}.dat")))?;
                 }
                 return Ok(());
             }
         }
-        let mut qqqq_file = File::create(qqqq_path)?;
+        let mut qqqq_file = io::BufWriter::new(File::create(qqqq_path)?);
         for value in &phys.phys_lanczos_qqqq {
-            write!(qqqq_file, "{}  ", format_c_double(value.re))?;
+            write!(qqqq_file, "{}  ", CDouble(value.re))?;
         }
         writeln!(qqqq_file)?;
+        qqqq_file.flush()?;
 
         let (energy, variance, alpha) = match lanczos {
             Ok(result) => (result.energy, result.variance, result.alpha),
             Err(_) => (f64::NAN, f64::NAN, f64::NAN),
         };
-        let ls_path = output_path(&format!("{head}_ls_out_{index:03}.dat"), output_dir)?;
-        let mut ls_file = File::create(ls_path)?;
+        let ls_path = path_of(&format!("{head}_ls_out_{index:03}.dat"));
+        let mut ls_file = io::BufWriter::new(File::create(ls_path)?);
         write!(
             ls_file,
             "{}  {}  {}  ",
-            format_c_double(energy),
-            format_c_double(variance),
-            format_c_double(alpha)
+            CDouble(energy),
+            CDouble(variance),
+            CDouble(alpha)
         )?;
+        ls_file.flush()?;
 
         if data.modpara.lanczos_mode > 1 {
             let complex = crate::run::get_all_complex_flag(data).map_err(io::Error::other)?;
@@ -361,7 +407,7 @@ pub fn output_phys_data(
                         crate::observables::spin_code(term.spin1),
                         term.site2,
                         crate::observables::spin_code(term.spin2),
-                        format_c_double(value.re),
+                        CDouble(value.re),
                         if complex {
                             format_c_double(value.im)
                         } else {
@@ -393,7 +439,7 @@ pub fn output_phys_data(
                         crate::observables::spin_code(term.spin3),
                         term.site4,
                         crate::observables::spin_code(term.spin4),
-                        format_c_double(value.re),
+                        CDouble(value.re),
                         if complex {
                             format_c_double(value.im)
                         } else {
@@ -415,7 +461,7 @@ pub fn output_phys_data(
                 .map(|value| {
                     format!(
                         "{} {} ",
-                        format_c_double(value.re),
+                        CDouble(value.re),
                         if complex {
                             format_c_double(value.im)
                         } else {
@@ -654,6 +700,82 @@ mod tests {
             }
         }
         panic!("cannot allocate exclusive IO test directory");
+    }
+
+    /// The original allocation-heavy implementation, kept as the byte-exact reference.
+    fn format_c_double_reference(value: f64) -> String {
+        let mut s = format!("{:+.18e}", value);
+        if let Some(stripped) = s.strip_prefix('+') {
+            s = format!(" {stripped}");
+        }
+        if let Some(e_pos) = s.find('e') {
+            let (mantissa, exp_with_e) = s.split_at(e_pos);
+            let exp = &exp_with_e[1..];
+            let (sign, digits) = if let Some(rest) = exp.strip_prefix('-') {
+                ("-", rest)
+            } else if let Some(rest) = exp.strip_prefix('+') {
+                ("+", rest)
+            } else {
+                ("+", exp)
+            };
+            let digits_padded = if digits.len() < 2 {
+                format!("{:0>2}", digits)
+            } else {
+                digits.to_string()
+            };
+            s = format!("{mantissa}e{sign}{digits_padded}");
+        }
+        s
+    }
+
+    #[test]
+    fn fast_c_double_formatter_is_byte_identical_to_the_reference() {
+        let specials = [
+            0.0,
+            -0.0,
+            1.0,
+            -1.5,
+            f64::NAN,
+            -f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MIN_POSITIVE,
+            5e-324,
+            f64::MAX,
+            f64::MIN,
+            1e-5,
+            9.999999999999999e99,
+            1e100,
+            -1e-100,
+            123456789.12345679,
+        ];
+        for value in specials {
+            assert_eq!(
+                format_c_double(value),
+                format_c_double_reference(value),
+                "{value:e}"
+            );
+        }
+        // xorshift over raw bit patterns (all exponents, subnormals, NaN payloads)
+        let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+        for _ in 0..200_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let value = f64::from_bits(state);
+            assert_eq!(
+                format_c_double(value),
+                format_c_double_reference(value),
+                "{state:#x}"
+            );
+        }
+        for k in -9..=9 {
+            for m in [1.0, 1.2345678901234567, 9.87654321, 0.5] {
+                let value = m * 10f64.powi(k);
+                assert_eq!(format_c_double(value), format_c_double_reference(value));
+                assert_eq!(format_c_double(-value), format_c_double_reference(-value));
+            }
+        }
     }
 
     #[test]
