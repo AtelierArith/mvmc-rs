@@ -1595,6 +1595,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                         callback: Some(&mut callback),
                         skip_sr: false,
                         file_flush_interval: None,
+                        binary_output: false,
                     },
                 );
                 if diagnostic_collect_all {
@@ -1930,6 +1931,7 @@ fn transfer_site(output_root: &Path) {
                 callback: None,
                 skip_sr: true,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
         .unwrap();
@@ -2099,6 +2101,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
                     callback: None,
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                 },
             )
             .unwrap();
@@ -2961,6 +2964,7 @@ fn independent_real_fsz(output_root: &Path) {
                 callback: None,
                 skip_sr,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
         .unwrap();

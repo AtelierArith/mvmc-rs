@@ -43,13 +43,13 @@ PhysCal は `NDataQtySmp` 回、サンプリング(最初の呼び出しには `
 > - C: `GreenFunc1` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:41`
 > - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
 > - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.3.0/src/mVMC/calgrn_fsz.c:33`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:775`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:512`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
 > - Rust: `ordinary_green_values` — `crates/mvmc-core/src/observables/green_measurements.rs:232`
 > - Rust: `accumulate_two_body_gex_sample` — `crates/mvmc-core/src/observables.rs:109`
 > - Rust: `normalize_physcal_green` — `crates/mvmc-core/src/run.rs:249`
 > - Rust: `calculate_green_func_fsz` — `crates/mvmc-core/src/observables/fsz_measurements.rs:17`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
 > - 整合性: C は `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` を累積します(`calgrn.c:110`)。Rust の `accumulate_two_body_gex_sample` は同じ順序で `weight * one_body[first] * one_body[second].conj()` を形成します。規格化では、事前に計算した $W$ の逆数を掛けます(`const double complex invW = 1.0/Wc`、`average.c:278`。ランク0での `SafeMpiReduce_fcmp` の後に適用、`average.c:287-290`)。Rust は C99 方式の `c_complex::divide(1, wc)` を使って各値に掛けます(`run.rs:249-278`)。要素ごとの除算は行いません。C では、平均されたグリーン関数はルートランクにのみ存在し(`weightAverageReduce` はランク0へ縮約します)、ファイルを書くのもルートのみです。サンプルごとの結果は*同じ*番号付きファイル一式に出力され、ファイルは `NDataIdxStart + sample` ごとに再作成(`"w"`)されます。
 
 ## 6.2 1ステップ Lanczos 波動関数

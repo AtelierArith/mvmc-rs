@@ -113,6 +113,11 @@ fn run(name: &str, check_numbers: bool) {
 /// for every thread count; for ranks it is the C run with the same rank count.
 fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
     let sc = scenario(name);
+    assert!(
+        matches!(sc.mode.as_str(), "real" | "cmp" | "fsz"),
+        "{}",
+        sc.mode
+    );
     let dir = root().join(name);
     let work = Work::new(name);
     let out = work.0.join("out");
@@ -131,6 +136,18 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
             )
             .unwrap();
         }
+        // `--mode` is a checked label (#347): pass the mode the inputs declare. The
+        // scenario table's label never selected an arithmetic path, so a `cmp` label on
+        // real-declared inputs would now be rejected.
+        let parsed =
+            mvmc_expert_parsers::parse_expert_mode_files(inputs.join("namelist.def")).unwrap();
+        let declared = if parsed.i_flg_orbital_general != 0 {
+            "fsz"
+        } else if mvmc_core::get_all_complex_flag(&parsed).unwrap() {
+            "cmp"
+        } else {
+            "real"
+        };
         let mut command = if ranks > 1 {
             let mut launcher = Command::new(
                 std::env::var("MVMC_RS_MPIEXEC").unwrap_or_else(|_| "mpiexec".to_owned()),
@@ -149,7 +166,7 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
             .arg(inputs.join("namelist.def"))
             .arg("--physcal")
             .arg(dir.join("zqp_opt.dat"))
-            .args(["--seed", "1", "--mode", &sc.mode, "--out-dir"])
+            .args(["--seed", "1", "--mode", declared, "--out-dir"])
             .arg(&out)
             .env("OMP_NUM_THREADS", "1")
             .env("OPENBLAS_NUM_THREADS", "1");

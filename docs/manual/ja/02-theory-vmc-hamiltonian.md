@@ -78,7 +78,7 @@ $$
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2716`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
 > - Rust: `weight_average_we` — `crates/mvmc-core/src/average.rs:18`
-> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:89`
+> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
 > - 整合性: `Etot2 += w * conj(e) * e` (`vmccal.c:191`) は `run.rs:2771` の `etot2 += w * e.conj() * e` に対応し、積の順序は同じです。`output_data` では、相対分散は $|\langle H\rangle|>10^{-14}$ のときにのみ計算され、それ以外は `0.0` として書き出されます(Julia のガード)。C は無条件に割ります。最適化出力の複素数除算には `julia_complex::divide` を使い、PhysCal 出力(`output_phys_data`, `io.rs:161`)には C99 方式の `c_complex::divide` を使います。
 > - 整合性: パフィアンのセットアップに失敗したサンプルや、エネルギーが有限でないサンプルは、どちらの実装でもスキップされます(C は警告を出力して `continue` し、Rust は `continue` します)。
 

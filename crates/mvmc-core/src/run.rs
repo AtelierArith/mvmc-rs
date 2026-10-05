@@ -487,6 +487,11 @@ pub struct PhysCalPreparation {
     pub rng: Sfmt19937Rng,
     /// Number of fixed parameter slots consumed by the record.
     pub n_para_consumed: usize,
+    /// C `-b` (`FlagBinary`): write `_varbin_` files instead of `_var_` text files.
+    pub binary_output: bool,
+    /// True when the C `InitParameter` draw block was already consumed by
+    /// preparation (the no-parameter-file path), so the driver must not draw again.
+    pub initialization_consumed: bool,
 }
 
 /// Result of a serial PhysCal core run.
@@ -517,7 +522,7 @@ pub fn prepare_phys_cal_from_namelist(
 ) -> Result<PhysCalPreparation, String> {
     prepare_phys_cal_from_namelist_with_seed_offset(
         namelist_path,
-        opt_para_path,
+        Some(opt_para_path.as_ref()),
         mode,
         seed,
         true,
@@ -540,7 +545,7 @@ pub fn prepare_phys_cal_from_namelist_with_reducer<R: Reducer + ?Sized>(
 ) -> Result<PhysCalPreparation, String> {
     prepare_phys_cal_from_namelist_with_seed_offset(
         namelist_path,
-        opt_para_path,
+        Some(opt_para_path.as_ref()),
         mode,
         seed,
         true,
@@ -560,7 +565,29 @@ pub fn prepare_phys_cal_from_namelist_with_reducer_and_opt_trans<R: Reducer + ?S
 ) -> Result<PhysCalPreparation, String> {
     prepare_phys_cal_from_namelist_with_seed_offset(
         namelist_path,
-        opt_para_path,
+        Some(opt_para_path.as_ref()),
+        mode,
+        seed,
+        enable_opt_trans,
+        reducer.seed_offset(),
+        reducer,
+    )
+}
+
+/// Prepare PhysCal without a fixed parameter file, as C `vmc.out namelist.def`
+/// does for `NVMCCalMode=1` (`vmcmain.c:260-268`): `InitParameter` draws, then
+/// the `In*` overlays and `SyncModifiedParameter`. The draw block is consumed
+/// here and recorded in [`PhysCalPreparation::initialization_consumed`].
+pub fn prepare_phys_cal_without_parameter_file_with_reducer_and_opt_trans<R: Reducer + ?Sized>(
+    namelist_path: impl AsRef<Path>,
+    mode: &str,
+    seed: Option<i64>,
+    reducer: &R,
+    enable_opt_trans: bool,
+) -> Result<PhysCalPreparation, String> {
+    prepare_phys_cal_from_namelist_with_seed_offset(
+        namelist_path,
+        None,
         mode,
         seed,
         enable_opt_trans,
@@ -571,13 +598,45 @@ pub fn prepare_phys_cal_from_namelist_with_reducer_and_opt_trans<R: Reducer + ?S
 
 fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
     namelist_path: impl AsRef<Path>,
-    opt_para_path: impl AsRef<Path>,
+    opt_para_path: Option<&Path>,
     mode: &str,
     seed: Option<i64>,
     enable_opt_trans: bool,
     seed_offset: usize,
     reducer: &R,
 ) -> Result<PhysCalPreparation, String> {
+    let Some(opt_para_path) = opt_para_path else {
+        // C order: seed -> InitParameter -> (no ReadInitParameter) -> ReadInputParameters
+        // -> SyncModifiedParameter. The draws are real, not a discarded clone.
+        let parsed = (|| {
+            if !matches!(mode, "real" | "cmp" | "fsz") {
+                return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
+            }
+            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+                namelist_path.as_ref(),
+                enable_opt_trans,
+            )
+            .map_err(|error| error.to_string())
+        })();
+        let mut data = collective_result(parsed, reducer, "PhysCal parse")?;
+        let actual_seed = resolve_rnd_seed(data.modpara.rnd_seed, seed, seed_offset, reducer)?;
+        let mut rng = seeded_rng_with_reducer(actual_seed, reducer)?;
+        let loaded = (|| {
+            init_parameter(&mut data, &mut rng).map_err(str::to_string)?;
+            read_input_parameters(&mut data, namelist_path.as_ref())?;
+            sync_modified_parameter(&mut data, false);
+            crate::validation::validate_phys_cal(&data)?;
+            crate::validation::validate_reducer_rank(&data, reducer)
+        })();
+        collective_result(loaded, reducer, "PhysCal initialization/load/validation")?;
+        return Ok(PhysCalPreparation {
+            data,
+            rng,
+            n_para_consumed: 0,
+            binary_output: false,
+            initialization_consumed: true,
+        });
+    };
     let loaded = (|| {
         if !matches!(mode, "real" | "cmp" | "fsz") {
             return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
@@ -607,6 +666,8 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
         data,
         rng,
         n_para_consumed,
+        binary_output: false,
+        initialization_consumed: false,
     })
 }
 
@@ -723,7 +784,7 @@ pub fn vmc_phys_cal_with_reducer_and_callback_timed<const TIMED: bool, R: Reduce
     // The in-place core allocates the correctly sized state after validation
     // and QP setup. Avoid allocating a second full saved chain here.
     let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
-    let iterations = vmc_phys_cal_in_place_timed::<TIMED, R>(
+    let iterations = vmc_phys_cal_in_place_with_options_timed::<TIMED, R>(
         &mut preparation.data,
         &mut state,
         &mut preparation.rng,
@@ -731,6 +792,10 @@ pub fn vmc_phys_cal_with_reducer_and_callback_timed<const TIMED: bool, R: Reduce
         reducer,
         callback,
         timer,
+        PhysCalRunOptions {
+            binary_output: preparation.binary_output,
+            initialization_consumed: preparation.initialization_consumed,
+        },
     )?;
     Ok(PhysCalResult {
         data: preparation.data,
@@ -778,8 +843,41 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
     rng: &mut Sfmt19937Rng,
     output_dir: Option<&Path>,
     reducer: &R,
+    callback: Option<&mut PhysCalCallback<'_>>,
+    timer: &mut CTimer<TIMED>,
+) -> Result<usize, String> {
+    vmc_phys_cal_in_place_with_options_timed::<TIMED, R>(
+        data,
+        state,
+        rng,
+        output_dir,
+        reducer,
+        callback,
+        timer,
+        PhysCalRunOptions::default(),
+    )
+}
+
+/// Output and initialization controls for the PhysCal driver.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PhysCalRunOptions {
+    /// C `-b`: write `_varbin_` files instead of `_var_` text files.
+    pub binary_output: bool,
+    /// The C `InitParameter` draw block was already consumed by the caller.
+    pub initialization_consumed: bool,
+}
+
+/// [`vmc_phys_cal_in_place_timed`] with explicit [`PhysCalRunOptions`].
+#[allow(clippy::too_many_arguments)]
+pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + ?Sized>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    output_dir: Option<&Path>,
+    reducer: &R,
     mut callback: Option<&mut PhysCalCallback<'_>>,
     timer: &mut CTimer<TIMED>,
+    options: PhysCalRunOptions,
 ) -> Result<usize, String> {
     let all_complex = collective_result(
         crate::validation::validate_phys_cal(data)
@@ -808,13 +906,15 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
         Ok(())
     };
     collective_result(output_setup, reducer, "PhysCal output directory")?;
-    let mut init_data = data.clone();
-    collective_result(
-        init_parameter(&mut init_data, rng).map_err(str::to_string),
-        reducer,
-        "PhysCal complex declaration/initialization",
-    )?;
-    observe_physcal_lifecycle("initialized-clone", &init_data, Some(rng), None);
+    if !options.initialization_consumed {
+        let mut init_data = data.clone();
+        collective_result(
+            init_parameter(&mut init_data, rng).map_err(str::to_string),
+            reducer,
+            "PhysCal complex declaration/initialization",
+        )?;
+        observe_physcal_lifecycle("initialized-clone", &init_data, Some(rng), None);
+    }
     if data.modpara.nmp_trans == 0 {
         data.modpara.nmp_trans = 1;
     } else if data.modpara.nmp_trans < 0 {
@@ -900,9 +1000,15 @@ pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
         timer.start(22);
         let output_error = if reducer.is_output_root() {
             if let Some(output_dir) = output_dir {
-                crate::io::output_phys_data(data, state, sample, Some(output_dir))
-                    .err()
-                    .map(|error| error.to_string())
+                crate::io::output_phys_data(
+                    data,
+                    state,
+                    sample,
+                    Some(output_dir),
+                    options.binary_output,
+                )
+                .err()
+                .map(|error| error.to_string())
             } else {
                 None
             }
@@ -973,6 +1079,8 @@ pub struct OptimizationOptions<'a> {
     /// C `NFileFlushInterval` (`-F`, default 1): flush the `_time_` and
     /// `_SRinfo` files when `step % interval == 0`. Values below 1 are rejected.
     pub file_flush_interval: Option<i64>,
+    /// C `-b` (`FlagBinary`): write `_varbin_` files instead of `_var` text files.
+    pub binary_output: bool,
 }
 
 /// Run `nsteps` SR steps starting from `data` and the seeded `rng`.
@@ -1156,7 +1264,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         // 5. Output.
         timer.start(22);
         let output_error = if reducer.is_output_root() {
-            output_data(data, state, step, output_dir)
+            output_data(data, state, step, output_dir, options.binary_output)
                 .err()
                 .map(|error| error.to_string())
                 .or_else(|| io_error.take())
@@ -1311,6 +1419,8 @@ pub struct RunConfig {
     pub enable_opt_trans: Option<bool>,
     /// C `-F` / `NFileFlushInterval`; `None` is C's default of 1.
     pub file_flush_interval: Option<i64>,
+    /// C `-b` (`FlagBinary`): write `_varbin_` files instead of `_var` text files.
+    pub binary_output: bool,
 }
 
 impl RunConfig {
@@ -1325,6 +1435,7 @@ impl RunConfig {
             initial_def: InitialDef::Auto,
             enable_opt_trans: None,
             file_flush_interval: None,
+            binary_output: false,
         }
     }
 }
@@ -1581,6 +1692,7 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         reducer,
         OptimizationOptions {
             file_flush_interval: config.file_flush_interval,
+            binary_output: config.binary_output,
             ..OptimizationOptions::default()
         },
         timer,
@@ -3607,6 +3719,7 @@ mod callback_tests {
                 callback: Some(&mut callback),
                 skip_sr: false,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
         .unwrap();
@@ -3674,6 +3787,7 @@ mod callback_tests {
             OptimizationOptions {
                 skip_sr: true,
                 file_flush_interval: None,
+                binary_output: false,
                 ..OptimizationOptions::default()
             },
         )
@@ -3692,6 +3806,7 @@ mod callback_tests {
                 OptimizationOptions {
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                     ..OptimizationOptions::default()
                 },
             )
@@ -3731,6 +3846,7 @@ mod callback_tests {
                 callback: Some(&mut callback),
                 skip_sr: true,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
         .unwrap();
@@ -3786,6 +3902,7 @@ mod callback_tests {
                 callback: Some(&mut callback),
                 skip_sr: false,
                 file_flush_interval: None,
+                binary_output: false,
             },
         )
         .unwrap_err();
@@ -3808,6 +3925,7 @@ mod callback_tests {
                 callback: Some(&mut callback),
                 skip_sr: false,
                 file_flush_interval: None,
+                binary_output: false,
             }
         )
         .is_err());
@@ -3846,6 +3964,7 @@ mod callback_tests {
                     callback: Some(&mut callback),
                     skip_sr: false,
                     file_flush_interval: None,
+                    binary_output: false,
                 },
             )
             .unwrap();
@@ -4477,6 +4596,7 @@ mod callback_tests {
                             callback: Some(&mut callback),
                             skip_sr: false,
                             file_flush_interval: None,
+                            binary_output: false,
                         },
                     )
                     .unwrap();
@@ -6098,6 +6218,7 @@ mod callback_tests {
                 OptimizationOptions {
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                     ..OptimizationOptions::default()
                 },
             )
@@ -6180,6 +6301,7 @@ mod callback_tests {
                 OptimizationOptions {
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                     ..OptimizationOptions::default()
                 },
             )
@@ -6427,6 +6549,7 @@ mod callback_tests {
                 OptimizationOptions {
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                     ..OptimizationOptions::default()
                 },
             )
@@ -6450,6 +6573,7 @@ mod callback_tests {
                 OptimizationOptions {
                     skip_sr: true,
                     file_flush_interval: None,
+                    binary_output: false,
                     ..OptimizationOptions::default()
                 },
                 &mut timer,

@@ -4,22 +4,34 @@
 //! the binary can reproduce the Julia `examples/*.jl` workflow from the
 //! terminal.
 //!
-//! Usage:
-//!   mvmc <namelist.def> [options]
-//!   mvmc uhf <namelist.def> [OptParaFile]   (C ComplexUHF initial-orbital tool)
+//! Usage (C `vmc.out \[option\] NameListFile \[OptParaFile\]`):
+//!   mvmc \[options\] <namelist.def> \[initpara\]
+//!   mvmc -s \[options\] <stan.in>             (Standard mode: StdFace, then run)
+//!   mvmc --dry-run <stan.in>                (vmcdry.out: generate the Expert files)
+//!   mvmc uhf <namelist.def> \[OptParaFile\]   (C ComplexUHF initial-orbital tool)
 //!
-//! Options:
+//! C options (`vmcmain.c:83-165`, getopt `"bhm:oF:esv"`):
+//!   -b                Binary parameter output (`_varbin_` files instead of `_var_`)
+//!   -F <N>            Flush _time_/_SRinfo files every N steps (N >= 1)
+//!   -o                Enable C optimized-translation mode
+//!   -e                Expert mode (accepted; the only mode until StdFace, #353)
+//!   -v                Print the version and exit
+//!   -h                Print usage and exit
+//!   -s                Standard mode: StdFace generates the Expert files from <stan.in>
+//!   -m <N>            Rejected: MultiDef is not yet implemented (#348)
+//!
+//! Positional `initpara`: the fixed parameter file for NVMCCalMode=1 (optional, as in
+//! C) and the initial parameter file for NVMCCalMode=0.
+//!
+//! Rust extensions:
 //!   --nsteps <N>      SR optimisation steps  [default: value in modpara.def]
-//!   --out-dir <DIR>   Output directory       [default: namelist parent dir]
+//!   --out-dir <DIR>   Output directory       [default: <namelist parent dir>/output]
 //!   --seed <N>        RNG seed override      [default: RndSeed in modpara.def]
 //!   --nsmp <N>        Final averaging window [default: NSROptItrSmp]
-//!   --mode <MODE>     Sanity label: real/cmp/fsz [default: inferred]
+//!   --mode <MODE>     Sanity check real/cmp/fsz; a mismatch with the input is an error
 //!   --initial-def <auto|none|PATH> Starting parameter file [default: auto]
-//!   -o / --opt-trans  Enable C optimized-translation mode [default: disabled]
-//!   --physcal <PATH>  Run fixed-parameter PhysCal with this parameter file
-//!                     (requires NVMCCalMode=1 in ModPara; NVMCCalMode=1 requires --physcal)
-//!   -F, --flush-interval <N>  Flush _time_/_SRinfo files every N steps (C -F)
-//!   --help / -h       Print this help text
+//!   --physcal <PATH>  Alias of the positional fixed parameter file (NVMCCalMode=1)
+//!   --flush-interval, --opt-trans, --help, --version: long forms of -F, -o, -h, -v
 //!
 //! Environment:
 //!   MVMC_NSTEPS       Same as --nsteps (CLI flag takes precedence)
@@ -32,32 +44,39 @@ use std::time::Instant;
 
 mod physcal_trace;
 
+const USAGE_LINE: &str = "Usage: {program} [option] NameListFile [OptParaFile]";
+
 fn print_usage(program: &str) {
-    eprintln!("Usage: {program} <namelist.def> [options]");
-    eprintln!("       {program} uhf <namelist.def> [OptParaFile]");
-    eprintln!("       {program} -s <stan.in> [options]");
-    eprintln!("       {program} --dry-run <stan.in>");
+    eprintln!("{}", USAGE_LINE.replace("{program}", program));
+    eprintln!("  -b     binary mode (write _varbin_ files instead of _var_ text files)");
+    eprintln!("  -m N   multiDef mode (not yet implemented, #348)");
+    eprintln!("  -o     optTrans mode");
+    eprintln!("  -F N   set interval of file flush");
+    eprintln!(
+        "  -s     Standard mode: generate the Expert files from <stan.in> (StdFace), then run"
+    );
+    eprintln!("  -e     Expert mode");
+    eprintln!("  -v     print version");
+    eprintln!("  -h     show this message");
     eprintln!();
-    eprintln!("Options:");
+    eprintln!("OptParaFile: fixed parameters for NVMCCalMode=1 (optional), initial parameters");
+    eprintln!("             for NVMCCalMode=0.");
+    eprintln!();
+    eprintln!("Rust extensions:");
+    eprintln!("  uhf <namelist.def> [OptParaFile]  C ComplexUHF initial-orbital tool");
     eprintln!(
-        "  -s, --standard  Standard mode: generate the Expert files from <stan.in> (StdFace)"
+        "  --dry-run <stan.in>  Generate the Expert files from <stan.in> and stop (vmcdry.out)"
     );
-    eprintln!(
-        "                  into --out-dir (default: current directory), then run namelist.def"
-    );
-    eprintln!("  --dry-run       Generate the Expert files from <stan.in> and stop (vmcdry.out)");
-    eprintln!("  -e, --expert    Expert mode (default; accepted for C compatibility)");
+    eprintln!("  --standard, --expert  Long forms of -s, -e");
     eprintln!("  --nsteps <N>    SR optimisation steps [default: NSROptItrStep in modpara.def]");
-    eprintln!("  --out-dir <DIR> Output directory      [default: namelist parent dir]");
+    eprintln!("  --out-dir <DIR> Output directory      [default: <namelist parent dir>/output]");
     eprintln!("  --seed <N>      RNG seed override     [default: RndSeed in modpara.def]");
     eprintln!("  --nsmp <N>      Final averaging window [default: NSROptItrSmp]");
-    eprintln!("  --mode <MODE>   Sanity label: real, cmp or fsz [default: inferred]");
+    eprintln!("  --mode <MODE>   Check real, cmp or fsz against the input; mismatch is an error");
     eprintln!("  --initial-def <auto|none|PATH> Starting parameter file [default: auto]");
-    eprintln!("  -F, --flush-interval <N> Flush _time_/_SRinfo files every N steps [default: 1]");
-    eprintln!("  -o, --opt-trans Enable C OptTrans mode [default: disabled]");
-    eprintln!("  --physcal <PATH> Run fixed-parameter PhysCal using PATH");
+    eprintln!("  --physcal <PATH> Alias of the positional fixed parameter file (NVMCCalMode=1)");
     eprintln!("  --physcal-trace <NEW_DIR> Nonconsuming serial PhysCal diagnostics");
-    eprintln!("  --help, -h      Print this help");
+    eprintln!("  --flush-interval, --opt-trans, --help, --version  Long forms of -F, -o, -h, -v");
     eprintln!();
     eprintln!("Environment:");
     eprintln!("  MVMC_NSTEPS     Same as --nsteps (CLI flag takes precedence)");
@@ -111,6 +130,43 @@ fn run_stdface(input: &Path, gen_dir: &Path) -> i32 {
     }
 }
 
+/// C `printVersion` analogue. The Rust port reports its own crate version and the
+/// authoritative C release it follows.
+fn print_version() {
+    println!(
+        "mvmc-rs version {} (follows C mVMC 1.3.0)",
+        env!("CARGO_PKG_VERSION")
+    );
+}
+
+/// C `strtol` handling shared by `-F` (`vmcmain.c:124-150`): no digits and
+/// out-of-`int` values are errors, trailing characters only warn.
+fn parse_c_int(option: char, text: &str) -> Result<i64, String> {
+    let trimmed = text.trim_start();
+    let bytes = trimmed.as_bytes();
+    let mut end = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let digits_start = end;
+    while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+        end += 1;
+    }
+    if end == digits_start {
+        return Err(format!("-{option}: No digits were found"));
+    }
+    let value: i64 = trimmed[..end]
+        .parse()
+        .map_err(|_| format!("-{option}: Numerical result out of range"))?;
+    if i32::try_from(value).is_err() {
+        return Err(format!("-{option}: Numerical result out of range"));
+    }
+    if end != trimmed.len() {
+        eprintln!(
+            "warning: -{option}: Futher characters after number: {}",
+            &trimmed[end..]
+        );
+    }
+    Ok(value)
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let program = args.first().map(String::as_str).unwrap_or("mvmc");
@@ -120,25 +176,108 @@ fn main() {
     }
 
     // ── argument parsing (no external crate dependency) ──────────────────────
-    let mut namelist: Option<PathBuf> = None;
+    let mut positional: Vec<PathBuf> = Vec::new();
     let mut nsteps_arg: Option<i64> = None;
     let mut out_dir_arg: Option<PathBuf> = None;
     let mut seed_arg: Option<i64> = None;
     let mut nsmp_arg: Option<i64> = None;
     let mut mode_arg: Option<String> = None;
     let mut initial_def = mvmc_core::InitialDef::Auto;
+    let mut initial_def_explicit = false;
     let mut opt_trans_arg = false;
+    let mut binary_arg = false;
     let mut flush_interval_arg: Option<i64> = None;
-    let mut physcal_params: Option<PathBuf> = None;
+    let mut physcal_flag: Option<PathBuf> = None;
     let mut physcal_trace_dir: Option<PathBuf> = None;
     let mut standard_mode = false;
     let mut dry_run = false;
 
+    let usage_error = |message: &str| -> ! {
+        eprintln!("error: {message}");
+        process::exit(2)
+    };
     let mut idx = 1;
+    let mut options_done = false;
     while idx < args.len() {
-        match args[idx].as_str() {
-            "--help" | "-h" => {
+        let arg = args[idx].as_str();
+        if options_done || arg == "-" || !arg.starts_with('-') {
+            positional.push(PathBuf::from(arg));
+            idx += 1;
+            continue;
+        }
+        if arg == "--" {
+            options_done = true;
+            idx += 1;
+            continue;
+        }
+        if !arg.starts_with("--") {
+            // C getopt: clustered short options (`-bo`), arguments attached (`-F2`)
+            // or in the next word (`-F 2`).
+            let cluster: Vec<char> = arg[1..].chars().collect();
+            let mut pos = 0;
+            while pos < cluster.len() {
+                let option = cluster[pos];
+                pos += 1;
+                match option {
+                    'b' => binary_arg = true,
+                    'e' => standard_mode = false,
+                    'o' => opt_trans_arg = true,
+                    'h' => {
+                        print_usage(program);
+                        process::exit(0);
+                    }
+                    'v' => {
+                        print_version();
+                        process::exit(0);
+                    }
+                    's' => standard_mode = true,
+                    'm' | 'F' => {
+                        let value: String = if pos < cluster.len() {
+                            let rest: String = cluster[pos..].iter().collect();
+                            pos = cluster.len();
+                            rest
+                        } else {
+                            idx += 1;
+                            match args.get(idx) {
+                                Some(value) => value.clone(),
+                                None => {
+                                    eprintln!("error: option requires an argument -- '{option}'");
+                                    print_usage(program);
+                                    process::exit(2)
+                                }
+                            }
+                        };
+                        if option == 'm' {
+                            match parse_c_int('m', &value) {
+                                Ok(_) => {
+                                    usage_error("-m: MultiDef mode is not yet implemented (#348)")
+                                }
+                                Err(error) => usage_error(&error),
+                            }
+                        }
+                        match parse_c_int('F', &value) {
+                            Ok(n) if n >= 1 => flush_interval_arg = Some(n),
+                            Ok(_) => usage_error("-F: FileFlushInterval should be natural number."),
+                            Err(error) => usage_error(&error),
+                        }
+                    }
+                    other => {
+                        eprintln!("error: invalid option -- '{other}'");
+                        print_usage(program);
+                        process::exit(2)
+                    }
+                }
+            }
+            idx += 1;
+            continue;
+        }
+        match arg {
+            "--help" => {
                 print_usage(program);
+                process::exit(0);
+            }
+            "--version" => {
+                print_version();
                 process::exit(0);
             }
             "--nsteps" => {
@@ -181,13 +320,18 @@ fn main() {
             }
             "--mode" => {
                 idx += 1;
-                mode_arg = Some(args.get(idx).cloned().unwrap_or_else(|| {
+                let value = args.get(idx).cloned().unwrap_or_else(|| {
                     eprintln!("error: --mode requires real, cmp or fsz");
                     process::exit(2)
-                }));
+                });
+                if !matches!(value.as_str(), "real" | "cmp" | "fsz") {
+                    usage_error(&format!("--mode requires real, cmp or fsz; got `{value}`"));
+                }
+                mode_arg = Some(value);
             }
             "--initial-def" => {
                 idx += 1;
+                initial_def_explicit = true;
                 initial_def = match args.get(idx).map(String::as_str) {
                     Some("auto") => mvmc_core::InitialDef::Auto,
                     Some("none") => mvmc_core::InitialDef::None,
@@ -198,33 +342,24 @@ fn main() {
                     }
                 };
             }
-            "-F" | "--flush-interval" => {
+            "--flush-interval" => {
                 idx += 1;
-                flush_interval_arg = Some(
-                    args.get(idx)
-                        .and_then(|s| s.parse().ok())
-                        .filter(|&n| n >= 1)
-                        .unwrap_or_else(|| {
-                            eprintln!("error: -F: FileFlushInterval should be natural number.");
-                            process::exit(2)
-                        }),
-                );
+                match args.get(idx).map(|value| parse_c_int('F', value)) {
+                    Some(Ok(n)) if n >= 1 => flush_interval_arg = Some(n),
+                    Some(Ok(_)) => usage_error("-F: FileFlushInterval should be natural number."),
+                    Some(Err(error)) => usage_error(&error),
+                    None => usage_error("--flush-interval requires an integer"),
+                }
             }
-            "-o" | "--opt-trans" => {
+            "--opt-trans" => {
                 opt_trans_arg = true;
             }
-            "-s" | "--standard" => {
-                standard_mode = true;
-            }
-            "-e" | "--expert" => {
-                standard_mode = false;
-            }
-            "--dry-run" => {
-                dry_run = true;
-            }
+            "--standard" => standard_mode = true,
+            "--expert" => standard_mode = false,
+            "--dry-run" => dry_run = true,
             "--physcal" => {
                 idx += 1;
-                physcal_params = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
+                physcal_flag = Some(args.get(idx).map(PathBuf::from).unwrap_or_else(|| {
                     eprintln!("error: --physcal requires a fixed parameter file");
                     process::exit(2)
                 }));
@@ -236,27 +371,41 @@ fn main() {
                     process::exit(2);
                 }));
             }
-            flag if flag.starts_with('-') => {
+            flag => {
                 eprintln!("error: unknown flag `{flag}`");
                 print_usage(program);
                 process::exit(2);
-            }
-            path => {
-                if namelist.is_none() {
-                    namelist = Some(PathBuf::from(path));
-                } else {
-                    eprintln!("error: unexpected argument `{path}`");
-                    process::exit(2);
-                }
             }
         }
         idx += 1;
     }
 
-    let namelist = match namelist {
-        Some(p) => p,
+    if positional.len() > 2 {
+        eprintln!("error: Argument count mismatch");
+        print_usage(program);
+        process::exit(2);
+    }
+    let positional_initpara = positional.get(1).cloned();
+    if positional_initpara.is_some() && physcal_flag.is_some() {
+        usage_error(
+            "both a positional initpara and --physcal were given; use one \
+             (--physcal is an alias of the positional fixed parameter file)",
+        );
+    }
+    if positional_initpara.is_some() && initial_def_explicit {
+        usage_error(
+            "both a positional initpara and --initial-def were given; the positional \
+             file is the C initial parameter file",
+        );
+    }
+    // Positional initpara and --physcal name the same file; its role (fixed parameters or
+    // initial parameters) is decided by NVMCCalMode after ModPara is read.
+    let parameter_file: Option<PathBuf> = positional_initpara.or(physcal_flag.clone());
+
+    let namelist = match positional.first() {
+        Some(p) => p.clone(),
         None => {
-            eprintln!("error: <namelist.def> argument is required");
+            eprintln!("error: Argument count mismatch: <namelist.def> is required");
             print_usage(program);
             process::exit(2);
         }
@@ -269,9 +418,8 @@ fn main() {
     }
 
     if physcal_trace_dir.is_some()
-        && (physcal_params.is_none()
-            || mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok())
-                .is_some_and(|context| context.world_size > 1))
+        && mvmc_core::parallel::LaunchContext::from_env(|key| std::env::var(key).ok())
+            .is_some_and(|context| context.world_size > 1)
     {
         eprintln!("error: --physcal-trace requires serial --physcal execution");
         process::exit(2);
@@ -331,7 +479,7 @@ fn main() {
     if let Some(context) = &mpi_context {
         let controls = format!(
             "physcal={};nsteps={nsteps_override:?};mode={mode_arg:?};nsmp={nsmp_arg:?};seed={seed_arg:?};opt_trans={opt_trans_arg};initial={}",
-            physcal_params.is_some(),
+            parameter_file.is_some(),
             match &initial_def {
                 mvmc_core::InitialDef::Auto => "auto",
                 mvmc_core::InitialDef::None => "none",
@@ -357,8 +505,8 @@ fn main() {
             // C vmcmain.c dispatches on NVMCCalMode: 0 optimizes, 1 runs fixed-parameter
             // PhysCal. Make the CLI selection explicit and reject any disagreement
             // between ModPara and the supplied options before initialization or IO.
-            select_calculation(data.modpara.vmc_calc_mode, physcal_params.is_some())?;
-            let validation = if physcal_params.is_some() {
+            select_calculation(data.modpara.vmc_calc_mode, physcal_flag.is_some())?;
+            let validation = if data.modpara.vmc_calc_mode == 1 {
                 mvmc_core::validation::validate_phys_cal(&data)
             } else {
                 mvmc_core::validation::validate_para_opt(&data)
@@ -378,6 +526,12 @@ fn main() {
         process::exit(1);
     });
     let p = &data.modpara;
+    let is_physcal = p.vmc_calc_mode == 1;
+    // The trace observes the fixed-file lifecycle stages, so it needs the explicit file.
+    if physcal_trace_dir.is_some() && !(is_physcal && parameter_file.is_some()) {
+        eprintln!("error: --physcal-trace requires serial --physcal execution");
+        process::exit(2);
+    }
     let nsteps = nsteps_override.unwrap_or(p.nsr_opt_itr_step);
     let inferred_mode = if data.i_flg_orbital_general != 0 {
         "fsz"
@@ -389,6 +543,15 @@ fn main() {
     } else {
         "real"
     };
+    if let Some(requested) = mode_arg.as_deref() {
+        if requested != inferred_mode {
+            eprintln!(
+                "error: --mode {requested} contradicts the input files, which declare a \
+                 {inferred_mode} calculation; fix --mode or the definition files"
+            );
+            process::exit(2);
+        }
+    }
     #[cfg(feature = "mpi")]
     if let Some(context) = &mpi_context {
         // ModPara determines loop counts and collective buffer shapes. Agree it
@@ -431,8 +594,14 @@ fn main() {
         println!("=== mvmc — Julia-mVMC Rust port ===");
         println!("namelist : {}", namelist.display());
         println!("out-dir  : {}", out_dir.display());
-        if let Some(path) = &physcal_params {
-            println!("physcal  : {}", path.display());
+        match (&parameter_file, is_physcal) {
+            (Some(path), true) => println!("physcal  : {}", path.display()),
+            (None, true) => println!("physcal  : (no parameter file; C InitParameter draws)"),
+            (Some(path), false) => println!("initpara : {}", path.display()),
+            (None, false) => {}
+        }
+        if binary_arg {
+            println!("binary   : varbin output (-b)");
         }
         if let Some(n) = nsteps_override {
             println!("nsteps   : {n} (override)");
@@ -443,7 +612,7 @@ fn main() {
         println!();
     }
 
-    let step_validation = if physcal_params.is_none() && nsteps <= 0 {
+    let step_validation = if !is_physcal && nsteps <= 0 {
         Err("NSROptItrStep is 0 — nothing to run. Use --nsteps <N>.".to_owned())
     } else {
         Ok(())
@@ -461,7 +630,7 @@ fn main() {
     // ── run ───────────────────────────────────────────────────────────────────
     let t0 = Instant::now();
 
-    if let Some(fixed_params) = physcal_params {
+    if is_physcal {
         let trace = physcal_trace_dir
             .as_ref()
             .map(|directory| {
@@ -486,11 +655,12 @@ fn main() {
         });
         match run_physcal_with_selected_backend(
             &namelist,
-            &fixed_params,
+            parameter_file.as_deref(),
             seed_arg,
             &out_dir,
             mode_arg.as_deref().unwrap_or(inferred_mode),
             opt_trans_arg,
+            binary_arg,
             #[cfg(feature = "mpi")]
             mpi_context.as_ref(),
         ) {
@@ -517,7 +687,12 @@ fn main() {
             }
         }
     } else {
+        // C `ReadInitParameter(fileInitPara)` for a positional initpara (mode 0).
+        if let Some(path) = &parameter_file {
+            initial_def = mvmc_core::InitialDef::Path(path.clone());
+        }
         let config = mvmc_core::RunConfig {
+            binary_output: binary_arg,
             nsmp: nsmp_arg,
             seed: seed_arg,
             output_dir: Some(out_dir),
@@ -556,18 +731,15 @@ fn main() {
     }
 }
 
-/// Validate that NVMCCalMode and the CLI options select the same calculation.
-fn select_calculation(vmc_calc_mode: i64, has_physcal_file: bool) -> Result<(), String> {
-    match (vmc_calc_mode, has_physcal_file) {
-        (0, false) | (1, true) => Ok(()),
+/// Validate the NVMCCalMode dispatch (`vmcmain.c:304-319`). The positional `initpara` is
+/// optional in both modes, so only the explicit `--physcal` alias can disagree.
+fn select_calculation(vmc_calc_mode: i64, has_physcal_flag: bool) -> Result<(), String> {
+    match (vmc_calc_mode, has_physcal_flag) {
+        (0, false) | (1, _) => Ok(()),
         (0, true) => Err(
             "--physcal requires NVMCCalMode=1 in ModPara (found NVMCCalMode=0); \
-             set NVMCCalMode=1 for fixed-parameter PhysCal"
-                .into(),
-        ),
-        (1, false) => Err(
-            "NVMCCalMode=1 selects fixed-parameter PhysCal; supply the fixed parameter file \
-             with --physcal <PATH>"
+             set NVMCCalMode=1 for fixed-parameter PhysCal, or pass the file positionally \
+             as the initial parameter file"
                 .into(),
         ),
         (mode, _) => Err(format!(
@@ -576,13 +748,15 @@ fn select_calculation(vmc_calc_mode: i64, has_physcal_file: bool) -> Result<(), 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_physcal_with_selected_backend(
     namelist: &Path,
-    fixed_params: &Path,
+    fixed_params: Option<&Path>,
     seed: Option<i64>,
     output_dir: &Path,
     mode: &str,
     enable_opt_trans: bool,
+    binary_output: bool,
     #[cfg(feature = "mpi")] mpi_context: Option<&mvmc_core::mpi::MpiContext>,
 ) -> Result<mvmc_core::PhysCalResult, String> {
     let flags = mvmc_core::c_timer::TimerEnv::from_env();
@@ -599,6 +773,7 @@ fn run_physcal_with_selected_backend(
             output_dir,
             mode,
             enable_opt_trans,
+            binary_output,
             #[cfg(feature = "mpi")]
             mpi_context,
             &mut mvmc_core::c_timer::CTimer::<true>::new(),
@@ -612,6 +787,7 @@ fn run_physcal_with_selected_backend(
             output_dir,
             mode,
             enable_opt_trans,
+            binary_output,
             #[cfg(feature = "mpi")]
             mpi_context,
             &mut mvmc_core::c_timer::CTimer::<false>::new(),
@@ -623,11 +799,12 @@ fn run_physcal_with_selected_backend(
 #[allow(clippy::too_many_arguments)]
 fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
     namelist: &Path,
-    fixed_params: &Path,
+    fixed_params: Option<&Path>,
     seed: Option<i64>,
     output_dir: &Path,
     mode: &str,
     enable_opt_trans: bool,
+    binary_output: bool,
     #[cfg(feature = "mpi")] mpi_context: Option<&mvmc_core::mpi::MpiContext>,
     timer: &mut mvmc_core::c_timer::CTimer<TIMED>,
     flags: mvmc_core::c_timer::TimerEnv,
@@ -647,11 +824,13 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
         )
         .map_err(|error| error.to_string())?;
         mvmc_core::validation::validate_phys_cal(&parsed)?;
-        if !fixed_params.is_file() {
-            return Err(format!(
-                "fixed parameter file not found: {}",
-                fixed_params.display()
-            ));
+        if let Some(fixed_params) = fixed_params {
+            if !fixed_params.is_file() {
+                return Err(format!(
+                    "fixed parameter file not found: {}",
+                    fixed_params.display()
+                ));
+            }
         }
         Ok(parsed)
     })();
@@ -678,7 +857,7 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
             };
             // [13] InitParameter: fixed load + overlays + sync.
             timer.start(13);
-            let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
+            let mut preparation = prepare_physcal(
                 namelist,
                 fixed_params,
                 mode,
@@ -686,6 +865,7 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
                 reducer,
                 enable_opt_trans,
             )?;
+            preparation.binary_output = binary_output;
             timer.stop(13);
             timer.stop(1);
             timer.start(2);
@@ -712,7 +892,7 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
     mvmc_core::validation::validate_reducer_rank(&parsed, &mvmc_core::SingleProcessReducer)?;
     // [13] InitParameter: fixed load + overlays + sync.
     timer.start(13);
-    let preparation = mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
+    let mut preparation = prepare_physcal(
         namelist,
         fixed_params,
         mode,
@@ -720,6 +900,7 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
         &mvmc_core::SingleProcessReducer,
         enable_opt_trans,
     )?;
+    preparation.binary_output = binary_output;
     timer.stop(13);
     timer.stop(1);
     timer.start(2);
@@ -733,6 +914,35 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
     timer.stop(0);
     write_physcal_timer::<TIMED, _>(timer, output_dir, &mvmc_core::SingleProcessReducer, flags)?;
     Ok(result)
+}
+
+/// C `InitParameter` + optional `ReadInitParameter(fileInitPara)` for NVMCCalMode=1:
+/// a given file fixes the parameters, otherwise the initialization draws are used.
+fn prepare_physcal<R: mvmc_core::Reducer + ?Sized>(
+    namelist: &Path,
+    fixed_params: Option<&Path>,
+    mode: &str,
+    seed: Option<i64>,
+    reducer: &R,
+    enable_opt_trans: bool,
+) -> Result<mvmc_core::PhysCalPreparation, String> {
+    match fixed_params {
+        Some(path) => mvmc_core::prepare_phys_cal_from_namelist_with_reducer_and_opt_trans(
+            namelist,
+            path,
+            mode,
+            seed,
+            reducer,
+            enable_opt_trans,
+        ),
+        None => mvmc_core::prepare_phys_cal_without_parameter_file_with_reducer_and_opt_trans(
+            namelist,
+            mode,
+            seed,
+            reducer,
+            enable_opt_trans,
+        ),
+    }
 }
 
 /// Write the C-compatible PhysCal timer report(s) on the output root.

@@ -60,7 +60,7 @@ fn optimization_var_full_declared_storage_matches_fixed_c_bytes() {
     state.energy.etot = Complex64::new(-3.0, 0.0);
     state.energy.etot2 = Complex64::new(9.0, 0.0);
     let dir = test_output_dir("c-var-bytes");
-    mvmc_core::io::output_data(&data, &state, 0, Some(&dir)).unwrap();
+    mvmc_core::io::output_data(&data, &state, 0, Some(&dir), false).unwrap();
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/physcal_181/formatting/var-full.dat");
     assert_eq!(
@@ -112,7 +112,7 @@ fn optimization_var_writes_complete_c_parameter_storage_and_truncates_on_first_s
         state.energy.etot = Complex64::new(-3.0, 0.0);
         state.energy.etot2 = Complex64::new(9.0, 0.0);
         for step in [0, 1, 0] {
-            mvmc_core::io::output_data(&data, &state, step, Some(&dir)).unwrap();
+            mvmc_core::io::output_data(&data, &state, step, Some(&dir), false).unwrap();
             let text = fs::read_to_string(dir.join("zvo_var.dat")).unwrap();
             assert_eq!(text.lines().count(), if step == 1 { 2 } else { 1 });
             for line in text.lines() {
