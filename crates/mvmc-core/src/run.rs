@@ -6126,6 +6126,7 @@ mod physcal_green_observer_tests {
         data.modpara.vmc_calc_mode = 0;
         data.modpara.nsr_opt_itr_step = 1;
         data.modpara.nsr_opt_itr_smp = 1;
+        let output_dir = fresh_output_directory().unwrap();
         let capture = Rc::new(Capture::default());
         let _guard = install_physcal_green_observer(capture.clone()).unwrap();
         with_physcal_green_sample(7, || {
@@ -6133,12 +6134,13 @@ mod physcal_green_observer_tests {
                 &mut data,
                 &mut state,
                 &mut rng,
-                None,
+                Some(&output_dir),
                 &SingleProcessReducer,
                 OptimizationOptions::default(),
             )
         })
         .unwrap();
         assert!(capture.0.borrow().is_empty());
+        fs::remove_dir_all(output_dir).unwrap();
     }
 }

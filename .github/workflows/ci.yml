@@ -95,6 +95,15 @@ jobs:
           feature_args=()
           if test -n "$FEATURE_ARGS"; then feature_args+=("$FEATURE_ARGS"); fi
           cargo nextest run --workspace "${feature_args[@]}" --locked --cargo-profile ci --no-fail-fast --retries 0
+      - name: Fail if tests left files in the working tree
+        run: |
+          set -euo pipefail
+          stray=$(git status --porcelain --untracked-files=all | grep -Ev '^.. (target[^/]*/|.*/target[^/]*/)' || true)
+          if test -n "$stray"; then
+            echo "::error::tests modified or created files in the checkout (route outputs to temporary directories, see #359):"
+            echo "$stray"
+            exit 1
+          fi
       - name: Launch exact-head scalar contracts on worlds2 and4
         if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
         run: |
