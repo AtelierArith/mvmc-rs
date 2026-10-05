@@ -4802,8 +4802,10 @@ mod callback_tests {
     /// (tests/fixtures/c_order_sr_operands, c_toolbox/sr_operand_dump).
     /// Operands depend only on the initial parameters and sampling, so they do
     /// not pass through the amplified CG solve. `rbm_real` has no native C
-    /// reference: its Rust model is the historical sparse RBM control, which C
-    /// does not run identically (step-1 energy 5.9845 in C, 6.2287 here).
+    /// reference: C ignores RBM in real mode (`vmcmake_real.c` has no RBM code),
+    /// so its step-1 energy 5.9845 equals Rust's with RBM zeroed, versus 6.2287
+    /// with RBM applied. See docs/NUMERICAL_COMPARISONS.md (#379) and
+    /// tmisawa/Julia-mVMC#59.
     fn assert_c_step_one_operands(case: &str, cg: bool, store: i64, state: &VmcOptimizationState) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../tests/fixtures/c_order_sr_operands/{case}-{}-store{store}.txt",

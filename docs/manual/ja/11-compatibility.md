@@ -107,6 +107,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 10. **Rustの `modpara.def` の既定値**はCと異なります([7.2](07-input-files.md#72-modparadef))。したがって、キーを省略した実行の結果は、2つのプログラム間で互換ではありません。
 11. **負の `DSROptStepDt`** は、Cでは注記つきで正のステップに変換されます(`readdef.c:746-752`)が、Rustではそのまま使われます(コード読解、`crates/` に `SRFlag` の使用なし)。
 12. **`Nelectron`/`Ne` はRustの `modpara.def` パーサーに無視されます**(観測: `Nelectron 8` を持ち `Ncond` のないモデルは `Nelec=0` と報告し、「normal initialization precondition: ...」で失敗します)。Cマニュアル自身の例は `Nelectron` を使っています。
+13. **Cは実数モードでRBMパラメータを無視します**(#379、tmisawa/Julia-mVMC#59 として報告済み)。実数モデル(軌道が `ComplexType 0`)がRBMセクションを宣言しても、Cは `FlagRBM=1` を黙って受理しますが、実数用サンプラー `vmcmake_real.c` にはRBMのコードがなく(`RBM` の出現は0回。複素用の `vmcmake.c` には27回)、RBMの重みは一度も適用されません。`tests/fixtures/c_orbital_inputs/namelist_rbm_real.def`(シード1、ステップ1)での観測:Cは NPara = 55(NProj 7、NRBM 36、NSlater 12)、ステップ1のエネルギー 5.984544891656925 を報告し、RBMの初期値を 0.125/-0.25 から全て0に変えても変化せず、RBM値を全て0にしたRustとビット単位で一致します。Rustは(エネルギー 6.228711216019723 のように)RBMの重みを適用します。RustはRBMの正しい数学を維持し、そのため `rbm_real` にはネイティブCのオペランド参照がありません。
 
 ## 11.6 本マニュアルで検証しなかったこと
 

@@ -63,7 +63,7 @@ $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\
 
 > **実装**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1311`
+> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1320`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2591`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
 

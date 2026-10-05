@@ -200,10 +200,15 @@ are identical.
 - The CG solve itself is verified at fixed operands against the C recurrence
   (`c_toolbox/ctest_cg_refresh.c`, `tests/fixtures/sr_cg/c_refresh`,
   `real.txt`/`complex.txt`).
-- `rbm_real` has no native C operand reference: its Rust model is the
-  historical sparse RBM control, which C does not run identically
-  (step-1 energy 5.9845 in C, 6.2287 here). It keeps the Julia-derived
-  step-1 energy, sampling and SRinfo checks.
+- `rbm_real` has no native C operand reference because native C ignores RBM in
+  real mode (#379, tmisawa/Julia-mVMC#59). `vmcmake_real.c` has no RBM code
+  (the complex `vmcmake.c` has 27 mentions) and C accepts `FlagRBM=1` for real
+  models without a message. On `c_orbital_inputs/namelist_rbm_real.def` (seed 1,
+  step 1) C has NPara = 55 (NProj 7, NRBM 36, NSlater 12) and energy
+  5.984544891656925, identical for RBM overlay 0.125/-0.25 and for all zeros, and
+  bit-identical to Rust with all RBM values zero. Rust applies the RBM weight
+  (6.228711216019723); initial parameters agree. Rust keeps the correct math and
+  the Julia-derived step-1 energy, sampling and SRinfo checks.
 - `opt_real`: C's real-mode OptTrans derivatives are written through a complex
   pointer offset (`vmccal.c`, `calculateOptTransDiff(SROptO + 2*NProj + ...)`),
   so for `NQPOptTrans > 1` derivative 1 is dropped, derivative 2 lands in
