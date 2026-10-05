@@ -1,0 +1,42 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : Hubbard 
+  KEYWORD : lattice              | VALUE : kagome 
+  KEYWORD : a0w                  | VALUE : 1 
+  KEYWORD : a0l                  | VALUE : 1 
+  KEYWORD : a1w                  | VALUE : 2 
+  KEYWORD : a1l                  | VALUE : 2 
+  KEYWORD : u                    | VALUE : 1.0 
+  KEYWORD : t                    | VALUE : 1.0 
+  KEYWORD : ncond                | VALUE : 1 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+  @ Lattice Size & Shape
+
+                a = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Wlength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Llength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wx = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wy = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               Lx = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Ly = 0.86603     ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+              a0W = 1         
+              a0L = 1         
+              a0H = 0           ######  DEFAULT VALUE IS USED  ######
+              a1W = 2         
+              a1L = 2         
+              a1H = 0           ######  DEFAULT VALUE IS USED  ######
+              a2W = 0           ######  DEFAULT VALUE IS USED  ######
+              a2L = 0           ######  DEFAULT VALUE IS USED  ######
+              a2H = 1           ######  DEFAULT VALUE IS USED  ######
+   Number of Cell = 0

@@ -1,0 +1,8 @@
+model = "Hubbard"
+lattice = "square"
+W = 2
+L = 2
+U = 4.0
+t = 1.0
+ncond = 4
+D = 1.0

@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "tetragonal"
+W = 3
+L = 2
+U = 4.0
+t = 1.0
+ncond = 6
+Wsub = 1
+Lsub = 2

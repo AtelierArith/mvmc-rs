@@ -1,0 +1,6 @@
+model = "Spin"
+lattice = "tetragonal"
+W = 3
+L = 2
+J = 1.0
+2Sz = 0

@@ -244,8 +244,12 @@ zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 b
 |-----------------------|--------|
 | `chain` | supported |
 | `ladder` | supported (see the C defect below) |
-| tetragonal/square, triangular, honeycomb, kagome, orthorhombic/cubic, face-centered orthorhombic/cubic, pyrochlore, wannier90 | not yet ported (the run stops with a message) |
+| `tetragonal`/`square`, `triangular`, `honeycomb`, `kagome` | supported |
+| orthorhombic/cubic, face-centered orthorhombic/cubic, pyrochlore, wannier90 | not yet ported (the run stops with a message) |
 
 C behaviour reproduced as is: for `lattice = ladder` the C code rejects `t`, `t'`, `V`, `V'`, `J`, `J'`
 (`NotUsed` checks that precede the reads), so a ladder needs `t0`, `t1`, `t2`, `t1'`, `t2'` (and `V*`, `J*`),
 and the Kondo coupling `J` cannot be set; the printed `Wx` of a ladder is overwritten by the number of legs.
+The spin-model checks of the triangular, honeycomb and kagome lattices contain copy-paste slips that are
+reproduced as is (for example `t''` and `V''` are silently accepted for a spin model on a triangular or
+honeycomb lattice, and `J''` messages are labelled `J0'`).

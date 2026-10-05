@@ -1,0 +1,107 @@
+
+######  Input Parameter of Standard Intarface  ######
+
+  Open Standard-Mode Inputfile StdFace.def 
+
+  KEYWORD : model                | VALUE : SpinGC 
+  KEYWORD : lattice              | VALUE : triangular 
+  KEYWORD : w                    | VALUE : 3 
+  KEYWORD : l                    | VALUE : 3 
+  KEYWORD : j                    | VALUE : 1.0 
+  KEYWORD : h                    | VALUE : 0.3 
+  KEYWORD : gamma                | VALUE : 0.2 
+  KEYWORD : gamma_y              | VALUE : -0.4 
+
+#######  Construct Model  #######
+
+    CDataFileHead = zvo         ######  DEFAULT VALUE IS USED  ######
+  @ Lattice Size & Shape
+
+                a = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Wlength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+          Llength = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wx = 1.00000     ######  DEFAULT VALUE IS USED  ######
+               Wy = 0.00000     ######  DEFAULT VALUE IS USED  ######
+               Lx = 0.50000     ######  DEFAULT VALUE IS USED  ######
+               Ly = 0.86603     ######  DEFAULT VALUE IS USED  ######
+           phase0 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+           phase1 = 0.00000     ######  DEFAULT VALUE IS USED  ######
+
+  @ Super-Lattice setting
+
+                L = 3         
+                W = 3         
+           Height = 1           ######  DEFAULT VALUE IS USED  ######
+   Number of Cell = 9
+
+  @ Hamiltonian 
+
+                h = 0.30000   
+            Gamma = 0.20000   
+          Gamma_y = -0.40000  
+               2S = 1           ######  DEFAULT VALUE IS USED  ######
+                D = 0.00000     ######  DEFAULT VALUE IS USED  ######
+              J0x = 1.00000   
+              J0y = 1.00000   
+              J0z = 1.00000   
+              J1x = 1.00000   
+              J1y = 1.00000   
+              J1z = 1.00000   
+              J2x = 1.00000   
+              J2y = 1.00000   
+              J2z = 1.00000   
+
+  @ Numerical conditions
+
+
+######  Print Expert input files  ######
+
+    locspn.def is written.
+      trans.def is written.
+    coulombinter.def is written.
+    hund.def is written.
+    exchange.def is written.
+    CParaFileHead = zqp         ######  DEFAULT VALUE IS USED  ######
+      NVMCCalMode = 0           ######  DEFAULT VALUE IS USED  ######
+     NLanczosMode = 0           ######  DEFAULT VALUE IS USED  ######
+    NDataIdxStart = 1           ######  DEFAULT VALUE IS USED  ######
+      NDataQtySmp = 1           ######  DEFAULT VALUE IS USED  ######
+         NMPTrans = -1          ######  DEFAULT VALUE IS USED  ######
+    NSROptItrStep = 1000        ######  DEFAULT VALUE IS USED  ######
+     NSROptItrSmp = 100         ######  DEFAULT VALUE IS USED  ######
+       NVMCWarmUp = 10          ######  DEFAULT VALUE IS USED  ######
+     NVMCInterval = 1           ######  DEFAULT VALUE IS USED  ######
+       NVMCSample = 1000        ######  DEFAULT VALUE IS USED  ######
+    NExUpdatePath = 2         
+          RndSeed = 123456789   ######  DEFAULT VALUE IS USED  ######
+       NSplitSize = 1           ######  DEFAULT VALUE IS USED  ######
+           NStore = 1           ######  DEFAULT VALUE IS USED  ######
+            NSRCG = 0           ######  DEFAULT VALUE IS USED  ######
+     DSROptRedCut = 0.00100     ######  DEFAULT VALUE IS USED  ######
+     DSROptStaDel = 0.02000     ######  DEFAULT VALUE IS USED  ######
+     DSROptStepDt = 0.02000     ######  DEFAULT VALUE IS USED  ######
+     modpara.def is written.
+      ComplexType = 1           ######  DEFAULT VALUE IS USED  ######
+           a0Wsub = 3           ######  DEFAULT VALUE IS USED  ######
+           a0Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a0Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a1Lsub = 3           ######  DEFAULT VALUE IS USED  ######
+           a1Hsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Wsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Lsub = 0           ######  DEFAULT VALUE IS USED  ######
+           a2Hsub = 1           ######  DEFAULT VALUE IS USED  ######
+         Number of Cell in the sublattice: 9
+    qptransidx.def is written.
+    jastrowidx.def is written.
+    orbitalidxpara.def is written.
+    orbitalidxgen.def is written.
+    gutzwilleridx.def is written.
+    orbitalidx.def is written.
+      ioutputmode = 1           ######  DEFAULT VALUE IS USED  ######
+    greenone.def is written.
+    greentwo.def is written.
+    namelist.def is written.
+
+######  Input files are generated.  ######
+

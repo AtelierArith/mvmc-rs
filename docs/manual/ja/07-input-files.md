@@ -221,8 +221,10 @@ mVMC ビルドが知らないキーワードとして拒否されます。
 |---------------------|------|
 | `chain` | 対応 |
 | `ladder` | 対応(下記の C の不具合を参照) |
-| tetragonal/square、triangular、honeycomb、kagome、orthorhombic/cubic、face-centered orthorhombic/cubic、pyrochlore、wannier90 | 未移植(メッセージを表示して停止します) |
+| `tetragonal`/`square`、`triangular`、`honeycomb`、`kagome` | 対応 |
+| orthorhombic/cubic、face-centered orthorhombic/cubic、pyrochlore、wannier90 | 未移植(メッセージを表示して停止します) |
 
 そのまま再現している C の挙動: `lattice = ladder` では C が `t`、`t'`、`V`、`V'`、`J`、`J'` を拒否する
 (読み取りの前に `NotUsed` 検査があるため)ので、ラダーでは `t0`、`t1`、`t2`、`t1'`、`t2'`(および `V*`、`J*`)を
 指定する必要があり、近藤結合 `J` は設定できません。表示される `Wx` はレッグ数で上書きされます。
+三角格子・ハニカム格子・カゴメ格子のスピン模型の検査にはコピー&ペースト由来の誤りがあり、そのまま再現しています(たとえば三角格子・ハニカム格子のスピン模型では `t''` や `V''` が黙って受理され、`J''` のメッセージは `J0'` と表示されます)。

@@ -45,7 +45,7 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 | `InterAll` ハミルトニアン項 | パース済みで最適化時に評価されます。この項目群の所有は本マニュアルとは別です |
 | BackFlow(`BF`, `BFRange`)、`SpinJastrow`、`NSRCG >= 2`、`useDiagScale`、`RescaleSmat` | 拒否 |
 | グループ実行(`NSplitSize > 1`)を含む MPI | `mpi` フィーチャーでサポート。制約あり([8.4](08-running.md#84-mpiとグループ実行)) |
-| 未移植の格子に対する C ドライバーの Standardモード(`-s`, StdFace)、複数定義モード(`-m`)、バイナリ出力(`-b`) | 未提供([7.6](07-input-files.md#76-standard-モードstdface)) |
+| 未移植の格子(3 次元・Wannier90)に対する C ドライバーの Standardモード(`-s`, StdFace)、複数定義モード(`-m`)、バイナリ出力(`-b`) | 未提供([7.6](07-input-files.md#76-standard-モードstdface)) |
 
 ## 1.4 動作要件
 

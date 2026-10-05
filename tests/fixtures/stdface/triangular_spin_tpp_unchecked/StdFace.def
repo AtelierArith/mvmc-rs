@@ -1,0 +1,7 @@
+model = "Spin"
+lattice = "triangular"
+W = 3
+L = 3
+J = 1.0
+2Sz = 1
+t'' = 1.0

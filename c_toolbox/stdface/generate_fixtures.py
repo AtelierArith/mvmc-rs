@@ -11,6 +11,7 @@ generated Expert files, the C `stdout` and the exit status are stored under
 source hashes, compiler, flags and commands.
 """
 import hashlib
+import cases_2d
 import cases_ladder
 import os
 import platform
@@ -39,6 +40,8 @@ UPSTREAM_CASES = [
     "KondoChain_cmp",
     "KondoChain_fsz",
     "KondoChain_Stot1_cmp",
+    "HubbardTetragonal",
+    "HubbardTetragonal_MomentumProjection",
 ]
 
 HUBBARD = 'model = "Hubbard"\nlattice = "chain"\nL = 6\nU = 4.0\nt = 1.0\nncond = 6\n'
@@ -167,6 +170,9 @@ EXTRA_CASES = {
 
 
 EXTRA_CASES.update(cases_ladder.CASES)
+EXTRA_CASES.update(cases_2d.CASES)
+# Upstream sample (HPhi keywords: rejected by the mVMC build of StdFace).
+EXTRA_CASES["sample_hubbard_default_model"] = (STD / "samples/hubbard/default_model/stan.in").read_text()
 
 
 def sha256(path):
