@@ -265,6 +265,8 @@ lattice routines that the port does **not** reproduce; the C output is kept as t
 - Kagome: the duplicated `t0` check is removed, and `t''`, `V''`, `J''` (and their bond-specific forms), which
   the kagome Hamiltonian does not use, are rejected instead of being silently ignored.
 - Square and honeycomb: the second `V'` console line is not printed.
+- All lattices: C reserves four on-site transfer terms per site but writes six when `Gamma` and `Gamma_y` are both
+  non-zero (heap overflow, a crash for some inputs); the port has no such limit.
 
 ### 7.6.1 Three-dimensional lattices
 

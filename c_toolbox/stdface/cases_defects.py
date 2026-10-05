@@ -81,3 +81,20 @@ CASES = {
     "err_kagome_spin_Jpp_not_used": head("Spin", "kagome") + "J = 1.0\n2Sz = 0\nJ'' = 1.0\n",
     "err_kagome_kondo_Jpp_not_used": head("Kondo", "kagome") + "t = 1.0\nJ = 1.0\nncond = 12\nJ0'' = 1.0\n",
 }
+
+# --- GC models with every on-site term and long-range hopping (ntransMax overflow in C) ---------
+# `StdFace_HubbardLocal` appends up to 6 on-site transfers per site (mu-h, mu+h, 2 x Gamma,
+# 2 x Gamma_y) but every lattice reserves 4, so C writes past the end of `trans`.
+GC = "U = 3.0\nmu = -0.2\nh = -0.6\nGamma = 0.4\nGamma_y = 0.25\n"
+CASES.update(
+    {
+        "gc_all_terms_chain": 'model = "HubbardGC"\nlattice = "chain"\nL = 6\nt = 1.0\nt\' = 0.3\nt\'\' = 0.1\n' + GC + "ncond = 6\n",
+        "gc_all_terms_chain_kondo": 'model = "KondoGC"\nlattice = "chain"\nL = 4\nt = 1.0\nt\' = 0.3\nt\'\' = 0.1\nJ = 1.0\nncond = 4\nh = -0.6\nGamma = 0.4\nGamma_y = 0.25\n',
+        "gc_all_terms_ladder": 'model = "HubbardGC"\nlattice = "ladder"\nW = 2\nL = 3\nt0 = 1.0\nt1 = 0.8\nt2 = 0.2\nt1\' = 0.3\nt2\' = 0.1\n' + GC + "ncond = 6\n",
+        "gc_all_terms_square": head("HubbardGC", "square", 3, 3) + "t = 1.0\nt' = 0.3\nt'' = 0.1\n" + GC + "ncond = 9\n",
+        "gc_all_terms_triangular": head("HubbardGC", "triangular", 3, 3) + "t = 1.0\nt' = 0.3\nt'' = 0.1\n" + GC + "ncond = 9\n",
+        "gc_all_terms_honeycomb": head("HubbardGC", "honeycomb", 2, 2) + "t = 1.0\nt' = 0.3\nt'' = 0.1\n" + GC + "ncond = 8\n",
+        "gc_all_terms_kagome": head("HubbardGC", "kagome", 2, 2) + "t = 1.0\nt' = 0.3\n" + GC + "ncond = 12\n",
+        "gc_all_terms_square_kondo": head("KondoGC", "square", 2, 2) + "t = 1.0\nt' = 0.3\nt'' = 0.1\nJ = 1.0\nncond = 4\nh = -0.6\nGamma = 0.4\nGamma_y = 0.25\n",
+    }
+)

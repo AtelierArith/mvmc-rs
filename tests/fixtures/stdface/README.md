@@ -27,6 +27,7 @@ byte-identical to the C program.
 | `TriangularLattice.c` | spin branch `NotUsed_c("t''", tp)` | tests `tpp`; Hubbard/Kondo also reject `J'`, `J''` |
 | `HoneycombLattice.c` | no `t''`/`V''` check for the spin model; Hubbard branch checks only `J0,J1,J2,J'` | `t''`, `t0''..t2''`, `V''`, `V0''..V2''` rejected for spin; full `J` family rejected for Hubbard/Kondo |
 | `Kagome.c` | duplicate `NotUsed_c("t0", t)`; `t''`, `V''`, `J''` silently ignored | duplicate removed; `t''`, `V''`, `J''` family rejected |
+| `StdFace_ModelUtil.c` (every lattice) | each lattice reserves 4 on-site transfers per site (`ntransMax`) but `HubbardLocal` appends 6 when `Gamma` and `Gamma_y` are both non-zero: heap overflow, SIGSEGV for the `gc_all_terms_*` cases (historical `exit_status` -11) | `MallocInteractions` reserves twice as much; the Rust lists grow on demand, so the port needed no change |
 | `SquareLattice.c`, `HoneycombLattice.c` | extra `PrintVal_d("V'")` console line | removed |
 
 Cases that differ (`expected_fixed/` present) are listed in PROVENANCE.md; cases added for the

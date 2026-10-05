@@ -54,7 +54,7 @@ C `stdout`), `exit_status` (255 = `StdFace_exit(-1)`) and, if any, `stderr.txt`.
 (`build_reference.sh --fixed`: `lattice_defects.patch` applied to a copy of the C sources, see
 `tests/fixtures/stdface/README.md`). `expected/` stays the historical C output; the Rust
 port is compared with `expected_fixed/` when present, else with `expected/`.
-- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `e096c8b221846b48c50b39a6ff32f6534ec967da4842c67f9baee75156167f53`
+- `c_toolbox/stdface/lattice_defects.patch` SHA-256: `9b044eecc4939a2c218b2df7b0b19d2cd4ef29094206141d3a9e87895624c415`
 
 ## Cases whose C output differs from the corrected build (`expected_fixed/`)
 
@@ -110,6 +110,14 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 - `err_triangular_spin_Jpp_conflict`
 - `err_triangular_spin_tpp_not_used`
 - `err_triangular_spin_tpp_not_used_c`
+- `gc_all_terms_chain`
+- `gc_all_terms_chain_kondo`
+- `gc_all_terms_honeycomb`
+- `gc_all_terms_kagome`
+- `gc_all_terms_ladder`
+- `gc_all_terms_square`
+- `gc_all_terms_square_kondo`
+- `gc_all_terms_triangular`
 - `honeycomb_alias`
 - `honeycomb_hubbard`
 - `honeycomb_hubbard_antiperiodic`
@@ -501,4 +509,12 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 | `err_kagome_spin_Vpp_not_used` | generated | 0 | `82dc61c02ae7a72e555514424769bfb4963c245f197c33f131e62b5b9f96a375` |
 | `err_kagome_spin_Jpp_not_used` | generated | 0 | `90bdb2cd09623b65cf9762ea520b2fff600703690da9cb0a2b83668a05a8e9ca` |
 | `err_kagome_kondo_Jpp_not_used` | generated | 0 | `1c39e1995c2357708cc9e3c30fd199228cfe82bbdcba8d70d48d2d47d60d2e37` |
+| `gc_all_terms_chain` | generated | -11 | `5b00b10dcbee4ac65f18fe7a1ee6faef5443d49fb3bac9a2ac4c5b28dda51f92` |
+| `gc_all_terms_chain_kondo` | generated | -11 | `6bdd1f5f64f649ed6743e4ef7cfe6c87ce2288eb40a7fbce3f4ee07a8c3b86f2` |
+| `gc_all_terms_ladder` | generated | -11 | `ee9a0d3ea793a79dc4e6849e5aa4e85b49a22952a9c6161b49caf425b82630a9` |
+| `gc_all_terms_square` | generated | -11 | `01f50d086ede990c6285a12eaf139405cb9aaf1af269996d8c978146d484aff2` |
+| `gc_all_terms_triangular` | generated | -11 | `fdf043943cd52f033bb412b88365667f826653b29e568826becbeeef8e592120` |
+| `gc_all_terms_honeycomb` | generated | -11 | `6793b654dcacde70cb5b6422e1cf94093d4419e6bf137cfa10421a8b2f7c09e6` |
+| `gc_all_terms_kagome` | generated | -11 | `13301c6f865af62f4dc6b5a61cd8483bd07d88a59f1ac4b7da03743e890adb90` |
+| `gc_all_terms_square_kondo` | generated | -11 | `b552434eebb198c2e7ac324ace921c8202b36937754c137ef4e04eb874edc9e2` |
 | `sample_hubbard_default_model` | generated | 255 | `0503aee770ac4a4f883db290b511edc9a9d7ec6c7d68060ed06441f051d345fa` |

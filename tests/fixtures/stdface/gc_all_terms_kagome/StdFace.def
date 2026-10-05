@@ -1,0 +1,12 @@
+model = "HubbardGC"
+lattice = "kagome"
+W = 2
+L = 2
+t = 1.0
+t' = 0.3
+U = 3.0
+mu = -0.2
+h = -0.6
+Gamma = 0.4
+Gamma_y = 0.25
+ncond = 12

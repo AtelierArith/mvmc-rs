@@ -10,6 +10,7 @@ diff -u a/ChainLattice.c b/ChainLattice.c
      /**/
      StdFace_NotUsed_d("mu", StdI->mu);
      StdFace_NotUsed_d("U", StdI->U);
+Only in a: CMakeLists.txt
 diff -u a/HoneycombLattice.c b/HoneycombLattice.c
 --- a/HoneycombLattice.c
 +++ b/HoneycombLattice.c
@@ -177,6 +178,7 @@ diff -u a/Ladder.c b/Ladder.c
      StdFace_NotUsed_d("D", StdI->D[2][2]);
  
      if (strcmp(StdI->model, "hubbard") == 0 ) {
+Only in a: makefile_StdFace
 diff -u a/SquareLattice.c b/SquareLattice.c
 --- a/SquareLattice.c
 +++ b/SquareLattice.c
@@ -188,6 +190,17 @@ diff -u a/SquareLattice.c b/SquareLattice.c
      /**/
      StdFace_NotUsed_J("J0", StdI->J0All, StdI->J0);
      StdFace_NotUsed_J("J1", StdI->J1All, StdI->J1);
+diff -u a/StdFace_ModelUtil.c b/StdFace_ModelUtil.c
+--- a/StdFace_ModelUtil.c
++++ b/StdFace_ModelUtil.c
+@@ -1276,6 +1276,7 @@
+   /**@brief
+   (1) Transfer StdIntList::trans, StdIntList::transindx
+   */
++  ntransMax *= 2;/*HubbardLocal can append 6 on-site terms per site, not 4*/
+   StdI->transindx = (int **)malloc(sizeof(int*) * ntransMax);
+   StdI->trans = (double complex *)malloc(sizeof(double complex) * ntransMax);
+   for (ii = 0; ii < ntransMax; ii++) {
 diff -u a/TriangularLattice.c b/TriangularLattice.c
 --- a/TriangularLattice.c
 +++ b/TriangularLattice.c
