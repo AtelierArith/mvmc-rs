@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "triangular"
+W = 3
+L = 3
+U = 2.0
+t = 1.0, 0.5
+t' = -0.3, 0.2
+ncond = 9
+ComplexType = 1

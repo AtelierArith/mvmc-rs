@@ -1,0 +1,7 @@
+model = "Spin"
+lattice = "square"
+W = 2
+L = 2
+J0 = 1.0
+J0x = 2.0
+2Sz = 0

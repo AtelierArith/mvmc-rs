@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "kagome"
+a0W = 1
+a0L = 2
+a1W = 2
+a1L = 0
+U = 4.0
+t = 1.0
+ncond = 4

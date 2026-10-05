@@ -22,10 +22,14 @@ pub mod ccomplex;
 pub mod cexpr;
 pub mod cfmt;
 pub mod chain_lattice;
+pub mod honeycomb_lattice;
+pub mod kagome;
 pub mod ladder;
 pub mod model_util;
 pub mod out;
+pub mod square_lattice;
 pub mod stdface_main;
+pub mod triangular_lattice;
 pub mod vals;
 
 pub use out::{Out, StdFaceError};

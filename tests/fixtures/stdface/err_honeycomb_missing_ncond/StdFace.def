@@ -1,0 +1,6 @@
+model = "Hubbard"
+lattice = "honeycomb"
+W = 2
+L = 2
+U = 4.0
+t = 1.0

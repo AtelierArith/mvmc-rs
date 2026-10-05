@@ -1,0 +1,10 @@
+model = "HubbardGC"
+lattice = "square"
+W = 2
+L = 2
+U = 3.0
+t = 1.0
+h = -0.7
+Gamma = 0.4
+Gamma_y = 0.25
+ncond = 4

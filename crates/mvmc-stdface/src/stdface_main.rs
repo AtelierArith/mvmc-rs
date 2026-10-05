@@ -9,10 +9,14 @@
 use crate::ccomplex::C64;
 use crate::cfmt;
 use crate::chain_lattice::std_face_chain;
+use crate::honeycomb_lattice::std_face_honeycomb;
+use crate::kagome::std_face_kagome;
 use crate::ladder::std_face_ladder;
 use crate::model_util as mu;
 use crate::out::{exit, Out, Res, StdFaceError};
 use crate::outf;
+use crate::square_lattice::std_face_tetragonal;
+use crate::triangular_lattice::std_face_triangular;
 use crate::vals::{StdIntList, NAN_I, UNSET_STR};
 use std::path::Path;
 
@@ -1644,27 +1648,23 @@ fn run(o: &mut Out, fname: &str, input: Option<&[u8]>) -> Res<()> {
     match s.lattice.as_str() {
         "chain" | "chainlattice" => std_face_chain(o, &mut s)?,
         "ladder" | "ladderlattice" => std_face_ladder(o, &mut s)?,
+        "tetragonal" | "tetragonallattice" | "square" | "squarelattice" => {
+            std_face_tetragonal(o, &mut s)?
+        }
+        "triangular" | "triangularlattice" => std_face_triangular(o, &mut s)?,
+        "honeycomb" | "honeycomblattice" => std_face_honeycomb(o, &mut s)?,
+        "kagome" | "kagomelattice" => std_face_kagome(o, &mut s)?,
         "face-centeredorthorhombic"
         | "fcorthorhombic"
         | "fco"
         | "face-centeredcubic"
         | "fccubic"
         | "fcc"
-        | "honeycomb"
-        | "honeycomblattice"
-        | "kagome"
-        | "kagomelattice"
         | "orthorhombic"
         | "simpleorthorhombic"
         | "cubic"
         | "simplecubic"
         | "pyrochlore"
-        | "tetragonal"
-        | "tetragonallattice"
-        | "square"
-        | "squarelattice"
-        | "triangular"
-        | "triangularlattice"
         | "wannier90" => {
             outf!(
                 o,

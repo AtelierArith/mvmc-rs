@@ -1,0 +1,9 @@
+model = "Kondo"
+lattice = "square"
+W = 2
+L = 2
+t = 1.0
+Jx = 2.0
+Jy = 1.5
+Jz = 1.0
+ncond = 4

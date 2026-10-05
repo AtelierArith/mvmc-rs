@@ -1,0 +1,9 @@
+model = "Hubbard"
+lattice = "square"
+W = 2
+L = 2
+U = 2.0
+t = 1.0, 0.5
+t' = -0.3, 0.2
+ncond = 4
+ComplexType = 1
