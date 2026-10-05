@@ -1,0 +1,10 @@
+--------------------
+Model_Parameters   0
+--------------------
+CDataFileHead  zvo
+CParaFileHead  zqp
+--------------------
+Nsite 6
+NumAve 2
+Lanczos_max 3
+ExpecInterval 2

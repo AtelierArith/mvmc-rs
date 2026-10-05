@@ -1,0 +1,19 @@
+[package]
+name = "mvmc-greenr2k"
+version = "0.0.0"
+description = "Pure-Rust port of mVMC tool/greenr2k.F90 (Fourier transform of correlation functions)"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "mvmc_greenr2k"
+path = "src/lib.rs"
+
+[[bin]]
+name = "greenr2k"
+path = "src/main.rs"
+
+[dependencies]

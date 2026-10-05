@@ -76,6 +76,7 @@ range reduction, scaling and cache fingerprints is unchanged.
 | Short SR prefixes / long-run repeatability | `1e-11` absolute and relative for computed parameters/energy; short independent checkpoints and long same-implementation discrete/RNG repeatability |
 | ComplexUHF Hartree-Fock (`mvmc uhf`) | Iteration counts, indices and headers exact; 10-decimal outputs `abs 2e-10 + rel 1e-10` (print quantum, contraction factor <= 0.9), residual `abs 2e-12 + rel 1e-8`, energy column `abs 1e-10`; orbital files only through eigenvector-gauge-invariant `F F^+` (`abs 3e-5`) and the SFMT noise (`abs 2e-6`); see `docs/COMPLEX_UHF.md` |
 | CLI numerical output | `1e-12` absolute and relative, exact indexed coordinates and parameter headers |
+| `greenr2k` Fourier transform (vs the compiled Fortran tool) | Printed text layout exact; numeric tokens within one unit of the last printed digit (`E15.5`: five mantissa digits; `F15.10`: ten decimals) plus a `1e-13` absolute floor for values that are zero up to roundoff (sums of at most ~100 terms of magnitude <= 1, about 100 x 2.2e-16). On the Linux fixtures the correlation files agree textually; only the sign of zero in LAPACK's 3x3 inverse differs on the console. Fortran output formats are checked exactly against a gfortran probe. |
 
 These are regression envelopes for the supplied inputs, not forward-error
 guarantees for arbitrary ill-conditioned systems or untested BLAS providers.

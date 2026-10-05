@@ -3,3 +3,5 @@ c_toolbox/*.inc whitespace=-blank-at-eol
 # Output regression files compare reference formatting byte for byte.
 tests/fixtures/c_kernel_order/**/*.dat whitespace=-blank-at-eol
 c_toolbox/sr_operand_dump/*.patch whitespace=-blank-at-eol
+# greenr2k expected outputs keep gfortran list-directed trailing blanks.
+tests/fixtures/greenr2k/** whitespace=-blank-at-eol

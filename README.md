@@ -26,6 +26,7 @@ A user manual that starts from the theory (variational Monte Carlo, the Pfaffian
 | [`crates/mvmc-expert-parsers`](crates/mvmc-expert-parsers) | GPL-3.0-or-later | `MVMCExpertModeParsers.jl/src` |
 | [`crates/mvmc-core`](crates/mvmc-core) | GPL-3.0-or-later | `MVMCOptimizers.jl/src` |
 | [`crates/mvmc-cli`](crates/mvmc-cli) | GPL-3.0-or-later | `examples/*.jl` + CLI binary |
+| [`crates/mvmc-greenr2k`](crates/mvmc-greenr2k) | GPL-3.0-or-later | `extern/mVMC-1.3.0/tool/greenr2k.F90` (`greenr2k` binary) |
 | [`xtask`](xtask) | GPL-3.0-or-later | build / regression driver |
 
 ## Quick start

@@ -11,6 +11,7 @@ members = [
     "crates/mvmc-uhf",
     "crates/mvmc-stdface",
     "crates/mvmc-cli",
+    "crates/mvmc-greenr2k",
     "xtask",
 ]
 exclude = [
