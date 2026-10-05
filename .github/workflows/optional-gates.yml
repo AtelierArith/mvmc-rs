@@ -11,11 +11,11 @@ name: Explicit bounded optional gates
         options: [general, lanczos, mpi, thread, all, none]
       ctest_models:
         description: >-
-          Optional explicit long (20-step) ctest gate: comma-separated model names or
-          "all". Empty leaves the long ctest gate NotRun. Unknown models are
-          Unsupported and models without independent references fail
-          (MissingFixture/UNVERIFIED); neither is reported as Pass. Model coverage
-          itself is tracked by #180.
+          Optional explicit long ctest gate (upstream C/Julia rule: fail only when
+          difference >= 3*ref_std and >= 1e-8 at the upstream run length): comma-separated
+          model names or "all". Empty leaves the long ctest gate NotRun. Unknown models are
+          Unsupported; the supplementary 20-step independent-reference gates are reported
+          MissingFixture/Unverified and never produce Pass. Tracked by #180.
         required: false
         default: ''
         type: string
@@ -134,7 +134,7 @@ jobs:
   ctest-long:
     # Outside the bounded-family aggregate ledger: its own job status is the
     # verdict. Skipped (NotRun) unless a selection is dispatched explicitly.
-    name: Explicit long ctest 20-step gate (Linux x86_64)
+    name: Explicit long ctest upstream-rule gate (Linux x86_64)
     if: inputs.ctest_models != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 180
