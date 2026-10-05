@@ -19,3 +19,5 @@ output
 .DS_Store
 *.out
 .env
+!tests/fixtures/greenr2k/**/output
+!tests/fixtures/greenr2k/**/output/**
