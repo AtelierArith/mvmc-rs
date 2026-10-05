@@ -113,27 +113,38 @@ against C (below).
 
 ## C-only regions (serial in both Julia and Rust)
 
-These are C OpenMP regions with no Julia counterpart. They are outside the
-"Julia inner-threading coverage" criterion of #182 and are recorded for a
-follow-up, not implemented here. Each parallelizes an index loop *within* one
-sample; none involves RNG draws, so they are candidates for deterministic
-Rust parallelization with fixed in-order reductions.
+These are C OpenMP regions with no Julia counterpart. #182 recorded them; **#360
+ports the priority regions** to the same dedicated Rayon pool
+(`crates/mvmc-core/src/threading.rs`, `MVMC_RS_INNER_THREADS` /
+`MVMC_RS_INNER_THRESHOLD`). Each parallelizes an index loop *within* one sample;
+none involves RNG draws. The sample loop itself stays serial. Every ported region
+keeps its serial code for one worker (or work below the threshold) and reduces in
+fixed index order (per-term/per-element values are computed concurrently, then
+combined serially in index order), so results are bit-identical for any worker
+count and equal to C's one-thread order.
 
-| C region | Files | Notes |
-|---|---|---|
-| Two-body Hamiltonian terms (CoulombInter, Hund, PairHop, Exchange) | `calham*.c`, `lslocgrn*.c` | `reduction(+:e)` plus per-thread workspaces; Rust/Julia serial, serial order matches C one-thread |
-| Green function accumulation | `calgrn*.c` | Rust parallelizes measurement cells already (superset of Julia) |
-| Sampler updates | `vmcmake*.c`, `pfupdate*.c` | rank-1 QP update loops over `qpidx`; per-sample, after RNG draws |
-| Projection/RBM/Slater | `projection.c`, `rbm.c`, `slater*.c` | index loops, `reduction(+:z)` in RBM |
-| SR/CG vector kernels | `stcopt*.c`, `stcopt_cg_impl.c`, `stcopt_pdposv.c`, `average.c`, `parameter.c` | elementwise loops; Rust CG operator uses serial BLAS GEMV by design (Julia GEMV order contract) |
-| Setup | `qp.c`, `gauleg.c`, `workspace.c`, `matrix.c` setup | one-time |
+| C region | Files | Status (#360) | Rust |
+|---|---|---|---|
+| Diagonal and two-body Hamiltonian terms (CoulombIntra/Inter, Hund, PairHop, Exchange, InterAll) | `calham*.c` | ported (pooled term values, serial in-order sum) | `observables.rs` `calculate_hamiltonian_diagonal`, `calculate_local_energy_timed` via `threading::collect_terms` |
+| Lanczos local Green (`lslocgrn*.c`) | `lslocgrn*.c` | **not ported**: the Rust Lanczos evaluator mutates and restores the shared Slater state per moved configuration; per-task state copies need a separate design | `observables.rs` `lanczos_*` (serial) |
+| Green function accumulation | `calgrn*.c` | already pooled (superset of Julia) | `green_measurements.rs` |
+| Sampler updates | `pfupdate*.c` (`updateMAll*`, `calculateNewPfM*`) | ported: QP loops of 15 flat kernels | `sampling/updates.rs` via `threading::qp_fill` / `qp_update` |
+| Projection | `projection.c` DH2/DH4 loops | ported (definitions concurrent, integer increments applied in definition order) | `sampling/projection.rs` `recompute_dh_counts` |
+| RBM | `rbm.c` `LogWeightRBM`, `RBMRatio` | ported (per-hidden-unit values concurrent, serial `z`/`zz` fold in unit order); derivative accumulation (`set_rbm_diff`) and counter build left serial | `sampling/rbm.rs` `log_rbm_val`, `log_rbm_ratio` |
+| Slater setup | `slater*.c` `UpdateSlaterElm*` | ported (one producer per QP plane, real shadow copy elementwise) | `slater_update.rs` |
+| SR/CG vector kernels | `stcopt.c`, `stcopt_cg_impl.c` | ported: S diagonal, S/g assembly (per column), CG axpy/residual/direction/product-correction loops and the sample-matrix fill; dot products and GEMV stay serial by design (Julia/C operation order) | `sr.rs`, `sr_cg.rs` |
+| `stcopt_pdposv.c`, `average.c`, `parameter.c` | | not ported: Rust uses its own Cholesky / sequential parameter updates (`update_parameter_value` mutates `ExpertModeData`) | |
+| Setup | `qp.c`, `gauleg.c`, `workspace.c`, `matrix.c` setup | not ported: one-time work | |
 
-Why not implemented here: Rust's hot per-sample cost for the benchmark inputs
-is dominated by Pfaffian updates and the Green/Hamiltonian kernels on very small
-dimensions (see benchmark), where thread dispatch overhead exceeds the work.
-Changing the SR/CG GEMV to threaded BLAS would break the Julia GEMV operation
-order that Rust deliberately preserves. A faithful port of these regions needs
-per-region reduction-order design and per-kernel tolerance justification.
+Proof: `crates/mvmc-core/tests/threaded_issue360.rs` runs every worker setting in
+its own process (threshold 1) and requires identical bits for the QP kernels
+(including start offsets and the coincident-index branch) and byte-identical
+output files for short optimizations (Gutzwiller/Jastrow/DH, direct SR and
+NSRCG with stored samples, RBM with OptTrans, all Hamiltonian terms), plus the
+observed pooled-dispatch counters for 2 and 4 workers and none for one worker.
+InterAll is covered by the same code path as PairHop/Exchange but no
+optimization fixture contains InterAll terms; real and complex energies are not
+distinguished by the term collection.
 
 ## Benchmark
 

@@ -509,25 +509,41 @@ pub fn log_rbm_ratio(
     let block_size = cfg.nblock_size_rbm_ratio.max(1);
     let n_blk = (n_hidden - 1) / block_size + 1;
 
+    // Per hidden unit: the folded difference and the cosh-ratio factor.
+    let unit = |hi: usize| -> (Complex64, Complex64) {
+        let idx = n_phys_eff + hi;
+        let mut rbm_new = rbm_cnt_new[idx];
+        let mut rbm_old = rbm_cnt_old[idx];
+        if rbm_new.re <= 0.0 {
+            rbm_new = -rbm_new;
+        }
+        if rbm_old.re <= 0.0 {
+            rbm_old = -rbm_old;
+        }
+        (
+            rbm_new - rbm_old,
+            crate::julia_complex::divide(
+                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_new),
+                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_old),
+            ),
+        )
+    };
+    // C `rbm.c:72-120` evaluates the hidden units under `omp for` with `reduction(+:z)`
+    // and `reduction(*:zz)` per block. The pooled path computes the per-unit values
+    // concurrently and folds them serially in unit order (`z +=` difference, `zz *=`
+    // factor, `z += log(zz)` per block), so the result equals the serial loop.
+    let pooled = crate::threading::collect_terms(n_hidden, || (), |_, hi| unit(hi));
     for iblk in 0..n_blk {
         let hist = iblk * block_size;
         let hiend = (hist + block_size).min(n_hidden);
         let mut zz = Complex64::new(1.0, 0.0);
         for hi in hist..hiend {
-            let idx = n_phys_eff + hi;
-            let mut rbm_new = rbm_cnt_new[idx];
-            let mut rbm_old = rbm_cnt_old[idx];
-            if rbm_new.re <= 0.0 {
-                rbm_new = -rbm_new;
-            }
-            if rbm_old.re <= 0.0 {
-                rbm_old = -rbm_old;
-            }
-            z += rbm_new - rbm_old;
-            zz *= crate::julia_complex::divide(
-                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_new),
-                Complex64::new(1.0, 0.0) + rbm_math::exp(-2.0 * rbm_old),
-            );
+            let (difference, factor) = match &pooled {
+                Some(values) => values[hi],
+                None => unit(hi),
+            };
+            z += difference;
+            zz *= factor;
         }
         z += rbm_math::log(zz);
     }
@@ -638,6 +654,23 @@ pub fn log_rbm_val(ele_num: &[i64], cfg: &RbmConfig<'_>) -> Complex64 {
         hidden_general[hi as usize] += term.value * Complex64::new(xi, 0.0);
     }
 
+    // C `rbm.c:56` `omp parallel for ... reduction(+:z)` over the hidden units: the
+    // pooled path evaluates log cosh per unit concurrently and sums the values
+    // serially in unit order (charge, spin, general), equal to the serial loops.
+    if crate::threading::inner_parallel_enabled(n_charge + n_spin + n_general) {
+        let hidden: Vec<Complex64> = hidden_charge
+            .into_iter()
+            .chain(hidden_spin)
+            .chain(hidden_general)
+            .collect();
+        let values =
+            crate::threading::collect_terms(hidden.len(), || (), |_, i| log_cosh_stable(hidden[i]))
+                .expect("gate checked above");
+        for value in values {
+            z += value;
+        }
+        return z;
+    }
     for v in hidden_charge {
         z += log_cosh_stable(v);
     }

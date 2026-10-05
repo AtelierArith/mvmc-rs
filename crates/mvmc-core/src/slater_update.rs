@@ -47,98 +47,74 @@ pub fn update_slater_elm(data: &mut ExpertModeData, state: &mut VmcOptimizationS
         slater[idx] = value;
     }
 
-    for qp in 0..n_qp_full {
-        let n_qp_fix = n_sp_gauss_leg * n_mp_trans;
-        let rem = qp % n_qp_fix;
-        let mpidx = rem / n_sp_gauss_leg;
-        let spidx = qp % n_sp_gauss_leg;
-        let cs = weights.spgl_cos_sin[spidx];
-        let cc = weights.spgl_cos_cos[spidx];
-        let ss = weights.spgl_sin_sin[spidx];
-        let optidx = qp / n_qp_fix;
+    let n_site2 = state.slater_matrix.slater_elm.n_site2();
+    let plane_len = n_site2 * n_site2;
+    // C slater.c `omp parallel for` over the QP planes (one producer per plane).
+    crate::threading::for_each_chunk_mut(
+        &mut state.slater_matrix.slater_elm.as_mut_slice()[..n_qp_full * plane_len],
+        plane_len,
+        |qp, plane| {
+            let n_qp_fix = n_sp_gauss_leg * n_mp_trans;
+            let rem = qp % n_qp_fix;
+            let mpidx = rem / n_sp_gauss_leg;
+            let spidx = qp % n_sp_gauss_leg;
+            let cs = weights.spgl_cos_sin[spidx];
+            let cc = weights.spgl_cos_cos[spidx];
+            let ss = weights.spgl_sin_sin[spidx];
+            let optidx = qp / n_qp_fix;
 
-        for ri in 0..n_site {
-            let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
-            if tri >= n_site {
-                continue;
-            }
-            for rj in 0..n_site {
-                let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
-                if trj >= n_site {
+            for ri in 0..n_site {
+                let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
+                if tri >= n_site {
                     continue;
                 }
-                let qpsgn = sgni * sgnj;
-                let idx_ij = orb_idx[tri][trj];
-                let idx_ji = orb_idx[trj][tri];
-                if idx_ij < 0 || idx_ji < 0 {
-                    continue;
-                }
-                let sgn_ij = orb_sgn[tri][trj] * qpsgn;
-                let sgn_ji = orb_sgn[trj][tri] * qpsgn;
-                let slt_ij = slater[idx_ij as usize] * sgn_ij as f64;
-                let slt_ji = slater[idx_ji as usize] * sgn_ji as f64;
+                for rj in 0..n_site {
+                    let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
+                    if trj >= n_site {
+                        continue;
+                    }
+                    let qpsgn = sgni * sgnj;
+                    let idx_ij = orb_idx[tri][trj];
+                    let idx_ji = orb_idx[trj][tri];
+                    if idx_ij < 0 || idx_ji < 0 {
+                        continue;
+                    }
+                    let sgn_ij = orb_sgn[tri][trj] * qpsgn;
+                    let sgn_ji = orb_sgn[trj][tri] * qpsgn;
+                    let slt_ij = slater[idx_ij as usize] * sgn_ij as f64;
+                    let slt_ji = slater[idx_ji as usize] * sgn_ji as f64;
 
-                let rsi0 = ri;
-                let rsi1 = ri + n_site;
-                let rsj0 = rj;
-                let rsj1 = rj + n_site;
-                if all_complex {
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
-                } else {
-                    let cs = cs.re;
-                    let cc = cc.re;
-                    let ss = ss.re;
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi0, rsj0, -(slt_ij - slt_ji) * cs);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi0, rsj1, slt_ij * cc + slt_ji * ss);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi1, rsj0, -slt_ij * ss - slt_ji * cc);
-                    state
-                        .slater_matrix
-                        .slater_elm
-                        .set(qp, rsi1, rsj1, (slt_ij - slt_ji) * cs);
+                    let rsi0 = ri;
+                    let rsi1 = ri + n_site;
+                    let rsj0 = rj;
+                    let rsj1 = rj + n_site;
+                    if all_complex {
+                        plane[rsi0 * n_site2 + rsj0] = -(slt_ij - slt_ji) * cs;
+                        plane[rsi0 * n_site2 + rsj1] = slt_ij * cc + slt_ji * ss;
+                        plane[rsi1 * n_site2 + rsj0] = -slt_ij * ss - slt_ji * cc;
+                        plane[rsi1 * n_site2 + rsj1] = (slt_ij - slt_ji) * cs;
+                    } else {
+                        let cs = cs.re;
+                        let cc = cc.re;
+                        let ss = ss.re;
+                        plane[rsi0 * n_site2 + rsj0] = -(slt_ij - slt_ji) * cs;
+                        plane[rsi0 * n_site2 + rsj1] = slt_ij * cc + slt_ji * ss;
+                        plane[rsi1 * n_site2 + rsj0] = -slt_ij * ss - slt_ji * cc;
+                        plane[rsi1 * n_site2 + rsj1] = (slt_ij - slt_ji) * cs;
+                    }
                 }
             }
-        }
-    }
+        },
+    );
 
     // Real shadow buffer: refresh the per-QP real plane from the
     // freshly-updated complex master so the real-mode sampler sees a
     // consistent view.
-    for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
-        for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
-            for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                state.slater_matrix.slater_elm_real.set(
-                    qp,
-                    row,
-                    col,
-                    state.slater_matrix.slater_elm.get(qp, row, col).re,
-                );
-            }
-        }
-    }
+    let source = state.slater_matrix.slater_elm.as_slice();
+    crate::threading::for_each_mut(
+        state.slater_matrix.slater_elm_real.as_mut_slice(),
+        |k, value| *value = source[k].re,
+    );
 }
 
 /// `update_slater_elm_fsz!(data, state)` for pure General and AP+P orbitals.
@@ -160,53 +136,56 @@ pub fn update_slater_elm_fsz(data: &mut ExpertModeData, state: &mut VmcOptimizat
     let n_qp_full = n_qp_fix * n_qp_opt_trans;
 
     let (orbital_idx, orbital_sgn, slater) = build_orbital_idx_sgn_matrices_fsz(data, n_site);
-    for qp in 0..n_qp_full {
-        let rem = qp % n_qp_fix;
-        let mpidx = rem / n_sp_gauss_leg;
-        let optidx = qp / n_qp_fix;
-        for ri in 0..n_site {
-            let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
-            if tri >= n_site {
-                continue;
-            }
-            for rj in 0..n_site {
-                let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
-                if trj >= n_site {
+    let n_site2 = state.slater_matrix.slater_elm.n_site2();
+    let plane_len = n_site2 * n_site2;
+    crate::threading::for_each_chunk_mut(
+        &mut state.slater_matrix.slater_elm.as_mut_slice()[..n_qp_full * plane_len],
+        plane_len,
+        |qp, plane| {
+            let rem = qp % n_qp_fix;
+            let mpidx = rem / n_sp_gauss_leg;
+            let optidx = qp / n_qp_fix;
+            for ri in 0..n_site {
+                let (tri, sgni) = crate::qp::translated_site(data, ri, optidx, mpidx, true);
+                if tri >= n_site {
                     continue;
                 }
-                for si in 0..2 {
-                    for sj in 0..2 {
-                        let rsi = ri + si * n_site;
-                        let rsj = rj + sj * n_site;
-                        let tri_s = tri + si * n_site;
-                        let trj_s = trj + sj * n_site;
-                        let idx_ij = orbital_idx[tri_s][trj_s];
-                        let idx_ji = orbital_idx[trj_s][tri_s];
-                        let slt_ij = if idx_ij >= 0 && (idx_ij as usize) < slater.len() {
-                            slater[idx_ij as usize]
-                                * orbital_sgn[tri_s][trj_s] as f64
-                                * sgni as f64
-                                * sgnj as f64
-                        } else {
-                            Complex64::new(0.0, 0.0)
-                        };
-                        let slt_ji = if idx_ji >= 0 && (idx_ji as usize) < slater.len() {
-                            slater[idx_ji as usize]
-                                * orbital_sgn[trj_s][tri_s] as f64
-                                * sgni as f64
-                                * sgnj as f64
-                        } else {
-                            Complex64::new(0.0, 0.0)
-                        };
-                        state
-                            .slater_matrix
-                            .slater_elm
-                            .set(qp, rsi, rsj, slt_ij - slt_ji);
+                for rj in 0..n_site {
+                    let (trj, sgnj) = crate::qp::translated_site(data, rj, optidx, mpidx, true);
+                    if trj >= n_site {
+                        continue;
+                    }
+                    for si in 0..2 {
+                        for sj in 0..2 {
+                            let rsi = ri + si * n_site;
+                            let rsj = rj + sj * n_site;
+                            let tri_s = tri + si * n_site;
+                            let trj_s = trj + sj * n_site;
+                            let idx_ij = orbital_idx[tri_s][trj_s];
+                            let idx_ji = orbital_idx[trj_s][tri_s];
+                            let slt_ij = if idx_ij >= 0 && (idx_ij as usize) < slater.len() {
+                                slater[idx_ij as usize]
+                                    * orbital_sgn[tri_s][trj_s] as f64
+                                    * sgni as f64
+                                    * sgnj as f64
+                            } else {
+                                Complex64::new(0.0, 0.0)
+                            };
+                            let slt_ji = if idx_ji >= 0 && (idx_ji as usize) < slater.len() {
+                                slater[idx_ji as usize]
+                                    * orbital_sgn[trj_s][tri_s] as f64
+                                    * sgni as f64
+                                    * sgnj as f64
+                            } else {
+                                Complex64::new(0.0, 0.0)
+                            };
+                            plane[rsi * n_site2 + rsj] = slt_ij - slt_ji;
+                        }
                     }
                 }
             }
-        }
-    }
+        },
+    );
 }
 
 type OrbitalMatrix<'a> = Cow<'a, [Vec<i64>]>;

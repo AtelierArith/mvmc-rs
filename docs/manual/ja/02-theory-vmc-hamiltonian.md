@@ -142,10 +142,10 @@ $$
 > - C: `CalculateHamiltonian1` (transfer part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:244`
 > - C: `CalculateHamiltonian2` (two-body part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:299`
 > - C: `CalculateHamiltonian_fsz` — `extern/mVMC-1.3.0/src/mVMC/calham_fsz.c:49`
-> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:2785`
-> - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:1885`
+> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:2813`
+> - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:1913`
 > - Rust: `calculate_hamiltonian_diagonal` — `crates/mvmc-core/src/observables.rs:551`
-> - Rust: `calculate_local_energy_fsz` — `crates/mvmc-core/src/observables.rs:1218`
+> - Rust: `calculate_local_energy_fsz` — `crates/mvmc-core/src/observables.rs:1246`
 > - 整合性: 累積の順序は、CoulombIntra, CoulombInter, Hund(マイナス符号), Transfer(マイナス符号), PairHop, Exchange(`tmp = G(0,1) + G(1,0)`、その後 `J*tmp`)、そしてファイル順の InterAll です。C コードはこれらのループを `schedule(dynamic)` の OpenMP `reduction(+:e)` の下で実行するため、項にわたる C の総和順序はスレッド数によって固定されません。Rust はファイル順に逐次的に総和します。*実*の遷移係数の場合、Rust は Transfer セクション全体を別の和(`transfer_energy`)に累積し、あとで対角部分に加えます(`observables.rs:2807-2889`)。2 つの和を結合すると SR 勾配が丸め誤差レベルで変わるため、この順序は維持しなければなりません。
 > - 整合性: 実波動関数では、C は `CalculateHamiltonian_real(creal(ip), ...)` (`calham_real.c`) を呼び出し、その累積量は `double` です。したがって Rust の実数経路は `InterAll` 係数の虚部を捨てます(`observables.rs:2984` のコメント。C の `calham_real.c:52` は `double myEnergy` を宣言し、`calham_real.c:136` は `creal(ParaTransfer[idx])` を使うため、実数経路では虚部を持つ `Trans` 係数も捨てられます)。
 > - 整合性: サイトインデックスが $0\ldots N_s-1$ の範囲外にある項は Rust ではスキップされます(`InterAll` については、それより前に検証で拒否されます。[7.5](07-input-files.md#75-サポートされる入力と拒否される入力)を参照)。
@@ -181,10 +181,10 @@ $G^{(2)}$ では、インデックスが一致する場合は $G^{(1)}$ また�
 > - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
 > - C: `GreenFunc1_fsz` — `extern/mVMC-1.3.0/src/mVMC/locgrn_fsz.c:29`
 > - C: `CalculateIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
-> - Rust: `green_func1` — `crates/mvmc-core/src/observables.rs:1435`
-> - Rust: `green_func1_impl` — `crates/mvmc-core/src/observables.rs:1714`
-> - Rust: `green_func2` — `crates/mvmc-core/src/observables.rs:598`
-> - Rust: `green_func2_impl` — `crates/mvmc-core/src/observables.rs:703`
+> - Rust: `green_func1` — `crates/mvmc-core/src/observables.rs:1463`
+> - Rust: `green_func1_impl` — `crates/mvmc-core/src/observables.rs:1742`
+> - Rust: `green_func2` — `crates/mvmc-core/src/observables.rs:626`
+> - Rust: `green_func2_impl` — `crates/mvmc-core/src/observables.rs:731`
 > - Rust: `green_func2_fsz` — `crates/mvmc-core/src/observables/fsz_green.rs:20`
 > - 整合性: 最終的な振幅比は複素共役を取ります(`conj(z/ip)`)。Rust では `divide(proj_ratio * new_ip, ip).conj()` が、C カーネルのインスタンス化(`C_KERNEL = true`)では `c_complex::divide`(C99 の意味論)を、それ以外では `julia_complex::divide` を選択します(`observables.rs:1874-1877`)。`ProjRatio` は射影指数の*実部*の $\exp$ のみを使います。C が Gutzwiller/Jastrow/DH パラメータを実数と宣言しているためです(`projection.c:41-56`, "we assume gutzwiller and jastrow is real")。
 > - 整合性: C の `GreenFunc1` は RBM 以外の分岐で `UpdateProjCnt` を 2 回呼び出します(`locgrn.c:68`。同一引数での冗長な重複)。これは結果を変えません。

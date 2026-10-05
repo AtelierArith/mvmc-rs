@@ -41,10 +41,10 @@ $\mathrm{IP}$. At $\beta=0$ this reduces to $O_k=-\sum_{i\uparrow,j\downarrow}(X
 > - C: `RBMDiff` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:323`
 > - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
-> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:656`
+> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:689`
 > - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:136`
 > - Rust: `slater_elm_diff_fsz_with_scratch` — `crates/mvmc-core/src/slater_derivative.rs:322`
-> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:957`
+> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:985`
 > - Parity: in C the per-sector buffer is accumulated with `buf[orbidx] += invM_i[msj]*cs*tOrbSgn_i[msj]` etc., summed over sectors with `QPFullWeight`, and finally multiplied by $1/\mathrm{IP}$ (`slater.c:194-238`). The Rust accumulation preserves this order (a tensor contraction helper is used for the sector sum, `qp_weighted_orbital_sum_einsum`, `observables.rs:537`; test `qp_weighted_orbital_sum_einsum_matches_manual_complex_reference`) and multiplies by `julia_complex::reciprocal(ip)` rather than dividing; results are compared with tolerances. The OptTrans layout differs between C and Rust, see [3.4](03-theory-wavefunction.md#34-quantum-number-projection).
 
 ## 5.2 The SR equations
@@ -93,12 +93,12 @@ are synchronized ([3.7](03-theory-wavefunction.md#37-initial-values-and-synchron
 > - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
 > - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:172`
-> - Rust: `build_s_g_real` — `crates/mvmc-core/src/sr.rs:393`
-> - Rust: `build_s_g_complex` — `crates/mvmc-core/src/sr.rs:424`
-> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:356`
+> - Rust: `build_s_g_real` — `crates/mvmc-core/src/sr.rs:394`
+> - Rust: `build_s_g_complex` — `crates/mvmc-core/src/sr.rs:427`
+> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:357`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
-> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:854`
-> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:758`
+> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:856`
+> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:760`
 > - Parity: `S[idx] = OO[(pi+2)*(2*size)+(pj+2)].re - OO[pi+2].re*OO[pj+2].re` and `S[ii] *= 1+DSROptStaDel` (`stcopt_dposv.c:69-74`); `g[si] = -DSROptStepDt*2.0*(HO[pi+2].re - HO[0].re*OO[pi+2].re)` (`stcopt_dposv.c:81`) — Rust `build_s_g_complex` evaluates the same expressions in the same order (real mode uses index offset 1 instead of 2). In real mode C embeds the real matrices into the complex layout with zero imaginary entries, so $S_{\max}$ includes the zero imaginary variances; Rust's `collect_active_real` folds from `0.0` for the same reason. Rust solves with LAPACK `dpotrf_`/`dpotrs_` (Cholesky of the upper triangle, declared in `sr.rs:45-52`), C with `dposv('U')`. A non-positive-definite $S$ rejects the update in Rust (`cholesky_solve` returns `Err`) and C returns the `dposv` `info`. The $\texttt{zvo\_SRinfo.dat}$ line that C writes for the direct solver (`stcopt.c:157`) is **not** written by Rust ([9](09-output-files.md)).
 
 ## 5.3 Accumulating $\mathrm{OO}$ and $\mathrm{HO}$; the `NStore` option
@@ -164,10 +164,10 @@ Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C)
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:301`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:414`
-> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:237`
-> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:261`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:326`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:440`
+> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:262`
+> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:286`
 > - Parity: this is where operation order matters most. C computes `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat` (`stcopt_cg_impl.c:265`), and the recurrence `beta = xdot(r,r)/delta; delta = beta*delta;` — the old $\delta$ is *not* replaced by $r\!\cdot\!r$ (`stcopt_cg_impl.c:333-336`). Rust reproduces both (`crates/mvmc-core/src/sr_cg.rs:346`, `crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm"). The dot products are sequential (`sequential_dot`) rather than BLAS `ddot`, and the products use the same `dgemv` pairs as C, which is why CG is sensitive to FMA and reduction order; truncated CG results therefore use a tolerance gate, not bit parity.
 > - Parity: the diagonal shift appears as `z += sdiag[si]*DSROptStaDel*x[si]` (`stcopt_cg_impl.c:420`) rather than a modified matrix; $\langle O\rangle\cdot x$ uses `xdot`. The MPI reduction of the sampled product is performed before the global weight, mean and shift corrections (`apply_with_reducer` docs).
 

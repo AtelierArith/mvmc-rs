@@ -40,24 +40,28 @@ pub fn calculate_new_pf_m2_complex_flat(
     let n_size = 2 * n_elec;
     let msa = ma + (spin as usize) * n_elec;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride + msa * n_size;
-        let mut ratio = Complex64::new(0.0, 0.0);
-        for msj in 0..n_size {
-            let rsj = if msj < n_elec {
-                ele_idx[msj] as usize
-            } else {
-                ele_idx[msj] as usize + n_site
-            };
-            let inv_val = inv_m_flat[inv_base + msj];
-            let slt_val = slater_elm.get(qp, rsa, rsj);
-            ratio += inv_val * slt_val;
-        }
-        pf_m_new[qp] = -ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (),
+        |_, qp| {
+            let inv_base = qp * inv_stride + msa * n_size;
+            let mut ratio = Complex64::new(0.0, 0.0);
+            for msj in 0..n_size {
+                let rsj = if msj < n_elec {
+                    ele_idx[msj] as usize
+                } else {
+                    ele_idx[msj] as usize + n_site
+                };
+                let inv_val = inv_m_flat[inv_base + msj];
+                let slt_val = slater_elm.get(qp, rsa, rsj);
+                ratio += inv_val * slt_val;
+            }
+            -ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Real normal-mode `calculate_new_pf_m2_real!`.
@@ -78,22 +82,26 @@ pub fn calculate_new_pf_m2_real_flat(
     let n_size = 2 * n_elec;
     let msa = ma + (spin as usize) * n_elec;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride + msa * n_size;
-        let mut ratio = 0.0;
-        for msj in 0..n_size {
-            let rsj = if msj < n_elec {
-                ele_idx[msj] as usize
-            } else {
-                ele_idx[msj] as usize + n_site
-            };
-            ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
-        }
-        pf_m_new[qp] = -ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (),
+        |_, qp| {
+            let inv_base = qp * inv_stride + msa * n_size;
+            let mut ratio = 0.0;
+            for msj in 0..n_size {
+                let rsj = if msj < n_elec {
+                    ele_idx[msj] as usize
+                } else {
+                    ele_idx[msj] as usize + n_site
+                };
+                ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
+            }
+            -ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Complex FSZ `calculate_new_pf_m2_fsz!`.
@@ -115,18 +123,22 @@ pub fn calculate_new_pf_m2_fsz_complex_flat(
     let n_size = 2 * n_elec;
     let msa = ma;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride + msa * n_size;
-        let mut ratio = Complex64::new(0.0, 0.0);
-        for msj in 0..n_size {
-            let rsj = ele_idx[msj] as usize + (ele_spn[msj] as usize) * n_site;
-            ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
-        }
-        pf_m_new[qp] = -ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (),
+        |_, qp| {
+            let inv_base = qp * inv_stride + msa * n_size;
+            let mut ratio = Complex64::new(0.0, 0.0);
+            for msj in 0..n_size {
+                let rsj = ele_idx[msj] as usize + (ele_spn[msj] as usize) * n_site;
+                ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
+            }
+            -ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Real FSZ `calculate_new_pf_m2_fsz_real!`.
@@ -148,18 +160,22 @@ pub fn calculate_new_pf_m2_fsz_real_flat(
     let n_size = 2 * n_elec;
     let msa = ma;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride + msa * n_size;
-        let mut ratio = 0.0;
-        for msj in 0..n_size {
-            let rsj = ele_idx[msj] as usize + (ele_spn[msj] as usize) * n_site;
-            ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
-        }
-        pf_m_new[qp] = -ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (),
+        |_, qp| {
+            let inv_base = qp * inv_stride + msa * n_size;
+            let mut ratio = 0.0;
+            for msj in 0..n_size {
+                let rsj = ele_idx[msj] as usize + (ele_spn[msj] as usize) * n_site;
+                ratio += inv_m_flat[inv_base + msj] * slater_elm.get(qp, rsa, rsj);
+            }
+            -ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Complex normal-mode `calculate_new_pf_m_two2!`.
@@ -192,20 +208,26 @@ pub fn calculate_new_pf_m_two2_complex_flat(
 
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
-    let mut vec_a = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec_b = vec![Complex64::new(0.0, 0.0); n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride;
-        fill_vecs_normal_complex(
-            qp, rsa, rsb, ele_idx, slater_elm, &mut vec_a, &mut vec_b, n_site, n_elec,
-        );
-        let ratio = two_ratio_complex(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
-        pf_m_new[qp] = ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || {
+            (
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+            )
+        },
+        |(vec_a, vec_b), qp| {
+            let inv_base = qp * inv_stride;
+            fill_vecs_normal_complex(
+                qp, rsa, rsb, ele_idx, slater_elm, vec_a, vec_b, n_site, n_elec,
+            );
+            let ratio = two_ratio_complex(msa, msb, inv_m_flat, inv_base, n_size, vec_a, vec_b);
+            ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Real normal-mode two-electron Pfaffian update.
@@ -239,21 +261,22 @@ pub fn calculate_new_pf_m_two2_real_flat<const SCALAR: bool>(
 
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
-    let mut vec_a = vec![0.0; n_size];
-    let mut vec_b = vec![0.0; n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride;
-        fill_vecs_normal_real(
-            qp, rsa, rsb, ele_idx, slater_elm, &mut vec_a, &mut vec_b, n_site, n_elec,
-        );
-        let ratio =
-            two_ratio_real::<SCALAR>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
-        pf_m_new[qp] = ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (vec![0.0; n_size], vec![0.0; n_size]),
+        |(vec_a, vec_b), qp| {
+            let inv_base = qp * inv_stride;
+            fill_vecs_normal_real(
+                qp, rsa, rsb, ele_idx, slater_elm, vec_a, vec_b, n_site, n_elec,
+            );
+            let ratio =
+                two_ratio_real::<SCALAR>(msa, msb, inv_m_flat, inv_base, n_size, vec_a, vec_b);
+            ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Complex FSZ `calculate_new_pf_m_two_fsz!`.
@@ -287,20 +310,26 @@ pub fn calculate_new_pf_m_two_fsz_complex_flat(
 
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
-    let mut vec_a = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec_b = vec![Complex64::new(0.0, 0.0); n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride;
-        fill_vecs_fsz_complex(
-            qp, rsa, rsb, ele_idx, ele_spn, slater_elm, &mut vec_a, &mut vec_b, n_site,
-        );
-        let ratio = two_ratio_complex(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
-        pf_m_new[qp] = ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || {
+            (
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+            )
+        },
+        |(vec_a, vec_b), qp| {
+            let inv_base = qp * inv_stride;
+            fill_vecs_fsz_complex(
+                qp, rsa, rsb, ele_idx, ele_spn, slater_elm, vec_a, vec_b, n_site,
+            );
+            let ratio = two_ratio_complex(msa, msb, inv_m_flat, inv_base, n_size, vec_a, vec_b);
+            ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Real FSZ `calculate_new_pf_m_two2_fsz_real!`.
@@ -334,20 +363,22 @@ pub fn calculate_new_pf_m_two_fsz_real_flat(
 
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
-    let mut vec_a = vec![0.0; n_size];
-    let mut vec_b = vec![0.0; n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() || qp >= pf_m_new.len() {
-            continue;
-        }
-        let inv_base = qp * inv_stride;
-        fill_vecs_fsz_real(
-            qp, rsa, rsb, ele_idx, ele_spn, slater_elm, &mut vec_a, &mut vec_b, n_site,
-        );
-        let ratio = two_ratio_real::<true>(msa, msb, inv_m_flat, inv_base, n_size, &vec_a, &vec_b);
-        pf_m_new[qp] = ratio * pf_m[qp];
-    }
+    let end = qp_end.min(pf_m.len());
+    crate::threading::qp_fill(
+        pf_m_new,
+        qp_start,
+        end,
+        || (vec![0.0; n_size], vec![0.0; n_size]),
+        |(vec_a, vec_b), qp| {
+            let inv_base = qp * inv_stride;
+            fill_vecs_fsz_real(
+                qp, rsa, rsb, ele_idx, ele_spn, slater_elm, vec_a, vec_b, n_site,
+            );
+            let ratio =
+                two_ratio_real::<true>(msa, msb, inv_m_flat, inv_base, n_size, vec_a, vec_b);
+            ratio * pf_m[qp]
+        },
+    );
 }
 
 /// Complex normal-mode `update_m_all!`.
@@ -367,27 +398,26 @@ pub fn update_m_all_complex_flat(
     let n_size = 2 * n_elec;
     let msa = ma + (spin as usize) * n_elec;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    let mut slt_vec = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec1 = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec2 = vec![Complex64::new(0.0, 0.0); n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        fill_slt_vec_normal_complex(qp, rsa, ele_idx, slater_elm, &mut slt_vec, n_site, n_elec);
-        let base = qp * inv_stride;
-        update_one_complex(
-            base,
-            msa,
-            inv_m_flat,
-            &slt_vec,
-            &mut vec1,
-            &mut vec2,
-            n_size,
-            &mut pf_m[qp],
-        );
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || {
+            (
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+            )
+        },
+        |(slt_vec, vec1, vec2), qp, pf, window| {
+            fill_slt_vec_normal_complex(qp, rsa, ele_idx, slater_elm, slt_vec, n_site, n_elec);
+            let base = 0;
+            update_one_complex(base, msa, window, slt_vec, vec1, vec2, n_size, pf);
+        },
+    );
 }
 
 /// Real normal-mode `update_m_all_real!`.
@@ -407,27 +437,20 @@ pub fn update_m_all_real_flat(
     let n_size = 2 * n_elec;
     let msa = ma + (spin as usize) * n_elec;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    let mut slt_vec = vec![0.0; n_size];
-    let mut vec1 = vec![0.0; n_size];
-    let mut vec2 = vec![0.0; n_size];
-
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        fill_slt_vec_normal_real(qp, rsa, ele_idx, slater_elm, &mut slt_vec, n_site, n_elec);
-        let base = qp * inv_stride;
-        update_one_real(
-            base,
-            msa,
-            inv_m_flat,
-            &slt_vec,
-            &mut vec1,
-            &mut vec2,
-            n_size,
-            &mut pf_m[qp],
-        );
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || (vec![0.0; n_size], vec![0.0; n_size], vec![0.0; n_size]),
+        |(slt_vec, vec1, vec2), qp, pf, window| {
+            fill_slt_vec_normal_real(qp, rsa, ele_idx, slater_elm, slt_vec, n_site, n_elec);
+            let base = 0;
+            update_one_real(base, msa, window, slt_vec, vec1, vec2, n_size, pf);
+        },
+    );
 }
 
 /// Complex FSZ `update_m_all_fsz!`.
@@ -448,26 +471,26 @@ pub fn update_m_all_fsz_complex_flat(
     let n_size = 2 * n_elec;
     let msa = ma;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    let mut slt_vec = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec1 = vec![Complex64::new(0.0, 0.0); n_size];
-    let mut vec2 = vec![Complex64::new(0.0, 0.0); n_size];
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        fill_slt_vec_fsz_complex(qp, rsa, ele_idx, ele_spn, slater_elm, &mut slt_vec, n_site);
-        let base = qp * inv_stride;
-        update_one_complex(
-            base,
-            msa,
-            inv_m_flat,
-            &slt_vec,
-            &mut vec1,
-            &mut vec2,
-            n_size,
-            &mut pf_m[qp],
-        );
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || {
+            (
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+                vec![Complex64::new(0.0, 0.0); n_size],
+            )
+        },
+        |(slt_vec, vec1, vec2), qp, pf, window| {
+            fill_slt_vec_fsz_complex(qp, rsa, ele_idx, ele_spn, slater_elm, slt_vec, n_site);
+            let base = 0;
+            update_one_complex(base, msa, window, slt_vec, vec1, vec2, n_size, pf);
+        },
+    );
 }
 
 /// Real FSZ `update_m_all_fsz_real!`.
@@ -488,26 +511,20 @@ pub fn update_m_all_fsz_real_flat(
     let n_size = 2 * n_elec;
     let msa = ma;
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
-    let mut slt_vec = vec![0.0; n_size];
-    let mut vec1 = vec![0.0; n_size];
-    let mut vec2 = vec![0.0; n_size];
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        fill_slt_vec_fsz_real(qp, rsa, ele_idx, ele_spn, slater_elm, &mut slt_vec, n_site);
-        let base = qp * inv_stride;
-        update_one_real(
-            base,
-            msa,
-            inv_m_flat,
-            &slt_vec,
-            &mut vec1,
-            &mut vec2,
-            n_size,
-            &mut pf_m[qp],
-        );
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || (vec![0.0; n_size], vec![0.0; n_size], vec![0.0; n_size]),
+        |(slt_vec, vec1, vec2), qp, pf, window| {
+            fill_slt_vec_fsz_real(qp, rsa, ele_idx, ele_spn, slater_elm, slt_vec, n_site);
+            let base = 0;
+            update_one_real(base, msa, window, slt_vec, vec1, vec2, n_size, pf);
+        },
+    );
 }
 
 /// Complex normal-mode `update_m_all_two!`.
@@ -540,27 +557,32 @@ pub fn update_m_all_two_complex_flat(
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
     let rsa_old = ra_old + (spin as usize) * n_site;
     let rsb_old = rb_old + (spin_other as usize) * n_site;
-    let mut work = TwoUpdateWorkComplex::new(n_size);
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        let base = qp * inv_stride;
-        let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
-        fill_vecs_normal_complex(
-            qp,
-            rsa,
-            rsb,
-            ele_idx,
-            slater_elm,
-            &mut work.vec_s,
-            &mut work.vec_t,
-            n_site,
-            n_elec,
-        );
-        work.vec_s[msb] = m_old_ab;
-        update_two_complex(base, msa, msb, inv_m_flat, n_size, &mut work, &mut pf_m[qp]);
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || TwoUpdateWorkComplex::new(n_size),
+        |work, qp, pf, window| {
+            let base = 0;
+            let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
+            fill_vecs_normal_complex(
+                qp,
+                rsa,
+                rsb,
+                ele_idx,
+                slater_elm,
+                &mut work.vec_s,
+                &mut work.vec_t,
+                n_site,
+                n_elec,
+            );
+            work.vec_s[msb] = m_old_ab;
+            update_two_complex(base, msa, msb, window, n_size, work, pf);
+        },
+    );
 }
 
 /// Real normal-mode `update_m_all_two_real!`.
@@ -591,27 +613,32 @@ pub fn update_m_all_two_real_flat(
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
     let rsa_old = ra_old + (spin as usize) * n_site;
     let rsb_old = ra_old + (spin_other as usize) * n_site;
-    let mut work = TwoUpdateWorkReal::new(n_size);
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        let base = qp * inv_stride;
-        let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
-        fill_vecs_normal_real(
-            qp,
-            rsa,
-            rsb,
-            ele_idx,
-            slater_elm,
-            &mut work.vec_s,
-            &mut work.vec_t,
-            n_site,
-            n_elec,
-        );
-        work.vec_s[msb] = m_old_ab;
-        update_two_real(base, msa, msb, inv_m_flat, n_size, &mut work, &mut pf_m[qp]);
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || TwoUpdateWorkReal::new(n_size),
+        |work, qp, pf, window| {
+            let base = 0;
+            let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
+            fill_vecs_normal_real(
+                qp,
+                rsa,
+                rsb,
+                ele_idx,
+                slater_elm,
+                &mut work.vec_s,
+                &mut work.vec_t,
+                n_site,
+                n_elec,
+            );
+            work.vec_s[msb] = m_old_ab;
+            update_two_real(base, msa, msb, window, n_size, work, pf);
+        },
+    );
 }
 
 /// Real FSZ `update_m_all_two_fsz_real!`.
@@ -643,27 +670,32 @@ pub fn update_m_all_two_fsz_real_flat(
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
     let rsa_old = ra_old + (spin as usize) * n_site;
     let rsb_old = ra_old + (spin_other as usize) * n_site;
-    let mut work = TwoUpdateWorkReal::new(n_size);
-    for qp in qp_start..qp_end {
-        if qp >= pf_m.len() {
-            continue;
-        }
-        let base = qp * inv_stride;
-        let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
-        fill_vecs_fsz_real(
-            qp,
-            rsa,
-            rsb,
-            ele_idx,
-            ele_spn,
-            slater_elm,
-            &mut work.vec_s,
-            &mut work.vec_t,
-            n_site,
-        );
-        work.vec_s[msb] = m_old_ab;
-        update_two_real(base, msa, msb, inv_m_flat, n_size, &mut work, &mut pf_m[qp]);
-    }
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        || TwoUpdateWorkReal::new(n_size),
+        |work, qp, pf, window| {
+            let base = 0;
+            let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
+            fill_vecs_fsz_real(
+                qp,
+                rsa,
+                rsb,
+                ele_idx,
+                ele_spn,
+                slater_elm,
+                &mut work.vec_s,
+                &mut work.vec_t,
+                n_site,
+            );
+            work.vec_s[msb] = m_old_ab;
+            update_two_real(base, msa, msb, window, n_size, work, pf);
+        },
+    );
 }
 
 fn fill_vecs_normal_complex(
