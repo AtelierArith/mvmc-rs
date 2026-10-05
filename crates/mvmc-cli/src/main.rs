@@ -285,6 +285,10 @@ fn main() {
     let output_root = mpi_context.as_ref().is_none_or(|context| context.is_root());
     #[cfg(not(feature = "mpi"))]
     let output_root = true;
+    // readdef.c:749-752: rank 0 reports the negative-DSROptStepDt mode on stderr.
+    if data.modpara.sr_flag && output_root {
+        eprintln!("remark: Diagonalization Mode");
+    }
 
     // ── banner ────────────────────────────────────────────────────────────────
     if output_root {

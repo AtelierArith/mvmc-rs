@@ -215,10 +215,13 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
         let header = !path.exists() || path.metadata()?.len() == 0;
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         if header {
-            writeln!(
-                file,
+            // initfile.c:47-54: SRFlag selects the sEigen* spelling.
+            let header = if data.modpara.sr_flag {
+                "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax"
+            } else {
                 "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax"
-            )?;
+            };
+            writeln!(file, "{header}")?;
         }
         let mut imax = 0;
         for i in 1..result.solution.len() {

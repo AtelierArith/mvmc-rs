@@ -162,7 +162,15 @@ pub struct ModParaParameters {
     /// `DSROptStaDel`.
     pub dsr_opt_sta_del: f64,
     /// `DSROptStepDt`.
+    ///
+    /// C `GetInfoFromModPara` callers (readdef.c:749-755) store a negative
+    /// value as `SRFlag = 1` and negate it, so this field is always the
+    /// non-negative step the SR update uses. Set `sr_flag` for the sign.
     pub dsr_opt_step_dt: f64,
+    /// C `SRFlag`: `true` ("Diagonalization Mode") when the file gave a
+    /// negative `DSROptStepDt`. In C it only selects the `sEigen*` SRinfo
+    /// header; the SR solver and update are unchanged.
+    pub sr_flag: bool,
     /// `DSROptCGTol`.
     pub dsr_opt_cg_tol: f64,
     /// `NSROptCGMaxIter`.
@@ -265,6 +273,7 @@ impl Default for ModParaParameters {
             dsr_opt_red_cut: 0.001,
             dsr_opt_sta_del: 0.02,
             dsr_opt_step_dt: 0.02,
+            sr_flag: false,
             dsr_opt_cg_tol: 1e-10,
             nsr_opt_cg_max_iter: 0,
             nsrcg: 0,
