@@ -16,6 +16,7 @@
 //!   --initial-def <auto|none|PATH> Starting parameter file [default: auto]
 //!   -o / --opt-trans  Enable C optimized-translation mode [default: disabled]
 //!   --physcal <PATH>  Run fixed-parameter PhysCal with this parameter file
+//!                     (requires NVMCCalMode=1 in ModPara; NVMCCalMode=1 requires --physcal)
 //!   --help / -h       Print this help text
 //!
 //! Environment:
@@ -227,6 +228,10 @@ fn main() {
         opt_trans_arg,
     ) {
         Ok(data) => {
+            // C vmcmain.c dispatches on NVMCCalMode: 0 optimizes, 1 runs fixed-parameter
+            // PhysCal. Make the CLI selection explicit and reject any disagreement
+            // between ModPara and the supplied options before initialization or IO.
+            select_calculation(data.modpara.vmc_calc_mode, physcal_params.is_some())?;
             let validation = if physcal_params.is_some() {
                 mvmc_core::validation::validate_phys_cal(&data)
             } else {
@@ -417,6 +422,26 @@ fn main() {
                 process::exit(1);
             }
         }
+    }
+}
+
+/// Validate that NVMCCalMode and the CLI options select the same calculation.
+fn select_calculation(vmc_calc_mode: i64, has_physcal_file: bool) -> Result<(), String> {
+    match (vmc_calc_mode, has_physcal_file) {
+        (0, false) | (1, true) => Ok(()),
+        (0, true) => Err(
+            "--physcal requires NVMCCalMode=1 in ModPara (found NVMCCalMode=0); \
+             set NVMCCalMode=1 for fixed-parameter PhysCal"
+                .into(),
+        ),
+        (1, false) => Err(
+            "NVMCCalMode=1 selects fixed-parameter PhysCal; supply the fixed parameter file \
+             with --physcal <PATH>"
+                .into(),
+        ),
+        (mode, _) => Err(format!(
+            "unsupported NVMCCalMode={mode}; the CLI supports 0 (optimization) and 1 (PhysCal)"
+        )),
     }
 }
 

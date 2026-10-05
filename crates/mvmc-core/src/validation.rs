@@ -117,7 +117,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     }
     if p.vmc_calc_mode != 0 {
         return Err(format!(
-            "NVMCCalMode={} cannot run parameter optimization; PhysCal is not implemented yet (issue #29)",
+            "NVMCCalMode={} cannot run parameter optimization; use fixed-parameter PhysCal",
             p.vmc_calc_mode
         ));
     }
