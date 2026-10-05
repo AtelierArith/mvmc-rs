@@ -131,7 +131,7 @@ def evidence_type(rel_or_key, body=""):
         return "C fixture"
     if re.search(r"julia|golden_vs_julia|_vs_julia|linux_gnu|macos_arm", key):
         return "Julia fixture"
-    if re.search(r"repeat|observer|passiv|same_worker|nonmutating|unchanged|rejects_before", key):
+    if re.search(r"repeat|observer|passiv|same_worker|worker_invariant|nonmutating|unchanged|rejects_before", key):
         return "same-impl repeatability"
     return UNIT
 
@@ -398,18 +398,44 @@ def missing_family(scenario, entry, owner, note, area="c-only"):
     F.append(dict(area=area, scenario=scenario, entry=entry, state=M, tests=[], owner=owner, note=note, evidence="none"))
 
 
-missing_family("vmc.out -b (varbin), -F, -v, -e, -h options", "none", "#347", "Not ported.")
-missing_family("MultiDef mode (vmc.out -m N)", "none", "#348", "Not ported.")
-missing_family("Post-processing tools (greenr2k and converters)", "none", "#351", "Not ported.")
-missing_family("StdFace 1D lattices (chain, ladder)", "none", "#354", "Not ported; part of #352 umbrella.")
-missing_family("StdFace 2D lattices (square, triangular, honeycomb, kagome)", "none", "#355", "Not ported.")
-missing_family("StdFace 3D lattices (orthorhombic, fcc, pyrochlore)", "none", "#356", "Not ported.")
-missing_family("StdFace Wannier90 input/export", "none", "#357", "Not ported.")
-missing_family("C-only OpenMP parallel regions in Rust inner threading", "none", "#360", "Inventory/port pending.", area="threading")
+fam("c-only", "vmc.out options -b (varbin), -F flush interval, -v, -e, -h and positional InitPara", "mvmc CLI option parser", I,
+    [r"cli::issue347_c_cli_options "], "#347")
+fam("c-only", "MultiDef mode (vmc.out -m N): directory list, rank-to-group map, C messages", "mvmc -m, mvmc_core::multidef", I,
+    [r"cli::issue348_multidef ", r"core::multidef_348_split ", r"core multidef::tests::"], "#348")
+fam("c-only", "greenr2k post-processing tool (Fortran reference), exit status and input handling", "mvmc-greenr2k", I,
+    [r"mvmc-greenr2k::fortran_parity ", r"mvmc-greenr2k::fortran_format ", r"mvmc-greenr2k::behavior "], "#351",
+    "References are native gfortran greenr2k outputs; converters beyond greenr2k are tracked in #351.",
+    evidence="C fixture")
+fam("c-only", "StdFace 1D lattices (chain, ladder) byte-identical to C", "mvmc-stdface chain/ladder", I,
+    [r"mvmc-stdface::stdface_c_fixtures ", r"cli::issue353_standard_mode "], "#354/#404", "Ladder/NotUsed defects (Julia-mVMC#66) corrected deliberately, see defect rows.")
+fam("c-only", "StdFace 2D lattices (square, triangular, honeycomb, kagome)", "mvmc-stdface square/triangular/honeycomb/kagome", I,
+    [r"cli::issue355_standard_2d ", r"mvmc-stdface::stdface_c_fixtures "], "#355/#405")
+fam("c-only", "StdFace 3D lattices (orthorhombic, fcc, pyrochlore)", "mvmc-stdface lattice3d", I,
+    [r"mvmc-stdface::stdface_3d_defects ", r"mvmc-stdface::stdface_c_fixtures "], "#356/#408")
+fam("c-only", "StdFace Wannier90 input and export", "mvmc-stdface wannier90", I,
+    [r"cli::issue357_standard_wannier90 ", r"mvmc-stdface::wannier90_defects "], "#357/#407")
+fam("threading", "C-only OpenMP parallel regions ported to worker-invariant inner threading", "MVMC_RS_INNER_THREADS regions", I,
+    [r"core::threaded_issue360 "], "#360/#402/#409")
+fam("threading", "Inner-threading work/size gate and benchmark worker selection", "inner worker gate", I,
+    [r"core::threaded_issue361 "], "#361/#412")
+fam("sampler", "FSZ sampler applies the RBM factor consistently (incremental update equals recomputation)", "FSZ RBM sampler", I,
+    [r"core::issue403_fsz_rbm_sampler "], "#403/#406")
+fam("physcal", "Buffered, allocation-free PhysCal outputData with unchanged output bytes", "io::write_phys_cal", I,
+    [r"core io::tests::phys", r"core::physcal_issue181 (original_io134|fixed_records)"], "#337/#410",
+    "Performance change; bytes are pinned by the output tests.")
+fam("physcal", "Native-C PhysCal and Lanczos cells (FSZ combinations, complex Hubbard mode 1, threaded)", "mvmc --physcal", I,
+    [r"cli::issue181_native_c_physcal "], "#181/#397",
+    "Single-process cells; MPI multi-rank cells stay gated (#179).")
 missing_family("CalHamiltonian1 / ReturnSlaterElmDiff on the Hubbard real path", "none", "#207", "Gap documented in issue.", area="optimization")
-missing_family("Deterministic 20-step references for all 13 ctest models", "none", "#185", "No independent step-20 references; never generated from Rust.", area="ctest")
+F.append(dict(area="ctest", scenario="Deterministic 20-step references for all 13 ctest models",
+              entry="rust_ctest_upstream_rule_selected_models + same-implementation repeatability", state=D,
+              tests=[r"core::ctest_equivalent rust_ctest_upstream_rule_selected_models", r"core run::callback_tests::canonical_cg_fixed_seed_same_configuration_is_repeatable",
+                     r"core::ctest_general_reference corrected_general_twenty_step_public_runner_is_repeatable"],
+              owner="#180 (closed; decision)", evidence="statistical ctest + same-impl repeatability",
+              note="Decision at #180 closure: SR-CG parameter trajectories are ill-conditioned (#358; 1e-16 operand differences amplify to 1e-4..1e-2), "
+                   "so long runs use the upstream 3-sigma/1e-8 statistical rule plus same-implementation repeatability instead of independent step-20 references; "
+                   "50-step references are not truncated and none are generated from Rust."))
 missing_family("MPI multi-rank scenario matrix execution (optimization and measurement)", "mvmc-core mpi_* gates", "#179", "Gated tests exist; full matrix not executed in the default build.", area="mpi")
-missing_family("PhysCal outputData section cost (performance, not numerics)", "io::write_phys_cal", "#337", "Output bytes already match; speed open.", area="physcal")
 
 # ---- known C defects (Julia-mVMC#55-#63) and how Rust treats them
 DEFECTS = [
@@ -424,7 +450,7 @@ DEFECTS = [
     ("Julia-mVMC#58", "rsbOld typo in two-electron updates (no observable effect)", I,
      [r"core::two_electron_rsbold "], "#365", "Rust matches the C definition; no observable difference."),
     ("Julia-mVMC#59", "real-mode runs silently ignore the RBM factor", D,
-     [r"core run::callback_tests::rbm_real_and_general_complex_direct_prefixes"], "#184",
+     [r"core run::callback_tests::rbm_real_and_general_complex_direct_prefixes", r"core::issue403_fsz_rbm_sampler "], "#379/#403",
      "Rust applies the RBM factor in real mode like Julia; C silently ignores it (defect, not copied)."),
     ("Julia-mVMC#60", "ComplexUHF input-handling defects (NULL fclose, out-of-range writes, ignored errors)", D,
      [r"mvmc-uhf::definition_contract c_crashes_become_errors", r"cli::issue350_complex_uhf usage_and_missing_files"], "#350",
@@ -432,10 +458,28 @@ DEFECTS = [
     ("Julia-mVMC#61", "grouped runs with stored O read uninitialized SROptO_Store columns", D,
      [r"core::grouped_nsplit_349 ", r"core validation::tests::grouped_matrix_rejects_only_the_c_undefined_sr_cg_combination"], "#349/#178",
      "Rust computes grouped direct-SR NStore=1 correctly (equals serial) and rejects grouped SR-CG citing the C defect; other grouped cases follow C."),
-    ("Julia-mVMC#62", "-b binary parameter output (varbin) writes only half of the complex parameters", M,
-     [], "#347", "-b not ported (see #347), so the defect is not reachable."),
-    ("Julia-mVMC#63", "tool/greenr2k: exit status, invalid input format, namelist path truncation", M,
-     [], "#351", "greenr2k not ported (see #351)."),
+    ("Julia-mVMC#62", "-b binary parameter output (varbin) writes only half of the complex parameters", D,
+     [r"cli::issue347_c_cli_options binary_mode_blocks_contain_every_text_parameter", r"cli::issue347_c_cli_options binary_mode_optimizer_matches_c_varbin_layout"],
+     "#347/#390", "Rust follows the C varbin layout but writes every parameter (C writes only half of the complex ones)."),
+    ("Julia-mVMC#63", "tool/greenr2k: exit status, invalid input format, namelist path truncation", D,
+     [r"mvmc-greenr2k::behavior missing_index_exit_status_is_nonzero_unlike_fortran", r"mvmc-greenr2k::behavior file_names_with_slashes_are_read_whole",
+      r"mvmc-greenr2k::behavior values_may_continue_on_the_next_record"],
+     "#351/#385", "Rust returns a nonzero status, reads whole path names and accepts continued records where the original does not."),
+    ("Julia-mVMC#64", "PhysCal Lanczos: FSZ admitted with NSPGaussLeg > 1; uninitialized singular output; exchange counters missing in Julia", R,
+     [r"cli::issue181_native_c_physcal heisenberg_fsz_lanczos_with_gauss_leg_is_a_c_defect_rust_rejects", r"cli::issue181_native_c_physcal exact_eigenstate_real_lanczos_has_c_singular_alpha",
+      r"cli::issue181_native_c_physcal exact_eigenstate_complex_lanczos_has_c_singular_alpha"],
+     "#181/#397", "Rust rejects FSZ + Lanczos regardless of NSPGaussLeg and writes nothing for a singular Lanczos step (matches C's empty-file contract)."),
+    ("Julia-mVMC#65", "MultiDef (-m N): division by zero for N=0 and non-collective rank-0 failure", D,
+     [r"cli::issue348_multidef nonpositive_n_is_rejected_where_c_divides_by_zero", r"cli::issue348_multidef bad_group_directory_and_small_world_fail_collectively"],
+     "#348/#401", "Rust rejects N <= 0 and fails collectively where C divides by zero or fails on rank 0 only."),
+    ("Julia-mVMC#66", "StdFace lattice defects (Ladder NotUsed order, wrong unused checks and labels)", D,
+     [r"mvmc-stdface::stdface_c_fixtures ", r"cli::issue353_standard_mode "],
+     "#404/#405", "Rust corrects the defects (PR #405) instead of reproducing them; fixtures keep the historical C outputs for comparison."),
+    ("Julia-mVMC#67", "StdFace Wannier90 defects (uninitialized free, uninitialized reads, cutoff flag always true)", D,
+     [r"mvmc-stdface::wannier90_defects ", r"cli::issue357_standard_wannier90 missing_geometry_file"],
+     "#357/#407", "Rust errors or initializes correctly for defects 1-3; the always-true cutoff flag keeps C behavior pending clarification."),
+    ("Julia-mVMC#68", "StdFace 3D lattice defects (Pyrochlore Kondo sites, FCOrtho field, missing NotUsed checks, ntransMax overflow)", D,
+     [r"mvmc-stdface::stdface_3d_defects "], "#356/#408", "Rust output differs from the historical C output in every defect case (asserted)."),
 ]
 
 
@@ -518,8 +562,9 @@ def main():
         """Resolved citations, their defined symbols, and directly cited tests."""
         resolved, symbols, direct = [], [], []
         for c in cites:
-            idents = [i for i in re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", c) if i in defs and i not in generic]
-            if idents:
+            loose = [i for i in re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", c) if i in defs and i not in generic]
+            idents = [i for i in loose if len(i) >= 6 and ("_" in i or i[0].isupper() or re.search(r"[a-z][A-Z]", i))]
+            if loose:
                 resolved.append(c)
             for i in idents:
                 if i in test_by_name:
@@ -529,17 +574,22 @@ def main():
         return resolved, symbols, direct
 
     def referencing(symbols, direct):
-        items = {}
+        items, weight = {}, {}
         for t in direct:
-            items[(f"{t['crate']}::{t['stem']} {t['fn']}" if t["kind"] == "integration" else f"{t['crate']} {t['fn']}")] = index.result(t)
+            key = f"{t['crate']}::{t['stem']} {t['fn']}" if t["kind"] == "integration" else f"{t['crate']} {t['fn']}"
+            items[key] = index.result(t)
+            weight[key] = 10 ** 6  # explicitly cited by the inventory
         syms = set(symbols)
         if syms:
             pats = [re.compile(r"\b" + re.escape(x) + r"\b") for x in syms]
             for t in stat:
-                if any(p.search(t["body"]) for p in pats):
+                hits = sum(len(p.findall(t["body"])) for p in pats)
+                if hits:
                     key = f"{t['crate']}::{t['stem']} {t['fn']}" if t["kind"] == "integration" else f"{t['crate']} {t['fn']}"
                     items.setdefault(key, index.result(t))
-        out = sorted(items.items(), key=lambda kv: (kv[1] != "PASS", kv[0]))
+                    weight[key] = weight.get(key, 0) + hits
+        # most focused tests (most references to the cited symbols) first
+        out = sorted(items.items(), key=lambda kv: (kv[1] != "PASS", -weight[kv[0]], kv[0]))
         return out
 
     def classify(scope, entry, resolved):
@@ -555,19 +605,32 @@ def main():
             return D
         return I if resolved else M
 
+    api_override = {
+        "A201": dict(state=D, symbols=["max_integer"],
+                     entry="ParallelScalarOperations::max_integer (crates/mvmc-core/src/parallel_scalar.rs:36; serial :48, MPI world crates/mvmc-core/src/mpi.rs:237, "
+                           "split groups mpi.rs:287); sampling status max: Reducer::sampling_max_info (crates/mvmc-core/src/reducer.rs:83)",
+                     note="Rust covers Julia's integer max with the typed `ParallelScalarOperations::max_integer(domain, i32)`; the differences are "
+                          "i32 (C int) instead of any Julia Integer and an enum domain instead of Symbol `which`; source reconciliation in issue-184-a201-public-max-source.md"),
+    }
     api_rows = []
     for r in csv.DictReader(open(os.path.join(ROOT, VER, "issue-184-public-apis.tsv")), delimiter="\t"):
         sym = r["julia_symbol_or_scenario"]
         cites = [c.strip() for c in r["rust_entry"].split(";") if c.strip()]
         resolved, symbols, direct = analyse(cites)
         state = classify(r["implementation_scope"], r["rust_entry"], resolved)
+        ov = api_override.get(r["id"])
+        if ov:
+            state, symbols = ov["state"], symbols + ov["symbols"]
+            resolved = [ov["entry"]]
         items = referencing(symbols, direct)
         cited = items[:3]
         exported = "export" in r["kind"] or sym.split(".")[-1] in exports
         note = ("explicit Julia export" if exported else "public Julia name (not exported)")
-        if state == D and r["rust_entry"].startswith("NO "):
+        if state == D and r["rust_entry"].startswith("NO ") and not ov:
             note += "; no Rust counterpart by design: " + r["rust_entry"][3:120]
-        if state == M:
+        if ov:
+            note += "; " + ov["note"]
+        elif state == M:
             note += "; " + r["rust_entry"][:120]
         api_rows.append({"id": r["id"], "tier": "julia-api", "area": r["kind"], "julia_or_c_item": sym,
                          "rust_entry": "; ".join(resolved or cites)[:300], "state": state,
@@ -664,7 +727,7 @@ def main():
           f"- scenario families ({len(fam_rows)} rows): {counts(fam_rows)}",
           f"  - evidence: {ev_counts(fam_rows)}",
           f"  - result: {pass_counts(fam_rows)}",
-          f"- C defects Julia-mVMC#55-#63 ({len(defect_rows)} rows): {counts(defect_rows)}",
+          f"- C defects Julia-mVMC#55-#68 ({len(defect_rows)} rows): {counts(defect_rows)}",
           f"- Julia public API inventory ({len(api_rows)} rows, {sum(1 for r in api_rows if 'explicit Julia export' in r['note'])} explicit exports): {counts(api_rows)}",
           f"  - evidence: {ev_counts(api_rows)}",
           f"  - result: {pass_counts(api_rows)}",
@@ -677,7 +740,7 @@ def main():
     for r in ownerless + umbrella_only:
         md.append(f"  - {r['id']} {r['julia_or_c_item'][:100]} (owner field: {r['owner']})")
     md += ["", "## Scenario families (hand-curated, one row per supported scenario family)", "", table(fam_rows),
-           "", "## Known C defects (Julia-mVMC#55-#63) and Rust treatment", "", table(defect_rows),
+           "", "## Known C defects (Julia-mVMC#55-#68) and Rust treatment", "", table(defect_rows),
            "", "## Julia public API inventory (one row per name)", "",
            "Rows come from `issue-184-public-apis.tsv` (explicit exports and every public type/constant/function the Julia tests name). "
            "`Implemented` means the cited Rust symbol exists; see Evidence/Result for whether a test exercises it.", "",

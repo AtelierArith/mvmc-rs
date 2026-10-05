@@ -40,10 +40,10 @@ $\mathrm{IP}$ で割ります。$\beta=0$ ではこれは $O_k=-\sum_{i\uparrow,
 > - C: `RBMDiff` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:323`
 > - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
-> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:689`
+> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:693`
 > - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:136`
 > - Rust: `slater_elm_diff_fsz_with_scratch` — `crates/mvmc-core/src/slater_derivative.rs:322`
-> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:985`
+> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:996`
 > - 整合性: C ではセクターごとのバッファを `buf[orbidx] += invM_i[msj]*cs*tOrbSgn_i[msj]` などで累積し、`QPFullWeight` でセクターについて和をとり、最後に $1/\mathrm{IP}$ を掛けます(`slater.c:194-238`)。Rust の累積はこの順序を保ちます(セクター和にはテンソル縮約ヘルパー `qp_weighted_orbital_sum_einsum`、`observables.rs:537` を使用。テスト `qp_weighted_orbital_sum_einsum_matches_manual_complex_reference`)。また除算ではなく `julia_complex::reciprocal(ip)` を掛けます。結果は許容誤差付きで比較されます。OptTrans の配置は C と Rust で異なります。[3.4](03-theory-wavefunction.md#34-量子数射影) を参照してください。
 
 ## 5.2 SR方程式
@@ -119,12 +119,12 @@ $O(N_pN_{\rm smp})$ の追加メモリを要しますが、はるかに高速で
 > - C: `WeightAverageSROpt_real` — `extern/mVMC-1.3.0/src/mVMC/average.c:115`
 > - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:261`
 > - Rust: `calculate_oo_real` — `crates/mvmc-core/src/observables.rs:219`
-> - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:416`
-> - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:318`
-> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:437`
+> - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:425`
+> - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:321`
+> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:446`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1638`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
 > - 整合性: C は保存するサンプルを `sqrt(w)` でスケールし(`SROptO_Store[...] = sqrtw*SROptO[...]`、`vmccal.c:241,248`)、グラム積はステップごとに一度だけ形成します。実数の保存行列については、Rust は Julia の SYRK ディスパッチと上三角コピーに従います。複素の保存積は逐次的なサンプル和を保ちます(`sr_store_gram_julia`、`observables.rs:497`。テスト `stored_direct_sr_gram_matches_sampled_julia_values`、`real_gram_matches_julia_generic_and_syrk_dispatch_boundary`)。これらの浮動小数点の総和順序は BLAS プロバイダーによって異なるため、許容誤差付きで比較されます。`vmcmain.c` が `WeightAverageSROpt` の一方の分岐を選ぶのと同様に、MPI で縮約されるのはアクティブな分岐(実または複素)だけです。
 
 ## 5.4 共役勾配法ソルバー(`NSRCG = 1`)
@@ -161,10 +161,10 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます(グ�
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:326`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:440`
-> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:262`
-> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:286`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:328`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:442`
+> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:264`
+> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:288`
 > - 整合性: ここは演算順序が最も重要になる箇所です。C は `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat`(`stcopt_cg_impl.c:265`)を計算し、漸化式は `beta = xdot(r,r)/delta; delta = beta*delta;` です。古い $\delta$ は $r\!\cdot\!r$ で置き換えられ*ません*(`stcopt_cg_impl.c:333-336`)。Rust は両方を再現します(`crates/mvmc-core/src/sr_cg.rs:346`、`crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm")。内積は BLAS の `ddot` ではなく逐次(`sequential_dot`)で、積は C と同じ `dgemv` の組を使います。このため CG は FMA と縮約順序に敏感であり、打ち切られた CG の結果はビット単位の整合ではなく許容誤差のゲートで検証します。
 > - 整合性: 対角シフトは、行列を修正するのではなく `z += sdiag[si]*DSROptStaDel*x[si]`(`stcopt_cg_impl.c:420`)として現れます。$\langle O\rangle\cdot x$ には `xdot` を使います。サンプル積の MPI 縮約は、大域的な重み、平均、シフトの補正より前に行われます(`apply_with_reducer` のドキュメント)。
 
@@ -192,5 +192,5 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます(グ�
 > - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1092`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:515`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:561`
 > - 整合性: ウィンドウは `step >= NSROptItrStep - NSROptItrSmp` です。Rust は `NSROptItrSmp > NSROptItrStep` を事前に拒否します("nsteps must be >= nsmp; C leaves oversized-window rows unwritten"、`validate_optimization_window`、`run.rs:1306`)。標準偏差の式は、どちらも `creal(data*conj(data))` の `sqrt(var/(n-1))` です。コマンドラインの `--nsteps`/`--nsmp` による上書きは、ウィンドウについて `NSROptItrStep`/`NSROptItrSmp` を変更します。

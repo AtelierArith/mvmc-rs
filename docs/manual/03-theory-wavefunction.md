@@ -65,7 +65,7 @@ the identity: $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ 
 > **Implementation**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2716`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2828`
 > - Parity: Rust reserves the *declared* widths for each block even when the definition file lists fewer rows (the "sparse projection" rule, `ProjectionLayout` docs). The FSZ main-calculation places the Slater derivatives immediately after the projection block (no RBM slot), the normal path reserves all RBM slots first (`run.rs:2887-2900`).
 
 ## 3.2 The Pfaffian pair-product part
@@ -119,11 +119,11 @@ formula in [4.5](04-theory-sampling.md#45-pfaffian-ratio-and-inverse-updates).
 > - C: `CalculateMAll_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:516`
 > - C: `calculateMAll_child_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:557`
 > - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
-> - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:281`
+> - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
-> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:631`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:841`
+> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:508`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:630`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:840`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
@@ -178,7 +178,7 @@ real and imaginary parts are $2N_{\rm para}$ independent real variables
 
 > **Implementation**
 > - C: `ReadInputParameters` (sets `AllComplexFlag`) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1838`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1950`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - Parity: real-mode runs hold `SlaterElm_real`/`InvM_real`/`PfM_real` copies in C; Rust keeps real buffers (`pf_m_real`, `sr_opt_oo_real`, ...) and a complex shadow where the shared code needs it.
 
@@ -247,7 +247,7 @@ $$
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
-> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:126`
+> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:128`
 > - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
@@ -276,8 +276,8 @@ C takes only $\operatorname{Re}\,\texttt{Proj}[k]$ (`LogProjVal`, `LogProjRatio`
 > - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
 > - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
 > - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
-> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:177`
-> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:276`
+> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:179`
+> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:278`
 > - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
 > - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:401`
 > - Rust: `recompute_dh_counts` — `crates/mvmc-core/src/sampling/projection.rs:20`

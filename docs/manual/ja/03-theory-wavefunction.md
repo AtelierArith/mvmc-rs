@@ -64,7 +64,7 @@ $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\
 > **実装**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2716`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2828`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
 
 ## 3.2 パフィアンペア積部分
@@ -116,11 +116,11 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 > - C: `CalculateMAll_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:516`
 > - C: `calculateMAll_child_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:557`
 > - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
-> - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:281`
+> - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
-> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:631`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:841`
+> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:508`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:630`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:840`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
@@ -173,7 +173,7 @@ $$
 
 > **実装**
 > - C: `ReadInputParameters` (`AllComplexFlag` を設定) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1838`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1950`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - 整合性: 実数モードの実行では、C は `SlaterElm_real`/`InvM_real`/`PfM_real` のコピーを保持します。Rust は実数バッファ (`pf_m_real`, `sr_opt_oo_real`, ...) を保持し、共有コードが必要とする箇所では複素数のシャドウも保持します。
 
@@ -246,7 +246,7 @@ $$
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
-> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:126`
+> - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:128`
 > - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
@@ -275,8 +275,8 @@ C は $\operatorname{Re}\,\texttt{Proj}[k]$ だけを取ります (`LogProjVal`,
 > - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
 > - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
 > - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
-> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:177`
-> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:276`
+> - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:179`
+> - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:278`
 > - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
 > - Rust: `log_proj_ratio` — `crates/mvmc-core/src/sampling/projection.rs:401`
 > - Rust: `recompute_dh_counts` — `crates/mvmc-core/src/sampling/projection.rs:20`

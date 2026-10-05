@@ -51,8 +51,8 @@ columns 5 and 6 (`vmcmain.c:640`); Rust reproduces it byte for byte. Example (fi
 > **Implementation**
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
 > - C: `InitFile` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
-> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:93`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
+> - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
 > - Parity (**naming difference**): for optimization C writes the files with the data index, `zvo_out_001.dat` and `zvo_var_001.dat` (`initfile.c:55,59`, `NDataIdxStart`); Rust writes **`zvo_out.dat` and `zvo_var.dat` without the index** (Julia convention, `io.rs:113,128`). PhysCal files carry the index in both. The variance column is `0.0` in the optimization output when $\lvert\langle H\rangle\rvert\le10^{-14}$ (`io.rs:103`).
 
 ## 9.2 Parameters per step: `zvo_var.dat` and `zvo_var_NNN.dat`
@@ -92,8 +92,8 @@ of the DH blocks is the number of patterns, while the row count is $6\times$ (DH
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:515`
-> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:654`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:561`
+> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:700`
 > - Parity: block order, file names (`RBM_OUTPUT_BLOCKS`), header text and the "pairs, no auxiliary files" rule for `NSROptItrSmp = 1` follow `OutputOptData` literally. The window statistic is $\sqrt{\sum|x-\bar x|^2/(n-1)}$ in both.
 
 ## 9.4 Solver information: `zvo_SRinfo.dat`
@@ -170,7 +170,7 @@ A file is not created when its count is zero (the tutorial has no `TwoBodyGEx`, 
 > **Implementation**
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
 > - Parity: row text and the trailing blank line / single-line layout of the `ex` file are reproduced (`io.rs:244-301`, comment "C vmcmain.c:671-675 emits pairs in term order, newline after the loop").
 
 ## 9.7 Lanczos files
@@ -184,7 +184,7 @@ For `NLanczosMode > 0` ([6.2](06-theory-observables-lanczos.md#62-the-single-ste
 
 > **Implementation**
 > - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
-> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:210`
+> - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Parity: the debug-only C files `zvo_ls_qcisajsq_NNN.dat` and `zvo_ls_qcisajscktaltq_NNN.dat` (`#ifdef _DEBUG`) are not produced. On a failed $\alpha$ determination C writes nothing; Rust writes `NaN` ([6.2](06-theory-observables-lanczos.md#62-the-single-step-lanczos-wave-function)).
 
