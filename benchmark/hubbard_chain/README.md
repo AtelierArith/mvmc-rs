@@ -92,6 +92,10 @@ these timings are not an `R=4` MPI performance comparison.
 | hubbard_chain_L24 | 9.040 | 6.539 | 0.72x | 0.00e0 |
 | hubbard_chain_L32 | 16.190 | 11.966 | 0.74x | 0.00e0 |
 
+The table above is the initial (2026-06/10-03) Mac baseline. After the #207 fast paths Rust
+is 1.20-1.26x faster than Julia on the Linux reference host, with identical outputs; see
+`results/hubbard_chain_2026-10-06_calh1_slaterdiff.md`.
+
 Initial baselines are archived under `results/`; the task writes new CSV and
 Markdown reports to `target/bench/` for comparison. The section-timer
 breakdown that localizes the gap to `VMCMainCal`

@@ -645,6 +645,52 @@ pub(crate) fn qp_fill<T: Send, S>(
     }
 }
 
+/// Like [`qp_fill`] but hands `body` consecutive blocks of up to `block` QPs, so a
+/// kernel can interleave the independent per-QP dependency chains of one block
+/// (each output element still has exactly one producer, in the same operation order).
+/// `body(first_qp, outputs)` fills `outputs[k]` for QP `first_qp + k`.
+#[track_caller]
+pub(crate) fn qp_fill_blocks<T: Send>(
+    out: &mut [T],
+    qp_start: usize,
+    qp_end: usize,
+    cost_ns: usize,
+    block: usize,
+    body: impl Fn(usize, &mut [T]) + Send + Sync,
+) {
+    let end = qp_end.min(out.len());
+    if qp_start >= end || block == 0 {
+        return;
+    }
+    let count = end - qp_start;
+    let parallel = inner_parallel_work(count, cost_ns);
+    let _scope = ProfileScope::start(parallel, count);
+    let observed = observe_kernel(ObservedWork::Qp, parallel);
+    let run = |first: usize, chunk: &mut [T]| {
+        // Count every QP of the block as an entered item, as `qp_fill` does.
+        let mut binding = None;
+        for _ in 0..chunk.len() {
+            let entry = observed.enter_item();
+            if binding.is_none() {
+                binding = entry;
+            }
+        }
+        body(first, chunk);
+    };
+    if parallel {
+        install_inner(|| {
+            out[qp_start..end]
+                .par_chunks_mut(block)
+                .enumerate()
+                .for_each(|(i, chunk)| run(qp_start + i * block, chunk))
+        });
+    } else {
+        for (i, chunk) in out[qp_start..end].chunks_mut(block).enumerate() {
+            run(qp_start + i * block, chunk);
+        }
+    }
+}
+
 /// Evaluate independent Hamiltonian/Green terms in parallel and return their values
 /// in term order, or `None` when the serial path should run (threading off or fewer
 /// than the threshold terms). The caller reduces the returned values serially in

@@ -26,8 +26,9 @@ use crate::c_timer::CTimer;
 use crate::sampling::projection::update_proj_cnt;
 use crate::sampling::updates::{
     calculate_new_pf_m2_complex_flat, calculate_new_pf_m2_fsz_complex_flat,
-    calculate_new_pf_m2_fsz_real_flat, calculate_new_pf_m2_real_flat,
-    calculate_new_pf_m_two2_complex_flat, calculate_new_pf_m_two2_real_flat,
+    calculate_new_pf_m2_fsz_real_flat, calculate_new_pf_m2_ip_real_flat,
+    calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_complex_flat,
+    calculate_new_pf_m_two2_real_flat,
 };
 use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
 use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
@@ -978,6 +979,7 @@ pub fn slater_elm_diff(
         ele_idx,
         data,
         &state.slater_matrix,
+        false,
         &mut scratch,
         &mut timer,
     );
@@ -1617,16 +1619,18 @@ fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationStat
     state.transfer_cache.signature = signature;
     state.transfer_cache.all_real = all_real;
     state.transfer_cache.direct_projection_eligible = direct_projection_eligible;
+    state.transfer_cache.direct_tables = if direct_projection_eligible {
+        build_direct_projection_tables(data)
+    } else {
+        None
+    };
 }
 
-// The cached real Transfer path evaluates the moved configuration directly.
-// Its Jastrow subtraction must precede multiplication by the site charge.
-fn calh1_direct_projection_ratio(
-    source: usize,
-    dest: usize,
-    ele_num: &[i64],
+/// Flatten the Gutzwiller and Jastrow lookups of the direct projection ratio, or
+/// `None` when the indices are inconsistent (the generic ratio is used then).
+fn build_direct_projection_tables(
     data: &ExpertModeData,
-) -> Option<f64> {
+) -> Option<crate::state::DirectProjectionTables> {
     let n = data.modpara.nsite as usize;
     let ng = data.n_gutzwiller_idx.max(0) as usize;
     let nj = data.n_jastrow_idx.max(0) as usize;
@@ -1646,39 +1650,197 @@ fn calh1_direct_projection_ratio(
     {
         return None;
     }
-    let gutz = |site: usize| {
-        if ng == 0 {
-            return 0.0;
-        }
-        let index = data.gutzwiller_idx[site];
-        if index < 0 || index as usize >= ng {
-            0.0
-        } else {
-            data.gutzwiller_terms[index as usize].value.re
-        }
-    };
-    let jastrow = |a: usize, b: usize| {
-        if nj == 0 || a == b {
-            return 0.0;
-        }
-        let index = data.jastrow_idx[a.min(b)][a.max(b)];
-        if index < 0 || index as usize >= nj {
-            0.0
-        } else {
-            data.jastrow_terms[index as usize].value.re
-        }
-    };
-    let charge = |site: usize| ele_num[site] + ele_num[n + site] - 1;
-    let mut z = 0.0;
-    z -= gutz(source) * (ele_num[source] + ele_num[n + source]) as f64;
-    z += gutz(dest) * (ele_num[dest] * ele_num[n + dest]) as f64;
-    z += jastrow(source, dest) * (charge(source) - charge(dest) + 1) as f64;
-    for site in 0..n {
-        if site != source && site != dest {
-            z += (jastrow(dest, site) - jastrow(source, site)) * charge(site) as f64;
+    let gutzwiller = (0..n)
+        .map(|site| {
+            if ng == 0 {
+                return 0.0;
+            }
+            let index = data.gutzwiller_idx[site];
+            if index < 0 || index as usize >= ng {
+                0.0
+            } else {
+                data.gutzwiller_terms[index as usize].value.re
+            }
+        })
+        .collect();
+    let mut jastrow = vec![0.0; n * n];
+    if nj > 0 {
+        for a in 0..n {
+            for b in 0..n {
+                if a == b {
+                    continue;
+                }
+                let index = data.jastrow_idx[a.min(b)][a.max(b)];
+                if index >= 0 && (index as usize) < nj {
+                    jastrow[a * n + b] = data.jastrow_terms[index as usize].value.re;
+                }
+            }
         }
     }
-    Some(julia_exp(z))
+    Some(crate::state::DirectProjectionTables {
+        n_site: n,
+        gutzwiller,
+        jastrow,
+    })
+}
+
+// The cached real Transfer path evaluates the moved configuration directly.
+// Its Jastrow subtraction must precede multiplication by the site charge.
+fn calh1_direct_projection_ratio(
+    source: usize,
+    dest: usize,
+    ele_num: &[i64],
+    tables: &crate::state::DirectProjectionTables,
+) -> f64 {
+    let n = tables.n_site;
+    let charge = |site: usize| ele_num[site] + ele_num[n + site] - 1;
+    let (row_dest, row_source) = (
+        &tables.jastrow[dest * n..(dest + 1) * n],
+        &tables.jastrow[source * n..(source + 1) * n],
+    );
+    let mut z = 0.0;
+    z -= tables.gutzwiller[source] * (ele_num[source] + ele_num[n + source]) as f64;
+    z += tables.gutzwiller[dest] * (ele_num[dest] * ele_num[n + dest]) as f64;
+    z += row_source[dest] * (charge(source) - charge(dest) + 1) as f64;
+    for site in 0..n {
+        if site != source && site != dest {
+            z += (row_dest[site] - row_source[site]) * charge(site) as f64;
+        }
+    }
+    julia_exp(z)
+}
+
+/// [`calh1_direct_projection_ratio`] for the hop of one electron of `spin` from `source`
+/// to `dest`, evaluated on the unmoved occupations (`ele_num` is not copied): only the
+/// two touched `(site, spin)` entries differ, and only the source/dest terms read them.
+fn calh1_direct_projection_ratio_moved(
+    source: usize,
+    dest: usize,
+    spin: usize,
+    ele_num: &[i64],
+    tables: &crate::state::DirectProjectionTables,
+) -> f64 {
+    let n = tables.n_site;
+    let (src_slot, dst_slot) = (source + spin * n, dest + spin * n);
+    let occ = |slot: usize| {
+        if slot == src_slot {
+            0
+        } else if slot == dst_slot {
+            1
+        } else {
+            ele_num[slot]
+        }
+    };
+    let charge_moved = |site: usize| occ(site) + occ(n + site) - 1;
+    let charge = |site: usize| ele_num[site] + ele_num[n + site] - 1;
+    let (row_dest, row_source) = (
+        &tables.jastrow[dest * n..(dest + 1) * n],
+        &tables.jastrow[source * n..(source + 1) * n],
+    );
+    let mut z = 0.0;
+    z -= tables.gutzwiller[source] * (occ(source) + occ(n + source)) as f64;
+    z += tables.gutzwiller[dest] * (occ(dest) * occ(n + dest)) as f64;
+    z += row_source[dest] * (charge_moved(source) - charge_moved(dest) + 1) as f64;
+    for site in 0..n {
+        if site != source && site != dest {
+            z += (row_dest[site] - row_source[site]) * charge(site) as f64;
+        }
+    }
+    julia_exp(z)
+}
+
+/// Serial real CalHamiltonian1 transfer section (Julia's CalH1 fast path, diagnostics
+/// 925/926/929/935/936): the per-term `green_func1` real kernel without its scratch
+/// copies, with the direct projection ratio and the fused `PfM2 + IP` kernel. Returns the
+/// transfer energy `-sum value * G1`, accumulated in term order exactly as the generic
+/// loop does. Requires `calh1_fast_path_available`.
+#[allow(clippy::too_many_arguments)]
+fn calh1_real_fast<const TIMED: bool>(
+    ip: f64,
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+    ele_cfg: &[i64],
+    ele_idx: &[i64],
+    ele_num: &[i64],
+    observed: &crate::threading::KernelObservation,
+    timer: &mut CTimer<TIMED>,
+) -> f64 {
+    let diag = timer.diagnostics.calham1;
+    timer.start_diag(925, diag);
+    let n_site = data.modpara.nsite as usize;
+    let n_elec = data.modpara.nelec as usize;
+    let inv_stride = (2 * n_elec).pow(2) + 1;
+    let tables = state
+        .transfer_cache
+        .direct_tables
+        .as_ref()
+        .expect("checked by calh1_fast_path_available");
+    let weights: &[Complex64] = data
+        .qp_weights
+        .as_ref()
+        .map_or(&[], |weights| &weights.qp_full_weight);
+    let sm = &state.slater_matrix;
+    timer.stop_diag(925, diag);
+    timer.start_diag(926, diag);
+    let mut transfer_energy = 0.0;
+    for term in &state.transfer_cache.terms {
+        let _entry = observed.enter_item();
+        let (ri, rj) = (term.site1, term.site2);
+        let (spin_create, spin_annihilate) = (term.spin1, term.spin2);
+        let dst = ri + spin_create as usize * n_site;
+        let src = rj + spin_annihilate as usize * n_site;
+        let g1 = if spin_create == spin_annihilate && ri == rj {
+            ele_num[src] as f64
+        } else if spin_create != spin_annihilate
+            || ele_num[dst] == 1
+            || ele_num[src] == 0
+            || ele_cfg[src] < 0
+        {
+            0.0
+        } else {
+            let mj = ele_cfg[src] as usize;
+            let msj = mj + spin_annihilate as usize * n_elec;
+            timer.start_diag(935, diag);
+            let proj_ratio = calh1_direct_projection_ratio_moved(
+                rj,
+                ri,
+                spin_annihilate as usize,
+                ele_num,
+                tables,
+            );
+            timer.stop_diag(935, diag);
+            timer.start_diag(936, diag);
+            let new_ip = calculate_new_pf_m2_ip_real_flat(
+                mj,
+                spin_annihilate,
+                (msj, ri as i64),
+                ele_idx,
+                &sm.slater_elm_real,
+                sm.inv_m_real.as_slice(),
+                inv_stride,
+                &sm.pf_m_real,
+                weights,
+                n_site,
+                n_elec,
+            );
+            timer.stop_diag(936, diag);
+            proj_ratio * new_ip / ip
+        };
+        transfer_energy -= term.value.re * g1;
+    }
+    timer.stop_diag(926, diag);
+    transfer_energy
+}
+
+/// The serial CalH1 fast path applies to the real main calculation without RBM, with the
+/// direct projection tables built and one real Pfaffian per full QP.
+fn calh1_fast_path_available(state: &VmcOptimizationState) -> bool {
+    state.transfer_cache.all_real
+        && !state.all_complex
+        && state.transfer_cache.direct_projection_eligible
+        && state.transfer_cache.direct_tables.is_some()
+        && !state.slater_matrix.pf_m_real.is_empty()
+        && state.slater_matrix.pf_m_real.len() == state.slater_matrix.pf_m.len()
 }
 
 /// Evaluate Transfer's main-calculation one-body kernel with section timers.
@@ -1816,29 +1978,39 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
     scratch.ele_num[src] = 0;
 
     timer.stop_diag(927, diag);
-    timer.start_diag(921, diag);
-    // Update projection counts for the hop rj → ri (same spin).
     let n_proj = ele_proj_cnt.len();
-    scratch.proj_new.resize(n_proj, 0);
-    scratch.proj_new.fill(0);
-    update_proj_cnt(
-        rj as i64,
-        ri as i64,
-        spin_create,
-        &mut scratch.proj_new,
-        ele_proj_cnt,
-        &scratch.ele_num,
-        data,
-    );
-
-    timer.stop_diag(921, diag);
+    // The direct projection ratio reads the moved occupations only, so the
+    // projection-count update below is needed just for the generic ratio.
+    let direct_tables = if TRANSFER && !state.all_complex {
+        state
+            .transfer_cache
+            .direct_tables
+            .as_ref()
+            .filter(|_| state.transfer_cache.direct_projection_eligible)
+    } else {
+        None
+    };
     timer.start_diag(922, diag);
     let direct_ratio =
-        if TRANSFER && !state.all_complex && state.transfer_cache.direct_projection_eligible {
-            calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, data)
-        } else {
-            None
-        };
+        direct_tables.map(|tables| calh1_direct_projection_ratio(rj, ri, &scratch.ele_num, tables));
+    timer.stop_diag(922, diag);
+    timer.start_diag(921, diag);
+    if direct_ratio.is_none() || !scratch.skip_unused_proj {
+        // Update projection counts for the hop rj -> ri (same spin).
+        scratch.proj_new.resize(n_proj, 0);
+        scratch.proj_new.fill(0);
+        update_proj_cnt(
+            rj as i64,
+            ri as i64,
+            spin_create,
+            &mut scratch.proj_new,
+            ele_proj_cnt,
+            &scratch.ele_num,
+            data,
+        );
+    }
+    timer.stop_diag(921, diag);
+    timer.start_diag(922, diag);
     let proj_ratio = if let Some(ratio) = direct_ratio {
         ratio
     } else if C_KERNEL {
@@ -2922,6 +3094,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         // to the Green kernel while preserving its capacities for the next
         // local-energy call.
         let mut green_scratch = std::mem::take(&mut state.transfer_scratch);
+        green_scratch.skip_unused_proj = true;
         let parallel_transfer = real_transfer
             && !state.all_complex
             && !timer.diagnostics.calham1
@@ -2935,6 +3108,8 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             crate::threading::ObservedWork::Term,
             parallel_transfer,
         );
+        // Serial real path: Julia's CalH1 fast path (no per-term scratch copies).
+        let fast_transfer = !parallel_transfer && calh1_fast_path_available(state);
         let parallel_green = if parallel_transfer {
             let shared_state = &*state;
             Some(crate::threading::install_inner(|| {
@@ -2942,30 +3117,49 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
                     .transfer_cache
                     .terms
                     .par_iter()
-                    .map_init(GreenScratch::default, |scratch, term| {
-                        let _entry = observed.enter_item();
-                        green_func1_impl::<false, true, false>(
-                            term.site1,
-                            term.site2,
-                            term.spin1,
-                            term.spin2,
-                            ip,
-                            data,
-                            shared_state,
-                            ele_idx,
-                            ele_cfg,
-                            ele_num,
-                            ele_proj_cnt,
-                            scratch,
-                            &mut CTimer::<false>::new(),
-                        )
-                    })
+                    .map_init(
+                        || GreenScratch {
+                            skip_unused_proj: true,
+                            ..GreenScratch::default()
+                        },
+                        |scratch, term| {
+                            let _entry = observed.enter_item();
+                            green_func1_impl::<false, true, false>(
+                                term.site1,
+                                term.site2,
+                                term.spin1,
+                                term.spin2,
+                                ip,
+                                data,
+                                shared_state,
+                                ele_idx,
+                                ele_cfg,
+                                ele_num,
+                                ele_proj_cnt,
+                                scratch,
+                                &mut CTimer::<false>::new(),
+                            )
+                        },
+                    )
                     .collect::<Vec<_>>()
             }))
         } else {
             None
         };
-        for index in 0..state.transfer_cache.terms.len() {
+        if fast_transfer {
+            let combined = calh1_real_fast(
+                ip.re, data, state, ele_cfg, ele_idx, ele_num, &observed, timer,
+            );
+            timer.start_diag(929, timer.diagnostics.calham1);
+            transfer_energy = combined;
+            timer.stop_diag(929, timer.diagnostics.calham1);
+        }
+        let generic_terms = if fast_transfer {
+            0..0
+        } else {
+            0..state.transfer_cache.terms.len()
+        };
+        for index in generic_terms {
             let term = state.transfer_cache.terms[index];
             let ri = term.site1;
             let rj = term.site2;
@@ -3005,6 +3199,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         if real_transfer {
             e += Complex64::new(transfer_energy, 0.0);
         }
+        green_scratch.skip_unused_proj = false;
         state.transfer_scratch = green_scratch;
     }
 
@@ -3355,58 +3550,155 @@ mod tests {
         assert!(!state.transfer_cache.all_real);
     }
 
+    /// The flattened Gutzwiller/Jastrow tables must give exactly the indexed lookups'
+    /// ratio, including unused and out-of-range indices (value 0), for every hop.
+    #[test]
+    fn direct_projection_tables_match_indexed_lookups_bitwise() {
+        let n = 5;
+        let mut data = ExpertModeData::new();
+        data.modpara.nsite = n as i64;
+        data.modpara.nelec = 2;
+        data.gutzwiller_idx = vec![0, 1, -1, 1, 7];
+        data.n_gutzwiller_idx = 2;
+        data.gutzwiller_terms = [0.3125, -0.7]
+            .into_iter()
+            .map(|v| mvmc_expert_parsers::GutzwillerTerm {
+                site: 0,
+                value: Complex64::new(v, 0.0),
+                is_complex: false,
+            })
+            .collect();
+        data.n_jastrow_idx = 3;
+        data.jastrow_idx = (0..n)
+            .map(|a| (0..n).map(|b| ((a * 3 + b * 5) % 5) as i64 - 1).collect())
+            .collect();
+        data.jastrow_terms = [0.1, -0.45, 0.8]
+            .into_iter()
+            .map(|v| mvmc_expert_parsers::JastrowTerm {
+                site1: 0,
+                site2: 1,
+                value: Complex64::new(v, 0.0),
+                is_complex: false,
+            })
+            .collect();
+        let tables = build_direct_projection_tables(&data).expect("eligible model");
+        let gutz = |site: usize| {
+            let index = data.gutzwiller_idx[site];
+            if index < 0 || index as usize >= 2 {
+                0.0
+            } else {
+                data.gutzwiller_terms[index as usize].value.re
+            }
+        };
+        let jastrow = |a: usize, b: usize| {
+            if a == b {
+                return 0.0;
+            }
+            let index = data.jastrow_idx[a.min(b)][a.max(b)];
+            if index < 0 || index as usize >= 3 {
+                0.0
+            } else {
+                data.jastrow_terms[index as usize].value.re
+            }
+        };
+        let occupations = [[1, 0, 1, 0, 0], [0, 1, 1, 0, 1]];
+        let ele_num: Vec<i64> = occupations.concat();
+        for source in 0..n {
+            for dest in 0..n {
+                if source == dest {
+                    continue;
+                }
+                let charge = |site: usize| ele_num[site] + ele_num[n + site] - 1;
+                let mut z = 0.0;
+                z -= gutz(source) * (ele_num[source] + ele_num[n + source]) as f64;
+                z += gutz(dest) * (ele_num[dest] * ele_num[n + dest]) as f64;
+                z += jastrow(source, dest) * (charge(source) - charge(dest) + 1) as f64;
+                for site in 0..n {
+                    if site != source && site != dest {
+                        z += (jastrow(dest, site) - jastrow(source, site)) * charge(site) as f64;
+                    }
+                }
+                let expected = julia_exp(z);
+                let actual = calh1_direct_projection_ratio(source, dest, &ele_num, &tables);
+                assert_eq!(actual.to_bits(), expected.to_bits(), "hop {source}->{dest}");
+            }
+        }
+        // The no-copy moved-occupation ratio equals the ratio on explicitly moved occupations.
+        for spin in 0..2 {
+            for source in 0..n {
+                for dest in 0..n {
+                    if source == dest
+                        || ele_num[source + spin * n] == 0
+                        || ele_num[dest + spin * n] == 1
+                    {
+                        continue;
+                    }
+                    let mut moved = ele_num.clone();
+                    moved[source + spin * n] = 0;
+                    moved[dest + spin * n] = 1;
+                    let expected = calh1_direct_projection_ratio(source, dest, &moved, &tables);
+                    let actual =
+                        calh1_direct_projection_ratio_moved(source, dest, spin, &ele_num, &tables);
+                    assert_eq!(
+                        actual.to_bits(),
+                        expected.to_bits(),
+                        "spin {spin} hop {source}->{dest}"
+                    );
+                }
+            }
+        }
+        // Inconsistent indices fall back to the generic ratio.
+        data.jastrow_idx.truncate(n - 1);
+        assert!(build_direct_projection_tables(&data).is_none());
+    }
+
     #[test]
     fn transfer_local_energy_reuses_workspace_capacity() {
         let mut data = ExpertModeData::new();
         data.modpara.nsite = 2;
         data.modpara.nelec = 1;
-        data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
-            site1: 1,
-            spin1: Spin::Up,
-            site2: 0,
-            spin2: Spin::Up,
-            value: Complex64::new(1.0, 0.0),
-        });
         let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
         state.slater_matrix.pf_m_real[0] = 1.0;
         let idx = [0_i64, 0];
         let cfg = [0_i64, -1, -1, -1];
         let num = [1_i64, 0, 0, 0];
         let counts: [i64; 0] = [];
-
-        let _ = calculate_local_energy(
-            Complex64::new(1.0, 0.0),
-            &data,
-            &mut state,
-            &idx,
-            &cfg,
-            &num,
-            &counts,
-        );
+        // The generic Green kernel (used by the parallel/complex/non-direct paths) keeps
+        // its workspace in the state; the serial real CalH1 fast path needs none.
+        let mut scratch = std::mem::take(&mut state.transfer_scratch);
+        let run = |state: &mut VmcOptimizationState, scratch: &mut GreenScratch| {
+            green_func1_timed_with_scratch(
+                1,
+                0,
+                0,
+                0,
+                Complex64::new(1.0, 0.0),
+                &data,
+                state,
+                &idx,
+                &cfg,
+                &num,
+                &counts,
+                scratch,
+                &mut CTimer::<false>::new(),
+            )
+        };
+        let _ = run(&mut state, &mut scratch);
         let first_capacity = (
-            state.transfer_scratch.ele_idx.capacity(),
-            state.transfer_scratch.ele_num.capacity(),
-            state.transfer_scratch.new_pf_real.capacity(),
+            scratch.ele_idx.capacity(),
+            scratch.ele_num.capacity(),
+            scratch.new_pf_real.capacity(),
         );
         assert!(first_capacity.0 >= idx.len());
         assert!(first_capacity.1 >= num.len());
         assert!(first_capacity.2 >= 1);
-
-        let _ = calculate_local_energy(
-            Complex64::new(1.0, 0.0),
-            &data,
-            &mut state,
-            &idx,
-            &cfg,
-            &num,
-            &counts,
-        );
+        let _ = run(&mut state, &mut scratch);
         assert_eq!(
             first_capacity,
             (
-                state.transfer_scratch.ele_idx.capacity(),
-                state.transfer_scratch.ele_num.capacity(),
-                state.transfer_scratch.new_pf_real.capacity(),
+                scratch.ele_idx.capacity(),
+                scratch.ele_num.capacity(),
+                scratch.new_pf_real.capacity(),
             )
         );
     }

@@ -1096,6 +1096,19 @@ pub(crate) struct TransferKernelCache {
     pub(crate) terms: Vec<TransferTermMetadata>,
     pub(crate) direct_projection_eligible: bool,
     pub(crate) all_real: bool,
+    /// Flattened Gutzwiller/Jastrow values for the direct projection ratio (`None`
+    /// when the model is not eligible). Rebuilt whenever `signature` changes.
+    pub(crate) direct_tables: Option<DirectProjectionTables>,
+}
+
+/// Dense Gutzwiller vector and symmetric Jastrow matrix (real parts) used by the
+/// real Transfer path; entries equal what the indexed lookups would return.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DirectProjectionTables {
+    pub(crate) n_site: usize,
+    pub(crate) gutzwiller: Vec<f64>,
+    /// Row-major `n_site * n_site`, zero diagonal.
+    pub(crate) jastrow: Vec<f64>,
 }
 
 /// Reusable scratch buffers for the real/complex Transfer Green kernel.
@@ -1110,6 +1123,9 @@ pub(crate) struct TransferGreenScratch {
     pub(crate) proj_new: Vec<i64>,
     pub(crate) new_pf_real: Vec<f64>,
     pub(crate) new_pf_complex: Vec<Complex64>,
+    /// The caller reads only the Green value, not `proj_new`, so the projection-count
+    /// update may be skipped when the direct projection ratio is used (Transfer energy).
+    pub(crate) skip_unused_proj: bool,
 }
 
 impl PhysicalQuantities {

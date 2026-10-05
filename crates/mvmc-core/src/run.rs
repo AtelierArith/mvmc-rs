@@ -2929,13 +2929,21 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             continue;
         }
         if !all_complex {
-            for qp in 0..n_qp_full {
-                let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
-                // Copy only the matrix, leaving the per-QP inverse pad untouched.
-                crate::threading::copy_real_to_complex(
-                    &mut state.slater_matrix.inv_m.qp_matrix_slice_mut(qp)[..n_size * n_size],
-                    &real_plane[..n_size * n_size],
-                );
+            // The real Slater derivative reads the real inverse; refresh the complex
+            // inverse planes only for consumers that still need them.
+            // PhysCal/Lanczos (and FSZ) read the complex tables in real mode too.
+            if use_fsz
+                || data.modpara.vmc_calc_mode != 0
+                || !crate::slater_derivative::real_slater_derivative_available(data, n_qp_full)
+            {
+                for qp in 0..n_qp_full {
+                    let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
+                    // Copy only the matrix, leaving the per-QP inverse pad untouched.
+                    crate::threading::copy_real_to_complex(
+                        &mut state.slater_matrix.inv_m.qp_matrix_slice_mut(qp)[..n_size * n_size],
+                        &real_plane[..n_size * n_size],
+                    );
+                }
             }
             crate::threading::copy_real_to_complex(
                 &mut state.slater_matrix.pf_m[..n_qp_full],
@@ -3161,6 +3169,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                     &ele_idx,
                     data,
                     &state.slater_matrix,
+                    !all_complex,
                     &mut slater_derivative_scratch,
                     timer,
                 );
@@ -4055,7 +4064,9 @@ mod callback_tests {
                 assert!(timer.elapsed_ns[id] > 0, "{case}: missing timer {id}");
             }
             if case == "hubbard_chain_real" {
-                for id in [32, 60, 61, 62, 63, 920, 921, 922, 924, 927] {
+                // Serial real Transfer runs Julia's CalH1 fast path (#207): prep, term loop,
+                // combine, direct projection ratio and the fused PfM2+IP kernel.
+                for id in [32, 60, 61, 62, 63, 925, 926, 929, 935, 936] {
                     assert!(timer.elapsed_ns[id] > 0, "{case}: missing timer {id}");
                 }
                 assert_eq!(timer.elapsed_ns[33], 0);
