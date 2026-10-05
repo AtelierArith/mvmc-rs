@@ -186,6 +186,7 @@ fn mpi_physcal_reduces_fixed_parameter_samples() {
                     "zvo_cisajs_001.dat",
                     "zvo_cisajscktalt_001.dat",
                     "zvo_cisajscktaltex_001.dat",
+                    "zvo_time_001.dat",
                 ]
                 .into_iter()
                 .map(std::ffi::OsString::from)

@@ -200,6 +200,8 @@ fn inventory(dir: &Path, samples: usize) -> Result<Vec<(String, String)>, String
             Ok((name, body))
         })
         .collect::<Result<Vec<_>, String>>()?;
+    // C InitFile also creates one `_time_` file whose rows end in a ctime string.
+    actual.retain(|row| !row.0.contains("_time_"));
     actual.sort_by(|a, b| a.0.cmp(&b.0));
     let mut expected = Vec::new();
     for sample in 1..=samples {
@@ -631,8 +633,13 @@ fn mpi_physcal_callback_preserves_two_samples_and_collective_error_boundaries() 
             let correct_inventory = names.is_ok_and(|mut names| {
                 names.sort();
                 names
-                    == ["zvo_cisajs_001.dat", "zvo_out_001.dat", "zvo_var_001.dat"]
-                        .map(std::ffi::OsString::from)
+                    == [
+                        "zvo_cisajs_001.dat",
+                        "zvo_out_001.dat",
+                        "zvo_time_001.dat",
+                        "zvo_var_001.dat",
+                    ]
+                    .map(std::ffi::OsString::from)
             });
             check(
                 &mut errors,

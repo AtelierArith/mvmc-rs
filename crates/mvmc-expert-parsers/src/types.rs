@@ -204,8 +204,6 @@ pub struct ModParaParameters {
     /// `CParaFileHead`.
     pub c_para_file_head: String,
 
-    /// `NFileFlushInterval`.
-    pub n_file_flush_interval: i64,
     /// `ComplexType`.
     pub complex_flag: i64,
 
@@ -288,7 +286,6 @@ impl Default for ModParaParameters {
             n_data_qty_smp: 1,
             c_data_file_head: String::from("zvo"),
             c_para_file_head: String::from("zqp"),
-            n_file_flush_interval: 1,
             complex_flag: 0,
             nneuron: 0,
             nneuron_general: 0,

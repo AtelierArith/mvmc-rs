@@ -118,6 +118,7 @@ fn exercise(
         OptimizationOptions {
             callback: Some(&mut callback),
             skip_sr: false,
+            file_flush_interval: None,
         },
     );
     let records = capture.finish();
