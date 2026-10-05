@@ -47,7 +47,8 @@ without C, Julia or toolbox inputs.
 
 This evidence is not full initializer/recovery, native prefix, full-model,
 20-step trajectory, or 13-model numerical acceptance. The separate ten
-C-derived lifecycle fixtures and their serializer remain pending.
+C-derived lifecycle fixtures were later merged in PR #314; see
+`issue-274-shared-normal-initializer.md` for the current mapping.
 
 ## Focused publication checks
 
