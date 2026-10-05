@@ -42,10 +42,10 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 > - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
 > - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
 > - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
-> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:621`
+> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:623`
 > - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:122`
 > - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1175`
-> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:602`
+> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:604`
 > - Parity: the number of outer steps, the saved-sample index and the `nAccept > Nsite` refresh follow `vmcmake.c:141, 309, 334-349` (Rust `driver.rs:271-278, 532-552, 558-562`). The refresh test uses a strict `>`. `copyToBurnSample` after the last step is reproduced by the "burn" buffers of `ElectronConfiguration`; the carry-over is detected by `counter[9] != 0` (`driver.rs:167`).
 
 ## 4.2 Initial configuration

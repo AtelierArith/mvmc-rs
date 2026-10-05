@@ -92,8 +92,8 @@ of the DH blocks is the number of patterns, while the row count is $6\times$ (DH
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
-> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:441`
-> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:580`
+> - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:460`
+> - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:599`
 > - Parity: block order, file names (`RBM_OUTPUT_BLOCKS`), header text and the "pairs, no auxiliary files" rule for `NSROptItrSmp = 1` follow `OutputOptData` literally. The window statistic is $\sqrt{\sum|x-\bar x|^2/(n-1)}$ in both.
 
 ## 9.4 Solver information: `zvo_SRinfo.dat`
@@ -185,7 +185,7 @@ For `NLanczosMode > 0` ([6.2](06-theory-observables-lanczos.md#62-the-single-ste
 > **Implementation**
 > - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:161`
-> - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:61`
+> - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Parity: the debug-only C files `zvo_ls_qcisajsq_NNN.dat` and `zvo_ls_qcisajscktaltq_NNN.dat` (`#ifdef _DEBUG`) are not produced. On a failed $\alpha$ determination C writes nothing; Rust writes `NaN` ([6.2](06-theory-observables-lanczos.md#62-the-single-step-lanczos-wave-function)).
 
 ## 9.8 C files that Rust does not write
