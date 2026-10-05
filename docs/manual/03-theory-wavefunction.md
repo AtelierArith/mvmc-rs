@@ -52,7 +52,7 @@ The first group has $N_{\rm proj}=N_G+N_J+6N_{\rm DH2}+10N_{\rm DH4}$ entries
 (DH2 starts at `NGutzwillerIdx + NJastrowIdx`, DH4 at
 `NGutzwillerIdx + NJastrowIdx + 2*3*NDoublonHolon2siteIdx`, `readdef.c`); the
 Rust layout is `ProjectionLayout` (`projection_layout`,
-`crates/mvmc-expert-parsers/src/types.rs:1296`) with `dh2_offset`,
+`crates/mvmc-expert-parsers/src/types.rs:1311`) with `dh2_offset`,
 `dh4_offset`, `n_proj`. Every parameter has two *optimization flags* (real part,
 imaginary part) stored consecutively (`OptFlag[2k]`, `OptFlag[2k+1]`). A
 parameter component is optimized only if its flag equals 1.
@@ -64,7 +64,7 @@ the identity: $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ 
 
 > **Implementation**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1296`
+> - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1311`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2591`
 > - Parity: Rust reserves the *declared* widths for each block even when the definition file lists fewer rows (the "sparse projection" rule, `ProjectionLayout` docs). The FSZ main-calculation places the Slater derivatives immediately after the projection block (no RBM slot), the normal path reserves all RBM slots first (`run.rs:2887-2900`).
 
@@ -124,9 +124,9 @@ formula in [4.5](04-theory-sampling.md#45-pfaffian-ratio-and-inverse-updates).
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:509`
 > - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:623`
 > - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:721`
-> - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:63`
+> - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
-> - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:349`
+> - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
 > - Parity: C fails the sample (`info != 0`) when the factorization reports a zero pivot or the Pfaffian is not finite (`matrix.c:371-373`); Rust returns `CalcMAllError::{ZeroPivot, NonFinitePfaffian, AllZero}`. The ordinary complex optimizer follows Julia's `zsktf2_turbo` operation order and the `c_compat` variant (`calc_m_all_complex_c_compat`, `crates/mvmc-core/src/pfaffian.rs:301`) follows the C PFAPACK kernel; the real path uses BLAS `dger`/`dtrtri`/`dtrmm`. Pfaffian and inverse results are compared with explicit tolerances, not bitwise (see [11.4](11-compatibility.md#114-numerical-comparison-policy)).
 
 ### Orbital modes

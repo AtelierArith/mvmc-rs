@@ -102,7 +102,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 5. **`--mode`** は検証されるだけのラベルであり、一致しないラベル(たとえば実数モデルでの `--mode fsz`)も黙って受け付けられます(観測)。
 6. **タイマーのファイル名**は `CDataFileHead` を無視します([9.5](09-output-files.md#95-タイマー))。
 7. **直接法ソルバーの `zvo_SRinfo.dat`** は書き出されません([9.4](09-output-files.md#94-ソルバー情報-zvo_srinfodat))。
-8. **OptTransの微分のレイアウト**は、`calculateOptTransDiff`(`vmccal.c:639`)と `opt_trans_diff`(`observables.rs:957`)で異なります。フィクスチャは `tests/fixtures/opttrans` にありますが、本マニュアルではOptTransをこれ以上対応づけていません(コード読解)。
+8. **実数モードでのOptTransの微分のレイアウト**(決定は #370 に記録)。C の `calculateOptTransDiff`(`vmccal.c:639`)は `double complex *` のポインタオフセット付きで呼ばれる(`vmccal.c:466`)ため、微分 *i* はパラメータスロット *i* ではなく複素スロット `offset + i` に書かれます。`NQPOptTrans = 3` の実数モード実行では、ネイティブCのステップ1オペランド(`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`、観測)で、微分1が欠落し、微分2が微分1のスロットに入り、最後のスロットは0になります。Rust の `opt_trans_diff`(`observables.rs:957`)は数学的に正しいレイアウトを保ち、`real_mode_opttrans_derivatives_use_their_own_slots`(`sum_i w_i O_i = 1`)で固定されています。この欠陥は tmisawa/Julia-mVMC#55 として報告済みで、各オペランド配列の影響を受ける末尾2要素はC比較から除外しています([NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md))。複素モードは調べていません。
 9. **Lanczos法の失敗時の出力**が異なります([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 10. **Rustの `modpara.def` の既定値**はCと異なります([7.2](07-input-files.md#72-modparadef))。したがって、キーを省略した実行の結果は、2つのプログラム間で互換ではありません。
 11. **負の `DSROptStepDt`** は、Cでは注記つきで正のステップに変換されます(`readdef.c:746-752`)が、Rustではそのまま使われます(コード読解、`crates/` に `SRFlag` の使用なし)。
