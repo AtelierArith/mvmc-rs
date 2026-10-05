@@ -49,7 +49,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | # | 領域 | C | Rust |
 |---|------|---|------|
 | 1 | ドライバーのオプション | `-b -h -m -o -F -e -s -v` | `-b -h -m -o -F -e -s -v` と位置引数 `initpara` は実装済み(`-m` は、C が `N` で割る `N <= 0` を拒否、[MultiDef モード](08-running.md#multidef-モード-m))、Rust 独自の長いオプションあり([8.1](08-running.md#81-mvmcコマンド)) |
-| 2 | Standardモード / StdFace | 組み込み(`-s`) | [7.6](07-input-files.md#76-standard-モードstdface)の格子について `mvmc -s` / `--dry-run`。他は未移植 |
+| 2 | Standardモード / StdFace | 組み込み(`-s`) | [7.6](07-input-files.md#76-standard-モードstdface)の格子について `mvmc -s` / `--dry-run`。他は未移植。C の格子ルーチンの明らかな不具合は再現せず修正([7.6](07-input-files.md#76-standard-モードstdface)) |
 | 3 | 最適化中の `zvo_out`/`zvo_var` | `zvo_out_NNN.dat`, `zvo_var_NNN.dat` | `zvo_out.dat`, `zvo_var.dat` |
 | 4 | `zvo_SRinfo.dat` | 直接法とCGの両方のソルバーで書き出し | CGのみ |
 | 5 | `zvo_time_NNN.dat`, `zvo_varbin_NNN.dat` | 書き出し(`-b` でバイナリ) | どちらも書き出し(`-b` は C のヘッダーで、C の切り詰められたブロックの代わりに完全な `2*NPara` ブロック。[8.1](08-running.md#バイナリ出力-b)) |

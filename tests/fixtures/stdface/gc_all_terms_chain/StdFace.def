@@ -1,0 +1,12 @@
+model = "HubbardGC"
+lattice = "chain"
+L = 6
+t = 1.0
+t' = 0.3
+t'' = 0.1
+U = 3.0
+mu = -0.2
+h = -0.6
+Gamma = 0.4
+Gamma_y = 0.25
+ncond = 6

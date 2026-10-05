@@ -1,0 +1,7 @@
+model = "Kondo"
+lattice = "ladder"
+W = 2
+L = 2
+ncond = 4
+t = 1.0
+J' = 1.0

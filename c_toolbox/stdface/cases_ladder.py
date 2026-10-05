@@ -50,11 +50,11 @@ CASES = {
         'model = "KondoGC"\nlattice = "ladder"\nW = 2\nL = 2\nt0 = 1.0\nt1 = 1.0\nncond = 4\n'
         "h = -0.4\nGamma = 0.3\nGamma_y = 0.2\n"
     ),
-    "err_ladder_kondo_J_not_used": K + "J = 2.0\n",
-    "err_ladder_kondo_Jx_not_used": K + "Jx = 2.0\n",
+    "ladder_kondo_J_given": K + "J = 2.0\n",
+    "ladder_kondo_Jx_given": K + "Jx = 2.0\n",
     "err_ladder_hubbard_t_not_used": H + "t = 1.0\n",
     "err_ladder_hubbard_tp_not_used": H + "t' = 1.0\n",
-    "err_ladder_hubbard_V_not_used": H + "V = 1.0\n",
+    "ladder_hubbard_V_with_bonds": H + "V = 1.0\n",
     "err_ladder_missing_W": (
         'model = "Hubbard"\nlattice = "ladder"\nL = 3\nU = 4.0\nt1 = 1.0\nncond = 6\n'
     ),

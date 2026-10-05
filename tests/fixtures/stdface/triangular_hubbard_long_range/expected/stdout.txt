@@ -12,9 +12,9 @@
   KEYWORD : ncond                | VALUE : 9 
   KEYWORD : mu                   | VALUE : -0.4 
   KEYWORD : t'                   | VALUE : 0.3 
-  KEYWORD : t''                  | VALUE : 0.1 
   KEYWORD : v                    | VALUE : 0.5 
   KEYWORD : v'                   | VALUE : 0.2 
+  KEYWORD : t''                  | VALUE : 0.1 
   KEYWORD : v''                  | VALUE : 0.1 
 
 #######  Construct Model  #######

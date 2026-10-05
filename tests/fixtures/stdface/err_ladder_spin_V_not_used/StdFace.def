@@ -1,0 +1,6 @@
+model = "Spin"
+lattice = "ladder"
+W = 2
+L = 3
+2Sz = 0
+V = 1.0

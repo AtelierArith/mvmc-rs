@@ -1,0 +1,9 @@
+model = "Kondo"
+lattice = "ladder"
+W = 2
+L = 2
+ncond = 4
+t0 = 1.0
+t1 = 0.5
+J = 1.0
+Gamma_y = 0.2

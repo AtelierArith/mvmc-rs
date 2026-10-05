@@ -233,7 +233,7 @@ files (`modpara.def`, `namelist.def`, `locspn.def`, `trans.def`, interaction fil
 that goes to standard output is reproduced, and an error such as an unknown keyword exits with status 255 like
 C (`StdFace_exit(-1)`).
 
-The generated files and the console output are byte-identical to the C program for the checked-in fixtures
+The generated files and the console output are byte-identical to the C program for the checked-in fixtures (except for the corrected C defects listed below)
 (`tests/fixtures/stdface/`, provenance in `tests/fixtures/stdface/PROVENANCE.md`), including the sign of
 zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 bytes, `TrimSpaceQuote`,
 `strtok` on `=`, `sscanf` for numbers, duplicate detection), so for example `2S`, `method` and
@@ -247,12 +247,26 @@ zero in `-0.000000000000000`. Keyword parsing follows C (`fgets` chunks of 255 b
 | orthorhombic/cubic, face-centered orthorhombic/cubic (fcc), pyrochlore | supported, corrected C defects ([7.6.1](#761-three-dimensional-lattices)) |
 | `wannier90` | not yet ported (the run stops with a message) |
 
-C behaviour reproduced as is: for `lattice = ladder` the C code rejects `t`, `t'`, `V`, `V'`, `J`, `J'`
-(`NotUsed` checks that precede the reads), so a ladder needs `t0`, `t1`, `t2`, `t1'`, `t2'` (and `V*`, `J*`),
-and the Kondo coupling `J` cannot be set; the printed `Wx` of a ladder is overwritten by the number of legs.
-The spin-model checks of the triangular, honeycomb and kagome lattices contain copy-paste slips that are
-reproduced as is (for example `t''` and `V''` are silently accepted for a spin model on a triangular or
-honeycomb lattice, and `J''` messages are labelled `J0'`).
+Differences from the C program (corrected defects, issue #404). The C StdFace has clear defects in its
+lattice routines that the port does **not** reproduce; the C output is kept as the historical fixture
+(`tests/fixtures/stdface/<case>/expected/`) and the corrected output is checked separately
+(`expected_fixed/`, produced by a patched C build, see `tests/fixtures/stdface/README.md`):
+
+- Ladder: C rejects the isotropic `t`, `V`, `J` (`NotUsed` checks that precede the reads), so a ladder needed
+  `t0, t1, t2, t1', t2'` and the Kondo coupling `J` could not be set. They are accepted for the Hubbard and
+  Kondo models and rejected for the spin model; `t'`, `V'`, `J'` are rejected everywhere.
+- Ladder: C replaces the printed `Wx` by the number of legs (ignoring `a`, `Wx`, `Wy`); the cell vector is now
+  the number of legs times the printed `Wx`/`Wy`. All nine `a0W..a2H` entries are rejected, and the spin and
+  Hubbard branches use the same `J1'`/`J2'` names in messages.
+- Chain, triangular, honeycomb: `J''` messages say `J0''`, `J1''`, `J2''` instead of `J0'`, `J1'`, `J2'`.
+- Triangular: `t''` is checked for a spin model (C tested `t'`); `J'`, `J''` are rejected for Hubbard/Kondo.
+- Honeycomb: `t''`, `t0''..t2''`, `V''`, `V0''..V2''` are rejected for a spin model, and the complete `J` family
+  is rejected for Hubbard/Kondo.
+- Kagome: the duplicated `t0` check is removed, and `t''`, `V''`, `J''` (and their bond-specific forms), which
+  the kagome Hamiltonian does not use, are rejected instead of being silently ignored.
+- Square and honeycomb: the second `V'` console line is not printed.
+- All lattices: C reserves four on-site transfer terms per site but writes six when `Gamma` and `Gamma_y` are both
+  non-zero (heap overflow, a crash for some inputs); the port has no such limit.
 
 ### 7.6.1 Three-dimensional lattices
 

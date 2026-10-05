@@ -10,7 +10,6 @@
   KEYWORD : j                    | VALUE : 1.0 
   KEYWORD : 2sz                  | VALUE : 0 
   KEYWORD : j'                   | VALUE : 0.4 
-  KEYWORD : j''                  | VALUE : 0.1 
 
 #######  Construct Model  #######
 

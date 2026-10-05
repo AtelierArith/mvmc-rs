@@ -1,0 +1,7 @@
+model = "Spin"
+lattice = "honeycomb"
+W = 2
+L = 2
+J = 1.0
+2Sz = 0
+t'' = 1.0

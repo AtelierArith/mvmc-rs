@@ -32,10 +32,16 @@ fn ladder_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<
 
     mu::required_val_i(o, "L", s.L)?;
     mu::required_val_i(o, "W", s.W)?;
+    // C checks only a0W, a0L, a1W, a1L; all nine box entries are unused here (#404).
     mu::not_used_i(o, "a0W", s.box_[0][0])?;
     mu::not_used_i(o, "a0L", s.box_[0][1])?;
+    mu::not_used_i(o, "a0H", s.box_[0][2])?;
     mu::not_used_i(o, "a1W", s.box_[1][0])?;
     mu::not_used_i(o, "a1L", s.box_[1][1])?;
+    mu::not_used_i(o, "a1H", s.box_[1][2])?;
+    mu::not_used_i(o, "a2W", s.box_[2][0])?;
+    mu::not_used_i(o, "a2L", s.box_[2][1])?;
+    mu::not_used_i(o, "a2H", s.box_[2][2])?;
 
     mu::print_val_d(o, "phase0", &mut s.phase[0], 0.0);
     mu::not_used_d(o, "phase1", s.phase[1])?;
@@ -44,8 +50,11 @@ fn ladder_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<
 
     s.NsiteUC = s.W;
     s.W = 1;
-    // C overwrites Wx after printing it (the printed value is not the one used).
-    s.direct[0][0] = s.NsiteUC as f64;
+    // C replaces Wx by NsiteUC after printing it, ignoring `a`/`Wx`/`Wy`. The printed Wx is the
+    // spacing of the legs, so the cell vector is NsiteUC times it (identical for the default
+    // Wx = a = 1; corrected, #404).
+    s.direct[0][0] *= s.NsiteUC as f64;
+    s.direct[0][1] *= s.NsiteUC as f64;
     mu::init_site(o, s, gp, 2)?;
     for isite in 0..s.NsiteUC as usize {
         s.tau[isite] = [isite as f64 / s.NsiteUC as f64, 0.0, 0.0];
@@ -53,11 +62,10 @@ fn ladder_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<
 
     // (2) check & store parameters of Hamiltonian
     o.print("\n  @ Hamiltonian \n\n");
-    mu::not_used_j(o, "J", s.JAll, &s.J)?;
+    // C also rejected J, t and V here, before the Hubbard/Kondo branch read them: the isotropic
+    // t and V and the Kondo coupling J were unusable. They are now rejected per branch (#404).
     mu::not_used_j(o, "J'", s.JpAll, &s.Jp)?;
-    mu::not_used_c(o, "t", s.t)?;
     mu::not_used_c(o, "t'", s.tp)?;
-    mu::not_used_d(o, "V", s.V)?;
     mu::not_used_d(o, "V'", s.Vp)?;
     mu::not_used_d(o, "K", s.K)?;
     mu::print_val_d(o, "h", &mut s.h, 0.0);
@@ -73,6 +81,9 @@ fn ladder_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<
         mu::input_spin(o, &mut s.J1p, s.J1pAll, "J1'")?;
         mu::input_spin(o, &mut s.J2p, s.J2pAll, "J2'")?;
 
+        mu::not_used_j(o, "J", s.JAll, &s.J)?;
+        mu::not_used_c(o, "t", s.t)?;
+        mu::not_used_d(o, "V", s.V)?;
         mu::not_used_d(o, "mu", s.mu)?;
         mu::not_used_d(o, "U", s.U)?;
         mu::not_used_c(o, "t0", s.t0)?;
@@ -102,9 +113,9 @@ fn ladder_body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<
         mu::not_used_j(o, "J0", s.J0All, &s.J0)?;
         mu::not_used_j(o, "J1", s.J1All, &s.J1)?;
         mu::not_used_j(o, "J2", s.J2All, &s.J2)?;
-        // C spells these "J1p"/"J2p" (not "J1'"/"J2'"): the component names differ in messages.
-        mu::not_used_j(o, "J1p", s.J1pAll, &s.J1p)?;
-        mu::not_used_j(o, "J2p", s.J2pAll, &s.J2p)?;
+        // C spells these "J1p"/"J2p"; corrected to match the spin branch (#404).
+        mu::not_used_j(o, "J1'", s.J1pAll, &s.J1p)?;
+        mu::not_used_j(o, "J2'", s.J2pAll, &s.J2p)?;
         mu::not_used_d(o, "D", s.D[2][2])?;
 
         if s.model == "hubbard" {

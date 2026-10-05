@@ -1,6 +1,7 @@
 //! Port of `TriangularLattice.c` (`StdFace_Triangular`, mVMC branch): the triangular lattice.
 //!
-//! Generated from the C source by a mechanical statement-by-statement translation and then
+//! Generated from the C source with the corrections of issue #404
+//! (`c_toolbox/stdface/lattice_defects.patch`) by a mechanical statement-by-statement translation and then
 //! reviewed; the output is checked byte for byte against the C program (see
 //! `tests/stdface_c_fixtures.rs`). The HPhi-only boost routines are not ported.
 #![allow(non_snake_case)]
@@ -59,9 +60,9 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::input_spin_nn(o, &s.Jp, s.JpAll, &mut s.J0p, s.J0pAll, "J0'")?;
         mu::input_spin_nn(o, &s.Jp, s.JpAll, &mut s.J1p, s.J1pAll, "J1'")?;
         mu::input_spin_nn(o, &s.Jp, s.JpAll, &mut s.J2p, s.J2pAll, "J2'")?;
-        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J0pp, s.J0ppAll, "J0'")?;
-        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J1pp, s.J1ppAll, "J1'")?;
-        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J2pp, s.J2ppAll, "J2'")?;
+        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J0pp, s.J0ppAll, "J0''")?;
+        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J1pp, s.J1ppAll, "J1''")?;
+        mu::input_spin_nn(o, &s.Jpp, s.JppAll, &mut s.J2pp, s.J2ppAll, "J2''")?;
         mu::not_used_d(o, "mu", s.mu)?;
         mu::not_used_d(o, "U", s.U)?;
         mu::not_used_c(o, "t", s.t)?;
@@ -72,7 +73,7 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::not_used_c(o, "t0'", s.t0p)?;
         mu::not_used_c(o, "t1'", s.t1p)?;
         mu::not_used_c(o, "t2'", s.t2p)?;
-        mu::not_used_c(o, "t''", s.tp)?;
+        mu::not_used_c(o, "t''", s.tpp)?;
         mu::not_used_c(o, "t0''", s.t0pp)?;
         mu::not_used_c(o, "t1''", s.t1pp)?;
         mu::not_used_c(o, "t2''", s.t2pp)?;
@@ -118,6 +119,8 @@ fn body(o: &mut Out, s: &mut StdIntList, gp: &mut Option<String>) -> Res<()> {
         mu::not_used_j(o, "J0''", s.J0ppAll, &s.J0pp)?;
         mu::not_used_j(o, "J1''", s.J1ppAll, &s.J1pp)?;
         mu::not_used_j(o, "J2''", s.J2ppAll, &s.J2pp)?;
+        mu::not_used_j(o, "J'", s.JpAll, &s.Jp)?;
+        mu::not_used_j(o, "J''", s.JppAll, &s.Jpp)?;
         mu::not_used_d(o, "D", s.D[2][2])?;
         if s.model == "hubbard" {
             mu::not_used_i(o, "2S", s.S2)?;

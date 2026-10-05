@@ -45,7 +45,13 @@ fn cases() -> Vec<String> {
 /// Run one case; returns a list of mismatch descriptions.
 fn check_case(case: &str) -> Vec<String> {
     let dir = fixture_root().join(case);
-    let expected = dir.join("expected");
+    // `expected/` is the historical C output; `expected_fixed/` (where present) is the corrected
+    // behaviour of issue #404 (patched C build, tests/fixtures/stdface/README.md).
+    let expected = if dir.join("expected_fixed").is_dir() {
+        dir.join("expected_fixed")
+    } else {
+        dir.join("expected")
+    };
     let work = TempDir::new(case);
     let input = fs::read(dir.join("StdFace.def")).ok();
     let result = stdface_main_bytes("StdFace.def", input.as_deref(), &work.0);

@@ -1,0 +1,15 @@
+model = "HubbardGC"
+lattice = "ladder"
+W = 2
+L = 3
+t0 = 1.0
+t1 = 0.8
+t2 = 0.2
+t1' = 0.3
+t2' = 0.1
+U = 3.0
+mu = -0.2
+h = -0.6
+Gamma = 0.4
+Gamma_y = 0.25
+ncond = 6
