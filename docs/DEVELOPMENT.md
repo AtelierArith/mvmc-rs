@@ -219,16 +219,15 @@ full checks; include `--all-features --run-ignored all` for optional coverage.
 ## Manual citations
 
 The manual (`docs/manual/` and `docs/manual/ja/`) cites code as `path:LINE`. The
-Lint job runs `python3 scripts/check_manual_citations.py` (standard library only,
-needs the `extern/mVMC-1.3.0` submodule for C citations) and fails on stale
-citations, broken relative links and missing anchors. When you move or edit code
-that the manual cites, run
+Lint job runs `python3 scripts/check_manual_citations.py --tolerant` (standard
+library only; needs the `extern/mVMC-1.3.0` submodule for C citations). In this
+mode a citation whose symbol moved but is still within `--window` lines (default
+400) only prints a warning with the corrected line. It fails when a file, symbol,
+relative link or anchor is missing, or the symbol is outside the window.
 
-```sh
-python3 scripts/check_manual_citations.py --fix   # rewrite line numbers of bullet citations whose symbol moved nearby
-python3 scripts/check_manual_citations.py         # verify
-```
-
-`--fix` only moves a citation to the nearest line (within `--window`, default
-400) that defines or contains the cited symbol; anything else is reported and
-must be corrected by hand. Review the resulting diff.
+**Do not include unrelated citation refreshes in feature PRs**: line-number
+rewrites in shared manual files conflict between PRs. Maintainers run
+`python3 scripts/check_manual_citations.py --fix` periodically (and then the
+strict `python3 scripts/check_manual_citations.py`, which fails on any line drift)
+in a dedicated PR. If your change deletes or renames a cited symbol, update that
+citation by hand in your PR.

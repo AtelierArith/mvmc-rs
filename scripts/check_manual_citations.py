@@ -23,7 +23,10 @@ Usage (from the repository root):
         [--c-root extern/mVMC-1.3.0] [--fix]
 
 The script uses only the Python standard library (``uv run --no-project`` also
-works). CI runs it in the Lint job and fails on any stale citation. With
+works). CI runs it with ``--tolerant``: a bullet citation whose symbol moved but is
+still found within ``--window`` lines only warns; a missing file, symbol, link or
+anchor, or a symbol outside the window, fails. Strict mode (no flag) fails on any
+line drift and is for maintenance. With
 ``--fix``, a bullet citation whose symbol is no longer on the cited line is
 rewritten to the nearest line within ``--window`` lines (default 400) that
 defines or contains the symbol; the corrected lines are listed and the check is
@@ -143,6 +146,8 @@ def main() -> int:
     ap.add_argument("--fix", action="store_true",
                     help="rewrite stale bullet-citation line numbers when the symbol is found nearby")
     ap.add_argument("--window", type=int, default=400)
+    ap.add_argument("--tolerant", action="store_true",
+                    help="CI mode: a moved symbol found within --window lines is a warning, not an error")
     args = ap.parse_args()
     repo = Path(args.repo)
     c_root = Path(args.c_root) if args.c_root else repo / "extern" / "mVMC-1.3.0"
@@ -170,6 +175,7 @@ def main() -> int:
 
     errors: list[str] = []
     fixes: list[tuple[Path, int, str, int, int]] = []
+    warnings: list[str] = []
     checked = skipped = 0
     manual = repo / "docs" / "manual"
     en_files = sorted(manual.glob("*.md"))
@@ -207,6 +213,12 @@ def main() -> int:
                                 near = nearest_symbol_line(body, ident, start, args.window)
                                 if args.fix and near is not None:
                                     fixes.append((md, lineno, path, start, near))
+                                    continue
+                                if args.tolerant and near is not None:
+                                    warnings.append(
+                                        f"{md_name}:{lineno}: `{ident}` is at {path}:{near}, "
+                                        f"cited {start} (run --fix)"
+                                    )
                                     continue
                                 errors.append(
                                     f"{md_name}:{lineno}: `{ident}` not on {path}:{start}: "
@@ -246,6 +258,8 @@ def main() -> int:
         print(f"rewrote {len(fixes)} citation(s); re-run to verify")
     print(f"checked {checked} citations, {links} relative links, skipped {skipped}, "
           f"{len(errors)} problem(s)")
+    for w in warnings:
+        print("  warning: " + w)
     for e in errors:
         print("  " + e)
     return 1 if errors else 0
