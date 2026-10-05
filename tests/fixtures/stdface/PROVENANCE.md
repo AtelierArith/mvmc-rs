@@ -558,6 +558,8 @@ port is compared with `expected_fixed/` when present, else with `expected/`.
 | `wannier_square_height` | generated | -11 | `6ee3315c1b416380bb4e4dae9286fc7312c3559261ebc775281cc6a4b7165f3a` |
 | `wannier_square_antiperiodic` | generated | -11 | `deda35493626a6f5eadad942d7c16961537cac5fffbdaa43fa425f67d443ac09` |
 | `wannier_square_gc_fields` | generated | -11 | `6be18126ad2ad071307b2eaebea79990b5a9ce7c2d131c66331fa0ff326e58ec` |
+| `wannier_square_gc_all_terms` | generated | 0 | `360b4bf48251ce7ebe2a09b7cc2bae007363994073675ad98ef51ab8f7fb2b17` |
+| `wannier_honeycomb_gc_all_terms` | generated | 0 | `59fbf84c68c99cd70e238dfb8e46976ccc52bf082ed3d591936979347a4469dd` |
 | `wannier_square_sublattice` | generated | -11 | `9e07f8b78bc4fd3d703d6131a77e9bc5fea7416df5289c43357cd3f3144cb8d8` |
 | `wannier_square_nmptrans_0` | generated | -11 | `549ec3cb6c8560ccc72337ed1466cc3b4d32c09b5db38461ca62a546b46d9208` |
 | `wannier_square_mu` | generated | -11 | `110403aaeddf45019c09952ec61c46bfe63408e957fc046ee3a8925a67a0477e` |

@@ -151,6 +151,20 @@ def cases(std):
         "Gamma = 0.3\nGamma_y = 0.2\nmu = 0.4\n",
         square_files(),
     )
+    # GC model with every on-site term and a complete data set (ntransMax check, see #404):
+    # HubbardLocal appends six on-site transfers per site while C reserves four.
+    c["wannier_square_gc_all_terms"] = (
+        'model = "HubbardGC"\nlattice = "wannier90"\nW = 2\nL = 2\nncond = 4\nh = -0.5\n'
+        "Gamma = 0.3\nGamma_y = 0.2\nmu = 0.4\ncutoff_length_U = 1.5\ncutoff_length_J = 1.5\n"
+        "doublecounting = full\n",
+        square_files(with_j=True, with_dr=True, nn_u=True),
+    )
+    c["wannier_honeycomb_gc_all_terms"] = (
+        'model = "HubbardGC"\nlattice = "wannier90"\nW = 2\nL = 2\nncond = 8\nh = -0.5\n'
+        "Gamma = 0.3\nGamma_y = 0.2\nmu = 0.4\ncutoff_length_U = 1.0\ncutoff_length_J = 1.0\n"
+        "doublecounting = full\n",
+        honeycomb_files(with_dr=True),
+    )
     c["wannier_square_sublattice"] = (sq + "Wsub = 1\nLsub = 2\n", square_files())
     c["wannier_square_nmptrans_0"] = (sq + "NMPTrans = 0\nWsub = 1\nLsub = 1\n", square_files())
     c["wannier_square_mu"] = (sq + "mu = -0.3\n", square_files())
