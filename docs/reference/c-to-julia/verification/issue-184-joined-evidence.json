@@ -211,7 +211,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/MVMCExpertModeParsers.jl:239",
       "symbol_or_scenario": "MVMCExpertModeParsers.apply_orbital_opt_flags_from_files!",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/utils/opt_flag.rs::set_orbital_opt_flags",
+      "rust_entry": "crates/mvmc-expert-parsers/src/orbital_flags.rs::refresh_orbital_optimization_flags; OrbitalDefinitionKey; OrbitalRawDeclaration; OrbitalOptimizationSource",
       "supported_rejected_conditions": "Exact RNG/config/count/status/indices/flags and untouched copy tails; computed normalization/inverse values follow #190; no claimed full trajectory from snapshots",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -248,7 +248,35 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "scoped_merged_mapping_36b": {
+        "rust_entry": "crates/mvmc-expert-parsers/src/orbital_flags.rs::refresh_orbital_optimization_flags; OrbitalDefinitionKey; OrbitalRawDeclaration; OrbitalOptimizationSource",
+        "contract": "Julia-style caller-owned file-driven flags-only transaction. Explicit unbound declarations cover active raw headers; loaded bindings cannot be overridden. Empty no-op, duplicate keys rejected, checked widths/prefix/capacity and mapping, selected strict rereads, unchanged coefficient/mapping/mode/RNG buffers, all staged flags committed only after success. Signed AP/General imaginary components and Parallel offsets follow C authority; unset manual annotations are not new C file admission.",
+        "ci": {
+          "pr": 335,
+          "head": "726844d2c49c215b259bad72af0d4630213dadcb",
+          "tested_merge": "6ef6c211b13a8d5b899e0bb827cb959f399873b7",
+          "run": 37227491958,
+          "default_job": 111510063726,
+          "default_pass": 1214,
+          "default_ignored_NotRun": 42,
+          "all_job": 111510063628,
+          "all_pass": 1216,
+          "all_ignored_NotRun": 63,
+          "exact_controls": 9
+        },
+        "receipt": "/dev/shm/mvmc-pr335-ci-review.pf8BkJ/FINAL_ALL_NATIVE_RECEIPT.json",
+        "durable_evidence": {
+          "default_job": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37227491958/job/111510063726",
+          "all_job": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37227491958/job/111510063628",
+          "scalar_native_artifact": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37227491958/artifacts/11312938619",
+          "scope": "Retained local receipt supplements recoverable GitHub evidence; scalar artifact is not distributed orbital-refresh proof"
+        },
+        "source_sha256": "ab46f5d63467e3f6dd571613bec7be5e6ba07f27710ef293b6461f7351c1c8f9",
+        "remaining": "Condition-by-condition original scenario/argument joins require review; nine tests are not whole A004, S117, model initialization or sampling proof.",
+        "mpi_scope": "Six actual scalar-native world2/4 ranks and startup/provider/POST closures; NOT orbital refresh distributed/model execution. Artifact11312938619 zip c4fd9f12b2e04443fb928c7d35e174171307305a8e44598bd2e8622f16d01911.",
+        "state": "Bounded committed-main source/evidence mapping; whole-row status retained"
+      }
     },
     {
       "key": "api:A005",
@@ -352,7 +380,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/MVMCExpertModeParsers.jl:428",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_file_by_type!",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/lib.rs::parse_expert_mode_files_mode",
+      "rust_entry": "crates/mvmc-expert-parsers/src/definition.rs::load_hamiltonian_definition; HamiltonianDefinitionKind",
       "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -448,7 +476,27 @@
       "reader_policy_evidence": [
         "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_accept_short_zero_as_empty_parsed_sections",
         "PR273:issue184_qptrans_definition_boundary::public_qptrans_aliases_reject_malformed_count_and_positive_short_header"
-      ]
+      ],
+      "scoped_merged_mapping_36b": {
+        "rust_entry": "crates/mvmc-expert-parsers/src/definition.rs::load_hamiltonian_definition; HamiltonianDefinitionKind",
+        "contract": "PR333 caller-owned six-family Transfer/CoulombIntra/CoulombInter/Hund/Exchange/PairHop dispatch through existing strict C readers; selected vector replacement only after successful parse, failure preserves buffers/flags, zero clears selected vector, C carry/order/spin/sign retained.",
+        "ci": {
+          "pr": 333,
+          "head": "fb84ee89810cc75c5705f4703cc0fb72bc934ec5",
+          "tested_merge": "c3a2ce053a5718d72788ec406c72c6e59b22b391",
+          "run": 37216328290,
+          "default_pass": 1205,
+          "all_pass": 1207,
+          "exact_controls": 7
+        },
+        "receipt": "/dev/shm/mvmc-pr333-ci-review/ALL_SEVEN_RECEIPT.json",
+        "durable_evidence": {
+          "default_job": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37216328290/job/111477474781",
+          "all_job": "https://github.com/AtelierArith/mvmc-rs/actions/runs/37216328290/job/111477474844"
+        },
+        "remaining": "Projection/DH/orbital/RBM and every original file-dispatch scenario are not certified by six Hamiltonian families. Preserve earlier partial reader evidence.",
+        "state": "Bounded committed-main source/evidence mapping; whole-row status retained"
+      }
     },
     {
       "key": "api:A008",
@@ -458,7 +506,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/coulomb_parser.jl:12",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_coulomb_intra_def",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/coulomb.rs::parse_coulomb_intra_def",
+      "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct",
       "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -545,6 +593,13 @@
           "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
         ],
         "table": "issue-184-parser-milestone-controls.tsv"
+      },
+      "scoped_merged_mapping_36b": {
+        "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct",
+        "contract": "PR331 introduces public Julia-style context diagnostics separately from strict C declared-count reader. Replace stale NO-context/source-only claims with current committed mapping, retaining historical payload test and all original rows.",
+        "evidence_state": "Merged implementation source verified at36b. Exact PR331 raw CI log paths not yet joined in this packet: no invented runtime records or status promotion.",
+        "remaining": "Review each original context/error overload, physical-line/default diagnostic and scenario before claiming full API.",
+        "state": "Bounded committed-main source/evidence mapping; whole-row status retained"
       }
     },
     {
@@ -555,7 +610,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/parsers/coulomb_parser.jl:31",
       "symbol_or_scenario": "MVMCExpertModeParsers.parse_coulomb_intra_content",
       "parent_keys": [],
-      "rust_entry": "crates/mvmc-expert-parsers/src/parsers/coulomb.rs::parse_coulomb_intra_content; crates/mvmc-expert-parsers/tests/issue184_literal_hamiltonian_parsers.rs::original_coulomb_payload_preserves_both_sites_and_couplings (44-54)",
+      "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct; crates/mvmc-expert-parsers/tests/issue184_literal_hamiltonian_parsers.rs::original_coulomb_payload_preserves_both_sites_and_couplings (44-54)",
       "supported_rejected_conditions": "Exact output count2 and (site,value) tuples [(0,4.0),(1,4.0)]; no RNG, sampling/configuration, local energy, CLI or MPI evidence",
       "intentional_scope": "Bounded named Coulomb literal parser case executed; full API/testset unverified",
       "evidence_type": "E1 bounded named Coulomb parser case from fresh parent execution; not whole API/scenario proof",
@@ -607,6 +662,13 @@
           "Native definition and content-helper conditions differ; original term/error overloads and model output remain unverified."
         ],
         "table": "issue-184-parser-milestone-controls.tsv"
+      },
+      "scoped_merged_mapping_36b": {
+        "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct; crates/mvmc-expert-parsers/tests/issue184_literal_hamiltonian_parsers.rs::original_coulomb_payload_preserves_both_sites_and_couplings (44-54)",
+        "contract": "PR331 introduces public Julia-style context diagnostics separately from strict C declared-count reader. Replace stale NO-context/source-only claims with current committed mapping, retaining historical payload test and all original rows.",
+        "evidence_state": "Merged implementation source verified at36b. Exact PR331 raw CI log paths not yet joined in this packet: no invented runtime records or status promotion.",
+        "remaining": "Review each original context/error overload, physical-line/default diagnostic and scenario before claiming full API.",
+        "state": "Bounded committed-main source/evidence mapping; whole-row status retained"
       }
     },
     {
@@ -5186,7 +5248,7 @@
       "source_anchor": "MVMCExpertModeParsers.jl/src/types/expert_types.jl:49; MVMCExpertModeParsers.jl/src/types/expert_types.jl:55",
       "symbol_or_scenario": "MVMCExpertModeParsers.ParsingContext",
       "parent_keys": [],
-      "rust_entry": "NO Julia metadata/context object API; std::fs::metadata and mvmc_expert_parsers::ParseError in parse_expert_mode_files",
+      "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct",
       "supported_rejected_conditions": "Sampling/proposed moves/acceptance must remain exact; numerical comparisons only for computed values; no implicit rejection rollback claim",
       "intentional_scope": "executable bounded production mapping; independent scenario replay unverified",
       "evidence_type": "E0 source/API mapping; candidate contract gate, not executed by this inventory",
@@ -5223,7 +5285,14 @@
       },
       "parent_rows": [],
       "original_owner_identifier": "#184/#178",
-      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred"
+      "current_coordination": "#184/#185 Pauli reconciliation; original responsible owner retained, reassignment not inferred",
+      "scoped_merged_mapping_36b": {
+        "rust_entry": "types.rs::ParsingContext (line23); parsers/coulomb.rs::parse_coulomb_intra_def (line100), parse_coulomb_intra_content (line115); strict parse_coulomb_intra_definition (line16) remains distinct",
+        "contract": "PR331 introduces public Julia-style context diagnostics separately from strict C declared-count reader. Replace stale NO-context/source-only claims with current committed mapping, retaining historical payload test and all original rows.",
+        "evidence_state": "Merged implementation source verified at36b. Exact PR331 raw CI log paths not yet joined in this packet: no invented runtime records or status promotion.",
+        "remaining": "Review each original context/error overload, physical-line/default diagnostic and scenario before claiming full API.",
+        "state": "Bounded committed-main source/evidence mapping; whole-row status retained"
+      }
     },
     {
       "key": "api:A094",
@@ -154380,6 +154449,13 @@
     }
   ],
   "reconciliation": {
+    "scoped_checkpoint_36b": {
+      "main": "36b1eb5a71deb9aebc493bd656619b233bc4ca26",
+      "historical_current_main": "14a30849ae4fa9dd78900f113257389d906008ee",
+      "scope": "A004/A007/A008/A009/A093 source mapping and bounded condition evidence only; PR336 excluded; all original rows, owners and statuses retained",
+      "execution_lineage": "PR335 tested merge6ef6 and PR333 tested mergec3a2 are historical executions, not executions of36b; PR331 runtime join not supplied",
+      "remaining": "Whole API/scenario acceptance and the original2342-cell inventory remain unfinished; scalar MPI evidence does not establish orbital/Hamiltonian model execution"
+    },
     "checkpoint": "4d39231688b55b22ebbd1c23cac2e4bc0884080b",
     "prior_checkpoint": "eaa5db6254c721b95e8e63096287cdb74d5124e2",
     "original_matrix_sha256": "ccdd19c7e8c14e207c3c3b7122efee0b0aafaad3b86f203a4d932a76f056d7e1",
