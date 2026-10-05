@@ -1,0 +1,32 @@
+# C mVMC 1.3.0 ComplexUHF reference outputs (issue #350)
+# Unmodified C source of extern/mVMC-1.3.0/src/ComplexUHF run as the full UHF executable.
+# extern/mVMC-1.3.0/src/ComplexUHF/UHFmain.c sha256=bd7a24847a30b2a454a647a78b9eaccaf354c0890281f2f917b945171added3c
+# extern/mVMC-1.3.0/src/ComplexUHF/output.c sha256=14354e50029215e3363ebca3d94ca73194a205489b7681dd1603c0cd0132356f
+# extern/mVMC-1.3.0/src/ComplexUHF/cal_energy.c sha256=3e123a6bb7d52a90370888039330e7ebf61c907daece70bd97243d19ab20fa81
+# extern/mVMC-1.3.0/src/ComplexUHF/green.c sha256=baac0b7ceccf6624ace97cf8847a85750cb7faada2a090bdc402677000a69300
+# extern/mVMC-1.3.0/src/ComplexUHF/makeham.c sha256=d206b37702072e0072a12b4b9b16a19cf8bf15c79c74f56846586345c650b947
+# extern/mVMC-1.3.0/src/ComplexUHF/diag.c sha256=6bf70862685055e0ac1c953c644ace2def9b25552b8589bdc9c85dc9f652d43e
+# extern/mVMC-1.3.0/src/ComplexUHF/initial.c sha256=2f4df756dad50e3869c57492be83a88fddeb5255a0fd802c31de46c3503d8f0b
+# extern/mVMC-1.3.0/src/ComplexUHF/matrixlapack.c sha256=1b2e2e75a85e108973bfc7882fbec513bd1fbddfa8621a4069bf768ffcaa32ad
+# extern/mVMC-1.3.0/src/ComplexUHF/readdef.c sha256=6f8e1332312ea77d1cdf04cf60b2ce5b165089d5f4e44392baa04efccdb531a2
+# extern/mVMC-1.3.0/src/ComplexUHF/include/Def.h sha256=6babf6c2aef8b07f04f4b2cc28124a827b6fd250700361512f006440fedb31ba
+# extern/mVMC-1.3.0/src/ComplexUHF/include/cal_energy.h sha256=7d88a811dced03f244537f8e64dc721fb1dbab40e25f160aefea22444113f1eb
+# extern/mVMC-1.3.0/src/ComplexUHF/include/diag.h sha256=4cc5f51f1e65c3d2a887aec4df9ae31a9bec51825c80bdad8bc276f84a688cf4
+# extern/mVMC-1.3.0/src/ComplexUHF/include/green.h sha256=1fee18e238023746c2e8013b85e2efa1aa959e520ddcf2a90ea0d680813aeedf
+# extern/mVMC-1.3.0/src/ComplexUHF/include/initial.h sha256=83a34315aaba435f352a7a9d85bf31a32e93904d202501a63ee001512a196b9b
+# extern/mVMC-1.3.0/src/ComplexUHF/include/makeham.h sha256=cbaf987820fe1f6601b3bb2ac7641c670bc4241780ac0bf6d788562851bcee3f
+# extern/mVMC-1.3.0/src/ComplexUHF/include/matrixlapack.h sha256=86ede5f1e7937af9ce178b9429d373d7b3736e6d2f821d1a5c3e1290d421445b
+# extern/mVMC-1.3.0/src/ComplexUHF/include/output.h sha256=86ab5c797279607ee26fa5046af1741c1ac717e36461863571ffb8b58636a6ff
+# extern/mVMC-1.3.0/src/ComplexUHF/include/readdef.h sha256=dfd5a70b9818383296acc1f98e598dddd3b58b213e59b9b3abc27ed9a2aa90ce
+# extern/mVMC-1.3.0/src/ComplexUHF/include/struct.h sha256=0d169fcb3ae7d5bea1b3341f4210ab5a3b56ea85d110fd8fa806bad2b2b79a2d
+# extern/mVMC-1.3.0/src/common/setmemory.c sha256=47295de0bfa1747cc995d41bd08a74c7f9e456039c4e2933b06d1726e06ea9cb
+# extern/mVMC-1.3.0/src/sfmt/SFMT.c sha256=b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+# compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+# compile: cc -O2 -ffp-contract=off -fopenmp -DMEXP=19937 -I extern/mVMC-1.3.0/src/ComplexUHF/include -I extern/mVMC-1.3.0/src/common -I extern/mVMC-1.3.0/src/sfmt extern/mVMC-1.3.0/src/ComplexUHF/UHFmain.c extern/mVMC-1.3.0/src/ComplexUHF/output.c extern/mVMC-1.3.0/src/ComplexUHF/cal_energy.c extern/mVMC-1.3.0/src/ComplexUHF/green.c extern/mVMC-1.3.0/src/ComplexUHF/makeham.c extern/mVMC-1.3.0/src/ComplexUHF/diag.c extern/mVMC-1.3.0/src/ComplexUHF/initial.c extern/mVMC-1.3.0/src/ComplexUHF/matrixlapack.c extern/mVMC-1.3.0/src/ComplexUHF/readdef.c extern/mVMC-1.3.0/src/common/setmemory.c extern/mVMC-1.3.0/src/sfmt/SFMT.c -o UHF -lopenblas -lm
+# platform: Linux x86_64 6.8.0-146-generic glibc 2.39
+# openblas config: OpenBLAS 0.3.26 NO_LAPACKE DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64
+# openblas library: libopenblas.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libopenblas.so.0
+# openblas package: ii  libopenblas0:amd64         0.3.26+ds-1ubuntu0.1 amd64        Optimized BLAS (linear algebra) library (meta); ii  libopenblas0-pthread:amd64 0.3.26+ds-1ubuntu0.1 amd64        Optimized BLAS (linear algebra) library (shared lib, pthread)
+# case inputs: c_toolbox/complex_uhf/cases.py (verbatim upstream trees or generated)
+# reproduce: uv run --no-project python scripts/check_complex_uhf_c_parity.py --write
+# layout: <case>/input/*.def, <case>/expected/{zvo_*,zqp_*}.dat, <case>/status.txt (C exit code)

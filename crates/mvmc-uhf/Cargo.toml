@@ -1,0 +1,16 @@
+[package]
+name = "mvmc-uhf"
+version = "0.0.0"
+description = "Pure-Rust port of the mVMC C ComplexUHF initial-orbital tool (src/ComplexUHF)"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sfmt19937 = { workspace = true }
+num-complex = { workspace = true }
+blas = { workspace = true }
+lapack = { workspace = true }
+thiserror = { workspace = true }
