@@ -72,7 +72,7 @@ cargo run -p mvmc-cli -- <namelist.def> --physcal <zqp_opt.dat> [options]
 
 `modpara.def` must set `NVMCCalMode 1` for `--physcal` (and `--physcal` is required when it does). `--mode real|cmp|fsz` is only a sanity label: the real, complex or FSZ path is determined by the input declarations. For nonconsuming serial diagnostics, add `--physcal-trace <NEW_DIR>`.
 
-Reference comparisons are in `crates/mvmc-core/tests/physcal_issue181.rs` and `crates/mvmc-cli/tests/physcal_reference.rs`. The single-step Lanczos correction (`NLanczosMode = 1, 2`, written to `zvo_ls_out_*`, `zvo_ls_qqqq_*` and, for mode 2, the `zvo_ls_cisajs*` files) is implemented for the sz-conserved path with `NSplitSize = 1`, without `InterAll` or spin-changing `Trans` terms (issues #31 and #32); see the [manual](docs/manual/06-theory-observables-lanczos.md) for the formulas and [the supported-input matrix](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) for the rejected combinations.
+Reference comparisons are in `crates/mvmc-core/tests/physcal_issue181.rs` and `crates/mvmc-cli/tests/physcal_reference.rs`. The single-step Lanczos correction (`NLanczosMode = 1, 2`, written to `zvo_ls_out_*`, `zvo_ls_qqqq_*` and, for mode 2, the `zvo_ls_cisajs*` files) is implemented for the sz-conserved path (any `NSplitSize`), without `InterAll` or spin-changing `Trans` terms; see the [manual](docs/manual/06-theory-observables-lanczos.md) for the formulas and [the supported-input matrix](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) for the rejected combinations.
 
 ### PhysCal verification
 
@@ -244,7 +244,7 @@ cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1
 The authoritative list of rejected inputs is [the supported/rejected matrix in the manual](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) (`crates/mvmc-core/src/validation.rs`).
 
 - BackFlow correlation factor and `SpinJastrow` (rejected), `NSRCG >= 2`, `useDiagScale`, `RescaleSmat`.
-- Lanczos corrections for FSZ/general orbitals, with `InterAll` or spin-changing `Trans`, or with `NSplitSize > 1` (rejected). The single-step Lanczos correction itself (`NLanczosMode` 1/2) is implemented.
+- Lanczos corrections for FSZ/general orbitals (also rejected by C), or with `InterAll` or spin-changing `Trans` (rejected). The single-step Lanczos correction itself (`NLanczosMode` 1/2) is implemented.
 - The `cimpl_utu2inv!` ccall path and `fimpl_zsktf2_/_dsktf2_` Fortran wrappers from `PfaPack.jl` — the optimizer's hot path uses the pure-Julia routines, so we port those directly and drop the FFI surface entirely (no `gfortran` / `g++` required).
 
 ## License

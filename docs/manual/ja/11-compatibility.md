@@ -32,7 +32,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | MPIの検出 | `JULIA_MVMC_MPI=1` とランチャーの変数 | ランチャーの変数のみ(`LaunchContext::from_env`)。`JULIA_MVMC_MPI` はテストのヘルパーにのみ現れます |
 | デバッグダンプ | `MVMC_DEBUG_*` | 未実装 |
 | タイマー出力 | `MVMC_C_TIMER=1` | 同じ変数、同じファイル `zvo_CalcTimer.dat`、加えて `MVMC_*_DIAG` 系列 |
-| サポートされないオプション | BackFlow、スピンJastrow、CGでの `NSplitSize>1`、`NSRCG>=2`、`useDiagScale`、`RescaleSmat`、FSZのLanczos法、Lanczos法の分割、分割を伴うOptTrans由来のQPセクター | 同じ一覧が `validation.rs` で拒否されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力)) |
+| サポートされないオプション | BackFlow、スピンJastrow、CGでの `NSplitSize>1`(Cでも未定義: 保存した `O` が未書き込みメモリから読まれます)、`NSRCG>=2`、`useDiagScale`、`RescaleSmat`、FSZのLanczos法(Cも拒否) | 同じ一覧が `validation.rs` で拒否されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力)) |
 | 高水準ランナー | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `RunConfig` を伴う `run::run_para_opt_from_namelist`(同じ引数)。CLIはこれをラップします |
 | `1e-14` のスレーター振幅カットオフ | 従来のJuliaのテーブル構築で適用 | 適用**しません**(Cは宣言された値を読み込みます、`slater_update.rs:46`) |
 | 最適化中の出力名 | `zvo_out.dat`, `zvo_var.dat` | 同じ(Cとは異なります、[9.1](09-output-files.md#91-ステップごとのエネルギー-zvo_outdat-opt-と-zvo_out_nnndat-phys)) |
@@ -57,8 +57,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 7 | `modpara.def` のパーサーの既定値 | `SetDefaultValuesModPara` | `ModParaParameters::default`([7.2](07-input-files.md#72-modparadef)) |
 | 8 | `NMPTrans = 0` | リーダーでは拒否されない(既定値0で `NQPFix = 0` となる、`readdef.c:778`) | 拒否 |
 | 9 | `NSROptItrSmp > NSROptItrStep` | 行が書き出されないまま残る | 拒否 |
-| 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし、`InterAll` なし、スピンを変える `Trans` なし、`NSplitSize>1` なし。$\alpha$ が失敗すると `NaN` を書き出す |
-| 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | `validate_para_opt` で拒否(PhysCalは受け付ける) |
+| 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、`InterAll` なし、スピンを変える `Trans` なし。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
+| 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
 | 12 | BackFlow(`BF`, `NProjBF`) | サポート | 最適化では拒否。PhysCalでは**チェックされない**([11.5](#115-未解決の観測事項)) |
 | 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | `NSRCG != 0` でCGを選択(`vmcmain.c:485`)。他の2つのキーはC 1.3.0には存在しない(Julia-mVMCのオプション) | `NSRCG >= 2` と、非ゼロの `useDiagScale`/`RescaleSmat` は拒否 |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99の複素数 | Julia互換の移植(最下位ビットの差が生じうる) |
@@ -97,7 +97,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
    `update_m_all_two_complex_flat` は、Juliaと同様に電子 b の古いサイトを用います(`crates/mvmc-core/src/sampling/updates.rs:537`)。これが複素数の交換更新の数値に影響するかどうかは**検証していません**(コード読解)。
 2. **PhysCalはネームリストのセクションをチェックしません。** `validate_phys_cal` には `validate_para_opt` のキーワードチェックがありません。`namelist.def` に `BF bf.def` の行があると、最適化は `unsupported namelist section BF` で停止しますが、
    `--physcal` は最後まで実行され、BackFlowは適用されません(観測)。未知のキーワード、`SpinJastrow`、未知の `In…` キーワードも、同様にPhysCalでは拒否されません。
-3. **`TwoBodyGEx` は最適化では拒否されます**(「not implemented yet (issue #30)」、観測)が、PhysCalはこれをサポートし、Cは最適化でこれを無視します。
+3. **最適化における `TwoBodyGEx`** は C と同様に受理され無視されます(#349 までは古い「issue #30」メッセージで拒否されていました)。
 4. **`--help` のテキスト**は、既定の出力ディレクトリが「namelist parent dir」であると述べていますが、コードは `<namelist parent>/output` を使います(観測)。
 5. **`--mode`** は検証されるだけのラベルであり、一致しないラベル(たとえば実数モデルでの `--mode fsz`)も黙って受け付けられます(観測)。
 6. **タイマーのファイル名**は `CDataFileHead` を無視します([9.5](09-output-files.md#95-タイマー))。

@@ -152,7 +152,7 @@ C を再現する上で重要な3つの規則があります。
 
 カットと力は直接ソルバーと同一です([5.2](#52-sr方程式))。カットに使う対角要素は
 $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$ です。CG の反復回数は `zvo_SRinfo.dat` の最終列に出力されます。
-Rust では CG に対して `NSplitSize = 1` のみサポートされます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
+Rust では CG に対して `NSplitSize = 1` のみサポートされます(グループ CG は C で未定義)([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
 
 > **実装**
 > - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg.c:42`

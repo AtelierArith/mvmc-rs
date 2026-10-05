@@ -17,7 +17,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NLanczosMode 1", "parameter optimization"),
         ("NSRCG 2\nNStore 0", "undefined in mVMC C"),
         ("NVMCCalMode 1", "PhysCal"),
-        ("NSplitSize 2", "issue #36"),
+        ("NSplitSize 2", "MPI group communicator"),
         ("NVMCSample -1", "NVMCSample must be positive"),
     ] {
         let mut data = ExpertModeData::new();
@@ -57,12 +57,15 @@ fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
     data.modpara.nmp_trans = 1;
     data.i_flg_orbital_general = 1;
     let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(error.contains("FSZ/general") && error.contains("issue #31"));
+    assert!(
+        error.contains("FSZ/general") && error.contains("readdef.c"),
+        "{error}"
+    );
 
+    // Grouped Lanczos is defined in C; only the communicator check applies.
     data.i_flg_orbital_general = 0;
     data.modpara.nsplit_size = 2;
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(error.contains("NSplitSize") && error.contains("issue #31"));
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
 }
 
 #[test]
@@ -78,10 +81,7 @@ fn rejects_spin_changing_lanczos_operators_before_sampling() {
         value: num_complex::Complex64::new(1.0, 0.0),
     });
     let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(
-        error.contains("spin-changing") && error.contains("issue #31"),
-        "{error}"
-    );
+    assert!(error.contains("spin-changing"), "{error}");
 }
 
 #[test]
@@ -97,21 +97,24 @@ fn rejects_duplicate_mode2_one_body_entries_without_factored_green() {
     };
     data.green_one_terms = vec![term, term];
     let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(
-        error.contains("duplicate") && error.contains("issue #32"),
-        "{error}"
-    );
+    assert!(error.contains("duplicate"), "{error}");
 }
 
 #[test]
 fn unported_sections_cannot_silently_change_the_model() {
-    for kind in ["TwoBodyGEx", "SpinJastrow"] {
-        let mut data = ExpertModeData::new();
-        data.modpara.nmp_trans = 1;
-        data.namelist.push((kind.into(), "missing.def".into()));
-        let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
-        assert!(error.contains(kind), "{kind}: {error}");
-    }
+    // C reads TwoBodyGEx but never uses it during optimization, so it is
+    // accepted there; SpinJastrow would change the projection layout.
+    let mut data = ExpertModeData::new();
+    data.modpara.nmp_trans = 1;
+    data.namelist
+        .push(("TwoBodyGEx".into(), "missing.def".into()));
+    mvmc_core::validation::validate_para_opt(&data).unwrap();
+    let mut data = ExpertModeData::new();
+    data.modpara.nmp_trans = 1;
+    data.namelist
+        .push(("SpinJastrow".into(), "missing.def".into()));
+    let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+    assert!(error.contains("SpinJastrow"), "{error}");
 }
 
 #[test]
@@ -425,7 +428,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
 }
 
 #[test]
-fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use() {
+fn grouped_opttrans_rows_pass_c_contract_and_need_communicator_without_rng_use() {
     let fixture = include_str!("../../../tests/fixtures/opttrans/grouped.txt");
     for line in fixture.lines().filter(|s| !s.starts_with('#')) {
         let fields = line
@@ -450,14 +453,11 @@ fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use()
             mvmc_core::OptimizationOptions::default(),
         )
         .unwrap_err();
-        if fields[3] == 1 {
-            assert!(
-                error.contains("OptTrans") && error.contains("not supported"),
-                "{line}: {error}"
-            );
-        } else {
-            assert!(error.contains("issue #36"), "{line}: {error}");
-        }
+        // C defines grouped OptTrans for every row (historical Julia fixture
+        // column {} marked some rows as Julia-rejected); only the missing
+        // communicator rejects here.
+        let _julia_rejected = fields[3] == 1;
+        assert!(error.contains("MPI group communicator"), "{line}: {error}");
         assert_eq!(data.opt_trans, before.opt_trans);
         assert_eq!(data.optimization_flags, before.optimization_flags);
         for _ in 0..624 {
@@ -467,38 +467,33 @@ fn grouped_opttrans_rejection_matches_canonical_support_matrix_without_rng_use()
 }
 
 #[test]
-fn grouped_runtime_matrix_accepts_normal_physcal_and_rejects_unsupported_scopes() {
+fn grouped_runtime_matrix_rejects_only_c_undefined_sr_cg() {
     let mut data = ExpertModeData::new();
     data.modpara.nsplit_size = 2;
     data.modpara.nmp_trans = 1;
 
-    // Julia scopes grouped PhysCal to sz-conserved normal Green paths.
-    // SR-CG is an optimization-only restriction, unused by PhysCal.
-    let before = data.clone();
+    // PhysCal never runs SR, so NSRCG metadata does not matter to it.
     mvmc_core::validation::validate_phys_cal(&data).unwrap();
-
     data.modpara.nsrcg = 1;
     mvmc_core::validation::validate_phys_cal(&data).unwrap();
     let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
-    assert!(error.contains("SR-CG"), "{error}");
-
-    data.modpara.nsrcg = 0;
-    data.i_flg_orbital_general = 1;
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(error.contains("FSZ / general-orbital PhysCal"), "{error}");
-    data.i_flg_orbital_general = 0;
-    data.n_qp_opt_trans = 2;
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
-    assert!(error.contains("NQPOptTrans > 1"), "{error}");
-    data.n_qp_opt_trans = before.n_qp_opt_trans;
-
-    data.modpara.nsrcg = 0;
-    data.modpara.lanczos_mode = 1;
-    let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
     assert!(
-        error.contains("NSplitSize > 1 with NLanczosMode > 0"),
+        error.contains("NSRCG != 0 is undefined in mVMC C"),
         "{error}"
     );
+    assert!(error.contains("vmccal.c"), "{error}");
+
+    // C defines grouped FSZ (any NQPFull), OptTrans and Lanczos PhysCal.
+    data.modpara.nsrcg = 0;
+    data.i_flg_orbital_general = 1;
+    mvmc_core::validation::validate_para_opt(&data).unwrap();
+    data.i_flg_orbital_general = 0;
+    data.n_qp_opt_trans = 2;
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
+    data.n_qp_opt_trans = 1;
+
+    data.modpara.lanczos_mode = 1;
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
     let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
     assert!(
         error.contains("Lanczos") || error.contains("NLanczosMode"),

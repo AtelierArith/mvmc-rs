@@ -1,5 +1,6 @@
 //! Public supported/rejected combinations and actual callback/filesystem errors.
-//! Julia grouped feature limits are NOT claims that C rejects valid C inputs.
+//! Only the grouped combination that is undefined in mVMC C (SR-CG, #349) is
+//! rejected; FSZ, OptTrans and Lanczos grouped runs are accepted as in C.
 use mvmc_core::{
     read_opt_para_file, vmc_para_opt, vmc_phys_cal_in_place, ExpertModeData, OptimizationOptions,
     Reducer, SingleProcessReducer, VmcOptimizationState,
@@ -113,41 +114,13 @@ fn call(
     }
 }
 fn rejected_case(case: &str, phys: bool, width: usize) -> (ExpertModeData, &'static str) {
-    let model = if case.starts_with("fsz") {
-        "heisenberg_chain_fsz"
-    } else if case == "opttrans" {
-        "hubbard_chain_dh_opttrans"
-    } else {
-        "heisenberg_chain_real"
-    };
+    let model = "heisenberg_chain_real";
     let mut data = loaded(model, phys);
     data.modpara.nsplit_size = width as i64;
     let diagnostic = match case {
         "cg" => {
             data.modpara.nsrcg = 1;
-            "SR-CG"
-        }
-        "fsz-phys" => "FSZ / general-orbital PhysCal",
-        "fsz-gauss" => {
-            data.modpara.nsp_gauss_leg = 2;
-            "FSZ standard-projection NQPFull"
-        }
-        "fsz-trans" => {
-            data.modpara.nmp_trans = 2;
-            "FSZ standard-projection NQPFull"
-        }
-        "fsz-ap" => {
-            data.modpara.nmp_trans = -2;
-            "FSZ standard-projection NQPFull"
-        }
-        "opttrans" => "OptTrans",
-        "lanczos1" => {
-            data.modpara.lanczos_mode = 1;
-            "NLanczosMode"
-        }
-        "lanczos2" => {
-            data.modpara.lanczos_mode = 2;
-            "NLanczosMode"
+            "NSRCG != 0 is undefined in mVMC C"
         }
         "zero-trans" => {
             data.modpara.nmp_trans = 0;
@@ -159,22 +132,14 @@ fn rejected_case(case: &str, phys: bool, width: usize) -> (ExpertModeData, &'sta
         }
         "invalid-lanczos" => {
             data.modpara.lanczos_mode = 3;
-            if width > 1 && !phys {
-                "NSplitSize > 1 with NLanczosMode > 0 is unsupported"
-            } else {
-                "NLanczosMode must be"
-            }
+            "NLanczosMode must be"
         }
         "invalid-cg" => {
             // NSRCG >= 2 selects CG in C; without O storage it is undefined there.
             // PhysCal never runs SR, so the case is only a ParaOpt rejection.
             data.modpara.nsrcg = 2;
             data.modpara.nstore_o = 0;
-            if width > 1 && !phys {
-                "NSplitSize > 1 with SR-CG is not supported"
-            } else {
-                "undefined in mVMC C"
-            }
+            "undefined in mVMC C"
         }
         other => panic!("unknown case {other}"),
     };
@@ -331,20 +296,8 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                     if phys {
                         cases.retain(|case| *case != "invalid-cg");
                     }
-                    if width == 2 {
-                        cases.extend(if phys {
-                            vec!["fsz-phys", "opttrans", "lanczos1", "lanczos2"]
-                        } else {
-                            vec![
-                                "cg",
-                                "fsz-gauss",
-                                "fsz-trans",
-                                "fsz-ap",
-                                "opttrans",
-                                "lanczos1",
-                                "lanczos2",
-                            ]
-                        });
+                    if width == 2 && !phys {
+                        cases.push("cg");
                     }
                     for case in cases {
                         for bad_rank in [0, world.world_size() - 1] {
@@ -392,21 +345,22 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                 ),
                 ("fsz-opt", "heisenberg_chain_fsz", false, 0, 0),
             ];
+            // C defines every grouped combination below (#349).
+            positives.extend([
+                ("fsz-phys", "heisenberg_chain_fsz", true, 0, 0),
+                ("opttrans-opt", "hubbard_chain_dh_opttrans", false, 0, 0),
+                ("opttrans-phys", "hubbard_chain_dh_opttrans", true, 0, 0),
+                ("lanczos1-phys", "heisenberg_chain_real", true, 0, 1),
+                ("lanczos2-phys", "heisenberg_chain_real", true, 0, 2),
+            ]);
             if width == 1 {
-                positives.extend([
-                    (
-                        "normal-opt-cg-sampling",
-                        "heisenberg_chain_real",
-                        false,
-                        1,
-                        0,
-                    ),
-                    ("fsz-phys", "heisenberg_chain_fsz", true, 0, 0),
-                    ("opttrans-opt", "hubbard_chain_dh_opttrans", false, 0, 0),
-                    ("opttrans-phys", "hubbard_chain_dh_opttrans", true, 0, 0),
-                    ("lanczos1-phys", "heisenberg_chain_real", true, 0, 1),
-                    ("lanczos2-phys", "heisenberg_chain_real", true, 0, 2),
-                ]);
+                positives.push((
+                    "normal-opt-cg-sampling",
+                    "heisenberg_chain_real",
+                    false,
+                    1,
+                    0,
+                ));
             }
             for (case, model, phys, cg, lanczos) in positives {
                 let mut data = loaded(model, phys);

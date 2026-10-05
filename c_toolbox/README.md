@@ -280,3 +280,14 @@ never modified. It generates `tests/fixtures/c_order_sr_operands/`; provenance
 (source/patch/binary SHA-256, compiler, BLAS, image, command) is recorded in
 that directory's `PROVENANCE.md`. This is a native single-rank operand check,
 distinct from the standalone fixed-operand CG oracle (`ctest_cg_refresh.c`).
+
+## Grouped `NSplitSize` runs (#349)
+
+`grouped_nsplit_349/generate.sh` builds the unmodified `extern/mVMC-1.3.0`
+`vmc.out` and runs it on the `physcal_181` inputs at 1/2/4 ranks and
+`NSplitSize` 1/2/4 for FSZ PhysCal and ParaOpt (`NQPFull = 2`), Lanczos PhysCal
+and OptTrans (`-o`). Outputs go to `tests/fixtures/grouped_nsplit_349/` with
+`PROVENANCE.txt`; see that directory's `README.md` for the per-combination
+findings, including the C defect that keeps grouped SR-CG rejected. This is a
+full native C/MPI run, not a kernel check. Run inside the Dev Container:
+`SOURCE_COMMIT=$(git -C extern/mVMC-1.3.0 rev-parse HEAD) c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c`.

@@ -152,14 +152,14 @@ $\mathrm{IP}$ はグループ内でリダクションされます。したがっ
 
 ### 制約
 
-Rust は初期化の前に次のものを拒否します(`validate_grouped_runtime`, [7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。C はそのうちいくつかをサポートします。
+Rust が初期化の前に拒否するのは、C で未定義の唯一のグループ組合せだけです(`validate_grouped_runtime`, [7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
 
-- CG ソルバー(`NSRCG != 0`)での `NSplitSize > 1`。
-- `NLanczosMode > 0` での `NSplitSize > 1`。
-- `OptTrans`/`NQPOptTrans > 1` での `NSplitSize > 1`。
-- PhysCal での一般(FSZ)軌道に対する `NSplitSize > 1`、および最適化で $N_{\rm GL}>1$ または $\lvert N_{\rm MP}\rvert>1$ の場合。
+- CG ソルバー(`NSRCG != 0`)での `NSplitSize > 1`。`VMCMainCal` は `sqrt(w) O` をグローバルなサンプル位置に保存しますが(`vmccal.c:241,248`)、
+  `calculateOO_Store` は基底ポインタから先頭の `sampleEnd - sampleStart` 列を読むため(`vmccal.c:314-318`)、最初以外のランクは未書き込みの `malloc` メモリを読みます(`setmemory.c:419-421`)。
+  同じ欠陥により C では `NStore != 0` かつ `NSplitSize > 1` の直接SRも壊れます。Rust はこの場合を正しく計算するため、C と異なります。
 
-サポート: 任意の `NSplitSize` での直接SR(`NSRCG = 0`)、`NSplitSize = 1` でのSR-CG(`NSRCG = 1`)、任意の `NSplitSize` での sz 保存経路の PhysCal。
+サポート(ネイティブ C の 2/4 ランクと照合、`tests/fixtures/grouped_nsplit_349/`): 任意の `NSplitSize` での直接SR(`NSRCG = 0`)、`NSplitSize = 1` でのSR-CG(`NSRCG = 1`)、
+sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化、`NQPOptTrans > 1` の OptTrans、`NLanczosMode = 1, 2` の PhysCal。
 
 ### 各ランクの書き出し内容
 

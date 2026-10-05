@@ -140,7 +140,7 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 |----------|-----------------------|---------|
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | 受理 | 受理 |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | 受理 | 受理 |
-| `TwoBodyGEx` | **拒否**("not implemented yet (issue #30)") | 受理 **(観測)** |
+| `TwoBodyGEx` | 受理され無視される | 受理 **(観測)** |
 | その他の `In…` キーワード | 拒否("not implemented yet (issue #20)") | チェックされない |
 | `SpinJastrow` | 拒否("projection layout would be wrong") | チェックされない |
 | `BF`, `BFRange` (BackFlow) および未知のキーワード | 拒否("unsupported namelist section …") | **チェックされない: `BF` エントリは受理され、BackFlow は適用されません(現在の `main` で観測)** |
@@ -177,16 +177,15 @@ PhysCal の列は `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`)
 | 任意の `InterAll` 項がある場合の `NLanczosMode > 0` | 拒否 |
 | `TwoBodyGEx` がなく `OneBodyG` のエントリが重複している場合の `NLanczosMode = 2` | 拒否 |
 
-### グループ実行(`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-55`。`NSplitSize > 1` のとき適用)
+### グループ実行(`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-44`。`NSplitSize > 1` のとき適用)
 
 | 条件 | 結果 |
 |-----------|--------|
-| 一般(FSZ)軌道での PhysCal | 拒否 |
-| `NSRCG != 0`(CG)での最適化 | 拒否 |
-| 一般軌道で($N_{\rm GL}>1$ または $\lvert N_{\rm MP}\rvert>1$)での最適化 | 拒否 |
-| `NLanczosMode > 0` | 拒否 |
-| `NQPOptTrans > 1` または 2 個以上の `OptTrans`/`QPOptTrans` エントリ | 拒否 |
-| `NSplitSize > 1` だがリデューサがグループ通信子でない(`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:58`) | 拒否("requires an MPI group communicator") |
+| `NSRCG != 0`(CG)での最適化 | 拒否: C で未定義(`vmccal.c:241,248` は保存した `O` をグローバルなサンプル位置に書くが、`vmccal.c:314-318` は先頭列からローカル数だけ読む) |
+| 一般(FSZ)軌道での PhysCal/最適化(任意の `NQPFull`) | 受理(C が定義。#349 でネイティブ C の 2/4 ランクと照合) |
+| `NLanczosMode > 0` の PhysCal | 受理(C が定義) |
+| `NQPOptTrans > 1` / `OptTrans` | 受理(C が定義) |
+| `NSplitSize > 1` だがリデューサがグループ通信子でない(`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:47-66`) | 拒否("requires an MPI group communicator") |
 
 ### コマンドラインレベル(`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/main.rs`)
 

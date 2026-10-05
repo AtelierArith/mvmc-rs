@@ -32,7 +32,7 @@ Chapters 2-6 give the line-level map for every equation.
 | MPI detection | `JULIA_MVMC_MPI=1` and launcher variables | launcher variables only (`LaunchContext::from_env`); `JULIA_MVMC_MPI` appears only in a test helper |
 | Debug dumps | `MVMC_DEBUG_*` | not implemented |
 | Timer output | `MVMC_C_TIMER=1` | same variable, same file `zvo_CalcTimer.dat`, plus `MVMC_*_DIAG` families |
-| Unsupported options | BackFlow, spin Jastrow, `NSplitSize>1` with CG, `NSRCG>=2`, `useDiagScale`, `RescaleSmat`, FSZ Lanczos, Lanczos split, OptTrans-derived QP sectors with split | the same list is rejected by `validation.rs` ([7.5](07-input-files.md#75-supported-and-rejected-inputs)) |
+| Unsupported options | BackFlow, spin Jastrow, `NSplitSize>1` with CG (undefined in C: stored `O` is read from unwritten memory), `NSRCG>=2`, `useDiagScale`, `RescaleSmat`, FSZ Lanczos (also rejected by C) | the same list is rejected by `validation.rs` ([7.5](07-input-files.md#75-supported-and-rejected-inputs)) |
 | High-level runner | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `run::run_para_opt_from_namelist` with `RunConfig` (same arguments); CLI wraps it |
 | `1e-14` Slater amplitude cutoff | applied in the historical Julia table build | **not** applied (C reads the declared value, `slater_update.rs:46`) |
 | Output names during optimization | `zvo_out.dat`, `zvo_var.dat` | same (differs from C, [9.1](09-output-files.md#91-energy-per-step-zvo_outdat-opt-and-zvo_out_nnndat-phys)) |
@@ -57,8 +57,8 @@ Differences that a user can observe:
 | 7 | Parser defaults of `modpara.def` | `SetDefaultValuesModPara` | `ModParaParameters::default` ([7.2](07-input-files.md#72-modparadef)) |
 | 8 | `NMPTrans = 0` | not rejected by the reader (the default 0 gives `NQPFix = 0`, `readdef.c:778`) | rejected |
 | 9 | `NSROptItrSmp > NSROptItrStep` | leaves rows unwritten | rejected |
-| 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ, no `InterAll`, no spin-changing `Trans`, no `NSplitSize>1`; a failed $\alpha$ writes `NaN` |
-| 11 | `TwoBodyGEx` in optimization | read and ignored by the optimizer | rejected by `validate_para_opt` (PhysCal accepts it) |
+| 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ (C also rejects it), no `InterAll`, no spin-changing `Trans`; `NSplitSize>1` is supported as in C; a failed $\alpha$ writes `NaN` |
+| 11 | `TwoBodyGEx` in optimization | read and ignored by the optimizer | read and ignored (accepted by `validate_para_opt`, as by PhysCal) |
 | 12 | BackFlow (`BF`, `NProjBF`) | supported | rejected in optimization; **not checked** in PhysCal ([11.5](#115-open-observations)) |
 | 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | `NSRCG != 0` selects CG (`vmcmain.c:485`); the other two keys do not exist in C 1.3.0 (Julia-mVMC options) | `NSRCG >= 2` and nonzero `useDiagScale`/`RescaleSmat` are rejected |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99 complex | Julia-compatible ports (last-bit differences possible) |
@@ -97,7 +97,7 @@ Items noticed while writing this manual, to be handled by separate issues. "Obse
    `update_m_all_two_complex_flat` uses the old site of electron b (`crates/mvmc-core/src/sampling/updates.rs:537`), as Julia does. Whether this changes complex exchange updates numerically was **not tested** (code reading).
 2. **PhysCal does not check namelist sections.** `validate_phys_cal` omits the keyword check of `validate_para_opt`. With a `BF bf.def` line in `namelist.def`, optimization stops with `unsupported namelist section BF`, whereas
    `--physcal` runs to completion and BackFlow is not applied (observed). Unknown keywords, `SpinJastrow` and unknown `In…` keywords are likewise not rejected in PhysCal.
-3. **`TwoBodyGEx` is rejected for optimization** ("not implemented yet (issue #30)", observed) although PhysCal supports it and C ignores it in optimization.
+3. **`TwoBodyGEx` in optimization** is accepted and ignored, as in C (it was rejected with a stale "issue #30" message until #349).
 4. **`--help` text** claims the default output directory is "namelist parent dir"; the code uses `<namelist parent>/output` (observed).
 5. **`--mode`** is only a validated label; a mismatching label (for example `--mode fsz` on a real model) is silently accepted (observed).
 6. **Timer file name** ignores `CDataFileHead` ([9.5](09-output-files.md#95-timers)).

@@ -45,7 +45,7 @@ builds and tests do not need `c_toolbox/`.
 |------------|---------------------|
 | Parameter optimization (`NVMCCalMode = 0`) with direct SR (`NSRCG = 0`) or CG SR (`NSRCG = 1`) | supported |
 | Fixed-parameter physical quantities (`NVMCCalMode = 1`): `OneBodyG`, `TwoBodyG`, `TwoBodyGEx` | supported |
-| Single-step Lanczos (`NLanczosMode = 1, 2`) | supported for the sz-conserved path with `NSplitSize = 1`, no `InterAll`, no spin-changing `Trans` (see [7.5](07-input-files.md#75-supported-and-rejected-inputs)) |
+| Single-step Lanczos (`NLanczosMode = 1, 2`) | supported for the sz-conserved path (any `NSplitSize`), no `InterAll`, no spin-changing `Trans` (see [7.5](07-input-files.md#75-supported-and-rejected-inputs)) |
 | Real and complex wave functions | supported (decided by the input declarations, see [3.3](03-theory-wavefunction.md#33-real-and-complex-modes)) |
 | `Orbital`/`OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral` (FSZ) | supported |
 | Gutzwiller, Jastrow, 2-/4-site doublon-holon, charge/spin/general RBM, `OptTrans` | supported |

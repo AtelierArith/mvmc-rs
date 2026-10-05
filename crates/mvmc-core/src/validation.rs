@@ -1,8 +1,8 @@
 //! Runtime compatibility checks, separate from Expert-mode format parsing.
 //!
-//! Permanent restrictions follow Julia's `unsupported_inputs.jl`. Temporary
-//! restrictions name the porting issue and must be removed when its full
-//! production path passes deterministic Julia parity checks.
+//! Permanent restrictions follow Julia's `unsupported_inputs.jl`. Grouped
+//! (`NSplitSize > 1`) restrictions exist only where mVMC C itself is undefined;
+//! C is the authority for every other grouped combination.
 
 use mvmc_expert_parsers::{ExpertModeData, ModParaParameters};
 
@@ -28,28 +28,17 @@ pub fn validate_grouped_runtime(
         return Ok(());
     }
 
-    if entry_point == RuntimeEntryPoint::PhysCal && data.i_flg_orbital_general != 0 {
-        return Err("NSplitSize > 1 is not supported for FSZ / general-orbital PhysCal".into());
-    }
+    // C defines every other grouped combination (verified against native
+    // MPI runs; see tests/fixtures/grouped_nsplit_349/README.md). SR-CG needs
+    // stored O for all of a rank's samples, which C does not provide.
     if entry_point == RuntimeEntryPoint::ParaOpt && data.modpara.nsrcg != 0 {
-        return Err("NSplitSize > 1 with SR-CG is not supported by Julia-mVMC".into());
-    }
-    if entry_point == RuntimeEntryPoint::ParaOpt
-        && data.i_flg_orbital_general != 0
-        && (data.modpara.nsp_gauss_leg > 1 || data.modpara.nmp_trans.unsigned_abs() > 1)
-    {
         return Err(
-            "NSplitSize > 1 with FSZ standard-projection NQPFull > 1 is unsupported".into(),
+            "NSplitSize > 1 with NSRCG != 0 is undefined in mVMC C: VMCMainCal writes \
+             SROptO_Store at the global sample slot (vmccal.c:241,248) but reads it back from \
+             column 0 with the local sample count (calculateOO_Store, vmccal.c:314-318), so ranks \
+             after the first read unwritten malloc memory (setmemory.c:419-421); use NSRCG = 0"
+                .into(),
         );
-    }
-    if data.modpara.lanczos_mode > 0 {
-        return Err("NSplitSize > 1 with NLanczosMode > 0 is unsupported (issue #31)".into());
-    }
-    if data.n_qp_opt_trans.max(1) > 1 || data.opt_trans.len() > 1 || data.qp_opt_trans.len() > 1 {
-        return Err(format!(
-            "NSplitSize > 1 with NQPOptTrans > 1 / OptTrans is not supported: grouped QP-split sampling currently supports standard-projection NQPFull only (NQPOptTrans = 1), got NSplitSize = {}, NQPOptTrans = {}. Use NSplitSize = 1 for OptTrans-derived QP sectors.",
-            data.modpara.nsplit_size, data.n_qp_opt_trans
-        ));
     }
     Ok(())
 }
@@ -60,7 +49,10 @@ pub fn validate_reducer_rank<R: crate::reducer::Reducer + ?Sized>(
     reducer: &R,
 ) -> Result<(), String> {
     if data.modpara.nsplit_size > 1 && !reducer.supports_grouped_sampling() {
-        return Err("NSplitSize > 1 requires an MPI group communicator (issue #36)".into());
+        return Err(
+            "NSplitSize > 1 requires an MPI group communicator (C vmcmain.c:239-246 splits comm0)"
+                .into(),
+        );
     }
     let world_size = reducer.world_size();
     if world_size == 0 || reducer.rank() >= world_size {
@@ -171,36 +163,28 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
         }
     }
     for (kind, _) in &data.namelist {
-        let issue = match kind.as_str() {
+        match kind.as_str() {
             "SpinJastrow" => {
                 return Err("SpinJastrow inputs are not supported by Julia-mVMC; projection layout would be wrong".into());
             }
-            "PairHop" => None,
-            "InterAll" => None,
-            "DH2" | "DoublonHolon2Site" | "InDH2" => None,
-            "DH4" | "DoublonHolon4Site" | "InDH4" => None,
-            "OptTrans" | "InOptTrans" => None,
-            "TwoBodyGEx" => Some(30),
-            k if k.starts_with("ChargeRBM_")
-                || k.starts_with("SpinRBM_")
-                || k.starts_with("GeneralRBM_") =>
-            {
-                None
-            }
-            "InGutzwiller"
+            "PairHop"
+            | "InterAll"
+            | "DH2"
+            | "DoublonHolon2Site"
+            | "InDH2"
+            | "DH4"
+            | "DoublonHolon4Site"
+            | "InDH4"
+            | "OptTrans"
+            | "InOptTrans"
+            | "TwoBodyGEx"
+            | "InGutzwiller"
             | "InJastrow"
             | "InOrbital"
             | "InOrbitalAntiParallel"
             | "InOrbitalParallel"
-            | "InOrbitalGeneral" => None,
-            k if k.starts_with("InChargeRBM_")
-                || k.starts_with("InSpinRBM_")
-                || k.starts_with("InGeneralRBM_") =>
-            {
-                None
-            }
-            k if k.starts_with("In") => Some(20),
-            "ModPara"
+            | "InOrbitalGeneral"
+            | "ModPara"
             | "LocSpin"
             | "Trans"
             | "CoulombIntra"
@@ -216,11 +200,14 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             | "OneBodyG"
             | "TwoBodyG"
             | "TransSym"
-            | "QPTrans" => None,
+            | "QPTrans" => {}
+            k if k.starts_with("ChargeRBM_")
+                || k.starts_with("SpinRBM_")
+                || k.starts_with("GeneralRBM_")
+                || k.starts_with("InChargeRBM_")
+                || k.starts_with("InSpinRBM_")
+                || k.starts_with("InGeneralRBM_") => {}
             k => return Err(format!("unsupported namelist section {k}")),
-        };
-        if let Some(issue) = issue {
-            return Err(format!("{kind} is not implemented yet (issue #{issue})"));
         }
     }
     if !data.input_errors.is_empty() {
@@ -266,7 +253,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     if p.lanczos_mode > 0 {
         if data.i_flg_orbital_general != 0 {
             return Err(
-                "Lanczos PhysCal for FSZ/general orbitals is not implemented yet (issue #31)"
+                "NLanczosMode > 0 is not supported for FSZ/general orbitals (mVMC C readdef.c:615-617)"
                     .into(),
             );
         }
@@ -275,12 +262,10 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
             .iter()
             .any(|term| term.spin1 != term.spin2)
         {
-            return Err(
-                "spin-changing Transfer is unsupported for Lanczos PhysCal (issue #31)".into(),
-            );
+            return Err("spin-changing Transfer is not implemented for Lanczos PhysCal".into());
         }
         if !data.inter_all_terms.is_empty() {
-            return Err("InterAll Lanczos PhysCal is not implemented yet (issue #31)".into());
+            return Err("InterAll Lanczos PhysCal is not implemented".into());
         }
         if p.lanczos_mode > 1 && data.green_two_ex_terms.is_empty() {
             let mut seen = std::collections::HashSet::new();
@@ -288,7 +273,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
                 let key = (term.site1, term.spin1, term.site2, term.spin2);
                 if !seen.insert(key) {
                     return Err(format!(
-                        "NLanczosMode = 2 does not support duplicate OneBodyG entries without TwoBodyGEx; duplicate=({}, {}, {}, {}) (issue #32)",
+                        "NLanczosMode = 2 does not support duplicate OneBodyG entries without TwoBodyGEx; duplicate=({}, {}, {}, {})",
                         term.site1,
                         term.spin1.as_code(),
                         term.site2,
@@ -321,28 +306,31 @@ mod tests {
     use super::mpi_requested;
 
     #[test]
-    fn grouped_matrix_allows_normal_physcal_and_rejects_fsz_multi_qp() {
+    fn grouped_matrix_rejects_only_the_c_undefined_sr_cg_combination() {
         use super::{validate_grouped_runtime, RuntimeEntryPoint};
         let mut data = mvmc_expert_parsers::ExpertModeData::new();
         data.modpara.nsplit_size = 2;
         data.modpara.nmp_trans = 1;
         data.modpara.nsrcg = 1; // SR controls do not affect PhysCal.
         validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).unwrap();
-        assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).is_err());
+        let error = validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).unwrap_err();
+        assert!(error.contains("undefined in mVMC C"), "{error}");
+        assert!(error.contains("vmccal.c"), "{error}");
         data.modpara.nsrcg = 0;
+        // FSZ with multiple QP points, Lanczos and OptTrans are defined in C.
         data.i_flg_orbital_general = 1;
-        assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).is_err());
-        validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).unwrap();
-        for (gauss, trans) in [(2, 1), (1, 2), (1, -2)] {
+        data.modpara.lanczos_mode = 2;
+        data.n_qp_opt_trans = 3;
+        for (gauss, trans) in [(1, 1), (2, 1), (1, 2), (1, -2)] {
             data.modpara.nsp_gauss_leg = gauss;
             data.modpara.nmp_trans = trans;
-            assert!(validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt)
-                .unwrap_err()
-                .contains("FSZ standard-projection NQPFull"));
+            for entry in [RuntimeEntryPoint::ParaOpt, RuntimeEntryPoint::PhysCal] {
+                validate_grouped_runtime(&data, entry).unwrap();
+            }
         }
-        data.i_flg_orbital_general = 0;
+        data.modpara.nsplit_size = 1;
+        data.modpara.nsrcg = 1;
         validate_grouped_runtime(&data, RuntimeEntryPoint::ParaOpt).unwrap();
-        validate_grouped_runtime(&data, RuntimeEntryPoint::PhysCal).unwrap();
     }
 
     #[test]
