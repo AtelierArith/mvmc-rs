@@ -1756,6 +1756,30 @@ Not done here: the measurement and sampler Pfaffian still call `calc_m_all_*` di
 `PfaffianStages` slot is exercised by the harness and gates); wiring it into production is the
 #422/#434 work. SR stages are routed in production since #421.
 
+### 14.4 Measurement stage A through the stage backend (issue #422)
+
+`measurement_batch::stage_a_pfaffian` routes the table construction of the batched measurement
+(stage A of #428) through `PfaffianStages::pfaffian_inverse_batch`: the real, non-FSZ stage A
+assembles the planes of a whole batch in the batched layout `[n, n, NQP * B]` (the formula of
+`assemble_inv_m_real`, `X[msj, msi] = -S[rsi, rsj]`), makes one backend call, and stores mVMC's
+`invM = -X^-1` with `pf` unchanged (the stage returns the true inverse `X^-1`; the sign flip is
+`calc_m_all_child_real`'s `M_DSCAL(.., -1, ..)`). A failing plane (zero pivot, non-finite
+Pfaffian, all-zero plane, out-of-range site) fails its whole sample like `calc_m_all_real`.
+
+* Selection: `MVMC_RS_MEASURE_PF_BACKEND=calc-m-all|c-order|tenferro|cuda[:N]` (default
+  `calc-m-all`, the unchanged C-order kernels). It is separate from `MVMC_RS_SR_BACKEND`
+  because tenferro 0.7.1 has SR stages but no Pfaffian: a backend without the stage, or a
+  complex/FSZ mode, is a hard error, never a fallback.
+* Validation: `c-order` through the stage is the same PfaPack sequence and is byte-identical to
+  the default for batch sizes 1, 3 and all samples (optimization with DH/Gutzwiller/Jastrow and
+  PhysCal with Green and Lanczos; `measurement_batch_422.rs`); the table values equal
+  `calc_m_all_real` (unit test). The CUDA kernel is validated by
+  `measurement_gate.rs` (PhysCal on two Hubbard fixtures, 964 numeric tokens each, worst relative
+  difference 1.8e-12 against bound `abs 1e-11 / rel 1e-9`; the sampler and RNG do not depend on
+  the measurement backend).
+* Not done: complex/FSZ Pfaffian stages, batched local energy/Green/Slater derivative (stage B
+  stays per-sample), performance tuning of the batched call (correctness first).
+
 ## 15. Device-resident SR pipeline for large NPara (issue #447)
 
 Status: implemented for real parameters (direct Cholesky and CG), validated and benchmarked on the

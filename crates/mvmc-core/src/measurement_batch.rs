@@ -52,6 +52,23 @@
 //! about one quarter of the Slater table (`(2 Nsite)^2 * NQP`) per slot at half filling.
 //! `MVMC_RS_MEASURE_BATCH=<B>` overrides the batch size (an explicit value is not capped).
 //!
+//! # Stage A through the unified stage backend (issue #422, #437)
+//!
+//! By default stage A calls the C-order kernels (`calc_m_all_*`) per sample. With
+//! `MVMC_RS_MEASURE_PF_BACKEND=c-order|tenferro|cuda[:N]` (or
+//! [`set_measurement_backend_override`]) the real, non-FSZ stage A instead assembles the
+//! skew-symmetric planes of the whole batch (`[n, n, NQP * B]`, the batched layout) and
+//! makes ONE call to `PfaffianStages::pfaffian_inverse_batch` of the selected
+//! `StageBackend` (see `stage_backend`). The plane assembly is the exact formula of
+//! `assemble_inv_m_real` (`X[msj, msi] = -S[rsi, rsj]`), the stored table is mVMC's
+//! `invM = -X^-1` (the stage returns the true inverse `X^-1`; `calc_m_all_child_real` applies
+//! the same sign flip), and `pf` is stored unchanged. Per-plane failures (zero pivot,
+//! non-finite Pfaffian, all-zero plane, out-of-range site) fail the whole sample exactly as a
+//! failing `calc_m_all_real` does. `c-order` through the stage trait uses the same PfaPack
+//! sequence as `calc_m_all_real` and is byte-identical to it (tested); other backends are
+//! validated with bounds. A backend that does not provide the stage (tenferro 0.7.1 has no
+//! Pfaffian) or a complex/FSZ mode is a hard error, never a silent fallback.
+//!
 //! # Coverage
 //!
 //! All measurement modes use the batched pipeline: real, complex, FSZ real/complex, with
@@ -62,7 +79,8 @@
 use num_complex::Complex64;
 use tenferro_tensor::TensorScalar;
 
-use crate::state::InvMColMajor;
+use crate::stage_backend::{PfaffianStages, PlaneOutcome, StageBackendKind, StageError};
+use crate::state::{InvMColMajor, SlaterElmFlat};
 
 /// Default number of samples per batch (see the module docs on memory).
 pub const DEFAULT_BATCH: usize = 4;
@@ -86,6 +104,157 @@ pub fn resolve_batch_size(n_samples: usize) -> usize {
         v => Some(v),
     };
     explicit.unwrap_or(DEFAULT_BATCH).min(n_samples.max(1))
+}
+
+/// Where stage A gets its Pfaffian/inverse tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeasurementPfaffian {
+    /// The C-order `calc_m_all_*` kernels, per sample (default).
+    CalcMAll,
+    /// One batched `PfaffianStages` call of the selected backend (real, non-FSZ mode only).
+    Stage(StageBackendKind),
+}
+
+/// Environment variable selecting the measurement Pfaffian source (`calc-m-all` (default),
+/// `c-order`, `tenferro`, `cuda[:N]`).
+pub const MEASURE_PF_VARIABLE: &str = "MVMC_RS_MEASURE_PF_BACKEND";
+
+/// Parse a [`MEASURE_PF_VARIABLE`] value.
+pub fn parse_measurement_pfaffian(value: &str) -> Result<MeasurementPfaffian, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "calc-m-all" | "default" => Ok(MeasurementPfaffian::CalcMAll),
+        other => crate::stage_backend::parse_stage_backend(other)
+            .map(MeasurementPfaffian::Stage)
+            .map_err(|_| {
+                format!(
+                    "{MEASURE_PF_VARIABLE}={other:?} is not one of calc-m-all, c-order, tenferro, cuda[:N]"
+                )
+            }),
+    }
+}
+
+static MEASURE_OVERRIDE: std::sync::Mutex<Option<MeasurementPfaffian>> =
+    std::sync::Mutex::new(None);
+
+/// Process-wide override for tests (`None` restores the environment/default).
+pub fn set_measurement_backend_override(source: Option<MeasurementPfaffian>) {
+    *MEASURE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) = source;
+}
+
+/// The measurement Pfaffian source: override, then environment, then the C-order default.
+/// An invalid environment value is a hard error.
+pub fn selected_measurement_pfaffian() -> MeasurementPfaffian {
+    if let Some(source) = *MEASURE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
+        return source;
+    }
+    match std::env::var(MEASURE_PF_VARIABLE) {
+        Ok(v) => parse_measurement_pfaffian(&v).unwrap_or_else(|e| panic!("{e}")),
+        Err(_) => MeasurementPfaffian::CalcMAll,
+    }
+}
+
+/// Smallest squared plane entry that `calc_m_all_real` accepts (its `MIN_ABS2`).
+const MIN_ABS2: f64 = 1.0e-28;
+
+/// Stage A of the real, non-FSZ measurement through a [`PfaffianStages`] backend.
+///
+/// `active` lists the batch slots that need tables (their `ele_idx` rows are filled). One
+/// batched call evaluates all `active.len() * n_qp` planes (`[n, n, NQP * B]` order, plane
+/// `a * n_qp + qp`). On return every active slot is [`SlotStatus::Ready`] with its tables in
+/// the working layout (`invM = -X^-1`, `pf`), or [`SlotStatus::Failed`] when any of its planes
+/// failed, like a failing `calc_m_all_real`.
+///
+/// # Errors
+///
+/// The backend's [`StageError`] (for example `Unsupported`); slot statuses are then
+/// unspecified.
+pub fn stage_a_pfaffian(
+    backend: &mut dyn PfaffianStages,
+    slater: &SlaterElmFlat<f64>,
+    batch: &mut MeasurementBatchWorkspace,
+    active: &[usize],
+    n_site: usize,
+    n_elec: usize,
+    n_qp: usize,
+) -> Result<(), StageError> {
+    let n = 2 * n_elec;
+    let n2 = 2 * n_site;
+    let nn = n * n;
+    if active.is_empty() {
+        return Ok(());
+    }
+    if n == 0 || n_qp == 0 {
+        for &slot in active {
+            batch.status[slot] = SlotStatus::Failed;
+        }
+        return Ok(());
+    }
+    let planes = active.len() * n_qp;
+    let mut x = std::mem::take(&mut batch.stage_x);
+    x.clear();
+    x.resize(nn * planes, 0.0);
+    let src = slater.as_slice();
+    let mut sample_ok = vec![true; active.len()];
+    let mut cols = vec![0usize; n];
+    for (a, &slot) in active.iter().enumerate() {
+        let ele = &batch.ele_idx[slot * n..(slot + 1) * n];
+        let mut valid = true;
+        for (msi, c) in cols.iter_mut().enumerate() {
+            let rsi = ele[msi] + ((msi / n_elec) as i64) * (n_site as i64);
+            if rsi < 0 || rsi >= n2 as i64 {
+                valid = false;
+                break;
+            }
+            *c = rsi as usize;
+        }
+        if !valid {
+            sample_ok[a] = false;
+            continue;
+        }
+        for qp in 0..n_qp {
+            let plane = &mut x[(a * n_qp + qp) * nn..(a * n_qp + qp + 1) * nn];
+            let mut max_abs2 = 0.0_f64;
+            // Same visiting order and formula as `assemble_inv_m_real`.
+            for (&rsi, out) in cols.iter().zip(plane.chunks_exact_mut(n)) {
+                let start = (qp * n2 + rsi) * n2;
+                let row = &src[start..start + n2];
+                for (o, &rsj) in out.iter_mut().zip(&cols) {
+                    let v = -row[rsj];
+                    *o = v;
+                    max_abs2 = max_abs2.max(v * v);
+                }
+            }
+            if max_abs2 < MIN_ABS2 {
+                sample_ok[a] = false;
+            }
+        }
+    }
+    let result = backend.pfaffian_inverse_batch(&x, n, planes);
+    batch.stage_x = x;
+    let out = result?;
+    for (a, &slot) in active.iter().enumerate() {
+        let planes_ok = (0..n_qp).all(|qp| out.outcome[a * n_qp + qp] == PlaneOutcome::Ok);
+        if !sample_ok[a] || !planes_ok {
+            batch.status[slot] = SlotStatus::Failed;
+            continue;
+        }
+        let set = &mut batch.real[slot];
+        for qp in 0..n_qp {
+            let p = a * n_qp + qp;
+            // mVMC invM = -X^-1 (`M_DSCAL(&nsq, &minus_one, invM, &one)`).
+            for (dst, &v) in set
+                .inv
+                .qp_matrix_slice_mut(qp)
+                .iter_mut()
+                .zip(&out.inv[p * nn..(p + 1) * nn])
+            {
+                *dst = -v;
+            }
+            set.pf[qp] = out.pf[p];
+        }
+        batch.status[slot] = SlotStatus::Ready;
+    }
+    Ok(())
 }
 
 /// Contiguous batched Pfaffian/inverse planes, `planes[n, n, NQP, B]` and `pf[NQP, B]`.
@@ -250,6 +419,8 @@ pub struct MeasurementBatchWorkspace {
     pub ele_idx: Vec<i64>,
     /// Stage-A outcome per slot.
     pub status: Vec<SlotStatus>,
+    /// Reusable `[n, n, NQP * B]` plane buffer of the stage-backend path.
+    pub stage_x: Vec<f64>,
 }
 
 impl MeasurementBatchWorkspace {
@@ -285,7 +456,9 @@ impl MeasurementBatchWorkspace {
             .iter()
             .map(|s| slot_bytes(s.inv.len(), s.pf.len(), std::mem::size_of::<Complex64>()))
             .sum();
-        real + complex + self.ele_idx.len() * std::mem::size_of::<i64>()
+        real + complex
+            + self.ele_idx.len() * std::mem::size_of::<i64>()
+            + self.stage_x.len() * std::mem::size_of::<f64>()
     }
 }
 
@@ -374,5 +547,202 @@ mod tests {
     fn batch_size_is_clamped_to_sample_count() {
         assert_eq!(resolve_batch_size(0), 1);
         assert!(resolve_batch_size(2) <= 2);
+    }
+
+    use crate::stage_backend::{COrderPfaffian, PfInvBatch};
+    use crate::state::ThreadedPfaPackWorkspace;
+
+    /// Wraps the C-order stage: scales every Pfaffian by `1 + rel` and marks the planes in
+    /// `fail` as zero-pivot, to prove the routing and the failure handling.
+    struct Tweaked {
+        rel: f64,
+        fail: Vec<usize>,
+    }
+
+    impl PfaffianStages for Tweaked {
+        fn label(&self) -> String {
+            "tweaked".into()
+        }
+        fn provider(&self) -> String {
+            "test".into()
+        }
+        fn pfaffian_inverse_batch(
+            &mut self,
+            x: &[f64],
+            n: usize,
+            planes: usize,
+        ) -> Result<PfInvBatch, StageError> {
+            let mut out = COrderPfaffian.pfaffian_inverse_batch(x, n, planes)?;
+            for (p, pf) in out.pf.iter_mut().enumerate() {
+                *pf *= 1.0 + self.rel;
+                if self.fail.contains(&p) {
+                    out.outcome[p] = PlaneOutcome::ZeroPivot { row: 1 };
+                }
+            }
+            Ok(out)
+        }
+    }
+
+    fn skew_slater(n_qp: usize, n_site: usize) -> SlaterElmFlat<f64> {
+        let n2 = 2 * n_site;
+        let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+        let mut state = 12345u64;
+        for qp in 0..n_qp {
+            let plane = slater.qp_slice_mut(qp);
+            for i in 0..n2 {
+                for j in 0..i {
+                    state = state
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
+                    let v = ((state >> 11) as f64) / ((1u64 << 53) as f64) - 0.5;
+                    plane[i * n2 + j] = v;
+                    plane[j * n2 + i] = -v;
+                }
+            }
+        }
+        slater
+    }
+
+    fn setup(
+        n_site: usize,
+        n_elec: usize,
+        n_qp: usize,
+        configs: &[Vec<i64>],
+    ) -> MeasurementBatchWorkspace {
+        let mut batch = MeasurementBatchWorkspace::default();
+        batch.configure(2 * n_elec, n_qp, configs.len(), false);
+        for (slot, ele) in configs.iter().enumerate() {
+            batch.ele_idx[slot * 2 * n_elec..(slot + 1) * 2 * n_elec].copy_from_slice(ele);
+            batch.status[slot] = SlotStatus::Ready;
+        }
+        let _ = n_site;
+        batch
+    }
+
+    #[test]
+    fn stage_a_matches_calc_m_all_real_and_applies_the_invm_sign() {
+        let (n_site, n_elec, n_qp) = (4usize, 2usize, 3usize);
+        let slater = skew_slater(n_qp, n_site);
+        let configs = vec![vec![0, 2, 1, 3], vec![3, 1, 0, 2]];
+        let mut batch = setup(n_site, n_elec, n_qp, &configs);
+        stage_a_pfaffian(
+            &mut COrderPfaffian,
+            &slater,
+            &mut batch,
+            &[0, 1],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap();
+        let pool = ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
+        for (slot, ele) in configs.iter().enumerate() {
+            assert_eq!(batch.status[slot], SlotStatus::Ready);
+            let mut inv = InvMColMajor::<f64>::zeros(n_qp, n_elec);
+            let mut pf = vec![0.0; n_qp];
+            crate::pfaffian::calc_m_all_real(
+                ele, &slater, &mut inv, &mut pf, 0, n_qp, n_site, n_elec, &pool,
+            )
+            .unwrap();
+            for qp in 0..n_qp {
+                assert_eq!(batch.real[slot].pf[qp], pf[qp]);
+                assert_eq!(
+                    batch.real[slot].inv.qp_matrix_slice(qp),
+                    inv.qp_matrix_slice(qp),
+                    "slot {slot} qp {qp}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn stage_a_failure_of_one_plane_fails_only_its_sample() {
+        let (n_site, n_elec, n_qp) = (4usize, 2usize, 2usize);
+        let slater = skew_slater(n_qp, n_site);
+        let configs = vec![vec![0, 2, 1, 3], vec![3, 1, 0, 2], vec![1, 3, 0, 2]];
+        let mut batch = setup(n_site, n_elec, n_qp, &configs);
+        // plane index = a * n_qp + qp: plane 3 is sample 1, qp 1
+        stage_a_pfaffian(
+            &mut Tweaked {
+                rel: 0.0,
+                fail: vec![3],
+            },
+            &slater,
+            &mut batch,
+            &[0, 1, 2],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap();
+        assert_eq!(
+            batch.status[..3],
+            [SlotStatus::Ready, SlotStatus::Failed, SlotStatus::Ready]
+        );
+    }
+
+    #[test]
+    fn stage_a_uses_the_backend_values_and_reports_unsupported() {
+        let (n_site, n_elec, n_qp) = (4usize, 2usize, 2usize);
+        let slater = skew_slater(n_qp, n_site);
+        let configs = vec![vec![0, 2, 1, 3]];
+        let mut exact = setup(n_site, n_elec, n_qp, &configs);
+        stage_a_pfaffian(
+            &mut COrderPfaffian,
+            &slater,
+            &mut exact,
+            &[0],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap();
+        let mut tweaked = setup(n_site, n_elec, n_qp, &configs);
+        stage_a_pfaffian(
+            &mut Tweaked {
+                rel: 1e-6,
+                fail: vec![],
+            },
+            &slater,
+            &mut tweaked,
+            &[0],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap();
+        for qp in 0..n_qp {
+            let (a, b) = (exact.real[0].pf[qp], tweaked.real[0].pf[qp]);
+            assert!((b - a * (1.0 + 1e-6)).abs() <= 1e-15 * a.abs().max(1.0));
+        }
+        let mut unsupported = setup(n_site, n_elec, n_qp, &configs);
+        let err = stage_a_pfaffian(
+            &mut crate::stage_backend::UnsupportedPfaffian::tenferro(),
+            &slater,
+            &mut unsupported,
+            &[0],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap_err();
+        assert!(matches!(err, StageError::Unsupported(_)));
+    }
+
+    #[test]
+    fn measurement_selector_parses() {
+        assert_eq!(
+            parse_measurement_pfaffian(""),
+            Ok(MeasurementPfaffian::CalcMAll)
+        );
+        assert_eq!(
+            parse_measurement_pfaffian("c-order"),
+            Ok(MeasurementPfaffian::Stage(StageBackendKind::COrder))
+        );
+        assert_eq!(
+            parse_measurement_pfaffian("cuda:1"),
+            Ok(MeasurementPfaffian::Stage(StageBackendKind::Cuda(1)))
+        );
+        assert!(parse_measurement_pfaffian("nope").is_err());
     }
 }

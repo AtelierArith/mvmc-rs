@@ -31,7 +31,7 @@ rout="${MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-ro
 tout="${MVMC_RS_CUDA_GATE_TRANSFER_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-transfer.md}"
 mkdir -p "$(dirname "$out")"
 
-inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_gate --test pfaffian_gate --test transfer_gate --test sampler_gate --test sr_device_gate -- --ignored --nocapture --test-threads=1'
+inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_gate --test pfaffian_gate --test transfer_gate --test sampler_gate --test measurement_gate --test sr_device_gate -- --ignored --nocapture --test-threads=1'
 
 case "$mode" in
   native)
