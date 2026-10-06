@@ -35,6 +35,7 @@ pub mod one_move;
 pub mod projection;
 pub mod rbm;
 pub(crate) mod rbm_math;
+pub mod stage;
 pub mod updates;
 
 pub use candidate::{

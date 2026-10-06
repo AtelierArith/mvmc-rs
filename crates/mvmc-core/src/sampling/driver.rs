@@ -22,8 +22,7 @@ use sfmt19937::Sfmt19937Rng;
 
 use crate::observables::{calculate_ip_complex, calculate_ip_real};
 use crate::pfaffian::{
-    calc_m_all_complex, calc_m_all_complex_native_info, calc_m_all_real,
-    calc_m_all_real_native_info,
+    calc_m_all_complex, calc_m_all_complex_native_info, calc_m_all_real_native_info,
 };
 use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::sampling::candidate::{
@@ -39,10 +38,7 @@ use crate::sampling::normal_initial::{
 use crate::sampling::projection::{
     init_loc_spn, log_proj_ratio, revert_ele_config, update_ele_config, update_proj_cnt,
 };
-use crate::sampling::updates::{
-    calculate_new_pf_m2_real_flat, calculate_new_pf_m_two2_real_flat, update_m_all_real_flat,
-    update_m_all_two_real_flat,
-};
+use crate::sampling::stage::{CpuStage, RealPfStage, StageGeom, StageTables};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 
 /// Output of [`vmc_make_sample_real`].
@@ -125,6 +121,19 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
     rng: &mut Sfmt19937Rng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
+) -> Result<SampleStats, NormalInitializationError> {
+    vmc_make_sample_real_staged(data, state, rng, timer, reducer, &mut CpuStage)
+}
+
+/// [`vmc_make_sample_real_with_reducer_timed`] with a pluggable Pfaffian stage backend
+/// ([`RealPfStage`]); `CpuStage` is the production path.
+pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: RealPfStage>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+    stage: &mut S,
 ) -> Result<SampleStats, NormalInitializationError> {
     timer.start(30);
     // This writes LocSpin workspace before typed preflight; the no-mutation
@@ -266,6 +275,28 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
     };
 
     let inv_stride = n_size * n_size + 1;
+    let geom = StageGeom {
+        n_site,
+        n_elec,
+        qp_start,
+        qp_end,
+        inv_stride,
+    };
+    {
+        let mut tables = StageTables {
+            slater_elm: &state.slater_matrix.slater_elm_real,
+            inv_m: &mut state.slater_matrix.inv_m_real,
+            pf_m: &mut state.slater_matrix.pf_m_real,
+            pool: &pool,
+        };
+        if let Err(error) = stage.begin(&geom, &mut tables, &tmp_ele_idx) {
+            state.electron_config.tmp_ele_idx = tmp_ele_idx;
+            state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
+            state.electron_config.tmp_ele_num = tmp_ele_num;
+            state.electron_config.tmp_ele_proj_cnt = tmp_ele_proj_cnt;
+            return Err(NormalInitializationError::Precondition(error));
+        }
+    }
     let mut pf_m_new = vec![0.0_f64; n_qp_full];
     let mut proj_cnt_new = vec![0_i64; tmp_ele_proj_cnt.len()];
     let n_out_step = if burn_flag {
@@ -323,20 +354,21 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                     );
                     timer.stop(60);
                     timer.start(61);
-                    calculate_new_pf_m2_real_flat(
-                        candidate.mi,
-                        candidate.spin,
-                        &mut pf_m_new,
-                        &tmp_ele_idx,
-                        &state.slater_matrix.slater_elm_real,
-                        state.slater_matrix.inv_m_real.as_slice(),
-                        inv_stride,
-                        &state.slater_matrix.pf_m_real,
-                        qp_start,
-                        qp_end,
-                        n_site,
-                        n_elec,
-                    );
+                    stage
+                        .propose_hop(
+                            &geom,
+                            &mut StageTables {
+                                slater_elm: &state.slater_matrix.slater_elm_real,
+                                inv_m: &mut state.slater_matrix.inv_m_real,
+                                pf_m: &mut state.slater_matrix.pf_m_real,
+                                pool: &pool,
+                            },
+                            &tmp_ele_idx,
+                            candidate.mi,
+                            candidate.spin,
+                            &mut pf_m_new,
+                        )
+                        .map_err(NormalInitializationError::Precondition)?;
                     timer.stop(61);
                     timer.start(62);
                     let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
@@ -349,24 +381,25 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                         Complex64::new(log_ip_old, 0.0),
                         rng,
                     );
-                    if decision.accepted {
+                    if stage.decide(&decision) {
                         timer.start(63);
-                        update_m_all_real_flat(
-                            candidate.mi,
-                            candidate.spin,
-                            &tmp_ele_idx,
-                            &state.slater_matrix.slater_elm_real,
-                            state.slater_matrix.inv_m_real.as_mut_slice(),
-                            inv_stride,
-                            &mut state.slater_matrix.pf_m_real,
-                            qp_start,
-                            qp_end,
-                            n_site,
-                            n_elec,
-                        );
+                        stage
+                            .accept_hop(
+                                &geom,
+                                &mut StageTables {
+                                    slater_elm: &state.slater_matrix.slater_elm_real,
+                                    inv_m: &mut state.slater_matrix.inv_m_real,
+                                    pf_m: &mut state.slater_matrix.pf_m_real,
+                                    pool: &pool,
+                                },
+                                &tmp_ele_idx,
+                                candidate.mi,
+                                candidate.spin,
+                                &pf_m_new,
+                            )
+                            .map_err(NormalInitializationError::Precondition)?;
                         timer.stop(63);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
-                        state.slater_matrix.pf_m_real.copy_from_slice(&pf_m_new);
                         log_ip_old = log_ip_new;
                         accepted_total += 1;
                         n_accept_window += 1;
@@ -448,22 +481,23 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                     );
                     timer.stop(65);
                     timer.start(66);
-                    calculate_new_pf_m_two2_real_flat::<false>(
-                        candidate.mi,
-                        candidate.spin,
-                        candidate.mj,
-                        candidate.spin_other,
-                        &mut pf_m_new,
-                        &tmp_ele_idx,
-                        &state.slater_matrix.slater_elm_real,
-                        state.slater_matrix.inv_m_real.as_slice(),
-                        inv_stride,
-                        &state.slater_matrix.pf_m_real,
-                        qp_start,
-                        qp_end,
-                        n_site,
-                        n_elec,
-                    );
+                    stage
+                        .propose_exchange(
+                            &geom,
+                            &mut StageTables {
+                                slater_elm: &state.slater_matrix.slater_elm_real,
+                                inv_m: &mut state.slater_matrix.inv_m_real,
+                                pf_m: &mut state.slater_matrix.pf_m_real,
+                                pool: &pool,
+                            },
+                            &tmp_ele_idx,
+                            [
+                                (candidate.mi, candidate.spin),
+                                (candidate.mj, candidate.spin_other),
+                            ],
+                            &mut pf_m_new,
+                        )
+                        .map_err(NormalInitializationError::Precondition)?;
                     timer.stop(66);
                     timer.start(67);
                     let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
@@ -476,25 +510,25 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
                         Complex64::new(log_ip_old, 0.0),
                         rng,
                     );
-                    if decision.accepted {
+                    if stage.decide(&decision) {
                         timer.start(68);
-                        update_m_all_two_real_flat(
-                            candidate.mi,
-                            candidate.spin,
-                            candidate.mj,
-                            candidate.spin_other,
-                            ri_old,
-                            rj_old,
-                            &tmp_ele_idx,
-                            &state.slater_matrix.slater_elm_real,
-                            state.slater_matrix.inv_m_real.as_mut_slice(),
-                            inv_stride,
-                            &mut state.slater_matrix.pf_m_real,
-                            qp_start,
-                            qp_end,
-                            n_site,
-                            n_elec,
-                        );
+                        stage
+                            .accept_exchange(
+                                &geom,
+                                &mut StageTables {
+                                    slater_elm: &state.slater_matrix.slater_elm_real,
+                                    inv_m: &mut state.slater_matrix.inv_m_real,
+                                    pf_m: &mut state.slater_matrix.pf_m_real,
+                                    pool: &pool,
+                                },
+                                &tmp_ele_idx,
+                                [
+                                    (candidate.mi, candidate.spin),
+                                    (candidate.mj, candidate.spin_other),
+                                ],
+                                [ri_old, rj_old],
+                            )
+                            .map_err(NormalInitializationError::Precondition)?;
                         timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
                         log_ip_old = log_ip_new;
@@ -534,20 +568,19 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
             // check (mirrors the upstream `n_accept > n_site` guard).
             if n_accept_window > n_site {
                 timer.start(34);
-                if !reducer.sampling_any_failure(
-                    calc_m_all_real(
+                let recompute_failed = stage
+                    .recompute(
+                        &geom,
+                        &mut StageTables {
+                            slater_elm: &state.slater_matrix.slater_elm_real,
+                            inv_m: &mut state.slater_matrix.inv_m_real,
+                            pf_m: &mut state.slater_matrix.pf_m_real,
+                            pool: &pool,
+                        },
                         &tmp_ele_idx,
-                        &state.slater_matrix.slater_elm_real,
-                        &mut state.slater_matrix.inv_m_real,
-                        &mut state.slater_matrix.pf_m_real,
-                        qp_start,
-                        qp_end,
-                        n_site,
-                        n_elec,
-                        &pool,
                     )
-                    .is_err(),
-                ) {
+                    .map_err(NormalInitializationError::Precondition)?;
+                if !reducer.sampling_any_failure(recompute_failed) {
                     log_ip_old =
                         sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
                 }

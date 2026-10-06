@@ -1,0 +1,13 @@
+method,L,W,seconds,hops_per_walker_per_call,hops_per_s,detail
+cpu-1thread,16,8,0.1398,2992,171267,
+cpu-multichain,16,8,0.0274,2992,872766,threads=8
+cuda-pageable,16,8,0.4660,2992,51364,passes=2916 max_batch=8 recv_ms=183.9 round_ms=194.7 deliver_ms=77.5 stage_ms=7.3 upload_ms=27.8 launch_ms=153.0 wait_ms=1.0 dev_accept_ms=0.0 slow_wait_ms=0.0 slow_batches=474 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,16,64,0.7092,2992,270014,
+cpu-multichain,16,64,0.0940,2992,2036408,threads=36
+cuda-pageable,16,64,0.9813,2992,195132,passes=2917 max_batch=64 recv_ms=382.6 round_ms=451.0 deliver_ms=87.1 stage_ms=22.1 upload_ms=49.1 launch_ms=363.8 wait_ms=2.9 dev_accept_ms=0.0 slow_wait_ms=0.0 slow_batches=2210 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,64,8,0.4367,2944,53936,
+cpu-multichain,64,8,0.0973,2944,242152,threads=8
+cuda-pageable,64,8,0.3194,2944,73749,passes=2382 max_batch=8 recv_ms=50.7 round_ms=233.3 deliver_ms=33.6 stage_ms=4.2 upload_ms=15.7 launch_ms=210.3 wait_ms=0.5 dev_accept_ms=0.0 slow_wait_ms=0.0 slow_batches=102 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,64,64,3.5309,2944,53362,
+cpu-multichain,64,64,0.2807,2944,671260,threads=36
+cuda-pageable,64,64,1.4995,2944,125655,passes=2383 max_batch=64 recv_ms=369.0 round_ms=1014.8 deliver_ms=71.7 stage_ms=18.2 upload_ms=36.0 launch_ms=949.8 wait_ms=2.5 dev_accept_ms=0.0 slow_wait_ms=0.0 slow_batches=679 dev_slow_ms=0.0 dev_propose_ms=0.0

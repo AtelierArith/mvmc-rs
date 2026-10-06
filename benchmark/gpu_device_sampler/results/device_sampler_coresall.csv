@@ -1,0 +1,45 @@
+method,L,W,seconds,hops_per_walker_per_call,hops_per_s,detail
+cpu-1thread,16,1,0.0097,2992,306961,
+cpu-multichain,16,1,0.0100,2992,298111,threads=1
+cuda-pinned,16,1,0.0896,2992,33393,passes=2911 max_batch=1 recv_ms=14.6 round_ms=66.0 deliver_ms=0.9 stage_ms=0.9 upload_ms=15.2 launch_ms=27.9 wait_ms=20.7 dev_accept_ms=0.0 slow_wait_ms=5.2 slow_batches=63 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,16,8,0.0653,2992,366522,
+cpu-multichain,16,8,0.0141,2992,1691651,threads=8
+cuda-pinned,16,8,0.1416,2992,168996,passes=3031 max_batch=8 recv_ms=11.6 round_ms=109.7 deliver_ms=12.0 stage_ms=2.8 upload_ms=20.4 launch_ms=49.5 wait_ms=35.1 dev_accept_ms=0.0 slow_wait_ms=0.1 slow_batches=479 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,16,64,0.5029,2992,380763,
+cpu-multichain,16,64,0.0817,2992,2342547,threads=36
+cuda-pinned,16,64,0.9316,2992,205549,passes=2917 max_batch=64 recv_ms=371.5 round_ms=391.3 deliver_ms=101.7 stage_ms=24.0 upload_ms=91.1 launch_ms=157.4 wait_ms=108.3 dev_accept_ms=0.0 slow_wait_ms=0.4 slow_batches=2210 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-multichain,16,512,0.6441,2992,2378472,threads=36
+cuda-pinned,16,512,1.9826,2992,772655,passes=2921 max_batch=512 recv_ms=866.4 round_ms=487.5 deliver_ms=289.1 stage_ms=59.6 upload_ms=91.1 launch_ms=130.2 wait_ms=188.9 dev_accept_ms=0.0 slow_wait_ms=1.7 slow_batches=2892 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,32,1,0.0203,2976,146651,
+cpu-multichain,32,1,0.0197,2976,150833,threads=1
+cuda-pinned,32,1,0.1064,2976,27976,passes=2720 max_batch=1 recv_ms=17.9 round_ms=76.4 deliver_ms=1.1 stage_ms=0.9 upload_ms=15.4 launch_ms=28.2 wait_ms=30.8 dev_accept_ms=0.0 slow_wait_ms=9.7 slow_batches=32 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,32,8,0.1483,2976,160544,
+cpu-multichain,32,8,0.0236,2976,1007985,threads=8
+cuda-pinned,32,8,0.1822,2976,130656,passes=2860 max_batch=8 recv_ms=19.5 round_ms=134.2 deliver_ms=21.3 stage_ms=2.7 upload_ms=19.9 launch_ms=45.7 wait_ms=64.1 dev_accept_ms=0.0 slow_wait_ms=0.3 slow_batches=225 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,32,64,1.0788,2976,176556,
+cpu-multichain,32,64,0.0774,2976,2460439,threads=36
+cuda-pinned,32,64,0.8515,2976,223677,passes=2749 max_batch=64 recv_ms=215.8 round_ms=355.3 deliver_ms=77.7 stage_ms=17.5 upload_ms=60.2 launch_ms=106.8 wait_ms=163.9 dev_accept_ms=0.0 slow_wait_ms=1.8 slow_batches=1343 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-multichain,32,512,0.5769,2976,2641102,threads=36
+cuda-pinned,32,512,2.1424,2976,711208,passes=2723 max_batch=512 recv_ms=640.9 round_ms=780.9 deliver_ms=235.1 stage_ms=50.1 upload_ms=80.9 launch_ms=118.8 wait_ms=514.7 dev_accept_ms=0.0 slow_wait_ms=10.1 slow_batches=2654 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,64,1,0.0504,2944,58411,
+cpu-multichain,64,1,0.0523,2944,56286,threads=1
+cuda-pinned,64,1,0.1190,2944,24749,passes=2382 max_batch=1 recv_ms=21.3 round_ms=84.5 deliver_ms=2.6 stage_ms=0.9 upload_ms=15.1 launch_ms=27.8 wait_ms=39.4 dev_accept_ms=0.0 slow_wait_ms=13.7 slow_batches=14 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,64,8,0.4381,2944,53764,
+cpu-multichain,64,8,0.0583,2944,404226,threads=8
+cuda-pinned,64,8,0.2064,2944,114084,passes=2538 max_batch=8 recv_ms=25.2 round_ms=145.0 deliver_ms=27.1 stage_ms=2.5 upload_ms=17.2 launch_ms=38.8 wait_ms=84.9 dev_accept_ms=0.0 slow_wait_ms=1.4 slow_batches=100 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,64,64,4.5636,2944,41287,
+cpu-multichain,64,64,0.2490,2944,756793,threads=36
+cuda-pinned,64,64,0.9136,2944,206243,passes=2426 max_batch=64 recv_ms=183.1 round_ms=507.7 deliver_ms=68.9 stage_ms=14.4 upload_ms=48.3 launch_ms=85.0 wait_ms=354.4 dev_accept_ms=0.0 slow_wait_ms=9.9 slow_batches=677 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-multichain,64,512,1.7253,2944,873657,threads=36
+cuda-pinned,64,512,4.0697,2944,370381,passes=2400 max_batch=512 recv_ms=766.6 round_ms=2313.8 deliver_ms=264.1 stage_ms=50.1 upload_ms=73.7 launch_ms=114.2 wait_ms=2061.2 dev_accept_ms=0.0 slow_wait_ms=63.2 slow_batches=2074 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,128,1,0.1265,2944,23274,
+cpu-multichain,128,1,0.1175,2944,25056,threads=1
+cuda-pinned,128,1,0.1348,2944,21843,passes=1797 max_batch=1 recv_ms=26.2 round_ms=82.4 deliver_ms=1.8 stage_ms=0.7 upload_ms=10.8 launch_ms=19.1 wait_ms=51.0 dev_accept_ms=0.0 slow_wait_ms=19.6 slow_batches=5 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,128,8,1.0058,2944,23416,
+cpu-multichain,128,8,0.1602,2944,147046,threads=8
+cuda-pinned,128,8,0.3015,2944,78110,passes=2015 max_batch=8 recv_ms=42.9 round_ms=207.2 deliver_ms=23.9 stage_ms=2.0 upload_ms=14.6 launch_ms=32.8 wait_ms=156.5 dev_accept_ms=0.0 slow_wait_ms=10.5 slow_batches=36 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-1thread,128,64,8.0922,2944,23284,
+cpu-multichain,128,64,0.7562,2944,249158,threads=36
+cuda-pinned,128,64,2.7497,2944,68522,passes=1824 max_batch=64 recv_ms=1212.5 round_ms=1025.9 deliver_ms=114.0 stage_ms=17.6 upload_ms=69.8 launch_ms=110.7 wait_ms=820.6 dev_accept_ms=0.0 slow_wait_ms=75.4 slow_batches=262 dev_slow_ms=0.0 dev_propose_ms=0.0
+cpu-multichain,128,512,4.9409,2944,305071,threads=36
+cuda-pinned,128,512,10.1193,2944,148955,passes=1810 max_batch=512 recv_ms=1571.0 round_ms=6430.9 deliver_ms=200.2 stage_ms=47.2 upload_ms=69.6 launch_ms=103.2 wait_ms=6199.8 dev_accept_ms=0.0 slow_wait_ms=580.7 slow_batches=934 dev_slow_ms=0.0 dev_propose_ms=0.0
