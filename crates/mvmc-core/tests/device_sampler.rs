@@ -176,3 +176,67 @@ fn teacher_reports_a_forced_flip_as_a_defect() {
     assert!(rep.flips >= 1);
     assert!(rep.defects >= 1);
 }
+
+fn device_run(c: &Case) -> (SamplingWalker, SamplingWalker) {
+    let mut cpu = walker(c, 0);
+    vmc_make_sample_real(&cpu.data, &mut cpu.state, &mut cpu.rng).unwrap();
+    let mut ws = vec![walker(c, 0)];
+    run_lockstep_real(&mut ws, &mut HostService::new(), LockstepOptions::default()).unwrap();
+    (ws.pop().unwrap(), cpu)
+}
+
+/// Issue #454: a device-resident run leaves the host inverse table marked stale, and any read
+/// of it fails loudly instead of returning out-of-date numbers.
+#[test]
+#[should_panic(expected = "stale inverse table read")]
+fn stale_host_inverse_read_after_device_run_panics() {
+    let (w, _) = device_run(&hubbard());
+    assert!(w.state.slater_matrix.inv_m_real.is_stale());
+    let _ = w.state.slater_matrix.inv_m_real.as_slice();
+}
+
+#[test]
+#[should_panic(expected = "stale inverse table read")]
+fn stale_host_inverse_element_read_panics() {
+    let (w, _) = device_run(&heisenberg());
+    let _ = w.state.slater_matrix.inv_m_real.get(0, 0, 1);
+}
+
+/// The Pfaffian buffer is kept current by the stage (hop, exchange and recompute copies), so it
+/// equals the CPU sampler's, for hopping and for exchange moves; the CPU tables are not stale.
+#[test]
+fn host_pfaffians_after_device_run_equal_cpu_sampler() {
+    for c in [hubbard(), heisenberg()] {
+        let (dev, cpu) = device_run(&c);
+        assert!(!cpu.state.slater_matrix.inv_m_real.is_stale());
+        let (a, b) = (
+            &dev.state.slater_matrix.pf_m_real,
+            &cpu.state.slater_matrix.pf_m_real,
+        );
+        assert_eq!(a.len(), b.len());
+        for (x, y) in a.iter().zip(b) {
+            // same implementation and operation order: identical up to rounding of the copy
+            assert!((x - y).abs() <= 1e-12 * y.abs().max(1.0), "pf {x} vs {y}");
+        }
+    }
+}
+
+/// Recomputing is the way back to a valid table: the next sampling call recomputes every plane
+/// first, which clears the flag, and the tables match the CPU sampler's.
+#[test]
+fn recompute_after_device_run_makes_the_table_valid_again() {
+    let c = hubbard();
+    let (mut dev, mut cpu) = device_run(&c);
+    assert!(dev.state.slater_matrix.inv_m_real.is_stale());
+    vmc_make_sample_real(&dev.data, &mut dev.state, &mut dev.rng).unwrap();
+    vmc_make_sample_real(&cpu.data, &mut cpu.state, &mut cpu.rng).unwrap();
+    assert!(!dev.state.slater_matrix.inv_m_real.is_stale());
+    let (a, b) = (
+        dev.state.slater_matrix.inv_m_real.as_slice(),
+        cpu.state.slater_matrix.inv_m_real.as_slice(),
+    );
+    assert_eq!(a.len(), b.len());
+    for (x, y) in a.iter().zip(b) {
+        assert!((x - y).abs() <= 1e-9 * y.abs().max(1.0), "inv {x} vs {y}");
+    }
+}

@@ -366,6 +366,9 @@ struct TeacherState {
     report: TeacherReport,
 }
 
+/// Reason carried by the stale-table panic after a device-resident run.
+pub const STALE_REASON: &str = "device-resident sampling run: inverses live on the device";
+
 /// Per-walker stage: forwards the Pfaffian operations to the service thread.
 pub struct WalkerStage {
     walker: usize,
@@ -378,6 +381,8 @@ pub struct WalkerStage {
     /// Host copy of the accepted configuration is the sampler's own `tmp_ele_idx`; the stage only
     /// remembers the pending proposal's moves (for the accepted-move bookkeeping).
     pending: Option<ProposeReq>,
+    /// Pfaffians of the proposed exchange, copied to the host buffer when it is accepted.
+    exchange_pf: Vec<f64>,
 }
 
 impl WalkerStage {
@@ -486,6 +491,7 @@ impl RealPfStage for WalkerStage {
         match self.call(Msg::Propose(req))? {
             Reply::Pf(v) => {
                 pf_new.copy_from_slice(&v);
+                self.exchange_pf = v;
                 Ok(())
             }
             _ => Err("unexpected reply to an exchange proposal".to_string()),
@@ -495,7 +501,7 @@ impl RealPfStage for WalkerStage {
     fn accept_exchange(
         &mut self,
         _g: &StageGeom,
-        _t: &mut StageTables<'_>,
+        t: &mut StageTables<'_>,
         _ele_idx: &[i64],
         _slots: [(usize, u8); 2],
         _old_sites: [usize; 2],
@@ -503,7 +509,10 @@ impl RealPfStage for WalkerStage {
         self.pending = None;
         self.tx
             .send(Msg::Accept(self.walker))
-            .map_err(|_| "device service stopped".to_string())
+            .map_err(|_| "device service stopped".to_string())?;
+        // Like the CPU in-place update, keep the host Pfaffian buffer current (issue #454).
+        t.pf_m.copy_from_slice(&self.exchange_pf);
+        Ok(())
     }
 
     fn recompute(
@@ -685,6 +694,7 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
                 }),
                 geom,
                 pending: None,
+                exchange_pf: Vec::new(),
             };
             let done_tx = tx.clone();
             handles.push(scope.spawn(move || {
@@ -708,6 +718,14 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
                     &mut stage,
                 );
                 let decisions = trace::finish_decisions();
+                // The inverses live on the device and the host table was never updated by the
+                // accepted moves: make a later read fail loudly (issue #454). `pf_m_real` is kept
+                // current by the stage (hop, exchange and recompute copies).
+                walker
+                    .state
+                    .slater_matrix
+                    .inv_m_real
+                    .mark_stale(STALE_REASON);
                 WalkerRun {
                     stats: result.map_err(|e| e.to_string()),
                     decisions,
