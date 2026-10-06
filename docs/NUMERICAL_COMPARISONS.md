@@ -476,7 +476,9 @@ identical to `main`), "after" is this change.
 | Sandybridge / reference BLAS with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
 | GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | 1 and default | same 16 (+4 stderr-comparison artefacts of `OPENBLAS_VERBOSE`) | pass (`BLAS matrix` workflow, PR #459) |
 | GitHub macOS 15 ARM64 VM (Apple M1 Virtual), Homebrew OpenBLAS 0.3.34, `OPENBLAS_CORETYPE` unset (core `armv8`) | 1 and default | same 16 (+4 artefacts) | pass (`BLAS matrix` workflow, PR #459) |
-| macOS Accelerate | n/a | link error | unsupported: `mvmc-core/build.rs` links `openblas` unconditionally (`ld: library 'openblas' not found`); not changed here |
+| macOS 15 ARM64 VM, **Accelerate** (`MVMC_BLAS_PROVIDER=accelerate`, #474) | default | link error before #474 (`ld: library 'openblas' not found`) | 1578 pass with the kernel-aware bounds (`kernel_class` = `Unverified`; `BLAS matrix` run 37500455643) |
+| same, strict reference bounds forced (`MVMC_BLAS_KERNEL_CLASS=reference`, informational probe) | default | n/a | the same 16 tests fail as on every other non-reference provider (1562 pass, 16 fail); no test outside the documented set, so no new finding |
+| Reference BLAS/LAPACK built as a provider (`MVMC_BLAS_PROVIDER=netlib`, `LD_LIBRARY_PATH` to `/usr/lib/x86_64-linux-gnu/{blas,lapack}`, local) | 1 | n/a | 1070 pass (`kernel_class` = `Unverified`: the reference library does not export `openblas_get_corename`) |
 | macOS ARM64 `NEOVERSEN1` (main CI, Homebrew OpenBLAS, overlay references) | 1 | pass | pass (strict bounds) |
 
 The four extra `mvmc-cli::issue348_multidef` failures in the first run of the optional workflow
@@ -527,6 +529,17 @@ difference"; no defect was found, the backward-error and invariant checks pass o
   On `Unverified` kernels those two records use `abs 1e-9, rel 1e-7` (at least 16 times the
   observed deviation); Haswell reproduces all of them at the strict bound and the
   independently generated native-C Green fixtures keep the strict bound on every kernel.
+
+**Provider selection (#474).** The provider is chosen at build time with `MVMC_BLAS_PROVIDER`
+(`openblas` default, `accelerate`, `mkl`, `netlib`; `build_support/blas_provider.rs`, shared by
+the build scripts of `mvmc-core`, `mvmc-uhf` and `pfapack`). The default emits the same link
+directives as before, so Linux OpenBLAS (the numerical reference) is unchanged; the OpenBLAS
+and MKL providers also set the process BLAS thread count to 1 for the serial SR path,
+Accelerate and netlib are used as linked. Accelerate is detected as `Unverified` (no
+`openblas_get_corename`), so its test run uses the kernel-aware bounds above; the probe job that
+forces the strict bounds on Accelerate fails exactly the 16 tests of the matrix (Accelerate
+is, like Sandybridge or reference BLAS, a provider whose GEMV/solve rounding differs from the
+FMA reference kernels), with no failure outside that set. MKL was not exercised (no runner).
 
 Reproduction: `OPENBLAS_NUM_THREADS=1 OPENBLAS_CORETYPE=Sandybridge cargo nextest run -p mvmc-core
 -p mvmc-cli --cargo-profile test-fast --no-fail-fast`; add `MVMC_BLAS_KERNEL_CLASS=reference` to
