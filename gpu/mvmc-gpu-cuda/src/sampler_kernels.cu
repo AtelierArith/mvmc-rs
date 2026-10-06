@@ -176,13 +176,28 @@ extern "C" __global__ void k_accept(const int* acc_w, const double* const* slate
     const double inv_vec1_a = -1.0 / tmp;
     for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
     __syncthreads();
-    for (int e = tid; e < n * n; e += nt) {
-      const int i = e / n, j = e % n;
-      double x = invq[e];
-      x += v1[i] * v2[j] - v1[j] * v2[i];
-      if (j == msa) x -= v2[i];
-      if (i == msa) x += v2[j];
-      invq[e] = x;
+    // rank-two update, 8 elements per thread in flight: the loads of the group are issued before
+    // any store (the loop is latency bound, not bandwidth bound)
+    const int nn = n * n;
+    for (int base = tid; base < nn; base += 8 * nt) {
+      double xv[8];
+#pragma unroll
+      for (int u = 0; u < 8; ++u) {
+        const int e = base + u * nt;
+        xv[u] = (e < nn) ? invq[e] : 0.0;
+      }
+#pragma unroll
+      for (int u = 0; u < 8; ++u) {
+        const int e = base + u * nt;
+        if (e < nn) {
+          const int i = e / n, j = e % n;
+          double x = xv[u];
+          x += v1[i] * v2[j] - v1[j] * v2[i];
+          if (j == msa) x -= v2[i];
+          if (i == msa) x += v2[j];
+          invq[e] = x;
+        }
+      }
     }
     if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
     return;
@@ -234,21 +249,33 @@ extern "C" __global__ void k_accept(const int* acc_w, const double* const* slate
     vt[i] = inv_det * invq[(size_t)msb * n + i];
   }
   __syncthreads();
-  for (int idx = tid; idx < n * n; idx += nt) {
-    const int i = idx / n, j = idx % n;
-    const double p_i = vp[i], q_i = vq[i], s_i = vs[i], t_i = vt[i];
-    const double p_j = vp[j], q_j = vq[j], s_j = vs[j], t_j = vt[j];
-    double x = invq[idx];
-    x += a * (q_i * t_j - q_j * t_i) + b * (q_i * s_j - q_j * s_i) +
-         c * (p_i * t_j - p_j * t_i) + d * (p_i * s_j - p_j * s_i) +
-         e * det * (s_i * t_j - s_j * t_i) + f * inv_det * (p_i * q_j - q_i * p_j);
-    if (j == msa) x += -c * t_i - d * s_i - f * inv_det * q_i;
-    if (j == msb) x += -a * t_i - b * s_i + f * inv_det * p_i;
-    if (i == msa) x += c * t_j + d * s_j + f * inv_det * q_j;
-    if (i == msb) x += a * t_j + b * s_j - f * inv_det * p_j;
-    if (i == msa && j == msb) x += f * inv_det;
-    if (i == msb && j == msa) x -= f * inv_det;
-    invq[idx] = x;
+  const int nn2 = n * n;
+  for (int base = tid; base < nn2; base += 4 * nt) {
+    double xv[4];
+#pragma unroll
+    for (int u = 0; u < 4; ++u) {
+      const int idx = base + u * nt;
+      xv[u] = (idx < nn2) ? invq[idx] : 0.0;
+    }
+#pragma unroll
+    for (int u = 0; u < 4; ++u) {
+      const int idx = base + u * nt;
+      if (idx >= nn2) continue;
+      const int i = idx / n, j = idx % n;
+      const double p_i = vp[i], q_i = vq[i], s_i = vs[i], t_i = vt[i];
+      const double p_j = vp[j], q_j = vq[j], s_j = vs[j], t_j = vt[j];
+      double x = xv[u];
+      x += a * (q_i * t_j - q_j * t_i) + b * (q_i * s_j - q_j * s_i) +
+           c * (p_i * t_j - p_j * t_i) + d * (p_i * s_j - p_j * s_i) +
+           e * det * (s_i * t_j - s_j * t_i) + f * inv_det * (p_i * q_j - q_i * p_j);
+      if (j == msa) x += -c * t_i - d * s_i - f * inv_det * q_i;
+      if (j == msb) x += -a * t_i - b * s_i + f * inv_det * p_i;
+      if (i == msa) x += c * t_j + d * s_j + f * inv_det * q_j;
+      if (i == msb) x += a * t_j + b * s_j - f * inv_det * p_j;
+      if (i == msa && j == msb) x += f * inv_det;
+      if (i == msb && j == msa) x -= f * inv_det;
+      invq[idx] = x;
+    }
   }
 }
 

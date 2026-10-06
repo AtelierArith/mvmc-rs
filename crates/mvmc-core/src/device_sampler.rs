@@ -252,7 +252,9 @@ impl ReplySlot {
             if t0.elapsed() < spin {
                 std::hint::spin_loop();
             } else {
-                std::thread::park_timeout(Duration::from_micros(200));
+                // plain park: the unpark token cannot be lost, and a timeout would wake every
+                // parked walker spuriously (hundreds of walkers on few cores thrash)
+                std::thread::park();
             }
         }
     }
