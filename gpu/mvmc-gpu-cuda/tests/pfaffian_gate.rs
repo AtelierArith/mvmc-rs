@@ -194,11 +194,14 @@ fn cuda_pfaffian_passes_the_validation_harness_replay() {
     use mvmc_core::accel_validation::{replay, ReplayConfig};
     use mvmc_gpu::stages::BatchedStages;
 
-    let Some(e) = engine() else { return };
-    let mut stages = BatchedStages::new(Backend::Engine(&e), "batched-cuda-pfaffian");
+    let Some(_) = engine() else { return };
+    // the persistent engine compiles the kernel once; the replay issues hundreds of calls
+    let e = mvmc_gpu_cuda::pfaffian::PersistentCudaEngine::new(0);
+    let mut stages =
+        BatchedStages::new(Backend::Engine(&e), "batched-cuda-pfaffian").into_stage_backend();
     let rep = replay(&mut stages, &ReplayConfig::default()).expect("replay");
     println!("{}", rep.render());
-    // only S and g are unsupported by this stage set; everything Pfaffian-related is compared
+    // the SR slot is the C-order oracle here; everything Pfaffian-related is compared
     let bad: Vec<_> = rep
         .violations()
         .into_iter()

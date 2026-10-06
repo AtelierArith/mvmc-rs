@@ -1,18 +1,18 @@
-//! [`AcceleratedStages::pfaffian_inverse`] over the batched backends, for the validation
-//! harness of issue #424 (`mvmc_core::accel_validation`).
+//! [`PfaffianStages`] over the batched backends: the Pfaffian slot of the unified
+//! `mvmc_core::stage_backend::StageBackend` (issues #437, #424).
 //!
-//! Convention. The harness oracle (`CpuOracle`) returns the true inverse `X^-1`
+//! Convention. The harness oracle (`COrderPfaffian`) returns the true inverse `X^-1`
 //! (`X * inv = I`), the output of `utu2inv` without the final sign flip. This crate's `inv`
 //! has the same convention, so the mapping is the identity. mVMC's `invM` (C
 //! `CalculateMAll`, Rust `calc_m_all_real`) is `-X^-1`: those routines finish with
 //! `M_DSCAL(&nsq, &minus_one, invM, &one)` (`mvmc_core::pfaffian`,
 //! `calc_m_all_child_real`), so `invM = -inv` and `pf` is unchanged.
 //!
-//! The harness evaluates one matrix per call, so each call is a batch of one plane
-//! (`NQP = 1, B = 1`). The SR stage is not provided here and reports `Unsupported`
-//! (never a CPU fallback).
+//! A call with `planes` matrices is one batch of `planes` planes (`NQP = planes, B = 1`).
 
-use mvmc_core::accel_validation::{AcceleratedStages, PfInv, SrSg, StageError};
+use mvmc_core::stage_backend::{
+    PfInvBatch, PfaffianStages, PlaneOutcome, StageBackend, StageError,
+};
 
 use crate::{pfaffian_inverse_batched, Backend, PlaneStatus};
 
@@ -30,12 +30,20 @@ impl<'a> BatchedStages<'a> {
             label: label.to_string(),
         }
     }
+
+    /// The C-order SR stages (`COrderSr`) composed with this Pfaffian stage in one
+    /// [`StageBackend`] labelled like the stage.
+    pub fn into_stage_backend(self) -> StageBackend<'a> {
+        let label = self.label.clone();
+        StageBackend::c_order().with_pfaffian(&label, Box::new(self))
+    }
 }
 
-impl AcceleratedStages for BatchedStages<'_> {
+impl PfaffianStages for BatchedStages<'_> {
     fn label(&self) -> String {
         self.label.clone()
     }
+
     fn provider(&self) -> String {
         format!(
             "mvmc-gpu pfaffian_inverse_batched, backend {:?}",
@@ -43,31 +51,26 @@ impl AcceleratedStages for BatchedStages<'_> {
         )
     }
 
-    fn pfaffian_inverse(&mut self, x: &[f64], n: usize) -> Result<PfInv, StageError> {
-        let out = pfaffian_inverse_batched(&self.backend, x, n, 1, 1)
-            .map_err(|e| StageError::Failed(e.to_string()))?;
-        match out.status[0] {
-            PlaneStatus::Ok => Ok(PfInv {
-                pf: out.pf[0],
-                inv: out.inv,
-            }),
-            PlaneStatus::ZeroPivot { row } => {
-                Err(StageError::Failed(format!("zero pivot at {row}")))
-            }
-            PlaneStatus::NonFinite => Err(StageError::Failed("non-finite Pfaffian".into())),
-        }
-    }
-
-    fn sr_s_g(
+    fn pfaffian_inverse_batch(
         &mut self,
-        _o: &[f64],
-        _nsample: usize,
-        _npara: usize,
-        _e: &[f64],
-        _w: &[f64],
-    ) -> Result<SrSg, StageError> {
-        Err(StageError::Unsupported(
-            "the batched Pfaffian backends provide no SR stage".to_string(),
-        ))
+        x: &[f64],
+        n: usize,
+        planes: usize,
+    ) -> Result<PfInvBatch, StageError> {
+        let out = pfaffian_inverse_batched(&self.backend, x, n, planes, 1)
+            .map_err(|e| StageError::Failed(e.to_string()))?;
+        Ok(PfInvBatch {
+            pf: out.pf,
+            inv: out.inv,
+            outcome: out
+                .status
+                .into_iter()
+                .map(|s| match s {
+                    PlaneStatus::Ok => PlaneOutcome::Ok,
+                    PlaneStatus::ZeroPivot { row } => PlaneOutcome::ZeroPivot { row },
+                    PlaneStatus::NonFinite => PlaneOutcome::NonFinite,
+                })
+                .collect(),
+        })
     }
 }

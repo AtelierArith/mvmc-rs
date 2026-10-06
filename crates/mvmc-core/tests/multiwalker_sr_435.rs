@@ -620,9 +620,9 @@ fn thread_reducer_collectives_follow_the_mpi_contract() {
 /// path equals the serial tenferro run byte for byte.
 #[test]
 fn multi_walker_optimization_runs_through_the_tenferro_sr_backend() {
-    use mvmc_core::sr_backend::{set_sr_backend_override, SrBackendKind};
+    use mvmc_core::stage_backend::{set_stage_backend_override, StageBackendKind};
     let _guard = lock();
-    set_sr_backend_override(Some(SrBackendKind::Tenferro));
+    set_stage_backend_override(Some(StageBackendKind::TenferroCpu));
     let result = std::panic::catch_unwind(|| {
         let all = cells();
         for cell in all
@@ -654,7 +654,7 @@ fn multi_walker_optimization_runs_through_the_tenferro_sr_backend() {
         assert_eq!(a[0].state.energy.etot, b[0].state.energy.etot);
         assert_eq!(a[1].rng.state_snapshot(), b[1].rng.state_snapshot());
     });
-    set_sr_backend_override(None);
+    set_stage_backend_override(None);
     if let Err(e) = result {
         std::panic::resume_unwind(e);
     }

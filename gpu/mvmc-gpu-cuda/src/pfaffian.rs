@@ -299,3 +299,131 @@ impl BatchedEngine for CudaEngine {
         with_session(self.device, |s| Ok(s.run_timed(planes, n, count)?.0))
     }
 }
+
+enum Job {
+    F64 {
+        planes: Vec<f64>,
+        n: usize,
+        count: usize,
+        reply: std::sync::mpsc::Sender<Result<BatchOutput<f64>, Error>>,
+    },
+    C64 {
+        planes: Vec<Complex64>,
+        n: usize,
+        count: usize,
+        reply: std::sync::mpsc::Sender<Result<BatchOutput<Complex64>, Error>>,
+    },
+}
+
+/// Engine that keeps one CUDA session and the compiled kernel module alive on a worker thread
+/// (`raw::Module` is `!Send`, so it cannot be stored in the engine itself). The first call
+/// pays the context creation and NVRTC compile; later calls only upload, launch and download.
+/// This is the engine of the unified stage backend (`stages::cuda_stage_backend`), where the
+/// validation harness and production issue many small calls. The worker ends when the engine
+/// is dropped.
+pub struct PersistentCudaEngine {
+    device: usize,
+    tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<Job>>>,
+}
+
+impl PersistentCudaEngine {
+    /// Engine for CUDA device `device`; the worker starts lazily on the first call.
+    pub fn new(device: usize) -> Self {
+        Self {
+            device,
+            tx: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn submit(&self, job: Job) -> Result<(), Error> {
+        let mut guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
+        let tx = guard.get_or_insert_with(|| {
+            let (tx, rx) = std::sync::mpsc::channel::<Job>();
+            let rx = std::sync::Arc::new(std::sync::Mutex::new(rx));
+            let device = self.device;
+            std::thread::spawn(move || {
+                let worker_rx = rx.clone();
+                let started = with_session(device, move |s| {
+                    let rx = worker_rx.lock().unwrap_or_else(|e| e.into_inner());
+                    for job in rx.iter() {
+                        match job {
+                            Job::F64 {
+                                planes,
+                                n,
+                                count,
+                                reply,
+                            } => {
+                                let _ = reply.send(s.run_timed(&planes, n, count).map(|r| r.0));
+                            }
+                            Job::C64 {
+                                planes,
+                                n,
+                                count,
+                                reply,
+                            } => {
+                                let _ = reply.send(s.run_timed(&planes, n, count).map(|r| r.0));
+                            }
+                        }
+                    }
+                    Ok(())
+                });
+                if let Err(e) = started {
+                    let msg = e.to_string();
+                    let rx = rx.lock().unwrap_or_else(|e| e.into_inner());
+                    for job in rx.iter() {
+                        match job {
+                            Job::F64 { reply, .. } => {
+                                let _ = reply.send(Err(Error::BackendUnavailable(msg.clone())));
+                            }
+                            Job::C64 { reply, .. } => {
+                                let _ = reply.send(Err(Error::BackendUnavailable(msg.clone())));
+                            }
+                        }
+                    }
+                }
+            });
+            tx
+        });
+        tx.send(job)
+            .map_err(|_| Error::Backend("CUDA worker thread ended".to_string()))
+    }
+}
+
+impl std::fmt::Debug for PersistentCudaEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PersistentCudaEngine(cuda:{})", self.device)
+    }
+}
+
+impl BatchedEngine for PersistentCudaEngine {
+    fn name(&self) -> String {
+        format!("cuda:{} (persistent session)", self.device)
+    }
+    fn run_f64(&self, planes: &[f64], n: usize, count: usize) -> Result<BatchOutput<f64>, Error> {
+        let (reply, rx) = std::sync::mpsc::channel();
+        self.submit(Job::F64 {
+            planes: planes.to_vec(),
+            n,
+            count,
+            reply,
+        })?;
+        rx.recv()
+            .map_err(|_| Error::Backend("CUDA worker thread ended".to_string()))?
+    }
+    fn run_c64(
+        &self,
+        planes: &[Complex64],
+        n: usize,
+        count: usize,
+    ) -> Result<BatchOutput<Complex64>, Error> {
+        let (reply, rx) = std::sync::mpsc::channel();
+        self.submit(Job::C64 {
+            planes: planes.to_vec(),
+            n,
+            count,
+            reply,
+        })?;
+        rx.recv()
+            .map_err(|_| Error::Backend("CUDA worker thread ended".to_string()))?
+    }
+}

@@ -115,6 +115,11 @@ pub trait CudaProvider: Send + Sync {
     fn device_count(&self) -> Result<usize, String>;
     /// Device and library versions for one device ordinal.
     fn report(&self, ordinal: usize) -> Result<DeviceReport, String>;
+    /// The unified stage backend (SR stages and batched Pfaffian) on one device ordinal.
+    fn open_stage_backend(
+        &self,
+        ordinal: usize,
+    ) -> Result<crate::stage_backend::StageBackend<'static>, String>;
 }
 
 #[cfg(feature = "gpu-cuda")]
@@ -132,6 +137,36 @@ fn cuda_provider() -> Result<&'static dyn CudaProvider, BackendError> {
         .get()
         .map(|p| p.as_ref())
         .ok_or(BackendError::NoCudaProvider)
+}
+
+/// Open the unified CUDA stage backend on `ordinal` (see `crate::stage_backend`).
+///
+/// An error without the `gpu-cuda` feature, without a registered provider or without that
+/// device; never a CPU fallback.
+#[cfg(not(feature = "gpu-cuda"))]
+pub fn open_cuda_stage_backend(
+    _ordinal: usize,
+) -> Result<crate::stage_backend::StageBackend<'static>, BackendError> {
+    Err(BackendError::CudaNotCompiled)
+}
+
+/// Open the unified CUDA stage backend on `ordinal` (see `crate::stage_backend`).
+///
+/// An error without the `gpu-cuda` feature, without a registered provider or without that
+/// device; never a CPU fallback.
+#[cfg(feature = "gpu-cuda")]
+pub fn open_cuda_stage_backend(
+    ordinal: usize,
+) -> Result<crate::stage_backend::StageBackend<'static>, BackendError> {
+    let count = cuda_device_count()?;
+    if ordinal >= count {
+        return Err(BackendError::Device(format!(
+            "CUDA device {ordinal} requested but {count} device(s) found"
+        )));
+    }
+    cuda_provider()?
+        .open_stage_backend(ordinal)
+        .map_err(BackendError::Device)
 }
 
 /// Number of CUDA devices. `Err` when CUDA support is not compiled in or not registered.

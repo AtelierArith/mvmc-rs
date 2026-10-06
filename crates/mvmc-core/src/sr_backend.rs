@@ -1,7 +1,7 @@
 //! Stage-level backend for the Stochastic Reconfiguration (SR) tensor work (issue #421,
 //! design: `docs/design/gpu-readiness.md`, sections 5.2 and 5.3).
 //!
-//! The SR step has four tensor-shaped stages, all dispatched through [`SrBackend`]:
+//! The SR step has four tensor-shaped stages, all dispatched through [`SrStages`]:
 //!
 //! 1. the Gram product `OO = O O^H` of the saved-sample store (`finalize_oo_store*`),
 //! 2. the S matrix / force `g` assembly (`sr.rs`),
@@ -38,7 +38,7 @@
 //! equivalence test uses exactly that bound with a safety factor. The decision is: C order
 //! stays authoritative and default, the accelerated order is opt-in and tolerance-validated.
 
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::Arc;
 
 use num_complex::Complex64;
 use tenferro_ad::{EagerRuntime, EagerTensor};
@@ -46,70 +46,10 @@ use tenferro_cpu::CpuBackend;
 use tenferro_linalg::EagerTensorLinalgExt;
 use tenferro_tensor::{DotGeneralConfig, Tensor, TensorRead};
 
-/// Selectable SR implementations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SrBackendKind {
-    /// The C-order BLAS/LAPACK implementation (default, parity oracle).
-    COrder,
-    /// tenferro eager ops on the CPU backend (`cpu-faer`).
-    Tenferro,
-}
+use crate::stage_backend::{centered, SrSg, StageError};
 
-/// Environment variable selecting the SR backend (`c-order` or `tenferro`).
-pub const SR_BACKEND_VARIABLE: &str = "MVMC_RS_SR_BACKEND";
-
-static OVERRIDE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
-
-/// Process-wide override of the backend choice for tests (`None` restores env/default).
-pub fn set_sr_backend_override(kind: Option<SrBackendKind>) {
-    let v = match kind {
-        None => 0,
-        Some(SrBackendKind::COrder) => 1,
-        Some(SrBackendKind::Tenferro) => 2,
-    };
-    OVERRIDE.store(v, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Parse a backend selector value.
-pub fn parse_sr_backend(value: &str) -> Result<SrBackendKind, String> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "" | "c" | "c-order" | "corder" | "default" => Ok(SrBackendKind::COrder),
-        "tenferro" | "tenferro-cpu" => Ok(SrBackendKind::Tenferro),
-        other => Err(format!(
-            "{SR_BACKEND_VARIABLE}={other:?} is not one of c-order, tenferro"
-        )),
-    }
-}
-
-/// The backend chosen by the override, then the environment, then the default (C order).
-///
-/// An invalid environment value is a hard error, never a silent fallback.
-pub fn selected_sr_backend() -> SrBackendKind {
-    match OVERRIDE.load(std::sync::atomic::Ordering::SeqCst) {
-        1 => return SrBackendKind::COrder,
-        2 => return SrBackendKind::Tenferro,
-        _ => {}
-    }
-    match std::env::var(SR_BACKEND_VARIABLE) {
-        Ok(v) => parse_sr_backend(&v).unwrap_or_else(|e| panic!("{e}")),
-        Err(_) => SrBackendKind::COrder,
-    }
-}
-
-/// Backend failure of the opt-in path (typed, never swallowed into the C-order path).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SrBackendError(pub String);
-
-impl std::fmt::Display for SrBackendError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SR backend error: {}", self.0)
-    }
-}
-
-impl std::error::Error for SrBackendError {}
-
-fn err(e: impl std::fmt::Display) -> SrBackendError {
-    SrBackendError(e.to_string())
+fn err(e: impl std::fmt::Display) -> StageError {
+    StageError::Failed(e.to_string())
 }
 
 /// A strided view of real values: a real array or the real parts of a complex array.
@@ -169,9 +109,29 @@ pub struct CgSamples<'a> {
 }
 
 /// Stage-level SR backend.
-pub trait SrBackend: Send {
+pub trait SrStages: Send {
     /// Human-readable label for logs and result files.
     fn label(&self) -> String;
+
+    /// Provider description recorded in the benchmark metadata.
+    fn provider(&self) -> String;
+
+    /// Profiling counters of backends that keep them (`None` otherwise).
+    fn stats(&self) -> Option<TenferroStats> {
+        None
+    }
+
+    /// `S = sum_s w_s dO_s dO_s^T` and `g = sum_s w_s dO_s dE_s` with `dO = O - <O>` and
+    /// `dE = E - <E>` (`<.>` weighted by `w`, `sum w = 1`); `o` is column-major
+    /// `nsample x npara`. This is the validation harness's composite SR stage.
+    fn sr_s_g(
+        &mut self,
+        o: &[f64],
+        nsample: usize,
+        npara: usize,
+        e: &[f64],
+        w: &[f64],
+    ) -> Result<SrSg, StageError>;
 
     /// Real Gram `out = O O^T` for the `[n, samples]` store; `out` is the full symmetric
     /// `n x n` column-major matrix.
@@ -181,7 +141,7 @@ pub trait SrBackend: Send {
         n: usize,
         samples: usize,
         out: &mut [f64],
-    ) -> Result<(), SrBackendError>;
+    ) -> Result<(), StageError>;
 
     /// Complex Gram `G[i + j n] = sum_s O[i,s] conj(O[j,s])`, column-major `n x n`.
     fn gram_complex(
@@ -189,7 +149,7 @@ pub trait SrBackend: Send {
         store: &[Complex64],
         n: usize,
         samples: usize,
-    ) -> Result<Vec<Complex64>, SrBackendError>;
+    ) -> Result<Vec<Complex64>, StageError>;
 
     /// S matrix (column-major) and force `g`.
     fn assemble_s_g(
@@ -197,7 +157,7 @@ pub trait SrBackend: Send {
         input: &SrAssembleInput<'_>,
         s: &mut [f64],
         g: &mut [f64],
-    ) -> Result<(), SrBackendError>;
+    ) -> Result<(), StageError>;
 
     /// Solve the symmetric positive-definite system `S x = rhs` in place (`rhs` becomes `x`).
     ///
@@ -211,7 +171,7 @@ pub trait SrBackend: Send {
         samples: &CgSamples<'_>,
         x: &[f64],
         z: &mut [f64],
-    ) -> Result<(), SrBackendError>;
+    ) -> Result<(), StageError>;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -308,9 +268,41 @@ pub(crate) fn c_order_gram_complex(
     gram
 }
 
-impl SrBackend for COrderSr {
+impl SrStages for COrderSr {
     fn label(&self) -> String {
-        "c-order (BLAS/LAPACK)".to_string()
+        "c-order-cpu".to_string()
+    }
+
+    fn provider(&self) -> String {
+        "BLAS/LAPACK (dsyrk, dgemv, dpotrf/dpotrs) + scalar loops".to_string()
+    }
+
+    fn sr_s_g(
+        &mut self,
+        o: &[f64],
+        ns: usize,
+        np: usize,
+        e: &[f64],
+        w: &[f64],
+    ) -> Result<SrSg, StageError> {
+        let (d, de) = centered(o, ns, np, e, w);
+        let mut s = vec![0.0; np * np];
+        let mut g = vec![0.0; np];
+        for q in 0..np {
+            for p in 0..np {
+                let mut acc = 0.0;
+                for k in 0..ns {
+                    acc += w[k] * d[k + p * ns] * d[k + q * ns];
+                }
+                s[p + q * np] = acc;
+            }
+            let mut acc = 0.0;
+            for k in 0..ns {
+                acc += w[k] * d[k + q * ns] * de[k];
+            }
+            g[q] = acc;
+        }
+        Ok(SrSg { s, g })
     }
 
     fn gram_real(
@@ -319,7 +311,7 @@ impl SrBackend for COrderSr {
         n: usize,
         samples: usize,
         out: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         c_order_gram_real(store, n, samples, out);
         Ok(())
     }
@@ -329,7 +321,7 @@ impl SrBackend for COrderSr {
         store: &[Complex64],
         n: usize,
         samples: usize,
-    ) -> Result<Vec<Complex64>, SrBackendError> {
+    ) -> Result<Vec<Complex64>, StageError> {
         Ok(c_order_gram_complex(store, n, samples))
     }
 
@@ -338,7 +330,7 @@ impl SrBackend for COrderSr {
         input: &SrAssembleInput<'_>,
         s: &mut [f64],
         g: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         let n_smat = input.map.len();
         let ratio_diag = 1.0 + input.sta_del;
         // C stcopt.c:69 `omp parallel for` over the S entries; every entry has one
@@ -372,7 +364,7 @@ impl SrBackend for COrderSr {
         m: &CgSamples<'_>,
         x: &[f64],
         z: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         let complex = !m.imag.is_empty();
         if m.samples == 0 {
             z.fill(0.0);
@@ -502,7 +494,7 @@ impl std::fmt::Debug for TenferroSr {
 
 impl TenferroSr {
     /// CPU runtime with the `cpu-faer` provider (built once; see [`acquire`]).
-    pub fn new_cpu() -> Result<Self, SrBackendError> {
+    pub fn new_cpu() -> Result<Self, StageError> {
         let ctx = EagerRuntime::with_cpu_backend(CpuBackend::new()).map_err(err)?;
         Ok(Self::with_runtime(
             ctx,
@@ -527,7 +519,7 @@ impl TenferroSr {
         self.stats
     }
 
-    fn upload(&self, host: Tensor) -> Result<EagerTensor, SrBackendError> {
+    fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
         let tensor = match self.placement {
             Placement::Host => host,
             Placement::Device => self
@@ -539,16 +531,12 @@ impl TenferroSr {
         EagerTensor::from_tensor_in(tensor, self.ctx.clone()).map_err(err)
     }
 
-    fn upload_real(
-        &self,
-        shape: Vec<usize>,
-        data: Vec<f64>,
-    ) -> Result<EagerTensor, SrBackendError> {
+    fn upload_real(&self, shape: Vec<usize>, data: Vec<f64>) -> Result<EagerTensor, StageError> {
         // Column-major on purpose: every buffer in this module is column-major.
         self.upload(Tensor::from_vec_col_major(shape, data).map_err(err)?)
     }
 
-    fn download(&self, t: &EagerTensor) -> Result<Tensor, SrBackendError> {
+    fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
         self.ctx.synchronize().map_err(err)?;
         let dev = t.to_tensor().map_err(err)?;
         match self.placement {
@@ -561,7 +549,7 @@ impl TenferroSr {
         }
     }
 
-    fn download_f64(&self, t: &EagerTensor) -> Result<Vec<f64>, SrBackendError> {
+    fn download_f64(&self, t: &EagerTensor) -> Result<Vec<f64>, StageError> {
         let host = self.download(t)?;
         let typed = host
             .into_typed::<f64>()
@@ -579,9 +567,48 @@ fn dot(contract_l: usize, contract_r: usize) -> DotGeneralConfig {
     }
 }
 
-impl SrBackend for TenferroSr {
+impl SrStages for TenferroSr {
     fn label(&self) -> String {
         self.label.clone()
+    }
+
+    fn provider(&self) -> String {
+        match self.placement {
+            Placement::Host => "tenferro-ad EagerRuntime + CpuBackend (cpu-faer)".to_string(),
+            Placement::Device => {
+                "tenferro-ad EagerRuntime + tenferro-gpu CudaBackend (cuBLAS/cuSOLVER)".to_string()
+            }
+        }
+    }
+
+    fn stats(&self) -> Option<TenferroStats> {
+        Some(self.stats)
+    }
+
+    fn sr_s_g(
+        &mut self,
+        o: &[f64],
+        ns: usize,
+        np: usize,
+        e: &[f64],
+        w: &[f64],
+    ) -> Result<SrSg, StageError> {
+        let (d, de) = centered(o, ns, np, e, w);
+        let mut dw = d.clone();
+        for p in 0..np {
+            for k in 0..ns {
+                dw[k + p * ns] *= w[k];
+            }
+        }
+        let dt = self.upload_real(vec![ns, np], d)?;
+        let dwt = self.upload_real(vec![ns, np], dw)?;
+        let det = self.upload_real(vec![ns], de)?;
+        let st = dwt.dot_general(&dt, dot(0, 0)).map_err(err)?;
+        let gt = dwt.dot_general(&det, dot(0, 0)).map_err(err)?;
+        Ok(SrSg {
+            s: self.download_f64(&st)?,
+            g: self.download_f64(&gt)?,
+        })
     }
 
     fn gram_real(
@@ -590,7 +617,7 @@ impl SrBackend for TenferroSr {
         n: usize,
         samples: usize,
         out: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         let o = self.upload_real(vec![n, samples], store.to_vec())?;
         // OO[i,j] = sum_s O[i,s] O[j,s]: contract the sample axis of both operands.
         let gram = o.dot_general(&o, dot(1, 1)).map_err(err)?;
@@ -611,7 +638,7 @@ impl SrBackend for TenferroSr {
         store: &[Complex64],
         n: usize,
         samples: usize,
-    ) -> Result<Vec<Complex64>, SrBackendError> {
+    ) -> Result<Vec<Complex64>, StageError> {
         let host = Tensor::from_vec_col_major(vec![n, samples], store.to_vec()).map_err(err)?;
         let o = self.upload(host)?;
         // G[i,j] = sum_s O[i,s] conj(O[j,s]).
@@ -630,7 +657,7 @@ impl SrBackend for TenferroSr {
         input: &SrAssembleInput<'_>,
         s: &mut [f64],
         g: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         let n = input.map.len();
         // Gather the active block, the means and the energy derivatives (index tables are
         // small host data; the gather is the only non-tensor step).
@@ -681,7 +708,7 @@ impl SrBackend for TenferroSr {
         if n == 0 {
             return Ok(());
         }
-        let run = || -> Result<Vec<f64>, SrBackendError> {
+        let run = || -> Result<Vec<f64>, StageError> {
             let a = self.upload_real(vec![n, n], s[..n * n].to_vec())?;
             let b = self.upload_real(vec![n, 1], rhs[..n].to_vec())?;
             // S = L L^T with lower L; solve L y = b, then L^T x = y.
@@ -712,7 +739,7 @@ impl SrBackend for TenferroSr {
         m: &CgSamples<'_>,
         x: &[f64],
         z: &mut [f64],
-    ) -> Result<(), SrBackendError> {
+    ) -> Result<(), StageError> {
         self.stats.cg_products += 1;
         if m.samples == 0 || m.components == 0 {
             z.fill(0.0);
@@ -748,61 +775,5 @@ impl SrBackend for TenferroSr {
         let zt = op.tensor.dot_general(&y, dot(1, 0)).map_err(err)?;
         z.copy_from_slice(&self.download_f64(&zt)?);
         Ok(())
-    }
-}
-
-// ---------------------------------------------------------------------------------------
-// Selection
-// ---------------------------------------------------------------------------------------
-
-static TENFERRO: OnceLock<Result<Mutex<TenferroSr>, SrBackendError>> = OnceLock::new();
-
-/// Handle to the selected backend for one SR solve.
-///
-/// The tenferro runtime is one process-wide instance built on first use (never per sample or
-/// per SR step) and locked for the duration of the handle; the C-order backend is a small
-/// owned value holding its scratch vectors.
-pub enum SrBackendHandle {
-    /// C-order implementation.
-    COrder(COrderSr),
-    /// Shared tenferro implementation.
-    Tenferro(MutexGuard<'static, TenferroSr>),
-}
-
-impl SrBackendHandle {
-    /// The backend as a trait object.
-    pub fn get(&mut self) -> &mut dyn SrBackend {
-        match self {
-            Self::COrder(b) => b,
-            Self::Tenferro(b) => &mut **b,
-        }
-    }
-}
-
-/// Acquire the selected backend. A tenferro runtime that cannot be built is a hard error.
-pub fn acquire() -> SrBackendHandle {
-    match selected_sr_backend() {
-        SrBackendKind::COrder => SrBackendHandle::COrder(COrderSr::default()),
-        SrBackendKind::Tenferro => {
-            let cell = TENFERRO.get_or_init(|| TenferroSr::new_cpu().map(Mutex::new));
-            match cell {
-                Ok(m) => SrBackendHandle::Tenferro(m.lock().unwrap_or_else(|e| e.into_inner())),
-                Err(e) => panic!("{e}"),
-            }
-        }
-    }
-}
-
-/// Fresh operand version for the constant-operand cache.
-pub fn next_operand_version() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Counters of the process-wide tenferro backend, `None` if it was never built.
-pub fn tenferro_stats() -> Option<TenferroStats> {
-    match TENFERRO.get() {
-        Some(Ok(m)) => Some(m.lock().unwrap_or_else(|e| e.into_inner()).stats()),
-        _ => None,
     }
 }

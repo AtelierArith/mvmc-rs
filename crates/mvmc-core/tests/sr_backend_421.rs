@@ -17,9 +17,7 @@
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 
-use mvmc_core::sr_backend::{
-    COrderSr, CgSamples, RealView, SrAssembleInput, SrBackend, TenferroSr,
-};
+use mvmc_core::sr_backend::{COrderSr, CgSamples, RealView, SrAssembleInput, SrStages, TenferroSr};
 use num_complex::Complex64;
 
 const EPS: f64 = f64::EPSILON;
@@ -104,7 +102,7 @@ fn complex_gram_matches_sequential_c_order_within_dot_product_bound() {
 }
 
 fn assemble(
-    backend: &mut dyn SrBackend,
+    backend: &mut dyn SrStages,
     oo: RealView<'_>,
     ho: RealView<'_>,
     map: &[usize],
@@ -316,7 +314,7 @@ fn cg_product_matches_c_order_and_caches_constant_operand() {
 
 // ---- end to end: short optimization runs with both backends -------------------------------
 
-use mvmc_core::sr_backend::{set_sr_backend_override, tenferro_stats, SrBackendKind};
+use mvmc_core::stage_backend::{set_stage_backend_override, tenferro_stats, StageBackendKind};
 use std::path::{Path, PathBuf};
 
 fn repo_root() -> PathBuf {
@@ -327,9 +325,9 @@ fn run_optimization(
     fixture: &str,
     mode: &str,
     cg: bool,
-    kind: SrBackendKind,
+    kind: StageBackendKind,
 ) -> std::collections::BTreeMap<String, String> {
-    set_sr_backend_override(Some(kind));
+    set_stage_backend_override(Some(kind));
     let source = repo_root().join("tests/fixtures/physcal_181").join(fixture);
     let root = std::env::temp_dir().join(format!(
         "mvmc-issue421-{}-{fixture}-{}-{kind:?}",
@@ -411,8 +409,8 @@ fn direct_sr_run_with_tenferro_tracks_the_c_order_run() {
         ("hubbard_chain_dh_real", "real"),
         ("heisenberg_chain_cmp", "cmp"),
     ] {
-        let reference = run_optimization(fixture, mode, false, SrBackendKind::COrder);
-        let accelerated = run_optimization(fixture, mode, false, SrBackendKind::Tenferro);
+        let reference = run_optimization(fixture, mode, false, StageBackendKind::COrder);
+        let accelerated = run_optimization(fixture, mode, false, StageBackendKind::TenferroCpu);
         assert_eq!(
             reference.keys().collect::<Vec<_>>(),
             accelerated.keys().collect::<Vec<_>>()
@@ -427,7 +425,7 @@ fn direct_sr_run_with_tenferro_tracks_the_c_order_run() {
             );
         }
     }
-    set_sr_backend_override(None);
+    set_stage_backend_override(None);
     assert!(tenferro_stats().is_some(), "tenferro backend never used");
 }
 
@@ -457,8 +455,8 @@ fn cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy() {
         ("hubbard_chain_dh_real", "real"),
         ("heisenberg_chain_cmp", "cmp"),
     ] {
-        let reference = run_optimization(fixture, mode, true, SrBackendKind::COrder);
-        let accelerated = run_optimization(fixture, mode, true, SrBackendKind::Tenferro);
+        let reference = run_optimization(fixture, mode, true, StageBackendKind::COrder);
+        let accelerated = run_optimization(fixture, mode, true, StageBackendKind::TenferroCpu);
         assert_eq!(
             reference.keys().collect::<Vec<_>>(),
             accelerated.keys().collect::<Vec<_>>()
@@ -484,7 +482,7 @@ fn cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy() {
             );
         }
     }
-    set_sr_backend_override(None);
+    set_stage_backend_override(None);
 }
 
 // ---- CG sensitivity: the tolerance of the CG comparison is the measured conditioning --------
@@ -521,13 +519,18 @@ fn cg_difference_is_within_the_conditioning_spread() {
     let grab = Rc::new(Grab::default());
     {
         let _guard = install_cg_observer(grab.clone()).unwrap();
-        let _ = run_optimization("hubbard_chain_dh_real", "real", true, SrBackendKind::COrder);
+        let _ = run_optimization(
+            "hubbard_chain_dh_real",
+            "real",
+            true,
+            StageBackendKind::COrder,
+        );
     }
     let (mean, diag, real, grad) = grab.0.borrow().clone().expect("a CG system was prepared");
     let n = mean.len();
     let samples = real.len() / n;
     let solve = |kind, noise: f64, seed: u64| {
-        set_sr_backend_override(Some(kind));
+        set_stage_backend_override(Some(kind));
         let mut op = SampledSrOperator::new(n, samples, false);
         op.mean = mean.clone();
         op.diagonal = diag.clone();
@@ -545,13 +548,13 @@ fn cg_difference_is_within_the_conditioning_spread() {
             .fold(0.0_f64, |m, (x, y)| m.max((x - y).abs()))
             / scale
     };
-    let base = solve(SrBackendKind::COrder, 0.0, 1);
+    let base = solve(StageBackendKind::COrder, 0.0, 1);
     let spread = [(1e-16, 2u64), (1e-16, 3), (1e-15, 4)]
         .iter()
-        .map(|&(noise, seed)| relative(&solve(SrBackendKind::COrder, noise, seed), &base))
+        .map(|&(noise, seed)| relative(&solve(StageBackendKind::COrder, noise, seed), &base))
         .fold(0.0_f64, f64::max);
-    let backend_difference = relative(&solve(SrBackendKind::Tenferro, 0.0, 1), &base);
-    set_sr_backend_override(None);
+    let backend_difference = relative(&solve(StageBackendKind::TenferroCpu, 0.0, 1), &base);
+    set_stage_backend_override(None);
     assert!(
         spread > 1e-6,
         "fixture must be ill conditioned enough to need this argument (spread {spread:e})"

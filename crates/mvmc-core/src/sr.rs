@@ -125,9 +125,9 @@ pub fn stochastic_opt_real_with_sr_info_timed<const TIMED: bool>(
         let mut s = vec![0.0_f64; n_smat * n_smat];
         let mut g = vec![0.0_f64; n_smat];
         // One backend handle per SR solve (issue #421): C order by default.
-        let mut backend = crate::sr_backend::acquire();
+        let mut backend = crate::stage_backend::acquire();
         backend
-            .get()
+            .sr()
             .assemble_s_g(
                 &crate::sr_backend::SrAssembleInput {
                     oo: crate::sr_backend::RealView::Real(&state.sr_opt.sr_opt_oo_real),
@@ -146,7 +146,7 @@ pub fn stochastic_opt_real_with_sr_info_timed<const TIMED: bool>(
         timer.start(57);
         let observation =
             observer::before_solve(data, &s, &g, &smat_to_para_idx, observer::DirectMode::Real);
-        let result = backend.get().cholesky_solve(&mut s, &mut g, n_smat);
+        let result = backend.sr().cholesky_solve(&mut s, &mut g, n_smat);
         observer::after_solve(observation, &g, &result);
         timer.stop(57);
         timer.stop(51);
@@ -251,9 +251,9 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
     timer.start(56);
     let mut s = vec![0.0_f64; n_smat * n_smat];
     let mut g = vec![0.0_f64; n_smat];
-    let mut backend = crate::sr_backend::acquire();
+    let mut backend = crate::stage_backend::acquire();
     backend
-        .get()
+        .sr()
         .assemble_s_g(
             &crate::sr_backend::SrAssembleInput {
                 oo: crate::sr_backend::RealView::ReOfComplex(&state.sr_opt.sr_opt_oo),
@@ -278,7 +278,7 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
         &smat_to_para_idx,
         observer::DirectMode::Complex,
     );
-    let result = backend.get().cholesky_solve(&mut s, &mut g, n_smat);
+    let result = backend.sr().cholesky_solve(&mut s, &mut g, n_smat);
     observer::after_solve(observation, &g, &result);
     timer.stop(57);
     timer.stop(51);
@@ -1043,7 +1043,7 @@ mod tests {
                     1,
                 )
             };
-            crate::sr_backend::SrBackend::assemble_s_g(
+            crate::sr_backend::SrStages::assemble_s_g(
                 &mut crate::sr_backend::COrderSr::default(),
                 &crate::sr_backend::SrAssembleInput {
                     oo,

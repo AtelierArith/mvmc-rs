@@ -71,10 +71,10 @@ fn cuda_gate_dot_general_and_cholesky_match_cpu() {
 #[ignore = "optional CUDA gate: run with --ignored (MVMC_RS_CUDA_GATE=1 to require a device)"]
 fn cuda_gate_validation_harness_matches_c_order_oracle() {
     use mvmc_core::accel_validation::{
-        bench_stages, repeatability, replay, AcceleratedStages, BenchMetadata, ReplayConfig,
-        DEFAULT_ITERATIONS, DEFAULT_WARMUPS,
+        bench_stages, repeatability, replay, BenchMetadata, ReplayConfig, DEFAULT_ITERATIONS,
+        DEFAULT_WARMUPS,
     };
-    use mvmc_gpu_cuda::stages::EagerStages;
+    use mvmc_core::stage_backend::{open_stage_backend, StageBackendKind};
 
     mvmc_gpu_cuda::install();
     let requested = std::env::var(CUDA_GATE_VARIABLE).ok();
@@ -90,7 +90,7 @@ fn cuda_gate_validation_harness_matches_c_order_oracle() {
     }
     let device = device_report(BackendKind::Cuda(0)).expect("device report");
     let cfg = ReplayConfig::default();
-    let mut cuda = EagerStages::cuda(0).expect("cuda stages");
+    let mut cuda = open_stage_backend(StageBackendKind::Cuda(0)).expect("cuda stages");
     let rep = replay(&mut cuda, &cfg).expect("replay");
     let (pf_ms, sr_ms) = bench_stages(&mut cuda, &cfg, DEFAULT_WARMUPS, DEFAULT_ITERATIONS);
     let meta = BenchMetadata::collect(
@@ -114,9 +114,16 @@ fn cuda_gate_validation_harness_matches_c_order_oracle() {
         std::fs::write(path, &text).expect("write report");
     }
     assert!(rep.violations().is_empty(), "{:?}", rep.violations());
+    // validated means deployed: the object opened through the production selector provides
+    // both stage families and the harness really compared both
     assert!(rep.s.compared > 0 && rep.g.compared > 0);
+    assert!(rep.pf.compared > 0 && rep.inv.compared > 0);
     let short = ReplayConfig { steps: 20, ..cfg };
-    repeatability(|| EagerStages::cuda(0).expect("cuda stages"), &short).expect("repeatability");
+    repeatability(
+        || open_stage_backend(StageBackendKind::Cuda(0)).expect("cuda stages"),
+        &short,
+    )
+    .expect("repeatability");
 }
 
 /// Device round-trip floor (issue #425): launch/sync latency and pageable transfer bandwidth
