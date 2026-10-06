@@ -4,8 +4,29 @@
 use std::cell::{Cell, RefCell};
 
 thread_local! {
+    /// Opt-in log of Metropolis decisions `(weight, draw)` for the multi-chain runner (#425).
+    static DECISIONS: RefCell<Option<Vec<(f64, f64)>>> = const { RefCell::new(None) };
     static EVENTS: RefCell<Option<Vec<Vec<i64>>>> = const { RefCell::new(None) };
     static RAW_CHECKPOINTS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Start recording `(weight, draw)` of every Metropolis decision on this thread.
+/// Purely observational: no RNG draw, no numerical operation and no state change.
+pub fn start_decisions() {
+    DECISIONS.with(|slot| *slot.borrow_mut() = Some(Vec::new()));
+}
+
+/// Stop recording and return the decisions in execution order (empty if not started).
+pub fn finish_decisions() -> Vec<(f64, f64)> {
+    DECISIONS.with(|slot| slot.borrow_mut().take().unwrap_or_default())
+}
+
+pub(crate) fn record_decision(weight: f64, draw: f64) {
+    DECISIONS.with(|slot| {
+        if let Some(log) = slot.borrow_mut().as_mut() {
+            log.push((weight, draw));
+        }
+    });
 }
 
 /// Enable capture on the sampler's calling thread. Nested captures are errors.

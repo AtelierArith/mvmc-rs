@@ -26,6 +26,7 @@ if [ -z "$mode" ]; then
 fi
 out="${MVMC_RS_CUDA_GATE_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-gate.md}"
 vout="${MVMC_RS_CUDA_GATE_VALIDATION_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-validation.md}"
+rout="${MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-roundtrip.md}"
 mkdir -p "$(dirname "$out")"
 
 inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_gate -- --ignored --nocapture --test-threads=1'
@@ -33,7 +34,7 @@ inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_ga
 case "$mode" in
   native)
     cd "$root"
-    MVMC_RS_CUDA_GATE=1 MVMC_RS_CUDA_GATE_OUT="$out" MVMC_RS_CUDA_GATE_VALIDATION_OUT="$vout" bash -c "$inner $*"
+    MVMC_RS_CUDA_GATE=1 MVMC_RS_CUDA_GATE_OUT="$out" MVMC_RS_CUDA_GATE_VALIDATION_OUT="$vout" MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT="$rout" bash -c "$inner $*"
     ;;
   docker)
     image="${MVMC_RS_CUDA_IMAGE:-tenferro-benchmark-cuda:full-verify-20260822}"
@@ -44,6 +45,7 @@ case "$mode" in
       -e HOME="$HOME" -e MVMC_RS_CUDA_GATE=1 \
       -e MVMC_RS_CUDA_GATE_OUT="/work/$rel" \
       -e MVMC_RS_CUDA_GATE_VALIDATION_OUT="/work/${vout#"$root"/}" \
+      -e MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT="/work/${rout#"$root"/}" \
       -e MVMC_RS_REVISION="${MVMC_RS_REVISION:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}" \
       -e MVMC_RS_CUDA_GATE_SIZES -e MVMC_RS_CUDA_GATE_REPS \
       -e CARGO_TARGET_DIR=/work/gpu/mvmc-gpu-cuda/target \
@@ -57,3 +59,4 @@ case "$mode" in
 esac
 echo "report: $out"
 echo "validation report: $vout"
+echo "round-trip report: $rout"

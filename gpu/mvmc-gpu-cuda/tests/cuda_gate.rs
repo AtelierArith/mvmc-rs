@@ -118,3 +118,40 @@ fn cuda_gate_validation_harness_matches_c_order_oracle() {
     let short = ReplayConfig { steps: 20, ..cfg };
     repeatability(|| EagerStages::cuda(0).expect("cuda stages"), &short).expect("repeatability");
 }
+
+/// Device round-trip floor (issue #425): launch/sync latency and pageable transfer bandwidth
+/// per buffer size. This is the cost an accelerated stage must amortize over many walkers.
+#[test]
+#[ignore = "optional CUDA gate: run with --ignored (MVMC_RS_CUDA_GATE=1 to require a device)"]
+fn cuda_gate_roundtrip_floor() {
+    mvmc_gpu_cuda::install();
+    let requested = std::env::var(CUDA_GATE_VARIABLE).ok();
+    match cuda_gate_decision(requested.as_deref(), cuda_device_count()) {
+        CudaGateDecision::SkippedNoDevice(why) => {
+            eprintln!("cuda-gate: ExplicitSkip: skipped, no device ({why})");
+            return;
+        }
+        CudaGateDecision::FailNoDevice(why) => {
+            panic!("cuda-gate: {CUDA_GATE_VARIABLE} requested but no device: {why}");
+        }
+        CudaGateDecision::Run => {}
+    }
+    let device = device_report(BackendKind::Cuda(0)).expect("device report");
+    let ctx = bench::cuda_runtime(0).expect("cuda runtime");
+    let sizes = [1usize, 1 << 10, 1 << 13, 1 << 16, 1 << 19, 1 << 22, 1 << 24];
+    let rows: Vec<_> = sizes
+        .iter()
+        .map(|&n| bench::roundtrip(&ctx, n, 5, 30).expect("roundtrip"))
+        .collect();
+    let text = format!(
+        "## CUDA round-trip floor\n\n```\n{}```\n\nmedian of 30 after 5 warm-ups; pageable host \
+         memory; upload and download each synchronized\n\n{}",
+        device.render(),
+        bench::render_roundtrip(&rows)
+    );
+    println!("{text}");
+    if let Ok(path) = std::env::var("MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT") {
+        std::fs::write(path, &text).expect("write report");
+    }
+    assert!(rows.iter().all(|r| r.total_ms() > 0.0));
+}

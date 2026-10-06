@@ -343,3 +343,102 @@ pub fn render(rows: &[Row]) -> String {
     }
     s
 }
+
+/// Host-to-device-to-host round-trip measurement for one buffer size.
+#[derive(Debug, Clone, Copy)]
+pub struct RoundTrip {
+    /// Buffer size in bytes (one f64 vector).
+    pub bytes: usize,
+    /// Median pageable upload (ms), synchronized.
+    pub upload_ms: f64,
+    /// Median elementwise-add launch plus synchronize (ms): the launch/sync floor.
+    pub op_ms: f64,
+    /// Median pageable download (ms).
+    pub download_ms: f64,
+}
+
+impl RoundTrip {
+    /// Whole round trip in milliseconds.
+    pub fn total_ms(&self) -> f64 {
+        self.upload_ms + self.op_ms + self.download_ms
+    }
+    /// Upload bandwidth in GB/s.
+    pub fn upload_gbps(&self) -> f64 {
+        self.bytes as f64 / (self.upload_ms * 1e-3) / 1e9
+    }
+    /// Download bandwidth in GB/s.
+    pub fn download_gbps(&self) -> f64 {
+        self.bytes as f64 / (self.download_ms * 1e-3) / 1e9
+    }
+}
+
+/// Measure the device round trip for a vector of `n` f64 values (median of `reps` after
+/// `warmups`): the data cost a stage must amortize before any compute benefit.
+pub fn roundtrip(
+    ctx: &Arc<EagerRuntime>,
+    n: usize,
+    warmups: usize,
+    reps: usize,
+) -> Result<RoundTrip, String> {
+    let host = Tensor::from_vec_col_major(vec![n], vec![1.0_f64; n]).map_err(|e| e.to_string())?;
+    let upload = |ctx: &Arc<EagerRuntime>| -> Result<EagerTensor, String> {
+        let dev = ctx
+            .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(&host)))
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        let t = EagerTensor::from_tensor_in(dev, ctx.clone()).map_err(|e| e.to_string())?;
+        ctx.synchronize().map_err(|e| e.to_string())?;
+        Ok(t)
+    };
+    let (mut up, mut op, mut down) = (vec![], vec![], vec![]);
+    let a = upload(ctx)?;
+    let b = upload(ctx)?;
+    for i in 0..warmups + reps.max(1) {
+        let t = Instant::now();
+        let _ = upload(ctx)?;
+        let u = t.elapsed().as_secs_f64() * 1e3;
+        let t = Instant::now();
+        let c = a.add(&b).map_err(|e| e.to_string())?;
+        ctx.synchronize().map_err(|e| e.to_string())?;
+        let o = t.elapsed().as_secs_f64() * 1e3;
+        let t = Instant::now();
+        let dev = c.to_tensor().map_err(|e| e.to_string())?;
+        let _ = ctx
+            .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev)))
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        let d = t.elapsed().as_secs_f64() * 1e3;
+        if i >= warmups {
+            up.push(u);
+            op.push(o);
+            down.push(d);
+        }
+    }
+    Ok(RoundTrip {
+        bytes: n * 8,
+        upload_ms: median(&mut up),
+        op_ms: median(&mut op),
+        download_ms: median(&mut down),
+    })
+}
+
+/// Markdown table of round-trip rows.
+pub fn render_roundtrip(rows: &[RoundTrip]) -> String {
+    let mut s = String::from(
+        "| bytes | upload ms | upload GB/s | add+sync ms | download ms | download GB/s | total ms |\n\
+         |---|---|---|---|---|---|---|\n",
+    );
+    for r in rows {
+        s += &format!(
+            "| {} | {:.4} | {:.2} | {:.4} | {:.4} | {:.2} | {:.4} |\n",
+            r.bytes,
+            r.upload_ms,
+            r.upload_gbps(),
+            r.op_ms,
+            r.download_ms,
+            r.download_gbps(),
+            r.total_ms()
+        );
+    }
+    s
+}

@@ -740,6 +740,105 @@ run: S and g match the oracle, 0 flips, 0 defects, Pfaffian stage unsupported). 
 Pfaffian implementation (#423) plugs in by implementing `pfaffian_inverse`. The policy text is
 in `docs/NUMERICAL_COMPARISONS.md`.
 
+### 10.6 Multi-chain walker runner and device break-even (issue #425)
+
+`mvmc_core::multichain` runs `W` independent PhysCal chains side by side
+(`run_phys_cal_multichain`). The contract:
+
+* **Seeds.** Walker `w` uses `RndSeed + group_base + w`, the C group seed
+  (`init_gen_rand(RndSeed + group1)`, `resolve_rnd_seed`): `W` walkers on one process are the
+  chains of `W` groups of a grouped C run. Each walker owns its host SFMT stream; a time-based
+  seed (`RndSeed < 0`) is resolved once for all walkers (the C group broadcast).
+* **Draw order and count.** Nothing is added, removed or reordered: a walker is the existing
+  serial run with seed offset `group_base + w`. Tests (`crates/mvmc-core/tests/multichain.rs`)
+  compare, for every walker, the complete final SFMT state (624 words and position), the number
+  of consumed words, the recorded Metropolis `(weight, draw)` sequence and the whole sampling/
+  observable state (`Debug` bytes) against that serial run; `W = 1` equals the plain serial
+  run, and results do not depend on the worker pool size.
+* **Thread budget.** One rayon pool over walkers (`threads`, default `min(W, cores)`), each
+  walker single-threaded, BLAS pinned to one thread. A walker owns all of its working state
+  (tables, scratch, RNG), the `tenferro-decision-rs` workspace pattern; nothing is shared
+  mutably.
+* **Batched stages.** `pack_walker_tables` packs the Pfaffian/inverse tables of all walkers in
+  the `[n, n, NQP, W]` `BatchedPlanes` layout of #422 (walker `w` in slot `w`, tested against the
+  walkers' own tables): the staging format for the batched Pfaffian/inverse of #423. Lock-step
+  recomputation of the tables across walkers inside the sampler (one batched call per
+  recalculation) is not wired: it only pays with device-resident planes (below), and the
+  batched engine of #423 (PR #430) was not merged when this was written.
+* **Decision margins.** `trace::start_decisions`/`finish_decisions` record every Metropolis
+  `(weight, draw)` observationally (no RNG, numerical or state effect); `DecisionSummary` reports
+  proposals, accepted, the smallest margin `|w - u|` and the near-flip count (margin below the
+  1e-10 relative weight bound of the #424 harness). On the Heisenberg-chain fixture
+  (121 254 proposals per walker, 200 samples) the smallest margin was 1.5e-7 to 3.2e-7, i.e.
+  above a 1e-10 weight perturbation by three orders of magnitude, so a backend meeting the
+  `accel_validation` bounds cannot flip a decision on this input.
+* **Not covered.** Walker-parallel optimization (SR) needs the cross-walker reductions of the C
+  group runs (`NSplitSize`); the runner covers the fixed-parameter sampling and measurement
+  loop.
+
+#### Device round-trip floor (measured)
+
+RTX 3060, driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, tenferro 0.7.1, Linux x86_64;
+median of 30 after 5 warm-ups, pageable host memory, each step synchronized
+(`cuda_gate_roundtrip_floor`, `scripts/run_cuda_gate.sh docker`).
+
+| bytes | upload ms | upload GB/s | add+sync ms | download ms | download GB/s | total ms |
+|---|---|---|---|---|---|---|
+| 8 | 0.0704 | 0.00 | 0.0504 | 0.0715 | 0.00 | 0.1923 |
+| 8192 | 0.1337 | 0.06 | 0.0901 | 0.1304 | 0.06 | 0.3542 |
+| 65536 | 0.1782 | 0.37 | 0.0899 | 0.1369 | 0.48 | 0.4050 |
+| 524288 | 0.6806 | 0.77 | 0.1019 | 0.2372 | 2.21 | 1.0196 |
+| 4194304 | 3.8744 | 1.08 | 0.1582 | 1.0606 | 3.95 | 5.0932 |
+| 33554432 | 73.7077 | 0.46 | 4.1402 | 25.0268 | 1.34 | 102.8748 |
+| 134217728 | 295.5751 | 0.45 | 19.1972 | 102.9005 | 1.30 | 417.6728 |
+
+The floor of one host-device round trip is about 0.19 ms (about 0.05 ms for a launch plus
+synchronize, 0.07 ms each way for the smallest transfers). Upload saturates at about 1 GB/s
+(0.45 GB/s beyond 32 MB), download at about 4 GB/s.
+
+#### Break-even walker count
+
+A walker-batched Pfaffian/inverse stage pays only if its cost, per step, beats the CPU doing
+the same `W` walkers on `C` cores. The comparison below uses the measured single-thread CPU time
+of the batched Pfaffian (`pfapack 1T`) and the CUDA kernel/total times of the batched engine of
+#423 (`benchmark/gpu_pfaffian/results/pfaffian_batched.md` of PR #430, f64, `NQP = 8`, the
+same host), expressed as the number of CPU cores the device replaces (`1T time of W walkers /
+device time`):
+
+| n | W | cores replaced, kernel only (planes already on the device) | cores replaced, with upload and download |
+|---|---|---|---|
+| 16 | 8 | 5.5 | 1.4 |
+| 16 | 64 | 13.8 | 2.9 |
+| 32 | 8 | 9.4 | 3.5 |
+| 32 | 64 | 14.7 | 3.7 |
+| 32 | 512 | 23.3 | 1.7 |
+| 64 | 64 | 19.0 | 2.6 |
+| 128 | 64 | 9.4 | 2.1 |
+
+Reading: with transfers in every step the device replaces at most about 4 cores and below
+about `W = 8` it replaces less than one (the 0.19 ms round-trip floor dominates the 0.05 to
+0.4 ms CPU time of a single walker), so it never beats a walker-per-core CPU run on a host with
+more than 4 cores. With the planes built and consumed on the device (kernel only) it replaces 14
+to 24 cores for `W >= 64` at `n >= 32`, so the break-even is about `W = 8` against a single
+core, about `W = 16` against 8 cores and unreachable against this 36-core host (a 3.4x to 7x
+win over the all-core `rayon` column only at `W >= 64`, `n = 32`, and 1.4x to 3.6x for
+`n >= 64`). RTX 3060 FP64 is 1/64 of FP32; a data-center GPU shifts these ratios. Numbers are
+single-run on a shared host.
+
+CPU walker scaling on the same host (`multichain_scaling_report`, Heisenberg-chain fixture,
+200 samples per walker, one thread per walker, median of 5; ignored test, metadata block in its
+output): the host was heavily loaded by other jobs (load average 58 to 81 on 36 threads), so
+these are upper bounds on the cost of the runner itself, not a property of it.
+
+| W | wall ms | ms per walker-chain | efficiency T(1)/T(W) |
+|---|---|---|---|
+| 1 | 1788.5 | 1788.5 | 1.00 |
+| 2 | 1897.3 | 948.7 | 0.94 |
+| 4 | 2126.0 | 531.5 | 0.84 |
+| 8 | 3197.6 | 399.7 | 0.56 |
+| 16 | 5761.5 | 360.1 | 0.31 |
+| 32 | 15427.9 | 482.1 | 0.12 |
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
