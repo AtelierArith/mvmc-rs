@@ -187,11 +187,59 @@ A single Markov chain cannot profit from a GPU (one attempted hop costs 2-13 mic
 
 ## 12.9 The benchmark and validation suite (#450)
 
-Issue #450 builds a portable, function-level CPU/GPU benchmark suite so that the parked sampler-side work can be re-evaluated on an A100 that the maintainer runs on a separate server: one entry point that builds and runs the batched Pfaffian, SR, sampler-stage, transfer and CPU-baseline families, checks every result against the C-order oracle, and writes a single `results-<host>-<date>.tar.gz` (CSV per family, a Markdown report, raw logs and the metadata block), plus an analysis script that turns archives into a speedup table and a per-function "GPU-ize?" recommendation.
+Issue #450 is implemented ([PR #462](https://github.com/AtelierArith/mvmc-rs/pull/462)). It is a portable, function-level suite that first checks the **numerics** of every GPU, tenferro and CPU variant against the C-order oracle and only then records timings, so that the parked sampler-side work can be re-evaluated on an FP64-strong GPU (A100) that the maintainer runs on a separate server. The authoritative reference is `benchmark/function_suite/README.md`; the harness is the `function_suite` example of `gpu/mvmc-gpu-cuda`; a reference report from an RTX 3060 is `benchmark/function_suite/results/rtx3060-reference.md`.
 
-> **To be completed when #450 lands.** At the time of writing the suite is in progress and has no pull request; this manual does not describe commands that do not exist yet. When it lands, its usage (the entry point, the `--quick`/`--full` profiles, the native and docker requirements, the analysis script and how to send the archive back) is documented in `benchmark/function_suite/README.md`, which is the authoritative reference; this section should then be updated to summarize it.
+### Running it
 
-Until then the per-component scripts of [12.3](#benchmarks-of-the-individual-components) and the gate of [12.3](#the-cuda-gate-native-or-docker) give the same kind of data for the three families that already exist.
+```bash
+git submodule update --init --recursive
+scripts/bench/run_all.sh --native --quick --out bench-out          # about 10 minutes, smoke run
+scripts/bench/run_all.sh --native --full --gpu 0 --out bench-out   # about 2 hours on one GPU
+scripts/bench/run_all.sh --docker --full --gpu 0 --out bench-out   # nvidia/cuda image instead of a host toolkit
+scripts/bench/run_all.sh --native --preflight-only                 # only the checks
+```
+
+- **Requirements.** An NVIDIA driver (`nvidia-smi` works), Rust 1.96 or newer, python3, and either (native) a CUDA toolkit 12.6 or newer with NVRTC, cuBLAS and cuSOLVER plus the OpenBLAS development files (`libopenblas.so`), or (docker) docker with the NVIDIA container toolkit; the image is `nvidia/cuda:12.9.1-devel-ubuntu24.04` unless `MVMC_RS_CUDA_IMAGE` is set, OpenBLAS is installed inside it and the host `~/.rustup` and `~/.cargo` are mounted.
+- **Preflight.** The script stops with a message before building if the driver, the selected `--gpu`, rustc, the toolkit version, the CUDA libraries or OpenBLAS are missing. Without `--native`/`--docker` it picks native when a toolkit is found, else docker.
+- **Steps.** Release build, input generation for the Hubbard chain (L = 16..256 in `--full`) with the Rust StdFace port (`mvmc --dry-run`), then the families `pfaffian`, `sr` (plus a separate one-core CPU pass), `sr_resident`, `sampler` and `transfers`. A failing family does not stop the others. The `--full` sampler timing grid is capped at `W * L^2 <= 2.1e6` (`MVMC_BENCH_WORK_CAP` raises it); skipped points are explicit `SKIPPED` rows.
+- **Output.** `DIR/results-<host>-<date>.tar.gz` with one CSV per family (`csv/`), `report.md`, raw logs (`logs/`) and `metadata.txt` (GPU model, compute capability, FP64 peak if in the script's table, driver, CUDA, tenferro and cudarc versions, CPU, OS, rustc, git revision, thread environment). The CSV schema is `family,function,variant,dtype,params,reps,median_s,min_s,max_s,dev_metric,dev_value,dev_bound,dev_ratio,verdict,note`.
+- **The device-resident SR hook (#447).** `run_all.sh` runs `gpu/mvmc-gpu-cuda/examples/bench_sr_resident.rs` if that program exists and otherwise records one `NotAvailable` row; it never invents numbers. The existing `bench_sr_device` example is a separate program that does not write this schema yet, so the family is `NotAvailable` today.
+
+### What the verdicts mean
+
+The **numerical verdict is the primary result** and the process exits non-zero on any `FAIL` or `ERROR`; timings (median, min, max after warm-up) are secondary reference columns, and the report's "GPU-ize?" recommendation is never `YES` for a function with a failing check.
+
+| Verdict | Meaning |
+|---------|---------|
+| `PASS` | the deviation from the oracle is within the stated bound (`dev_ratio` = observed/bound <= 1), or an exact check (RNG state, draw count, configuration, status codes, bitwise copy) holds |
+| `FAIL` | outside the bound, or an exact check failed |
+| `ERROR` | an unexpected run-time error; counts as a failure |
+| `ORACLE` | the reference row itself (pfapack, `COrderSr` with OpenBLAS, the CPU sampler) |
+| `INFO` | timing only |
+| `NotAvailable` | the function or hook does not exist in this build; no numbers |
+| `SKIPPED` | not run (memory or work cap); the note says why |
+| `KNOWN-ISSUE` | a report label, not a CSV value: a `FAIL` that matches a tracked defect ([#465](https://github.com/AtelierArith/mvmc-rs/issues/465) resident inverse of a sampler walker, [#466](https://github.com/AtelierArith/mvmc-rs/issues/466) tenferro-native c64 Pfaffian at n = 128). It still counts as `FAIL`; an untracked failure is labelled `NEW` |
+
+Bounds per family (the derivations are in the source headers of `gpu/mvmc-gpu-cuda/examples/function_suite/*.rs`; they are not tuned to a device and must not be loosened to make a run pass):
+
+- **Pfaffian and inverse:** per plane, `max(inverse rel, Pfaffian rel) <= 16 n eps cond(A)` with `cond = ||A||_F ||A^-1||_F` of the actual plane, plus the independent invariants `A inv = I`, skew symmetry of `inv` and `Pf^2 = det`, and identical per-plane status codes (zero pivot, NaN).
+- **SR stages:** relative max-norm against `COrderSr`, with bounds `4 k eps` (Gram), `8 eps` (S/g), `8 n eps kappa` (Cholesky solve, Gershgorin kappa), `4 (k + n) eps` (CG product) and `2 K kappa 4 (k + n) eps` (a K-iteration CG solve).
+- **Sampler:** the hard gate is exact: RNG state and draw count, electron configuration, and the free-run decision sequence bit-identical to the CPU, with zero draw mismatches and zero unexplained decision flips ("defects") from the #424 teacher. A free-run divergence passes only when the teacher located decision flips, as the numerical policy allows. The weight deviation of a teacher-forced run is additionally checked per walker against `2 * 16 * (n + s) * eps * kappa / sqrt(w_min)`.
+- **Transfers:** a bitwise round trip (a copy has no arithmetic).
+
+The sampler weight bound rests on stated assumptions, not on a proof: the constant 16 is the one of the Pfaffian bound; `s`, the number of updates between recomputes, is taken as the worst case in which every proposal of the recompute window is accepted; `kappa` is the largest plane condition number sampled only at the start and at the end of each walker's run (not along the trajectory); and `w_min`, the smallest nonzero reference weight, stands in for the cancellation factor of the ratio's dot product (it also contains the projection factors). The bound is therefore loose, 600 to 20000 times above the deviation observed on the RTX 3060 (observed/allowed 5e-5 to 1.7e-3 for L = 16..256); tightening it needs per-proposal deviations exposed by the teacher.
+
+### Sending results back and comparing machines
+
+Send the single archive `bench-out/results-<host>-<date>.tar.gz` (a few hundred kilobytes). A non-zero exit status means a `FAIL` or `ERROR` was recorded; the archive is written either way and should be sent either way. To merge archives, with only the standard library:
+
+```bash
+uv run --no-project scripts/bench/analyze.py results-a100.tar.gz results-rtx3060.tar.gz --out comparison.md
+```
+
+Each argument is one machine (an archive or an unpacked directory). The report lists, in order, (1) numerical validation: verdict counts per machine, the failures with their KNOWN-ISSUE or NEW label, and the worst deviation/bound per function and variant across machines; (2) timing as a reference: speedup tables and break-even sizes (batch size, NPara, walker count); (3) the "GPU-ize?" recommendation per function, gated by numerics; (4) `NotAvailable` and `SKIPPED` rows; then the metadata of each machine.
+
+Timings of the sampler depend on the host cores as much as on the GPU (its host side runs one thread per walker), so compare against the CPU multichain row of the same machine; CPU rows are sensitive to other load, so run on a quiet host.
 
 ## 12.10 Reproducing the numbers
 
