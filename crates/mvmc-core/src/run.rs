@@ -2999,10 +2999,16 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             if !all_complex {
                 // The real Slater derivative reads the real inverse; refresh the complex
                 // inverse planes only for consumers that still need them.
-                // PhysCal/Lanczos (and FSZ) read the complex tables in real mode too.
-                if use_fsz
-                    || data.modpara.vmc_calc_mode != 0
-                    || !crate::slater_derivative::real_slater_derivative_available(data, n_qp_full)
+                // PhysCal without SR (no SlaterElmDiff) and without Lanczos reads only
+                // the real tables, so skip the full real->complex inverse copy there.
+                let physcal_without_sr =
+                    data.modpara.vmc_calc_mode != 0 && data.modpara.lanczos_mode == 0;
+                if !physcal_without_sr
+                    && (use_fsz
+                        || data.modpara.vmc_calc_mode != 0
+                        || !crate::slater_derivative::real_slater_derivative_available(
+                            data, n_qp_full,
+                        ))
                 {
                     for qp in 0..n_qp_full {
                         let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
@@ -3198,139 +3204,147 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
 
             timer.stop_diag(946, diag);
             timer.stop_diag(940, diag);
-            timer.start_diag(940, diag);
-            timer.start_diag(948, diag);
-            // SR `O` vector — projection diff fills the leading block.
-            for slot in state.sr_opt.sr_opt_o.iter_mut() {
-                *slot = Complex64::new(0.0, 0.0);
-            }
-            crate::observables::set_projection_diff(
-                &mut state.sr_opt.sr_opt_o,
-                &ele_proj_cnt,
-                n_proj,
-            );
-            // Normal Julia main-calculation reserves all RBM derivative slots.
-            // Its FSZ main-calculation places Slater immediately after projection.
-            if !use_fsz && n_rbm > 0 {
-                let cfg = crate::sampling::rbm::RbmConfig::from(data);
-                let cnt = crate::sampling::rbm::make_rbm_cnt(&ele_num, &cfg);
-                let offset = 2 * (1 + n_proj);
-                crate::sampling::rbm::set_rbm_diff(
-                    &mut state.sr_opt.sr_opt_o[offset..offset + 2 * n_rbm],
-                    &cnt,
-                    &ele_num,
-                    &cfg,
-                );
-            }
-            let slater_offset = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
-            timer.stop_diag(948, diag);
-            timer.stop_diag(940, diag);
-            if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
-                timer.start(42);
-                let n_copy = (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
-                let slater_o = &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
-                if use_fsz {
-                    crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
-                        slater_o,
-                        ip,
-                        ele_idx,
-                        &ele_spn,
-                        data,
-                        &state.slater_matrix,
-                        &mut slater_derivative_scratch,
-                    );
-                } else {
-                    timer.start_diag(930, timer.diagnostics.slater);
-                    crate::slater_derivative::slater_elm_diff_with_scratch_timed(
-                        slater_o,
-                        ip,
-                        ele_idx,
-                        data,
-                        &state.slater_matrix,
-                        !all_complex,
-                        &mut slater_derivative_scratch,
-                        timer,
-                    );
-                    timer.stop_diag(930, timer.diagnostics.slater);
-                }
-                timer.stop(42);
-            }
-            let n_opt = data.count_opt_trans_parameters();
-            let opt_offset = slater_offset + 2 * n_orb_total;
-            let opt_end = opt_offset + 2 * n_opt;
-            if n_opt > 0 && opt_end <= state.sr_opt.sr_opt_o.len() {
-                let diag = !use_fsz && timer.diagnostics.maincal;
+            // C `VMCMainCal` builds the SR `O` vector, `SlaterElmDiff` and the
+            // OO/HO accumulators only for NVMCCalMode==0 (`vmccal.c:195`). PhysCal
+            // (NVMCCalMode=1) computes the Green functions only, so skip this
+            // wasted per-sample work.
+            if data.modpara.vmc_calc_mode == 0 {
                 timer.start_diag(940, diag);
-                timer.start_diag(949, diag);
-                crate::observables::opt_trans_diff(
-                    &mut state.sr_opt.sr_opt_o[opt_offset..opt_end],
-                    ip,
-                    data,
-                    &state.slater_matrix.pf_m,
-                );
-                timer.stop_diag(949, diag);
-                timer.stop_diag(940, diag);
-            }
-            observe_optimization_measurement(OptimizationMeasurementView {
-                data,
-                state,
-                sample,
-                overlap: ip,
-                local_energy: e,
-                weight: w,
-            });
-            timer.start(43);
-            if all_complex && use_store {
-                crate::observables::calculate_oo_store(
-                    &mut state.sr_opt.sr_opt_ho,
-                    &mut state.sr_opt.sr_opt_o_store,
-                    &state.sr_opt.sr_opt_o,
-                    w,
-                    e,
-                    sample,
-                    sr_opt_size,
-                );
-            } else if all_complex {
-                crate::observables::calculate_oo(
-                    &mut state.sr_opt.sr_opt_oo,
-                    &mut state.sr_opt.sr_opt_ho,
-                    &state.sr_opt.sr_opt_o,
-                    w,
-                    e,
-                    sr_opt_size,
-                );
-            } else {
-                for i in 0..sr_opt_size {
-                    state.sr_opt.sr_opt_o_real[i] = state.sr_opt.sr_opt_o[2 * i].re;
+                timer.start_diag(948, diag);
+                // SR `O` vector — projection diff fills the leading block.
+                for slot in state.sr_opt.sr_opt_o.iter_mut() {
+                    *slot = Complex64::new(0.0, 0.0);
                 }
-                if use_store {
-                    crate::observables::calculate_oo_store_real(
-                        &mut state.sr_opt.sr_opt_ho_real,
-                        &mut state.sr_opt.sr_opt_o_store_real,
-                        &state.sr_opt.sr_opt_o_real,
+                crate::observables::set_projection_diff(
+                    &mut state.sr_opt.sr_opt_o,
+                    &ele_proj_cnt,
+                    n_proj,
+                );
+                // Normal Julia main-calculation reserves all RBM derivative slots.
+                // Its FSZ main-calculation places Slater immediately after projection.
+                if !use_fsz && n_rbm > 0 {
+                    let cfg = crate::sampling::rbm::RbmConfig::from(data);
+                    let cnt = crate::sampling::rbm::make_rbm_cnt(&ele_num, &cfg);
+                    let offset = 2 * (1 + n_proj);
+                    crate::sampling::rbm::set_rbm_diff(
+                        &mut state.sr_opt.sr_opt_o[offset..offset + 2 * n_rbm],
+                        &cnt,
+                        &ele_num,
+                        &cfg,
+                    );
+                }
+                let slater_offset = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
+                timer.stop_diag(948, diag);
+                timer.stop_diag(940, diag);
+                if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
+                    timer.start(42);
+                    let n_copy = (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
+                    let slater_o =
+                        &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
+                    if use_fsz {
+                        crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
+                            slater_o,
+                            ip,
+                            ele_idx,
+                            &ele_spn,
+                            data,
+                            &state.slater_matrix,
+                            &mut slater_derivative_scratch,
+                        );
+                    } else {
+                        timer.start_diag(930, timer.diagnostics.slater);
+                        crate::slater_derivative::slater_elm_diff_with_scratch_timed(
+                            slater_o,
+                            ip,
+                            ele_idx,
+                            data,
+                            &state.slater_matrix,
+                            !all_complex,
+                            &mut slater_derivative_scratch,
+                            timer,
+                        );
+                        timer.stop_diag(930, timer.diagnostics.slater);
+                    }
+                    timer.stop(42);
+                }
+                let n_opt = data.count_opt_trans_parameters();
+                let opt_offset = slater_offset + 2 * n_orb_total;
+                let opt_end = opt_offset + 2 * n_opt;
+                if n_opt > 0 && opt_end <= state.sr_opt.sr_opt_o.len() {
+                    let diag = !use_fsz && timer.diagnostics.maincal;
+                    timer.start_diag(940, diag);
+                    timer.start_diag(949, diag);
+                    crate::observables::opt_trans_diff(
+                        &mut state.sr_opt.sr_opt_o[opt_offset..opt_end],
+                        ip,
+                        data,
+                        &state.slater_matrix.pf_m,
+                    );
+                    timer.stop_diag(949, diag);
+                    timer.stop_diag(940, diag);
+                }
+                observe_optimization_measurement(OptimizationMeasurementView {
+                    data,
+                    state,
+                    sample,
+                    overlap: ip,
+                    local_energy: e,
+                    weight: w,
+                });
+                timer.start(43);
+                if all_complex && use_store {
+                    crate::observables::calculate_oo_store(
+                        &mut state.sr_opt.sr_opt_ho,
+                        &mut state.sr_opt.sr_opt_o_store,
+                        &state.sr_opt.sr_opt_o,
                         w,
-                        e.re,
+                        e,
                         sample,
                         sr_opt_size,
                     );
-                } else {
-                    crate::observables::calculate_oo_real(
-                        &mut state.sr_opt.sr_opt_oo_real,
-                        &mut state.sr_opt.sr_opt_ho_real,
-                        &state.sr_opt.sr_opt_o_real,
+                } else if all_complex {
+                    crate::observables::calculate_oo(
+                        &mut state.sr_opt.sr_opt_oo,
+                        &mut state.sr_opt.sr_opt_ho,
+                        &state.sr_opt.sr_opt_o,
                         w,
-                        e.re,
+                        e,
                         sr_opt_size,
                     );
+                } else {
+                    for i in 0..sr_opt_size {
+                        state.sr_opt.sr_opt_o_real[i] = state.sr_opt.sr_opt_o[2 * i].re;
+                    }
+                    if use_store {
+                        crate::observables::calculate_oo_store_real(
+                            &mut state.sr_opt.sr_opt_ho_real,
+                            &mut state.sr_opt.sr_opt_o_store_real,
+                            &state.sr_opt.sr_opt_o_real,
+                            w,
+                            e.re,
+                            sample,
+                            sr_opt_size,
+                        );
+                    } else {
+                        crate::observables::calculate_oo_real(
+                            &mut state.sr_opt.sr_opt_oo_real,
+                            &mut state.sr_opt.sr_opt_ho_real,
+                            &state.sr_opt.sr_opt_o_real,
+                            w,
+                            e.re,
+                            sr_opt_size,
+                        );
+                    }
                 }
+                timer.stop(43);
             }
-            timer.stop(43);
         }
     }
     state.measurement_batch = batch;
     observe_physcal_green(data, state, use_fsz);
     normalize_physcal_green(state, use_fsz, all_complex);
-    if use_store {
+    // C finalizes the stored OO only for NVMCCalMode==0 (`vmccal.c:309`).
+    if use_store && data.modpara.vmc_calc_mode == 0 {
         timer.start(45);
         let options = crate::observables::StoreFinalization {
             sample_start: 0,

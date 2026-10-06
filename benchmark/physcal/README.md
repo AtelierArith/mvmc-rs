@@ -96,3 +96,17 @@ the `julia-patch` branch (PR tmisawa/Julia-mVMC#54); the committed reference
 
 Baselines in `results/` were captured on Darwin arm64, rustc 1.99.0, Julia
 1.13.1, one thread.
+
+`physcal_hubbard_2026-10-06.md` (Linux x86_64, system OpenBLAS) is the
+Rust-slower baseline and `physcal_hubbard_2026-10-06_green_gap.md` is the same
+benchmark after the issue #442 fix. After the fix Rust is faster at L16 (1.12x)
+and L24 (1.06x) and within ~2% at L32; `|ΔE|=0` and every observable family
+matched.
+
+Reproduce both tasks (four `physcal_ref` fixtures and the Hubbard L16/L24/L32
+chain) with:
+
+```sh
+scripts/run_physcal_benchmark.sh [reps] [warmups] [threads]
+```
+

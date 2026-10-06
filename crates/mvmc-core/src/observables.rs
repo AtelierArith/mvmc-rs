@@ -866,13 +866,13 @@ fn green_func2_impl<const C_KERNEL: bool>(
             n_elec,
         );
         let new_ip_real = calculate_ip_real(&pf_m_new_real, 0, n_qp_full, data);
-        if C_KERNEL {
-            return Complex64::new(proj_ratio.re * new_ip_real / ip.re, 0.0);
-        }
-        // In real mode all quantities are real, so conj is a no-op.
-        // Return as Complex64 to match the function signature.
-        return crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip_real, 0.0), ip)
-            .conj();
+        return if C_KERNEL {
+            Complex64::new(proj_ratio.re * new_ip_real / ip.re, 0.0)
+        } else {
+            // In real mode all quantities are real, so conj is a no-op.
+            // Return as Complex64 to match the function signature.
+            crate::julia_complex::divide(proj_ratio * Complex64::new(new_ip_real, 0.0), ip).conj()
+        };
     }
 
     let n_size = 2 * n_elec;
