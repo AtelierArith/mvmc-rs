@@ -23,6 +23,9 @@ jobs:
     name: ${{ matrix.variant.name }}
     runs-on: ${{ matrix.variant.os }}
     timeout-minutes: 90
+    # The strict-bounds probe forces the reference-kernel bounds on a provider that does not
+    # have them, to record how far it is from them; its failures are findings, not CI failures.
+    continue-on-error: ${{ matrix.variant.probe == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,10 +33,12 @@ jobs:
           - { name: macOS ARM64 OpenBLAS native kernel (threads 1), os: macos-15, arch: ARM64, cache: macos-arm64, provider: openblas, coretype: '', threads: '1' }
           - { name: macOS ARM64 OpenBLAS native kernel (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, provider: openblas, coretype: '', threads: '' }
           - { name: macOS ARM64 Accelerate (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, provider: accelerate, coretype: '', threads: '' }
+          - { name: macOS ARM64 Accelerate strict-bounds probe (informational), os: macos-15, arch: ARM64, cache: macos-arm64, provider: accelerate, coretype: '', threads: '', kclass: reference, probe: true }
           - { name: Linux x86_64 OpenBLAS native kernel (threads 1), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, provider: openblas, coretype: '', threads: '1' }
           - { name: Linux x86_64 OpenBLAS native kernel (threads default), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, provider: openblas, coretype: '', threads: '' }
     env:
       MVMC_BLAS_PROVIDER: ${{ matrix.variant.provider }}
+      MVMC_BLAS_KERNEL_CLASS: ${{ matrix.variant.kclass }}
       MVMC_CG_DIAGNOSTICS: '1'
       MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
     steps:
