@@ -1745,6 +1745,143 @@ Not done here: the measurement and sampler Pfaffian still call `calc_m_all_*` di
 `PfaffianStages` slot is exercised by the harness and gates); wiring it into production is the
 #422/#434 work. SR stages are routed in production since #421.
 
+## 14. Device-resident SR pipeline for large NPara (issue #447)
+
+Status: implemented for real parameters (direct Cholesky and CG), validated and benchmarked on the
+RTX 3060. Related to #417, #421, #432, #437. Complex parameters need the same stages with
+`Complex64` (a second sample matrix in the CG product already works; the complex Gram and
+Hermitian Cholesky are not implemented).
+
+### 14.1 Design
+
+`gpu/mvmc-gpu-cuda/src/sr_device.rs` (`DeviceSr`) keeps the SR step on the device between stages.
+Only per-step inputs and small outputs cross PCIe:
+
+| stage | where it runs | crosses PCIe |
+| --- | --- | --- |
+| sample matrix `O` (`[n, samples]`, or the active-component matrix of CG) | resident | once per step, `8 n samples` bytes, pinned write-combined staging in 32 MiB chunks, two buffers so that the host copy overlaps the transfer (#432) |
+| Gram `G = O O^T` | cuBLAS `dsyrk` (upper) | nothing |
+| S and g assembly with the active-component map, diagonal shift `1 + DSROptStaDel` | kernels `k_assemble_s`/`k_assemble_g`, bitwise the formulas of `COrderSr::assemble_s_g` (`--fmad=false`), reading the upper triangle of `G` | `HO` (`n`) and the map in, nothing out |
+| solve | cuSOLVER `dpotrf('U')` + `dpotrs('U')`, the `DPOSV` of C `stcopt_dposv.c`; `info != 0` or a nonfinite solution is `SrDeviceError::SolveFailed` (the host's `Err(())`) | `x` (`NPara` doubles) and two ints out |
+| CG | the loop of `SampledSrOperator::solve` ported statement for statement: threshold `tol^2 n^2` left to right, 20-iteration explicit residual refresh, the `beta * delta` recurrence, breakdown exit; the product is two cuBLAS `dgemv` per sample matrix plus a combine kernel (`z = w*y - (mean.x) mean + shift*diag*x`); `daxpy`/`dscal` for the updates | gradient, mean, diagonal in; solution out; three scalars per iteration (`ddot`, host pointer mode) are the only syncs |
+
+There is no CPU fallback: every failure is a typed `SrDeviceError`. S and G never leave the
+device in a production step (`download_gram`/`download_s_g` exist for the gate). Device memory
+is `8 (n^2 + n_active^2 + n samples)` bytes (direct) or `8 n samples` (CG); a 10^4 x 10^4 step
+needs 2.4 GB of the 12 GB.
+
+**Where the unified backend (#437) fits.** `DeviceSr` is the device implementation of the
+fused SR step. It is deliberately a separate object with host-slice inputs: the per-stage
+`SrStages` methods (`gram_real`, `assemble_s_g`, `cholesky_solve`, `cg_local_product`) return
+host data and would re-introduce the round trips this issue removes, so the device step is added
+as one more composite stage next to `sr_s_g` once #446 has landed (see the PR description for
+the exact status of the wiring).
+
+### 14.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
+
+Bounds are derived, not tuned:
+
+* **Gram** (step-1 operand): per entry `|G_dev - G_host| <= 2 k eps (|O||O|^T)_ij` with `k` the
+  sample count (two different summation orders of `k` products, `gamma_k` each). Observed worst
+  ratio observed/bound: `9.8e-3` (n=17), `4.8e-2` (n=129), `6.2e-2` (n=400), `2.4e-2` (n=600).
+* **S and g assembly**: bit-identical to the host formula applied to the device's own Gram.
+* **Direct solution**: relative error `|dx|/|x| <= 4 n eps kappa(S)` with `kappa` estimated on the
+  host (power and inverse iteration through the C-order Cholesky), and the device residual
+  `|S x - g|/|g| <= 1e-9`. Observed: `7e-15 / 4.5e-12` (n=17, kappa 3e2), `4.7e-14 / 7.7e-11`
+  (n=129), `2.4e-13 / 4.0e-10` (n=400), `2.6e-14 / 2.3e-10` (n=600); residuals `5e-15..9e-14`.
+* **Failure semantics**: an indefinite `S` (negative shift) fails on the host (`Err(())`) and on the
+  device (`SolveFailed { info > 0 }`); the pipeline stays usable afterwards.
+* **CG operator product** (step-1 operand of the CG path): per entry
+  `|z_dev - z_host| <= 4 (k + m) eps scale_i`, `scale_i` the sum of the absolute terms of the
+  product; observed worst ratio `5.8e-4`, `2.5e-5`, `5.3e-6` (24 to 1125 components, 50 to 1500
+  samples).
+* **CG solutions and #358.** On a well-conditioned problem (shift 0.5, 3000 samples) the device
+  and host iteration counts are equal (29) and the solutions differ by `2.9e-15` (relative). On an
+  ill-conditioned problem (120 components, 130 samples, shift `1e-4`, tolerance 0, the regime of
+  the #358 analysis where the squared residual cancels to 1e-16) the solutions differ by
+  `1.8e-16, 3.4e-16, 7.3e-16, 2.0e-15` after 1, 2, 4, 8 iterations and by `6.7e-4` after 119
+  iterations: the amplification of last-bit differences by the cancellation, exactly the effect the
+  C-order Rust path shows against the instrumented C run. As in #358 the policy for long ill-conditioned solves is
+  repeatability: the gate asserts that the device trajectory is bitwise repeatable and finite, and
+  compares against the host only where the amplification has not set in (up to 2 iterations at
+  `1e-8`, observed `3e-16`).
+
+The C-order CPU path stays the default and the oracle; the device path never changes it.
+
+### 14.3 Benchmark
+
+Environment: Intel Xeon E5-2699 v3 (36 hardware threads) **shared with other jobs (load average
+17 to 20 during the run)**, so the CPU all-core columns are, if anything, pessimistic for the CPU
+and the 1-thread column is mildly affected; 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, device 0),
+driver 580.178.04, CUDA driver API 13.0, container CUDA toolkit 12.9.2 (cuBLAS 12.9.2, cuSOLVER
+11.7.5, NVRTC 12.9), OpenBLAS 0.3.x (system, `libopenblas.so.0`), rustc 1.98.0. Medians of 3 runs
+after one warm-up (one run at the two largest direct sizes). A step is what the host does today
+with the C-order path (`COrderSr::gram_real` + `assemble_s_g` + `cholesky_solve`, or 50 iterations
+of `SampledSrOperator::solve`, tolerance 0) with `openblas_set_num_threads(1)` and `(36)`, against
+`DeviceSr`. **GPU end-to-end** includes the per-step upload of the sample matrix through pinned
+staging; **GPU resident** has the matrix already on the device (what a device-side O store would
+give). Synthetic problems with the structure of the real store (row 0 constant, normalized by
+`1/sqrt(samples)`, latent-factor covariance), `NPara+1` rows, all components active. CSV and
+metadata: `benchmark/gpu_sr_device/results/`.
+
+**Direct SR step (Gram + S/g + Cholesky solve), milliseconds**
+
+| NPara+1 | samples | CPU 1 thread | CPU all cores | GPU end-to-end | GPU resident | e2e vs 1 thread | e2e vs all cores | resident vs all cores | GPU phases: upload / Gram / assemble / solve (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1000 | 1000 | 60.4 | 29.1 | 21.2 | 19.7 | 2.9x | 1.4x | 1.5x | 1.5 / 10.7 / 0.1 / 8.8 |
+| 1000 | 10000 | 403 | 74.0 | 120 | 108 | 3.4x | 0.6x | 0.7x | 11.9 / 99.5 / 0.1 / 8.3 |
+| 3000 | 3000 | 1384 | 452 | 254 | 242 | 5.5x | 1.8x | 1.9x | 11.4 / 165 / 0.7 / 76.6 |
+| 3000 | 10000 | 3270 | 709 | 658 | 626 | 5.0x | 1.1x | 1.1x | 31.9 / 548 / 0.7 / 76.6 |
+| 5000 | 5000 | 5020 | 1156 | 1063 | 1038 | 4.7x | 1.1x | 1.1x | 25.6 / 741 / 2.1 / 294 |
+| 10000 | 1000 | 13030 | 4164 | 2667 | 2656 | 4.9x | 1.6x | 1.6x | 10.9 / 564 / 17.3 / 2075 |
+| 10000 | 10000 | 34404 | 9000 | 7815 | 7710 | 4.4x | 1.2x | 1.2x | 106 / 5609 / 17.1 / 2083 |
+
+**CG SR step (50 CG iterations), milliseconds**
+
+| NPara+1 | samples | CPU 1 thread | CPU all cores | GPU end-to-end | GPU resident | e2e vs 1 thread | e2e vs all cores | resident vs all cores | GPU phases: upload / Gram / assemble / solve (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1000 | 1000 | 31.2 | 13.7 | 12.2 | 10.2 | 2.5x | 1.1x | 1.3x | 1.9 / - / - / 10.1 |
+| 1000 | 10000 | 856 | 292 | 42.7 | 30.8 | 20.0x | 6.8x | 9.5x | 11.9 / - / - / 30.5 |
+| 3000 | 3000 | 760 | 247 | 43.3 | 28.9 | 17.6x | 5.7x | 8.5x | 11.2 / - / - / 28.8 |
+| 3000 | 10000 | 2498 | 939 | 115 | 83.5 | 21.7x | 8.1x | 11.2x | 31.8 / - / - / 83.4 |
+| 5000 | 5000 | 1973 | 715 | 94.5 | 69.2 | 20.9x | 7.6x | 10.3x | 25.4 / - / - / 68.9 |
+| 10000 | 1000 | 729 | 200 | 49.3 | 33.7 | 14.8x | 4.1x | 5.9x | 15.6 / - / - / 33.4 |
+| 10000 | 10000 | 8476 | 2754 | 382 | 275 | 22.2x | 7.2x | 10.0x | 107 / - / - / 274 |
+
+
+### 14.4 When to opt in
+
+* **CG (`NSRCG = 1`): opt in whenever `NPara * samples >= 3e6`** (for example 1000 x 10000 or
+  3000 x 3000): 8.5x to 11x faster than all 36 cores resident, 5.7x to 8.1x end to end (upload
+  included), 15x to 22x faster than one thread end to end (at 10^4 x 10^4: 0.38 s against 8.5 s for one thread
+  and 2.75 s for 36 cores, 50 iterations). The product is memory-bandwidth bound (a 10^4 x 10^4 operand is 800 MB, read twice
+  per iteration at about 300 GB/s of the card's 360), so FP64 throughput (1/64 of FP32 on this
+  card) does not matter, and the per-step upload (0.1 s for 800 MB) is small against the
+  iterations. Below `NPara * samples ~ 1e6` the 10 launches and 3 syncs per iteration make the
+  device no faster than the CPU (1000 x 1000: 1.1x).
+* **Direct SR (`NSRCG = 0`): the device is a clear win only against one core** (4.4x to 5.5x
+  end to end for `NPara >= 3000`); against all 36 cores it is 1.1x to 1.8x faster at
+  `NPara >= 3000` with `samples <= NPara` and at `NPara = 10^4`, and 0.6x (slower) at
+  1000 x 10000. The Gram product (`NPara^2 * samples` FP64 flops, 1.6e2 GFLOP/s measured on the
+  card, close to its FP64 peak) and the Cholesky (`NPara^3/3`) are compute bound, and a 36-core
+  host has comparable FP64 throughput. Opt in for direct SR when the host has few cores (the
+  36-core host is the strongest case for the CPU; a host with a few cores loses in proportion,
+  the one-thread column is the bound), or when the O store is produced on the device. **Use CG on the device for large problems** if the physics allows
+  it: it is both the larger win and the smaller memory footprint.
+* **Memory:** direct needs `8 (n^2 + n_active^2 + n samples)` bytes (2.4 GB at 10^4 x 10^4, the
+  largest that fits twice on a 12 GB card is about 1.5 x 10^4 x 10^4); CG needs `8 n samples`.
+* **Not accelerated:** the O-store production (sampler and measurement, still on the host), the
+  weight-average/MPI reductions (CG over several ranks needs the cross-rank reduction between the
+  local product and the corrections, which the resident loop does not do; single-process runs
+  only) and complex parameters.
+
+### 14.5 Reproduce
+
+```sh
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # gates, including sr_device_gate
+scripts/run_sr_device_bench.sh docker                          # benchmark, writes the CSV
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
