@@ -398,6 +398,8 @@ native_scenarios! {
     all_terms_lanczos2_real_matches_native_c => "all_terms_lanczos2_real",
     all_terms_lanczos1_complex_matches_native_c => "all_terms_lanczos1_cmp",
     all_terms_lanczos2_complex_matches_native_c => "all_terms_lanczos2_cmp",
+    nodal_neel_lanczos1_matches_native_c => "nodal_neel_lanczos1",
+    nodal_neel_lanczos2_matches_native_c => "nodal_neel_lanczos2",
     hubbard_chain_lanczos1_matches_native_c => "hubbard_chain_lanczos1",
     hubbard_chain_lanczos2_matches_native_c => "hubbard_chain_lanczos2",
     spin_chain_lanczos1_matches_native_c => "spin_chain_lanczos1",

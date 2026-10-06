@@ -65,3 +65,5 @@ heisenberg_chain_fsz_mpi4	tests/fixtures/physcal_181/two-samples/heisenberg_chai
 hubbard_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/hubbard_chain_real	real	0		0	compare	ranks=4
 hubbard_chain_dh_opttrans_mpi4	tests/fixtures/physcal_181/two-samples/hubbard_chain_dh_opttrans	real	1		0	compare	ranks=4
 kondo_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0		0	compare	ranks=4
+nodal_neel_lanczos1	tests/fixtures/native_c_physcal_181/_sources/nodal_neel	real	0	NLanczosMode=1	0	compare
+nodal_neel_lanczos2	tests/fixtures/native_c_physcal_181/_sources/nodal_neel	real	0	NLanczosMode=2	0	compare

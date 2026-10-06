@@ -153,6 +153,18 @@ moments.
   is zero bytes and the run continues. Rust wrote a NaN triple and moments. Now
   identical for those two failures; non-finite arithmetic (all-zero moments)
   still writes NaN like C's IEEE propagation.
+* **Nodal hops in the Lanczos operators** (#481). C `calHCA`/`calHCACA` take
+  `calHCA2`/`calHCACA2` (Hamiltonian expansion through `GreenFunc1/2/N`) whenever the hopped
+  Pfaffian ratio `checkGF1/checkGF2` is `<= 1e-12`; Rust used the ratio form and dropped the
+  term when the Green value was zero, so Lanczos moments and `zvo_ls_*` were wrong
+  (0.9 relative in `zvo_ls_out`) on configurations with a vanishing hopped weight. The
+  branch, `GreenFuncN` (with its operator reductions and `calculateNewPfMN`) and C's coincident-index
+  dispatch of `calHCACA` (`h1`, sign, and `calHCA` reductions for the direct two-body Green
+  functions) are ported in `crates/mvmc-core/src/observables/lanczos_nodal.rs`. The native-C
+  scenarios `nodal_neel_lanczos1/2` (a Neel-type pairing state on 8 sites where every
+  nearest-neighbour hop and nearest-neighbour exchange is nodal while next-nearest-neighbour hops
+  are not; `c_toolbox/nodal_481/`) agree with C to 1e-16 in every `zvo_ls_*` file, with the
+  unchanged tolerances.
 * Rust's FSZ + Lanczos rejection now carries C's message.
 
 ## C defects and limits (math kept correct, not reproduced; for the maintainer to report)
@@ -169,6 +181,10 @@ moments.
   RBM factor, so trajectories differ from C when the RBM values are nonzero, while with the
   overlays zeroed they agree with C to 1.4e-14 (exact state included). Rust keeps the correct measurement math. Note the
   resulting asymmetry is fixed by #403: the Rust FSZ sampler now applies the RBM factor (it previously ignored it like C), so FSZ + RBM with nonzero values is correct math but has no native-C reference; the zeroed-overlay scenarios keep the exact native-C comparison.
+* Complex `GreenFuncN` (`locgrn.c`, marked "to be added" in the source) passes `&n` instead of
+  `2n` and an uninitialised `lda` to `M_ZSKPFA`: native C segfaults on the complex nodal
+  scenario (`nodal_neel_*` with `ComplexType 1`). Rust uses the intended `2n` Pfaffian; it agrees
+  with the real path on the same real-valued data to 1e-15, but has no native-C reference.
 * Singular alpha (exact eigenstate, zero energy variance): native C sample 007
   of `heisenberg_real_lanczos1_exact_state` writes uninitialised-memory denormals
   (`0 4.9e-324 1.7e-312`) and the complex model returns -1 depending on 1-ulp
