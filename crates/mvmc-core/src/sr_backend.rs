@@ -337,6 +337,57 @@ pub(crate) fn c_order_gram_real(store: &[f64], n: usize, sample_size: usize, out
     }
 }
 
+/// Accumulate `block` (`cols` consecutive output columns starting at `j0`) over all samples.
+///
+/// Every entry `(i, j)` is the sample-ordered sum `0 + p_0 + p_1 + ...` of the separately
+/// rounded products `p_s = raw[i, s] * conj(raw[j, s])` (`(a.re c.re - a.im c.im, a.re c.im +
+/// a.im c.re)` with `c = conj(raw[j, s])`, the `num_complex` product), exactly as the plain
+/// per-entry loop computes it; only the loop nest differs. Plain IEEE multiplies and additions
+/// only (Rust never fuses `a * b + c`), so every compiled instance, scalar, SSE2 or AVX2, gives
+/// bit-identical results. The inner loop works on four rows at a time in arrays of plain `f64`
+/// so that the compiler can vectorize across the rows.
+#[inline(always)]
+#[allow(clippy::chunks_exact_to_as_chunks)]
+fn gram_block(
+    raw: &[Complex64],
+    n: usize,
+    samples: usize,
+    j0: usize,
+    cols: usize,
+    block: &mut [Complex64],
+) {
+    block.fill(Complex64::new(0.0, 0.0));
+    for sample in 0..samples {
+        let o = &raw[sample * n..(sample + 1) * n];
+        for k in 0..cols {
+            let conj_j = o[j0 + k].conj();
+            let (cr, ci) = (conj_j.re, conj_j.im);
+            let column = &mut block[k * n..(k + 1) * n];
+            let mut acc_chunks = column.chunks_exact_mut(4);
+            let mut o_chunks = o.chunks_exact(4);
+            for (acc, os) in (&mut acc_chunks).zip(&mut o_chunks) {
+                let mut pr = [0.0_f64; 4];
+                let mut pi = [0.0_f64; 4];
+                for t in 0..4 {
+                    pr[t] = os[t].re * cr - os[t].im * ci;
+                    pi[t] = os[t].re * ci + os[t].im * cr;
+                }
+                for t in 0..4 {
+                    acc[t].re += pr[t];
+                    acc[t].im += pi[t];
+                }
+            }
+            for (acc, &oi) in acc_chunks
+                .into_remainder()
+                .iter_mut()
+                .zip(o_chunks.remainder())
+            {
+                *acc += oi * conj_j;
+            }
+        }
+    }
+}
+
 /// Complex store Gram with the authoritative sequential sample sum per entry.
 pub(crate) fn c_order_gram_complex(
     store: &[Complex64],
@@ -350,27 +401,31 @@ pub(crate) fn c_order_gram_complex(
     let observed =
         crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
     let _scope = crate::threading::profile_scope(parallel, n);
-    let update = |j: usize, column: &mut [Complex64]| {
-        let _entry = observed.enter_item();
-        for i in 0..n {
-            let mut sum = Complex64::new(0.0, 0.0);
-            for sample in 0..samples {
-                sum += raw[i + sample * n] * raw[j + sample * n].conj();
-            }
-            column[i] = sum;
+    // Four output columns are accumulated side by side while the stored samples are streamed
+    // once: every entry `(i, j)` still receives `raw[i, s] * conj(raw[j, s])` for `s = 0, 1, ...`
+    // in order, one separately rounded product and one addition each, so the result is
+    // bit-identical to the plain per-entry loop over the samples (issue #448; that loop walked
+    // the store with stride `n` and was 16x slower than C's ZGEMM on the FSZ benchmark).
+    const BLOCK: usize = 4;
+    let update = |block_index: usize, block: &mut [Complex64]| {
+        let j0 = block_index * BLOCK;
+        let cols = block.len() / n;
+        for _ in 0..cols {
+            let _entry = observed.enter_item();
         }
+        gram_block(raw, n, samples, j0, cols, block);
     };
     if parallel {
         use rayon::prelude::*;
         crate::threading::install_inner(|| {
-            gram.par_chunks_mut(n)
+            gram.par_chunks_mut(BLOCK * n)
                 .enumerate()
-                .for_each(|(j, column)| update(j, column))
+                .for_each(|(b, block)| update(b, block))
         });
     } else if n > 0 {
-        gram.chunks_mut(n)
+        gram.chunks_mut(BLOCK * n)
             .enumerate()
-            .for_each(|(j, column)| update(j, column));
+            .for_each(|(b, block)| update(b, block));
     }
     gram
 }
@@ -890,5 +945,87 @@ impl SrStages for TenferroSr {
         let zt = op.tensor.dot_general(&y, dot(1, 0)).map_err(err)?;
         z.copy_from_slice(&self.download_f64(&zt)?);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod complex_gram_tests {
+    use super::*;
+
+    /// The plain per-entry loop the blocked kernel replaced (issue #448).
+    pub(super) fn plain_for_timing(
+        store: &[Complex64],
+        n: usize,
+        samples: usize,
+    ) -> Vec<Complex64> {
+        plain(store, n, samples)
+    }
+
+    fn plain(store: &[Complex64], n: usize, samples: usize) -> Vec<Complex64> {
+        let mut gram = vec![Complex64::new(0.0, 0.0); n * n];
+        for j in 0..n {
+            for i in 0..n {
+                let mut sum = Complex64::new(0.0, 0.0);
+                for sample in 0..samples {
+                    sum += store[i + sample * n] * store[j + sample * n].conj();
+                }
+                gram[i + j * n] = sum;
+            }
+        }
+        gram
+    }
+
+    #[test]
+    fn blocked_complex_gram_is_bit_identical_to_the_plain_loop() {
+        let mut state = 12345_u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((state >> 11) as f64 / (1u64 << 53) as f64) - 0.5
+        };
+        for n in [1usize, 2, 3, 4, 5, 7, 8, 11, 16, 17] {
+            for samples in [1usize, 2, 7, 33] {
+                let store: Vec<Complex64> = (0..n * samples)
+                    .map(|_| Complex64::new(next(), next()))
+                    .collect();
+                let expected = plain(&store, n, samples);
+                let actual = c_order_gram_complex(&store, n, samples);
+                for (k, (a, e)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.re.to_bits(), e.re.to_bits(), "n={n} s={samples} re {k}");
+                    assert_eq!(a.im.to_bits(), e.im.to_bits(), "n={n} s={samples} im {k}");
+                }
+            }
+        }
+    }
+
+    /// Timing aid for issue #448 (`cargo nextest run --run-ignored only gram_kernel_timing`).
+    #[test]
+    #[ignore = "timing aid"]
+    fn gram_kernel_timing() {
+        let (n, samples) = (160usize, 1000usize);
+        let raw: Vec<Complex64> = (0..n * samples)
+            .map(|i| Complex64::new((i % 17) as f64 * 0.1, (i % 13) as f64 * 0.07))
+            .collect();
+        let time = |label: &str, f: &mut dyn FnMut()| {
+            f();
+            let start = std::time::Instant::now();
+            for _ in 0..5 {
+                f();
+            }
+            eprintln!("{label}: {:.1} ms", start.elapsed().as_secs_f64() * 200.0);
+        };
+        time("plain per-entry (old)", &mut || {
+            std::hint::black_box(super::complex_gram_tests::plain_for_timing(
+                &raw, n, samples,
+            ));
+        });
+        time("blocked (production kernel)", &mut || {
+            let mut out = vec![Complex64::new(0.0, 0.0); n * n];
+            for (b, block) in out.chunks_mut(4 * n).enumerate() {
+                gram_block(&raw, n, samples, b * 4, block.len() / n, block);
+            }
+            std::hint::black_box(out);
+        });
     }
 }

@@ -2442,7 +2442,7 @@ fn lanczos_evaluate_moved(
         )
     };
     if calculation.is_err() {
-        state.slater_matrix = original_slater.clone();
+        state.slater_matrix.restore_tables_from(original_slater);
         return None;
     }
     let moved_ip = if all_complex {
@@ -2460,7 +2460,7 @@ fn lanczos_evaluate_moved(
     } else {
         None
     };
-    state.slater_matrix = original_slater.clone();
+    state.slater_matrix.restore_tables_from(original_slater);
     value
 }
 
@@ -2827,7 +2827,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             let hca = moved_h * green;
             contribution = Some((-term.value) * hca);
         }
-        task.slater_matrix = original_slater.clone();
+        task.slater_matrix.restore_tables_from(&original_slater);
         contribution
     };
     let pair_hop_term = |term: &mvmc_expert_parsers::PairHopTerm,
@@ -2882,7 +2882,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             let hcaca = moved_h * green;
             contribution = Some(term.value * hcaca);
         }
-        task.slater_matrix = original_slater.clone();
+        task.slater_matrix.restore_tables_from(&original_slater);
         contribution
     };
     let exchange_term = |term: &mvmc_expert_parsers::ExchangeTerm,

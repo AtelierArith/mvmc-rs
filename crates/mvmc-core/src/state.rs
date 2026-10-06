@@ -388,6 +388,21 @@ impl<T: TensorScalar> InvMColMajor<T> {
     }
 }
 
+impl<T: TensorScalar + Copy> InvMColMajor<T> {
+    /// Overwrite this table (values and staleness) with `other` of the same shape, reusing the
+    /// existing allocation. Equal to `*self = other.clone()` without the allocation and the
+    /// tensor duplication (issue #448).
+    pub fn copy_from(&mut self, other: &Self) {
+        assert_eq!(
+            (self.n_qp_full, self.n_size),
+            (other.n_qp_full, other.n_size),
+            "InvMColMajor::copy_from requires equal shapes"
+        );
+        self.raw_mut().copy_from_slice(other.raw());
+        self.stale.clone_from(&other.stale);
+    }
+}
+
 impl<T: TensorScalar> Clone for InvMColMajor<T> {
     fn clone(&self) -> Self {
         Self {
@@ -872,6 +887,25 @@ pub struct SlaterMatrixData {
     pub inv_m_real: InvMColMajor<f64>,
     /// Real Pfaffian buffer (empty in all-complex mode).
     pub pf_m_real: Vec<f64>,
+}
+
+impl SlaterMatrixData {
+    /// Restore the tables that Pfaffian recomputation and local-energy evaluation overwrite
+    /// (`inv_m`, `pf_m`, `inv_m_real`, `pf_m_real`) from `original`, reusing the allocations.
+    /// The Slater elements are never written by those evaluations, so they are not copied:
+    /// this equals `*self = original.clone()` for a state whose Slater elements are unchanged
+    /// since `original` was taken (issue #448).
+    pub fn restore_tables_from(&mut self, original: &Self) {
+        self.inv_m.copy_from(&original.inv_m);
+        self.pf_m.copy_from_slice(&original.pf_m);
+        self.inv_m_real.copy_from(&original.inv_m_real);
+        self.pf_m_real.copy_from_slice(&original.pf_m_real);
+        debug_assert!(
+            self.slater_elm.as_slice().len() == original.slater_elm.as_slice().len()
+                && self.slater_elm_real.as_slice().len()
+                    == original.slater_elm_real.as_slice().len()
+        );
+    }
 }
 
 impl SlaterMatrixData {
