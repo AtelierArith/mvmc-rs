@@ -1,6 +1,6 @@
 # Device-resident SR step benchmark (issue #447)
 
-See docs/design/gpu-readiness.md section 14.3 for the method and metadata (shared host, load 17-20, RTX 3060, driver 580.178.04, CUDA 12.9.2).
+See docs/design/gpu-readiness.md section 15.3 for the method and metadata (shared host, load 17-20, RTX 3060, driver 580.178.04, CUDA 12.9.2).
 
 **Direct SR step (Gram + S/g + Cholesky solve), milliseconds**
 

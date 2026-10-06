@@ -22,7 +22,7 @@
 use std::io::Write;
 use std::time::Instant;
 
-use mvmc_core::sr_backend::{COrderSr, RealView, SrAssembleInput, SrBackend};
+use mvmc_core::sr_backend::{COrderSr, RealView, SrAssembleInput, SrStages};
 use mvmc_core::sr_cg::SampledSrOperator;
 use mvmc_gpu_cuda::sr_device::DeviceSr;
 use mvmc_gpu_cuda::sr_problem::{cg_inputs, make_problem};

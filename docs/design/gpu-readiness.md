@@ -1745,14 +1745,14 @@ Not done here: the measurement and sampler Pfaffian still call `calc_m_all_*` di
 `PfaffianStages` slot is exercised by the harness and gates); wiring it into production is the
 #422/#434 work. SR stages are routed in production since #421.
 
-## 14. Device-resident SR pipeline for large NPara (issue #447)
+## 15. Device-resident SR pipeline for large NPara (issue #447)
 
 Status: implemented for real parameters (direct Cholesky and CG), validated and benchmarked on the
 RTX 3060. Related to #417, #421, #432, #437. Complex parameters need the same stages with
 `Complex64` (a second sample matrix in the CG product already works; the complex Gram and
 Hermitian Cholesky are not implemented).
 
-### 14.1 Design
+### 15.1 Design
 
 `gpu/mvmc-gpu-cuda/src/sr_device.rs` (`DeviceSr`) keeps the SR step on the device between stages.
 Only per-step inputs and small outputs cross PCIe:
@@ -1770,17 +1770,23 @@ device in a production step (`download_gram`/`download_s_g` exist for the gate).
 is `8 (n^2 + n_active^2 + n samples)` bytes (direct) or `8 n samples` (CG); a 10^4 x 10^4 step
 needs 2.4 GB of the 12 GB.
 
-**Opt-in and the unified backend (#437).** The device step is opt-in by construction: it is only
-reachable through the explicit `DeviceSr` API of the standalone `gpu/mvmc-gpu-cuda` crate; the
-default build, `mvmc-core` and the C-order SR path (the oracle) are untouched. It is not yet
-selected by `MVMC_RS_SR_BACKEND` or routed from `sr.rs`/`sr_cg.rs`: the unification PR (#446,
-`SrStages`/`StageBackend`) was still open, and the per-stage `SrStages` methods (`gram_real`,
-`assemble_s_g`, `cholesky_solve`, `cg_local_product`) return host data, so they cannot express a
-resident step. The follow-up after #446 merges adds the fused direct step and the resident CG
-solve as composite stages next to `sr_s_g` and routes single-process runs to them. Per the
-priority decision (correct numerics first) this PR stops at the validated, opt-in pipeline.
+**Opt-in and the unified backend (#437).** The fused step is two new composite stages of
+`SrStages` (`mvmc_core::sr_backend`): `direct_step(&DirectStepInput) -> x` (Gram, S/g assembly,
+shift, Cholesky) and `cg_step(&CgStepInput) -> solution` (the CG loop). The C-order backend
+implements them as the production composition (`direct_step`'s default composes the backend's own
+`gram_real`/`assemble_s_g`/`cholesky_solve`; `cg_step` is `SampledSrOperator::solve_with_stages`,
+the production loop, now parameterized over the stage object), so `StageBackend::c_order()` is
+the oracle of the device step through the same trait. `ResidentCudaSr` (`gpu/mvmc-gpu-cuda/src/
+stages.rs`) delegates every per-stage method to the tenferro CUDA stages and overrides the two
+composite stages with `DeviceSr`; `cuda_resident_stage_backend(ordinal)` builds the opt-in
+`StageBackend`. The default `MVMC_RS_SR_BACKEND=cuda` backend, the C-order path and the production
+call sites are unchanged: production `sr.rs`/`sr_cg.rs` do not yet route to the composite stages
+(their S/g assembly consumes the host `OO` array produced earlier by `finalize_oo_store_real`, which
+the resident path deliberately never materializes on the host), so selecting the resident backend
+in a run is the follow-up; per the priority decision (correct numerics first) this change stops
+at the validated, opt-in stages.
 
-### 14.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
+### 15.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
 
 Bounds are derived, not tuned:
 
@@ -1809,7 +1815,7 @@ Bounds are derived, not tuned:
   compares against the host only where the amplification has not set in (up to 2 iterations at
   `1e-8`, observed `3e-16`).
 
-Also gated: bitwise repeatability of the direct solve (re-upload and re-solve give identical
+Through the `StageBackend` object: `direct_step` agrees with `StageBackend::c_order()` at `1.4e-13` (bound `2.3e-10`, kappa 9.7e2) and `cg_step` has equal iteration counts (27) and `4e-16` difference. Also gated: bitwise repeatability of the direct solve (re-upload and re-solve give identical
 bits) and the CG operator with an imaginary sample matrix (`1e-15` of the largest entry).
 No numerical discrepancy was found: every difference above is within its derived bound, the
 only large difference (`6.7e-4`) is the CG amplification of #358 and is not a defect of either
@@ -1818,7 +1824,7 @@ conditioning), not a sampled run of the optimizer, and there is one device (RTX 
 
 The C-order CPU path stays the default and the oracle; the device path never changes it.
 
-### 14.3 Benchmark
+### 15.3 Benchmark
 
 Environment: Intel Xeon E5-2699 v3 (36 hardware threads) **shared with other jobs (load average
 17 to 20 during the run)**, so the CPU all-core columns are, if anything, pessimistic for the CPU
@@ -1859,7 +1865,7 @@ metadata: `benchmark/gpu_sr_device/results/`.
 | 10000 | 10000 | 8476 | 2754 | 382 | 275 | 22.2x | 7.2x | 10.0x | 107 / - / - / 274 |
 
 
-### 14.4 When to opt in
+### 15.4 When to opt in
 
 * **CG (`NSRCG = 1`): opt in whenever `NPara * samples >= 3e6`** (for example 1000 x 10000 or
   3000 x 3000): 8.5x to 11x faster than all 36 cores resident, 5.7x to 8.1x end to end (upload
@@ -1885,7 +1891,7 @@ metadata: `benchmark/gpu_sr_device/results/`.
   local product and the corrections, which the resident loop does not do; single-process runs
   only) and complex parameters.
 
-### 14.5 Reproduce
+### 15.5 Reproduce
 
 ```sh
 MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # gates, including sr_device_gate

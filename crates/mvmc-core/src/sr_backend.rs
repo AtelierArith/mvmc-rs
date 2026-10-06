@@ -108,6 +108,91 @@ pub struct CgSamples<'a> {
     pub version: u64,
 }
 
+/// Inputs of one direct SR step on a `[n, samples]` store (real parameters).
+pub struct DirectStepInput<'a> {
+    /// Store `[n, samples]`, column-major (`O[i + s * n]`).
+    pub store: &'a [f64],
+    /// Rows of the store (`1 + NPara`).
+    pub n: usize,
+    /// Samples.
+    pub samples: usize,
+    /// `HO` vector (length `n`).
+    pub ho: &'a [f64],
+    /// Active components in S order.
+    pub map: &'a [usize],
+    /// Index offset of the first parameter (1 for real parameters).
+    pub offset: usize,
+    /// Diagonal regularization `DSROptStaDel`.
+    pub sta_del: f64,
+    /// Step size `DSROptStepDt`.
+    pub step_dt: f64,
+}
+
+/// Inputs of one CG SR solve (single process).
+pub struct CgStepInput<'a> {
+    /// Real sample matrix `[components, samples]`.
+    pub real: &'a [f64],
+    /// Imaginary sample matrix (`None` for real parameters).
+    pub imag: Option<&'a [f64]>,
+    /// Active components.
+    pub components: usize,
+    /// Samples.
+    pub samples: usize,
+    /// Gradient (right-hand side).
+    pub gradient: &'a [f64],
+    /// Component means.
+    pub mean: &'a [f64],
+    /// Component variances (`diagonal` of the operator).
+    pub diagonal: &'a [f64],
+    /// `1 / weight`.
+    pub inv_weight: f64,
+    /// Diagonal shift `DSROptStaDel`.
+    pub shift: f64,
+    /// CG tolerance.
+    pub tolerance: f64,
+    /// Iteration cap.
+    pub max_iterations: usize,
+}
+
+/// Result of a CG SR solve.
+#[derive(Debug, Clone)]
+pub struct CgStepResult {
+    /// Solution increment.
+    pub solution: Vec<f64>,
+    /// Iteration count (`CgSolution::iterations` convention).
+    pub iterations: usize,
+}
+
+/// The CG step of the C-order loop (`SampledSrOperator`) over the given stage implementation.
+pub fn cg_step_with(
+    stages: &mut dyn SrStages,
+    input: &CgStepInput<'_>,
+) -> Result<CgStepResult, StageError> {
+    let mut op =
+        crate::sr_cg::SampledSrOperator::new(input.components, input.samples, input.imag.is_some());
+    op.mean.copy_from_slice(input.mean);
+    op.diagonal.copy_from_slice(input.diagonal);
+    op.real_samples.copy_from_slice(input.real);
+    if let Some(im) = input.imag {
+        op.imag_samples.copy_from_slice(im);
+    }
+    let r = op
+        .solve_with_stages(
+            stages,
+            input.gradient,
+            input.inv_weight,
+            input.shift,
+            input.tolerance,
+            input.max_iterations,
+            &crate::reducer::SingleProcessReducer,
+        )
+        .map_err(StageError::Failed)?;
+    Ok(CgStepResult {
+        solution: r.solution,
+        iterations: r.iterations,
+    })
+}
+
 /// Stage-level SR backend.
 pub trait SrStages: Send {
     /// Human-readable label for logs and result files.
@@ -172,6 +257,43 @@ pub trait SrStages: Send {
         x: &[f64],
         z: &mut [f64],
     ) -> Result<(), StageError>;
+
+    /// Fused direct SR step: Gram `O O^T`, S/g assembly with the active map and the diagonal
+    /// shift, Cholesky solve; returns `x`. Composed from this backend's own stages by default
+    /// (for [`COrderSr`] that is the production sequence and the parity oracle); a resident
+    /// backend overrides it to keep `G`, `S` and the factor on the device (issue #447).
+    fn direct_step(&mut self, input: &DirectStepInput<'_>) -> Result<Vec<f64>, StageError> {
+        let (n, nm) = (input.n, input.map.len());
+        let mut gram = vec![0.0; n * n];
+        self.gram_real(input.store, n, input.samples, &mut gram)?;
+        let mut s = vec![0.0; nm * nm];
+        let mut g = vec![0.0; nm];
+        self.assemble_s_g(
+            &SrAssembleInput {
+                oo: RealView::Real(&gram),
+                ho: RealView::Real(input.ho),
+                map: input.map,
+                ld: n,
+                offset: input.offset,
+                sta_del: input.sta_del,
+                step_dt: input.step_dt,
+            },
+            &mut s,
+            &mut g,
+        )?;
+        self.cholesky_solve(&mut s, &mut g, nm).map_err(|()| {
+            StageError::Failed("Cholesky solve failed (info != 0 or nonfinite)".into())
+        })?;
+        Ok(g)
+    }
+
+    /// CG SR solve on the sampled operator (single process). Implemented by [`cg_step_with`] for
+    /// the host backends; a resident backend keeps the sample matrix on the device (issue #447).
+    fn cg_step(&mut self, _input: &CgStepInput<'_>) -> Result<CgStepResult, StageError> {
+        Err(StageError::Unsupported(
+            "this SR backend provides no CG step".to_string(),
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -269,6 +391,10 @@ pub(crate) fn c_order_gram_complex(
 }
 
 impl SrStages for COrderSr {
+    fn cg_step(&mut self, input: &CgStepInput<'_>) -> Result<CgStepResult, StageError> {
+        cg_step_with(self, input)
+    }
+
     fn label(&self) -> String {
         "c-order-cpu".to_string()
     }
@@ -568,6 +694,10 @@ fn dot(contract_l: usize, contract_r: usize) -> DotGeneralConfig {
 }
 
 impl SrStages for TenferroSr {
+    fn cg_step(&mut self, input: &CgStepInput<'_>) -> Result<CgStepResult, StageError> {
+        cg_step_with(self, input)
+    }
+
     fn label(&self) -> String {
         self.label.clone()
     }

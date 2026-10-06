@@ -23,7 +23,7 @@
 use mvmc_core::backend::{
     cuda_device_count, cuda_gate_decision, CudaGateDecision, CUDA_GATE_VARIABLE,
 };
-use mvmc_core::sr_backend::{COrderSr, RealView, SrAssembleInput, SrBackend};
+use mvmc_core::sr_backend::{COrderSr, RealView, SrAssembleInput, SrStages};
 use mvmc_core::sr_cg::SampledSrOperator;
 use mvmc_gpu_cuda::sr_device::{DeviceSr, SrDeviceError};
 use mvmc_gpu_cuda::sr_problem::{cg_inputs, make_problem};
@@ -435,4 +435,80 @@ fn device_cg_operator_with_imaginary_samples_matches_c_order() {
         worst <= 4.0 * (2 * samples + comp) as f64 * EPS * scale * 10.0,
         "{worst}"
     );
+}
+
+/// The unified stage backend (#437) object: `StageBackend::c_order()` is the oracle for the
+/// fused `direct_step`/`cg_step`, the resident CUDA backend must agree within the bounds above.
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn resident_stage_backend_fused_steps_match_the_c_order_stage_backend() {
+    use mvmc_core::sr_backend::{CgStepInput, DirectStepInput};
+    use mvmc_core::stage_backend::StageBackend;
+    if gate().is_none() {
+        return;
+    }
+    let mut oracle = StageBackend::c_order();
+    let mut resident = mvmc_gpu_cuda::stages::cuda_resident_stage_backend(0).expect("backend");
+
+    let (n, samples) = (301, 900);
+    let p = make_problem(n, samples, 70, 0.5, 9, 41);
+    let nm = p.map.len();
+    let input = DirectStepInput {
+        store: &p.store,
+        n,
+        samples,
+        ho: &p.ho,
+        map: &p.map,
+        offset: 1,
+        sta_del: 0.01,
+        step_dt: 0.003,
+    };
+    let x_c = oracle.sr().direct_step(&input).expect("oracle direct step");
+    let x_d = resident
+        .sr()
+        .direct_step(&input)
+        .expect("resident direct step");
+    let mut gram = vec![0.0; n * n];
+    COrderSr::default()
+        .gram_real(&p.store, n, samples, &mut gram)
+        .unwrap();
+    let (s_h, _g) = host_s_g(&gram, &p.ho, &p.map, n, 0.01, 0.003);
+    let kappa = cond_estimate(&s_h, nm);
+    let dx: Vec<f64> = x_d.iter().zip(&x_c).map(|(a, b)| a - b).collect();
+    let rel = norm(&dx) / norm(&x_c);
+    let bound = 4.0 * nm as f64 * EPS * kappa;
+    eprintln!(
+        "stage backend direct_step: |dx|/|x| {rel:.2e} (bound {bound:.2e}, kappa~{kappa:.1e})"
+    );
+    assert!(rel <= bound);
+
+    let inp = cg_inputs(&p, 0.003);
+    let cg = CgStepInput {
+        real: &inp.operand,
+        imag: None,
+        components: nm,
+        samples,
+        gradient: &inp.gradient,
+        mean: &inp.mean,
+        diagonal: &inp.diagonal,
+        inv_weight: 1.0,
+        shift: 0.5,
+        tolerance: 1e-8,
+        max_iterations: nm,
+    };
+    let c = oracle.sr().cg_step(&cg).expect("oracle cg");
+    let d = resident.sr().cg_step(&cg).expect("resident cg");
+    let dx: Vec<f64> = d
+        .solution
+        .iter()
+        .zip(&c.solution)
+        .map(|(a, b)| a - b)
+        .collect();
+    let rel = norm(&dx) / norm(&c.solution);
+    eprintln!(
+        "stage backend cg_step: iterations {} / {}, |dx|/|x| {rel:.2e}",
+        c.iterations, d.iterations
+    );
+    assert_eq!(c.iterations, d.iterations);
+    assert!(rel < 1e-9);
 }
