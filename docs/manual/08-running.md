@@ -95,14 +95,14 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
 > - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:965`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1197`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:981`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1150`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:969`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1201`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:985`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
-> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:843`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `-m` option is ported as [MultiDef mode](#multidef-mode--m) (#348).

@@ -94,14 +94,14 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
 > - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:965`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1197`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:981`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1150`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:969`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1201`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:985`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
-> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:843`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
 > - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `-m` オプションは [MultiDef モード](#multidef-モード-m) として移植されています(#348)。
