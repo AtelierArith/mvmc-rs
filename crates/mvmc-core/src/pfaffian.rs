@@ -295,8 +295,8 @@ pub fn calc_m_all_complex(
 
 /// Complex `calculate_m_all` using the operation order from C's `ZSKTRF` path.
 ///
-/// This is reserved for C-authoritative numerical paths such as Full Lanczos;
-/// ordinary sampling keeps the Julia-compatible production kernel above.
+/// Production sampling, the PhysCal refresh and Full Lanczos use this order (#449); the
+/// Julia-compatible kernel above is a historical opt-in.
 pub(crate) fn calc_m_all_complex_c_compat(
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
@@ -311,6 +311,53 @@ pub(crate) fn calc_m_all_complex_c_compat(
     calc_m_all_complex_with_kernel::<true, false>(
         ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
     )
+}
+
+thread_local! {
+    static JULIA_COMPLEX_KERNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Guard of [`use_julia_complex_kernel`]: restores the previous setting on drop.
+#[derive(Debug)]
+pub struct JuliaComplexKernelGuard(bool);
+
+impl Drop for JuliaComplexKernelGuard {
+    fn drop(&mut self) {
+        JULIA_COMPLEX_KERNEL.with(|flag| flag.set(self.0));
+    }
+}
+
+/// Historical opt-in (this thread only): evaluate the sampler's periodic complex
+/// `CalculateMAll` recalculation and the PhysCal refresh with Julia's `@turbo` kernel
+/// (`zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) instead of C's `ZSKTRF` operation
+/// order. The default is the C order (issue #449; AGENTS.md: C is authoritative for operation
+/// order). Only tests of archived Julia 1.11 trajectories select this.
+pub fn use_julia_complex_kernel() -> JuliaComplexKernelGuard {
+    JuliaComplexKernelGuard(JULIA_COMPLEX_KERNEL.with(|flag| flag.replace(true)))
+}
+
+/// Complex `CalculateMAll` of the production sampler and PhysCal refresh: the C operation order
+/// unless [`use_julia_complex_kernel`] is active on this thread.
+pub(crate) fn calc_m_all_complex_production(
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m: &mut InvMColMajor<Complex64>,
+    pf_m: &mut [Complex64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+    pool: &ThreadedPfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
+    if JULIA_COMPLEX_KERNEL.with(std::cell::Cell::get) {
+        calc_m_all_complex(
+            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+        )
+    } else {
+        calc_m_all_complex_c_compat(
+            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+        )
+    }
 }
 
 /// Native normal-complex validation status, without a Julia-only norm cutoff.

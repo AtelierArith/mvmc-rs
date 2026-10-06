@@ -21,9 +21,7 @@ use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 
 use crate::observables::{calculate_ip_complex, calculate_ip_real};
-use crate::pfaffian::{
-    calc_m_all_complex, calc_m_all_complex_native_info, calc_m_all_real_native_info,
-};
+use crate::pfaffian::{calc_m_all_complex_native_info, calc_m_all_real_native_info};
 use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::sampling::candidate::{
     get_update_type, make_candidate_exchange, make_candidate_exchange_fsz, make_candidate_hopping,
@@ -1084,8 +1082,10 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
 
             if n_accept_window > n_site {
                 timer.start(34);
+                // C `CalculateMAll` (ZSKTRF operation order) unless the historical Julia kernel is
+                // selected for this thread (#449).
                 if !reducer.sampling_any_failure(
-                    calc_m_all_complex(
+                    crate::pfaffian::calc_m_all_complex_production(
                         &tmp_ele_idx,
                         &state.slater_matrix.slater_elm,
                         &mut state.slater_matrix.inv_m,

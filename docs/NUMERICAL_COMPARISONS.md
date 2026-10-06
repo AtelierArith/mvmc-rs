@@ -323,3 +323,57 @@ bound above (observed worst case well inside it in every cell). `W = 1` is byte-
 serial optimization. Beyond the first, well-conditioned step the SR solve amplifies reduction
 roundoff (#358): trajectories are checked for bitwise repeatability (thread scheduling does not
 change the rank-ordered sums), not forced onto C.
+
+## C operation order of FMA and lane-split reductions (#449)
+
+C is authoritative for operation order (AGENTS.md). A default C build (x86-64 baseline, no
+`-march`, no FMA contraction) evaluates `tmp += a * b` as two separately rounded operations in
+sequential order; Julia's `@turbo`/LoopVectorization uses lane-split partial sums with fused
+multiply-adds. Rust never contracts `a * b + c`, so a plain loop is bit-identical to default C.
+
+**`two_hop_bilinear_real`** (the `b^T M a` form of the two-electron Pfaffian ratio, used by the
+two-body Green functions and the sampler's two-hop proposals). C counterpart:
+`calculateNewPfMTwo_child_real`, `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:167-177`
+(`tmp += invM_i[msj] * vec_a[msj]` sequential in `msj`, then `bMa += vec_b[msi] * tmp` in `msi`
+order). The Rust default is now exactly this order (it was Julia's four-lane, six-accumulator
+FMA tree, plus a #444 hardware-FMA dispatch). Speed is kept without changing a single
+association: four rows are evaluated side by side as four independent sequential chains and
+`bMa` is then accumulated in row order, so the result is bit-identical to the plain nested loop.
+Independent check: `c_toolbox/two_hop_bilinear_449` builds the C loop without FMA and stores the
+bits of 132 cases (`tests/fixtures/pfaffian_cg/two_hop_bilinear_c.txt`); the Rust kernel
+reproduces all 132 bitwise (`two_hop_bilinear_is_bit_identical_to_the_c_reduction`). A C build
+with FMA contraction (`-O3 -march=native`) differs from the no-FMA build in 50 of the 132
+cases, so the contract is "default C build". The archived Julia values
+(`two_hop_bilinear.txt`) are now only a historical comparison with a reordering bound.
+
+**Audit of the other Julia-style reductions** on the parity path:
+
+| site | C counterpart | Julia style | action |
+|---|---|---|---|
+| `sampling/updates.rs` `two_hop_bilinear_real` | `pfupdate_two_real.c:167-177` | lane-split, FMA | fixed (above) |
+| complex `CalculateMAll` of the sampler's periodic recalculation and the PhysCal refresh (`pfapack` `zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) | `ZSKTRF` order (`zsktf2_c_compat`) | FMA, Julia pivot inverse | default is now the C order (`calc_m_all_complex_production`); Julia's kernel is the opt-in `pfaffian::use_julia_complex_kernel()` (thread-local guard) used only by the archived Julia 1.11 SR prefix tests |
+| `sr_backend.rs` real Gram `O O^T` | `calculateOO_Store_real`: `DGEMM('N','T')` for every size (`vmccal.c:685-689`) | `DSYRK` for `max(n, samples) >= 4`, `muladd` loop below (Julia `mul!` dispatch) | now `DGEMM('N','T')`, full matrix; the Julia small-case `mul_add` is gone |
+| `c_complex.rs` `divide` (`mul_add` on macOS aarch64) | native ARM compiler-rt contraction | C behaviour on that target | kept (it is the C-faithful emulation) |
+| `mvmc-stdface/ccomplex.rs` `x2y2m1` | glibc `__x2y2m1` exact error-free sum | none (C emulation) | kept |
+| `mvmc-expert-parsers/utils/julia_{trig,log,exp}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | kept: deterministic across platforms (swapping to the host libm would make results platform-dependent); math-function roundoff is permitted by the policy above; candidate follow-up |
+| `pfapack` `simd-backend` (`mul_add_c64s`) | none (SIMD) | opt-in feature, not default | kept, documented opt-in |
+| tenferro SR backend (`MVMC_RS_SR_BACKEND=tenferro`) | BLAS/LAPACK | different GEMM/Cholesky order | kept, documented opt-in |
+
+**Effect on the native-C fixtures.** The 69 PhysCal tests of `native_c_physcal_181` (566 output
+files) pass with the unchanged bounds before and after all three changes. 137 of the 566 files
+(35 scenarios) change at the last bits, in both directions (for example complex-mode
+`zvo_out` entries near zero move by about 4e-16 absolute); the Lanczos-sensitive entries,
+amplified by the condition number of `alpha`, dominate the changes: the largest absolute
+deviation from C over the changed files is 5.1e-9 after against 1.0e-8 before (sum 3.4e-8
+against 5.4e-8), so the C order is not worse and slightly closer to C. The tolerances cannot be
+tightened on this evidence: the dominant bounds are set by the `alpha`-amplification
+(`1e-7`/`1e-6`, measured up to 8e8) and the FSZ one-configuration sensitivity, both unchanged by
+this issue. Against Julia the observables now differ at roundoff level instead of being
+bit-equal (Hubbard L16/L24/L32 `zvo_cisajscktalt` max|diff| 2.1e-15 / 3.1e-14 / 2.5e-13, energy
+|dE| = 0), which is the expected signature of leaving Julia's reduction order.
+The `heisenberg_chain_fsz` PhysCal record and the SR-CG/direct-SR prefix tests pass on this
+Linux host before and after (OpenBLAS 0.3.26, reference LAPACK 3.12; 1538 of 1538 on `main`);
+the 16 failures reported in #444 were not reproducible here (see the PR description).
+Measurement aid:
+`MVMC_RS_REPORT_MAXDIFF=1 cargo nextest run -p mvmc-cli --test issue181_native_c_physcal
+--no-capture` prints the largest absolute and relative difference per output file.

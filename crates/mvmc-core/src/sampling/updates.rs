@@ -1356,94 +1356,66 @@ fn two_ratio_real<const FSZ: bool>(
     inv_ab * vec_ba + inv_ab * bma + p_a * q_b - p_b * q_a
 }
 
-// Real FSZ uses Julia's scalar nested loop, without @turbo or fused
-// multiply-add. The normal real path below has a different reduction tree.
-fn two_hop_bilinear_fsz_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
-    let mut sum = 0.0;
-    for i in 0..n {
-        let mut tmp = 0.0;
-        for j in 0..n {
-            tmp += inv[base + i * n + j] * a[j];
-        }
-        sum += b[i] * tmp;
-    }
-    sum
-}
-
-/// Julia LoopVectorization's AVX2 reduction: four inner lanes and six outer
-/// accumulators. Keep this tree explicit; a scalar fold or blanket FMA changes
-/// Green ratios and eventually the SR-CG gradient even with identical samples.
+/// Two-hop bilinear form `b^T M a` in the operation order of the authoritative C kernel
+/// `calculateNewPfMTwo_child_real` (`extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:167-177`):
 ///
-/// `f64::mul_add` is a correctly rounded fused multiply-add, so the hardware
-/// FMA and the scalar fallback produce identical bits. On a baseline x86-64
-/// target (no `+fma`) `mul_add` lowers to a software implementation, which is
-/// several times slower; the runtime-dispatched `+fma,+avx2` build below
-/// recovers the hardware instruction (parity-safe) while staying portable to
-/// CPUs without those features. See issue #442.
+/// ```text
+/// for i: tmp = 0; for j: tmp += M[i][j] * a[j];   bMa += b[i] * tmp;
+/// ```
+///
+/// Every row is a sequential left-to-right sum of separately rounded products and the rows are
+/// accumulated in order: no fused multiply-add and no lane-split partial sums (C built for the
+/// default x86-64 target contracts nothing; only an FMA-enabled C build such as
+/// `-march=native` would differ, see `c_toolbox/two_hop_bilinear_449/README.md`). Rust never
+/// contracts `a * b + c`, so this is bit-identical to the C order on every platform.
+///
+/// Speed: the inner sum of one row is a serial dependency chain, so four rows are evaluated
+/// side by side (four independent chains, each still sequential in `j`), and `bMa` is then
+/// accumulated over the rows in their original order. The association of every result is
+/// unchanged, hence the result is bit-identical to the plain nested loop (tested).
+///
+/// Julia's `@turbo` version used four inner lanes and six outer accumulators with FMA
+/// (issue #449; the archived Julia values remain a historical comparison with a reordering
+/// bound only).
+fn two_hop_bilinear_c_order(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    let mut b_ma = 0.0;
+    let mut i = 0;
+    while i + 4 <= n {
+        let r0 = &inv[base + i * n..base + i * n + n];
+        let r1 = &inv[base + (i + 1) * n..base + (i + 1) * n + n];
+        let r2 = &inv[base + (i + 2) * n..base + (i + 2) * n + n];
+        let r3 = &inv[base + (i + 3) * n..base + (i + 3) * n + n];
+        let (mut t0, mut t1, mut t2, mut t3) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        for (j, &aj) in a[..n].iter().enumerate() {
+            t0 += r0[j] * aj;
+            t1 += r1[j] * aj;
+            t2 += r2[j] * aj;
+            t3 += r3[j] * aj;
+        }
+        b_ma += b[i] * t0;
+        b_ma += b[i + 1] * t1;
+        b_ma += b[i + 2] * t2;
+        b_ma += b[i + 3] * t3;
+        i += 4;
+    }
+    while i < n {
+        let row = &inv[base + i * n..base + i * n + n];
+        let mut tmp = 0.0;
+        for (j, &aj) in a[..n].iter().enumerate() {
+            tmp += row[j] * aj;
+        }
+        b_ma += b[i] * tmp;
+        i += 1;
+    }
+    b_ma
+}
+
 fn two_hop_bilinear_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if hardware_fma_available() {
-            // SAFETY: guarded by the runtime feature check above.
-            return unsafe { two_hop_bilinear_real_hw(inv, base, n, a, b) };
-        }
-    }
-    two_hop_bilinear_real_scalar(inv, base, n, a, b)
+    two_hop_bilinear_c_order(inv, base, n, a, b)
 }
 
-fn two_hop_bilinear_real_scalar(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
-    let mut outer = [0.0_f64; 6];
-    for i in 0..n {
-        let mut inner = [0.0_f64; 4];
-        for j in 0..n {
-            let lane = j % 4;
-            inner[lane] = inv[base + i * n + j].mul_add(a[j], inner[lane]);
-        }
-        let dot = (inner[0] + inner[2]) + (inner[1] + inner[3]);
-        let lane = i % 6;
-        outer[lane] = b[i].mul_add(dot, outer[lane]);
-    }
-    (outer[4] + (outer[0] + outer[2])) + (outer[5] + (outer[3] + outer[1]))
-}
-
-#[cfg(target_arch = "x86_64")]
-fn hardware_fma_available() -> bool {
-    use std::sync::atomic::{AtomicU8, Ordering};
-    // 0 = unknown, 1 = available, 2 = unavailable.
-    static STATE: AtomicU8 = AtomicU8::new(0);
-    match STATE.load(Ordering::Relaxed) {
-        1 => true,
-        2 => false,
-        _ => {
-            let available = std::arch::is_x86_feature_detected!("fma")
-                && std::arch::is_x86_feature_detected!("avx2");
-            STATE.store(if available { 1 } else { 2 }, Ordering::Relaxed);
-            available
-        }
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma,avx2")]
-unsafe fn two_hop_bilinear_real_hw(
-    inv: &[f64],
-    base: usize,
-    n: usize,
-    a: &[f64],
-    b: &[f64],
-) -> f64 {
-    let mut outer = [0.0_f64; 6];
-    for i in 0..n {
-        let mut inner = [0.0_f64; 4];
-        for j in 0..n {
-            let lane = j % 4;
-            inner[lane] = inv[base + i * n + j].mul_add(a[j], inner[lane]);
-        }
-        let dot = (inner[0] + inner[2]) + (inner[1] + inner[3]);
-        let lane = i % 6;
-        outer[lane] = b[i].mul_add(dot, outer[lane]);
-    }
-    (outer[4] + (outer[0] + outer[2])) + (outer[5] + (outer[3] + outer[1]))
+fn two_hop_bilinear_fsz_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    two_hop_bilinear_c_order(inv, base, n, a, b)
 }
 
 #[cfg(test)]
@@ -1648,7 +1620,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fsz_bilinear_matches_julia_scalar_reduction_values() {
+    fn fsz_bilinear_matches_archived_julia_scalar_reduction_values() {
         let inputs = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");
         let expected = include_str!("../../../../tests/fixtures/real_fsz/bilinear.txt");
         let mut lines = inputs
@@ -1693,8 +1665,10 @@ mod tests {
         );
     }
 
+    /// Historical Julia 1.13.1 `@turbo` values (four inner lanes, six outer accumulators, FMA):
+    /// the C-order kernel differs from them only by reduction-order roundoff.
     #[test]
-    fn two_hop_bilinear_matches_julia_vectorized_reduction_values() {
+    fn two_hop_bilinear_is_within_reordering_bound_of_archived_julia_values() {
         let fixture = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");
         let mut lines = fixture
             .lines()
@@ -1722,6 +1696,72 @@ mod tests {
                 bound,
                 bound,
                 format!("size {n}"),
+            );
+        }
+    }
+
+    /// The kernel equals the values of the authoritative C loops (compiled without FMA from
+    /// `pfupdate_two_real.c:167-177`, `c_toolbox/two_hop_bilinear_449`) bit for bit.
+    #[test]
+    fn two_hop_bilinear_is_bit_identical_to_the_c_reduction() {
+        let fixture = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");
+        let expected =
+            include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear_c.txt");
+        let mut lines = fixture
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'));
+        let mut cases = 0;
+        for row in expected.lines().filter(|l| !l.starts_with('#')) {
+            let mut fields = row.split_whitespace();
+            let n: usize = fields.next().unwrap().parse().unwrap();
+            let bits = u64::from_str_radix(fields.next().unwrap(), 16).unwrap();
+            assert_eq!(lines.next().unwrap().parse::<usize>().unwrap(), n);
+            let values: Vec<f64> = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
+                .collect();
+            let (m, a, b) = (
+                &values[1..1 + n * n],
+                &values[1 + n * n..1 + n * n + n],
+                &values[1 + n * n + n..],
+            );
+            assert_eq!(
+                two_hop_bilinear_real(m, 0, n, a, b).to_bits(),
+                bits,
+                "size {n}, case {cases}"
+            );
+            assert_eq!(two_hop_bilinear_fsz_real(m, 0, n, a, b).to_bits(), bits);
+            cases += 1;
+        }
+        assert!(lines.next().is_none());
+        assert!(cases >= 100, "{cases}");
+    }
+
+    /// The four-row interleaving is the plain nested loop, for every size and a base offset.
+    #[test]
+    fn two_hop_bilinear_interleaving_matches_the_plain_nested_loop_bitwise() {
+        let mut seed = 99;
+        for n in 1..=21 {
+            let base = 3;
+            let m: Vec<f64> = (0..base + n * n)
+                .map(|_| pseudo_random(&mut seed))
+                .collect();
+            let a: Vec<f64> = (0..n).map(|_| pseudo_random(&mut seed)).collect();
+            let b: Vec<f64> = (0..n).map(|_| pseudo_random(&mut seed)).collect();
+            let mut plain = 0.0;
+            for i in 0..n {
+                let mut tmp = 0.0;
+                for j in 0..n {
+                    tmp += m[base + i * n + j] * a[j];
+                }
+                plain += b[i] * tmp;
+            }
+            assert_eq!(
+                two_hop_bilinear_real(&m, base, n, &a, &b).to_bits(),
+                plain.to_bits(),
+                "n = {n}"
             );
         }
     }
