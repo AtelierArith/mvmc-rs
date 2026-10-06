@@ -1453,6 +1453,7 @@ dependencies = [
 name = "mvmc-gpu"
 version = "0.0.0"
 dependencies = [
+ "mvmc-core",
  "num-complex",
  "pfapack",
  "rayon",
