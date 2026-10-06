@@ -573,7 +573,7 @@ pub struct WalkerRun {
 }
 
 /// Options of [`run_lockstep_real`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LockstepOptions {
     /// One teacher per walker (same length as the walkers), or empty.
     pub teachers: Vec<Teacher>,
@@ -583,16 +583,6 @@ pub struct LockstepOptions {
     /// (`0` parks immediately); `None` spins 50 us when the walkers do not outnumber the cores
     /// and parks immediately otherwise (spinning walkers would starve the service thread).
     pub spin_us: Option<u64>,
-}
-
-impl Default for LockstepOptions {
-    fn default() -> Self {
-        Self {
-            teachers: Vec::new(),
-            passes: 0,
-            spin_us: None,
-        }
-    }
 }
 
 /// Statistics of the service loop.

@@ -138,3 +138,41 @@ fn heisenberg_exchange_lockstep_equals_cpu_sampler() {
 fn single_walker_lockstep_equals_cpu_sampler() {
     check(&hubbard(), 1);
 }
+
+/// The flip detector works: a reference decision that disagrees with the computed weight by far
+/// more than the weight error is reported as a flip and as a defect, while the walker follows the
+/// reference decision.
+#[test]
+fn teacher_reports_a_forced_flip_as_a_defect() {
+    let c = hubbard();
+    let mut sw = walker(&c, 0);
+    trace::start_decisions();
+    vmc_make_sample_real(&sw.data, &mut sw.state, &mut sw.rng).unwrap();
+    let mut reference = trace::finish_decisions();
+    // find a decision with a comfortable margin and invert it
+    let i = reference
+        .iter()
+        .position(|&(w, u)| (w - u).abs() > 0.1)
+        .expect("a decision with margin");
+    let (w, u) = reference[i];
+    reference[i].0 = if w > u { u - 0.1 } else { u + 0.1 };
+    let mut ws = vec![walker(&c, 0)];
+    let (runs, _) = run_lockstep_real(
+        &mut ws,
+        &mut HostService::new(),
+        LockstepOptions {
+            teachers: vec![Teacher {
+                reference,
+                weight_abs: 1e-12,
+                weight_rel: 1e-10,
+            }],
+            ..LockstepOptions::default()
+        },
+    )
+    .unwrap();
+    let rep = runs[0].teacher.as_ref().unwrap();
+    // the first disagreement is the forced one; afterwards the walker follows the reference
+    // decisions while the configurations differ, so later decisions disagree as well
+    assert!(rep.flips >= 1);
+    assert!(rep.defects >= 1);
+}

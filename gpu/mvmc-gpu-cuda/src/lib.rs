@@ -7,6 +7,7 @@
 //! The CPU C-order path stays the parity reference; nothing here changes RNG draw order.
 
 pub mod bench;
+pub mod device_sampler;
 pub mod pfaffian;
 pub mod sr_bench;
 pub mod stages;

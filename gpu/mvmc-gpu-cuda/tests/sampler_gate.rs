@@ -206,6 +206,7 @@ fn check_case(c: &Case, walkers: usize) {
     }
     // resident inverses vs the CPU tables (mVMC convention); includes accepted-move updates
     let n_qp = ws[0].state.slater_matrix.slater_elm_real.n_qp_full();
+    #[allow(clippy::needless_range_loop)]
     for w in 0..walkers.min(2) {
         let (inv, pf) = service.download_walker(w).expect("download");
         let cpu_inv = reference[w].1.state.slater_matrix.inv_m_real.as_slice();
@@ -264,7 +265,7 @@ extern "C" __global__ void twice(double* x, int n) {
         with_cuda_exec_session(session, |exec| {
             exec.with_raw("sampler-gate.interop", |sess| {
                 // device buffer owned by tenferro's allocator; its address from the raw session
-                let mut dev = sess.alloc_bytes(n * 8, "interop")?;
+                let dev = sess.alloc_bytes(n * 8, "interop")?;
                 let mut ptr = std::ptr::null_mut::<std::ffi::c_void>();
                 dev.with_ptr(|p| ptr = p);
                 // a separate cudarc handle of the same primary context performs the copies

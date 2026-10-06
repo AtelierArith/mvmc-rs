@@ -313,7 +313,7 @@ pub struct CudaSamplerService<T: TransferPath> {
 impl CudaSamplerService<PinnedTransfer> {
     /// Service on `device` with the pinned asynchronous transfer path.
     pub fn new_pinned(device: usize) -> Result<Self, String> {
-        Self::with_path(device, |ctx, ts| PinnedTransfer::new(ctx, ts))
+        Self::with_path(device, PinnedTransfer::new)
     }
 }
 

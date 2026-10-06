@@ -1474,6 +1474,7 @@ dependencies = [
  "mvmc-core",
  "mvmc-gpu",
  "num-complex",
+ "sfmt19937",
  "tenferro-ad",
  "tenferro-cpu",
  "tenferro-gpu",
