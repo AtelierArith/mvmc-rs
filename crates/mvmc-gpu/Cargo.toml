@@ -16,3 +16,4 @@ thiserror = { workspace = true }
 tenferro-tensor = { workspace = true }
 tenferro-cpu = { workspace = true }
 tenferro-runtime = { version = "0.7.1", default-features = false }
+mvmc-core = { workspace = true }

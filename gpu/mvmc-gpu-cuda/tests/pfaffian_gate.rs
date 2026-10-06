@@ -187,3 +187,28 @@ fn cuda_tensor_native_and_extension_backends_agree_with_the_kernel() {
         assert!((num / den).sqrt() < 1e-11, "{backend:?}");
     }
 }
+
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn cuda_pfaffian_passes_the_validation_harness_replay() {
+    use mvmc_core::accel_validation::{replay, ReplayConfig};
+    use mvmc_gpu::stages::BatchedStages;
+
+    let Some(e) = engine() else { return };
+    let mut stages = BatchedStages::new(Backend::Engine(&e), "batched-cuda-pfaffian");
+    let rep = replay(&mut stages, &ReplayConfig::default()).expect("replay");
+    println!("{}", rep.render());
+    // only S and g are unsupported by this stage set; everything Pfaffian-related is compared
+    let bad: Vec<_> = rep
+        .violations()
+        .into_iter()
+        .filter(|v| !v.starts_with("S:") && !v.starts_with("g:"))
+        .collect();
+    assert!(bad.is_empty(), "{bad:?}");
+    assert!(rep.pf.compared > 0 && rep.inv.compared > 0 && rep.o.compared > 0);
+    assert!(!rep
+        .unsupported
+        .iter()
+        .any(|u| u.starts_with("pfaffian_inverse")));
+    assert_eq!(rep.defects, 0);
+}

@@ -736,8 +736,8 @@ weight/draw/margin recording with a decision-flip defect rule, 20-step repeatabi
 benchmark metadata block. It is backend-agnostic through the trait `AcceleratedStages` (a stage
 that is not implemented reports `Unsupported`, never a CPU fallback). The CPU tenferro variant
 runs in normal CI; the CUDA variant is the second ignored test of the CUDA gate (CUDA RTX 3060
-run: S and g match the oracle, 0 flips, 0 defects, Pfaffian stage unsupported). A later batched
-Pfaffian implementation (#423) plugs in by implementing `pfaffian_inverse`. The policy text is
+run: S and g match the oracle, 0 flips, 0 defects, Pfaffian stage unsupported). The batched
+Pfaffian backends of #423 plug in through `mvmc_gpu::stages::BatchedStages` (section 11.6). The policy text is
 in `docs/NUMERICAL_COMPARISONS.md`.
 
 ### 10.6 Multi-chain walker runner and device break-even (issue #425)
@@ -1081,7 +1081,24 @@ Gaps found while writing both (candidates for upstream requests, none filed here
   `!Send` and so cannot be cached in `Session::resource`, and `raw` has no way to opt in to more
   than 48 KB of dynamic shared memory (`cuFuncSetAttribute`).
 
-### 11.6 Reproduce
+### 11.6 Validation harness (#424) and the invM convention
+
+`mvmc_gpu::stages::BatchedStages` implements `AcceleratedStages::pfaffian_inverse` on every
+batched backend (a batch of one plane per call; the SR stage stays `Unsupported`). CPU variants
+(`CpuPfapack`, rayon, `ExtensionOp`, tensor-native) run the teacher-forced replay with the flip
+detector in normal CI (`crates/mvmc-gpu/tests/accel_harness.rs`: 0 flips, 0 defects, Pfaffian
+bit-identical for pfapack/`ExtensionOp`, inverse max abs 5.7e-14 for tensor-native, minimum
+decision margin 5.1e-3); the CUDA kernel runs the same replay in the gate
+(`pfaffian_gate.rs`, `cuda_pfaffian_passes_the_validation_harness_replay`).
+
+Sign convention: the harness oracle returns the true inverse `X^-1` (`X * inv = I`), and so does
+`pfaffian_inverse_batched` (`utu2inv` output, no flip), so the mapping to the harness is the
+identity (`inv_convention_matches_the_oracle` checks it bitwise against `CpuOracle`). mVMC's
+`invM` is the negative: `calc_m_all_real` / C `CalculateMAll` end with
+`M_DSCAL(&nsq, &minus_one, invM, &one)`, hence `invM = -inv` while `pf` is unchanged.
+A production integration must apply that flip when storing into the sampler tables.
+
+### 11.7 Reproduce
 
 ```sh
 cargo nextest run -p mvmc-gpu --cargo-profile test-fast        # CPU, ExtensionOp, tensor-native

@@ -37,6 +37,8 @@ mod scalar;
 mod tenferro_ext;
 mod tenferro_native;
 
+pub mod stages;
+
 #[doc(hidden)]
 pub mod testkit;
 
