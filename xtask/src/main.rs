@@ -1,5 +1,6 @@
 //! Workspace task runner.
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1304,6 +1305,7 @@ fn bench_physcal(args: &[String]) -> Result<(), String> {
 
     let julia_runner = write_julia_physcal_runner(&workspace)?;
     let mut measurements = Vec::new();
+    let mut observable_diffs: Vec<(String, Vec<ObservableDiff>)> = Vec::new();
 
     for model in &config.models {
         println!("--- {} ---", model.name);
@@ -1322,11 +1324,23 @@ fn bench_physcal(args: &[String]) -> Result<(), String> {
         )?;
         print_summary("julia", &julia);
         measurements.extend(julia);
+
+        let last_rust = run_root
+            .join("rust")
+            .join(model.name)
+            .join(format!("rep-{}", config.reps));
+        let last_julia = run_root
+            .join("julia")
+            .join(model.name)
+            .join(format!("run_{}", config.warmups + config.reps));
+        let diffs = compare_physcal_observables(&last_rust, &last_julia)?;
+        observable_diffs.push((model.name.to_string(), diffs));
         println!();
     }
 
     write_csv(&config.csv, &measurements)?;
     print_physcal_comparison(&measurements, &config.models);
+    print_physcal_observables(&observable_diffs);
 
     if config.keep_output {
         println!("kept outputs: {}", run_root.display());
@@ -1498,7 +1512,9 @@ fn run_rust_physcal(
             .join(format!("rep-{}", rep + 1));
         let (seconds, _output) =
             run_rust_physcal_once(&binary, &namelist, &opt_params, model.mode, &out, config)?;
-        let energy = read_rust_energy_per_site(&out, &namelist);
+        // PhysCal writes one indexed `zvo_out_NNN.dat` per sample; the
+        // optimization reader's non-indexed `zvo_out.dat` does not exist here.
+        let energy = read_rust_physcal_energy_per_site(&out, &namelist);
         measurements.push(Measurement {
             implementation: "rust",
             model: model.name.to_string(),
@@ -1553,6 +1569,9 @@ fn run_julia_physcal(
     let out_root = run_root.join("julia").join(model.name);
     fs::create_dir_all(&out_root)
         .map_err(|e| format!("cannot create {}: {e}", out_root.display()))?;
+    // The runner divides the sampled total energy by its 8th argument to report
+    // energy per site; pass Nsite, not the PhysCal sample count.
+    let nsite = modpara_nsite(&namelist).unwrap_or(0);
 
     let mut command = Command::new(&config.julia_bin);
     if config.julia_bin == Path::new("julia") {
@@ -1573,7 +1592,7 @@ fn run_julia_physcal(
         .arg(config.warmups.to_string())
         .arg(config.reps.to_string())
         .arg(&out_root)
-        .arg(nvmc_sample.to_string())
+        .arg(nsite.to_string())
         .current_dir(julia_root)
         .output()
         .map_err(|e| format!("failed to spawn Julia: {e}"))?;
@@ -1621,6 +1640,243 @@ fn print_physcal_comparison(measurements: &[Measurement], models: &[PhyscalModel
             julia_median / rust_median,
             energy_str,
         );
+    }
+}
+
+// ── PhysCal observable comparison ───────────────────────────────────────────
+
+/// PhysCal output families compared between the Rust CLI and the Julia runner.
+/// The numeric sample index (`_001`) is stripped before matching, so one family
+/// groups every `NDataQtySmp` sample. `zvo_out`/`zvo_var` are excluded: their
+/// naming differs (indexed on the Rust side, plain on the Julia side) and the
+/// energy is already compared through the timing summary.
+const PHYSCAL_OBSERVABLE_FAMILIES: &[&str] = &[
+    "zvo_cisajs",
+    "zvo_cisajscktalt",
+    "zvo_cisajscktaltex",
+    "zvo_ls_out",
+    "zvo_ls_qqqq",
+    "zvo_ls_cisajs",
+    "zvo_ls_cisajscktalt",
+    "zvo_ls_cisajscktaltex",
+];
+
+/// Absolute and relative bounds used to label a family `ok` in the observable
+/// comparison. They follow the documented PhysCal comparison policy (one-body
+/// `1e-10`, direct and factored two-body `1e-9`). A benchmark run reports the
+/// observed maxima rather than aborting on them.
+const PHYSCAL_OBSERVABLE_ATOL: f64 = 1.0e-10;
+const PHYSCAL_OBSERVABLE_RTOL: f64 = 1.0e-9;
+
+#[derive(Debug, Clone)]
+struct ObservableDiff {
+    family: String,
+    files: usize,
+    values: usize,
+    max_abs: f64,
+    max_rel: f64,
+    /// Largest `|Δ| / (atol + rtol*scale)` across all compared values. A family
+    /// is within tolerance when this is at most one, which is the componentwise
+    /// absolute-plus-relative rule rather than two independent maxima.
+    max_error_ratio: f64,
+}
+
+impl ObservableDiff {
+    fn within_tolerance(&self) -> bool {
+        self.max_error_ratio <= 1.0
+    }
+}
+
+/// Map a PhysCal output file name (`zvo_cisajs_003.dat`) to its family
+/// (`zvo_cisajs`), or `None` when the file is not a compared observable.
+fn observable_family(file_name: &str) -> Option<&'static str> {
+    let stem = file_name.strip_suffix(".dat")?;
+    let (base, index) = stem.rsplit_once('_')?;
+    if index.is_empty() || !index.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    PHYSCAL_OBSERVABLE_FAMILIES
+        .iter()
+        .copied()
+        .find(|family| *family == base)
+}
+
+fn observable_files(
+    dir: &Path,
+) -> Result<BTreeMap<&'static str, BTreeMap<String, PathBuf>>, String> {
+    let mut map: BTreeMap<&'static str, BTreeMap<String, PathBuf>> = BTreeMap::new();
+    let entries = fs::read_dir(dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("cannot read entry in {}: {e}", dir.display()))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(family) = observable_family(&name) {
+            map.entry(family).or_default().insert(name, entry.path());
+        }
+    }
+    Ok(map)
+}
+
+/// Compare one observable file. Integer/token columns must match exactly; every
+/// other column is compared as a float. Returns `(numeric values, max abs, max
+/// rel, max error ratio)`.
+fn compare_observable_file(
+    rust: &Path,
+    julia: &Path,
+    family: &str,
+    file: &str,
+) -> Result<(usize, f64, f64, f64), String> {
+    let rust_text =
+        fs::read_to_string(rust).map_err(|e| format!("cannot read {}: {e}", rust.display()))?;
+    let julia_text =
+        fs::read_to_string(julia).map_err(|e| format!("cannot read {}: {e}", julia.display()))?;
+    let rust_lines: Vec<&str> = rust_text.lines().collect();
+    let julia_lines: Vec<&str> = julia_text.lines().collect();
+    if rust_lines.len() != julia_lines.len() {
+        return Err(format!(
+            "{family}/{file}: row count differs (rust {} vs julia {})",
+            rust_lines.len(),
+            julia_lines.len(),
+        ));
+    }
+    let mut values = 0usize;
+    let mut max_abs = 0.0f64;
+    let mut max_rel = 0.0f64;
+    let mut max_error_ratio = 0.0f64;
+    for (row, (rust_line, julia_line)) in rust_lines.iter().zip(&julia_lines).enumerate() {
+        if julia_line.trim_start().starts_with('#') {
+            if rust_line != julia_line {
+                return Err(format!("{family}/{file}: header row {row} differs"));
+            }
+            continue;
+        }
+        let rust_columns: Vec<&str> = rust_line.split_whitespace().collect();
+        let julia_columns: Vec<&str> = julia_line.split_whitespace().collect();
+        if rust_columns.len() != julia_columns.len() {
+            return Err(format!(
+                "{family}/{file}: row {row} column count differs (rust {} vs julia {})",
+                rust_columns.len(),
+                julia_columns.len(),
+            ));
+        }
+        for (column, (rust_token, julia_token)) in
+            rust_columns.iter().zip(&julia_columns).enumerate()
+        {
+            if let Ok(expected) = julia_token.parse::<i64>() {
+                if rust_token.parse::<i64>().ok() != Some(expected) {
+                    return Err(format!(
+                        "{family}/{file}: row {row} column {column} discrete value differs \
+                         ({rust_token} vs {julia_token})"
+                    ));
+                }
+                continue;
+            }
+            match (rust_token.parse::<f64>(), julia_token.parse::<f64>()) {
+                (Ok(actual), Ok(expected)) => {
+                    let difference = (actual - expected).abs();
+                    let scale = actual.abs().max(expected.abs());
+                    let relative = if scale > 0.0 { difference / scale } else { 0.0 };
+                    let error_ratio =
+                        difference / (PHYSCAL_OBSERVABLE_ATOL + PHYSCAL_OBSERVABLE_RTOL * scale);
+                    max_abs = max_abs.max(difference);
+                    max_rel = max_rel.max(relative);
+                    max_error_ratio = max_error_ratio.max(error_ratio);
+                    values += 1;
+                }
+                _ if rust_token != julia_token => {
+                    return Err(format!(
+                        "{family}/{file}: row {row} column {column} text differs \
+                         ({rust_token} vs {julia_token})"
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok((values, max_abs, max_rel, max_error_ratio))
+}
+
+/// Compare every PhysCal observable file family present in `rust_dir` against
+/// the same-named file in `julia_dir`. Shape and discrete-token mismatches are
+/// errors; floating-point differences are summarized per family.
+fn compare_physcal_observables(
+    rust_dir: &Path,
+    julia_dir: &Path,
+) -> Result<Vec<ObservableDiff>, String> {
+    let rust_files = observable_files(rust_dir)?;
+    let julia_files = observable_files(julia_dir)?;
+    for family in julia_files.keys() {
+        if !rust_files.contains_key(family) {
+            return Err(format!(
+                "{}: Julia wrote {family} files but the Rust run did not",
+                rust_dir.display(),
+            ));
+        }
+    }
+    let mut diffs = Vec::new();
+    for (family, rust_group) in &rust_files {
+        let family = *family;
+        let julia_group = julia_files.get(family).ok_or_else(|| {
+            format!(
+                "{}: Rust wrote {} {family} file(s) but Julia did not",
+                rust_dir.display(),
+                rust_group.len(),
+            )
+        })?;
+        let mut files = 0usize;
+        let mut values = 0usize;
+        let mut max_abs = 0.0f64;
+        let mut max_rel = 0.0f64;
+        let mut max_error_ratio = 0.0f64;
+        for (name, rust_path) in rust_group {
+            let julia_path = julia_group
+                .get(name)
+                .ok_or_else(|| format!("{family}/{name}: missing on the Julia side"))?;
+            let (file_values, file_abs, file_rel, file_ratio) =
+                compare_observable_file(rust_path, julia_path, family, name)?;
+            files += 1;
+            values += file_values;
+            max_abs = max_abs.max(file_abs);
+            max_rel = max_rel.max(file_rel);
+            max_error_ratio = max_error_ratio.max(file_ratio);
+        }
+        diffs.push(ObservableDiff {
+            family: family.to_string(),
+            files,
+            values,
+            max_abs,
+            max_rel,
+            max_error_ratio,
+        });
+    }
+    Ok(diffs)
+}
+
+fn print_physcal_observables(diffs: &[(String, Vec<ObservableDiff>)]) {
+    if diffs.is_empty() {
+        return;
+    }
+    println!("=== PhysCal observables (Rust vs Julia, last rep) ===");
+    println!(
+        "{:<24} {:<26} {:>5} {:>8} {:>11} {:>11}  status",
+        "model", "family", "files", "values", "max|Δ|", "max_rel"
+    );
+    for (model, rows) in diffs {
+        if rows.is_empty() {
+            println!("{model:<24} (no observable files found)");
+            continue;
+        }
+        for row in rows {
+            println!(
+                "{:<24} {:<26} {:>5} {:>8} {:>11.3e} {:>11.3e}  {}",
+                model,
+                row.family,
+                row.files,
+                row.values,
+                row.max_abs,
+                row.max_rel,
+                if row.within_tolerance() { "ok" } else { "DIFF" },
+            );
+        }
     }
 }
 
@@ -1692,6 +1948,7 @@ fn bench_physcal_hubbard(args: &[String]) -> Result<(), String> {
 
     let julia_runner = write_julia_physcal_runner(&workspace)?;
     let mut measurements = Vec::new();
+    let mut observable_diffs: Vec<(String, Vec<ObservableDiff>)> = Vec::new();
 
     for model in &config.models {
         println!("--- {} ---", model.name);
@@ -1708,14 +1965,26 @@ fn bench_physcal_hubbard(args: &[String]) -> Result<(), String> {
         )?;
         print_summary("julia", &julia);
         measurements.extend(julia);
+
+        let last_rust = run_root
+            .join("rust")
+            .join(model.name)
+            .join(format!("rep-{}", config.reps));
+        let last_julia = run_root
+            .join("julia")
+            .join(model.name)
+            .join(format!("run_{}", config.warmups + config.reps));
+        let diffs = compare_physcal_observables(&last_rust, &last_julia)?;
+        observable_diffs.push((model.name.to_string(), diffs));
         println!();
     }
 
     write_csv(&config.csv, &measurements)?;
     print_physcal_hubbard_comparison(&measurements, &config.models);
+    print_physcal_observables(&observable_diffs);
     write_report(
         &config.report,
-        &build_physcal_hubbard_report(&config, &measurements),
+        &build_physcal_hubbard_report(&config, &measurements, &observable_diffs),
     )?;
     println!("csv    : {}", config.csv.display());
     println!("report : {}", config.report.display());
@@ -2097,6 +2366,7 @@ fn print_physcal_hubbard_comparison(measurements: &[Measurement], models: &[Hubb
 fn build_physcal_hubbard_report(
     config: &PhyscalHubbardBenchConfig,
     measurements: &[Measurement],
+    observables: &[(String, Vec<ObservableDiff>)],
 ) -> String {
     let julia_version = if config.julia_bin == Path::new("julia") {
         command_output("julia", &["+1.13.1", "--version"])
@@ -2145,6 +2415,37 @@ fn build_physcal_hubbard_report(
         ));
     }
     report.push_str("\n`speedup = julia / rust`; values above `1.0x` mean Rust was faster.\n");
+    report.push_str("\n## PhysCal observables (Rust vs Julia, last rep)\n\n");
+    if observables.iter().all(|(_, rows)| rows.is_empty()) {
+        report.push_str("No observable output files were found.\n");
+    } else {
+        report.push_str(
+            "Maximum absolute and relative difference of the measured Green-function\n\
+             files (`zvo_cisajs*`) and, when `NLanczosMode > 0`, the Lanczos files\n\
+             (`zvo_ls_*`). `status` uses the documented PhysCal bounds\n\
+             (absolute `1e-10`, relative `1e-9`).\n\n",
+        );
+        report.push_str("| model | family | files | values | max abs | max rel | status |\n");
+        report.push_str("|---|---|---:|---:|---:|---:|---|\n");
+        for (model, rows) in observables {
+            if rows.is_empty() {
+                report.push_str(&format!("| {model} | - | 0 | 0 | - | - | - |\n"));
+                continue;
+            }
+            for row in rows {
+                report.push_str(&format!(
+                    "| {} | {} | {} | {} | {:.3e} | {:.3e} | {} |\n",
+                    model,
+                    row.family,
+                    row.files,
+                    row.values,
+                    row.max_abs,
+                    row.max_rel,
+                    if row.within_tolerance() { "ok" } else { "DIFF" },
+                ));
+            }
+        }
+    }
     report.push_str(
         "\nRun with `MVMC_C_TIMER=1` and `--keep-output` to keep each side's\n`zvo_CalcTimer.dat` for the section breakdown.\n",
     );
@@ -2484,9 +2785,15 @@ out_root = ARGS[7]
 nsite = parse(Int, ARGS[8])
 
 function energy_per_site(out_dir)::String
+    nsite == 0 && return "n/a"
     path = joinpath(out_dir, "zvo_out.dat")
-    if !isfile(path) || nsite == 0
-        return "n/a"
+    if !isfile(path)
+        # C-indexed PhysCal output (one file per sample): read the last sample,
+        # matching the Rust reader. Older Julia wrote a single non-indexed file.
+        indexed = sort(filter(n -> startswith(n, "zvo_out_") && endswith(n, ".dat"),
+                              readdir(out_dir)))
+        isempty(indexed) && return "n/a"
+        path = joinpath(out_dir, last(indexed))
     end
     for line in reverse(readlines(path))
         stripped = strip(line)
@@ -2642,5 +2949,77 @@ mod tests {
                 "model {model}"
             );
         }
+    }
+
+    #[test]
+    fn observable_family_strips_sample_index() {
+        assert_eq!(
+            super::observable_family("zvo_cisajs_001.dat"),
+            Some("zvo_cisajs")
+        );
+        assert_eq!(
+            super::observable_family("zvo_cisajscktalt_100.dat"),
+            Some("zvo_cisajscktalt")
+        );
+        assert_eq!(
+            super::observable_family("zvo_cisajscktaltex_007.dat"),
+            Some("zvo_cisajscktaltex")
+        );
+        assert_eq!(
+            super::observable_family("zvo_ls_qqqq_001.dat"),
+            Some("zvo_ls_qqqq")
+        );
+        assert_eq!(super::observable_family("zvo_out_001.dat"), None);
+        assert_eq!(super::observable_family("zvo_cisajs.dat"), None);
+        assert_eq!(super::observable_family("zvo_cisajs_00x.dat"), None);
+    }
+
+    #[test]
+    fn observable_comparison_reports_max_difference() {
+        let root = std::env::temp_dir().join(format!(
+            "xtask-observable-{}-{}",
+            std::process::id(),
+            "max_difference"
+        ));
+        let rust = root.join("rust");
+        let julia = root.join("julia");
+        std::fs::create_dir_all(&rust).unwrap();
+        std::fs::create_dir_all(&julia).unwrap();
+        std::fs::write(
+            rust.join("zvo_cisajs_001.dat"),
+            "0 0 0 0  1.0000000000000000e+00  0.0000000000000000e+00\n",
+        )
+        .unwrap();
+        std::fs::write(
+            julia.join("zvo_cisajs_001.dat"),
+            "0 0 0 0  1.0000000000000002e+00  0.0000000000000000e+00\n",
+        )
+        .unwrap();
+        let diffs = super::compare_physcal_observables(&rust, &julia).unwrap();
+        assert_eq!(diffs.len(), 1);
+        assert_eq!(diffs[0].family, "zvo_cisajs");
+        assert_eq!(diffs[0].files, 1);
+        assert_eq!(diffs[0].values, 2);
+        assert!(diffs[0].max_abs > 0.0 && diffs[0].max_abs < 1.0e-15);
+        assert!(diffs[0].within_tolerance());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn observable_comparison_rejects_discrete_mismatch() {
+        let root = std::env::temp_dir().join(format!(
+            "xtask-observable-{}-{}",
+            std::process::id(),
+            "discrete_mismatch"
+        ));
+        let rust = root.join("rust");
+        let julia = root.join("julia");
+        std::fs::create_dir_all(&rust).unwrap();
+        std::fs::create_dir_all(&julia).unwrap();
+        std::fs::write(rust.join("zvo_cisajs_001.dat"), "1 0 0 0  0.0  0.0\n").unwrap();
+        std::fs::write(julia.join("zvo_cisajs_001.dat"), "0 0 0 0  0.0  0.0\n").unwrap();
+        let error = super::compare_physcal_observables(&rust, &julia).unwrap_err();
+        assert!(error.contains("discrete value differs"), "{error}");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

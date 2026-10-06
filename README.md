@@ -110,6 +110,8 @@ cargo run -p xtask -- bench-physcal --model hubbard_chain_real --reps 3 --warmup
 
 Results are written to `target/bench/physcal_chain.csv`. The summary prints `speedup = julia / rust`, so values above `1.0x` mean Rust was faster. The fixtures use `NVMCSample=100` and `NDataQtySmp=1`; larger production PhysCal runs can be benchmarked by preparing a custom namelist with a larger sample count.
 
+Both PhysCal benchmarks also compare the measured observables, not just the energy. After the timed runs, `bench-physcal` prints and `bench-physcal-hubbard` writes to its Markdown report the number of files/values and the maximum absolute and relative Rust-vs-Julia difference for each output family: the one-body, direct and factored Green functions (`zvo_cisajs`, `zvo_cisajscktalt`, `zvo_cisajscktaltex`) and, when `NLanczosMode > 0`, the Lanczos files (`zvo_ls_out`, `zvo_ls_qqqq`, `zvo_ls_cisajs`, `zvo_ls_cisajscktalt`, `zvo_ls_cisajscktaltex`). Shape or discrete-index mismatches abort the run; floating-point differences are reported against the documented PhysCal bounds (absolute `1e-10`, relative `1e-9`). The small `bench-physcal` `|ΔE|` compares each side's indexed PhysCal energy, so it is no longer `n/a`.
+
 ## Example scripts
 
 Four ready-to-run examples mirror the Julia `examples/*.jl` scripts. Input files are read from `extern/Julia-mVMC/examples/inputs/`; output files are written to `output/<model>/`.
