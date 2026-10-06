@@ -10,6 +10,8 @@ pub mod bench;
 pub mod device_sampler;
 pub mod pfaffian;
 pub mod sr_bench;
+pub mod sr_device;
+pub mod sr_problem;
 pub mod stages;
 pub mod transfer;
 pub mod transfer_bench;

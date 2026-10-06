@@ -332,11 +332,35 @@ impl SampledSrOperator {
         max_iterations: usize,
         reducer: &R,
     ) -> Result<CgSolution, String> {
-        let n = self.components;
-        assert_eq!(gradient.len(), n);
         // One backend handle and one operand version per solve (issue #421): the sampled
         // matrices are constant during the solve, so a device backend uploads them once.
         let mut backend = crate::stage_backend::acquire();
+        self.solve_with_stages(
+            backend.sr(),
+            gradient,
+            inv_weight,
+            shift,
+            tolerance,
+            max_iterations,
+            reducer,
+        )
+    }
+
+    /// [`Self::solve_with_reducer`] on an explicit SR stage implementation (the default
+    /// `cg_step` and the validation of resident implementations use it).
+    #[allow(clippy::too_many_arguments)]
+    pub fn solve_with_stages<R: Reducer + ?Sized>(
+        &mut self,
+        stages: &mut dyn crate::sr_backend::SrStages,
+        gradient: &[f64],
+        inv_weight: f64,
+        shift: f64,
+        tolerance: f64,
+        max_iterations: usize,
+        reducer: &R,
+    ) -> Result<CgSolution, String> {
+        let n = self.components;
+        assert_eq!(gradient.len(), n);
         let version = crate::stage_backend::next_operand_version();
         // stcopt_cg_impl.c:265 evaluates these four factors left to right.
         let threshold = tolerance * tolerance * n as f64 * n as f64;
@@ -363,7 +387,7 @@ impl SampledSrOperator {
                 break;
             }
             self.apply_with_backend(
-                backend.sr(),
+                stages,
                 version,
                 &mut product,
                 &mut direction,
@@ -379,7 +403,7 @@ impl SampledSrOperator {
             });
             if iteration % 20 == 0 {
                 self.apply_with_backend(
-                    backend.sr(),
+                    stages,
                     version,
                     &mut residual,
                     &mut solution,
