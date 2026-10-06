@@ -2,21 +2,11 @@ fn main() {
     if !cfg!(feature = "blas-backend") {
         return;
     }
-
-    if cfg!(target_os = "macos") {
-        let brew_prefix = if cfg!(target_arch = "x86_64") {
-            "/usr/local/opt/openblas"
-        } else {
-            "/opt/homebrew/opt/openblas"
-        };
-
-        if std::path::Path::new(brew_prefix).join("lib").exists() {
-            println!("cargo:rustc-link-search=native={brew_prefix}/lib");
-            println!("cargo:rustc-link-lib=dylib=openblas");
-        } else {
-            println!("cargo:rustc-link-lib=framework=Accelerate");
-        }
-    } else {
-        println!("cargo:rustc-link-lib=dylib=openblas");
-    }
+    // The provider is selected by `MVMC_BLAS_PROVIDER` (openblas by default, see
+    // build_support/blas_provider.rs). Without Homebrew OpenBLAS the standalone crate keeps
+    // its historical macOS fallback to Accelerate.
+    println!("cargo:rerun-if-changed=../../build_support/blas_provider.rs");
+    mvmc_link_blas(true);
 }
+
+include!("../../build_support/blas_provider.rs");
