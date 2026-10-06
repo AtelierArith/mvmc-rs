@@ -148,6 +148,7 @@ fn operands(cell: &Cell) -> (f64, BTreeMap<String, Vec<(f64, f64)>>) {
     (energy, map)
 }
 
+#[allow(dead_code)]
 fn max_scaled(a: &[(f64, f64)], b: &[(f64, f64)]) -> f64 {
     assert_eq!(a.len(), b.len());
     a.iter()
@@ -458,6 +459,7 @@ fn two_walkers_equal_the_two_groups_of_the_four_rank_split_two_c_cells() {
                 .unwrap_or_else(|e| panic!("{}: {e}", grouped.id));
         }
         // each group leader of the C run has the chain of the matching walker
+        #[allow(clippy::needless_range_loop)]
         for g in 0..2 {
             let leader = rank_state(grouped, g * 2);
             let walker = &walkers[g].state;
