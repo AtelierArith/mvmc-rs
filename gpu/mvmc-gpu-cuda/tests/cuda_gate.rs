@@ -64,3 +64,57 @@ fn cuda_gate_dot_general_and_cholesky_match_cpu() {
         );
     }
 }
+
+/// Validation harness (issue #424) on the CUDA backend: teacher-forced replay against the
+/// C-order CPU oracle, decision recording, 20-step repeatability and the metadata block.
+#[test]
+#[ignore = "optional CUDA gate: run with --ignored (MVMC_RS_CUDA_GATE=1 to require a device)"]
+fn cuda_gate_validation_harness_matches_c_order_oracle() {
+    use mvmc_core::accel_validation::{
+        bench_stages, repeatability, replay, AcceleratedStages, BenchMetadata, ReplayConfig,
+        DEFAULT_ITERATIONS, DEFAULT_WARMUPS,
+    };
+    use mvmc_gpu_cuda::stages::EagerStages;
+
+    mvmc_gpu_cuda::install();
+    let requested = std::env::var(CUDA_GATE_VARIABLE).ok();
+    match cuda_gate_decision(requested.as_deref(), cuda_device_count()) {
+        CudaGateDecision::SkippedNoDevice(why) => {
+            eprintln!("cuda-gate: ExplicitSkip: skipped, no device ({why})");
+            return;
+        }
+        CudaGateDecision::FailNoDevice(why) => {
+            panic!("cuda-gate: {CUDA_GATE_VARIABLE} requested but no device: {why}");
+        }
+        CudaGateDecision::Run => {}
+    }
+    let device = device_report(BackendKind::Cuda(0)).expect("device report");
+    let cfg = ReplayConfig::default();
+    let mut cuda = EagerStages::cuda(0).expect("cuda stages");
+    let rep = replay(&mut cuda, &cfg).expect("replay");
+    let (pf_ms, sr_ms) = bench_stages(&mut cuda, &cfg, DEFAULT_WARMUPS, DEFAULT_ITERATIONS);
+    let meta = BenchMetadata::collect(
+        &cuda.provider(),
+        "f64",
+        1,
+        DEFAULT_WARMUPS,
+        DEFAULT_ITERATIONS,
+        true,
+        Some(&device),
+    );
+    let text = format!(
+        "## CUDA validation harness\n\n```\n{}```\n\n{}\nSR stage median {}; Pfaffian stage {}\n",
+        meta.render(),
+        rep.render(),
+        sr_ms.map_or("unsupported".to_string(), |v| format!("{v:.3} ms")),
+        pf_ms.map_or("unsupported".to_string(), |v| format!("{v:.3} ms")),
+    );
+    println!("{text}");
+    if let Ok(path) = std::env::var("MVMC_RS_CUDA_GATE_VALIDATION_OUT") {
+        std::fs::write(path, &text).expect("write report");
+    }
+    assert!(rep.violations().is_empty(), "{:?}", rep.violations());
+    assert!(rep.s.compared > 0 && rep.g.compared > 0);
+    let short = ReplayConfig { steps: 20, ..cfg };
+    repeatability(|| EagerStages::cuda(0).expect("cuda stages"), &short).expect("repeatability");
+}

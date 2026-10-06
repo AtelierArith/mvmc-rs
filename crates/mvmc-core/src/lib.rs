@@ -17,6 +17,7 @@
 #[path = "../../../tests/support/julia_fixture.rs"]
 mod julia_fixture;
 
+pub mod accel_validation;
 pub mod average;
 pub mod backend;
 mod c_complex;

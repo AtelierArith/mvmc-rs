@@ -2,7 +2,8 @@
 
 Status: design and inventory (issue #417, related to #185, #360, #361). No production
 code changes in #417. The `gpu-cuda` build path and optional gate landed with issue #420
-(section 10). Measurements were taken on `origin/main` at `dfa9515f`.
+(section 10); the validation harness of #424 is described in `docs/NUMERICAL_COMPARISONS.md`
+("Accelerated-backend validation"). Measurements were taken on `origin/main` at `dfa9515f`.
 
 The goal is to let the tensor-shaped part of mvmc-rs move to a GPU backend later without
 rewriting the physics code. This document inventories the operations, records what
@@ -715,6 +716,18 @@ the card), Cholesky is faster at n >= 256, and for these sizes upload costs as m
 compute, so device residency across stages (section 5) is required for any benefit. At
 n = 64 the CPU wins (Cholesky 0.27 ms vs 0.60 ms on the device). The CPU path remains the
 reference; this is a feasibility measurement, not a speed-up claim for mvmc.
+
+### 10.5 Validation harness (issue #424)
+
+`mvmc_core::accel_validation` implements the validation policy of section 5.6: teacher-forced
+replay against the C-order oracle (pf, invM, weights, O store, S, g), per-proposal
+weight/draw/margin recording with a decision-flip defect rule, 20-step repeatability and the
+benchmark metadata block. It is backend-agnostic through the trait `AcceleratedStages` (a stage
+that is not implemented reports `Unsupported`, never a CPU fallback). The CPU tenferro variant
+runs in normal CI; the CUDA variant is the second ignored test of the CUDA gate (CUDA RTX 3060
+run: S and g match the oracle, 0 flips, 0 defects, Pfaffian stage unsupported). A later batched
+Pfaffian implementation (#423) plugs in by implementing `pfaffian_inverse`. The policy text is
+in `docs/NUMERICAL_COMPARISONS.md`.
 
 ## 9. Japanese summary / 日本語要約
 

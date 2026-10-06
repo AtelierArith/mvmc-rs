@@ -1,4 +1,14 @@
 fn main() {
+    // Recorded in benchmark/validation metadata (`accel_validation::BenchMetadata`).
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let version = std::process::Command::new(rustc)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "rustc unknown".to_string());
+    println!("cargo:rustc-env=MVMC_RS_RUSTC_VERSION={version}");
     // Link OpenBLAS (LP64) for CG dgemv_ and direct-SR dpotrf_ / dpotrs_.
     //
     // On macOS the Homebrew openblas formula installs to a keg-only prefix
