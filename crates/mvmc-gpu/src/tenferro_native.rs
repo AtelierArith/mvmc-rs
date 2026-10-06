@@ -17,8 +17,9 @@
 //!    real Pfaffian are bit-identical to pfapack for real planes (complex differs only through
 //!    the division convention).
 //! 2. Pfaffian: sequential product of `A[i, i+1]` times the pivot sign.
-//! 3. Inverse: the unit upper-triangular inverse `(I+N)^-1 = prod_j (I + (-N)^(2^j))` by
-//!    repeated batched `dot_general` squaring (instead of `trtri`), the skew-tridiagonal
+//! 3. Inverse: the unit upper-triangular inverse `(I+N)^-1` by batched back substitution over
+//!    rows (elementwise multiply + `reduce_sum`; the former repeated-squaring expansion was
+//!    unstable for n >= 64, issue #466), the skew-tridiagonal
 //!    solve as row recurrences over `[n, P]` slices, and the pivot permutations as batched
 //!    one-hot permutation matrices applied with `dot_general`. The operation order differs
 //!    from pfapack, so the inverse agrees only to rounding.
@@ -340,24 +341,43 @@ impl<'a, T: PfScalar> Ops<'a, T> {
         let zm = self.full(&[m, m, p], 0.0)?;
         let strict = self.mask3(m, m, |i, j| i < j)?;
         let nn = self.select(&strict, &s, &zm)?;
-        let ident = {
-            let eye = self.mask3(m, m, |i, j| i == j)?;
-            let one = self.full(&[m, m, p], 1.0)?;
-            self.select(&eye, &one, &zm)?
+        // Back substitution (I + N) X = I, from the last row up: X_i = e_i - sum_{j>i} N_ij X_j.
+        // (The former explicit expansion (I+N)^-1 = prod_j (I + (-N)^(2^j)) is mathematically
+        // exact but numerically unstable: the entries of the powers of the multiplier matrix
+        // grow exponentially with n and the factors cancel, so the residual grew from 3e-14 at
+        // n = 32 to 1e-8 at n = 128 (issue #466). Substitution has the stability of
+        // `dtrtri`/pfapack.)
+        let mut x_rows: Option<Tensor> = None; // rows i+1..m as [k, m, P]
+        let ident_row = |ops: &mut Self, i: usize| -> R<Tensor> {
+            let mut data = vec![T::from_parts(0.0, 0.0); m];
+            data[i] = T::from_parts(1.0, 0.0);
+            let e = T::make_tensor(vec![m], data)?;
+            ops.bc(&e, &[m, p], &[0])
         };
-        let mut pw = self.neg(&nn)?;
-        let mut x = self.add(&ident, &pw)?;
-        let mut reach = 1usize; // N^(2^j) vanishes once 2^j >= m
-        while reach < m {
-            pw = self.bmm(&pw, &pw)?;
-            reach *= 2;
-            if reach >= m {
-                break;
-            }
-            let factor = self.add(&ident, &pw)?;
-            x = self.bmm(&x, &factor)?;
+        for i in (0..m).rev() {
+            let e_i = ident_row(self, i)?;
+            let row = match &x_rows {
+                None => e_i,
+                Some(sub) => {
+                    let k = m - 1 - i;
+                    let coef = self.sl(&nn, &[i, i + 1, 0], &[i + 1, m, p])?;
+                    let coef = self.rs(&coef, &[k, p])?;
+                    let coef3 = self.bc(&coef, &[k, m, p], &[0, 2])?;
+                    let prod = self.mul(&coef3, sub)?;
+                    let sum = self.s().reduce_sum(&prod, &[0])?; // [m, P]
+                    self.sub(&e_i, &sum)?
+                }
+            };
+            let row3 = self.rs(&row, &[1, m, p])?;
+            x_rows = Some(match x_rows {
+                None => row3,
+                Some(sub) => {
+                    let parts = [&row3, &sub];
+                    self.s().concatenate(&parts, 0)?
+                }
+            });
         }
-        // Last factor (the loop above exits before multiplying it when the power is zero).
+        let x = x_rows.expect("m >= 1");
         // M = [X 0; 0 1] with the last column e_{n-1}.
         let mpad = self.pad(&x, &[0, 0, 0], &[1, 1, 0])?;
         let last = self.mask3(n, n, |i, j| i == n - 1 && j == n - 1)?;
