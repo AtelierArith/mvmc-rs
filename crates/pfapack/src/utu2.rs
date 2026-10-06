@@ -460,7 +460,7 @@ fn utu2inv_generic<T>(
     if let Some(divide) = fsz {
         solve_sktd_direct(vt, m, a, divide);
     } else if c_real {
-        solve_sktd_direct(vt, m, a, |x: T, y: T| x / y);
+        T::solve_sktd_c_real(vt, m.as_slice(), a.as_mut_slice(), n);
     } else {
         solve_sktd::<T>(vt, m, a);
     }
@@ -480,11 +480,7 @@ fn utu2inv_generic<T>(
     for (j, pivot) in pivots.iter().enumerate().take(n) {
         let target = (pivot.0 as usize) - 1;
         if target != j {
-            let col_j = j * n;
-            let col_target = target * n;
-            for i in 0..n {
-                a_data.swap(col_j + i, col_target + i);
-            }
+            swap_columns(a_data, n, j, target);
         }
     }
 
@@ -503,10 +499,71 @@ fn utu2inv_generic<T>(
     for (i, pivot) in pivots.iter().enumerate().take(n) {
         let target = (pivot.0 as usize) - 1;
         if target != i {
-            for j in 0..n {
-                let col = j * n;
-                a_data.swap(col + i, col + target);
+            for col in a_data.chunks_exact_mut(n) {
+                col.swap(i, target);
             }
+        }
+    }
+}
+
+/// Swap whole columns `x != y` of a column-major `n`-row matrix.
+#[inline]
+fn swap_columns<T>(data: &mut [T], n: usize, x: usize, y: usize) {
+    let (lo, hi) = if x < y { (x, y) } else { (y, x) };
+    let (head, tail) = data.split_at_mut(hi * n);
+    head[lo * n..(lo + 1) * n].swap_with_slice(&mut tail[..n]);
+}
+
+/// Real C-order skew-tridiagonal solve (`sktdsmx` with direct divisions) over
+/// column-major `b` -> `c`. Four columns advance together: the columns are
+/// independent, so their serial division chains overlap. Every entry is produced by
+/// the same sequence of operations as [`solve_sktd_direct`] with `x / y`.
+pub(crate) fn solve_sktd_c_real_f64(vt: &[f64], b: &[f64], c: &mut [f64], n: usize) {
+    debug_assert!(n >= 2 && b.len() >= n * n && c.len() >= n * n && vt.len() >= n - 1);
+    let mut b_groups = b[..n * n].chunks_exact(4 * n);
+    let mut c_groups = c[..n * n].chunks_exact_mut(4 * n);
+    for (bg, cg) in (&mut b_groups).zip(&mut c_groups) {
+        let (b0, br) = bg.split_at(n);
+        let (b1, br) = br.split_at(n);
+        let (b2, b3) = br.split_at(n);
+        let (c0, cr) = cg.split_at_mut(n);
+        let (c1, cr) = cr.split_at_mut(n);
+        let (c2, c3) = cr.split_at_mut(n);
+        let bs = [b0, b1, b2, b3];
+        let cs = [c0, c1, c2, c3];
+        let d0 = -vt[0];
+        for w in 0..4 {
+            cs[w][1] = bs[w][0] / d0;
+        }
+        for i in (2..n).step_by(2) {
+            let (v, d) = (vt[i - 1], -vt[i]);
+            for w in 0..4 {
+                cs[w][i + 1] = (bs[w][i] - cs[w][i - 1] * v) / d;
+            }
+        }
+        let dn = vt[n - 2];
+        for w in 0..4 {
+            cs[w][n - 2] = bs[w][n - 1] / dn;
+        }
+        for i in (1..n - 2).rev().step_by(2) {
+            let (v, d) = (vt[i], vt[i - 1]);
+            for w in 0..4 {
+                cs[w][i - 1] = (bs[w][i] + cs[w][i + 1] * v) / d;
+            }
+        }
+    }
+    for (bc, cc) in b_groups
+        .remainder()
+        .chunks_exact(n)
+        .zip(c_groups.into_remainder().chunks_exact_mut(n))
+    {
+        cc[1] = bc[0] / -vt[0];
+        for i in (2..n).step_by(2) {
+            cc[i + 1] = (bc[i] - cc[i - 1] * vt[i - 1]) / -vt[i];
+        }
+        cc[n - 2] = bc[n - 1] / vt[n - 2];
+        for i in (1..n - 2).rev().step_by(2) {
+            cc[i - 1] = (bc[i] + cc[i + 1] * vt[i]) / vt[i - 1];
         }
     }
 }
@@ -625,6 +682,41 @@ mod tests {
                 };
                 assert_relative_eq!(acc.re, want.re, epsilon = 1e-9);
                 assert_relative_eq!(acc.im, want.im, epsilon = 1e-9);
+            }
+        }
+    }
+    #[test]
+    fn real_c_order_tridiagonal_solve_matches_direct_reference_bitwise() {
+        // Four-column interleaving, remainder columns and the generic slice
+        // default must reproduce the per-entry `x / y` reference exactly.
+        for n in [2usize, 4, 6, 8, 10, 14, 16, 18, 32, 34] {
+            let b_buf = random_skew_real(n, 99 + n as u64);
+            let vt: Vec<f64> = random_skew_real(n, 7 + n as u64)[n..2 * n - 1].to_vec();
+            let mut b_ref = b_buf.clone();
+            let mut want = vec![0.0; n * n];
+            {
+                let b = SqMat::new(&mut b_ref, n);
+                let mut c = SqMat::new(&mut want, n);
+                solve_sktd_direct(&vt, &b, &mut c, |x: f64, y: f64| x / y);
+            }
+            let mut got = vec![0.0; n * n];
+            solve_sktd_c_real_f64(&vt, &b_buf, &mut got, n);
+            let mut generic = vec![0.0; n * n];
+            <Complex64 as BlasScalar>::solve_sktd_c_real(
+                &vt.iter()
+                    .map(|&x| Complex64::new(x, 0.0))
+                    .collect::<Vec<_>>(),
+                &b_buf
+                    .iter()
+                    .map(|&x| Complex64::new(x, 0.0))
+                    .collect::<Vec<_>>(),
+                &mut vec![Complex64::new(0.0, 0.0); n * n],
+                n,
+            );
+            <f64 as BlasScalar>::solve_sktd_c_real(&vt, &b_buf, &mut generic, n);
+            for i in 0..n * n {
+                assert_eq!(got[i].to_bits(), want[i].to_bits(), "n={n} entry {i}");
+                assert_eq!(generic[i].to_bits(), want[i].to_bits(), "n={n} entry {i}");
             }
         }
     }

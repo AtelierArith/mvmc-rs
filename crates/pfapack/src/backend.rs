@@ -52,6 +52,22 @@ pub trait BlasScalar:
     fn fsz_trmm(m: &[Self], a: &mut [Self], n: usize) {
         trmm_lutu(m, a, n);
     }
+    /// C-order skew-tridiagonal solve with direct divisions over column-major slices.
+    fn solve_sktd_c_real(vt: &[Self], b: &[Self], c: &mut [Self], n: usize) {
+        for (bc, cc) in b[..n * n]
+            .chunks_exact(n)
+            .zip(c[..n * n].chunks_exact_mut(n))
+        {
+            cc[1] = bc[0] / -vt[0];
+            for i in (2..n).step_by(2) {
+                cc[i + 1] = (bc[i] - cc[i - 1] * vt[i - 1]) / -vt[i];
+            }
+            cc[n - 2] = bc[n - 1] / vt[n - 2];
+            for i in (1..n - 2).rev().step_by(2) {
+                cc[i - 1] = (bc[i] + cc[i + 1] * vt[i]) / vt[i - 1];
+            }
+        }
+    }
     /// Reciprocal using the Julia scalar operation.
     fn julia_inv(self) -> Self;
     /// Division using the Julia scalar operation.
@@ -59,6 +75,9 @@ pub trait BlasScalar:
 }
 
 impl BlasScalar for f64 {
+    fn solve_sktd_c_real(vt: &[Self], b: &[Self], c: &mut [Self], n: usize) {
+        crate::utu2::solve_sktd_c_real_f64(vt, b, c, n);
+    }
     fn julia_inv(self) -> Self {
         1.0 / self
     }
