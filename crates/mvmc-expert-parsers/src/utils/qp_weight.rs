@@ -10,7 +10,7 @@
 #[cfg(test)]
 use crate::numerical_comparison;
 
-use super::julia_trig;
+use super::c_math;
 use num_complex::Complex64;
 
 use crate::types::{ExpertModeData, QuantumProjectionWeights};
@@ -34,7 +34,7 @@ pub fn gauss_legendre(x1: f64, x2: f64, n: usize) -> (Vec<f64>, Vec<f64>) {
     for i in 0..m {
         // C: z = cos(pi * (i + 0.75) / (n + 0.5)). The Julia port uses
         // i (0-based) + 0.75 so the same expression carries over.
-        let mut z = julia_trig::cos(std::f64::consts::PI * ((i as f64) + 0.75) / (n_f + 0.5));
+        let mut z = c_math::cos(std::f64::consts::PI * ((i as f64) + 0.75) / (n_f + 0.5));
         let mut pp;
         loop {
             let mut p1 = 1.0;
@@ -123,17 +123,16 @@ pub fn init_qp_weight_inplace(
         let (beta, weight_gl) = gauss_legendre(0.0, std::f64::consts::PI, n_leg);
         for i in 0..n_leg {
             let beta_i = beta[i];
-            let cos_h = julia_trig::cos(0.5 * beta_i);
-            let sin_h = julia_trig::sin(0.5 * beta_i);
+            let cos_h = c_math::cos(0.5 * beta_i);
+            let sin_h = c_math::sin(0.5 * beta_i);
             weights.spgl_cos[i] = Complex64::new(cos_h, 0.0);
             weights.spgl_sin[i] = Complex64::new(sin_h, 0.0);
             weights.spgl_cos_sin[i] = Complex64::new(cos_h * sin_h, 0.0);
             weights.spgl_cos_cos[i] = Complex64::new(cos_h * cos_h, 0.0);
             weights.spgl_sin_sin[i] = Complex64::new(sin_h * sin_h, 0.0);
 
-            let cos_beta = julia_trig::cos(beta_i);
-            let w =
-                0.5 * julia_trig::sin(beta_i) * weight_gl[i] * legendre_poly(cos_beta, nsp_stot);
+            let cos_beta = c_math::cos(beta_i);
+            let w = 0.5 * c_math::sin(beta_i) * weight_gl[i] * legendre_poly(cos_beta, nsp_stot);
             for j in 0..nmp_trans {
                 let idx = i + j * n_leg;
                 if j < para_qp_trans.len() {

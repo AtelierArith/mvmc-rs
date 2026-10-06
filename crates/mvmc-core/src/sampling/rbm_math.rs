@@ -1,8 +1,9 @@
-//! Julia 1.13.1 complex operations used by RBM ratios and derivatives.
+//! Julia 1.13.1 complex operations used by RBM ratios and derivatives (algorithms; the real
+//! building blocks are the platform libm through `c_math`, issue #457).
 //! Julia portions: MIT; see mvmc-expert-parsers/LICENSE-julia-math.
 use num_complex::Complex64;
 
-use mvmc_expert_parsers::utils::{julia_exp, julia_log, julia_trig};
+use mvmc_expert_parsers::utils::c_math;
 
 pub(crate) fn exp(z: Complex64) -> Complex64 {
     let (x, y) = (z.re, z.im);
@@ -18,11 +19,11 @@ pub(crate) fn exp(z: Complex64) -> Complex64 {
             Complex64::new(f64::NAN, f64::NAN)
         };
     }
-    let e = julia_exp::exp(x);
+    let e = c_math::exp(x);
     if y == 0.0 {
         Complex64::new(e, y)
     } else {
-        Complex64::new(e * julia_trig::cos(y), e * julia_trig::sin(y))
+        Complex64::new(e * c_math::cos(y), e * c_math::sin(y))
     }
 }
 fn ldexp(mut x: f64, mut exponent: i32) -> f64 {
@@ -66,11 +67,11 @@ pub(super) fn log(z: Complex64) -> Complex64 {
         (y.abs(), x.abs())
     };
     let real = if k == 0 && 0.5 < beta * beta && (beta <= 1.25 || rho < 3.0) {
-        julia_log::log1p((beta - 1.0) * (beta + 1.0) + theta * theta) / 2.0
+        c_math::log1p((beta - 1.0) * (beta + 1.0) + theta * theta) / 2.0
     } else {
-        julia_log::log(rho) / 2.0 + k as f64 * std::f64::consts::LN_2
+        c_math::log(rho) / 2.0 + k as f64 * std::f64::consts::LN_2
     };
-    Complex64::new(real, julia_trig::atan2(y, x))
+    Complex64::new(real, c_math::atan2(y, x))
 }
 pub(super) fn log1p(z: Complex64) -> Complex64 {
     if z.re.is_finite() {
@@ -106,17 +107,17 @@ pub(super) fn tanh(z: Complex64) -> Complex64 {
     if x.is_nan() && y == 0.0 {
         return z;
     }
-    if 4.0 * x.abs() > julia_log::log(f64::MAX) + std::f64::consts::LN_2 {
+    if 4.0 * x.abs() > c_math::log(f64::MAX) + std::f64::consts::LN_2 {
         let sign = y * if y.is_finite() {
-            julia_trig::sin(2.0 * y.abs())
+            c_math::sin(2.0 * y.abs())
         } else {
             1.0
         };
         return Complex64::new(1.0f64.copysign(x), 0.0f64.copysign(sign));
     }
-    let t = julia_trig::tan(y);
+    let t = c_math::tan(y);
     let beta = 1.0 + t * t;
-    let s = julia_trig::sinh(x);
+    let s = c_math::sinh(x);
     let rho = (1.0 + s * s).sqrt();
     if t.is_infinite() {
         Complex64::new(rho / s, 1.0 / t)

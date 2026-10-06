@@ -19,6 +19,8 @@ pub mod read_input_parameters;
 /// Quantum-projection weight init + `gauss_legendre` (port of `utils/qp_weight.jl`).
 pub mod qp_weight;
 
+/// Scalar libm functions as C calls them, with the Julia emulation as an explicit opt-in.
+pub mod c_math;
 pub mod julia_hypot;
 /// Julia Float64 logarithmic operations for deterministic kernels.
 pub mod julia_log;
