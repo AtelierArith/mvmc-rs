@@ -172,3 +172,80 @@ fn batched_measurement_is_byte_identical_for_all_modes() {
     }
     set_measurement_batch_size_override(None);
 }
+
+// ---- stage A through the unified stage backend (issues #422, #437) --------------------------
+
+use mvmc_core::measurement_batch::{set_measurement_backend_override, MeasurementPfaffian};
+use mvmc_core::stage_backend::StageBackendKind;
+
+fn assert_same_bytes(
+    label: &str,
+    reference: &BTreeMap<String, Vec<u8>>,
+    other: &BTreeMap<String, Vec<u8>>,
+) {
+    assert_eq!(
+        reference.keys().collect::<Vec<_>>(),
+        other.keys().collect::<Vec<_>>(),
+        "{label}: file set differs"
+    );
+    for (name, bytes) in reference {
+        assert!(bytes == &other[name], "{label}: {name} differs");
+    }
+}
+
+/// The C-order `PfaffianStages` routed through one batched call per chunk is the same PfaPack
+/// sequence as `calc_m_all_real` with the same plane assembly and the `invM = -X^-1` flip, so
+/// every output file is byte-identical to the default path for every batch size (real,
+/// non-FSZ modes: optimization with Doublon-Holon/Gutzwiller/Jastrow and PhysCal with Green
+/// and Lanczos).
+#[test]
+fn stage_backend_c_order_measurement_is_byte_identical_to_calc_m_all() {
+    for batch in [1usize, 3, 100_000] {
+        for (fixture, opt_trans) in [
+            ("hubbard_chain_real", false),
+            ("hubbard_chain_dh_real", false),
+        ] {
+            set_measurement_backend_override(None);
+            let reference = optimization(fixture, "real", opt_trans, batch);
+            set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
+                StageBackendKind::COrder,
+            )));
+            let staged = optimization(fixture, "real", opt_trans, batch);
+            assert_same_bytes(&format!("opt:{fixture} batch={batch}"), &reference, &staged);
+        }
+        for fixture in ["hubbard_all_terms_lanczos2", "hubbard_chain_real"] {
+            set_measurement_backend_override(None);
+            let reference = physcal(fixture, "real", batch);
+            set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
+                StageBackendKind::COrder,
+            )));
+            let staged = physcal(fixture, "real", batch);
+            assert_same_bytes(
+                &format!("physcal:{fixture} batch={batch}"),
+                &reference,
+                &staged,
+            );
+        }
+    }
+    set_measurement_backend_override(None);
+    set_measurement_batch_size_override(None);
+}
+
+/// A backend without the stage (tenferro 0.7.1 has no Pfaffian) is a hard error, never a
+/// fallback to the C-order kernels.
+#[test]
+#[should_panic(expected = "measurement Pfaffian stage failed")]
+fn stage_backend_without_pfaffian_is_a_hard_error() {
+    set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
+        StageBackendKind::TenferroCpu,
+    )));
+    let _ = physcal("hubbard_chain_real", "real", 3);
+}
+
+/// Complex mode has no stage-backend Pfaffian (the stage trait is real `f64`): hard error.
+#[test]
+#[should_panic(expected = "supports only real, non-FSZ mode")]
+fn stage_backend_in_complex_mode_is_a_hard_error() {
+    set_measurement_backend_override(Some(MeasurementPfaffian::Stage(StageBackendKind::COrder)));
+    let _ = physcal("heisenberg_chain_cmp", "cmp", 3);
+}

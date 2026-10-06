@@ -2939,78 +2939,136 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     let samples: Vec<usize> = measurement_range.collect();
     let batch_size = crate::measurement_batch::resolve_batch_size(samples.len());
     batch.configure(n_size, n_qp_full, batch_size, all_complex);
+    // Stage A source (issue #422/#437): C-order `calc_m_all_*` per sample by default, or one
+    // batched `PfaffianStages` call of the selected stage backend (real, non-FSZ only).
+    let stage_kind = match crate::measurement_batch::selected_measurement_pfaffian() {
+        crate::measurement_batch::MeasurementPfaffian::CalcMAll => None,
+        crate::measurement_batch::MeasurementPfaffian::Stage(kind) => {
+            assert!(
+                !all_complex && !use_fsz,
+                "{}: the stage-backend measurement supports only real, non-FSZ mode",
+                crate::measurement_batch::MEASURE_PF_VARIABLE
+            );
+            Some(kind)
+        }
+    };
     for chunk in samples.chunks(batch_size) {
-        // ---- stage A: tables for every sample of the batch -------------------------------
-        for (slot, &sample) in chunk.iter().enumerate() {
-            timer.start_diag(940, diag);
-            timer.start_diag(942, diag);
-            let ele_idx = state.electron_config.ele_idx_slice(sample);
-            if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
-                batch.status[slot] = SlotStatus::Skipped;
+        if let Some(kind) = stage_kind {
+            // ---- stage A through the stage backend: one batched call per chunk ------------
+            let mut active = Vec::with_capacity(chunk.len());
+            for (slot, &sample) in chunk.iter().enumerate() {
+                timer.start_diag(940, diag);
+                timer.start_diag(942, diag);
+                let ele_idx = state.electron_config.ele_idx_slice(sample);
+                if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
+                    batch.status[slot] = SlotStatus::Skipped;
+                } else {
+                    batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
+                    batch.status[slot] = SlotStatus::Ready;
+                    active.push(slot);
+                }
                 timer.stop_diag(942, diag);
                 timer.stop_diag(940, diag);
-                continue;
             }
-            batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
-            timer.stop_diag(942, diag);
-            timer.stop_diag(940, diag);
-            // The batch slot's tables become the working tables while the sample is built
-            // (pointer swap, no copy) and are swapped back afterwards.
-            swap_batch_tables(
-                state,
-                &mut batch.real,
-                &mut batch.complex,
-                slot,
-                all_complex,
-            );
             timer.start(40);
-            // Refresh Pfaffian for the saved walker.
-            let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
-            let info = if use_fsz {
-                let ele_spn = state.electron_config.ele_spn_slice(sample).to_vec();
-                refresh_fsz_observation_matrix(data, state, all_complex, ele_idx, &ele_spn, &pool)
-                    .err()
-            } else if all_complex {
-                // C `CalculateMAll` operation order (#449), as the other measurement paths.
-                crate::pfaffian::calc_m_all_complex_production(
-                    ele_idx,
-                    &state.slater_matrix.slater_elm,
-                    &mut state.slater_matrix.inv_m,
-                    &mut state.slater_matrix.pf_m,
-                    0,
-                    n_qp_full,
-                    n_site,
-                    n_elec,
-                    &pool,
+            let mut handle = crate::stage_backend::acquire_kind(kind);
+            crate::measurement_batch::stage_a_pfaffian(
+                handle.backend().pfaffian(),
+                &state.slater_matrix.slater_elm_real,
+                &mut batch,
+                &active,
+                n_site,
+                n_elec,
+                n_qp_full,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{}: measurement Pfaffian stage failed: {e}",
+                    crate::measurement_batch::MEASURE_PF_VARIABLE
                 )
-                .err()
-            } else {
-                crate::pfaffian::calc_m_all_real(
-                    ele_idx,
-                    &state.slater_matrix.slater_elm_real,
-                    &mut state.slater_matrix.inv_m_real,
-                    &mut state.slater_matrix.pf_m_real,
-                    0,
-                    n_qp_full,
-                    n_site,
-                    n_elec,
-                    &pool,
-                )
-                .err()
-            };
+            });
             timer.stop(40);
-            swap_batch_tables(
-                state,
-                &mut batch.real,
-                &mut batch.complex,
-                slot,
-                all_complex,
-            );
-            if info.is_some() {
-                batch.status[slot] = SlotStatus::Failed;
-                continue;
+            drop(handle);
+        } else {
+            // ---- stage A: tables for every sample of the batch -------------------------------
+            for (slot, &sample) in chunk.iter().enumerate() {
+                timer.start_diag(940, diag);
+                timer.start_diag(942, diag);
+                let ele_idx = state.electron_config.ele_idx_slice(sample);
+                if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
+                    batch.status[slot] = SlotStatus::Skipped;
+                    timer.stop_diag(942, diag);
+                    timer.stop_diag(940, diag);
+                    continue;
+                }
+                batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
+                timer.stop_diag(942, diag);
+                timer.stop_diag(940, diag);
+                // The batch slot's tables become the working tables while the sample is built
+                // (pointer swap, no copy) and are swapped back afterwards.
+                swap_batch_tables(
+                    state,
+                    &mut batch.real,
+                    &mut batch.complex,
+                    slot,
+                    all_complex,
+                );
+                timer.start(40);
+                // Refresh Pfaffian for the saved walker.
+                let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
+                let info = if use_fsz {
+                    let ele_spn = state.electron_config.ele_spn_slice(sample).to_vec();
+                    refresh_fsz_observation_matrix(
+                        data,
+                        state,
+                        all_complex,
+                        ele_idx,
+                        &ele_spn,
+                        &pool,
+                    )
+                    .err()
+                } else if all_complex {
+                    // C `CalculateMAll` operation order (#449), as the other measurement paths.
+                    crate::pfaffian::calc_m_all_complex_production(
+                        ele_idx,
+                        &state.slater_matrix.slater_elm,
+                        &mut state.slater_matrix.inv_m,
+                        &mut state.slater_matrix.pf_m,
+                        0,
+                        n_qp_full,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .err()
+                } else {
+                    crate::pfaffian::calc_m_all_real(
+                        ele_idx,
+                        &state.slater_matrix.slater_elm_real,
+                        &mut state.slater_matrix.inv_m_real,
+                        &mut state.slater_matrix.pf_m_real,
+                        0,
+                        n_qp_full,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .err()
+                };
+                timer.stop(40);
+                swap_batch_tables(
+                    state,
+                    &mut batch.real,
+                    &mut batch.complex,
+                    slot,
+                    all_complex,
+                );
+                if info.is_some() {
+                    batch.status[slot] = SlotStatus::Failed;
+                    continue;
+                }
+                batch.status[slot] = SlotStatus::Ready;
             }
-            batch.status[slot] = SlotStatus::Ready;
         }
         // ---- stage B: per-sample consumers, in sample order -------------------------------
         for (slot, &sample) in chunk.iter().enumerate() {

@@ -456,7 +456,12 @@ impl StageHandle {
 
 /// Acquire the selected backend. An unavailable backend is a hard error.
 pub fn acquire() -> StageHandle {
-    match selected_stage_backend() {
+    acquire_kind(selected_stage_backend())
+}
+
+/// Acquire a backend of an explicit kind (shared instance for non-C-order kinds).
+pub fn acquire_kind(kind: StageBackendKind) -> StageHandle {
+    match kind {
         StageBackendKind::COrder => StageHandle::Owned(StageBackend::c_order()),
         kind => match shared(kind) {
             Ok(m) => StageHandle::Shared(m.lock().unwrap_or_else(|e| e.into_inner())),
