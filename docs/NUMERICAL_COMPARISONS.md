@@ -472,8 +472,8 @@ green. Thread count is not a factor.
 | OpenBLAS Prescott | 1 | 16 fail | 1052 pass |
 | Reference BLAS + LAPACK (`LD_PRELOAD`, `MVMC_BLAS_KERNEL_CLASS=unverified`) | 1 | 16 fail | 1052 pass (the PhysCal energy record needed its own relaxation, see below) |
 | Sandybridge with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
-| GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | 1 and default | same 16 | CI result in the PR (see below) |
-| GitHub macOS 15 ARM64 VM (Apple M1 Virtual), Homebrew OpenBLAS 0.3.34, `OPENBLAS_CORETYPE` unset (core `armv8`) | 1 and default | same 16 | CI result in the PR (see below) |
+| GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | 1 and default | same 16 (+4 stderr-comparison artefacts of `OPENBLAS_VERBOSE`) | pass (`BLAS matrix` workflow, PR #459) |
+| GitHub macOS 15 ARM64 VM (Apple M1 Virtual), Homebrew OpenBLAS 0.3.34, `OPENBLAS_CORETYPE` unset (core `armv8`) | 1 and default | same 16 (+4 artefacts) | pass (`BLAS matrix` workflow, PR #459) |
 | macOS Accelerate | n/a | link error | unsupported: `mvmc-core/build.rs` links `openblas` unconditionally (`ld: library 'openblas' not found`); not changed here |
 | macOS ARM64 `NEOVERSEN1` (main CI, Homebrew OpenBLAS, overlay references) | 1 | pass | pass (strict bounds) |
 
