@@ -84,32 +84,29 @@ fn gate_child() {
         }
         "auto-default" => {
             assert_eq!(config.min_work_ns, DEFAULT_MIN_PARALLEL_WORK_NS);
-            // 120 * w / (w - 1): four workers need 160, two workers 240, eight 138.
-            assert_eq!(config.min_size, 160);
-            assert_eq!(default_min_size(4), 160);
-            assert_eq!(default_min_size(2), 240);
-            assert_eq!(default_min_size(8), 138);
-            assert!(default_min_size(1) >= DEFAULT_MIN_PARALLEL_SIZE);
+            // Size gate off by default since the spin pool (#479): independent of the workers.
+            assert_eq!(config.min_size, DEFAULT_MIN_PARALLEL_SIZE);
+            assert_eq!(DEFAULT_MIN_PARALLEL_SIZE, 1);
+            for workers in [1, 2, 4, 8, 16] {
+                assert_eq!(default_min_size(workers), 1);
+            }
             assert!(!config.threshold_explicit);
-            // Matrices below the size gate stay serial whatever the estimate says.
-            assert_eq!(scaled_cost_ns(config.min_size - 1, 1 << 30), 0);
-            assert_eq!(scaled_cost_ns(config.min_size, 1 << 30), 1 << 30);
-            assert!(!inner_parallel_work(
-                8,
-                scaled_cost_ns(config.min_size - 1, 1 << 30)
-            ));
-            // 100 us of estimated work is the boundary.
-            assert!(!inner_parallel_work(100, 999));
-            assert!(inner_parallel_work(100, 1000));
-            assert!(!inner_parallel_work(8, 12_499));
-            assert!(inner_parallel_work(8, 12_500));
+            // An explicit size gate still keeps small matrices serial.
+            assert_eq!(scaled_cost_ns(0, 1 << 30), 0);
+            assert_eq!(scaled_cost_ns(1, 1 << 30), 1 << 30);
+            // 20 us of estimated work is the boundary.
+            assert_eq!(DEFAULT_MIN_PARALLEL_WORK_NS, 20_000);
+            assert!(!inner_parallel_work(100, 199));
+            assert!(inner_parallel_work(100, 200));
+            assert!(!inner_parallel_work(8, 2_499));
+            assert!(inner_parallel_work(8, 2_500));
             // A single item has nothing to split; zero items never pool.
             assert!(!inner_parallel_work(1, usize::MAX));
             assert!(!inner_parallel_work(0, usize::MAX));
-            // Cheap elementwise work needs a huge range to pay for a dispatch.
+            // Cheap elementwise work still needs a large range to pay for a dispatch.
             assert!(!inner_parallel_work(32, 2));
-            assert!(!inner_parallel_work(40_000, 2));
-            assert!(inner_parallel_work(50_000, 2));
+            assert!(!inner_parallel_work(9_999, 2));
+            assert!(inner_parallel_work(10_000, 2));
             // The item-count gate used by the legacy predicate is unchanged.
             assert!(inner_parallel_enabled(32));
             assert!(!inner_parallel_enabled(31));
@@ -127,7 +124,7 @@ fn gate_child() {
             assert_eq!(config.threshold, 4);
             // Cost is ignored: only the item count decides, as before #361.
             assert_eq!(
-                scaled_cost_ns(1, 7),
+                scaled_cost_ns(0, 7),
                 0,
                 "size gate zeroes only the estimate"
             );

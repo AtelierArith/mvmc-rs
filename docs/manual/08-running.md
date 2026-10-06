@@ -160,11 +160,15 @@ random numbers exactly as the C code does. Optional shared-memory parallelism ov
 rows of the `OO`/`HO` accumulation and of the stored Gram product, transfer terms of the local energy for real wave functions, the diagonal/PairHop/Exchange/InterAll energy terms, the rank-one `update_m_all_*`/`calculate_new_pf_m*` QP loops, Slater-element planes, doublon-holon counters, RBM hidden units and their derivatives, the Lanczos Hamiltonian/Green terms, the SR matrix assembly and the CG vector updates, Green-function entries)
 is enabled with
 `MVMC_RS_INNER_THREADS` ([8.5](#85-environment-variables)); it does not change the chain or the order in which each result is formed.
-Waking the worker pool costs about 20 us per region and moves the QP planes between caches, so by default (no
-`MVMC_RS_INNER_THRESHOLD`) a region uses the pool only when the electron matrices are large (`n_size` of at least 160 with
-4 workers, 240 with 2) and its estimated work is at least 100 us. Smaller runs execute serially even with workers configured;
-on the Hubbard chain, pooling every region made 4 workers 2.3x slower at 16 sites and 1.2x slower at 64, and 1.7x faster at
-256 sites ([benchmark results](../../benchmark/hubbard_chain/results/hubbard_chain_2026-10-06_inner_threads.md)).
+The workers form a low-latency spin pool (`crates/mvmc-core/src/spin_pool.rs`): `threads - 1` threads that spin for
+about 300 us after each region (and park afterwards, so serial phases do not burn cores) and a calling thread that runs
+block 0, like the OpenMP master. A region costs about 1 to 3 us to dispatch and join at 8 workers (the Rayon pool it
+replaced cost 15 to 30 us), the blocks are the static `omp for` partition of the items, and every output element has one
+producer, so results are bit-identical for every worker count. By default (no `MVMC_RS_INNER_THRESHOLD`) a region uses the
+pool when its estimated serial work is at least 20 us; the many sub-microsecond per-proposal regions stay serial. On the
+Hubbard chain with 8 workers this gives 1.9x at 32 sites, 2.7x at 64 sites for optimization and 1.5x for PhysCal at 32 sites
+(about the speed of C's OpenMP regions); inputs whose regions are below the gate (Heisenberg, Kondo, FSZ, RBM) run as before
+([benchmark results](../../benchmark/cpu_round/README.md)).
 Dense linear algebra (`dgemv`, `dpotrf`, Pfaffian kernels) runs in OpenBLAS, whose own thread count is controlled by the usual
 `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` variables (not read by `mvmc-rs`; the project's benchmarks pin them to 1).
 
@@ -245,8 +249,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 | `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order` (default, BLAS/LAPACK parity oracle), `tenferro` or `cuda[:N]`. The opt-in backends run the SR stages (Gram product, S/g assembly, Cholesky solve, CG product) through tenferro `dot_general`/`cholesky`/`triangular_solve`, validated with explicit tolerances and not byte-identical. `cuda` needs the `mvmc-cuda` binary of `gpu/mvmc-gpu-cuda`, which registers the CUDA provider and then runs this same CLI; the stock `mvmc` rejects it. The selector is validated once at startup before any IO: an invalid value or an unavailable backend prints `error: MVMC_RS_SR_BACKEND: ...` and exits with status 2 (collectively under MPI), never a fallback. See [chapter 12](12-accelerated-backends.md#124-selecting-a-backend). |
 | `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | source of the Pfaffian/inverse tables of the measurement: `calc-m-all` (default, C-order kernels), or `c-order`, `tenferro`, `cuda[:N]` to build them with one batched `PfaffianStages` call per batch (real, non-FSZ mode only). `c-order` is byte-identical to the default; a backend without the stage or an unsupported mode is an error, never a fallback. Like `MVMC_RS_SR_BACKEND` it is validated once at startup before any IO (invalid value or unavailable backend: `error: MVMC_RS_MEASURE_PF_BACKEND: ...`, exit status 2). |
 | `MVMC_RS_INNER_THRESHOLD` | same | a positive value selects the plain item-count gate: a region uses the worker pool when it has at least this many items (used by the worker-invariance tests; small values force pooled execution of tiny inputs). Unset, empty, invalid or 0 selects the automatic gate below (reported `threshold` stays 32) |
-| `MVMC_RS_INNER_MIN_WORK_NS` | same | automatic gate: minimum estimated serial work of one region in nanoseconds; default 100000 |
-| `MVMC_RS_INNER_MIN_SIZE` | same | automatic gate: minimum electron-matrix dimension `n_size` (number of electrons) for regions that scale with the matrices; default `120*w/(w-1)` for `w` workers (160 for 4, 240 for 2) |
+| `MVMC_RS_INNER_MIN_WORK_NS` | same | automatic gate: minimum estimated serial work of one region in nanoseconds; default 20000 |
+| `MVMC_RS_INNER_MIN_SIZE` | same | automatic gate: minimum electron-matrix dimension `n_size` (number of electrons) for regions that scale with the matrices; default 1 (off, the work estimate decides alone; it was `120*w/(w-1)` with the former Rayon pool) |
 | `MVMC_RS_INNER_PROFILE` | `threading::dispatch_profile` | `1` makes the CLI print, on stderr after the run, the calls, items and time of every inner-kernel call site, serial or pooled |
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | launcher detection ([8.4](#84-mpi-and-grouped-execution)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` programs only | location of `extern/Julia-mVMC` inputs, step count, output root (default `output/<model>/`) |

@@ -49,6 +49,7 @@ pub mod sampling;
 mod serial_blas;
 mod slater_derivative;
 pub mod slater_update;
+mod spin_pool;
 pub mod sr;
 pub mod sr_accumulator;
 pub mod sr_backend;

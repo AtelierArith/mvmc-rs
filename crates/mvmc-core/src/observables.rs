@@ -18,7 +18,6 @@
 )]
 
 use num_complex::Complex64;
-use rayon::prelude::*;
 
 use mvmc_expert_parsers::{ExpertModeData, Spin};
 
@@ -230,30 +229,17 @@ pub fn calculate_oo_real(
     let lda = sr_opt_size;
     if lda > 0 {
         // One column is `lda` multiply-adds (about 1 ns each).
-        let parallel = crate::threading::inner_parallel_work(lda, lda);
-        let observed =
-            crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
-        let _scope = crate::threading::profile_scope(parallel, lda);
-        let update = |j: usize, column: &mut [f64]| {
-            let _entry = observed.enter_item();
-            let oj = sr_opt_o[j];
-            for i in 0..lda {
-                column[i] += w * sr_opt_o[i] * oj;
-            }
-        };
-        if parallel {
-            crate::threading::install_inner(|| {
-                sr_opt_oo[..lda * lda]
-                    .par_chunks_mut(lda)
-                    .enumerate()
-                    .for_each(|(j, column)| update(j, column))
-            });
-        } else {
-            sr_opt_oo[..lda * lda]
-                .chunks_mut(lda)
-                .enumerate()
-                .for_each(|(j, column)| update(j, column));
-        }
+        crate::threading::for_each_chunk_mut(
+            &mut sr_opt_oo[..lda * lda],
+            lda,
+            lda,
+            |j: usize, column: &mut [f64]| {
+                let oj = sr_opt_o[j];
+                for i in 0..lda {
+                    column[i] += w * sr_opt_o[i] * oj;
+                }
+            },
+        );
     }
     crate::threading::for_each_mut(&mut sr_opt_ho[..sr_opt_size], 2, |i, ho| {
         *ho += we * sr_opt_o[i]
@@ -282,31 +268,19 @@ pub fn calculate_oo(
     );
     if size_2 > 2 {
         // One row is `size_2` complex multiply-adds (about 3 ns each).
-        let parallel = crate::threading::inner_parallel_work(size_2 - 2, 3 * size_2);
-        let observed =
-            crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
-        let _scope = crate::threading::profile_scope(parallel, size_2 - 2);
-        let update = |offset: usize, row: &mut [Complex64]| {
-            let _entry = observed.enter_item();
-            let i = offset + 2;
-            for j in 0..size_2 {
-                // C vmccal.c:788 scales O[j] before the complex product.
-                // Keep that order independently within each observed row.
-                row[j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
-            }
-        };
-        let rows = &mut sr_opt_oo[2 * size_2..size_2 * size_2];
-        if parallel {
-            crate::threading::install_inner(|| {
-                rows.par_chunks_mut(size_2)
-                    .enumerate()
-                    .for_each(|(i, row)| update(i, row))
-            });
-        } else {
-            rows.chunks_mut(size_2)
-                .enumerate()
-                .for_each(|(i, row)| update(i, row));
-        }
+        crate::threading::for_each_chunk_mut(
+            &mut sr_opt_oo[2 * size_2..size_2 * size_2],
+            size_2,
+            3 * size_2,
+            |offset: usize, row: &mut [Complex64]| {
+                let i = offset + 2;
+                for j in 0..size_2 {
+                    // C vmccal.c:788 scales O[j] before the complex product.
+                    // Keep that order independently within each observed row.
+                    row[j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
+                }
+            },
+        );
     }
 }
 
@@ -3317,37 +3291,37 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         let fast_transfer = !parallel_transfer && calh1_fast_path_available(state);
         let parallel_green = if parallel_transfer {
             let shared_state = &*state;
-            Some(crate::threading::install_inner(|| {
-                state
-                    .transfer_cache
-                    .terms
-                    .par_iter()
-                    .map_init(
-                        || GreenScratch {
-                            skip_unused_proj: true,
-                            ..GreenScratch::default()
-                        },
-                        |scratch, term| {
-                            let _entry = observed.enter_item();
-                            green_func1_impl::<false, true, false>(
-                                term.site1,
-                                term.site2,
-                                term.spin1,
-                                term.spin2,
-                                ip,
-                                data,
-                                shared_state,
-                                ele_idx,
-                                ele_cfg,
-                                ele_num,
-                                ele_proj_cnt,
-                                scratch,
-                                &mut CTimer::<false>::new(),
-                            )
-                        },
-                    )
+            let terms = &shared_state.transfer_cache.terms;
+            // One scratch per static block, terms evaluated independently and returned in
+            // term order (the caller reduces them serially in index order).
+            let blocks = crate::threading::static_blocks(terms.len(), |start, end| {
+                let mut scratch = GreenScratch {
+                    skip_unused_proj: true,
+                    ..GreenScratch::default()
+                };
+                terms[start..end]
+                    .iter()
+                    .map(|term| {
+                        let _entry = observed.enter_item();
+                        green_func1_impl::<false, true, false>(
+                            term.site1,
+                            term.site2,
+                            term.spin1,
+                            term.spin2,
+                            ip,
+                            data,
+                            shared_state,
+                            ele_idx,
+                            ele_cfg,
+                            ele_num,
+                            ele_proj_cnt,
+                            &mut scratch,
+                            &mut CTimer::<false>::new(),
+                        )
+                    })
                     .collect::<Vec<_>>()
-            }))
+            });
+            Some(blocks.into_iter().flatten().collect::<Vec<_>>())
         } else {
             None
         };
