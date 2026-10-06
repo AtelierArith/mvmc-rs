@@ -56,9 +56,15 @@ pub fn weight_average_sr_opt_real(state: &mut VmcOptimizationState, nsrcg: bool)
     if !state.sr_opt.sr_opt_oo_real.is_empty() {
         let size = state.sr_opt.sr_opt_size;
         let active_oo = if nsrcg { 2 * size } else { size * size };
-        crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_oo_real[..active_oo], 2, |_, x| {
-            *x *= inv
-        });
+        // A deferred Gram (issue #452) lives on the device; the resident step applies `inv`
+        // itself (`DirectSolveInput::gram_scale`), so there is no host OO to scale.
+        if !state.sr_oo_deferred {
+            crate::threading::for_each_mut(
+                &mut state.sr_opt.sr_opt_oo_real[..active_oo],
+                2,
+                |_, x| *x *= inv,
+            );
+        }
         crate::threading::for_each_mut(&mut state.sr_opt.sr_opt_ho_real, 2, |_, x| *x *= inv);
     }
 }

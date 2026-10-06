@@ -1836,11 +1836,10 @@ the oracle of the device step through the same trait. `ResidentCudaSr` (`gpu/mvm
 stages.rs`) delegates every per-stage method to the tenferro CUDA stages and overrides the two
 composite stages with `DeviceSr`; `cuda_resident_stage_backend(ordinal)` builds the opt-in
 `StageBackend`. The default `MVMC_RS_SR_BACKEND=cuda` backend, the C-order path and the production
-call sites are unchanged: production `sr.rs`/`sr_cg.rs` do not yet route to the composite stages
-(their S/g assembly consumes the host `OO` array produced earlier by `finalize_oo_store_real`, which
-the resident path deliberately never materializes on the host), so selecting the resident backend
-in a run is the follow-up; per the priority decision (correct numerics first) this change stops
-at the validated, opt-in stages.
+call sites were unchanged by #447: production `sr.rs`/`sr_cg.rs` did not yet route to the composite
+stages (their S/g assembly consumed the host `OO` array produced earlier by
+`finalize_oo_store_real`, which the resident path deliberately never materializes on the host).
+Issue #452 routed them; see section 15.6.
 
 ### 15.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
 
@@ -1953,6 +1952,53 @@ metadata: `benchmark/gpu_sr_device/results/`.
 MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # gates, including sr_device_gate
 scripts/run_sr_device_bench.sh docker                          # benchmark, writes the CSV
 ```
+
+### 15.6 Production routing (issue #452)
+
+`MVMC_RS_SR_BACKEND=cuda[:N]` (through `mvmc-cuda`, #464) now runs the resident steps in a normal
+optimizer run. The provider opens `cuda_resident_stage_backend`; `SrStages` gained the resident
+stage contract, all with defaults that leave host backends unchanged:
+
+| trait item | meaning |
+| --- | --- |
+| `resident_direct()`, `resident_cg()` | the backend keeps the direct step / the CG loop on the device (default `false`) |
+| `direct_begin(store, n, samples) -> GramSummary` | upload the `[n, samples]` store (once per step), `G = O O^T` on the device, return `diag(G)` and `G[:, 0]` (`O(n)`) |
+| `direct_assemble(DirectSolveInput { ho, map, offset, sta_del, step_dt, gram_scale })` | `S`, `g` on the device; every Gram entry is multiplied by `gram_scale = 1 / wc` before use (the kernels use `scale * G` per read, exact for 1.0) |
+| `direct_download_s_g(nmap)` | diagnostics only (SR observer capture) |
+| `direct_factor_solve(nmap) -> x` | Cholesky factor and solve, `info != 0` or a nonfinite `x` is `StageError::Failed` (the host's `Err(())`) |
+| `cg_step(CgStepInput)` | the whole CG loop (real or complex samples) |
+| `resident_counters()` | call counters for tests and metadata |
+
+**Direct SR.** `run.rs` (`accumulate_observables_local`) asks `sr::resident_direct_real_applies`
+(`NSRCG = 0`, `NStore != 0`, real parameters, `NVMCSample > 0`, a one-process reducer, selected
+backend reports `resident_direct`). If so it skips `finalize_oo_store_real`, so the host `OO` is
+never formed, and sets `VmcOptimizationState::sr_oo_deferred` (set after `SrMeasurement::finish`,
+which swaps the buffers back). `weight_average_sr_opt_real` then leaves the (zero) host `OO`
+alone, and `sr.rs::stochastic_opt_real_resident` runs the step: `direct_begin` on the store,
+`s_diag = G_pp / wc - (G_p0 / wc)^2` from the summary (the same expression and operation order as
+`collect_active_real` on the normalized `OO`; the redundancy cut selection is shared code,
+`select_active_real`), `direct_assemble` with `HO` (already normalized by the host) and
+`gram_scale`, `direct_factor_solve`, then the same `_SRinfo` row and parameter update as the host
+path. The normalization guard of `weight_average_sr_opt_real` (`|wc| < 1e-15`: no scaling) is
+mirrored (`gram_scale = 1`). An SR observer, if installed, gets `S` and `g` downloaded between
+assembly and factorization (its normalized `oo_real` is empty for a deferred step: the host `OO`
+does not exist).
+
+**CG.** `SampledSrOperator::solve_with_reducer` calls `cg_step` when the backend is
+`resident_cg`, the reducer has one rank and no CG observer is installed; the returned
+`CgSolution` has empty `residual`/`direction` (they are diagnostics of the host loop).
+
+**What stays on the per-stage path of the selected backend** (never a CPU fallback): complex
+direct SR, several ranks or grouped sampling, `NStore = 0`, CG with an observer.
+
+**Validation.** `crates/mvmc-core/tests/sr_resident_routing_452.rs` (CI, no GPU): a host model of
+the resident contract with C-order arithmetic, registered with `register_stage_backend`; the
+optimizer run (direct real, complex direct, CG real and complex) must be byte-identical to the
+C-order run, the Gram stage must never be asked for a host `OO`, and the store is handed over once
+per SR step. `gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs` (GPU gate, in `scripts/run_cuda_gate.sh`):
+real sampled runs on the CUDA backend against C order with the SR observer: step-1 `S`, `g` and
+solution within bounds derived from `k`, `a_i = sqrt(OO_ii)` and `kappa`, resident counters,
+bitwise repeatability, and bounded multi-step trajectories (observed numbers in manual 12.4).
 
 ## 9. Japanese summary / 日本語要約
 

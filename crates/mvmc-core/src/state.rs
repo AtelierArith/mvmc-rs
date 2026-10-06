@@ -1271,9 +1271,18 @@ pub struct VmcOptimizationState {
     pub(crate) transfer_scratch: TransferGreenScratch,
     /// Reusable sample-batched measurement buffers (issue #422).
     pub(crate) measurement_batch: crate::measurement_batch::MeasurementBatchWorkspace,
+    /// The real direct-SR Gram `sr_opt_oo_real` was not materialized for this step: a resident SR
+    /// backend forms it on the device from the O store (issue #452).
+    pub(crate) sr_oo_deferred: bool,
 }
 
 impl VmcOptimizationState {
+    /// True when the real direct-SR Gram of this step was left to a resident SR backend (the host
+    /// `sr_opt_oo_real` was not materialized, issue #452).
+    pub fn sr_oo_deferred(&self) -> bool {
+        self.sr_oo_deferred
+    }
+
     /// Check declaration metadata and the mode used to allocate this state.
     /// Direct Slater/energy callers must check this before using their buffers;
     /// public runners perform it inside their collective preflight.
@@ -1322,6 +1331,7 @@ impl VmcOptimizationState {
             transfer_cache: TransferKernelCache::default(),
             transfer_scratch: TransferGreenScratch::default(),
             measurement_batch: Default::default(),
+            sr_oo_deferred: false,
         }
     }
 }

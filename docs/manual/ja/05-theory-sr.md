@@ -90,12 +90,12 @@ $$
 > - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:53`
 > - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
-> - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:181`
-> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:240`
-> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:374`
+> - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:184`
+> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:280`
+> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:377`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
-> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:808`
-> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:712`
+> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:933`
+> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:837`
 > - 整合性: `S[idx] = OO[(pi+2)*(2*size)+(pj+2)].re - OO[pi+2].re*OO[pj+2].re` および `S[ii] *= 1+DSROptStaDel`(`stcopt_dposv.c:69-74`)、`g[si] = -DSROptStepDt*2.0*(HO[pi+2].re - HO[0].re*OO[pi+2].re)`(`stcopt_dposv.c:81`)です。Rust の `build_s_g_complex` は同じ式を同じ順序で評価します(実モードではインデックスオフセットが2ではなく1)。実モードでは C は実行列を虚部ゼロの複素配置に埋め込むため、$S_{\max}$ にはゼロの虚部分散が含まれます。Rust の `collect_active_real` も同じ理由で `0.0` から畳み込みます。Rust は LAPACK の `dpotrf_`/`dpotrs_`(上三角のコレスキー分解。`sr.rs:45-52` で宣言)で解き、C は `dposv('U')` を使います。$S$ が正定値でない場合、Rust は更新を拒否し(`cholesky_solve` が `Err` を返す)、C は `dposv` の `info` を返します。C が直接ソルバー向けに書き出す $\texttt{zvo\_SRinfo.dat}$ の行(`stcopt.c:157`)は、Rust では書き出し**ません**([9](09-output-files.md))。
 
 ## 5.3 $\mathrm{OO}$ と $\mathrm{HO}$ の累積と `NStore` オプション
@@ -160,10 +160,10 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます(グ�
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:326`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:482`
-> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:264`
-> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:288`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:517`
+> - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:268`
+> - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:292`
 > - 整合性: ここは演算順序が最も重要になる箇所です。C は `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat`(`stcopt_cg_impl.c:265`)を計算し、漸化式は `beta = xdot(r,r)/delta; delta = beta*delta;` です。古い $\delta$ は $r\!\cdot\!r$ で置き換えられ*ません*(`stcopt_cg_impl.c:333-336`)。Rust は両方を再現します(`crates/mvmc-core/src/sr_cg.rs:346`、`crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm")。内積は BLAS の `ddot` ではなく逐次(`sequential_dot`)で、積は C と同じ `dgemv` の組を使います。このため CG は FMA と縮約順序に敏感であり、打ち切られた CG の結果はビット単位の整合ではなく許容誤差のゲートで検証します。
 > - 整合性: 対角シフトは、行列を修正するのではなく `z += sdiag[si]*DSROptStaDel*x[si]`(`stcopt_cg_impl.c:420`)として現れます。$\langle O\rangle\cdot x$ には `xdot` を使います。サンプル積の MPI 縮約は、大域的な重み、平均、シフトの補正より前に行われます(`apply_with_reducer` のドキュメント)。
 

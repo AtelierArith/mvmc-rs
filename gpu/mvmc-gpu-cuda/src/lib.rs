@@ -40,7 +40,9 @@ impl CudaProvider for Provider {
         &self,
         ordinal: usize,
     ) -> Result<mvmc_core::stage_backend::StageBackend<'static>, String> {
-        stages::cuda_stage_backend(ordinal)
+        // Production SR (`MVMC_RS_SR_BACKEND=cuda[:N]`) runs the device-resident direct and CG
+        // steps (issue #452); the per-stage backend stays available as `stages::cuda_stage_backend`.
+        stages::cuda_resident_stage_backend(ordinal)
     }
 
     fn report(&self, ordinal: usize) -> Result<DeviceReport, String> {

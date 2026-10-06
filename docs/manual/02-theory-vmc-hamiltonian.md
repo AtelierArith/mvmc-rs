@@ -89,7 +89,7 @@ $W$, $\sum wF$, $\sum w|F|^2$ and the SR accumulators before the division by $W$
 > - C: `VMCMainCal` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:82`
 > - C: `WeightAverageWE` — `extern/mVMC-1.3.0/src/mVMC/average.c:41`
 > - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2896`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2900`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
 > - Rust: `weight_average_we` — `crates/mvmc-core/src/average.rs:18`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`

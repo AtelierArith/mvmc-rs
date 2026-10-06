@@ -11,8 +11,8 @@
 //!   fallback.
 
 use mvmc_core::sr_backend::{
-    CgSamples, CgStepInput, CgStepResult, DirectStepInput, Placement, SrAssembleInput, SrStages,
-    TenferroSr,
+    CgSamples, CgStepInput, CgStepResult, DirectSolveInput, DirectStepInput, GramSummary,
+    Placement, ResidentCounters, SrAssembleInput, SrStages, TenferroSr,
 };
 use mvmc_core::stage_backend::{StageBackend, StageError, UnsupportedPfaffian};
 use mvmc_gpu::stages::BatchedStages;
@@ -64,6 +64,7 @@ pub struct ResidentCudaSr {
     inner: TenferroSr,
     device: usize,
     dev: Option<DeviceSr>,
+    counters: ResidentCounters,
 }
 
 impl ResidentCudaSr {
@@ -77,6 +78,7 @@ impl ResidentCudaSr {
             ),
             device: ordinal,
             dev: None,
+            counters: ResidentCounters::default(),
         })
     }
 
@@ -157,6 +159,55 @@ impl SrStages for ResidentCudaSr {
         self.inner.cg_local_product(samples, x, z)
     }
 
+    fn resident_counters(&self) -> Option<ResidentCounters> {
+        Some(self.counters)
+    }
+
+    fn resident_direct(&self) -> bool {
+        true
+    }
+
+    fn resident_cg(&self) -> bool {
+        true
+    }
+
+    fn direct_begin(
+        &mut self,
+        store: &[f64],
+        n: usize,
+        samples: usize,
+    ) -> Result<GramSummary, StageError> {
+        self.counters.direct_steps += 1;
+        self.counters.store_uploads += 1;
+        self.counters.store_values += store.len() as u64;
+        let dev = self.pipeline()?;
+        dev.upload_store(store, n, samples).map_err(stage_err)?;
+        dev.compute_gram().map_err(stage_err)?;
+        let (diag, col0) = dev.gram_summary().map_err(stage_err)?;
+        Ok(GramSummary { diag, col0 })
+    }
+
+    fn direct_assemble(&mut self, input: &DirectSolveInput<'_>) -> Result<(), StageError> {
+        self.pipeline()?
+            .assemble_scaled(
+                input.ho,
+                input.map,
+                input.offset,
+                input.sta_del,
+                input.step_dt,
+                input.gram_scale,
+            )
+            .map_err(stage_err)
+    }
+
+    fn direct_download_s_g(&mut self, nmap: usize) -> Result<(Vec<f64>, Vec<f64>), StageError> {
+        self.pipeline()?.download_s_g(nmap).map_err(stage_err)
+    }
+
+    fn direct_factor_solve(&mut self, nmap: usize) -> Result<Vec<f64>, StageError> {
+        self.pipeline()?.factor_solve(nmap).map_err(stage_err)
+    }
+
     fn direct_step(&mut self, input: &DirectStepInput<'_>) -> Result<Vec<f64>, StageError> {
         let dev = self.pipeline()?;
         dev.upload_store(input.store, input.n, input.samples)
@@ -172,6 +223,7 @@ impl SrStages for ResidentCudaSr {
     }
 
     fn cg_step(&mut self, input: &CgStepInput<'_>) -> Result<CgStepResult, StageError> {
+        self.counters.cg_solves += 1;
         let dev = self.pipeline()?;
         dev.set_cg_operand(input.real, input.imag, input.components, input.samples)
             .map_err(stage_err)?;
