@@ -4,14 +4,12 @@
 //! hopping updates; same logic as `tests/sampler_gate.rs`, see the #424 harness):
 //! * `sampler_teacher_forced`: the device weights drive the CPU decisions. RNG state, words
 //!   consumed and the electron configuration must be bit-identical (RNG parity is exact, never
-//!   toleranced); draw mismatches and unexplained flips ("defects") must be 0; the worst
-//!   relative weight deviation (accumulated rank-1 update roundoff over the run) must be
-//!   `<= 1e-8 * max(1, (L/32)^3)`. The `1e-8` is the `sampler_gate` bound (L <= 32). The L
-//!   scaling is empirical, from the first full-profile run on an RTX 3060 (4 walkers, 20
-//!   samples, flips = defects = 0, RNG exact): max relative weight deviation 1.3e-8 (L=64),
-//!   4.4e-8 (L=128), 2.2e-6 (L=256); the update error grows with the matrix size and the
-//!   conditioning of the Slater matrix. The decision-level criterion (defects = 0) does not
-//!   depend on this bound.
+//!   toleranced); draw mismatches and unexplained flips ("defects") must be 0 (hard gate). The
+//!   worst relative weight deviation of each walker must be within a bound derived from the
+//!   computation (see `weight_allowed`): `2 * 16 * (n + s) * eps * kappa / sqrt(w_min)` (`w_min`: smallest nonzero reference
+//!   weight of the walker, the cancellation factor of the ratio's dot product), with `kappa =
+//!   ||A||_F ||A^-1||_F` of the walker's Slater planes (max over planes, start and end of the
+//!   run) and `s` the updates between recomputes. `dev_value` is the worst observed/allowed ratio.
 //! * `sampler_free_run_vs_cpu`: the device decides. Identical decision bits, RNG state and
 //!   configuration pass. A divergence is permitted only when the teacher-forced run located
 //!   decision flips (numerical policy of AGENTS.md); otherwise it FAILs.
@@ -104,6 +102,72 @@ fn make_walkers(
     Ok(out.into_iter().map(|w| w.expect("walker built")).collect())
 }
 
+/// Largest `kappa = ||A||_F ||A^-1||_F` over the QP planes of the walker's current state
+/// (`A` is the skew-symmetric matrix of the current electron configuration, `A^-1` the stored
+/// inverse table; the same condition number as in the Pfaffian family).
+fn plane_kappa_max(w: &SamplingWalker) -> f64 {
+    let sm = &w.state.slater_matrix;
+    let elm = &sm.slater_elm_real;
+    let n_site = w.data.modpara.nsite as usize;
+    let n_elec = w.data.modpara.nelec as usize;
+    let n = 2 * n_elec;
+    let cfg = &w.state.electron_config.tmp_ele_idx;
+    let r: Vec<usize> = (0..n)
+        .map(|k| cfg[k] as usize + if k < n_elec { 0 } else { n_site })
+        .collect();
+    let inv = sm.inv_m_real.as_slice();
+    let mut worst = 0.0f64;
+    for q in 0..elm.n_qp_full() {
+        let mut fa = 0.0;
+        for &ri in &r {
+            for &rj in &r {
+                let v = elm.get(q, ri, rj);
+                fa += v * v;
+            }
+        }
+        let fi: f64 = inv[q * (n * n + 1)..q * (n * n + 1) + n * n]
+            .iter()
+            .map(|v| v * v)
+            .sum();
+        worst = worst.max((fa * fi).sqrt());
+    }
+    worst
+}
+
+/// Allowed relative deviation of a Metropolis weight `w = |Pf ratio|^2` between two
+/// implementations of the same recompute plus rank-1/2 updates, derived from the computation:
+/// the Pfaffian ratio is a length-`n` dot product of an inverse row with the new Slater row,
+/// and each of the `s` accepted updates since the last recompute perturbs the inverse by
+/// backward-stable roundoff amplified by `kappa`, so the relative error of the ratio is at most
+/// `c (n + s) eps kappa / |ratio|`; the weight squares the ratio (factor 2). `c = 16` as in the Pfaffian
+/// family bound. `s` is bounded by the proposals per walker between recomputes
+/// (`proposals / max(1, recomputes - walkers)` per walker, rounded up), the worst case in which
+/// every proposal in that window is accepted.
+fn weight_allowed(
+    w: &SamplingWalker,
+    kappa: f64,
+    st: &LockstepStats,
+    walkers: usize,
+    decisions: &[(f64, f64)],
+) -> f64 {
+    // cancellation: the dot product's relative error is (sum |inv_ij a_j|)/|ratio| times eps,
+    // and sum |inv_ij a_j| <= ||inv row|| ||a|| <= kappa; |ratio| = sqrt(weight) of the proposal.
+    // The worst proposal (smallest nonzero reference weight) bounds every proposal's factor.
+    let w_min = decisions
+        .iter()
+        .map(|d| d.0)
+        .filter(|&x| x > 0.0)
+        .fold(f64::INFINITY, f64::min);
+    let cancel = (1.0 / w_min.sqrt()).max(1.0);
+    let n = 2.0 * w.data.modpara.nelec as f64;
+    let per_walker = st.proposals.div_ceil(walkers.max(1));
+    let windows = (st.recomputes.saturating_sub(walkers))
+        .max(1)
+        .div_ceil(walkers.max(1));
+    let s = per_walker.div_ceil(windows) as f64;
+    2.0 * 16.0 * (n + s) * f64::EPSILON * kappa * cancel
+}
+
 fn rel_diff(a: &[f64], b: &[f64]) -> f64 {
     let num: f64 = a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum();
     let den: f64 = b.iter().map(|y| y * y).sum();
@@ -170,7 +234,6 @@ fn check_path<T: TransferPath>(
     mut service: CudaSamplerService<T>,
     mut fresh: impl FnMut() -> CudaSamplerService<T>,
 ) {
-    let weight_bound = 1e-8 * ((l as f64 / 32.0).powi(3)).max(1.0);
     let params = format!(
         "L={l};Wc={wc};NVMCSample={samples};setup={}",
         seed.map_or("shared-wavefunction".to_string(), |s| format!("seed{s}"))
@@ -189,6 +252,8 @@ fn check_path<T: TransferPath>(
         Ok(w) => w,
         Err(m) => return csv.push(row("sampler_teacher_forced").error(&m)),
     };
+    // condition numbers of the Slater planes at the start (before the run)
+    let kappa_start: Vec<f64> = ws.iter().map(plane_kappa_max).collect();
     let teach = run_lockstep_real(
         &mut ws,
         &mut service,
@@ -200,8 +265,10 @@ fn check_path<T: TransferPath>(
     let flips: usize;
     match teach {
         Err(m) => return csv.push(row("sampler_teacher_forced").error(&m)),
-        Ok((runs, _)) => {
+        Ok((runs, lstats)) => {
             let mut reports: Vec<TeacherReport> = Vec::new();
+            let mut walker_ratio = 0.0f64;
+            let (mut kmax, mut allowed_min) = (0.0f64, f64::INFINITY);
             let mut exact = true;
             let mut why = String::new();
             for (w, run) in runs.iter().enumerate() {
@@ -222,7 +289,13 @@ fn check_path<T: TransferPath>(
                     exact = false;
                     why += &format!("walker {w}: configuration differs; ");
                 }
-                reports.push(run.teacher.clone().unwrap_or_default());
+                let rep = run.teacher.clone().unwrap_or_default();
+                let kappa = kappa_start[w].max(plane_kappa_max(&reference[w].1));
+                let allowed = weight_allowed(&ws[w], kappa, &lstats, wc, &reference[w].0);
+                walker_ratio = walker_ratio.max(rep.max_weight_rel / allowed);
+                kmax = kmax.max(kappa);
+                allowed_min = allowed_min.min(allowed);
+                reports.push(rep);
             }
             let sum = |f: fn(&TeacherReport) -> usize| reports.iter().map(f).sum::<usize>();
             flips = sum(|r| r.flips);
@@ -237,10 +310,10 @@ fn check_path<T: TransferPath>(
                 .map(|r| r.min_margin)
                 .fold(f64::INFINITY, f64::min);
             let note = format!(
-                "decisions={compared}/{expected} flips={flips} defects={defects} draw_mismatches={draws} max_abs_dw={max_abs:.2e} min_margin={min_margin:.2e}"
+                "decisions={compared}/{expected} flips={flips} defects={defects} draw_mismatches={draws} max_abs_dw={max_abs:.2e} min_margin={min_margin:.2e} max_rel_dw={max_rel:.2e} max_kappa={kmax:.2e} min_allowed={allowed_min:.2e}"
             );
             let mut r = row("sampler_teacher_forced")
-                .dev("max_rel_weight_dev", max_rel, weight_bound)
+                .dev("max_walker(rel_weight_dev/allowed)", walker_ratio, 1.0)
                 .note(&note);
             if !exact || defects > 0 || draws > 0 || compared != expected {
                 r = r.fail(&format!("{note}; {why}"));
@@ -554,6 +627,9 @@ pub fn run(cfg: &Cfg, csv: &mut Csv) {
         }
     }
 
+    if cfg.checks_only {
+        return;
+    }
     // timings (reference)
     for &l in time_ls {
         if !namelist(cfg, l).exists() {

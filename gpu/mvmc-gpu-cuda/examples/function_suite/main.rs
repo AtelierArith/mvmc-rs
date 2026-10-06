@@ -36,6 +36,7 @@ pub struct Cfg {
     /// Optional overrides of the Pfaffian grid (`--ns 16,64 --batches 1,8`).
     /// Sampler timing grid cap on `W * L^2` (full profile budget).
     pub work_cap: f64,
+    pub checks_only: bool,
     pub ns: Option<Vec<usize>>,
     pub batches: Option<Vec<usize>>,
 }
@@ -72,6 +73,7 @@ fn main() {
                 s.parse().expect("--max-bytes")
             }),
         work_cap: arg(&args, "--work-cap").map_or(2.1e6, |s| s.parse().expect("--work-cap")),
+        checks_only: args.iter().any(|a| a == "--checks-only"),
         ns: arg(&args, "--ns").map(list),
         batches: arg(&args, "--batches").map(list),
     };

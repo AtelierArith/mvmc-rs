@@ -24,6 +24,32 @@ GPU_PREFIX = ("cuda", "tenferro-cuda")
 FAMILY_FILES = ["pfaffian", "sr", "sr_cpu_1core", "sr_resident", "sampler", "transfers"]
 
 
+BASE = "https://github.com/AtelierArith/mvmc-rs/issues/"
+# (family, function, variant prefix, dtype or None, n or None, issue). FAIL rows that match are
+# labelled KNOWN-ISSUE in the report; they still count as FAIL in the verdict counts.
+KNOWN_ISSUES = [
+    ("sampler", "sampler_resident_inverse", "cuda", None, None, 465),
+    ("sampler", "sampler_download_synchronization", "", None, None, 465),
+    ("pfaffian", "pfaffian_inverse", "tenferro-native-cpu", "c64", "128", 466),
+]
+
+
+def known_issue(r):
+    """Issue number for a FAIL/ERROR row that matches a tracked defect, else None."""
+    if r["verdict"] not in ("FAIL", "ERROR"):
+        return None
+    p = params(r)
+    for fam, fn, var, dt, n, issue in KNOWN_ISSUES:
+        if r["family"] == fam and r["function"] == fn and r["variant"].startswith(var) \
+                and (dt is None or r["dtype"] == dt) and (n is None or p.get("n") == n):
+            return issue
+    return None
+
+
+def issue_tag(issue):
+    return "KNOWN-ISSUE [#%d](%s%d)" % (issue, BASE, issue) if issue else "NEW"
+
+
 def load(path):
     """Return (metadata dict, rows list) of one archive or directory."""
     files = {}
@@ -117,14 +143,15 @@ def numerical_section(machines):
         "ratio <= 1. RNG state, draw counts and configurations are compared exactly.\n"
     )
     # verdict counts per machine
-    hdr = ["machine", "PASS", "FAIL", "ERROR", "NotAvailable", "SKIPPED", "overall"]
+    hdr = ["machine", "PASS", "FAIL", "ERROR", "of which known issues", "NotAvailable", "SKIPPED", "overall"]
     rows = []
     for name, meta, rs in machines:
         c = defaultdict(int)
         for r in rs:
             c[r["verdict"]] += 1
         overall = "**FAIL**" if c["FAIL"] + c["ERROR"] else ("PASS" if c["PASS"] else "no checks")
-        rows.append([name, c["PASS"], c["FAIL"], c["ERROR"], c["NotAvailable"], c["SKIPPED"], overall])
+        known = sum(1 for r in rs if known_issue(r))
+        rows.append([name, c["PASS"], c["FAIL"], c["ERROR"], known, c["NotAvailable"], c["SKIPPED"], overall])
     out.append(md_table(hdr, rows))
 
     # failures
@@ -133,9 +160,10 @@ def numerical_section(machines):
         for r in rs:
             if r["verdict"] in ("FAIL", "ERROR"):
                 fails.append([name, r["family"], r["function"], r["variant"], r["dtype"], r["params"],
-                              r["verdict"], sci(fnum(r["dev_ratio"])), r["note"][:160]])
+                              r["verdict"] + " " + issue_tag(known_issue(r)), sci(fnum(r["dev_ratio"])), r["note"][:160]])
     out.append("\n### Failures\n")
-    out.append(md_table(["machine", "family", "function", "variant", "dtype", "params", "verdict", "ratio", "note"], fails))
+    out.append(md_table(["machine", "family", "function", "variant", "dtype", "params", "verdict / label", "ratio", "note"], fails))
+    out.append("\nKNOWN-ISSUE rows are tracked defects (still FAIL in the counts above); NEW rows are untracked.\n")
 
     # worst ratio per (function, variant, dtype) across machines
     worst = {}
