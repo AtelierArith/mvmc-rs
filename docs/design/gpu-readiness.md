@@ -482,6 +482,17 @@ Two independent batch axes:
   (`NQP*NS` planes). This needs no change to RNG or to the sampling trajectory, only to the
   order of the measurement stages (and is therefore a pure reordering of independent work on
   the CPU path as well).
+  **Implemented in #422** (`crates/mvmc-core/src/measurement_batch.rs`, loop in
+  `run.rs::accumulate_observables_local`): stage A builds the Pfaffian/inverse tables for `B`
+  samples, stage B runs the unchanged per-sample consumers in sample order, so all
+  accumulation orders and outputs are independent of `B`
+  (`MVMC_RS_MEASURE_BATCH`, default 4; `B = 1` is the former serial order). All modes are
+  covered (real, complex, FSZ, DH, RBM, OptTrans, PhysCal Green and Lanczos). The CPU slots
+  keep the working layout and are swapped into the state (no copy); `BatchedPlanes::pack`
+  produces the device layout `[n,n,NQP,B]` / `[NQP,B]` (trailing batch, column-major). A first
+  variant that copied every sample into and out of that layout cost 2.7 % on L32, so it is
+  not on the CPU hot path. Local energy, Green functions and the Slater derivative are still
+  per-sample in stage B (phase 4).
 * **Chains (walkers)** (`B`): Metropolis sampling is sequential within a chain. Independent
   chains, each with its own SFMT stream, are the only way to fill a device during sampling.
 

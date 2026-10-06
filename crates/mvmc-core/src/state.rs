@@ -1180,6 +1180,8 @@ pub struct VmcOptimizationState {
     pub phys_quantities: Option<PhysicalQuantities>,
     pub(crate) transfer_cache: TransferKernelCache,
     pub(crate) transfer_scratch: TransferGreenScratch,
+    /// Reusable sample-batched measurement buffers (issue #422).
+    pub(crate) measurement_batch: crate::measurement_batch::MeasurementBatchWorkspace,
 }
 
 impl VmcOptimizationState {
@@ -1230,6 +1232,7 @@ impl VmcOptimizationState {
             phys_quantities: None,
             transfer_cache: TransferKernelCache::default(),
             transfer_scratch: TransferGreenScratch::default(),
+            measurement_batch: Default::default(),
         }
     }
 }
