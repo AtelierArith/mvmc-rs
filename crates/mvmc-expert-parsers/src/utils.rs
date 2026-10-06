@@ -21,6 +21,8 @@ pub mod qp_weight;
 
 /// Scalar libm functions as C calls them, with the Julia emulation as an explicit opt-in.
 pub mod c_math;
+/// glibc complex elementary functions (cexp, clog, ccosh, ctanh) as the C RBM code calls them.
+pub mod glibc_complex;
 pub mod julia_hypot;
 /// Julia Float64 logarithmic operations for deterministic kernels.
 pub mod julia_log;

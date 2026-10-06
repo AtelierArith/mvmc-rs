@@ -393,14 +393,11 @@ the system libm on macOS). Julia's implementations (`julia_exp`, `julia_log`, `j
 |---|---|---|
 | `exp` | Metropolis weight `sampling/metropolis.rs:48`, FSZ real accept `sampling/fsz_real.rs:452`, projection ratio and Green ratios `observables.rs` (`c_exp`), `observables/fsz_green.rs:353,358`, RBM `cexp` real part `sampling/rbm_math.rs` | `w = exp(2.0*(x + logIpNew - logIpOld))` `vmcmake_real.c:176,251,496,560`, `vmcmake.c:194,278,721,783`, `vmcmake_fsz*.c`; `ProjRatio` `projection.c:56`; `cexp` in `rbm.c` |
 | `log` | `LogIP` `sampling/driver.rs:72`, `observables.rs:175`, RBM `clog` real part | `log(fabs(ip))`; `clog` in `rbm.c` |
-| `log1p`, `tan`, `atan2`, `sinh` | RBM complex `log`/`log1p`/`tanh` (`sampling/rbm_math.rs`) | `clog`, `ctanh` in `rbm.c:345-369` |
+| `log1p`, `tan`, `atan2`, `sinh` | Julia complex algorithms only under the opt-in (the default RBM path uses `glibc_complex`, #470) | `clog`, `ctanh` in `rbm.c:345-369` |
 | `sin`, `cos` | `qp_weight.rs` (Gauss-Legendre nodes and `SPGLCos/SPGLSin`), `parameter_init.rs:105-106` | `gauleg.c:42`, `qp.c:67-73`; RBM initialization `cexp(2 I pi u)` `parameter.c:53` |
 | `hypot` | `sync.rs:91` and `parameter_init.rs:252` amplitude normalization | `cabs` `parameter.c:155-167` |
 
-Not changed here (algorithm, not a libm emulation): the complex RBM functions `rbm_math::{log,
-log1p, tanh}` and `log_cosh_stable` keep Julia's complex algorithms (C evaluates `clog(ccosh(z))`
-and glibc's `clog`/`ctanh` formulas); only their real building blocks now use the libm. A port of
-glibc's complex functions is a follow-up.
+The complex RBM functions were handled in #470 (below): they now follow glibc's algorithms.
 
 **Effect on the fixtures.** The 69 PhysCal tests of `native_c_physcal_181` pass with unchanged
 bounds. Only 8 of the 566 output files change at all (scenarios `spin_chain_lanczos1/2`,
@@ -421,3 +418,32 @@ macOS-versus-Linux difference is of the same size as the Julia-versus-glibc diff
 section removes. Linux (glibc, the platform of the C reference outputs) is the numerical
 reference; tests compare computed values within the explicit bounds above on both platforms and
 keep RNG state, draw counts and the decisions on identical control paths exact.
+
+## glibc complex functions on the RBM path (#470)
+
+Complex elementary functions differ between libraries in more than the last bit (branch cuts,
+overflow scaling, cancellation handling), so the Julia complex algorithms that `rbm_math` used
+were a C-parity gap, not just roundoff. The C RBM code calls `cexp`, `clog(ccosh(z))` and
+`ctanh` (`rbm.c:41,44,58,94,118,122,155,179,345,357,369`). `mvmc_expert_parsers::utils::
+glibc_complex` ports glibc 2.39's `cexp`, `clog`, `ccosh`, `ctanh` and `__x2y2m1` line by line
+(templates `math/s_c*_template.c` and `sysdeps/ieee754/dbl-64/x2y2m1.c`; version, tag object,
+SHA-256 and extraction boundary in `c_toolbox/glibc_complex_470/README.md`); the RBM weights now
+evaluate `clog(ccosh(z))` instead of Julia's sign-flipped `log1p` form. Julia's complex
+algorithms remain only behind `c_math::use_julia_libm()` (the archived Julia prefix tests).
+
+* **Check:** `c_toolbox/glibc_complex_470/probe.c` (a standalone kernel check, not a full
+  `vmc.out` run) evaluates the four C functions on 1600 inputs (all combinations of signed zeros,
+  +-1, +-inf and NaN; large `|Re z|` around the overflow thresholds 354/709/708/2127; the
+  negative real axis with tiny, subnormal and signed-zero imaginary parts; every `clog` branch
+  including the `x2y2m1` path and the `DBL_MAX`/`DBL_MIN` scalings; RBM-like hidden values).
+  On Linux x86_64 with glibc 2.39 all 6400 results of the Rust port are **bit-identical** to the
+  C library (`ports_match_the_glibc_probe_fixture`).
+* **Native-C RBM fixtures:** the 69 `native_c_physcal_181` tests pass with unchanged bounds; only
+  4 of 566 output files change (`hubbard_chain_dh_rbm_opttrans`), at the last bits; the largest
+  absolute deviation from C over the changed files drops from 2.1e-14 to 1.1e-14.
+* **macOS:** the port shares glibc's algorithm but its building blocks (`exp`, `log`, `log1p`,
+  `sincos`, `sinh`, `cosh`, `atan2`, `hypot`) are the macOS libm, which differs from glibc in the
+  last bits; Apple's own `cexp`/`clog`/`ctanh` are different algorithms again. On macOS the probe
+  fixture is compared to 16 eps per component (plus four subnormal quanta); exact equality is a
+  Linux/glibc contract. glibc also selects different `exp`/`log`/`sin`/`cos` code paths (ifunc)
+  on CPUs without FMA; the fixture records the generating CPU.

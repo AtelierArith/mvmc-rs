@@ -41,6 +41,13 @@ pub fn use_julia_libm() -> JuliaLibmGuard {
     JuliaLibmGuard(JULIA_LIBM.swap(true, Ordering::SeqCst), lock)
 }
 
+/// Whether the Julia opt-in ([`use_julia_libm`]) is active (for sibling complex-function
+/// dispatchers).
+#[inline]
+pub fn julia_libm_enabled() -> bool {
+    julia()
+}
+
 #[inline]
 fn julia() -> bool {
     JULIA_LIBM.load(Ordering::Relaxed)
