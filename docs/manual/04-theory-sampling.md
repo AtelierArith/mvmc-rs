@@ -42,10 +42,10 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 > - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
 > - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
 > - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
-> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:623`
-> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:122`
-> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1175`
-> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:604`
+> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:654`
+> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:116`
+> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1212`
+> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:635`
 > - Parity: the number of outer steps, the saved-sample index and the `nAccept > Nsite` refresh follow `vmcmake.c:141, 309, 334-349` (Rust `driver.rs:271-278, 532-552, 558-562`). The refresh test uses a strict `>`. `copyToBurnSample` after the last step is reproduced by the "burn" buffers of `ElectronConfiguration`; the carry-over is detected by `counter[9] != 0` (`driver.rs:167`).
 
 ## 4.2 Initial configuration
@@ -234,5 +234,5 @@ made identically on every rank of the group. See [8.4](08-running.md#84-mpi-and-
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:1976`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2044`
 > - Parity: `partition_range` reproduces `SplitLoop` including the "remainder to the last ranks" rule and the small-work branch. `resolve_rnd_seed` adds the group index to the base seed with wrapping `i64` arithmetic and then requires the result to fit in `u32` (`seeded_rng`, `run.rs:1799`); a negative `RndSeed` uses one clock value read on the output root and broadcast (Julia lifecycle).

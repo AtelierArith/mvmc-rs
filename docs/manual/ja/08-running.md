@@ -99,7 +99,7 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 > - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:985`
 > - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
 > - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
@@ -147,8 +147,8 @@ mvmc namelist.def zqp_opt.dat --out-dir phys    # --physcal zqp_opt.dat と同�
 > **実装**
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
 > - 整合性: `vmc_phys_cal_in_place_timed` は、C の PhysCal 分岐が暗黙に行うとおり、作業用コピー上で `vmc_calc_mode = 1` を強制します(`run.rs:811`)。
 
@@ -226,8 +226,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1457`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1525`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
 > - 整合性: コミュニケータの幅は `vmcmain.c:239-256` に従います(`NSplitSize` はコミュニケータの*幅*であり、連鎖の本数ではありません)。サンプルの範囲は `SplitLoop` に従います。C のグリーン関数のリダクションはランク 0 のみに集約されますが、Rust は累積量を all-reduce でリダクションしてルートが書き出すため、ファイルの内容は同じになります。
 
 ## 8.5 環境変数

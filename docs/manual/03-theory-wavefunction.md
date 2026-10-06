@@ -65,7 +65,7 @@ the identity: $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ 
 > **Implementation**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2828`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2896`
 > - Parity: Rust reserves the *declared* widths for each block even when the definition file lists fewer rows (the "sparse projection" rule, `ProjectionLayout` docs). The FSZ main-calculation places the Slater derivatives immediately after the projection block (no RBM slot), the normal path reserves all RBM slots first (`run.rs:2887-2900`).
 
 ## 3.2 The Pfaffian pair-product part
@@ -121,9 +121,9 @@ formula in [4.5](04-theory-sampling.md#45-pfaffian-ratio-and-inverse-updates).
 > - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
-> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:508`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:630`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:840`
+> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:555`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:677`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:891`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
@@ -178,7 +178,7 @@ real and imaginary parts are $2N_{\rm para}$ independent real variables
 
 > **Implementation**
 > - C: `ReadInputParameters` (sets `AllComplexFlag`) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1950`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:2018`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - Parity: real-mode runs hold `SlaterElm_real`/`InvM_real`/`PfM_real` copies in C; Rust keeps real buffers (`pf_m_real`, `sr_opt_oo_real`, ...) and a complex shadow where the shared code needs it.
 
@@ -243,7 +243,7 @@ $$
 > - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:90`
 > - Rust: `init_qp_weight` — `crates/mvmc-core/src/qp.rs:12`
 > - Rust: `init_qp_weight_inplace` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:86`
-> - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:151`
+> - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:150`
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
@@ -324,9 +324,9 @@ the full complex ratio `RBMRatio` multiplies the amplitude ratio. `NBlockSize_RB
 > - C: `WeightRBM` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:30`
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
-> - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:461`
-> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:554`
-> - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:453`
+> - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:460`
+> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:553`
+> - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:454`
 > - Parity: the C code evaluates `clog(ccosh(theta))` and `cexp` per hidden neuron (`rbm.c:30-60`); Rust uses a numerically stable `log_cosh_stable`, so large $|\operatorname{Re}\theta|$ can differ from `clog(ccosh)` at round-off level. The Metropolis exponent adds the RBM term in the left-associative order `(proj + rbm.re + ip_new.re) - ip_old.re` (`metropolis.rs:41`, test `rbm_acceptance_preserves_julia_left_associative_log_additions`). The RBM block parsers reject "archived sparse" RBM definitions before output (`crates/mvmc-core/src/run.rs:2074` test `public_runner_rejects_archived_sparse_rbm_definitions_before_output`).
 
 ## 3.7 Initial values and synchronization

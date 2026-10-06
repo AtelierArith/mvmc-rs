@@ -41,10 +41,10 @@ $\mathrm{IP}$. At $\beta=0$ this reduces to $O_k=-\sum_{i\uparrow,j\downarrow}(X
 > - C: `RBMDiff` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:323`
 > - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
-> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:693`
+> - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:692`
 > - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:176`
 > - Rust: `slater_elm_diff_fsz_with_scratch` — `crates/mvmc-core/src/slater_derivative.rs:473`
-> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:998`
+> - Rust: `opt_trans_diff` — `crates/mvmc-core/src/observables.rs:941`
 > - Parity: in C the per-sector buffer is accumulated with `buf[orbidx] += invM_i[msj]*cs*tOrbSgn_i[msj]` etc., summed over sectors with `QPFullWeight`, and finally multiplied by $1/\mathrm{IP}$ (`slater.c:194-238`). The Rust accumulation preserves this order (a tensor contraction helper is used for the sector sum, `qp_weighted_orbital_sum_einsum`, `observables.rs:537`; test `qp_weighted_orbital_sum_einsum_matches_manual_complex_reference`) and multiplies by `julia_complex::reciprocal(ip)` rather than dividing; results are compared with tolerances. The OptTrans layout differs between C and Rust, see [3.4](03-theory-wavefunction.md#34-quantum-number-projection).
 
 ## 5.2 The SR equations
@@ -92,12 +92,12 @@ are synchronized ([3.7](03-theory-wavefunction.md#37-initial-values-and-synchron
 > - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:53`
 > - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
-> - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:172`
-> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:328`
-> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:357`
+> - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:181`
+> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:240`
+> - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:374`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
-> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:856`
-> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:760`
+> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:808`
+> - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:712`
 > - Parity: `S[idx] = OO[(pi+2)*(2*size)+(pj+2)].re - OO[pi+2].re*OO[pj+2].re` and `S[ii] *= 1+DSROptStaDel` (`stcopt_dposv.c:69-74`); `g[si] = -DSROptStepDt*2.0*(HO[pi+2].re - HO[0].re*OO[pi+2].re)` (`stcopt_dposv.c:81`) — Rust `build_s_g_complex` evaluates the same expressions in the same order (real mode uses index offset 1 instead of 2). In real mode C embeds the real matrices into the complex layout with zero imaginary entries, so $S_{\max}$ includes the zero imaginary variances; Rust's `collect_active_real` folds from `0.0` for the same reason. Rust solves with LAPACK `dpotrf_`/`dpotrs_` (Cholesky of the upper triangle, declared in `sr.rs:45-52`), C with `dposv('U')`. A non-positive-definite $S$ rejects the update in Rust (`cholesky_solve` returns `Err`) and C returns the `dposv` `info`. The $\texttt{zvo\_SRinfo.dat}$ line that C writes for the direct solver (`stcopt.c:157`) is **not** written by Rust ([9](09-output-files.md)).
 
 ## 5.3 Accumulating $\mathrm{OO}$ and $\mathrm{HO}$; the `NStore` option
@@ -120,12 +120,12 @@ are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 > - C: `WeightAverageSROpt_real` — `extern/mVMC-1.3.0/src/mVMC/average.c:115`
 > - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:263`
 > - Rust: `calculate_oo_real` — `crates/mvmc-core/src/observables.rs:219`
-> - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:425`
+> - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:394`
 > - Rust: `calculate_oo_store_real` — `crates/mvmc-core/src/observables.rs:322`
-> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:447`
+> - Rust: `finalize_oo_store` — `crates/mvmc-core/src/observables.rs:415`
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
 > - Parity: C scales stored samples by `sqrt(w)` (`SROptO_Store[...] = sqrtw*SROptO[...]`, `vmccal.c:241,248`); the Gram product is formed once per step. For the real stored matrix Rust follows Julia's SYRK dispatch and upper-triangle copy; the complex stored product preserves a sequential sample sum (`sr_store_gram_julia`, `observables.rs:497`; tests `stored_direct_sr_gram_matches_sampled_julia_values`, `real_gram_matches_julia_generic_and_syrk_dispatch_boundary`). These floating-point summation orders differ between BLAS providers and are compared with tolerances. Only the active branch (real or complex) is reduced over MPI, exactly as `vmcmain.c` selects one `WeightAverageSROpt` branch.
 
 ## 5.4 Conjugate-gradient solver (`NSRCG = 1`)
@@ -163,8 +163,8 @@ Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C)
 > - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:328`
-> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:442`
+> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:326`
+> - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:482`
 > - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:264`
 > - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:288`
 > - Parity: this is where operation order matters most. C computes `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat` (`stcopt_cg_impl.c:265`), and the recurrence `beta = xdot(r,r)/delta; delta = beta*delta;` — the old $\delta$ is *not* replaced by $r\!\cdot\!r$ (`stcopt_cg_impl.c:333-336`). Rust reproduces both (`crates/mvmc-core/src/sr_cg.rs:346`, `crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm"). The dot products are sequential (`sequential_dot`) rather than BLAS `ddot`, and the products use the same `dgemv` pairs as C, which is why CG is sensitive to FMA and reduction order; truncated CG results therefore use a tolerance gate, not bit parity.
@@ -190,9 +190,9 @@ the input of a later PhysCal run ([chapter 6](06-theory-observables-lanczos.md),
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
 > - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
-> - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1113`
-> - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1092`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
+> - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1181`
+> - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1160`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
 > - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:561`
 > - Parity: the window is `step >= NSROptItrStep - NSROptItrSmp`; Rust rejects `NSROptItrSmp > NSROptItrStep` up front ("nsteps must be >= nsmp; C leaves oversized-window rows unwritten", `validate_optimization_window`, `run.rs:1306`). The standard-deviation formula is `sqrt(var/(n-1))` of `creal(data*conj(data))` in both. The `--nsteps`/`--nsmp` command-line overrides change `NSROptItrStep`/`NSROptItrSmp` for the window.

@@ -64,7 +64,7 @@ $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\
 > **実装**
 > - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
-> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2828`
+> - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2896`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
 
 ## 3.2 パフィアンペア積部分
@@ -118,9 +118,9 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 > - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
-> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:508`
-> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:630`
-> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:840`
+> - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:555`
+> - Rust: `calc_m_all_fsz_real` — `crates/mvmc-core/src/pfaffian.rs:677`
+> - Rust: `calc_m_all_child_complex` — `crates/mvmc-core/src/pfaffian.rs:891`
 > - Rust: `zsktf2_c_compat` — `crates/pfapack/src/ltl.rs:54`
 > - Rust: `utu2pfa_complex` — `crates/pfapack/src/utu2.rs:57`
 > - Rust: `utu2inv_complex` — `crates/pfapack/src/utu2.rs:339`
@@ -173,7 +173,7 @@ $$
 
 > **実装**
 > - C: `ReadInputParameters` (`AllComplexFlag` を設定) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
-> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:1950`
+> - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:2018`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - 整合性: 実数モードの実行では、C は `SlaterElm_real`/`InvM_real`/`PfM_real` のコピーを保持します。Rust は実数バッファ (`pf_m_real`, `sr_opt_oo_real`, ...) を保持し、共有コードが必要とする箇所では複素数のシャドウも保持します。
 
@@ -242,7 +242,7 @@ $$
 > - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:90`
 > - Rust: `init_qp_weight` — `crates/mvmc-core/src/qp.rs:12`
 > - Rust: `init_qp_weight_inplace` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:86`
-> - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:151`
+> - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:150`
 > - Rust: `gauss_legendre` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:24`
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
@@ -325,9 +325,9 @@ $$
 > - C: `WeightRBM` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:30`
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
-> - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:461`
-> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:554`
-> - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:453`
+> - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:460`
+> - Rust: `log_rbm_val` — `crates/mvmc-core/src/sampling/rbm.rs:553`
+> - Rust: `log_cosh_stable` — `crates/mvmc-core/src/sampling/rbm.rs:454`
 > - 整合性: C は隠れニューロンごとに `clog(ccosh(theta))` と `cexp` を評価します (`rbm.c:30-60`)。Rust は数値的に安定な `log_cosh_stable` を使うため、$|\operatorname{Re}\theta|$ が大きい場合は `clog(ccosh)` と丸め誤差レベルで異なることがあります。メトロポリスの指数は、RBM の項を左結合の順序 `(proj + rbm.re + ip_new.re) - ip_old.re` で加えます (`metropolis.rs:41`、テスト `rbm_acceptance_preserves_julia_left_associative_log_additions`)。RBM ブロックのパーサーは、出力の前に「アーカイブされたスパース」RBM 定義を拒否します (`crates/mvmc-core/src/run.rs:2074`、テスト `public_runner_rejects_archived_sparse_rbm_definitions_before_output`)。
 
 ## 3.7 初期値と同期
