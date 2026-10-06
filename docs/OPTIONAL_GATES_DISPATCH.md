@@ -328,3 +328,11 @@ Like the long ctest gate it sits outside the bounded-family ledger: not selected
 any failing cell or fewer cells than the enforced minimum fails the job, Julia comparisons are
 reported Unverified, and the uploaded artifact carries `provenance.txt`, `cells.txt`,
 `summary.md` and all cell logs.
+
+## CUDA gate (#420)
+
+Input `cuda_gate` dispatches job `cuda-gate` on a self-hosted GPU runner (placeholder labels
+`self-hosted, linux, x64, gpu`). Like `mpi-explicit` it is outside the bounded-family ledger:
+NotRun unless selected, fails closed when no device is present (`MVMC_RS_CUDA_GATE=1`). Hosted
+runners have no GPU. See `docs/design/gpu-readiness.md` section 10 and
+`scripts/run_cuda_gate.sh` for the local container recipe.

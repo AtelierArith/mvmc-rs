@@ -43,3 +43,4 @@ tracing = { workspace = true }
 [features]
 default = []
 mpi = ["mvmc-core/mpi"]
+gpu-cuda = ["mvmc-core/gpu-cuda"]

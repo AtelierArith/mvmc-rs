@@ -1,0 +1,46 @@
+# Standalone, opt-in workspace for the tenferro CUDA backend (issue #420).
+#
+# Kept outside the root workspace on purpose: enabling tenferro-gpu's `cuda` feature adds
+# ~2000 lines (cubecl, cudarc, ...) to the lock file even as an optional dependency, which
+# would change Cargo.lock and the dependency audit surface of every default build. This
+# workspace has its own Cargo.lock and is built only by explicit developer/optional-gate
+# commands (see docs/design/gpu-readiness.md and scripts/run_cuda_gate.sh).
+[workspace]
+
+# Repeat the root's security patches (#192) and add the fifth: tenferro-gpu pulls `lru`
+# (optional, enabled by its `cuda` feature) with the vulnerable `^0.12` requirement.
+[patch.crates-io]
+tenferro-ad = { path = "../../third_party/tenferro-ad" }
+tenferro-cpu = { path = "../../third_party/tenferro-cpu" }
+tenferro-einsum = { path = "../../third_party/tenferro-einsum" }
+tenferro-runtime = { path = "../../third_party/tenferro-runtime" }
+tenferro-gpu = { path = "../../third_party/tenferro-gpu" }
+
+[package]
+name = "mvmc-gpu-cuda"
+version = "0.0.0"
+description = "tenferro CUDA backend provider, device report and optional gate for mvmc-rs"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]
+mvmc-core = { path = "../../crates/mvmc-core", features = ["gpu-cuda"] }
+# Versions must match the root workspace (crates.io 0.7.1; the git revisions used by
+# tenferro-decision-rs have a different with_backend_session signature, tenferro #1971).
+tenferro-gpu = { version = "0.7.1", features = ["cuda"] }
+tenferro-ad = { version = "0.7.1", features = ["cuda"] }
+tenferro-linalg = { version = "0.7.1", features = ["cuda", "autodiff"] }
+tenferro-tensor = { version = "0.7.1", default-features = false }
+tenferro-cpu = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
+num-complex = "0.4"
+libloading = "0.8"
+
+# Linking tenferro can exhaust hosted-runner disk: keep debuginfo off.
+[profile.dev]
+debug = 0
+strip = "symbols"
+
+[profile.test]
+opt-level = 2
+debug = 0

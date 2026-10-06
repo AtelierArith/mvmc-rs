@@ -1,7 +1,8 @@
 # GPU readiness: routing tensor-shaped operations through tenferro-rs
 
 Status: design and inventory (issue #417, related to #185, #360, #361). No production
-code changes. Measurements were taken on `origin/main` at `dfa9515f`.
+code changes in #417. The `gpu-cuda` build path and optional gate landed with issue #420
+(section 10). Measurements were taken on `origin/main` at `dfa9515f`.
 
 The goal is to let the tensor-shaped part of mvmc-rs move to a GPU backend later without
 rewriting the physics code. This document inventories the operations, records what
@@ -552,8 +553,10 @@ cuBLAS/cuSOLVER versions and the tenferro version.
 
 ### 5.7 Build, features and CI
 
-* Cargo feature `gpu-cuda` (mvmc-core, mvmc-cli) forwarding to `tenferro-einsum/cuda`
-  (and `tenferro-gpu/cuda`); off by default; no default-feature or lock-file change when off.
+* Cargo feature `gpu-cuda` (mvmc-core, mvmc-cli) marks that a CUDA provider may be
+  registered; it adds no dependency. The CUDA dependency tree lives in the standalone
+  workspace `gpu/mvmc-gpu-cuda` (decision and measurements in section 10). Off by default; no
+  default-feature or lock-file change.
 * The accelerated implementation is also compilable with the tenferro **CPU** backend
   (feature-independent module), so most of it is tested in normal CI.
 * GPU execution is an optional gate like `.github/workflows/optional-gates.yml` (manual or
@@ -618,6 +621,100 @@ Ordered by expected benefit; phase dependencies in parentheses.
 * Mixing the patched `third_party/` tenferro crates with a registry `tenferro-gpu` needs a
   check that Cargo resolves a single `tenferro-runtime` and that the `lru` advisories stay
   closed (issue #192).
+
+## 10. `gpu-cuda` build and optional gate (issue #420)
+
+Status: implemented and run on hardware (2x RTX 3060, Linux x86_64).
+
+### 10.1 Decision: standalone opt-in workspace, not an optional dependency
+
+An optional `tenferro-gpu` dependency in `mvmc-core` was tried first. Cargo records optional
+dependencies in `Cargo.lock`, and `tenferro-gpu/cuda` adds about 2000 lines (cubecl, cudarc,
+`lru` 0.12 and others), changing the lock file and the audit surface of every default build.
+The acceptance criterion forbids that, so:
+
+* `mvmc-core` gains the always-compiled module `backend` (CPU always available, `BackendKind`,
+  `DeviceReport`, `device_report`, the gate decision `cuda_gate_decision`) and the feature
+  `gpu-cuda = []` (forwarded by `mvmc-cli`) that enables the `CudaProvider` registry. Without
+  the feature (or without a registered provider) `BackendKind::Cuda` is an error: no silent CPU
+  fallback. `cargo check -p mvmc-cli --features gpu-cuda` needs no CUDA toolkit.
+* `gpu/mvmc-gpu-cuda` (own `[workspace]`, own `Cargo.lock`, excluded from the root workspace
+  like `benchmark/pfapack_compare`) holds the `tenferro-gpu` dependency, registers the
+  provider, queries versions and holds the gate. `Cargo.lock` of the root is unchanged.
+  The cost is that `cargo build --features gpu-cuda` at the root does not by itself link CUDA;
+  GPU work is built from `gpu/mvmc-gpu-cuda` (downstream crates such as the batched
+  Pfaffian can depend on it the same way).
+
+### 10.2 `lru` and the patches
+
+`tenferro-gpu` 0.7.1 requires `lru ^0.12` (optional, enabled by its `cuda` feature), the same
+vulnerable range as the four crates patched for #192. The issue is real: without a patch the
+GPU lock would contain `lru` 0.12.5. `third_party/tenferro-gpu` is a fifth snapshot with only
+the `lru` requirement raised to `0.18.5` (see `third_party/README.md`), and the standalone
+workspace repeats all five patches. Verified in `gpu/mvmc-gpu-cuda/Cargo.lock`: one `lru`
+(0.18.5) and one `tenferro-runtime` (0.7.1), and it compiles unmodified against lru 0.18.
+Remove the snapshot with the other four when upstream tenferro publishes an advisory-safe
+release (upstream tenferro #1958).
+
+Version trap from the `tenferro-decision-rs` survey: crates.io 0.7.1 and the source revision
+pinned there differ in the `with_backend_session` signature (tenferro #1971). This repository
+and the GPU workspace both use crates.io 0.7.1, so `tenferro-gpu` is pinned consistently.
+
+### 10.3 Gate and report
+
+* `scripts/run_cuda_gate.sh [native|docker]` runs the ignored test
+  `gpu/mvmc-gpu-cuda/tests/cuda_gate.rs` with `MVMC_RS_CUDA_GATE=1`. `docker` uses an NVIDIA
+  CUDA toolkit image with `--gpus all` (default `tenferro-benchmark-cuda:full-verify-20260822`,
+  CUDA 12.9.2; override with `MVMC_RS_CUDA_IMAGE`) and the host rustup/cargo.
+* `MVMC_RS_CUDA_GATE=1` and no device: hard failure. Unset and no device:
+  `cuda-gate: ExplicitSkip: skipped, no device (...)`, not a pass. Both were exercised in a
+  container without `--gpus`.
+* The report records device, compute capability, memory, driver (NVML), CUDA driver API,
+  NVRTC, cuBLAS, cuSOLVER and tenferro versions (`DeviceReport`; unavailable entries print
+  `unavailable`). tenferro does not expose these, so versions are read by `dlopen`; no toolkit
+  is needed at build time.
+* CI: `optional-gates.yml` input `cuda_gate` dispatches job `cuda-gate` on a self-hosted
+  runner (`[self-hosted, linux, x64, gpu]`, placeholder labels). It is outside the bounded
+  ledger like `mpi-explicit`: NotRun when not selected, fails closed without a device. Hosted
+  runners have no GPU, so the default and `plan`/`bounded` paths are unaffected.
+* Linking tenferro can exhaust hosted-runner disk (tenferro-decision-rs): the GPU workspace
+  sets `debug = 0`.
+* Behaviour follows the survey: unsupported op or dtype is a backend error, never a CPU
+  fallback; stages are timed separately with `synchronize` inside the timed compute region.
+
+### 10.4 Measured
+
+RTX 3060, driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, cuBLAS 12.9.2, cuSOLVER
+11.7.5, tenferro 0.7.1, Linux x86_64, 36 host threads.
+
+Median of 7 runs after one warm-up, milliseconds, through tenferro `EagerRuntime` on both
+backends (the CPU column is tenferro's faer CPU backend, not the BLAS/LAPACK path of
+`mvmc-core`). Upload/download are pageable-host transfers. FP64 on this consumer GPU runs at
+about 1/64 of FP32. Tolerances are relative max-norm vs tenferro CPU: dot 1e-11, Cholesky
+(lower triangle, diagonally dominant input) 1e-10; the largest observed errors were 5.2e-15
+and 8.9e-16, so the margins are large and set from the scale `n * eps`, not tuned. Single-run
+shared-host numbers; CPU times in particular are noisy.
+
+| op | dtype | n | CPU compute | CUDA upload | CUDA compute | CUDA download | CPU/CUDA compute |
+|---|---|---|---|---|---|---|---|
+| dot | f64 | 256 | 9.5 | 0.83 | 0.37 | 0.25 | 25x |
+| dot | c64 | 256 | 7.6 | 1.46 | 0.83 | 0.41 | 9.1x |
+| cholesky | f64 | 256 | 65.6 | 0.55 | 1.57 | 0.30 | 42x |
+| cholesky | c64 | 256 | 30.5 | 0.72 | 1.48 | 0.34 | 21x |
+| dot | f64 | 1024 | 20.3 | 31.7 | 13.7 | 6.8 | 1.5x |
+| dot | c64 | 1024 | 45.9 | 59.9 | 38.1 | 13.5 | 1.2x |
+| cholesky | f64 | 1024 | 315.5 | 6.2 | 5.5 | 2.1 | 57x |
+| cholesky | c64 | 1024 | 168.2 | 37.4 | 16.0 | 7.5 | 10x |
+| dot | f64 | 2048 | 93.6 | 156.2 | 96.5 | 25.2 | 0.97x |
+| dot | c64 | 2048 | 223.7 | 348.4 | 300.6 | 44.9 | 0.74x |
+| cholesky | f64 | 2048 | 347.1 | 77.8 | 26.2 | 24.3 | 13x |
+| cholesky | c64 | 2048 | 417.3 | 157.7 | 79.6 | 45.8 | 5.2x |
+
+Reading: the FP64 GEMM at n >= 1024 is at parity with the 36-thread CPU (FP64 throughput of
+the card), Cholesky is faster at n >= 256, and for these sizes upload costs as much as
+compute, so device residency across stages (section 5) is required for any benefit. At
+n = 64 the CPU wins (Cholesky 0.27 ms vs 0.60 ms on the device). The CPU path remains the
+reference; this is a feasibility measurement, not a speed-up claim for mvmc.
 
 ## 9. Japanese summary / 日本語要約
 
