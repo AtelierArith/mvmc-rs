@@ -240,7 +240,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
 | `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
 | `MVMC_RS_MEASURE_BATCH` | `measurement_batch::resolve_batch_size` | 測定バッチあたりのサンプル数(B サンプル分のテーブルを作ってから、サンプルごとの処理を順番に実行)。デフォルトは 4。出力バイトは値に依存しません。 |
-| `MVMC_RS_SR_BACKEND` | `sr_backend::selected_sr_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)または `tenferro`(オプトイン: Gram 積、S/g 構築、Cholesky 求解、CG 積を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行。明示的な許容誤差で検証され、バイト一致ではありません)。不正な値はエラーで、フォールバックしません。 |
+| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` は `gpu-cuda` ビルドと登録済みプロバイダが必要で、無ければエラーです。不正な値はエラーで、フォールバックしません。 |
 | `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
 | `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000 |
 | `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。デフォルトはワーカー数 `w` に対して `120*w/(w-1)`(4 で 160、2 で 240) |

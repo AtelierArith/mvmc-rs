@@ -34,6 +34,13 @@ impl CudaProvider for Provider {
         }
     }
 
+    fn open_stage_backend(
+        &self,
+        ordinal: usize,
+    ) -> Result<mvmc_core::stage_backend::StageBackend<'static>, String> {
+        stages::cuda_stage_backend(ordinal)
+    }
+
     fn report(&self, ordinal: usize) -> Result<DeviceReport, String> {
         let devices = cuda_devices().map_err(|e| e.to_string())?;
         let device = devices

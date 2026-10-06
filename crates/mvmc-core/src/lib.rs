@@ -53,6 +53,7 @@ pub mod sr;
 pub mod sr_accumulator;
 pub mod sr_backend;
 pub mod sr_cg;
+pub mod stage_backend;
 pub mod state;
 pub mod sync;
 pub mod threading;

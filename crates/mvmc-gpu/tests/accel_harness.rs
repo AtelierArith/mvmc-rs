@@ -1,12 +1,13 @@
 //! The batched Pfaffian backends under the #424 validation harness: teacher-forced replay
 //! against the C-order oracle with the decision-flip detector, plus the inverse-sign mapping.
 
-use mvmc_core::accel_validation::{replay, AcceleratedStages, CpuOracle, ReplayConfig};
+use mvmc_core::accel_validation::{replay, ReplayConfig};
+use mvmc_core::stage_backend::{COrderPfaffian, PfaffianStages};
 use mvmc_gpu::stages::BatchedStages;
 use mvmc_gpu::Backend;
 
 fn run(backend: Backend<'_>, label: &str) {
-    let mut stages = BatchedStages::new(backend, label);
+    let mut stages = BatchedStages::new(backend, label).into_stage_backend();
     let rep = replay(&mut stages, &ReplayConfig::default()).expect("replay");
     assert!(
         rep.violations()
@@ -56,7 +57,7 @@ fn inv_convention_matches_the_oracle() {
     let n = 6;
     let planes = mvmc_gpu::testkit::random_planes::<f64>(n, 1, 3);
     let got = mvmc_gpu::pfaffian_inverse_batched(&Backend::CpuPfapack, &planes, n, 1, 1).unwrap();
-    let want = CpuOracle.pfaffian_inverse(&planes, n).unwrap();
+    let want = COrderPfaffian.pfaffian_inverse(&planes, n).unwrap();
     assert_eq!(got.pf[0], want.pf);
     assert_eq!(got.inv, want.inv);
     for i in 0..n {

@@ -9,7 +9,7 @@
 use std::time::Instant;
 
 use mvmc_core::sr_backend::{
-    COrderSr, CgSamples, Placement, RealView, SrAssembleInput, SrBackend, TenferroSr,
+    COrderSr, CgSamples, Placement, RealView, SrAssembleInput, SrStages, TenferroSr,
 };
 
 use crate::bench::{cpu_runtime, cuda_runtime};
@@ -99,7 +99,7 @@ struct StageOutputs {
 }
 
 fn stages(
-    backend: &mut dyn SrBackend,
+    backend: &mut dyn SrStages,
     store: &[f64],
     n: usize,
     samples: usize,
@@ -107,7 +107,7 @@ fn stages(
     spd_s: Option<&[f64]>,
 ) -> Result<StageOutputs, String> {
     let mut gram = vec![0.0; n * n];
-    let e = |e: mvmc_core::sr_backend::SrBackendError| e.to_string();
+    let e = |e: mvmc_core::stage_backend::StageError| e.to_string();
     let gram_ms = {
         let mut err = None;
         let ms = time(reps, || {

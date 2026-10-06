@@ -733,7 +733,7 @@ reference; this is a feasibility measurement, not a speed-up claim for mvmc.
 `mvmc_core::accel_validation` implements the validation policy of section 5.6: teacher-forced
 replay against the C-order oracle (pf, invM, weights, O store, S, g), per-proposal
 weight/draw/margin recording with a decision-flip defect rule, 20-step repeatability and the
-benchmark metadata block. It is backend-agnostic through the trait `AcceleratedStages` (a stage
+benchmark metadata block. It drives the unified `StageBackend` object of section 14 (a stage
 that is not implemented reports `Unsupported`, never a CPU fallback). The CPU tenferro variant
 runs in normal CI; the CUDA variant is the second ignored test of the CUDA gate (CUDA RTX 3060
 run: S and g match the oracle, 0 flips, 0 defects, Pfaffian stage unsupported). The batched
@@ -1261,8 +1261,8 @@ Gaps found while writing both (candidates for upstream requests, none filed here
 
 ### 11.6 Validation harness (#424) and the invM convention
 
-`mvmc_gpu::stages::BatchedStages` implements `AcceleratedStages::pfaffian_inverse` on every
-batched backend (a batch of one plane per call; the SR stage stays `Unsupported`). CPU variants
+`mvmc_gpu::stages::BatchedStages` implements `PfaffianStages` on every
+batched backend (section 14; `into_stage_backend()` composes it with the C-order SR stages). CPU variants
 (`CpuPfapack`, rayon, `ExtensionOp`, tensor-native) run the teacher-forced replay with the flip
 detector in normal CI (`crates/mvmc-gpu/tests/accel_harness.rs`: 0 flips, 0 defects, Pfaffian
 bit-identical for pfapack/`ExtensionOp`, inverse max abs 5.7e-14 for tensor-native, minimum
@@ -1271,7 +1271,7 @@ decision margin 5.1e-3); the CUDA kernel runs the same replay in the gate
 
 Sign convention: the harness oracle returns the true inverse `X^-1` (`X * inv = I`), and so does
 `pfaffian_inverse_batched` (`utu2inv` output, no flip), so the mapping to the harness is the
-identity (`inv_convention_matches_the_oracle` checks it bitwise against `CpuOracle`). mVMC's
+identity (`inv_convention_matches_the_oracle` checks it bitwise against `COrderPfaffian`). mVMC's
 `invM` is the negative: `calc_m_all_real` / C `CalculateMAll` end with
 `M_DSCAL(&nsq, &minus_one, invM, &one)`, hence `invM = -inv` while `pf` is unchanged.
 A production integration must apply that flip when storing into the sampler tables.
@@ -1292,7 +1292,7 @@ parity oracle. This also starts the stage-level backend trait of section 5.2.
 
 ### 12.1 What exists
 
-* `crates/mvmc-core/src/sr_backend.rs`: trait `SrBackend` with the stages `gram_real`,
+* `crates/mvmc-core/src/sr_backend.rs`: trait `SrStages` (formerly `SrBackend`, section 14) with the stages `gram_real`,
   `gram_complex`, `assemble_s_g`, `cholesky_solve`, `cg_local_product`. `COrderSr` is the former
   inline code moved behind the trait without changing an operation (default outputs are
   byte-identical, checked by the full fixture suite). `TenferroSr` uses tenferro eager ops:
@@ -1685,6 +1685,65 @@ scripts/run_device_sampler_bench.sh docker                                      
 MVMC_RS_SAMPLER_CORES=0-3 MVMC_RS_SAMPLER_BENCH_OUT=$PWD/benchmark/gpu_device_sampler/results/device_sampler_cores4.csv \
   scripts/run_device_sampler_bench.sh docker                                           # 4 host cores
 ```
+
+## 14. Unified stage backend (issue #437)
+
+Status: implemented. The two overlapping traits of #421 (`SrBackend`) and #424
+(`AcceleratedStages`) are replaced by one layering, so the validation harness drives the same
+objects that production selects ("validated means deployed").
+
+### 14.1 Layering
+
+* Stage traits, each with host-slice inputs and outputs and `StageError::Unsupported` for a
+  stage a backend cannot run (never a CPU fallback):
+  * `mvmc_core::sr_backend::SrStages`: Gram, S/g assembly, Cholesky solve, CG product and the
+    composite `sr_s_g` stage of the harness;
+  * `mvmc_core::stage_backend::PfaffianStages`: batched Pfaffian and inverse
+    (`pfaffian_inverse_batch` over `planes` planes with a per-plane `PlaneOutcome`, plus a
+    single-plane convenience).
+* `mvmc_core::stage_backend::StageBackend<'a>`: the single backend object composing one
+  implementation per stage trait (`sr()`, `pfaffian()`, `label()`, `provider()`). Mixed
+  backends are expressed by composition (`with_pfaffian`), for example tenferro SR plus the
+  CUDA Pfaffian kernel.
+* Selection, `StageBackendKind`: C-order CPU (default, parity oracle: `COrderSr` +
+  `COrderPfaffian`), tenferro CPU (`TenferroSr` + unsupported Pfaffian) and CUDA
+  (`gpu/mvmc-gpu-cuda`: `TenferroSr` on the device + the batched CUDA kernel). Production reads
+  `MVMC_RS_SR_BACKEND=c-order|tenferro|cuda[:N]`; `acquire()` returns a handle to a
+  process-wide shared instance (non-C-order kinds are built once). CUDA registers through
+  `CudaProvider::open_stage_backend`; without the `gpu-cuda` feature or a provider it is an
+  error.
+* Harness: `accel_validation::{replay, repeatability, bench_stages}` take a `StageBackend`; the
+  oracle is `StageBackend::c_order()`. The CUDA gate opens its backend through
+  `open_stage_backend(StageBackendKind::Cuda(0))`, the same call production uses.
+
+The CUDA Pfaffian slot uses `PersistentCudaEngine` (`gpu/mvmc-gpu-cuda/src/pfaffian.rs`): a worker
+thread keeps one CUDA session and the NVRTC-compiled module alive (`raw::Module` is `!Send`),
+because the harness and production issue many small calls and the per-call `CudaEngine` pays
+context creation plus NVRTC each time (the first unified gate run took 1209 s instead of 35 s
+before this fix).
+
+### 14.2 Where things went
+
+| before | after |
+| --- | --- |
+| `SrBackend` (#421) | `SrStages` (+ `provider`, `stats`, `sr_s_g`) |
+| `SrBackendKind`, `acquire`, `set_sr_backend_override` | `StageBackendKind`, `stage_backend::acquire`, `set_stage_backend_override` |
+| `AcceleratedStages::{pfaffian_inverse, sr_s_g}` | `PfaffianStages::pfaffian_inverse[_batch]`, `SrStages::sr_s_g` |
+| `CpuOracle` | `COrderPfaffian` + `COrderSr` (`StageBackend::c_order()`) |
+| `TenferroCpuStages`, `gpu::stages::EagerStages` | `TenferroSr` (host or device placement) |
+| `BatchedStages` (`impl AcceleratedStages`) | `BatchedStages` (`impl PfaffianStages`, `into_stage_backend`) |
+
+### 14.3 Adding a stage (batched local energy #426, device-resident sampler #434)
+
+Define a stage trait next to its data types (`Unsupported` default), add one slot and one
+accessor to `StageBackend`, implement it for the C-order object first (the oracle), and extend
+the harness replay to compare it. The sampler (#434) should consume `StageBackend` through
+`PfaffianStages::pfaffian_inverse_batch` and a new sampler-stage trait rather than any private
+trait; the production SR path is the model (`stage_backend::acquire`).
+
+Not done here: the measurement and sampler Pfaffian still call `calc_m_all_*` directly (the
+`PfaffianStages` slot is exercised by the harness and gates); wiring it into production is the
+#422/#434 work. SR stages are routed in production since #421.
 
 ## 9. Japanese summary / 日本語要約
 

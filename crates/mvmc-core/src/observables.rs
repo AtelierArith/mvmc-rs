@@ -383,9 +383,9 @@ pub fn finalize_oo_store_real(
         &sr_opt_o_store[options.sample_start * n..(options.sample_start + sample_size) * n];
     // The Gram product runs through the selected SR backend (issue #421): the default C-order
     // backend is the former inline SYRK / muladd code, unchanged.
-    let mut backend = crate::sr_backend::acquire();
+    let mut backend = crate::stage_backend::acquire();
     backend
-        .get()
+        .sr()
         .gram_real(active, n, sample_size, &mut sr_opt_oo[..n * n])
         .expect("SR Gram backend failed");
 }
@@ -454,9 +454,9 @@ pub fn finalize_oo_store(
 
     // Sample order of the Gram sum: see the module docs of `sr_backend` (the default C-order
     // backend pins the sequential per-entry sum; the tenferro backend is opt-in).
-    let mut backend = crate::sr_backend::acquire();
+    let mut backend = crate::stage_backend::acquire();
     let gram = backend
-        .get()
+        .sr()
         .gram_complex(
             &sr_opt_o_store
                 [options.sample_start * size_2..(options.sample_start + sample_size) * size_2],

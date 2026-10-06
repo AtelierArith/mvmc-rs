@@ -336,8 +336,8 @@ impl SampledSrOperator {
         assert_eq!(gradient.len(), n);
         // One backend handle and one operand version per solve (issue #421): the sampled
         // matrices are constant during the solve, so a device backend uploads them once.
-        let mut backend = crate::sr_backend::acquire();
-        let version = crate::sr_backend::next_operand_version();
+        let mut backend = crate::stage_backend::acquire();
+        let version = crate::stage_backend::next_operand_version();
         // stcopt_cg_impl.c:265 evaluates these four factors left to right.
         let threshold = tolerance * tolerance * n as f64 * n as f64;
         let mut solution = vec![0.0; n];
@@ -363,7 +363,7 @@ impl SampledSrOperator {
                 break;
             }
             self.apply_with_backend(
-                backend.get(),
+                backend.sr(),
                 version,
                 &mut product,
                 &mut direction,
@@ -379,7 +379,7 @@ impl SampledSrOperator {
             });
             if iteration % 20 == 0 {
                 self.apply_with_backend(
-                    backend.get(),
+                    backend.sr(),
                     version,
                     &mut residual,
                     &mut solution,
@@ -463,16 +463,16 @@ impl SampledSrOperator {
         shift: f64,
         reducer: &R,
     ) -> Result<(), String> {
-        let mut backend = crate::sr_backend::acquire();
-        let version = crate::sr_backend::next_operand_version();
-        self.apply_with_backend(backend.get(), version, z, x, inv_weight, shift, reducer)
+        let mut backend = crate::stage_backend::acquire();
+        let version = crate::stage_backend::next_operand_version();
+        self.apply_with_backend(backend.sr(), version, z, x, inv_weight, shift, reducer)
     }
 
     /// [`Self::apply_with_reducer`] with an explicit SR backend and operand version.
     #[allow(clippy::too_many_arguments)]
     fn apply_with_backend<R: Reducer + ?Sized>(
         &mut self,
-        backend: &mut dyn crate::sr_backend::SrBackend,
+        backend: &mut dyn crate::sr_backend::SrStages,
         version: u64,
         z: &mut [f64],
         x: &mut [f64],

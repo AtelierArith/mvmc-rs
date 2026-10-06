@@ -93,7 +93,7 @@ are synchronized ([3.7](03-theory-wavefunction.md#37-initial-values-and-synchron
 > - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
 > - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:172`
-> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:336`
+> - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:328`
 > - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:357`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
 > - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:856`

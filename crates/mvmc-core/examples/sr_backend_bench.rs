@@ -9,9 +9,7 @@
 
 use std::time::Instant;
 
-use mvmc_core::sr_backend::{
-    COrderSr, CgSamples, RealView, SrAssembleInput, SrBackend, TenferroSr,
-};
+use mvmc_core::sr_backend::{COrderSr, CgSamples, RealView, SrAssembleInput, SrStages, TenferroSr};
 
 fn lcg(state: &mut u64) -> f64 {
     *state = state
