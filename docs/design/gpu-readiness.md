@@ -1317,6 +1317,327 @@ CUDA gain appears for the large-sample Gram and the cached CG matvec; solve is a
 `NPara` 3000, and S/g assembly is transfer-bound (4 uploads of `n^2` doubles), which is why the
 next step is device residency of `OO`/`S` across stages rather than faster single stages.
 
+## 13. Device-resident lock-step multi-walker sampler (issue #434)
+
+Status: implemented for the real (`f64`) normal-mode sampler with hopping and exchange updates
+(Hubbard chain and Heisenberg chain), validated on the RTX 3060 and benchmarked end to end.
+Complex and FSZ modes, the measurement stage and MPI QP splitting are not covered. Related to
+#417, #422, #423, #425, #432.
+
+### 13.1 Design
+
+The sampler loop `vmc_make_sample_real` is not rewritten. Its five Pfaffian operations sit behind
+the trait `RealPfStage` (`crates/mvmc-core/src/sampling/stage.rs`): the ratios of a proposed
+one- or two-electron move, the rank-one and rank-two inverse updates of an accepted move, and the
+periodic recomputation (`CalculateMAll`). `CpuStage` runs the existing flat kernels in place (the
+production path, same arithmetic, monomorphized, no dispatch cost). Everything else stays in the
+unchanged host code, in this order: update-type draw, candidate generation, projection counters,
+`log_proj_ratio`, the Metropolis weight and its SFMT draw, configuration bookkeeping. Draw order
+and count are therefore the serial sampler's by construction.
+
+`crates/mvmc-core/src/device_sampler.rs` runs `W` walkers in lock-step: one host thread per
+walker (each owns its `SamplingWalker`: data, state, SFMT stream seeded `RndSeed + w`, the C group
+seed of #425) executes the sampler with a `WalkerStage`, which turns the five operations into
+requests to a `DeviceService` owned by the calling thread:
+
+| sampler step | request | host-device traffic |
+| --- | --- | --- |
+| initial tables | `Begin` (slow lane) | configuration `[n]`, initial Pfaffians `[NQP]`; the Slater table once per distinct wavefunction |
+| proposal ratios | `Hop` / `Exchange` (blocking) | move: slot, site (and a second slot for exchange); back: `NQP` ratios |
+| accepted move | `Accept` (not blocking) | the walker index (the device remembers the pending move) |
+| `CalculateMAll` | `Recompute` (slow lane) | configuration; back: `NQP` Pfaffians |
+
+A **round** fires when every live walker is parked either on a proposal or on a slow-lane
+request (pending or in flight): the fast lane applies the round's accepted moves, runs all
+proposals and returns the ratios. Slow-lane requests (begin, recompute) run asynchronously on up
+to 8 slow lanes so that their latency (a batched Pfaffian/inverse is hundreds of microseconds to
+milliseconds) does not stall the other walkers' proposals. Walkers that reject a candidate on
+the host (`continue` in the sampler) simply reach their next request later. Results never depend
+on which walkers share a round, nor on thread timing: a walker has at most one blocking request
+outstanding, and its accept precedes its next request. Replies are delivered through a wake tree
+(a futex wake of hundreds of walkers from the single service thread costs more than a device
+round), walkers spin for 50 us when they do not outnumber the cores and park otherwise.
+
+The CUDA service (`gpu/mvmc-gpu-cuda/src/device_sampler.rs`, kernels in `sampler_kernels.cu`)
+keeps resident per walker: the inverses `[NQP][n*n]` in **mVMC's convention `invM = -X^-1`**, the
+Pfaffians, the accepted configuration and the pending move; the Slater table is resident once per
+distinct wavefunction (walkers share it when their parameters are bit-equal). What crosses the
+link per round is the request ints (one pinned upload) and the `NQP`-vectors of the proposals
+(one pinned download); Slater planes are assembled on the device from the configuration.
+
+* `k_propose`: one block per (proposal, QP). The rank-one ratio `-pf * sum_j invM[msa,j] S[rsa,rs_j]`
+  and the exchange ratio (`two_ratio_real::<false>`, including the Julia `@turbo` reduction tree with
+  explicit `fma`) are the CPU formulas. The products of each serial sum are formed in parallel and
+  summed in index order by one thread, so the rounding equals the CPU's.
+* `k_accept`: rank-one (`update_one_real`) and rank-two (`update_two_real`) inverse updates in the
+  CPU operation order, one block per (accepted walker, QP), then `k_commit_moves`.
+* `k_assemble` + `pfinv_f64` (the #423 kernel) + `k_commit_recompute`: the planes of
+  `assemble_inv_m_real` (`-S[rs_i][rs_j]`), the batched Pfaffian/inverse, and the commit with the
+  sign flip of `calc_m_all_real` (`invM = -inv`). On a failed plane the resident tables are left
+  unchanged and the host sees the failure like `calc_m_all_real(..).is_err()`.
+* NVRTC runs with `--fmad=false` (explicit `fma()` reproduces Rust's `mul_add`).
+
+**Sign convention.** `pfaffian_inverse_batched` (#423) returns the true inverse `X^-1`, the
+convention of the #424 harness oracle. mVMC's `invM` is its negative (`M_DSCAL(-1)` at the end of
+`CalculateMAll`/`calc_m_all_real`). The device stores `invM` so that the ratio and update kernels
+are the CPU formulas verbatim; the flip is applied in `k_commit_recompute`.
+
+**Transfers.** The host-device copies sit behind `TransferPath` (`PinnedTransfer`: the pool and
+asynchronous copies of #432; `PageableTransfer`: the cudarc baseline). Compute and copies go
+through cudarc on the service's own streams, bypassing tenferro's `upload`/`download` as the
+#432 measurements recommend; the resident buffers are therefore owned by one allocator. The gate
+test `pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses` validates the `*_raw`
+helpers of #432 against device addresses owned by a tenferro raw session (a `DeviceBytes`
+workspace uploaded and downloaded through `upload_raw`/`download_raw` while tenferro launches
+the kernel). Use of `AcceleratedStages` is confined to the one adapter `mvmc_gpu::stages::
+BatchedStages` of #430 (the sampler needs the finer `RealPfStage` operations, which the
+single-matrix `pfaffian_inverse` stage cannot express), so the unification of #437 touches one
+place.
+
+**Wavefunction sharing.** The benchmark and the gate build all walkers on the wavefunction
+(parameters) of walker 0 with independent chains, the physically relevant multi-walker case.
+Walkers with different parameters (the `init_parameter` random initialization of the no-file path
+differs per seed) get one resident Slater table each; the service supports both.
+
+After a device run the host's `inv_m_real` table and, after exchange moves, `pf_m_real` are
+stale (the device holds the truth). The next `vmc_make_sample_real` call recomputes both from the
+configuration, and the measurement stage recomputes per sample, so nothing reads them; a caller
+that needs the host tables must download them (`download_walker` in the test API).
+
+### 13.2 Validation
+
+Normal CI (`crates/mvmc-core/tests/device_sampler.rs`, no GPU): the `HostService` (the same flat
+CPU kernels behind the same request protocol, per-walker resident tables) driven through the
+lock-step runner equals the plain CPU sampler for `W = 1` and `W = 3`, Hubbard hopping (L = 16) and
+Heisenberg exchange: sampler statistics, every recorded Metropolis `(weight, draw)` pair, the
+final SFMT state (all 624 words and the position), the consumed word count, the working and saved
+configurations, bit for bit. A teacher-forced run reports 0 flips, 0 draw mismatches and a
+maximum weight difference of exactly 0; a negative test forces one reference decision to
+disagree and the detector reports the flip and classifies it as a defect.
+
+GPU gate (`gpu/mvmc-gpu-cuda/tests/sampler_gate.rs`, `MVMC_RS_CUDA_GATE=1
+scripts/run_cuda_gate.sh docker`, RTX 3060): per case the CPU sampler runs once and records its
+decisions; then (a) a teacher-forced run on the device with both transfer paths follows the CPU
+decisions and reports flips, defects (a flip whose margin `|w_cpu - u|` exceeds the weight
+difference or the `1e-12 + 1e-10 w` bound), draw mismatches, the weight difference and the
+smallest margin; the walker's final RNG state and configuration must equal the CPU's (they do:
+the draws are host draws); (b) a free run decides on the device weights and must reproduce the
+CPU decision sequence, final configuration and RNG state; (c) the resident inverses and Pfaffians
+after the run are compared with the CPU tables.
+
+| case | decisions | flips | defects | max rel. weight diff | min margin | resident invM rel. diff | resident pf rel. diff |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hubbard L=16, W=4, hopping | 1920 | 0 | 0 | 5.9e-12 | 1.9e-4 | 2.7e-14 | 5.7e-14 |
+| Hubbard L=32, W=3, hopping | 2880 | 0 | 0 | 5.9e-9 | 3.4e-4 | 1.5e-13 | 1.2e-13 |
+| Heisenberg N=6, W=4, exchange | 1200 | 0 | 0 | 3.6e-13 | 6.0e-4 | 7.4e-17 | 0 |
+
+The ratio and update kernels are bit-compatible with the CPU formulas; the weight differences
+come from the recomputation: the device inverse of `pfinv_f64` rounds differently from the
+production PfaPack path (BLAS `trmm`, panel product), and the difference is carried through the
+chain of rank-one updates between recomputations (`2.7e-14` to `1.5e-13` in the final inverse; the
+L=32 weight difference of `5.9e-9` is a relative difference of one tail weight, absolute `9e-10`).
+It is three to five orders of magnitude below the smallest decision margins (`1.9e-4` here, `1.5e-7`
+on the Heisenberg-chain PhysCal fixture of #425), so a flip needs a decision within `1e-9` of its
+draw; the detector reports none and would report any as a defect. The `*_raw` interoperability
+test passes.
+
+### 13.3 Benchmark
+
+Environment: Intel Xeon E5-2699 v3 (36 hardware threads) shared with other jobs (load average
+11 to 36 at the start and end of the runs, see the CSV headers; the numbers below carry that noise,
+two complete campaigns agreed within about +-30 %, the L=64 `W=512` row of the 4-core table flipped
+between 0.95x and 2.1x), 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, device 0), driver 580.178.04,
+CUDA driver API 13.0, container CUDA toolkit 12.9.2 (NVRTC 12.9), rustc 1.98.0, tenferro 0.7.1,
+Linux x86_64. Docker image `tenferro-benchmark-cuda:full-verify-20260822`.
+
+What is timed: one *call* is `vmc_make_sample_real` of every walker, the C `VMCMakeSample` of one
+sample series: `(NVMCWarmUp + NVMCSample) * Nsite` hop attempts per walker (about 3000 per walker
+and call; `NVMCSample` is chosen per size), the initial table construction (the CPU builds
+its tables for the initial configuration in both variants; the device additionally builds its
+resident tables from the configuration: a device `Begin` batch), and the periodic
+recomputations. Hubbard chain, half filling, `Lsub = 4`, `U = 4`, `NSPGaussLeg = 8` (`NQP = 8`),
+real normal mode, hopping updates, inputs `benchmark/hubbard_chain/inputs/hubbard_chain_L{16,32,64,128}`
+(`L128` is new, generated with the Rust StdFace port like `L64`). All `W` walkers share one
+wavefunction and have independent SFMT streams (`RndSeed + w`). Each method builds its own walkers,
+runs one untimed warm-up call (burn-in), then three timed calls (median). Measurement
+(`VMCMainCal`) is not part of the call. Thread creation per call (one thread per walker) and, for the
+device, service construction excluded, Slater-table upload included.
+
+* **CPU 1 thread**: the walkers one after the other on one thread (only for `W <= 64`).
+* **CPU multichain**: one thread per walker with up to all host cores, the #425 execution model
+  (independent walkers, single-threaded inside; BLAS pinned to one thread).
+* **CUDA device-resident**: this design, pinned asynchronous transfers (#432), one host thread per
+  walker, the Pfaffian stages on the GPU.
+
+The 4-core tables run the same program in a container restricted to cores 0-3 (`docker
+--cpuset-cpus=0-3`): a GPU attached to a small host, the CPU baselines and all walker threads of the
+device run share exactly those cores. Columns "CUDA / CPU" are wall-time ratios (above 1 the device
+is slower). The CSVs are `benchmark/gpu_device_sampler/results/device_sampler_cores{all,4}.csv`
+(plus `_pageable.csv`); the metadata block (device report, host cores, load average) is in the
+CSV/log header and in `results/device_sampler.md`.
+
+
+**Wall time of one sampling call, 36 host cores (all of them; shared host)**
+
+| L | W | CPU 1 thread | CPU multichain | CUDA device-resident | hops/s CPU multichain | hops/s CUDA | CUDA / CPU-multichain time | CUDA / CPU-1-thread time |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 1 | 0.010 s | 0.010 s | 0.090 s | 298k | 33k | 8.96x | 9.24x |
+| 16 | 8 | 0.065 s | 0.014 s | 0.142 s | 1.69M | 169k | 10.04x | 2.17x |
+| 16 | 64 | 0.503 s | 0.082 s | 0.932 s | 2.34M | 206k | 11.40x | 1.85x |
+| 16 | 512 | - | 0.644 s | 1.983 s | 2.38M | 773k | 3.08x | - |
+| 32 | 1 | 0.020 s | 0.020 s | 0.106 s | 151k | 28k | 5.40x | 5.24x |
+| 32 | 8 | 0.148 s | 0.024 s | 0.182 s | 1.01M | 131k | 7.72x | 1.23x |
+| 32 | 64 | 1.079 s | 0.077 s | 0.852 s | 2.46M | 224k | 11.00x | 0.79x |
+| 32 | 512 | - | 0.577 s | 2.142 s | 2.64M | 711k | 3.71x | - |
+| 64 | 1 | 0.050 s | 0.052 s | 0.119 s | 56k | 25k | 2.28x | 2.36x |
+| 64 | 8 | 0.438 s | 0.058 s | 0.206 s | 404k | 114k | 3.54x | 0.47x |
+| 64 | 64 | 4.564 s | 0.249 s | 0.914 s | 757k | 206k | 3.67x | 0.20x |
+| 64 | 512 | - | 1.725 s | 4.070 s | 874k | 370k | 2.36x | - |
+| 128 | 1 | 0.127 s | 0.117 s | 0.135 s | 25k | 22k | 1.15x | 1.07x |
+| 128 | 8 | 1.006 s | 0.160 s | 0.301 s | 147k | 78k | 1.88x | 0.30x |
+| 128 | 64 | 8.092 s | 0.756 s | 2.750 s | 249k | 69k | 3.64x | 0.34x |
+| 128 | 512 | - | 4.941 s | 10.119 s | 305k | 149k | 2.05x | - |
+
+**Anatomy of the device run, 36 host cores (all of them; shared host)**
+
+| L | W | wall | passes | ms/pass | service thread: wait for walkers / round / reply | in round: stage / upload / launch / device wait | slow batches |
+|---|---:|---:|---:|---:|---|---|---:|
+| 16 | 1 | 0.090 s | 2911 | 0.031 | 14.6 / 66.0 / 0.9 ms | 0.9 / 15.2 / 27.9 / 20.7 ms | 63 |
+| 16 | 8 | 0.142 s | 3031 | 0.047 | 11.6 / 109.7 / 12.0 ms | 2.8 / 20.4 / 49.5 / 35.1 ms | 479 |
+| 16 | 64 | 0.932 s | 2917 | 0.319 | 371.5 / 391.3 / 101.7 ms | 24.0 / 91.1 / 157.4 / 108.3 ms | 2210 |
+| 16 | 512 | 1.983 s | 2921 | 0.679 | 866.4 / 487.5 / 289.1 ms | 59.6 / 91.1 / 130.2 / 188.9 ms | 2892 |
+| 32 | 1 | 0.106 s | 2720 | 0.039 | 17.9 / 76.4 / 1.1 ms | 0.9 / 15.4 / 28.2 / 30.8 ms | 32 |
+| 32 | 8 | 0.182 s | 2860 | 0.064 | 19.5 / 134.2 / 21.3 ms | 2.7 / 19.9 / 45.7 / 64.1 ms | 225 |
+| 32 | 64 | 0.852 s | 2749 | 0.310 | 215.8 / 355.3 / 77.7 ms | 17.5 / 60.2 / 106.8 / 163.9 ms | 1343 |
+| 32 | 512 | 2.142 s | 2723 | 0.787 | 640.9 / 780.9 / 235.1 ms | 50.1 / 80.9 / 118.8 / 514.7 ms | 2654 |
+| 64 | 1 | 0.119 s | 2382 | 0.050 | 21.3 / 84.5 / 2.6 ms | 0.9 / 15.1 / 27.8 / 39.4 ms | 14 |
+| 64 | 8 | 0.206 s | 2538 | 0.081 | 25.2 / 145.0 / 27.1 ms | 2.5 / 17.2 / 38.8 / 84.9 ms | 100 |
+| 64 | 64 | 0.914 s | 2426 | 0.377 | 183.1 / 507.7 / 68.9 ms | 14.4 / 48.3 / 85.0 / 354.4 ms | 677 |
+| 64 | 512 | 4.070 s | 2400 | 1.696 | 766.6 / 2313.8 / 264.1 ms | 50.1 / 73.7 / 114.2 / 2061.2 ms | 2074 |
+| 128 | 1 | 0.135 s | 1797 | 0.075 | 26.2 / 82.4 / 1.8 ms | 0.7 / 10.8 / 19.1 / 51.0 ms | 5 |
+| 128 | 8 | 0.301 s | 2015 | 0.150 | 42.9 / 207.2 / 23.9 ms | 2.0 / 14.6 / 32.8 / 156.5 ms | 36 |
+| 128 | 64 | 2.750 s | 1824 | 1.508 | 1212.5 / 1025.9 / 114.0 ms | 17.6 / 69.8 / 110.7 / 820.6 ms | 262 |
+| 128 | 512 | 10.119 s | 1810 | 5.591 | 1571.0 / 6430.9 / 200.2 ms | 47.2 / 69.6 / 103.2 / 6199.8 ms | 934 |
+
+**Transfer path (pinned async vs pageable), 36 host cores (all of them; shared host)**
+
+| L | W | pinned async | pageable | pageable / pinned |
+|---|---:|---:|---:|---:|
+| 16 | 8 | 0.142 s | 0.466 s | 3.29x |
+| 16 | 64 | 0.932 s | 0.981 s | 1.05x |
+| 64 | 8 | 0.206 s | 0.319 s | 1.55x |
+| 64 | 64 | 0.914 s | 1.500 s | 1.64x |
+
+**Wall time of one sampling call, 4 host cores (docker --cpuset-cpus=0-3)**
+
+| L | W | CPU 1 thread | CPU multichain | CUDA device-resident | hops/s CPU multichain | hops/s CUDA | CUDA / CPU-multichain time | CUDA / CPU-1-thread time |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 1 | 0.009 s | 0.009 s | 0.099 s | 317k | 30k | 10.49x | 10.60x |
+| 16 | 8 | 0.072 s | 0.034 s | 0.304 s | 704k | 79k | 8.93x | 4.22x |
+| 16 | 64 | 0.573 s | 0.200 s | 1.079 s | 957k | 177k | 5.39x | 1.88x |
+| 16 | 512 | - | 1.360 s | 5.553 s | 1.13M | 276k | 4.08x | - |
+| 32 | 1 | 0.021 s | 0.020 s | 0.164 s | 146k | 18k | 8.02x | 7.99x |
+| 32 | 8 | 0.161 s | 0.073 s | 0.441 s | 324k | 54k | 6.00x | 2.74x |
+| 32 | 64 | 1.264 s | 0.324 s | 1.056 s | 588k | 180k | 3.26x | 0.84x |
+| 32 | 512 | - | 2.590 s | 5.060 s | 588k | 301k | 1.95x | - |
+| 64 | 1 | 0.051 s | 0.051 s | 0.123 s | 58k | 24k | 2.42x | 2.45x |
+| 64 | 8 | 0.396 s | 0.111 s | 0.286 s | 213k | 82k | 2.59x | 0.72x |
+| 64 | 64 | 3.233 s | 0.873 s | 1.243 s | 216k | 152k | 1.42x | 0.38x |
+| 64 | 512 | - | 6.879 s | 14.496 s | 219k | 104k | 2.11x | - |
+| 128 | 1 | 0.207 s | 0.207 s | 0.261 s | 14k | 11k | 1.26x | 1.26x |
+| 128 | 8 | 1.897 s | 0.729 s | 0.640 s | 32k | 37k | 0.88x | 0.34x |
+| 128 | 64 | 14.905 s | 2.650 s | 2.057 s | 71k | 92k | 0.78x | 0.14x |
+| 128 | 512 | - | 18.188 s | 13.194 s | 83k | 114k | 0.73x | - |
+
+**Anatomy of the device run, 4 host cores (docker --cpuset-cpus=0-3)**
+
+| L | W | wall | passes | ms/pass | service thread: wait for walkers / round / reply | in round: stage / upload / launch / device wait | slow batches |
+|---|---:|---:|---:|---:|---|---|---:|
+| 16 | 1 | 0.099 s | 2911 | 0.034 | 17.3 / 73.3 / 1.2 ms | 1.1 / 18.1 / 34.5 / 17.9 ms | 63 |
+| 16 | 8 | 0.304 s | 2961 | 0.103 | 46.6 / 173.5 / 80.9 ms | 6.3 / 45.5 / 100.9 / 16.3 ms | 475 |
+| 16 | 64 | 1.079 s | 2917 | 0.370 | 461.8 / 320.6 / 173.4 ms | 16.7 / 59.5 / 111.7 / 125.3 ms | 2210 |
+| 16 | 512 | 5.553 s | 2921 | 1.901 | 5339.7 / 708.5 / 937.5 ms | 80.8 / 150.5 / 217.1 / 234.7 ms | 2892 |
+| 32 | 1 | 0.164 s | 2720 | 0.060 | 33.8 / 111.3 / 4.5 ms | 2.2 / 31.9 / 60.3 / 13.9 ms | 32 |
+| 32 | 8 | 0.441 s | 2778 | 0.159 | 116.5 / 184.0 / 120.7 ms | 7.1 / 49.9 / 101.9 / 20.4 ms | 224 |
+| 32 | 64 | 1.056 s | 2729 | 0.387 | 372.1 / 332.8 / 150.8 ms | 15.3 / 50.2 / 90.0 / 171.3 ms | 1358 |
+| 32 | 512 | 5.060 s | 2722 | 1.859 | 2747.7 / 831.0 / 799.9 ms | 54.6 / 86.4 / 126.4 / 543.3 ms | 2655 |
+| 64 | 1 | 0.123 s | 2382 | 0.052 | 20.5 / 83.6 / 2.6 ms | 1.1 / 15.8 / 29.5 / 35.7 ms | 14 |
+| 64 | 8 | 0.286 s | 2490 | 0.115 | 51.5 / 154.3 / 58.7 ms | 3.6 / 25.5 / 52.5 / 70.3 ms | 99 |
+| 64 | 64 | 1.243 s | 2408 | 0.516 | 343.8 / 405.3 / 118.7 ms | 12.2 / 36.1 / 67.0 / 285.2 ms | 688 |
+| 64 | 512 | 14.496 s | 2384 | 6.080 | 9038.5 / 2130.9 / 2315.8 ms | 88.4 / 235.1 / 281.9 / 1498.5 ms | 2078 |
+| 128 | 1 | 0.261 s | 1797 | 0.145 | 113.9 / 112.6 / 12.7 ms | 1.7 / 26.2 / 43.7 / 38.8 ms | 5 |
+| 128 | 8 | 0.640 s | 1879 | 0.340 | 209.7 / 238.8 / 120.6 ms | 5.1 / 39.3 / 70.9 / 120.2 ms | 36 |
+| 128 | 64 | 2.057 s | 1839 | 1.119 | 499.4 / 982.7 / 60.6 ms | 8.9 / 26.0 / 46.1 / 898.6 ms | 265 |
+| 128 | 512 | 13.194 s | 1807 | 7.302 | 2980.5 / 5471.6 / 665.8 ms | 34.0 / 48.7 / 74.6 / 5305.6 ms | 934 |
+
+**Transfer path (pinned async vs pageable), 4 host cores (docker --cpuset-cpus=0-3)**
+
+| L | W | pinned async | pageable | pageable / pinned |
+|---|---:|---:|---:|---:|
+| 16 | 8 | 0.304 s | 0.268 s | 0.88x |
+| 16 | 64 | 1.079 s | 0.913 s | 0.85x |
+| 64 | 8 | 0.286 s | 0.359 s | 1.26x |
+| 64 | 64 | 1.243 s | 1.617 s | 1.30x |
+
+
+### 13.4 What the numbers say
+
+* **The device-resident sampler does not beat the host on this machine.** With all 36 cores the
+  CPU multichain runner is 1.15x (L=128, `W=1`) to 11.4x (L=16, `W=64`) faster, and still 2.1x to 3.7x
+  faster at `W=512`. The device is faster than **one** core for `W >= 8` at `L >= 64` (L=64, `W=64`: 5x;
+  L=128: about 3x) and from `W = 64` at L=32, which is the replacement of a handful of cores, not of 36.
+* **Only a small host changes the picture, and only at n = 128.** With 4 host cores the device wins
+  at L=128 for every `W >= 8`: 1.14x (`W=8`), 1.28x (`W=64`), 1.37x (`W=512`) faster than the
+  4-core CPU runner; at n <= 64 it still loses (1.4x to 10x), with the L=64 `W=512` point at parity
+  in one campaign and 2.1x slower in the other. This is the Amdahl bound of section 3.2: on the Hubbard-chain
+  profile the Pfaffian share of the sampler (`UpdateMAll`, `CalculateNewPfM2`, recomputation) is
+  about 32 % at L=16 and 45 % at L=64, so removing it entirely (infinitely fast device, free
+  transfers) cannot give more than about 1.5x to 1.8x; the rest (candidate generation, projection
+  counters and `log_proj_ratio`, SFMT, the acceptance weight) stays on the host by the RNG-parity
+  contract and costs 3.3 us (L=16), 6.7 us (L=32), 17 us (L=64) and 43 us (L=128) per attempted hop
+  per core (the `CPU 1 thread`, `W=1` rows).
+* **Fixed cost per round.** At `W=1` a round costs 31 us (L=16) to 70 us (L=128): about 1 us of
+  staging, 5 to 7 us of upload enqueue, 10 to 15 us of kernel launches (three to five launches
+  through cudarc), 6 to 25 us of device execution and download. A CPU hop costs 3 to 43 us, so
+  single walkers can never win (the `W=1` column is 9x slower at L=16 and 1.1x at L=128, where a
+  hop is expensive enough to hide the round).
+* **Where the time goes at scale (L=128, `W=512`).** The fast lane's device wait is 61 % of the wall
+  time with 36 cores and 40 % with 4 cores. The `nsys` profile of L=128, `W=64` attributes 64 % of the GPU time to
+  `pfinv_f64` (5.2 ms per batch of 8 planes: the serial LTL^T steps and column loops of a single
+  block per plane, `B=1` of the #423 benchmark), 28 % to `k_accept` (0.32 ms per launch) and 5 % to
+  `k_propose` (53 us). The slow lanes overlap with the fast lane but compete with it for the SMs.
+  The service thread then waits 20 % of the wall time for the walkers' host work and 5 % for
+  reply delivery. The kernels are straightforward ports, not tuned: a shared-memory LTL^T for
+  `n <= 64`, a parallel triangular inverse and a tiled rank-two update are the obvious next steps;
+  none changes the Amdahl bound above.
+* **Host coordination matters.** One thread per walker needs a futex wake per walker per round
+  (hundreds of microseconds at 64 to 512 walkers, hence the wake tree) and degenerates when
+  walkers greatly outnumber the cores (512 walkers on 4 cores took 107 s with timed parking before
+  the plain `park`, 4 to 14 s after). A resumable state machine per walker, driven by a few worker
+  threads, would remove that cost; it duplicates the driver's loop and was not attempted here.
+* **Transfers.** Pinned asynchronous copies make the end-to-end run 1.26x to 1.64x faster than
+  pageable copies at L=64 (`W = 8, 64`, both host configurations) and are equal within noise at
+  L=16 (0.85x to 1.05x; one 3.3x outlier of the 36-core campaign was a noisy run): the effect
+  grows with the bytes per round (the recompute configurations and the proposals' `NQP` ratios are
+  tens of kilobytes).
+* **What would make the device pay.** The remaining host cost per hop, mostly the projection
+  counters and `log_proj_ratio` (Gutzwiller/Jastrow), could move to the device without touching the
+  RNG contract (the SFMT draws stay on the host; only a scalar log ratio would come back), which is
+  the larger lever on hosts with many cores; together with the persistent-kernel or CUDA-graph
+  launch path (the 30 to 70 us round floor) and the tuned kernels it is the follow-up to #434. Complex
+  and FSZ modes use the same protocol with `Complex64` kernels.
+
+
+### 13.5 Reproduce
+
+```sh
+cargo nextest run -p mvmc-core --cargo-profile test-fast -E 'binary(device_sampler)'   # CPU, host service
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker                                    # GPU gate (sampler_gate)
+scripts/run_device_sampler_bench.sh docker                                             # all host cores
+MVMC_RS_SAMPLER_CORES=0-3 MVMC_RS_SAMPLER_BENCH_OUT=$PWD/benchmark/gpu_device_sampler/results/device_sampler_cores4.csv \
+  scripts/run_device_sampler_bench.sh docker                                           # 4 host cores
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
