@@ -839,6 +839,256 @@ these are upper bounds on the cost of the runner itself, not a property of it.
 | 16 | 5761.5 | 360.1 | 0.31 |
 | 32 | 15427.9 | 482.1 | 0.12 |
 
+## 11. Batched Pfaffian and inverse (issue #423)
+
+Status: implemented, validated and benchmarked on hardware (2x RTX 3060). Not wired into the
+production sampler (that needs #422 and #425). Related to #417 and #420.
+
+### 11.1 API and layout
+
+`mvmc_gpu::pfaffian_inverse_batched(&Backend, planes, n, nqp, batch)` takes a column-major
+`[n, n, NQP, B]` batch of skew-symmetric `f64` or `Complex64` planes (plane `p = q + NQP*b`,
+`n` even) and returns `pf [NQP, B]`, `inv [n, n, NQP, B]` and a per-plane `PlaneStatus`
+(`Ok`, `ZeroPivot { row }` with pfapack's 1-based `INFO`, `NonFinite`). `inv` is the true
+`A^-1` (`utu2inv`); the production sampler's final sign flip stays with the caller. For a failed
+plane the inverse is zero-filled and a zero-pivot plane reports `pf = 0`. There is no silent
+fallback: an unavailable backend is a typed `Error`.
+
+| backend | where | what |
+| --- | --- | --- |
+| `CpuPfapack`, `CpuPfapackRayon` | `crates/mvmc-gpu` (main workspace, normal CI) | pfapack per plane (`dsktf2`/`zsktf2`, `utu2pfa`, `utu2inv`), one workspace per task; bit-identical to calling pfapack |
+| `TenferroExtension` | `crates/mvmc-gpu` | the same per-plane kernel as a tenferro `ExtensionOp` (`define_extension_runtime!`, `execute_reads`, zero-copy `as_slice` input, per-`(dtype, n)` workspace in the runtime's `ExtensionCacheStore`) run in a tenferro `Runtime` on `CpuBackend`; bit-identical to pfapack |
+| `TenferroNative` | `crates/mvmc-gpu` | batched Parlett-Reid / LTL^T written with tenferro tensors only (11.5) |
+| `Engine(&CudaEngine)` | `gpu/mvmc-gpu-cuda` (`pfaffian.rs`, `pfaffian_batched.cu`) | one CUDA thread block per plane, NVRTC kernel launched through tenferro's raw session |
+
+`mvmc-gpu` has no CUDA dependency; the CUDA engine implements its `BatchedEngine` trait and
+plugs in through `Backend::Engine`. The root `Cargo.lock` gains only the `mvmc-gpu` package
+entry (no new external dependency). `gpu/mvmc-gpu-cuda` (own lock, #420 layout) depends on
+`mvmc-gpu`, reuses the #420 gate decision (`cuda_gate_decision`, `CUDA_GATE_VARIABLE`) and the
+device report, and is exercised by `scripts/run_cuda_gate.sh`.
+
+### 11.2 CUDA kernel design
+
+Same math as pfapack, ported thread-parallel: one block per plane (32 to 256 threads), the plane
+in global memory, `O(n)` vectors in dynamic shared memory, `n <= 1024`.
+
+1. LTL^T, `k0 = n-1 .. 1`: first-index argmax of `|A[0..kk, k0]|` (`|re|+|im|` for complex, as
+   `izamax`; NaN loses except at index 0, as in the scalar `v > colmax` scan) by a block tree
+   reduction; the row/column swap with the upper-triangle sign twiddles of `dsktf2` (all swapped
+   elements are disjoint, one barrier between swap and negation); the skew rank-2 update
+   `A_ij = (A_ij + x_i t1_j) - y_i t2_j` over the strict upper triangle with threads striding
+   `i + kk*j`; then the column scaling. A zero column records `INFO` once (the first met,
+   scanning from `n`) and skips the step, like pfapack's `continue`.
+2. Pfaffian: sequential product of `A[i, i+1]` and the pivot sign by thread 0, finiteness test.
+3. Inverse (`utu2inv`): one thread per column for the unit upper-triangular inverse (back
+   substitution into a workspace plane) and for the skew-tridiagonal solve, the composed pivot
+   permutation built once in shared memory, and the final `M^T C` product with both
+   permutations folded into the index map (one thread per output element).
+
+NVRTC runs with `--fmad=false`, so the rank-2 update keeps pfapack's operation order. The
+matrix stays in global memory, not shared memory: a complex `n = 128` plane is 256 KB (real
+128 KB), above the 99 KB opt-in shared limit of sm_86, so the working set is served by L1/L2.
+A shared-memory variant for small `n` is a possible later optimisation, not needed for the
+numbers below. Planes are processed in chunks of at most 3 GiB of device buffers (work copy,
+workspace, output).
+
+tenferro raw API notes (0.7.1): `with_raw`, `compile_nvrtc`, `launch`, `upload_bytes`,
+`alloc_output` and `download_tensor` are sufficient (no `cudarc` needed). `raw::Module` is
+`!Send`, so it cannot live in the `Send`-only `Session::resource` cache; the module is compiled
+once per `with_session` scope (tens of milliseconds, the driver caches the PTX JIT), and the
+`CudaEngine` convenience wrapper recompiles on every call. `alloc_output` memory is
+uninitialised (the kernel writes every output element). A kernel that updates its input in
+place needs `DeviceBytes` (`upload_bytes` + `KernelArg::workspace`) because a `TensorRef` is
+read-only. There are no pinned or asynchronous transfers (rates in 11.4).
+
+### 11.3 Accuracy
+
+Gate `gpu/mvmc-gpu-cuda/tests/pfaffian_gate.rs` (`MVMC_RS_CUDA_GATE=1
+scripts/run_cuda_gate.sh docker`; 32 random planes per size, NQP = 8, B = 4; RTX 3060), GPU
+against `CpuPfapack`. `observed/allowed` is the worst of the inverse and Pfaffian relative errors
+divided by `16 * n * eps * cond_F(A)` (`cond_F = |A|_F |A^-1|_F` of that plane), the standard
+forward-error scale of a backward-stable inverse. The kernel uses pfapack's pivot rule and, with
+`--fmad=false`, its real operation order, so the factor `16` is generous.
+
+| dtype | n | max inverse rel. err | max Pf rel. err | max cond_F | observed / allowed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| f64 | 2 / 4 | 0 / 0 | 0 / 0 | 2e0 / 1.9e2 | 0 |
+| f64 | 6 | 1.8e-16 | 0 (bit-identical) | 2.2e2 | 1e-3 |
+| f64 | 16 | 8.9e-16 | 0 | 2.1e3 | < 1e-3 |
+| f64 | 32 | 1.8e-15 | 0 | 4.7e4 | < 1e-3 |
+| f64 | 64 | 3.8e-15 | 0 | 1.4e4 | < 1e-3 |
+| f64 | 128 | 7.7e-15 | 0 | 8.3e4 | < 1e-3 |
+| c64 | 2 | 2.0e-16 | 0 | 2e0 | 1.4e-2 |
+| c64 | 4 / 6 | 1.7e-15 / 9.6e-16 | 1.7e-15 / 1.0e-15 | 2.1e2 / 9.9e1 | 4e-3 |
+| c64 | 16 | 1.1e-14 | 1.2e-14 | 6.9e2 | 1e-3 |
+| c64 | 32 | 8.6e-15 | 7.4e-15 | 6.1e2 | < 1e-3 |
+| c64 | 64 | 6.3e-14 | 6.6e-14 | 4.4e3 | < 1e-3 |
+| c64 | 128 | 3.3e-13 | 3.3e-13 | 1.9e4 | < 1e-3 |
+
+The real Pfaffian is bit-identical to pfapack at every size (same pivots, same update order);
+the real inverse differs only by the order of the dot products in the triangular inverse and in
+the final product. The complex results differ through the division convention (pfapack uses
+Julia's division, the kernel Smith's algorithm) and complex multiply association; they still
+sit more than two orders of magnitude below the conditioning scale. Independent invariants of
+the GPU result (not relative to the CPU result): `max|A A^-1 - I|`, the relative skew defect of
+`A^-1` and `Pf^2 = det A` (dense LU on the CPU, sign included) are each below the same
+`16 n eps cond` scale (`4x` for `Pf^2`). Zero-pivot planes (all zero; a zero row/column) report
+`ZeroPivot`, a NaN plane a non-`Ok` status, neighbouring planes are unaffected, and CPU and GPU
+statuses agree exactly. The tensor-native and `ExtensionOp` backends also agree with the kernel
+(`1e-12` Pfaffian, `1e-11` inverse, `n = 16`).
+
+Normal CI (no GPU) covers: CPU batched and `ExtensionOp` bit-identical to pfapack (real and
+complex, `n = 2..32`); `Pf^2 = det`, `A A^-1 = I` and skew structure of every CPU backend; the
+tensor-native backend against pfapack (real Pfaffian bit-identical, inverse relative error
+`7e-18..1.4e-15`, complex `2e-16..6e-15`); statuses; shape errors.
+
+### 11.4 Benchmark
+
+Environment: Intel Xeon E5-2699 v3 (36 hardware threads, shared host: load average 4.6 at the start and 18.8 at the end because other jobs were running), 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, benchmark on device 0), NVIDIA driver 580.178.04, CUDA driver API 13.0, container CUDA toolkit 12.9.2 (nvcc 12.9.86, NVRTC 12.9; image `tenferro-benchmark-cuda:full-verify-20260822`), rustc 1.98.0 (container), tenferro 0.7.1, Linux x86_64. Medians of up to 7 runs after one warm-up (stop after 12 s, at least 3 runs), times in milliseconds, NQP = 8, planes = 8 B. CPU rows run `pfapack` with its default scalar features (no BLAS, no SIMD). CSV: `benchmark/gpu_pfaffian/results/pfaffian_batched.csv`; reproduce with `scripts/run_pfaffian_bench.sh docker`.
+
+`CUDA total` is the call as a caller sees it (upload, allocation, kernel, download, host glue).
+Tensor-native and `ExtensionOp` are skipped when a single run would take minutes (`-`). The host
+was shared with other jobs while measuring, so CPU rows, rayon in particular, carry noise: a few
+single-thread outliers are visible (for example f64 `n = 32, B = 8`, c64 `n = 64, B = 1` and
+`B = 8`), and the CPU rows use scalar pfapack (the production `calc_m_all` uses the BLAS-backed
+path measured at 135 us per `n = 64` plane on an unloaded host in section 3.2, about half of the
+267 us per plane of the one-thread row here), so speedups against the production CPU path are
+roughly 2x lower than the ratios below. Times in milliseconds.
+
+| dtype | n | B | planes | pfapack 1T | pfapack rayon | tenferro native | tenferro ExtOp | CUDA total | CUDA kernel | up / alloc / down | f32 kernel | kernel vs 1T | kernel vs rayon | total vs 1T | total vs rayon | f64/f32 kernel |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| f64 | 16 | 1 | 8 | 0.05 | 0.13 | 20.82 | 8.93 | 0.38 | 0.13 | 0.05 / 0.05 / 0.14 | 0.08 | 0.4x | 1.0x | 0.1x | 0.3x | 1.6x |
+| f64 | 16 | 8 | 64 | 0.77 | 0.33 | 34.07 | 8.30 | 0.55 | 0.14 | 0.14 / 0.05 / 0.20 | 0.10 | 5.5x | 2.3x | 1.4x | 0.6x | 1.4x |
+| f64 | 16 | 64 | 512 | 5.68 | 2.71 | 172 | 11.68 | 1.93 | 0.41 | 0.72 / 0.06 / 0.47 | 0.15 | 13.8x | 6.6x | 2.9x | 1.4x | 2.7x |
+| f64 | 16 | 512 | 4096 | 22.25 | 13.16 | 566 | 57.99 | 40.71 | 2.61 | 20.37 / 2.59 / 13.14 | 0.62 | 8.5x | 5.0x | 0.5x | 0.3x | 4.2x |
+| f64 | 16 | 4096 | 32768 | 239 | 129 | - | 325 | 295 | 20.21 | 137 / 9.44 / 82.28 | 4.35 | 11.8x | 6.4x | 0.8x | 0.4x | 4.6x |
+| f64 | 32 | 1 | 8 | 0.42 | 0.39 | 55.34 | 16.84 | 0.62 | 0.33 | 0.10 / 0.04 / 0.15 | 0.21 | 1.3x | 1.2x | 0.7x | 0.6x | 1.5x |
+| f64 | 32 | 8 | 64 | 3.42 | 3.91 | 342 | 21.39 | 0.98 | 0.36 | 0.28 / 0.03 / 0.23 | 0.21 | 9.4x | 10.8x | 3.5x | 4.0x | 1.7x |
+| f64 | 32 | 64 | 512 | 27.39 | 6.37 | 1877 | 52.04 | 7.48 | 1.87 | 2.70 / 0.05 / 1.73 | 0.59 | 14.7x | 3.4x | 3.7x | 0.9x | 3.2x |
+| f64 | 32 | 512 | 4096 | 266 | 82.71 | - | 351 | 152 | 11.43 | 70.88 / 5.57 / 41.68 | 3.23 | 23.3x | 7.2x | 1.7x | 0.5x | 3.5x |
+| f64 | 32 | 4096 | 32768 | 2046 | 532 | - | 2422 | 1130 | 83.91 | 526 / 31.81 / 313 | 24.36 | 24.4x | 6.3x | 1.8x | 0.5x | 3.4x |
+| f64 | 64 | 1 | 8 | 2.09 | 0.53 | 98.09 | 17.49 | 1.53 | 0.99 | 0.20 / 0.04 / 0.22 | 0.61 | 2.1x | 0.5x | 1.4x | 0.3x | 1.6x |
+| f64 | 64 | 8 | 64 | 16.70 | 2.52 | 568 | 32.41 | 4.23 | 1.54 | 1.25 / 0.05 / 0.89 | 0.79 | 10.8x | 1.6x | 4.0x | 0.6x | 1.9x |
+| f64 | 64 | 64 | 512 | 179 | 17.79 | - | 216 | 69.47 | 9.45 | 30.46 / 7.12 / 18.97 | 6.31 | 19.0x | 1.9x | 2.6x | 0.3x | 1.5x |
+| f64 | 64 | 512 | 4096 | 1156 | 226 | - | 1450 | 577 | 62.27 | 258 / 20.56 / 151 | 40.03 | 18.6x | 3.6x | 2.0x | 0.4x | 1.6x |
+| f64 | 64 | 4096 | 32768 | 8750 | 1348 | - | - | 4557 | 486 | 2049 / 64.89 / 1295 | 304 | 18.0x | 2.8x | 1.9x | 0.3x | 1.6x |
+| f64 | 128 | 1 | 8 | 8.97 | 3.61 | 642 | 25.73 | 6.13 | 4.01 | 0.98 / 0.06 / 0.71 | 2.10 | 2.2x | 0.9x | 1.5x | 0.6x | 1.9x |
+| f64 | 128 | 8 | 64 | 90.28 | 15.22 | - | 108 | 39.77 | 10.43 | 19.91 / 0.05 / 7.35 | 4.56 | 8.7x | 1.5x | 2.3x | 0.4x | 2.3x |
+| f64 | 128 | 64 | 512 | 708 | 187 | - | 818 | 339 | 75.32 | 133 / 10.54 / 77.13 | 39.78 | 9.4x | 2.5x | 2.1x | 0.6x | 1.9x |
+| f64 | 128 | 512 | 4096 | 5397 | 1202 | - | - | 2643 | 580 | 1034 / 39.23 / 631 | 276 | 9.3x | 2.1x | 2.0x | 0.5x | 2.1x |
+| f64 | 128 | 4096 | 32768 | 42805 | 8801 | - | - | 22801 | 4631 | 9359 / 386 / 5264 | 2180 | 9.2x | 1.9x | 1.9x | 0.4x | 2.1x |
+| c64 | 16 | 1 | 8 | 0.10 | 0.16 | 20.85 | 8.58 | 0.37 | 0.17 | 0.05 / 0.03 / 0.10 | 0.09 | 0.6x | 0.9x | 0.3x | 0.4x | 2.0x |
+| c64 | 16 | 8 | 64 | 0.72 | 0.31 | 43.07 | 8.77 | 0.90 | 0.24 | 0.27 / 0.06 / 0.25 | 0.11 | 3.0x | 1.3x | 0.8x | 0.3x | 2.2x |
+| c64 | 16 | 64 | 512 | 7.33 | 3.07 | 192 | 14.33 | 3.86 | 1.09 | 1.36 / 0.05 / 0.87 | 0.20 | 6.7x | 2.8x | 1.9x | 0.8x | 5.6x |
+| c64 | 16 | 512 | 4096 | 48.68 | 17.31 | 1047 | 99.71 | 98.39 | 7.84 | 47.45 / 6.62 / 30.68 | 0.98 | 6.2x | 2.2x | 0.5x | 0.2x | 8.0x |
+| c64 | 16 | 4096 | 32768 | 368 | 175 | - | 547 | 602 | 57.82 | 273 / 20.85 / 160 | 6.84 | 6.4x | 3.0x | 0.6x | 0.3x | 8.4x |
+| c64 | 32 | 1 | 8 | 0.96 | 0.32 | 43.92 | 16.19 | 1.02 | 0.60 | 0.11 / 0.03 / 0.27 | 0.27 | 1.6x | 0.5x | 0.9x | 0.3x | 2.2x |
+| c64 | 32 | 8 | 64 | 7.79 | 2.11 | 217 | 22.89 | 2.98 | 0.93 | 0.95 / 0.07 / 0.64 | 0.32 | 8.4x | 2.3x | 2.6x | 0.7x | 2.9x |
+| c64 | 32 | 64 | 512 | 75.68 | 12.02 | 989 | 82.74 | 37.50 | 5.36 | 21.30 / 0.06 / 8.47 | 1.09 | 14.1x | 2.2x | 2.0x | 0.3x | 4.9x |
+| c64 | 32 | 512 | 4096 | 579 | 145 | - | 685 | 295 | 39.20 | 129 / 10.65 / 74.71 | 6.32 | 14.8x | 3.7x | 2.0x | 0.5x | 6.2x |
+| c64 | 32 | 4096 | 32768 | 4372 | 736 | - | 5096 | 3168 | 302 | 1179 / 59.42 / 884 | 48.65 | 14.5x | 2.4x | 1.4x | 0.2x | 6.2x |
+| c64 | 64 | 1 | 8 | 24.98 | 5.98 | 554 | 39.75 | 3.07 | 2.31 | 0.34 / 0.04 / 0.29 | 0.88 | 10.8x | 2.6x | 8.1x | 1.9x | 2.6x |
+| c64 | 64 | 8 | 64 | 163 | 9.32 | 3024 | 59.00 | 11.05 | 5.41 | 2.64 / 0.06 / 1.74 | 1.31 | 30.2x | 1.7x | 14.8x | 0.8x | 4.1x |
+| c64 | 64 | 64 | 512 | 381 | 88.08 | - | 413 | 194 | 34.91 | 79.74 / 5.57 / 46.88 | 9.96 | 10.9x | 2.5x | 2.0x | 0.5x | 3.5x |
+| c64 | 64 | 512 | 4096 | 3095 | 468 | - | 3379 | 1490 | 244 | 626 / 30.73 / 374 | 68.48 | 12.7x | 1.9x | 2.1x | 0.3x | 3.6x |
+| c64 | 64 | 4096 | 32768 | 24328 | 2677 | - | - | 11115 | 1928 | 4576 / 198 / 2767 | 548 | 12.6x | 1.4x | 2.2x | 0.2x | 3.5x |
+| c64 | 128 | 1 | 8 | 31.10 | 7.24 | 1137 | 46.84 | 15.71 | 13.26 | 1.20 / 0.04 / 0.77 | 1.51 | 2.3x | 0.5x | 2.0x | 0.5x | 8.8x |
+| c64 | 128 | 8 | 64 | 256 | 29.12 | - | 334 | 97.73 | 36.84 | 32.71 / 3.87 / 20.88 | 3.01 | 7.0x | 0.8x | 2.6x | 0.3x | 12.3x |
+| c64 | 128 | 64 | 512 | 2088 | 337 | - | 2417 | 728 | 215 | 257 / 21.14 / 150 | 17.86 | 9.7x | 1.6x | 2.9x | 0.5x | 12.1x |
+| c64 | 128 | 512 | 4096 | 16670 | 2278 | - | - | 5795 | 1666 | 2063 / 96.95 / 1238 | 134 | 10.0x | 1.4x | 2.9x | 0.4x | 12.4x |
+| c64 | 128 | 4096 | 32768 | skipped (> 4 GiB of planes) | | | | | | | | | | | | |
+
+
+What the table says (FP64 / C64, the physics path):
+
+* **Kernel only, data resident on the device** (the design of #422/#426, where planes are built
+  and consumed on the device): for `B >= 8` the kernel is 5.5 to 14x (f64 `n = 16`), 9 to 24x
+  (`n = 32`), 11 to 19x (`n = 64`) and 9x (`n = 128`) faster than one pfapack thread (c64: 3 to
+  7x, 8 to 15x, 11 to 30x, 7 to 10x), and 0.8 to 11x faster than all 36 threads (at least 1.3x
+  except c64 `n = 128, B = 8`; f64 `n = 32`: 3.4 to 11x, `n = 64`: 1.6 to 3.6x, `n = 128`: 1.5 to
+  2.5x). At `B = 1` (8 planes) the launch is not worth it: 0.4x of one thread at `n = 16`, 1.3x
+  at `n = 32`.
+* **Including upload and download** (an offload-only design): 1.4 to 4x faster than one thread
+  for `n >= 32` and `B >= 8` (15x on one noisy c64 row), but slower than all 36 threads in almost
+  every cell (0.2 to 0.9x); the GPU wins only in a few small cells (f64 `n = 16, B = 64` 1.4x,
+  f64 `n = 32, B = 8` 4.0x against a noisy rayon row, c64 `n = 64, B = 1` 1.9x). For `n = 16`
+  with `B >= 512` the transfers take 10 to 13x the kernel and the GPU is slower than even one
+  thread. The cause is the transfer path: tenferro's `upload_bytes` / `download_tensor` move
+  pageable memory at about 0.5 GB/s up (1.07 GB in 2.05 s, f64 `n = 64, B = 4096`) and 0.8 GB/s
+  down, far below PCIe 3.0 x16 (about 12 GB/s). The conclusion: do not offload the Pfaffian
+  plane by plane through host memory; it pays when the planes are built and consumed on the
+  device (or with pinned asynchronous transfers, which tenferro 0.7.1 does not offer).
+* **Crossover (data resident):** the GPU beats one thread from 64 planes (`B = 8`) at every
+  `n` (already at 8 planes for `n >= 32`), and beats 36 threads by 2x or more for `n <= 32`
+  from `B = 8`, by 1.5 to 3.6x for `n = 64` and `n = 128`.
+* **FP64 penalty:** FP64 runs at 1/64 of FP32 on this card, but the single-precision kernel
+  (timing only) is only 1.4 to 4.6x faster for f64 and 2 to 12.4x for c64: the kernel is limited
+  by global-memory traffic and its serial phases (argmax reduction, `n - 1` dependent LTL steps,
+  the column recurrences of the tridiagonal solve), not by FLOPs. The ratio grows with the
+  arithmetic per byte (c64 `n = 128`: 12x). A data-centre GPU (FP64 at 1/2 of FP32) would be
+  close to the f32 column; on this card the f64 kernel is already 9 to 24x faster than one core.
+* **Production scale:** the Hubbard inputs have `n = 16..64` and 8 QP planes per sample; 64
+  batch elements (512 planes) take 0.41 / 1.87 / 9.45 ms on the kernel (f64, `n = 16 / 32 / 64`)
+  against 5.7 / 27 / 179 ms for one thread (14 to 19x). The 58 to 61 % of wall time spent in
+  `CalculateMAll` and the recalculation (section 3.2) could therefore shrink by an order of
+  magnitude if the planes stay on the device, before adding the transfers and the rest of the
+  sampler (Amdahl bounds of section 6).
+
+### 11.5 tenferro-native CPU reference and its gaps
+
+`TenferroNative` shows what a device-portable tenferro formulation looks like: all state in
+tensors with the plane axis trailing, no per-plane host loop, one session per call. It uses
+pfapack's pivot rule and elementwise update order (so the real Pfaffian is bit-identical) and
+replaces the sequential kernels by whole-batch operations: the pivot search by `reduce_max` +
+`compare` + `select` + `reduce_min`, the batch-varying row/column swap by one-hot `select`
+masks and `reduce_sum`, the skew rank-2 update by broadcast elementwise operations with the
+block re-skewed through `transpose` and `select`, the unit upper-triangular inverse by
+`prod_j (I + (-N)^(2^j))` with batched `dot_general`, the skew-tridiagonal solve by row
+recurrences over `[n, P]` slices, and the pivot permutations by batched one-hot permutation
+matrices applied with `dot_general`.
+
+Cost: about 100 session operations per elimination step (137 / 568 / 1631 / 2482 operations for
+`n = 2 / 6 / 16 / 24`; `MVMC_GPU_NATIVE_OPCOUNT=1` prints the count); 10 to 15 us per operation
+when the tensors are tiny (`n = 16`, 8 planes: 17 to 21 ms) and about 1 ns per element-operation
+when they are large, so it is 20 to 400x slower than the pfapack loop (rows `-`: not run) and
+only a semantic reference. `TENFERRO_PROFILE_EAGER_OP_AGG` instruments only `tenferro-ad` eager
+tensors, not session operations (`TENFERRO_PROFILE_CPU_SESSION` exists for whole-session
+sections), so the counts are our own. The `ExtensionOp` backend pays about 8 ms per call for the
+runtime build and graph compile plus one input and one output copy, then runs pfapack at full
+speed: 1.2 to 2.6x of the pfapack loop for 512 to 4096 planes. It is the route that keeps the
+fast kernel inside a tenferro session.
+
+Gaps found while writing both (candidates for upstream requests, none filed here):
+
+* no argmax / first-index-of-max operation; worked around with four operations
+  (tensor4all/tenferro-rs#1976);
+* no per-matrix row/column gather or swap with batch-varying indices (StableHLO `gather` here
+  has no operand batching dims); worked around with one-hot masks, `select` and `reduce_sum`, an
+  `O(n^2 P)` pass per step instead of `O(n P)` (tensor4all/tenferro-rs#2008);
+* `Tensor` is not `Clone` (only a deep `duplicate`), so reusing an intermediate in two places
+  is awkward; a cheap shared handle would avoid it;
+* `tril`/`triu` have an unspecified axis convention for a trailing batch axis, so static 0/1
+  masks plus `select` were used; elementwise operations need explicit `broadcast_in_dim` (no
+  implicit broadcasting);
+* `GraphCompiler::compile_with_input_specs` takes one output, so a multi-output extension op
+  with a runtime-bound input cannot be compiled once and re-run (the plane tensor is attached as
+  a concrete leaf: one input copy and a compile per call);
+* `|re| + |im|` (`izamax`) needs complex-to-real `cast`; it projects the real part as needed,
+  but there is no documented `real`/`imag` operation;
+* `define_extension_runtime!` needs a runtime built with `runtime_engine_registration_with_id`
+  plus `install_extension_module`; the required wiring is not documented next to the macro;
+* CUDA: no pinned or asynchronous host transfers (0.5 to 0.8 GB/s measured), `Module` is
+  `!Send` and so cannot be cached in `Session::resource`, and `raw` has no way to opt in to more
+  than 48 KB of dynamic shared memory (`cuFuncSetAttribute`).
+
+### 11.6 Reproduce
+
+```sh
+cargo nextest run -p mvmc-gpu --cargo-profile test-fast        # CPU, ExtensionOp, tensor-native
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # GPU gate incl. pfaffian_gate
+scripts/run_pfaffian_bench.sh docker                           # benchmark, writes the CSV
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

@@ -12,6 +12,7 @@ members = [
     "crates/mvmc-stdface",
     "crates/mvmc-cli",
     "crates/mvmc-greenr2k",
+    "crates/mvmc-gpu",
     "xtask",
 ]
 exclude = [
@@ -46,6 +47,7 @@ mvmc-expert-parsers = { path = "crates/mvmc-expert-parsers", version = "0.0.0" }
 mvmc-core = { path = "crates/mvmc-core", version = "0.0.0" }
 mvmc-uhf = { path = "crates/mvmc-uhf", version = "0.0.0" }
 mvmc-stdface = { path = "crates/mvmc-stdface", version = "0.0.0" }
+mvmc-gpu = { path = "crates/mvmc-gpu", version = "0.0.0" }
 
 # --- numerics / data ---
 num-complex = "0.4"

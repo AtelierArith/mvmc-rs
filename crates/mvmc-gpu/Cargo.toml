@@ -1,0 +1,18 @@
+[package]
+name = "mvmc-gpu"
+version = "0.0.0"
+description = "Batched Pfaffian and inverse over [n,n,NQP,B] skew-symmetric planes: API, CPU references and tenferro backends (the CUDA kernel lives in gpu/mvmc-gpu-cuda)"
+license = "GPL-3.0-or-later"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+pfapack = { workspace = true }
+num-complex = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+tenferro-tensor = { workspace = true }
+tenferro-cpu = { workspace = true }
+tenferro-runtime = { version = "0.7.1", default-features = false }

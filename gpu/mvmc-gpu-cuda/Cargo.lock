@@ -1450,11 +1450,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "mvmc-gpu"
+version = "0.0.0"
+dependencies = [
+ "num-complex",
+ "pfapack",
+ "rayon",
+ "tenferro-cpu",
+ "tenferro-runtime",
+ "tenferro-tensor",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "mvmc-gpu-cuda"
 version = "0.0.0"
 dependencies = [
  "libloading 0.8.9",
  "mvmc-core",
+ "mvmc-gpu",
  "num-complex",
  "tenferro-ad",
  "tenferro-cpu",
