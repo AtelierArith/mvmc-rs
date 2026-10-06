@@ -86,3 +86,24 @@ fractions of the run.
 
 (The C 8T column was measured under load 2 to 5, so treat it as indicative; the C 4T/8T values on the small models
 are slower than 1T, which is C's OpenMP overhead.)
+
+## Lanczos rank-one update (issue #478)
+
+`calculate_lanczos_h2_transfer`, `calculate_lanczos_green` and the exchange/pair-hop terms now move the
+Slater tables to the moved configuration with C's `UpdateMAll` (one electron) / `UpdateMAllTwo` (two electrons,
+`ml` first, C's `rsb_old` conventions) instead of a full Pfaffian and inverse per term
+(`lanczos_move_tables`), and restore them in place (C's `copyMAll`). Configurations that are not a one- or
+two-electron move fall back to the full recomputation.
+
+| `phys_lanczos` (1 thread) | seconds (median) | host load |
+|---|---|---|
+| Rust after #448 (before) | 64.6 (A/B, `lanczos478_ab_rust_before_after.csv`) | 6 |
+| Rust #478 (after) | 34.7 (same A/B, 1.86x) | 6 |
+| Rust #478 vs native C, interleaved (`lanczos478_vs_c.csv`) | 32.6 vs C 38.5 (1.18x faster) | 2 to 3 |
+
+Deviation from native C (`lanczos478_deviation_from_c.txt`, `scripts/lanczos_deviation_vs_c.py`, largest
+absolute difference over the `zvo_ls_*` files relative to the largest magnitude in each file): 3.7e-13 before
+and after (the maximum comes from a file whose C/Rust difference is identical for both binaries); the
+individual files stay at the 1e-16 to 1e-13 level, so the native-C Lanczos fixtures pass with unchanged
+tolerances. The Lanczos output files are no longer byte-identical to the previous Rust binary (rank-one update
+instead of full recomputation, as in C); all other outputs of the A/B run are unchanged.
