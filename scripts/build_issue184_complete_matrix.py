@@ -426,7 +426,14 @@ fam("physcal", "Buffered, allocation-free PhysCal outputData with unchanged outp
 fam("physcal", "Native-C PhysCal and Lanczos cells (FSZ combinations, complex Hubbard mode 1, threaded)", "mvmc --physcal", I,
     [r"cli::issue181_native_c_physcal "], "#181/#397",
     "Single-process cells; MPI multi-rank cells stay gated (#179).")
-missing_family("CalHamiltonian1 / ReturnSlaterElmDiff on the Hubbard real path", "none", "#207", "Gap documented in issue.", area="optimization")
+fam("optimization", "CalHamiltonian1 / ReturnSlaterElmDiff fast paths on the Hubbard real path (PR #414)",
+    "observables / slater_derivative / sampling::updates real fast paths", I,
+    [r"core slater_derivative::tests::real_fast_path_matches_complex_path_on_real_data", r"core slater_derivative::tests::weighted_slater_derivative_matches_julia_numerical_values",
+     r"core sampling::updates::tests::(direct_projection_tables|slice_based_rank_one|fused_new_pf_m2|blocked_new_pf_m2)",
+     r"core run::callback_tests::(real|hubbard)_direct_sr_prefixes_match_julia", r"core::phase5_zvo_gate_hubbard "],
+    "#207/#414",
+    "Fast paths are checked against the reference paths and the existing Hubbard real prefix/zvo gates; speed is recorded in benchmark/hubbard_chain/hubbard_chain_2026-10-06_calh1_slaterdiff.md "
+    "(benchmark README updated), not claimed by tests.", evidence="same-impl repeatability + Julia fixture")
 F.append(dict(area="ctest", scenario="Deterministic 20-step references for all 13 ctest models",
               entry="rust_ctest_upstream_rule_selected_models + same-implementation repeatability", state=D,
               tests=[r"core::ctest_equivalent rust_ctest_upstream_rule_selected_models", r"core run::callback_tests::canonical_cg_fixed_seed_same_configuration_is_repeatable",
@@ -435,7 +442,11 @@ F.append(dict(area="ctest", scenario="Deterministic 20-step references for all 1
               note="Decision at #180 closure: SR-CG parameter trajectories are ill-conditioned (#358; 1e-16 operand differences amplify to 1e-4..1e-2), "
                    "so long runs use the upstream 3-sigma/1e-8 statistical rule plus same-implementation repeatability instead of independent step-20 references; "
                    "50-step references are not truncated and none are generated from Rust."))
-missing_family("MPI multi-rank scenario matrix execution (optimization and measurement)", "mvmc-core mpi_* gates", "#179", "Gated tests exist; full matrix not executed in the default build.", area="mpi")
+fam("mpi", "MPI multi-rank scenario matrix (optimization and measurement) against native-C fixtures (PR #398)",
+    "mvmc-core mpi_issue179_matrix; optional-gates mpi-explicit", I,
+    [r"core::mpi_issue179_matrix "], "#179/#398",
+    "C fixtures in tests/fixtures/mpi_matrix_179. Only the fixture-invariant test runs in serial CI; rank-wise and multi-step cases need the explicit "
+    "launcher gate (`optional-gates.yml` job mpi-explicit) and show NotRun-gated here.", evidence="C fixture")
 
 # ---- known C defects (Julia-mVMC#55-#63) and how Rust treats them
 DEFECTS = [

@@ -46,7 +46,7 @@ PhysCal は `NDataQtySmp` 回、サンプリング(最初の呼び出しには `
 > - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
 > - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
 > - Rust: `ordinary_green_values` — `crates/mvmc-core/src/observables/green_measurements.rs:233`
-> - Rust: `accumulate_two_body_gex_sample` — `crates/mvmc-core/src/observables.rs:109`
+> - Rust: `accumulate_two_body_gex_sample` — `crates/mvmc-core/src/observables.rs:110`
 > - Rust: `normalize_physcal_green` — `crates/mvmc-core/src/run.rs:249`
 > - Rust: `calculate_green_func_fsz` — `crates/mvmc-core/src/observables/fsz_measurements.rs:17`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
@@ -137,7 +137,7 @@ $$
 > - Rust: `accumulate_lanczos_qqqq` — `crates/mvmc-core/src/lanczos.rs:44`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Rust: `energy_by_alpha` — `crates/mvmc-core/src/lanczos.rs:128`
-> - Rust: `calculate_lanczos_h2_transfer` — `crates/mvmc-core/src/observables.rs:2597`
+> - Rust: `calculate_lanczos_h2_transfer` — `crates/mvmc-core/src/observables.rs:2769`
 > - 整合性: 判別式の式、`if (ene_p > ene_m) alpha = alpha_m` という選択、および許容条件 `fabs(dnorm/H1) < pow(10.0,-12)` は文字通りに再現されています(`lanczos.rs:61-114`、`lanczos.rs:117-143`)。`QQQQ` は、`calculateQQQQ` と `calculateQQQQ_real` の違いと同じく、複素の実行(`all_complex`)でのみ*左*因子に共役を使い、実数の実行では共役を使いません。Rust の演算子の適用は Julia の順序に従います(PairHop は down スピンのホップを先に適用し、Exchange は各スピンチャネルを up-down、down-up の順に適用します。テスト `lanczos_pair_hop_applies_down_then_up_like_julia`、`lanczos_exchange_applies_each_spin_channel_in_julia_order`)。**Rust の制限:** Lanczos は `InterAll` がなく、かつパスが FSZ でない場合にのみ累積されます(`run.rs:2779`)。また検証でスピンを変える `Trans`、`NSplitSize > 1`、一般軌道がさらに拒否されます(`crates/mvmc-core/src/validation.rs:255-291`)。これは C がサポートするもののサブセットです。**失敗時の挙動が異なります:** 2次方程式に許容される根がない場合、C はエラーを出力して `zvo_ls_*` ファイルには何も書きません。Rust は `zvo_ls_qqqq_NNN.dat` を書き出し、`zvo_ls_out_NNN.dat` には `NaN, NaN, NaN` を書き出します(`io.rs:311-316`)。
 
 ## 6.3 Lanczos ステップ後の物理量
@@ -172,6 +172,6 @@ $$
 > - C: `calculateQCAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:852`
 > - C: `calculateQCACAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:871`
 > - Rust: `lanczos_phys_values` — `crates/mvmc-core/src/io.rs:537`
-> - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2369`
+> - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2541`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
 > - 整合性: `lanczos_phys_values` は、`dnorm = (1 + 2*alpha*h1 + alpha*alpha*h2_1).re` として `(Q[i] + alpha*(Q[n+i] + Q[2n+i]) + alpha*alpha*Q[3n+i]) / dnorm` を評価します。これは C の `CalculatePhysVal_fcmp`(`physcal_lanczos.c:336-358`)と同じ式・同じ結合順序です。実モードでは虚部はリテラルの `0.0` として書き出されます(C には別の `_real` ライターがあります)。C マニュアルの記号 $A_{1(01)}$/$A_{1(10)}$ は2つの交差スロット `Q[n+i]` と `Q[2n+i]` に対応します。スロットとマニュアル記号の対応付けは `calculateQCAQ`(共役された左因子)に従っており、ここでは再導出していません **(未検証)**。

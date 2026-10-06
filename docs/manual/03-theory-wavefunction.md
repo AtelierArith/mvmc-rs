@@ -248,8 +248,8 @@ $$
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
 > - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:128`
-> - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
-> - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
+> - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:148`
+> - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:179`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
 > - Parity: C evaluates `w = 0.5*sin(beta[i])*weight[i]*LegendrePoly(cos(beta[i]), NSPStot)` and `QPFixWeight[i + j*NSPGaussLeg] = w*ParaQPTrans[j]` (`qp.c:73-77`); `QPFullWeight = OptTrans[i]*QPFixWeight` when `FlagOptTrans > 0` (`qp.c:129-146`). The sum `ip += QPFullWeight[q]*pfM[q]` is accumulated in sector order in `CalculateIP_fcmp`; `CalculateLogIP_fcmp` returns `clog(ip)`. Rust follows the same order; the Slater table is rebuilt from the *declared* coefficient without Julia's historical $10^{-14}$ amplitude cutoff (`slater_update.rs:46`). The translation sign (anti-periodic mode) is applied only when `NMPTrans < 0` (`qp.rs:67`).
 > - Parity: `OptTrans` has two flag layouts; the C driver flag `-o` selects "consecutive" flag writes (see `c_opt_trans_flags`, `crates/mvmc-core/src/sr.rs:23`). C's `calculateOptTransDiff` (`vmccal.c:639`) writes the derivative at consecutive complex indices ("this part will not be used" in the C comment), while Rust's `opt_trans_diff` (`observables.rs:957`) writes (value, i·value) pairs like Julia. OptTrans is covered by fixtures in `tests/fixtures/opttrans`; this manual does not map it further **(unverified)**.

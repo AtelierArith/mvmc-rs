@@ -247,8 +247,8 @@ $$
 > - Rust: `legendre_poly` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:65`
 > - Rust: `update_slater_elm` — `crates/mvmc-core/src/slater_update.rs:17`
 > - Rust: `update_slater_elm_fsz` — `crates/mvmc-core/src/slater_update.rs:128`
-> - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:147`
-> - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:178`
+> - Rust: `calculate_ip_complex` — `crates/mvmc-core/src/observables.rs:148`
+> - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:179`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
 > - 整合性: C は `w = 0.5*sin(beta[i])*weight[i]*LegendrePoly(cos(beta[i]), NSPStot)` と `QPFixWeight[i + j*NSPGaussLeg] = w*ParaQPTrans[j]` を評価し (`qp.c:73-77`)、`FlagOptTrans > 0` のときは `QPFullWeight = OptTrans[i]*QPFixWeight` とします (`qp.c:129-146`)。和 `ip += QPFullWeight[q]*pfM[q]` は `CalculateIP_fcmp` でセクター順に累積され、`CalculateLogIP_fcmp` は `clog(ip)` を返します。Rust も同じ順序に従います。Slater テーブルは、Julia の歴史的な $10^{-14}$ の振幅カットオフなしに、*宣言された*係数から再構築されます (`slater_update.rs:46`)。並進の符号 (反周期モード) は `NMPTrans < 0` のときにだけ適用されます (`qp.rs:67`)。
 > - 整合性: `OptTrans` には 2 種類のフラグレイアウトがあります。C ドライバのフラグ `-o` は「連続」フラグ書き込みを選択します (`c_opt_trans_flags`、`crates/mvmc-core/src/sr.rs:23` を参照)。C の `calculateOptTransDiff` (`vmccal.c:639`) は微分を連続した複素数インデックスに書き込みます (C のコメントでは「this part will not be used」)。一方 Rust の `opt_trans_diff` (`observables.rs:957`) は Julia と同様に (value, i·value) の組を書き込みます。OptTrans は `tests/fixtures/opttrans` のフィクスチャでカバーされています。このマニュアルでは、これ以上の対応付けは行いません **(未検証)**。

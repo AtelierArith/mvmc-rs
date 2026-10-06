@@ -166,10 +166,10 @@ $$
 > - C: `CalculateHamiltonian1` (transfer part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:244`
 > - C: `CalculateHamiltonian2` (two-body part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:299`
 > - C: `CalculateHamiltonian_fsz` — `extern/mVMC-1.3.0/src/mVMC/calham_fsz.c:49`
-> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:2897`
-> - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:1924`
-> - Rust: `calculate_hamiltonian_diagonal` — `crates/mvmc-core/src/observables.rs:562`
-> - Rust: `calculate_local_energy_fsz` — `crates/mvmc-core/src/observables.rs:1257`
+> - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:3069`
+> - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:2096`
+> - Rust: `calculate_hamiltonian_diagonal` — `crates/mvmc-core/src/observables.rs:563`
+> - Rust: `calculate_local_energy_fsz` — `crates/mvmc-core/src/observables.rs:1259`
 > - Parity: the accumulation order is CoulombIntra, CoulombInter, Hund (minus sign), Transfer (minus sign), PairHop, Exchange (`tmp = G(0,1) + G(1,0)`, then `J*tmp`), InterAll in file order. The C code runs these loops under OpenMP `reduction(+:e)` with `schedule(dynamic)`, so the C summation order over terms is not fixed across thread counts; Rust sums sequentially in file order. For *real* transfer coefficients Rust accumulates the whole Transfer section into a separate sum (`transfer_energy`) and adds it to the diagonal part afterwards (`observables.rs:2807-2889`); combining the two sums changes the SR gradient at round-off level, so this order must be kept.
 > - Parity: for real wave functions C calls `CalculateHamiltonian_real(creal(ip), ...)` (`calham_real.c`), whose accumulator is a `double`; the Rust real path therefore drops the imaginary part of an `InterAll` coefficient (comment at `observables.rs:2984`; C `calham_real.c:52` declares `double myEnergy` and `calham_real.c:136` uses `creal(ParaTransfer[idx])`, so the real path also drops imaginary `Trans` coefficients).
 > - Parity: terms whose site indices fall outside $0\ldots N_s-1$ are skipped in Rust (they are rejected earlier by validation for `InterAll`, see [7.5](07-input-files.md#75-supported-and-rejected-inputs)).
@@ -222,9 +222,9 @@ moved configuration is obtained with the two-electron update of
 > - C: `GreenFunc1_fsz` — `extern/mVMC-1.3.0/src/mVMC/locgrn_fsz.c:29`
 > - C: `CalculateIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `green_func1` — `crates/mvmc-core/src/observables.rs:1474`
-> - Rust: `green_func1_impl` — `crates/mvmc-core/src/observables.rs:1753`
-> - Rust: `green_func2` — `crates/mvmc-core/src/observables.rs:637`
-> - Rust: `green_func2_impl` — `crates/mvmc-core/src/observables.rs:742`
+> - Rust: `green_func1_impl` — `crates/mvmc-core/src/observables.rs:1915`
+> - Rust: `green_func2` — `crates/mvmc-core/src/observables.rs:638`
+> - Rust: `green_func2_impl` — `crates/mvmc-core/src/observables.rs:743`
 > - Rust: `green_func2_fsz` — `crates/mvmc-core/src/observables/fsz_green.rs:20`
 > - Parity: the final amplitude ratio is conjugated (`conj(z/ip)`); in Rust `divide(proj_ratio * new_ip, ip).conj()` selects `c_complex::divide` (C99 semantics) in the C-kernel instantiation (`C_KERNEL = true`) and `julia_complex::divide` otherwise (`observables.rs:1874-1877`). `ProjRatio` uses $\exp$ of the *real part* of the projection exponent only, because C declares Gutzwiller/Jastrow/DH parameters real (`projection.c:41-56`, "we assume gutzwiller and jastrow is real").
 > - Parity: C `GreenFunc1` calls `UpdateProjCnt` a second time in the non-RBM branch (`locgrn.c:68`, a redundant duplicate with identical arguments); this does not change the result.

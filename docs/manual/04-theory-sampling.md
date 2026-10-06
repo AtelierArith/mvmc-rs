@@ -209,14 +209,14 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
 > - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
-> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:69`
-> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:393`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:868`
-> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:186`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1132`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:980`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:605`
+> - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
+> - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:1026`
+> - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:341`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1294`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:703`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1142`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:760`
 > - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:227`, `pfupdate_two_real.c:227`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
 
 ## 4.6 Parallelism inside the sampler
