@@ -107,6 +107,9 @@ pub fn stochastic_opt_real_with_sr_info_timed<const TIMED: bool>(
 
     let sr_opt_size = state.sr_opt.sr_opt_size;
     if !state.sr_opt.sr_opt_oo_real.is_empty() {
+        if state.sr_oo_deferred() {
+            return stochastic_opt_real_resident(data, state, timer, sr_info, n_para, n_proj);
+        }
         // Real fast-path: SROptOO_real lives in the dedicated real buffer.
         timer.start(50);
         let (s_diag, smat_to_para_idx) = collect_active_real(data, state, n_para, sr_opt_size);
@@ -387,6 +390,16 @@ fn collect_active_real(
                 state.sr_opt.sr_opt_oo_real[idx_diag] - state.sr_opt.sr_opt_oo_real[idx_0].powi(2);
         }
     });
+    select_active_real(data, n_para, s_diag)
+}
+
+/// The active-component selection of the real direct SR (`stcopt.c` redundancy cut) from the
+/// component variances `s_diag`.
+fn select_active_real(
+    data: &ExpertModeData,
+    n_para: usize,
+    s_diag: Vec<f64>,
+) -> (Vec<f64>, Vec<usize>) {
     // Julia's real-to-complex layout includes zero imaginary variances.
     let s_diag_max = if s_diag.iter().any(|v| v.is_nan()) {
         f64::NAN
@@ -406,6 +419,118 @@ fn collect_active_real(
         smat_to_para_idx.push(pi);
     }
     (s_diag, smat_to_para_idx)
+}
+
+/// Whether the real direct SR step of this measurement is routed to a resident SR backend
+/// (issue #452): direct (not CG) real SR with a saved-sample store, one process, and a selected
+/// backend whose SR stages report [`crate::sr_backend::SrStages::resident_direct`]. Then the host
+/// `OO` is never materialized (`run.rs` skips the Gram) and [`stochastic_opt_real_resident`]
+/// drives the step. Everything else keeps the per-stage path on the selected backend.
+pub(crate) fn resident_direct_real_applies<R: crate::reducer::Reducer + ?Sized>(
+    data: &ExpertModeData,
+    n_vmc_sample: usize,
+    sr_opt_size: usize,
+    use_store: bool,
+    reducer: &R,
+) -> bool {
+    data.modpara.nsrcg == 0
+        && use_store
+        && n_vmc_sample > 0
+        && sr_opt_size > 0
+        && reducer.reduction_size() == 1
+        && !reducer.supports_grouped_sampling()
+        && crate::stage_backend::selected_resident_direct()
+}
+
+/// Real direct SR on a resident backend (issue #452): the O store is uploaded once, the Gram,
+/// `S`, `g` and the Cholesky factor stay on the device, and only `x` comes back. The host sees
+/// the Gram diagonal and first column (for the redundancy cut) and nothing else; the formulas
+/// and the `1 / wc` normalization are those of the per-stage path.
+fn stochastic_opt_real_resident<const TIMED: bool>(
+    data: &mut ExpertModeData,
+    state: &mut VmcOptimizationState,
+    timer: &mut CTimer<TIMED>,
+    sr_info: &mut Option<SrInfoRow>,
+    n_para: usize,
+    n_proj: usize,
+) -> i32 {
+    use crate::sr_backend::DirectSolveInput;
+    let n = state.sr_opt.sr_opt_size;
+    let samples = data.modpara.nvmc_sample.max(0) as usize;
+    // `weight_average_sr_opt_real` is a no-op below this weight; the same guard here.
+    let wc = state.energy.wc;
+    let gram_scale = if wc.norm() < 1.0e-15 {
+        1.0
+    } else {
+        1.0 / wc.re
+    };
+    let mut backend = crate::stage_backend::acquire();
+    let sr = backend.sr();
+    timer.start(51);
+    timer.start(56);
+    let summary = sr
+        .direct_begin(&state.sr_opt.sr_opt_o_store_real[..n * samples], n, samples)
+        .expect("resident SR Gram stage failed");
+    timer.start(50);
+    let mut s_diag = vec![0.0_f64; n_para];
+    crate::threading::for_each_mut(&mut s_diag, 3, |pi, value| {
+        // the normalized `OO(pi+1, pi+1) - OO(pi+1, 0)^2` of `collect_active_real`
+        let diagonal = summary.diag[pi + 1] * gram_scale;
+        let mean = summary.col0[pi + 1] * gram_scale;
+        *value = diagonal - mean.powi(2);
+    });
+    let (s_diag, smat_to_para_idx) = select_active_real(data, n_para, s_diag);
+    timer.stop(50);
+    if smat_to_para_idx.is_empty() {
+        timer.stop(56);
+        timer.stop(51);
+        observer::not_solved(
+            data,
+            observer::DirectMode::Real,
+            observer::NotSolvedReason::NoActiveComponents,
+        );
+        return 0;
+    }
+    let n_smat = smat_to_para_idx.len();
+    sr.direct_assemble(&DirectSolveInput {
+        ho: &state.sr_opt.sr_opt_ho_real,
+        map: &smat_to_para_idx,
+        offset: 1,
+        sta_del: data.modpara.dsr_opt_sta_del,
+        step_dt: data.modpara.dsr_opt_step_dt,
+        gram_scale,
+    })
+    .expect("resident SR S/g assembly failed");
+    timer.stop(56);
+    timer.start(57);
+    let observation = if observer::is_enabled() {
+        let (s, g) = sr
+            .direct_download_s_g(n_smat)
+            .expect("resident SR S/g download failed");
+        observer::before_solve(data, &s, &g, &smat_to_para_idx, observer::DirectMode::Real)
+    } else {
+        None
+    };
+    let solved = sr.direct_factor_solve(n_smat);
+    let status: Result<(), ()> = solved.as_ref().map(|_| ()).map_err(|_| ());
+    let g = solved.unwrap_or_default();
+    observer::after_solve(observation, &g, &status);
+    timer.stop(57);
+    timer.stop(51);
+    if status.is_err() {
+        return 1;
+    }
+    *sr_info = Some(direct_real_sr_info(
+        data,
+        &s_diag,
+        &smat_to_para_idx,
+        &g,
+        n_para,
+    ));
+    timer.start(52);
+    apply_parameter_update(data, &smat_to_para_idx, &g, n_proj);
+    timer.stop(52);
+    0
 }
 
 fn apply_parameter_update(

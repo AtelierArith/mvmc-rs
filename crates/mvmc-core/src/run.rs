@@ -2886,11 +2886,15 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
         // in-place publication arithmetic without allocating a local shape.
         accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
         crate::sr_accumulator::publish_physcal_in_place(&mut state.sr_opt);
+        state.sr_oo_deferred = false;
         return;
     }
     let mut local = crate::sr_accumulator::SrMeasurement::begin(state);
-    accumulate_observables_local(data, local.state(), all_complex, use_fsz, timer, reducer);
+    let deferred =
+        accumulate_observables_local(data, local.state(), all_complex, use_fsz, timer, reducer);
     local.finish();
+    // Set after `finish`, which swaps the local buffers back: the flag belongs to the state.
+    state.sr_oo_deferred = deferred;
 }
 
 fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
@@ -2900,7 +2904,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     use_fsz: bool,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
-) {
+) -> bool {
     let diag = timer.diagnostics.maincal && !use_fsz;
     timer.start_diag(940, diag);
     timer.start_diag(941, diag);
@@ -3449,13 +3453,26 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     observe_physcal_green(data, state, use_fsz);
     normalize_physcal_green(state, use_fsz, all_complex);
     // C finalizes the stored OO only for NVMCCalMode==0 (`vmccal.c:309`).
+    let mut oo_deferred = false;
     if use_store && data.modpara.vmc_calc_mode == 0 {
         timer.start(45);
         let options = crate::observables::StoreFinalization {
             sample_start: 0,
             diagonal_only: data.modpara.nsrcg != 0,
         };
-        if all_complex {
+        if !all_complex
+            && crate::sr::resident_direct_real_applies(
+                data,
+                n_vmc_sample,
+                sr_opt_size,
+                use_store,
+                reducer,
+            )
+        {
+            // Issue #452: the resident SR step forms the Gram on the device from the O store;
+            // the host never materializes `OO` for this step.
+            oo_deferred = true;
+        } else if all_complex {
             crate::observables::finalize_oo_store(
                 &mut state.sr_opt.sr_opt_oo,
                 &state.sr_opt.sr_opt_o_store,
@@ -3474,6 +3491,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
         }
         timer.stop(45);
     }
+    oo_deferred
 }
 
 /// Exchange batch slot `slot` with the working inverse/Pfaffian tables of the active mode.

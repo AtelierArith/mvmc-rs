@@ -128,6 +128,46 @@ pub struct DirectStepInput<'a> {
     pub step_dt: f64,
 }
 
+/// Call counters of a resident SR backend (tests and the benchmark metadata).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ResidentCounters {
+    /// Resident direct steps begun ([`SrStages::direct_begin`]).
+    pub direct_steps: u64,
+    /// Store uploads (one per direct step).
+    pub store_uploads: u64,
+    /// `f64` values uploaded as O store.
+    pub store_values: u64,
+    /// Resident CG solves ([`SrStages::cg_step`]).
+    pub cg_solves: u64,
+}
+
+/// Diagonal and first column of the Gram matrix `G = O O^T` of an uploaded store (unscaled):
+/// all that the host needs to select the active components (issue #452).
+#[derive(Debug, Clone, PartialEq)]
+pub struct GramSummary {
+    /// `G[i, i]`, length `n`.
+    pub diag: Vec<f64>,
+    /// `G[i, 0]` (the mean of component `i` before the `1 / wc` normalization), length `n`.
+    pub col0: Vec<f64>,
+}
+
+/// Inputs of the assembly phase of the resident direct SR step ([`SrStages::direct_assemble`]).
+pub struct DirectSolveInput<'a> {
+    /// `HO` vector (length `n`), already normalized by the host.
+    pub ho: &'a [f64],
+    /// Active components in S order.
+    pub map: &'a [usize],
+    /// Index offset of the first parameter (1 for real parameters).
+    pub offset: usize,
+    /// Diagonal regularization `DSROptStaDel`.
+    pub sta_del: f64,
+    /// Step size `DSROptStepDt`.
+    pub step_dt: f64,
+    /// Factor applied to every Gram entry before it is used (`1 / wc`, the weight
+    /// normalization `weight_average_sr_opt_real` applies to the host `OO`).
+    pub gram_scale: f64,
+}
+
 /// Inputs of one CG SR solve (single process).
 pub struct CgStepInput<'a> {
     /// Real sample matrix `[components, samples]`.
@@ -285,6 +325,62 @@ pub trait SrStages: Send {
             StageError::Failed("Cholesky solve failed (info != 0 or nonfinite)".into())
         })?;
         Ok(g)
+    }
+
+    /// Call counters of a resident backend (`None` for host backends).
+    fn resident_counters(&self) -> Option<ResidentCounters> {
+        None
+    }
+
+    /// True when [`Self::direct_begin`] / [`Self::direct_assemble`] keep the Gram matrix, `S` and the
+    /// factor on the device. Production (`sr.rs`) then never materializes the host `OO` and
+    /// uploads the O store once per step (issue #452). The default is `false`.
+    fn resident_direct(&self) -> bool {
+        false
+    }
+
+    /// True when [`Self::cg_step`] runs the whole CG loop on the device. Production
+    /// (`SampledSrOperator::solve_with_reducer`) then calls it once per solve (issue #452).
+    fn resident_cg(&self) -> bool {
+        false
+    }
+
+    /// Phase 1 of the resident direct step: upload the `[n, samples]` store (the once-per-step
+    /// input) and form the Gram matrix on the device; returns its diagonal and first column.
+    fn direct_begin(
+        &mut self,
+        _store: &[f64],
+        _n: usize,
+        _samples: usize,
+    ) -> Result<GramSummary, StageError> {
+        Err(StageError::Unsupported(
+            "this SR backend provides no resident direct step".to_string(),
+        ))
+    }
+
+    /// Phase 2: S/g assembly (Gram entries scaled by `gram_scale`, diagonal shift) on the Gram
+    /// matrix of the last [`Self::direct_begin`]; `S` and `g` stay on the device.
+    fn direct_assemble(&mut self, _input: &DirectSolveInput<'_>) -> Result<(), StageError> {
+        Err(StageError::Unsupported(
+            "this SR backend provides no resident direct step".to_string(),
+        ))
+    }
+
+    /// The assembled `S` (full symmetric `nmap x nmap`, diagonal shifted) and `g` after
+    /// [`Self::direct_assemble`], for diagnostics only (an SR observer); the production step
+    /// never copies `S` to the host.
+    fn direct_download_s_g(&mut self, _nmap: usize) -> Result<(Vec<f64>, Vec<f64>), StageError> {
+        Err(StageError::Unsupported(
+            "this SR backend provides no resident direct step".to_string(),
+        ))
+    }
+
+    /// Phase 3: Cholesky factorization and solve of the resident `S x = g`; returns `x`.
+    /// A nonzero factor/solve `info` or a nonfinite solution is [`StageError::Failed`].
+    fn direct_factor_solve(&mut self, _nmap: usize) -> Result<Vec<f64>, StageError> {
+        Err(StageError::Unsupported(
+            "this SR backend provides no resident direct step".to_string(),
+        ))
     }
 
     /// CG SR solve on the sampled operator (single process). Implemented by [`cg_step_with`] for

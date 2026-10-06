@@ -154,6 +154,7 @@ pub struct DeviceSr {
     k_assemble_g: CudaFunction,
     k_combine: CudaFunction,
     k_nonfinite: CudaFunction,
+    k_gram_summary: CudaFunction,
     pool: PinnedPool,
     stage: [Option<PinnedBuf>; 2],
     store: Option<Store>,
@@ -209,6 +210,7 @@ impl DeviceSr {
             k_assemble_g: f("k_assemble_g")?,
             k_combine: f("k_cg_combine")?,
             k_nonfinite: f("k_nonfinite")?,
+            k_gram_summary: f("k_gram_summary")?,
             pool: PinnedPool::new(&ctx),
             stage: [None, None],
             ctx,
@@ -351,18 +353,9 @@ impl DeviceSr {
         Ok(())
     }
 
-    /// Gram, S/g assembly (device-resident `S` and `g`).
-    ///
-    /// `map` lists the active components (S order), `offset` is the index of the first
-    /// parameter in the store (1 for real parameters), `ho` the `HO` vector of length `n`.
-    pub fn assemble(
-        &mut self,
-        ho: &[f64],
-        map: &[usize],
-        offset: usize,
-        sta_del: f64,
-        step_dt: f64,
-    ) -> Result<(), SrDeviceError> {
+    /// Gram `G = O O^T` of the uploaded store on the device (upper triangle, cuBLAS `dsyrk`).
+    /// The Gram matrix stays resident for [`Self::gram_summary`] and [`Self::assemble_scaled`].
+    pub fn compute_gram(&mut self) -> Result<(), SrDeviceError> {
         let (n, samples) = {
             let st = self
                 .store
@@ -370,40 +363,10 @@ impl DeviceSr {
                 .ok_or_else(|| SrDeviceError::Shape("no store uploaded".into()))?;
             (st.n, st.samples)
         };
-        let nmap = map.len();
-        if ho.len() != n || nmap == 0 || map.iter().any(|&p| p + offset >= n) {
-            return Err(SrDeviceError::Shape(
-                "ho/map inconsistent with the store".into(),
-            ));
-        }
         let stream = self.stream();
-        // vectors: 0 = ho, 1 = g (rhs / solution)
-        let t = Instant::now();
-        self.vec(0, n)?;
-        self.vec(1, nmap)?;
         let mut gram = self.gram.take();
         self.ensure(&mut gram, n * n)?;
         self.gram = gram;
-        let mut s = self.s.take();
-        self.ensure(&mut s, nmap * nmap)?;
-        self.s = s;
-        {
-            let mut v0 = std::mem::replace(&mut self.vecs[0], stream.alloc_zeros(1).map_err(be)?);
-            self.upload_small(&mut v0, ho)?;
-            self.vecs[0] = v0;
-        }
-        let map_i64: Vec<i64> = map.iter().map(|&p| p as i64).collect();
-        if self.map_dev.as_ref().is_none_or(|m| m.len() < nmap) {
-            self.map_dev = Some(stream.alloc_zeros(nmap).map_err(be)?);
-        }
-        stream
-            .memcpy_htod(
-                &map_i64,
-                &mut self.map_dev.as_mut().expect("map").slice_mut(..nmap),
-            )
-            .map_err(be)?;
-        self.sync()?;
-        self.timings.upload_vec_s = t.elapsed().as_secs_f64();
 
         // G = O O^T (upper triangle)
         let t = Instant::now();
@@ -432,6 +395,112 @@ impl DeviceSr {
         )?;
         self.sync()?;
         self.timings.gram_s = t.elapsed().as_secs_f64();
+        Ok(())
+    }
+
+    /// Diagonal `G[i, i]` and first column `G[i, 0]` of the resident Gram matrix (unscaled): the
+    /// `O(n)` the host needs to choose the active components (issue #452).
+    pub fn gram_summary(&mut self) -> Result<(Vec<f64>, Vec<f64>), SrDeviceError> {
+        let n = self
+            .store
+            .as_ref()
+            .ok_or_else(|| SrDeviceError::Shape("no store uploaded".into()))?
+            .n;
+        if self.gram.is_none() {
+            return Err(SrDeviceError::Shape("no Gram computed".into()));
+        }
+        let stream = self.stream();
+        self.vec(2, 2 * n)?;
+        let gptr = dp(self.gram.as_ref().expect("gram"), &stream);
+        let optr = dp(&self.vecs[2], &stream);
+        let nl = n as i64;
+        let mut b = stream.launch_builder(&self.k_gram_summary);
+        b.arg(&gptr).arg(&nl).arg(&optr);
+        // SAFETY: kernel ABI (const double*, long, double*); one thread per component, the
+        // output holds 2 n doubles.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: (n.div_ceil(256) as u32, 1, 1),
+                block_dim: (256, 1, 1),
+                shared_mem_bytes: 0,
+            })
+        }
+        .map_err(be)?;
+        self.sync()?;
+        let out = stream
+            .clone_dtoh(&self.vecs[2].slice(..2 * n))
+            .map_err(be)?;
+        Ok((out[..n].to_vec(), out[n..].to_vec()))
+    }
+
+    /// Gram, S/g assembly (device-resident `S` and `g`): [`Self::compute_gram`] followed by
+    /// [`Self::assemble_scaled`] with the scale 1.
+    ///
+    /// `map` lists the active components (S order), `offset` is the index of the first
+    /// parameter in the store (1 for real parameters), `ho` the `HO` vector of length `n`.
+    pub fn assemble(
+        &mut self,
+        ho: &[f64],
+        map: &[usize],
+        offset: usize,
+        sta_del: f64,
+        step_dt: f64,
+    ) -> Result<(), SrDeviceError> {
+        self.compute_gram()?;
+        self.assemble_scaled(ho, map, offset, sta_del, step_dt, 1.0)
+    }
+
+    /// S/g assembly on the resident Gram matrix, every Gram entry multiplied by `gram_scale`
+    /// before use (the `1 / wc` weight normalization the host applies to its `OO`; the scale 1
+    /// is exact). `S` and `g` stay on the device.
+    pub fn assemble_scaled(
+        &mut self,
+        ho: &[f64],
+        map: &[usize],
+        offset: usize,
+        sta_del: f64,
+        step_dt: f64,
+        gram_scale: f64,
+    ) -> Result<(), SrDeviceError> {
+        let n = self
+            .store
+            .as_ref()
+            .ok_or_else(|| SrDeviceError::Shape("no store uploaded".into()))?
+            .n;
+        if self.gram.is_none() {
+            return Err(SrDeviceError::Shape("no Gram computed".into()));
+        }
+        let nmap = map.len();
+        if ho.len() != n || nmap == 0 || map.iter().any(|&p| p + offset >= n) {
+            return Err(SrDeviceError::Shape(
+                "ho/map inconsistent with the store".into(),
+            ));
+        }
+        let stream = self.stream();
+        // vectors: 0 = ho, 1 = g (rhs / solution)
+        let t = Instant::now();
+        self.vec(0, n)?;
+        self.vec(1, nmap)?;
+        let mut s = self.s.take();
+        self.ensure(&mut s, nmap * nmap)?;
+        self.s = s;
+        {
+            let mut v0 = std::mem::replace(&mut self.vecs[0], stream.alloc_zeros(1).map_err(be)?);
+            self.upload_small(&mut v0, ho)?;
+            self.vecs[0] = v0;
+        }
+        let map_i64: Vec<i64> = map.iter().map(|&p| p as i64).collect();
+        if self.map_dev.as_ref().is_none_or(|m| m.len() < nmap) {
+            self.map_dev = Some(stream.alloc_zeros(nmap).map_err(be)?);
+        }
+        stream
+            .memcpy_htod(
+                &map_i64,
+                &mut self.map_dev.as_mut().expect("map").slice_mut(..nmap),
+            )
+            .map_err(be)?;
+        self.sync()?;
+        self.timings.upload_vec_s = t.elapsed().as_secs_f64();
 
         // S and g
         let t = Instant::now();
@@ -447,8 +516,9 @@ impl DeviceSr {
             .arg(&nm)
             .arg(&off)
             .arg(&ratio_diag)
+            .arg(&gram_scale)
             .arg(&sptr);
-        // SAFETY: kernel ABI (const double*, long, const long*, long, long, double, double*);
+        // SAFETY: kernel ABI (const double*, long, const long*, long, long, double, double, double*);
         // one thread per S entry, buffers sized above.
         unsafe {
             b.launch(LaunchConfig {
@@ -468,9 +538,10 @@ impl DeviceSr {
             .arg(&nm)
             .arg(&off)
             .arg(&step_dt)
+            .arg(&gram_scale)
             .arg(&goptr);
         // SAFETY: kernel ABI (const double*, const double*, long, const long*, long, long,
-        // double, double*); one thread per active component.
+        // double, double, double*); one thread per active component.
         unsafe {
             b.launch(LaunchConfig {
                 grid_dim: (nmap.div_ceil(256) as u32, 1, 1),

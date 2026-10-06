@@ -11,13 +11,14 @@ __device__ inline double sym(const double* g, long ld, long a, long b) {
 // S[si + sj*nmap] = OO(pj+off, pi+off) - OO(pi+off, 0) * OO(pj+off, 0), diagonal scaled by
 // ratio_diag = 1 + DSROptStaDel (the C stcopt.c:69 formula; `oo.at(flat)` of the CPU path).
 extern "C" __global__ void k_assemble_s(const double* g, long ld, const long* map, long nmap,
-                                        long off, double ratio_diag, double* s) {
+                                        long off, double ratio_diag, double scale, double* s) {
   const long idx = (long)blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= nmap * nmap) return;
   const long si = idx % nmap, sj = idx / nmap;
   const long pi = map[si], pj = map[sj];
-  const double tmp = sym(g, ld, pi + off, 0);
-  double v = sym(g, ld, pj + off, pi + off) - tmp * sym(g, ld, pj + off, 0);
+  // every Gram entry is scaled once, as the host's `OO *= 1/wc` (scale == 1.0 is exact)
+  const double tmp = sym(g, ld, pi + off, 0) * scale;
+  double v = sym(g, ld, pj + off, pi + off) * scale - tmp * (sym(g, ld, pj + off, 0) * scale);
   if (si == sj) v *= ratio_diag;
   s[idx] = v;
 }
@@ -25,11 +26,11 @@ extern "C" __global__ void k_assemble_s(const double* g, long ld, const long* ma
 // g[si] = -2 dt (HO(pi+off) - HO(0) OO(pi+off, 0))
 extern "C" __global__ void k_assemble_g(const double* ho, const double* g, long ld,
                                         const long* map, long nmap, long off, double step_dt,
-                                        double* out) {
+                                        double scale, double* out) {
   const long si = (long)blockIdx.x * blockDim.x + threadIdx.x;
   if (si >= nmap) return;
   const long pi = map[si];
-  const double v = ho[pi + off] - ho[0] * sym(g, ld, pi + off, 0);
+  const double v = ho[pi + off] - ho[0] * (sym(g, ld, pi + off, 0) * scale);
   out[si] = -2.0 * step_dt * v;
 }
 
@@ -46,4 +47,12 @@ extern "C" __global__ void k_cg_combine(const double* y, const double* x, const 
 extern "C" __global__ void k_nonfinite(const double* x, long n, int* flag) {
   const long i = (long)blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n && !(x[i] - x[i] == 0.0)) atomicExch(flag, 1);
+}
+
+// out[i] = G(i, i), out[n + i] = G(i, 0): what the host needs to choose the active components
+extern "C" __global__ void k_gram_summary(const double* g, long n, double* out) {
+  const long i = (long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  out[i] = sym(g, n, i, i);
+  out[n + i] = sym(g, n, i, 0);
 }

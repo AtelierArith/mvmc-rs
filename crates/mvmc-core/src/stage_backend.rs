@@ -26,8 +26,10 @@
 //! value or an unavailable device is an error, never a fallback. CUDA is only available when
 //! the `gpu-cuda` feature is enabled and a provider (`gpu/mvmc-gpu-cuda`) is registered.
 //!
-//! Production currently routes the SR stages through the selected backend. The sampler and the
-//! measurement Pfaffian still use the C-order kernels directly (`calc_m_all_*`); the
+//! Production routes the SR stages through the selected backend, and a backend that keeps the
+//! SR step on a device (`SrStages::resident_direct`/`resident_cg`, issue #452) takes the real
+//! direct step and the CG solve as whole composite stages (`sr.rs`, `sr_cg.rs`). The sampler and
+//! the measurement Pfaffian still use the C-order kernels directly (`calc_m_all_*`); the
 //! [`PfaffianStages`] slot is exercised by the harness and the gates and is where #422/#423
 //! wiring plugs in.
 
@@ -485,6 +487,40 @@ fn shared(kind: StageBackendKind) -> Result<Shared, StageError> {
     let backend: Shared = Box::leak(Box::new(Mutex::new(open_stage_backend(kind)?)));
     registry.push((kind, backend));
     Ok(backend)
+}
+
+/// Pre-register the process-wide backend of `kind` (tests and programs that supply their own
+/// stages). Returns `false`, leaving the existing backend, when `kind` was already opened or
+/// registered; `StageBackendKind::COrder` is never shared and cannot be registered.
+pub fn register_stage_backend(kind: StageBackendKind, backend: StageBackend<'static>) -> bool {
+    if kind == StageBackendKind::COrder {
+        return false;
+    }
+    let mut registry = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+    if registry.iter().any(|(k, _)| *k == kind) {
+        return false;
+    }
+    let leaked: Shared = Box::leak(Box::new(Mutex::new(backend)));
+    registry.push((kind, leaked));
+    true
+}
+
+/// True when the selected backend keeps the direct SR step resident on a device (the selected
+/// kind is not C order and its SR stages report [`SrStages::resident_direct`]). A backend that
+/// cannot be opened is not resident here; the SR step reports that error itself.
+pub fn selected_resident_direct() -> bool {
+    let kind = selected_stage_backend();
+    if kind == StageBackendKind::COrder {
+        return false;
+    }
+    match shared(kind) {
+        Ok(m) => m
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .sr()
+            .resident_direct(),
+        Err(_) => false,
+    }
 }
 
 /// Handle to the selected backend for one SR solve or one stage call.
