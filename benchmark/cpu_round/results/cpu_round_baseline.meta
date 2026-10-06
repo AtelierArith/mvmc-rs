@@ -1,0 +1,6 @@
+cpu=Intel(R) Xeon(R) CPU E5-2699 v3 @ 2.30GHz
+threads_available=36
+os=Linux-6.8.0-146-generic-x86_64-with-glibc2.39
+inner=1
+load_start=4.29
+load_end=1.02
