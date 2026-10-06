@@ -50,10 +50,28 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 ## 1.4 動作要件
 
 - 最近の安定版 Rust ツールチェーン。`rust-toolchain.toml` は `rustfmt` と `clippy` を含む `stable` チャンネルを選択します。固定された MSRV はありません。
-- **OpenBLAS と LAPACK(LP64 インターフェース)**。`crates/mvmc-core/build.rs` は `cargo:rustc-link-lib=dylib=openblas` を出力します。Linux ではシステムパッケージ(Debian/Ubuntu では `libopenblas-dev liblapack-dev`)をインストールしてください。macOS では `brew install openblas` を実行します。この formula は keg-only であり、ビルドスクリプトが Homebrew のライブラリパス(Apple Silicon では `/opt/homebrew/opt/openblas`、Intel では `/usr/local/opt/openblas`)を追加します。
+- **LP64 インターフェースの BLAS と LAPACK プロバイダ**。既定は OpenBLAS で、`mvmc-core`・`mvmc-uhf`・`pfapack` のビルドスクリプトが取り込む `build_support/blas_provider.rs` が `cargo:rustc-link-lib=dylib=openblas` を出力します。Linux ではシステムパッケージ(Debian/Ubuntu では `libopenblas-dev liblapack-dev`)をインストールしてください。macOS では `brew install openblas` を実行します。この formula は keg-only であり、ビルドスクリプトが Homebrew のライブラリパス(Apple Silicon では `/opt/homebrew/opt/openblas`、Intel では `/usr/local/opt/openblas`)を追加します。他のプロバイダはビルド時の環境変数 `MVMC_BLAS_PROVIDER` で選びます([1.4.1](#141-blaslapack-プロバイダの選択))。
 - `mpi` フィーチャーを使う場合: C コンパイララッパーを備えた MPI 実装と `libclang`(`mpi` クレートがバインディングを生成します)。CI のセットアップアクションは、Ubuntu では `libopenblas-dev liblapack-dev libclang-dev libmpich-dev mpich pkg-config` を、macOS では `openblas mpich` をインストールします
   (`.github/actions/setup-rust-ci/action.yml`)。
 - Linux x86_64 が数値のリファレンスプラットフォームです。Dev Container が用意されており([docs/DEV_CONTAINER.md](../../DEV_CONTAINER.md))、macOS は移植性の確認に使われます([docs/NUMERICAL_COMPARISONS.md](../../NUMERICAL_COMPARISONS.md))。
+
+### 1.4.1 BLAS/LAPACK プロバイダの選択
+
+| `MVMC_BLAS_PROVIDER` | リンク | 備考 |
+|---|---|---|
+| `openblas`(既定、未設定でも同じ) | `-lopenblas` | Linux の数値リファレンス環境。直列 SR 経路では実行時スレッド数を 1 に固定(`openblas_set_num_threads`)。 |
+| `accelerate` | `-framework Accelerate` | macOS のみ。実行時のスレッド設定は呼びません。 |
+| `mkl` | `-lmkl_rt`(`MKLROOT/lib`、`MKLROOT/lib/intel64` を探索) | oneMKL の単一動的ライブラリ(LP64)。SR 経路で `MKL_Set_Num_Threads(1)` を呼びます。CI では未検証。 |
+| `netlib` | `-lblas -llapack` | リファレンス BLAS/LAPACK(同名のシンボルを提供するライブラリ)。 |
+
+```sh
+# 既定: OpenBLAS
+cargo build --release -p mvmc-cli
+# macOS Accelerate
+MVMC_BLAS_PROVIDER=accelerate cargo build --release -p mvmc-cli
+```
+
+変数は `cargo` 呼び出し全体に設定してください。値を変えるとビルドスクリプトが再実行されます。数値リファレンスは Linux + OpenBLAS(`Haswell`/`Zen` カーネル)で、他のプロバイダや OpenBLAS カーネルの結果は文書化された範囲内で一致します(テストの `kernel_class`、[docs/NUMERICAL_COMPARISONS.md](../../NUMERICAL_COMPARISONS.md) の「BLAS provider and kernel matrix」)。リファレンスカーネルを持たないプロバイダでのテストは、そこで説明している条件数を考慮した検査を使います。
 
 ## 1.5 Cargoフィーチャー
 

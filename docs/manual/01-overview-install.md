@@ -59,12 +59,14 @@ builds and tests do not need `c_toolbox/`.
 
 - A recent stable Rust toolchain. `rust-toolchain.toml` selects the `stable`
   channel with `rustfmt` and `clippy`; there is no pinned MSRV.
-- **OpenBLAS and LAPACK (LP64 interface)**. `crates/mvmc-core/build.rs` emits
-  `cargo:rustc-link-lib=dylib=openblas`. On Linux install the system package
-  (`libopenblas-dev liblapack-dev` on Debian/Ubuntu). On macOS install
-  `brew install openblas`; the formula is keg-only and the build script adds the
-  Homebrew library path (`/opt/homebrew/opt/openblas` on Apple Silicon,
-  `/usr/local/opt/openblas` on Intel).
+- **A BLAS and LAPACK provider with the LP64 interface**. The default is OpenBLAS:
+  `build_support/blas_provider.rs` (included by the build scripts of `mvmc-core`,
+  `mvmc-uhf` and `pfapack`) emits `cargo:rustc-link-lib=dylib=openblas`. On Linux
+  install the system package (`libopenblas-dev liblapack-dev` on Debian/Ubuntu). On
+  macOS install `brew install openblas`; the formula is keg-only and the build script
+  adds the Homebrew library path (`/opt/homebrew/opt/openblas` on Apple Silicon,
+  `/usr/local/opt/openblas` on Intel). Other providers are selected at build time with
+  the environment variable `MVMC_BLAS_PROVIDER` (see [1.4.1](#141-selecting-the-blaslapack-provider)).
 - For the `mpi` feature: an MPI implementation with a C compiler wrapper and
   `libclang` (the `mpi` crate generates bindings). The CI setup action installs
   `libopenblas-dev liblapack-dev libclang-dev libmpich-dev mpich pkg-config` on
@@ -73,6 +75,29 @@ builds and tests do not need `c_toolbox/`.
 - Linux x86_64 is the numerical reference platform; a Dev Container is provided
   ([docs/DEV_CONTAINER.md](../DEV_CONTAINER.md)) and macOS is used for
   portability checks ([docs/NUMERICAL_COMPARISONS.md](../NUMERICAL_COMPARISONS.md)).
+
+### 1.4.1 Selecting the BLAS/LAPACK provider
+
+| `MVMC_BLAS_PROVIDER` | Links | Notes |
+|---|---|---|
+| `openblas` (default, also when unset) | `-lopenblas` | Linux numerical reference environment. Runtime thread count is fixed to 1 for the serial SR path (`openblas_set_num_threads`). |
+| `accelerate` | `-framework Accelerate` | macOS only. No runtime thread setter is called. |
+| `mkl` | `-lmkl_rt` (`MKLROOT/lib`, `MKLROOT/lib/intel64` are searched) | oneMKL single dynamic library, LP64 interface; the SR path calls `MKL_Set_Num_Threads(1)`. Not exercised in CI. |
+| `netlib` | `-lblas -llapack` | Reference BLAS/LAPACK (or any library exporting those names). |
+
+```sh
+# default: OpenBLAS
+cargo build --release -p mvmc-cli
+# macOS Accelerate
+MVMC_BLAS_PROVIDER=accelerate cargo build --release -p mvmc-cli
+```
+
+Set the variable for the whole `cargo` invocation; changing it re-runs the build
+scripts. The numerical reference is Linux with OpenBLAS (`Haswell`/`Zen` kernels);
+results with other providers or OpenBLAS kernels agree within the documented bounds
+(`kernel_class` in the tests, [docs/NUMERICAL_COMPARISONS.md](../NUMERICAL_COMPARISONS.md),
+section "BLAS provider and kernel matrix"). Tests on a provider without the reference
+kernels use the conditioning-aware checks described there.
 
 ## 1.5 Cargo features
 

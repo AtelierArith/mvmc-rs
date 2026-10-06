@@ -2,8 +2,8 @@
 # The main CI pins OPENBLAS_CORETYPE (HASWELL / NEOVERSEN1) with Homebrew or apt OpenBLAS.
 # This workflow runs the same tests with the provider variants developers can hit:
 # macOS and Linux OpenBLAS with the kernel chosen by the CPU (hosted macOS VMs report the
-# generic `armv8` core) and unpinned thread counts. macOS Accelerate is not a supported
-# provider: `mvmc-core/build.rs` links `openblas` unconditionally. Manual, or when this file changes.
+# generic `armv8` core), unpinned thread counts, and macOS Accelerate (`MVMC_BLAS_PROVIDER=accelerate`,
+# #474). Manual, or when this file changes.
 name: BLAS matrix
 
 on:
@@ -27,11 +27,13 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-          - { name: macOS ARM64 OpenBLAS native kernel (threads 1), os: macos-15, arch: ARM64, cache: macos-arm64, accelerate: '0', coretype: '', threads: '1' }
-          - { name: macOS ARM64 OpenBLAS native kernel (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, accelerate: '0', coretype: '', threads: '' }
-          - { name: Linux x86_64 OpenBLAS native kernel (threads 1), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '1' }
-          - { name: Linux x86_64 OpenBLAS native kernel (threads default), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '' }
+          - { name: macOS ARM64 OpenBLAS native kernel (threads 1), os: macos-15, arch: ARM64, cache: macos-arm64, provider: openblas, coretype: '', threads: '1' }
+          - { name: macOS ARM64 OpenBLAS native kernel (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, provider: openblas, coretype: '', threads: '' }
+          - { name: macOS ARM64 Accelerate (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, provider: accelerate, coretype: '', threads: '' }
+          - { name: Linux x86_64 OpenBLAS native kernel (threads 1), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, provider: openblas, coretype: '', threads: '1' }
+          - { name: Linux x86_64 OpenBLAS native kernel (threads default), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, provider: openblas, coretype: '', threads: '' }
     env:
+      MVMC_BLAS_PROVIDER: ${{ matrix.variant.provider }}
       MVMC_CG_DIAGNOSTICS: '1'
       MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
     steps:
