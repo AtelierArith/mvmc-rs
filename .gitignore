@@ -21,3 +21,5 @@ output
 .env
 !tests/fixtures/greenr2k/**/output
 !tests/fixtures/greenr2k/**/output/**
+/target-bench-docker
+/bench-out
