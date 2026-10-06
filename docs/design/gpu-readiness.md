@@ -1221,9 +1221,21 @@ replaces the sequential kernels by whole-batch operations: the pivot search by `
 `compare` + `select` + `reduce_min`, the batch-varying row/column swap by one-hot `select`
 masks and `reduce_sum`, the skew rank-2 update by broadcast elementwise operations with the
 block re-skewed through `transpose` and `select`, the unit upper-triangular inverse by
-`prod_j (I + (-N)^(2^j))` with batched `dot_general`, the skew-tridiagonal solve by row
+batched back substitution over rows (broadcast multiply + `reduce_sum`), the skew-tridiagonal solve by row
 recurrences over `[n, P]` slices, and the pivot permutations by batched one-hot permutation
 matrices applied with `dot_general`.
+
+Stability (issue #466). The first version expanded the unit upper-triangular inverse as
+`(I+N)^-1 = prod_j (I + (-N)^(2^j))` (repeated squaring of the multiplier matrix). That is exact
+in exact arithmetic but numerically unstable: the entries of the powers of `N` grow exponentially
+with `n` and the factors cancel, so the identity residual `max|A A^-1 - I|` of random skew
+planes grew from 3e-14 (n = 32) through 4e-12 (c64, n = 64) to 1e-8 (c64) / 1e-9 (f64) at
+n = 128 while pfapack stayed at 3e-14 (the c64 n = 128 difference to pfapack, 1.2e-7, exceeded
+`16 n eps cond` = 2.3e-9). The cause was neither the pivot rule (the factor and the Pfaffian
+agree with pfapack to 1e-14) nor the bound or the condition estimate (`cond ~ 1e3`). Back
+substitution has the stability of `dtrtri`: n = 128 now gives residual 1e-14..3e-14 and
+difference to pfapack 4e-15..2e-14, in both dtypes; the `16 n eps cond` bound is unchanged and
+`native_inverse_is_stable_at_large_n_real_and_complex` also bounds the residual.
 
 Cost: about 100 session operations per elimination step (137 / 568 / 1631 / 2482 operations for
 `n = 2 / 6 / 16 / 24`; `MVMC_GPU_NATIVE_OPCOUNT=1` prints the count); 10 to 15 us per operation

@@ -2,7 +2,7 @@
 //!
 //! The LTL factorization keeps pfapack's elementwise operation order, so the real Pfaffian
 //! is expected to be bit-identical; the inverse uses a different operation order
-//! (repeated-squaring triangular inverse, `dot_general` permutations) and is compared with
+//! (back-substitution triangular inverse, `dot_general` permutations) and is compared with
 //! an explicit tolerance derived from `n * eps * cond`.
 
 use mvmc_gpu::testkit::*;
@@ -98,4 +98,56 @@ fn native_reports_non_finite_plane() {
     let out = pfaffian_inverse_batched(&Backend::TenferroNative, &planes, n, 2, 1).unwrap();
     assert_eq!(out.status[0], PlaneStatus::Ok);
     assert_ne!(out.status[1], PlaneStatus::Ok);
+}
+
+/// Issue #466: the tensor-native inverse must be as stable as pfapack at large `n`.
+///
+/// The former repeated-squaring expansion of the unit-triangular inverse had an identity
+/// residual that grew from 3e-14 at n = 32 to 1e-8 (c64) / 1e-9 (f64) at n = 128 while
+/// pfapack stayed at 3e-14: the powers of the multiplier matrix grow exponentially and the
+/// factors cancel. Back substitution restores the pfapack behaviour. Bounds, with the
+/// Frobenius condition estimate `cond = ||A|| ||A^-1||`:
+///
+/// * difference to pfapack: `16 n eps cond` (relative, Frobenius), the bound of issue #466;
+/// * own identity residual `max |A inv - I|`: a backward-stable inverse has `O(eps cond)`
+///   residual; `4 eps cond` is used (measured 1.1e-14 against 2.5e-12 allowed at n = 128).
+fn large_n<T: TestScalar>(label: &str) {
+    let eps = f64::EPSILON;
+    for n in [64usize, 128] {
+        let planes = random_planes::<T>(n, 2, 11 + n as u64);
+        let want = pfaffian_inverse_batched(&Backend::CpuPfapack, &planes, n, 1, 2).unwrap();
+        let got = pfaffian_inverse_batched(&Backend::TenferroNative, &planes, n, 1, 2).unwrap();
+        assert_eq!(got.status, want.status);
+        for p in 0..2 {
+            let a = &planes[p * n * n..(p + 1) * n * n];
+            let w = &want.inv[p * n * n..(p + 1) * n * n];
+            let g = &got.inv[p * n * n..(p + 1) * n * n];
+            let cond = fro(a) * fro(w);
+            let diff = T::as_f64_lanes(g)
+                .iter()
+                .zip(T::as_f64_lanes(w))
+                .map(|(x, y)| (x - y) * (x - y))
+                .sum::<f64>()
+                .sqrt()
+                / fro(w);
+            let allowed = 16.0 * n as f64 * eps * cond;
+            eprintln!("{label} n={n} p={p}: rel diff {diff:.2e} (allowed {allowed:.2e})");
+            assert!(
+                diff <= allowed,
+                "{label} n={n} p={p}: {diff:e} > {allowed:e}"
+            );
+            let residual = identity_residual(a, g, n);
+            let allowed_residual = 4.0 * eps * cond;
+            assert!(
+                residual <= allowed_residual,
+                "{label} n={n} p={p}: residual {residual:e} > {allowed_residual:e}"
+            );
+        }
+    }
+}
+
+#[test]
+fn native_inverse_is_stable_at_large_n_real_and_complex() {
+    large_n::<f64>("f64");
+    large_n::<Complex64>("c64");
 }
