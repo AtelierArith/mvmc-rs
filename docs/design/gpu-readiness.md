@@ -887,8 +887,16 @@ of one pinned copy call that does not wait.
   tenferro by the factors above. The code path (`upload_tensor`: CubeCL `create_from_slice`;
   `download_tensor`: `rt.synchronize()`, CubeCL `read_one`, then a second host copy
   `T::from_bytes(..).to_vec()`; `third_party/tenferro-gpu/src/cubecl/memory.rs`) adds a device
-  synchronization, CubeCL staging and extra host copies. Attributing the remaining cost inside
-  CubeCL would need a profiler; the request draft below asks upstream to do that.
+  synchronization, CubeCL staging and extra host copies. Instrumenting the sources with timers
+  attributes the cost (256 MB, after warm-up): an upload spends 181 ms in
+  `slice.to_vec()` (`t4a-cubecl-runtime` `client.rs:296`) and 381 ms in a second
+  `data.to_vec()` (`client.rs:232`) against 96 ms for the actual pageable host-to-device copy
+  (87 % redundant host copies; 68 % at 16 MB); a download spends 20.5 ms in `read_one` and
+  162 ms in `from_bytes(..).to_vec()` (`memory.rs:222`; 82 %, 61 % at 16 MB). Above 100 MB the
+  CubeCL host pool is bypassed for `vec![0; n]` (`t4a-cubecl-cuda` `command.rs:162`). The
+  copies run at 0.7 to 1.4 GB/s because every call writes into new, page-faulting memory. Full
+  analysis with file:line references and the minimal example are in
+  `docs/design/tenferro-transfer-request-draft.md`.
 * Write-combined memory is a trap for small copies: a 4 KB host-to-device copy takes 51 us from
   write-combined pinned memory against 7 us from cached pinned memory (reproduced in every run),
   and 11 us for 32 KB; the bandwidth is the same for 1 MB and larger. `PinnedKind::for_upload`
