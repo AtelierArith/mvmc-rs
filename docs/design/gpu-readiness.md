@@ -1459,6 +1459,15 @@ express); the only other backend interface it touches is `PfaffianStages` throug
 Walkers with different parameters (the `init_parameter` random initialization of the no-file path
 differs per seed) get one resident Slater table each; the service supports both.
 
+**Final accepts (issue #465).** A walker's last accepted move reaches the service as a message
+right before its `Done` and is normally applied by the next round. When the last walkers finish
+there is no next round, so `run_lockstep_real` flushes the pending accepts with a final
+proposal-free round; without it the resident inverse and Pfaffian stayed one move behind the
+walker's configuration (decisions, RNG and configuration were unaffected, since they never read
+the table afterwards). `HostService::download_walker` and the gate
+`device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker` check the resident tables
+of every walker, with walkers sharing one wavefunction, right after the run.
+
 **Stale host tables (issue #454).** The device holds the current inverses, so after a device run
 the host `inv_m_real` is out of date. This is tracked explicitly: `run_lockstep_real` calls
 `InvMColMajor::mark_stale` on each walker's `inv_m_real` when the run ends. Every read of a stale

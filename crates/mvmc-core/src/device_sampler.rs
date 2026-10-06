@@ -936,6 +936,22 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
                 std::hint::spin_loop();
             }
         }
+        // Issue #465: a walker's last accepted move arrives as a message right before its `Done`
+        // and is normally applied by the next round (together with the next proposals). When the
+        // last walkers finish there is no next round, so those accepts would never reach the
+        // device and the resident inverse/Pfaffian of the walker would stay one move behind its
+        // configuration. Flush them with a final proposal-free round.
+        if service_error.is_none() && !fast.accepts.is_empty() {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                service.round(&fast, &SlowBatch::default())
+            }))
+            .unwrap_or_else(|_| Err("device service panicked".to_string()));
+            loop_stats.passes += 1;
+            loop_stats.accepts += fast.accepts.len();
+            if let Err(e) = outcome {
+                service_error = Some(e);
+            }
+        }
         handles
             .into_iter()
             .map(|h| h.join().expect("walker thread panicked"))
@@ -997,6 +1013,24 @@ fn candidate_of(cur: &[i64], p: &ProposeReq) -> Vec<i64> {
         c[b.slot as usize] = i64::from(b.site);
     }
     c
+}
+
+impl HostService {
+    /// The resident inverse (`n_qp * n * n`, mVMC convention, no pad slots) and Pfaffians of
+    /// walker `w` (the host counterpart of the CUDA service's `download_walker`).
+    pub fn download_walker(&self, w: usize) -> Result<(Vec<f64>, Vec<f64>), String> {
+        let hw = self
+            .walkers
+            .get(w)
+            .and_then(Option::as_ref)
+            .ok_or("walker not begun")?;
+        let nn = hw.inv.n_size() * hw.inv.n_size();
+        let mut inv = Vec::with_capacity(hw.inv.n_qp_full() * nn);
+        for q in 0..hw.inv.n_qp_full() {
+            inv.extend_from_slice(hw.inv.qp_matrix_slice(q));
+        }
+        Ok((inv, hw.pf.clone()))
+    }
 }
 
 impl DeviceService for HostService {
