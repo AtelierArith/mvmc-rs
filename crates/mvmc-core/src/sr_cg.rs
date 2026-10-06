@@ -297,8 +297,6 @@ pub struct SampledSrOperator {
     components: usize,
     samples: usize,
     complex: bool,
-    y_real: Vec<f64>,
-    y_imag: Vec<f64>,
 }
 
 impl SampledSrOperator {
@@ -336,6 +334,10 @@ impl SampledSrOperator {
     ) -> Result<CgSolution, String> {
         let n = self.components;
         assert_eq!(gradient.len(), n);
+        // One backend handle and one operand version per solve (issue #421): the sampled
+        // matrices are constant during the solve, so a device backend uploads them once.
+        let mut backend = crate::sr_backend::acquire();
+        let version = crate::sr_backend::next_operand_version();
         // stcopt_cg_impl.c:265 evaluates these four factors left to right.
         let threshold = tolerance * tolerance * n as f64 * n as f64;
         let mut solution = vec![0.0; n];
@@ -360,7 +362,15 @@ impl SampledSrOperator {
                 iterations = iteration - 1;
                 break;
             }
-            self.apply_with_reducer(&mut product, &mut direction, inv_weight, shift, reducer)?;
+            self.apply_with_backend(
+                backend.get(),
+                version,
+                &mut product,
+                &mut direction,
+                inv_weight,
+                shift,
+                reducer,
+            )?;
             let dq = sequential_dot(&direction, &product);
             let alpha = delta / dq;
             // stcopt_cg_impl.c:313 `omp parallel for`: elementwise, one producer per entry.
@@ -368,7 +378,15 @@ impl SampledSrOperator {
                 *value += alpha * direction[i]
             });
             if iteration % 20 == 0 {
-                self.apply_with_reducer(&mut residual, &mut solution, inv_weight, shift, reducer)?;
+                self.apply_with_backend(
+                    backend.get(),
+                    version,
+                    &mut residual,
+                    &mut solution,
+                    inv_weight,
+                    shift,
+                    reducer,
+                )?;
                 crate::threading::for_each_mut(&mut residual, 2, |i, value| {
                     *value = gradient[i] - *value
                 });
@@ -417,8 +435,6 @@ impl SampledSrOperator {
             components,
             samples,
             complex,
-            y_real: vec![0.0; samples],
-            y_imag: vec![0.0; if complex { samples } else { 0 }],
         }
     }
 
@@ -447,6 +463,23 @@ impl SampledSrOperator {
         shift: f64,
         reducer: &R,
     ) -> Result<(), String> {
+        let mut backend = crate::sr_backend::acquire();
+        let version = crate::sr_backend::next_operand_version();
+        self.apply_with_backend(backend.get(), version, z, x, inv_weight, shift, reducer)
+    }
+
+    /// [`Self::apply_with_reducer`] with an explicit SR backend and operand version.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_with_backend<R: Reducer + ?Sized>(
+        &mut self,
+        backend: &mut dyn crate::sr_backend::SrBackend,
+        version: u64,
+        z: &mut [f64],
+        x: &mut [f64],
+        inv_weight: f64,
+        shift: f64,
+        reducer: &R,
+    ) -> Result<(), String> {
         let n = self.components;
         assert_eq!(z.len(), n);
         assert_eq!(x.len(), n);
@@ -464,70 +497,19 @@ impl SampledSrOperator {
         if self.samples == 0 {
             z.fill(0.0);
         } else {
-            crate::serial_blas::initialize();
-            let rows = i32::try_from(n).expect("CG component count must fit BLAS LP64");
-            let cols = i32::try_from(self.samples).expect("CG sample count must fit BLAS LP64");
-            // SAFETY: matrix buffers have exactly rows*cols entries, leading
-            // dimensions are rows, and every input/output vector has the
-            // required length. Mutable outputs never alias matrix/input views.
-            unsafe {
-                blas::dgemv(
-                    b'T',
-                    rows,
-                    cols,
-                    1.0,
-                    &self.real_samples,
-                    rows,
+            backend
+                .cg_local_product(
+                    &crate::sr_backend::CgSamples {
+                        real: &self.real_samples,
+                        imag: &self.imag_samples,
+                        components: n,
+                        samples: self.samples,
+                        version,
+                    },
                     x,
-                    1,
-                    0.0,
-                    &mut self.y_real,
-                    1,
-                );
-                if self.complex {
-                    blas::dgemv(
-                        b'T',
-                        rows,
-                        cols,
-                        1.0,
-                        &self.imag_samples,
-                        rows,
-                        x,
-                        1,
-                        0.0,
-                        &mut self.y_imag,
-                        1,
-                    );
-                }
-                blas::dgemv(
-                    b'N',
-                    rows,
-                    cols,
-                    1.0,
-                    &self.real_samples,
-                    rows,
-                    &self.y_real,
-                    1,
-                    0.0,
                     z,
-                    1,
-                );
-                if self.complex {
-                    blas::dgemv(
-                        b'N',
-                        rows,
-                        cols,
-                        1.0,
-                        &self.imag_samples,
-                        rows,
-                        &self.y_imag,
-                        1,
-                        1.0,
-                        z,
-                        1,
-                    );
-                }
-            }
+                )
+                .map_err(|e| e.to_string())?;
         }
         observe(|observer| observer.product(CgProductPhase::Local, x, z));
         reducer.barrier();

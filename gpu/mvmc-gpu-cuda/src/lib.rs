@@ -8,6 +8,7 @@
 
 pub mod bench;
 pub mod pfaffian;
+pub mod sr_bench;
 pub mod stages;
 pub mod transfer;
 pub mod transfer_bench;

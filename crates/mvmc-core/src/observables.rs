@@ -381,45 +381,13 @@ pub fn finalize_oo_store_real(
     }
     let active =
         &sr_opt_o_store[options.sample_start * n..(options.sample_start + sample_size) * n];
-    let dim = i32::try_from(n).expect("SR Gram dimension must fit BLAS LP64");
-    let samples = i32::try_from(sample_size).expect("sample count must fit BLAS LP64");
-    // Julia mul!(C, O, transpose(O)) recognizes the shared operand and
-    // selects SYRK. Below its max(n,samples)>=4 cutoff, generic_syrk!
-    // accumulates with muladd instead. Both paths copy the upper triangle.
-    if n.max(sample_size) < 4 {
-        sr_opt_oo[..n * n].fill(0.0);
-        for sample in 0..sample_size {
-            for j in 0..n {
-                let oj = active[j + sample * n];
-                for i in 0..=j {
-                    let index = i + j * n;
-                    sr_opt_oo[index] = active[i + sample * n].mul_add(oj, sr_opt_oo[index]);
-                }
-            }
-        }
-    } else {
-        // SAFETY: O is [n,samples], leading n; the writable output has n*n
-        // entries. SYRK reads O and overwrites the output's upper triangle.
-        unsafe {
-            blas::dsyrk(
-                b'U',
-                b'N',
-                dim,
-                samples,
-                1.0,
-                active,
-                dim,
-                0.0,
-                &mut sr_opt_oo[..n * n],
-                dim,
-            );
-        }
-    }
-    for j in 0..n {
-        for i in j + 1..n {
-            sr_opt_oo[i + j * n] = sr_opt_oo[j + i * n];
-        }
-    }
+    // The Gram product runs through the selected SR backend (issue #421): the default C-order
+    // backend is the former inline SYRK / muladd code, unchanged.
+    let mut backend = crate::sr_backend::acquire();
+    backend
+        .get()
+        .gram_real(active, n, sample_size, &mut sr_opt_oo[..n * n])
+        .expect("SR Gram backend failed");
 }
 
 /// Complex `calculate_oo_store!` mirror (stores `sqrt(w) * O`).
@@ -484,17 +452,18 @@ pub fn finalize_oo_store(
         return;
     }
 
-    let store_tensor = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
-        vec![size_2, sample_size],
-        sr_opt_o_store
-            [options.sample_start * size_2..(options.sample_start + sample_size) * size_2]
-            .to_vec(),
-    )
-    .expect("SR store shape and data length must match");
-    let gram = sr_store_gram_julia(&store_tensor).expect("SR store Gram must run");
-    let gram = gram
-        .host_data()
-        .expect("SR store Gram tensor must be host-backed");
+    // Sample order of the Gram sum: see the module docs of `sr_backend` (the default C-order
+    // backend pins the sequential per-entry sum; the tenferro backend is opt-in).
+    let mut backend = crate::sr_backend::acquire();
+    let gram = backend
+        .get()
+        .gram_complex(
+            &sr_opt_o_store
+                [options.sample_start * size_2..(options.sample_start + sample_size) * size_2],
+            size_2,
+            sample_size,
+        )
+        .expect("SR store Gram must run");
     for j in 0..size_2 {
         for i in 0..size_2 {
             sr_opt_oo[i * size_2 + j] = gram[i + j * size_2];
@@ -502,43 +471,17 @@ pub fn finalize_oo_store(
     }
 }
 
-// Preserve the authoritative complex finalizer's sequential sample sum.
-// A general einsum backend can change rounding and signed zeros, which changes
-// the direct SR input even when the sampling/RNG trajectory is identical.
+// The authoritative complex finalizer's sequential sample sum lives in
+// `sr_backend::c_order_gram_complex`; a general einsum/GEMM backend can change rounding and
+// signed zeros, which changes the direct SR input even when the RNG trajectory is identical.
+#[cfg(test)]
 fn sr_store_gram_julia(
     store: &tenferro_tensor::TypedTensor<Complex64>,
 ) -> tenferro_tensor::Result<tenferro_tensor::TypedTensor<Complex64>> {
     let shape = store.shape();
     assert_eq!(shape.len(), 2, "SR store must be [component, sample]");
     let (n, samples) = (shape[0], shape[1]);
-    let raw = store.host_data()?;
-    let mut gram = vec![Complex64::new(0.0, 0.0); n * n];
-    // One column is `n * samples` complex multiply-adds (about 3 ns each).
-    let parallel = crate::threading::inner_parallel_work(n, 3 * n * samples);
-    let observed =
-        crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, parallel);
-    let _scope = crate::threading::profile_scope(parallel, n);
-    let update = |j: usize, column: &mut [Complex64]| {
-        let _entry = observed.enter_item();
-        for i in 0..n {
-            let mut sum = Complex64::new(0.0, 0.0);
-            for sample in 0..samples {
-                sum += raw[i + sample * n] * raw[j + sample * n].conj();
-            }
-            column[i] = sum;
-        }
-    };
-    if parallel {
-        crate::threading::install_inner(|| {
-            gram.par_chunks_mut(n)
-                .enumerate()
-                .for_each(|(j, column)| update(j, column))
-        });
-    } else if n > 0 {
-        gram.chunks_mut(n)
-            .enumerate()
-            .for_each(|(j, column)| update(j, column));
-    }
+    let gram = crate::sr_backend::c_order_gram_complex(store.host_data()?, n, samples);
     tenferro_tensor::TypedTensor::from_vec_col_major(vec![n, n], gram)
 }
 

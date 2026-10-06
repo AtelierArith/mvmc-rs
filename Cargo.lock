@@ -972,8 +972,10 @@ dependencies = [
  "serde_json",
  "sfmt19937",
  "sha2",
+ "tenferro-ad",
  "tenferro-cpu",
  "tenferro-einsum",
+ "tenferro-linalg",
  "tenferro-tensor",
  "thiserror 1.0.69",
  "tracing",
@@ -1900,6 +1902,25 @@ dependencies = [
  "num-complex",
  "tenferro-core-ops",
  "tenferro-internal-extension-macros",
+ "tenferro-tensor",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tenferro-linalg"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead42c009f57c99560f2f3a318433a8e9cc57f6b4b6e8d2f265b097e0b743681"
+dependencies = [
+ "computegraph",
+ "faer",
+ "num-complex",
+ "num-traits",
+ "tenferro-ad",
+ "tenferro-cpu",
+ "tenferro-internal-extension-macros",
+ "tenferro-internal-ops",
+ "tenferro-runtime",
  "tenferro-tensor",
  "thiserror 2.0.18",
 ]
