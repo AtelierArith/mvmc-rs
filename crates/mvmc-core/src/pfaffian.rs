@@ -800,9 +800,13 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     let n_size = 2 * ne;
     let n_site2 = 2 * n_site;
 
-    assemble_inv_m_real(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
-    if !NATIVE_STATUS && frobenius_norm_sqr_real(inv_m, qp) < MIN_ABS2 {
-        return Err(CalcMAllError::AllZero { qp });
+    let fused_max_abs2 =
+        assemble_inv_m_real(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
+    if !NATIVE_STATUS {
+        let max_abs2 = fused_max_abs2.unwrap_or_else(|| frobenius_norm_sqr_real(inv_m, qp));
+        if max_abs2 < MIN_ABS2 {
+            return Err(CalcMAllError::AllZero { qp });
+        }
     }
 
     ensure_workspace_real(ws, n_size);
@@ -979,12 +983,46 @@ fn assemble_inv_m_real(
     ne: usize,
     n_size: usize,
     n_site2: usize,
-) -> Result<(), CalcMAllError> {
+) -> Result<Option<f64>, CalcMAllError> {
     // Plane/row slices instead of per-element `get`/`set` (each of which re-resolves
     // the tensor storage); same visiting order, so an out-of-range site leaves the same
     // partially written plane as before.
     let slater = slater_elm.as_slice();
     let plane = inv_m.qp_matrix_slice_mut(qp);
+    // Fast path: the spin-shifted source indices depend only on the electron slot, so
+    // resolve and validate them once per plane instead of once per matrix entry. When
+    // every index is in range the plane is the same; otherwise fall through to the
+    // incremental loop below, which reports the first bad site after the same partial
+    // writes as before.
+    const FAST_MAX: usize = 256;
+    if n_size <= FAST_MAX && ele_idx.len() >= n_size {
+        let mut cols = [0usize; FAST_MAX];
+        let mut valid = true;
+        for msi in 0..n_size {
+            let rsi = ele_idx[msi] + ((msi / ne) as i64) * (n_site as i64);
+            if rsi < 0 || rsi >= n_site2 as i64 {
+                valid = false;
+                break;
+            }
+            cols[msi] = rsi as usize;
+        }
+        if valid {
+            let cols = &cols[..n_size];
+            // Largest squared entry of the plane (the all-zero check), accumulated
+            // in the plane's column-major order like `frobenius_norm_sqr_real`.
+            let mut max_abs2 = 0.0_f64;
+            for (&rsi, out) in cols.iter().zip(plane.chunks_exact_mut(n_size)) {
+                let start = (qp * n_site2 + rsi) * n_site2;
+                let row = &slater[start..start + n_site2];
+                for (o, &rsj) in out.iter_mut().zip(cols) {
+                    let v = -row[rsj];
+                    *o = v;
+                    max_abs2 = max_abs2.max(v * v);
+                }
+            }
+            return Ok(Some(max_abs2));
+        }
+    }
     for msi in 0..n_size {
         let si = msi / ne; // spin index (0 or 1)
         let ri = ele_idx[msi];
@@ -1005,7 +1043,7 @@ fn assemble_inv_m_real(
             plane[msj + msi * n_size] = -row[rsj as usize];
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 fn assemble_inv_m_complex(
@@ -1311,6 +1349,63 @@ mod tests {
     /// A 2-site, 2-electron, 1-QP example crafted so the assembled
     /// `inv_m` is the simple skew block `[[0, a], [-a, 0]]`. Tests the
     /// end-to-end pipeline + sign-flip convention.
+    #[test]
+    fn real_assembly_fast_path_matches_indexed_reference_bitwise() {
+        // Same-implementation exact check: the hoisted-index assembly and its fused
+        // all-zero maximum equal the per-entry indexed reference for several sizes
+        // and QPs; an out-of-range site is still reported by the incremental path.
+        let mut seed = 0x9e3779b97f4a7c15_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+        };
+        for (n_site, ne) in [(4usize, 2usize), (6, 3), (8, 4), (16, 8)] {
+            let n_qp = 3;
+            let n_size = 2 * ne;
+            let n_site2 = 2 * n_site;
+            let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+            for qp in 0..n_qp {
+                for r in 0..n_site2 {
+                    for c in 0..n_site2 {
+                        slater.set(qp, r, c, next());
+                    }
+                }
+            }
+            let ele_idx: Vec<i64> = (0..n_size)
+                .map(|i| ((i * 5 + 1) % ne.max(1)) as i64)
+                .collect();
+            let mut inv = InvMColMajor::<f64>::zeros(n_qp, ne);
+            for qp in 0..n_qp {
+                let got = assemble_inv_m_real(
+                    qp, &ele_idx, &slater, &mut inv, n_site, ne, n_size, n_site2,
+                )
+                .unwrap();
+                let mut max_abs2 = 0.0_f64;
+                for msi in 0..n_size {
+                    let rsi = ele_idx[msi] + ((msi / ne) * n_site) as i64;
+                    for msj in 0..n_size {
+                        let rsj = ele_idx[msj] + ((msj / ne) * n_site) as i64;
+                        let want = -slater.get(qp, rsi as usize, rsj as usize);
+                        let have = inv.qp_matrix_slice(qp)[msj + msi * n_size];
+                        assert_eq!(have.to_bits(), want.to_bits());
+                        max_abs2 = max_abs2.max(want * want);
+                    }
+                }
+                assert_eq!(got.unwrap().to_bits(), max_abs2.to_bits());
+                assert_eq!(
+                    got.unwrap().to_bits(),
+                    frobenius_norm_sqr_real(&inv, qp).to_bits()
+                );
+            }
+            let mut bad = ele_idx.clone();
+            bad[n_size - 1] = n_site as i64;
+            let err = assemble_inv_m_real(0, &bad, &slater, &mut inv, n_site, ne, n_size, n_site2);
+            assert!(matches!(err, Err(CalcMAllError::SiteOutOfRange { .. })));
+        }
+    }
+
     #[test]
     fn calc_m_all_real_minimal_block() {
         // 2-site Hubbard, 1 electron per spin -> n_size = 2.

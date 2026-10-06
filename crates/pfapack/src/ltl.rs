@@ -95,11 +95,15 @@ where
         // appropriate 1-norm. Julia uses IDAMAX / IZAMAX which return
         // the FIRST index achieving the max; we mirror that with a
         // strict `>` comparison.
+        let lda = a.lda();
         let mut kp = 0usize;
-        let mut colmax = mag(a.get(0, k0));
-        for j in 1..=kk0 {
-            let v = mag(a.get(j, k0));
-            if v > colmax {
+        let mut colmax = 0.0;
+        for (j, &x) in a.as_slice()[k0 * lda..k0 * lda + kk0 + 1]
+            .iter()
+            .enumerate()
+        {
+            let v = mag(x);
+            if j == 0 || v > colmax {
                 colmax = v;
                 kp = j;
             }
@@ -120,32 +124,27 @@ where
         // Swap rows/columns kk0 and kp if needed.
         if kp != kk0 {
             // Julia: for j in 1:(kp-1); A[j, kk], A[j, kp] = A[j, kp], A[j, kk]
+            let data = a.as_mut_slice();
+            let (ckk, ckp) = (kk0 * lda, kp * lda);
             for j in 0..kp {
-                let t = a.get(j, kk0);
-                a.set(j, kk0, a.get(j, kp));
-                a.set(j, kp, t);
+                data.swap(ckk + j, ckp + j);
             }
             // Julia: for j in (kp+1):(kk-1); A[j, kk], A[kp, j] = A[kp, j], A[j, kk]
             for j in (kp + 1)..kk0 {
-                let t = a.get(j, kk0);
-                a.set(j, kk0, a.get(kp, j));
-                a.set(kp, j, t);
+                data.swap(ckk + j, j * lda + kp);
             }
             // Julia: for j in k:n; A[kk, j], A[kp, j] = A[kp, j], A[kk, j]
             for j in k0..n {
-                let t = a.get(kk0, j);
-                a.set(kk0, j, a.get(kp, j));
-                a.set(kp, j, t);
+                data.swap(j * lda + kk0, j * lda + kp);
             }
             // Julia: for j in kp:(kk-1); A[j, kk] = -A[j, kk]
-            for j in kp..kk0 {
-                let v = -a.get(j, kk0);
-                a.set(j, kk0, v);
+            for v in &mut data[ckk + kp..ckk + kk0] {
+                *v = -*v;
             }
             // Julia: for j in (kp+1):(kk-1); A[kp, j] = -A[kp, j]
             for j in (kp + 1)..kk0 {
-                let v = -a.get(kp, j);
-                a.set(kp, j, v);
+                let v = &mut data[j * lda + kp];
+                *v = -*v;
             }
         }
 
@@ -224,6 +223,18 @@ trait UpperRank2Kernel: BlasScalar {
 }
 
 impl UpperRank2Kernel for f64 {
+    fn scale_column_mode(data: &mut [Self], n: usize, alpha: Self, _turbo: bool) {
+        // `dscal` multiplies every entry by `alpha` (BLAS only special-cases a zero
+        // alpha); a finite nonzero alpha gives the same products from a plain loop
+        // without the BLAS call overhead on these short columns.
+        if alpha != 0.0 && alpha.is_finite() {
+            for x in &mut data[..n] {
+                *x *= alpha;
+            }
+        } else {
+            backend::scal_strided::<Self>(data, n, alpha);
+        }
+    }
     fn update_rank2_mode(
         data: &mut [Self],
         lda: usize,
@@ -556,9 +567,89 @@ fn update_upper_rank2_f64(data: &mut [f64], lda: usize, kk0: usize, k0: usize, a
     }
 }
 
+/// AVX2 form of [`update_upper_rank2_f64_c_order_scalar`]: the same independent
+/// per-element sequence `(a + x*t1) - y*t2` (separate multiplies and adds, no
+/// fused multiply-add), four lanes at a time; the column tail uses masked
+/// loads/stores so no element is touched twice.
+#[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
+#[allow(unsafe_code)]
+#[target_feature(enable = "avx2")]
+unsafe fn update_upper_rank2_f64_c_order_avx2(
+    write_cols: &mut [f64],
+    col_kk0_data: &[f64],
+    col_k0_data: &[f64],
+    lda: usize,
+    kk0: usize,
+    alpha: f64,
+) {
+    use core::arch::x86_64::*;
+    const MASKS: [[i64; 4]; 4] = [[0; 4], [-1, 0, 0, 0], [-1, -1, 0, 0], [-1, -1, -1, 0]];
+    assert!(write_cols.len() >= kk0 * lda && col_kk0_data.len() >= kk0 && col_k0_data.len() >= kk0);
+    let x = col_k0_data.as_ptr();
+    let y = col_kk0_data.as_ptr();
+    for j in 0..kk0 {
+        let temp1 = alpha * *y.add(j);
+        let temp2 = alpha * *x.add(j);
+        let t1 = _mm256_set1_pd(temp1);
+        let t2 = _mm256_set1_pd(temp2);
+        let col = write_cols.as_mut_ptr().add(j * lda);
+        let mut i = 0;
+        while i + 4 <= j {
+            let c = _mm256_loadu_pd(col.add(i));
+            let xv = _mm256_loadu_pd(x.add(i));
+            let yv = _mm256_loadu_pd(y.add(i));
+            let r = _mm256_sub_pd(
+                _mm256_add_pd(c, _mm256_mul_pd(xv, t1)),
+                _mm256_mul_pd(yv, t2),
+            );
+            _mm256_storeu_pd(col.add(i), r);
+            i += 4;
+        }
+        let rem = j - i;
+        if rem > 0 {
+            let mask = _mm256_loadu_si256(MASKS[rem].as_ptr() as *const __m256i);
+            let c = _mm256_maskload_pd(col.add(i), mask);
+            let xv = _mm256_maskload_pd(x.add(i), mask);
+            let yv = _mm256_maskload_pd(y.add(i), mask);
+            let r = _mm256_sub_pd(
+                _mm256_add_pd(c, _mm256_mul_pd(xv, t1)),
+                _mm256_mul_pd(yv, t2),
+            );
+            _mm256_maskstore_pd(col.add(i), mask, r);
+        }
+        *col.add(j) = 0.0;
+    }
+}
+
 /// C `DSKR2` column update: first addition, then subtraction.
 #[inline]
+#[cfg_attr(
+    all(feature = "blas-backend", target_arch = "x86_64"),
+    allow(unsafe_code)
+)]
 fn update_upper_rank2_f64_c_order(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
+    #[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
+    {
+        if std::arch::is_x86_feature_detected!("avx2") {
+            check_update_upper_rank2_args(data, lda, kk0, k0);
+            let (w, y, x) = split_update_upper_rank2_cols(data, lda, kk0, k0);
+            // SAFETY: AVX2 was detected at runtime; the slices cover `kk0` columns of
+            // `lda` entries and the two source columns (checked by the callee).
+            unsafe { update_upper_rank2_f64_c_order_avx2(w, y, x, lda, kk0, alpha) };
+            return;
+        }
+    }
+    update_upper_rank2_f64_c_order_scalar(data, lda, kk0, k0, alpha);
+}
+
+#[inline]
+fn update_upper_rank2_f64_c_order_scalar(
+    data: &mut [f64],
+    lda: usize,
+    kk0: usize,
+    k0: usize,
+    alpha: f64,
+) {
     check_update_upper_rank2_args(data, lda, kk0, k0);
     let (write_cols, col_kk0_data, col_k0_data) = split_update_upper_rank2_cols(data, lda, kk0, k0);
 
@@ -566,10 +657,12 @@ fn update_upper_rank2_f64_c_order(data: &mut [f64], lda: usize, kk0: usize, k0: 
         let temp1 = alpha * col_kk0_data[j];
         let temp2 = alpha * col_k0_data[j];
 
-        for i in 0..j {
-            col_j[i] = (col_j[i] + col_k0_data[i] * temp1) - col_kk0_data[i] * temp2;
+        let (upper, rest) = col_j.split_at_mut(j);
+        let (x, y) = (&col_k0_data[..j], &col_kk0_data[..j]);
+        for ((c, &xk), &yk) in upper.iter_mut().zip(x).zip(y) {
+            *c = (*c + xk * temp1) - yk * temp2;
         }
-        col_j[j] = 0.0;
+        rest[0] = 0.0;
     }
 }
 
@@ -743,5 +836,48 @@ mod tests {
         // Fortran INFO is the 1-based first zero-pivot row, which is
         // n-1 here (k = n, kk = n-1, info = kk = 3).
         assert_eq!(err, n - 1);
+    }
+    fn xorshift_values(len: usize, mut s: u64) -> Vec<f64> {
+        (0..len)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                ((s >> 11) as f64 / (1u64 << 53) as f64 - 0.5) * 1e3
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rank2_c_order_dispatch_matches_scalar_reference_bitwise() {
+        // Same-implementation exact check: the dispatched (possibly AVX2) update
+        // must produce the same bits as the scalar C-order loop for every column
+        // length remainder, with the surrounding storage untouched.
+        for kk0 in 1..=37usize {
+            let lda = kk0 + 3;
+            let k0 = kk0 + 1;
+            let a = xorshift_values(lda * lda, 17 + kk0 as u64);
+            let alpha = 0.37 + kk0 as f64;
+            let mut fast = a.clone();
+            let mut slow = a.clone();
+            update_upper_rank2_f64_c_order(&mut fast, lda, kk0, k0, alpha);
+            update_upper_rank2_f64_c_order_scalar(&mut slow, lda, kk0, k0, alpha);
+            for (i, (f, s)) in fast.iter().zip(&slow).enumerate() {
+                assert_eq!(f.to_bits(), s.to_bits(), "kk0={kk0} entry {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn real_scale_column_matches_plain_multiplication_bitwise() {
+        let x = xorshift_values(41, 5);
+        for alpha in [0.37, -2.5e-300, 3.0e300] {
+            let mut got = x.clone();
+            <f64 as UpperRank2Kernel>::scale_column_mode(&mut got, 37, alpha, false);
+            for (i, (g, v)) in got.iter().zip(&x).enumerate() {
+                let want = if i < 37 { v * alpha } else { *v };
+                assert_eq!(g.to_bits(), want.to_bits(), "alpha={alpha} entry {i}");
+            }
+        }
     }
 }
