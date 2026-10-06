@@ -124,20 +124,29 @@ pub fn stochastic_opt_real_with_sr_info_timed<const TIMED: bool>(
         timer.start(56);
         let mut s = vec![0.0_f64; n_smat * n_smat];
         let mut g = vec![0.0_f64; n_smat];
-        build_s_g_real(
-            &mut s,
-            &mut g,
-            &smat_to_para_idx,
-            state,
-            sr_opt_size,
-            data.modpara.dsr_opt_sta_del,
-            data.modpara.dsr_opt_step_dt,
-        );
+        // One backend handle per SR solve (issue #421): C order by default.
+        let mut backend = crate::sr_backend::acquire();
+        backend
+            .get()
+            .assemble_s_g(
+                &crate::sr_backend::SrAssembleInput {
+                    oo: crate::sr_backend::RealView::Real(&state.sr_opt.sr_opt_oo_real),
+                    ho: crate::sr_backend::RealView::Real(&state.sr_opt.sr_opt_ho_real),
+                    map: &smat_to_para_idx,
+                    ld: sr_opt_size,
+                    offset: 1,
+                    sta_del: data.modpara.dsr_opt_sta_del,
+                    step_dt: data.modpara.dsr_opt_step_dt,
+                },
+                &mut s,
+                &mut g,
+            )
+            .expect("SR S/g assembly backend failed");
         timer.stop(56);
         timer.start(57);
         let observation =
             observer::before_solve(data, &s, &g, &smat_to_para_idx, observer::DirectMode::Real);
-        let result = cholesky_solve(&mut s, &mut g, n_smat);
+        let result = backend.get().cholesky_solve(&mut s, &mut g, n_smat);
         observer::after_solve(observation, &g, &result);
         timer.stop(57);
         timer.stop(51);
@@ -242,15 +251,23 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
     timer.start(56);
     let mut s = vec![0.0_f64; n_smat * n_smat];
     let mut g = vec![0.0_f64; n_smat];
-    build_s_g_complex(
-        &mut s,
-        &mut g,
-        &smat_to_para_idx,
-        state,
-        sr_opt_size,
-        data.modpara.dsr_opt_sta_del,
-        data.modpara.dsr_opt_step_dt,
-    );
+    let mut backend = crate::sr_backend::acquire();
+    backend
+        .get()
+        .assemble_s_g(
+            &crate::sr_backend::SrAssembleInput {
+                oo: crate::sr_backend::RealView::ReOfComplex(&state.sr_opt.sr_opt_oo),
+                ho: crate::sr_backend::RealView::ReOfComplex(&state.sr_opt.sr_opt_ho),
+                map: &smat_to_para_idx,
+                ld: lda_oo,
+                offset: 2,
+                sta_del: data.modpara.dsr_opt_sta_del,
+                step_dt: data.modpara.dsr_opt_step_dt,
+            },
+            &mut s,
+            &mut g,
+        )
+        .expect("SR S/g assembly backend failed");
 
     timer.stop(56);
     timer.start(57);
@@ -261,7 +278,7 @@ pub fn stochastic_opt_complex_with_sr_info_timed<const TIMED: bool>(
         &smat_to_para_idx,
         observer::DirectMode::Complex,
     );
-    let result = cholesky_solve(&mut s, &mut g, n_smat);
+    let result = backend.get().cholesky_solve(&mut s, &mut g, n_smat);
     observer::after_solve(observation, &g, &result);
     timer.stop(57);
     timer.stop(51);
@@ -389,71 +406,6 @@ fn collect_active_real(
         smat_to_para_idx.push(pi);
     }
     (s_diag, smat_to_para_idx)
-}
-
-fn build_s_g_real(
-    s: &mut [f64],
-    g: &mut [f64],
-    smat_to_para_idx: &[usize],
-    state: &VmcOptimizationState,
-    sr_opt_size: usize,
-    sta_del: f64,
-    step_dt: f64,
-) {
-    let n_smat = smat_to_para_idx.len();
-    let ratio_diag = 1.0 + sta_del;
-    // C stcopt.c:69 `omp parallel for` over the S entries; every entry has one
-    // producer, so the columns are filled independently (column `sj` of S).
-    crate::threading::for_each_chunk_mut(s, n_smat, 3 * n_smat, |sj, column| {
-        let pj = smat_to_para_idx[sj];
-        for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-            let tmp = state.sr_opt.sr_opt_oo_real[pi + 1];
-            let oo_idx = (pi + 1) * sr_opt_size + (pj + 1);
-            column[si] =
-                state.sr_opt.sr_opt_oo_real[oo_idx] - tmp * state.sr_opt.sr_opt_oo_real[pj + 1];
-            if si == sj {
-                column[si] *= ratio_diag;
-            }
-        }
-    });
-    let ho_0 = state.sr_opt.sr_opt_ho_real[0];
-    crate::threading::for_each_mut(g, 3, |si, value| {
-        let pi = smat_to_para_idx[si];
-        let v = state.sr_opt.sr_opt_ho_real[pi + 1] - ho_0 * state.sr_opt.sr_opt_oo_real[pi + 1];
-        *value = -2.0 * step_dt * v;
-    });
-}
-
-fn build_s_g_complex(
-    s: &mut [f64],
-    g: &mut [f64],
-    smat_to_para_idx: &[usize],
-    state: &VmcOptimizationState,
-    sr_opt_size: usize,
-    sta_del: f64,
-    step_dt: f64,
-) {
-    let n_smat = smat_to_para_idx.len();
-    let lda_oo = 2 * sr_opt_size;
-    let ratio_diag = 1.0 + sta_del;
-    crate::threading::for_each_chunk_mut(s, n_smat, 3 * n_smat, |sj, column| {
-        let pj = smat_to_para_idx[sj];
-        for (si, &pi) in smat_to_para_idx.iter().enumerate() {
-            let tmp = state.sr_opt.sr_opt_oo[pi + 2].re;
-            let oo_idx = (pi + 2) * lda_oo + (pj + 2);
-            let oo_0j = pj + 2;
-            column[si] = state.sr_opt.sr_opt_oo[oo_idx].re - tmp * state.sr_opt.sr_opt_oo[oo_0j].re;
-            if si == sj {
-                column[si] *= ratio_diag;
-            }
-        }
-    });
-    let ho_0 = state.sr_opt.sr_opt_ho[0].re;
-    crate::threading::for_each_mut(g, 3, |si, value| {
-        let pi = smat_to_para_idx[si];
-        let v = state.sr_opt.sr_opt_ho[pi + 2].re - ho_0 * state.sr_opt.sr_opt_oo[pi + 2].re;
-        *value = -2.0 * step_dt * v;
-    });
 }
 
 fn apply_parameter_update(
@@ -853,7 +805,7 @@ mod original_parameter_delta_tests {
 /// Returns `Err(())` on failed factorization/substitution or nonfinite update,
 /// before parameter mutation. C's stcopt_dposv.c uses DPOSV, which does not
 /// substitute when POTRF returns positive INFO (a non-positive-definite matrix).
-fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
+pub(crate) fn cholesky_solve(s: &mut [f64], rhs: &mut [f64], n: usize) -> Result<(), ()> {
     if n == 0 {
         return Ok(());
     }
@@ -1076,20 +1028,36 @@ mod tests {
             let data = crate::historical_orbital_model::historical_kernel_model(namelist).unwrap();
             let mut s = vec![0.0; n * n];
             let mut g = vec![0.0; n];
-            let build = if complex {
-                build_s_g_complex
+            let (oo, ho, ld, offset) = if complex {
+                (
+                    crate::sr_backend::RealView::ReOfComplex(&state.sr_opt.sr_opt_oo),
+                    crate::sr_backend::RealView::ReOfComplex(&state.sr_opt.sr_opt_ho),
+                    2 * size,
+                    2,
+                )
             } else {
-                build_s_g_real
+                (
+                    crate::sr_backend::RealView::Real(&state.sr_opt.sr_opt_oo_real),
+                    crate::sr_backend::RealView::Real(&state.sr_opt.sr_opt_ho_real),
+                    size,
+                    1,
+                )
             };
-            build(
+            crate::sr_backend::SrBackend::assemble_s_g(
+                &mut crate::sr_backend::COrderSr::default(),
+                &crate::sr_backend::SrAssembleInput {
+                    oo,
+                    ho,
+                    map: &mapping,
+                    ld,
+                    offset,
+                    sta_del: data.modpara.dsr_opt_sta_del,
+                    step_dt: data.modpara.dsr_opt_step_dt,
+                },
                 &mut s,
                 &mut g,
-                &mapping,
-                &state,
-                size,
-                data.modpara.dsr_opt_sta_del,
-                data.modpara.dsr_opt_step_dt,
-            );
+            )
+            .unwrap();
             let compare = |label: &str, actual: &[f64], expected: &[f64]| {
                 // Matrix assembly and Cholesky use at most O(n squared) small
                 // reductions for these fixed, regularized inputs.

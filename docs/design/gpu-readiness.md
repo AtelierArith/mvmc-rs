@@ -1237,6 +1237,86 @@ scripts/run_pfaffian_bench.sh docker                           # benchmark, writ
 ```
 
 
+## 12. SR pathfinder through tenferro (issue #421)
+
+Status: implemented; opt-in (`MVMC_RS_SR_BACKEND=tenferro`), C order stays the default and the
+parity oracle. This also starts the stage-level backend trait of section 5.2.
+
+### 12.1 What exists
+
+* `crates/mvmc-core/src/sr_backend.rs`: trait `SrBackend` with the stages `gram_real`,
+  `gram_complex`, `assemble_s_g`, `cholesky_solve`, `cg_local_product`. `COrderSr` is the former
+  inline code moved behind the trait without changing an operation (default outputs are
+  byte-identical, checked by the full fixture suite). `TenferroSr` uses tenferro eager ops:
+  `dot_general` (Gram, CG, outer product), elementwise `sub`/`mul` (S and g assembly),
+  `cholesky` plus two `triangular_solve` (solve). It is generic over the eager runtime and the
+  placement (`Placement::Host` / `Placement::Device`); `gpu/mvmc-gpu-cuda` builds it on the CUDA
+  runtime (`sr_bench`, gate test `cuda_gate_sr_stages_match_c_order`).
+* Hook points: `finalize_oo_store[_real]` (Gram), `sr.rs` (S/g and solve, real and complex
+  layouts), `sr_cg.rs` (`SampledSrOperator`: one backend handle and one operand version per
+  solve). The MPI reduction, the sequential dots and the mean/diagonal corrections of the CG
+  product stay on the host in C order.
+* tenferro lessons applied: faer provider only (`cpu-blas` breaks CPU linalg; `autodiff` is
+  required for `EagerTensorLinalgExt`); one process-wide runtime built on first use and one
+  handle per SR solve; the constant CG operand (`[O_r | O_i]`) is cached under an explicit
+  version counter (`TenferroStats::cg_uploads`); host tensors are never created for device
+  runs (scalars are uploaded as constant vectors, which CUDA requires); results are explicit
+  errors, never a silent C-order fallback.
+* Not used: `ConcreteEinsumPlan` + `execute_into`. All contractions are single binary
+  `dot_general` calls, whose plan is built inside the eager runtime; a plan adds nothing for
+  one-shot shapes and the per-call cost is dominated by tensor upload (below).
+
+### 12.2 Complex Gram sample order (`observables.rs`, formerly `sr_store_gram_julia`)
+
+The authoritative complex finalizer sums every Gram entry sequentially over samples. A general
+GEMM may reassociate the sample sum and change both the rounding and the sign of exact zeros,
+which changes the direct SR input even for an identical RNG trajectory. Decision: the default
+path keeps the sequential order (`c_order_gram_complex`); the tenferro path uses blocked GEMM
+order and is validated per entry by `2 gamma_{samples+3} sum |O_is||O_js|`, i.e. only the
+reassociation error is allowed. The real Gram already follows C/Julia (`dsyrk`, upper triangle
+mirrored); the tenferro real Gram mirrors the upper triangle the same way.
+
+### 12.3 Equivalence and measurements
+
+Tolerances and derivations are in `docs/NUMERICAL_COMPARISONS.md` (row "tenferro SR backend vs
+C order"). Measured: Gram, solve and CG product differ from C order by 1e-15..1.5e-13 relative;
+S and g assembly agree exactly. CG runs amplify any rounding (one-ulp sample noise moves the
+C-order solution by 1e-4..7e-4 at `max_iterations = n`), so step-by-step CG trajectories are not
+compared; the test bounds the backend difference by that measured spread.
+
+CPU (release, 1 thread, `cargo run --release -p mvmc-core --example sr_backend_bench`, median of
+7, ms, C order / tenferro cpu-faer):
+
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec |
+|---:|---:|---|---|---|---|
+| 388 | 300 | 2.18 / 8.72 | 0.69 / 12.02 | 2.14 / 6.01 | 0.113 / 0.238 |
+| 1000 | 2000 | 82.95 / 210.66 | 3.82 / 40.68 | 13.89 / 29.27 | 2.300 / 2.353 |
+| 3000 | 300 | 116.94 / 408.40 | 139.69 / 512.10 | 288.80 / 566.83 | 0.539 / 0.819 |
+| 3000 | 6000 | 1402.24 / 5334.11 | 138.81 / 520.99 | 290.69 / 575.61 | 25.661 / 28.631 |
+
+On one CPU thread the tenferro path is 1.1-4x slower than OpenBLAS/LAPACK: faer GEMM instead of
+SYRK (half the flops), and every stage pays eager tensor upload and download (about 1.5 ms per
+388x388 tensor, against 0.2 ms for the elementwise op itself). It is a feasibility path, not a CPU
+speed-up; the benefit is the device run below. `TENFERRO_PROFILE_EAGER_OP_AGG=1` only reports
+`nary_op` sections, so the per-op costs above were measured directly.
+
+CUDA (2x RTX 3060, FP64 at 1/64 of FP32 rate, driver 580.178.04, CUDA 13.0 driver API, NVRTC
+12.9, cuBLAS 12.9.2, cuSOLVER 11.7.5, tenferro 0.7.1; `scripts/run_cuda_gate.sh docker`, median of
+3 after 1 warm-up, host-to-host ms per stage including upload, synchronized compute and
+download; the machine has 36 CPU threads that the C-order and tenferro-CPU columns may use):
+
+| NPara | samples | Gram C / CUDA | Cholesky solve C / CUDA | CG matvec C / CUDA (operand upload once) |
+|---:|---:|---|---|---|
+| 388 | 300 | 7.41 / 2.99 | 2.81 / 30.94 | 0.10 / 0.98 (0.52) |
+| 1000 | 2000 | 128.2 / 82.6 | 28.2 / 14.8 | 3.32 / 0.59 (64.6) |
+| 3000 | 300 | 241.0 / 363.3 | 614.9 / 439.9 | 0.66 / 0.78 (11.5) |
+| 3000 | 6000 | 3024.6 / 1246.5 | 370.4 / 339.3 | 28.4 / 1.31 (467) |
+
+All CUDA stages agree with C order to <= 6.5e-15 relative (bounds 1e-8..1e-15, all "ok"). The
+CUDA gain appears for the large-sample Gram and the cached CG matvec; solve is at parity at
+`NPara` 3000, and S/g assembly is transfer-bound (4 uploads of `n^2` doubles), which is why the
+next step is device residency of `OO`/`S` across stages rather than faster single stages.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

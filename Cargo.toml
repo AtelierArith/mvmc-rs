@@ -57,6 +57,10 @@ pulp = { version = "0.22.2", default-features = false, features = ["std"] }
 tenferro-tensor = { version = "0.7.1", default-features = false }
 tenferro-cpu = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
 tenferro-einsum = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
+tenferro-ad = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
+# SR pathfinder (#421): cholesky / triangular_solve. cpu-faer only (cpu-blas breaks CPU linalg);
+# `autodiff` is required for EagerTensorLinalgExt.
+tenferro-linalg = { version = "0.7.1", default-features = false, features = ["cpu-faer", "autodiff"] }
 
 # --- BLAS / LAPACK plumbing.
 #

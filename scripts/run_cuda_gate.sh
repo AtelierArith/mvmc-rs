@@ -50,7 +50,7 @@ case "$mode" in
       -e MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT="/work/${rout#"$root"/}" \
       -e MVMC_RS_CUDA_GATE_TRANSFER_OUT="/work/${tout#"$root"/}" \
       -e MVMC_RS_REVISION="${MVMC_RS_REVISION:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}" \
-      -e MVMC_RS_CUDA_GATE_SIZES -e MVMC_RS_CUDA_GATE_REPS \
+      -e MVMC_RS_CUDA_GATE_SIZES -e MVMC_RS_CUDA_GATE_SR_SIZES -e MVMC_RS_CUDA_GATE_REPS \
       -e CARGO_TARGET_DIR=/work/gpu/mvmc-gpu-cuda/target \
       -v "$HOME/.rustup:$HOME/.rustup" -v "$HOME/.cargo:$HOME/.cargo" \
       -v "$root:/work" -w /work "$image" \

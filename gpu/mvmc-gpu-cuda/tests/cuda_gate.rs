@@ -11,7 +11,7 @@ use mvmc_core::backend::{
     cuda_device_count, cuda_gate_decision, device_report, BackendKind, CudaGateDecision,
     CUDA_GATE_VARIABLE,
 };
-use mvmc_gpu_cuda::bench;
+use mvmc_gpu_cuda::{bench, sr_bench};
 
 #[test]
 #[ignore = "optional CUDA gate: run with --ignored (MVMC_RS_CUDA_GATE=1 to require a device)"]
@@ -154,4 +154,58 @@ fn cuda_gate_roundtrip_floor() {
         std::fs::write(path, &text).expect("write report");
     }
     assert!(rows.iter().all(|r| r.total_ms() > 0.0));
+}
+
+#[test]
+#[ignore = "optional CUDA gate: run with --ignored (MVMC_RS_CUDA_GATE=1 to require a device)"]
+fn cuda_gate_sr_stages_match_c_order() {
+    mvmc_gpu_cuda::install();
+    let requested = std::env::var(CUDA_GATE_VARIABLE).ok();
+    match cuda_gate_decision(requested.as_deref(), cuda_device_count()) {
+        CudaGateDecision::SkippedNoDevice(why) => {
+            eprintln!("cuda-gate: ExplicitSkip: skipped, no device ({why})");
+            return;
+        }
+        CudaGateDecision::FailNoDevice(why) => {
+            panic!("cuda-gate: {CUDA_GATE_VARIABLE} requested but no device: {why}");
+        }
+        CudaGateDecision::Run => {}
+    }
+    let report = device_report(BackendKind::Cuda(0)).expect("device report");
+    let sizes: Vec<usize> = std::env::var("MVMC_RS_CUDA_GATE_SR_SIZES")
+        .unwrap_or_else(|_| "388,1000".to_string())
+        .split(',')
+        .map(|s| s.trim().parse().expect("size"))
+        .collect();
+    let reps = std::env::var("MVMC_RS_CUDA_GATE_REPS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
+    let mut rows = Vec::new();
+    for n in sizes {
+        // Two sample counts: the benchmark default 300 and the large-sample regime 2 n.
+        for samples in [300, 2 * n] {
+            rows.push(sr_bench::run_case(0, n, samples, reps).expect("SR stages"));
+        }
+    }
+    let text = format!(
+        "## CUDA gate: SR stages (issue #421)\n\n```\n{}```\n\nmedian of {reps} runs after 1 warm-up, \
+         milliseconds per stage including upload, synchronized compute and download; \
+         relative max-norm difference against the C-order BLAS/LAPACK result.\n\n{}",
+        report.render(),
+        sr_bench::render(&rows)
+    );
+    println!("{text}");
+    if let Ok(path) = std::env::var("MVMC_RS_CUDA_GATE_OUT") {
+        let sr_path = std::path::Path::new(&path).with_file_name("cuda-gate-sr.md");
+        std::fs::write(sr_path, &text).expect("write SR report");
+    }
+    for r in &rows {
+        assert!(
+            r.ok(),
+            "SR stages out of bound at n={} samples={}",
+            r.n,
+            r.samples
+        );
+    }
 }

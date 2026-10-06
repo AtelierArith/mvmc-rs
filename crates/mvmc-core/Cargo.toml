@@ -22,6 +22,8 @@ mvmc-expert-parsers = { workspace = true }
 tenferro-tensor = { workspace = true }
 tenferro-cpu = { workspace = true }
 tenferro-einsum = { workspace = true }
+tenferro-ad = { workspace = true }
+tenferro-linalg = { workspace = true }
 num-complex = { workspace = true }
 ndarray = { workspace = true }
 blas = { workspace = true }
