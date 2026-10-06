@@ -563,7 +563,7 @@ impl DeviceSr {
             },
             "potrf_bufferSize",
         )?;
-        let mut work: CudaSlice<f64> = stream.alloc_zeros((lwork as usize).max(1)).map_err(be)?;
+        let work: CudaSlice<f64> = stream.alloc_zeros((lwork as usize).max(1)).map_err(be)?;
         let info: CudaSlice<i32> = stream.alloc_zeros(2).map_err(be)?;
         let wptr = dp(&work, &stream);
         let iptr = {
@@ -611,8 +611,7 @@ impl DeviceSr {
         let infos = stream.clone_dtoh(&info).map_err(be)?;
         let x = stream.clone_dtoh(&self.vecs[1].slice(..nmap)).map_err(be)?;
         self.timings.download_s = t.elapsed().as_secs_f64();
-        drop(work.slice(..0));
-        let _ = &mut work;
+        drop(work);
         if infos[0] != 0 || infos[1] != 0 {
             return Err(SrDeviceError::SolveFailed {
                 info: if infos[0] != 0 { infos[0] } else { infos[1] },
@@ -948,7 +947,7 @@ impl DeviceSr {
             let delta_new = self.ddot(n, res, res)?;
             let beta = delta_new / delta;
             // C:336 rounds the quotient and multiplies it by the old norm.
-            delta = beta * delta;
+            delta *= beta;
             self.scal(n, beta, dir)?;
             self.axpy(n, 1.0, res, dir)?;
         }
@@ -967,7 +966,7 @@ impl DeviceSr {
     /// Whether any element of the device vector `i` is nonfinite (diagnostic).
     pub fn any_nonfinite(&mut self, x: &[f64]) -> Result<bool, SrDeviceError> {
         let stream = self.stream();
-        let mut d = stream.clone_htod(x).map_err(be)?;
+        let d = stream.clone_htod(x).map_err(be)?;
         if self.ints.is_none() {
             self.ints = Some(stream.alloc_zeros(1).map_err(be)?);
         }
@@ -991,8 +990,7 @@ impl DeviceSr {
         }
         .map_err(be)?;
         let out = stream.clone_dtoh(flag).map_err(be)?;
-        drop(d.slice(..0));
-        let _ = &mut d;
+        drop(d);
         Ok(out[0] != 0)
     }
 }

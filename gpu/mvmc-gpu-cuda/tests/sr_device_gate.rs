@@ -18,6 +18,8 @@
 //!   finiteness and bitwise repeatability of the device trajectory are asserted, and the
 //!   amplification is printed.
 
+#![allow(clippy::needless_range_loop)]
+
 use mvmc_core::backend::{
     cuda_device_count, cuda_gate_decision, CudaGateDecision, CUDA_GATE_VARIABLE,
 };
