@@ -448,12 +448,11 @@ pub fn update_rbm_cnt_hopping(
     }
 }
 
-/// Numerically stable `log(cosh(z))` with the upstream sign flip.
+/// `log(cosh(z))` of the RBM weights: C's `clog(ccosh(z))` (glibc port, issue #470); Julia's
+/// stable sign-flipped `log1p` form only under `use_julia_libm()`.
 #[inline]
 pub fn log_cosh_stable(z: Complex64) -> Complex64 {
-    let zp = if z.re <= 0.0 { -z } else { z };
-    // Julia uses the corrected ComplexF64 log1p operation here.
-    zp + rbm_math::log1p(rbm_math::exp(-2.0 * zp)) - std::f64::consts::LN_2
+    rbm_math::log_cosh(z)
 }
 
 /// `log_rbm_ratio(rbm_cnt_new, rbm_cnt_old, data)` -- principal-log

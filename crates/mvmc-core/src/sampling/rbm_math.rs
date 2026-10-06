@@ -5,7 +5,47 @@ use num_complex::Complex64;
 
 use mvmc_expert_parsers::utils::c_math;
 
+use mvmc_expert_parsers::utils::glibc_complex;
+
+/// C `cexp` (glibc port) by default; Julia's algorithm only under `use_julia_libm()`.
 pub(crate) fn exp(z: Complex64) -> Complex64 {
+    if c_math::julia_libm_enabled() {
+        julia_exp(z)
+    } else {
+        glibc_complex::cexp(z)
+    }
+}
+
+/// C `clog` (glibc port) by default; Julia's algorithm only under `use_julia_libm()`.
+pub(super) fn log(z: Complex64) -> Complex64 {
+    if c_math::julia_libm_enabled() {
+        julia_log(z)
+    } else {
+        glibc_complex::clog(z)
+    }
+}
+
+/// C `ctanh` (glibc port) by default; Julia's algorithm only under `use_julia_libm()`.
+pub(super) fn tanh(z: Complex64) -> Complex64 {
+    if c_math::julia_libm_enabled() {
+        julia_tanh(z)
+    } else {
+        glibc_complex::ctanh(z)
+    }
+}
+
+/// `log(cosh(z))` of the RBM weights: C evaluates `clog(ccosh(z))` (`rbm.c:41,58`); Julia's
+/// stable sign-flipped `log1p` form only under `use_julia_libm()`.
+pub(crate) fn log_cosh(z: Complex64) -> Complex64 {
+    if c_math::julia_libm_enabled() {
+        let zp = if z.re <= 0.0 { -z } else { z };
+        zp + julia_log1p(julia_exp(-2.0 * zp)) - std::f64::consts::LN_2
+    } else {
+        glibc_complex::clog(glibc_complex::ccosh(z))
+    }
+}
+
+fn julia_exp(z: Complex64) -> Complex64 {
     let (x, y) = (z.re, z.im);
     if x.is_nan() {
         return Complex64::new(x, if y == 0.0 { y } else { x });
@@ -37,7 +77,7 @@ fn ldexp(mut x: f64, mut exponent: i32) -> f64 {
     }
     x * f64::from_bits(((exponent + 1023) as u64) << 52)
 }
-pub(super) fn log(z: Complex64) -> Complex64 {
+fn julia_log(z: Complex64) -> Complex64 {
     let (x, y) = (z.re, z.im);
     let mut rho = x * x + y * y;
     let mut k = 0;
@@ -73,18 +113,18 @@ pub(super) fn log(z: Complex64) -> Complex64 {
     };
     Complex64::new(real, c_math::atan2(y, x))
 }
-pub(super) fn log1p(z: Complex64) -> Complex64 {
+pub(super) fn julia_log1p(z: Complex64) -> Complex64 {
     if z.re.is_finite() {
         if z.im.is_infinite() {
-            return log(z);
+            return julia_log(z);
         }
         let u = Complex64::new(1.0 + z.re, z.im);
         if u == Complex64::new(1.0, 0.0) {
             z
         } else if u.re <= 0.0 {
-            log(u)
+            julia_log(u)
         } else {
-            log(u) * crate::julia_complex::divide(z, u - Complex64::new(1.0, 0.0))
+            julia_log(u) * crate::julia_complex::divide(z, u - Complex64::new(1.0, 0.0))
         }
     } else if z.re.is_nan() {
         Complex64::new(z.re, z.re)
@@ -102,7 +142,7 @@ pub(super) fn log1p(z: Complex64) -> Complex64 {
         Complex64::new(f64::INFINITY, f64::NAN)
     }
 }
-pub(super) fn tanh(z: Complex64) -> Complex64 {
+fn julia_tanh(z: Complex64) -> Complex64 {
     let (x, y) = (z.re, z.im);
     if x.is_nan() && y == 0.0 {
         return z;
@@ -143,10 +183,10 @@ mod tests {
                 .collect();
             let z = Complex64::new(f64::from_bits(words[0]), f64::from_bits(words[1]));
             for (i, (name, actual)) in [
-                ("exp", exp(z)),
-                ("log", log(z)),
-                ("log1p", log1p(z)),
-                ("tanh", tanh(z)),
+                ("exp", julia_exp(z)),
+                ("log", julia_log(z)),
+                ("log1p", julia_log1p(z)),
+                ("tanh", julia_tanh(z)),
             ]
             .into_iter()
             .enumerate()
