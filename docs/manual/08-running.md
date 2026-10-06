@@ -4,7 +4,7 @@
 
 ## 8.1 The `mvmc` command
 
-The binary is built from `crates/mvmc-cli/src/main.rs` (`cargo build --release -p mvmc-cli` gives
+The binary is built from `crates/mvmc-cli/src/lib.rs` (`cargo build --release -p mvmc-cli` gives
 `target/release/mvmc`; `cargo run -p mvmc-cli -- ...` also works). Synopsis:
 
 ```text
@@ -84,7 +84,7 @@ After parsing (before any initialization or file creation, and collectively acro
 | 0 | `--physcal` given | error: "`--physcal` requires NVMCCalMode=1 in ModPara" |
 | other | – | error: "unsupported NVMCCalMode=… the CLI supports 0 (optimization) and 1 (PhysCal)" |
 
-This dispatch rule was introduced by PR #340 (`select_calculation`, `crates/mvmc-cli/src/main.rs`). Because the CLI parses
+This dispatch rule was introduced by PR #340 (`select_calculation`, `crates/mvmc-cli/src/lib.rs`). Because the CLI parses
 and validates the input *before* it dispatches, an optimization run with `NVMCCalMode=1` input is rejected with the
 `select_calculation` message; the validation message "cannot run parameter optimization; use fixed-parameter PhysCal"
 (`validate_para_opt`) is the library-level counterpart.
@@ -93,16 +93,16 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:175`
-> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:149`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:937`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:1169`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:953`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:1122`
+> - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:965`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1197`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:981`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1150`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
-> - Rust: `init_multi_def` — `crates/mvmc-cli/src/main.rs:815`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:843`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
 > - Parity: the order "read definition files → set memory → initialize parameters (RNG seeded with `RndSeed + group`) → `InitFile` → run → write timers" of `main` is followed by `run_para_opt_from_namelist`; the C driver's `-m` option is ported as [MultiDef mode](#multidef-mode--m) (#348).
@@ -242,9 +242,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | same | enable the corresponding diagnostic timer family (IDs up to 966); any of them also enables the main timer and writes `zvo_CalcTimerDiag.dat` |
 | `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | number of worker threads for independent inner work items; default 1 (sequential); invalid or 0 falls back to 1. Read once per process. |
 | `MVMC_RS_MEASURE_BATCH` | `measurement_batch::resolve_batch_size` | samples per measurement batch (stage A tables for B samples, then per-sample consumers in order); default 4; output bytes do not depend on it. |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order` (default, BLAS/LAPACK parity oracle), `tenferro` or `cuda[:N]`. The opt-in backends run the SR stages (Gram product, S/g assembly, Cholesky solve, CG product) through tenferro `dot_general`/`cholesky`/`triangular_solve`, validated with explicit tolerances and not byte-identical. `cuda` needs the `gpu-cuda` build **and** a provider registered by the calling program (`mvmc_gpu_cuda::install()`); the stock `mvmc` binary has none, so `cuda` aborts there. An invalid value or an unavailable backend is a panic (exit status 101), never a fallback. See [chapter 12](12-accelerated-backends.md#124-selecting-a-backend). |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order` (default, BLAS/LAPACK parity oracle), `tenferro` or `cuda[:N]`. The opt-in backends run the SR stages (Gram product, S/g assembly, Cholesky solve, CG product) through tenferro `dot_general`/`cholesky`/`triangular_solve`, validated with explicit tolerances and not byte-identical. `cuda` needs the `gpu-cuda` build and a registered provider, otherwise it is an error. An invalid value is an error, never a fallback. |
-| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | source of the Pfaffian/inverse tables of the measurement: `calc-m-all` (default, C-order kernels), or `c-order`, `tenferro`, `cuda[:N]` to build them with one batched `PfaffianStages` call per batch (real, non-FSZ mode only). `c-order` is byte-identical to the default; a backend without the stage or an unsupported mode is an error, never a fallback. |
+| `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order` (default, BLAS/LAPACK parity oracle), `tenferro` or `cuda[:N]`. The opt-in backends run the SR stages (Gram product, S/g assembly, Cholesky solve, CG product) through tenferro `dot_general`/`cholesky`/`triangular_solve`, validated with explicit tolerances and not byte-identical. `cuda` needs the `mvmc-cuda` binary of `gpu/mvmc-gpu-cuda`, which registers the CUDA provider and then runs this same CLI; the stock `mvmc` rejects it. The selector is validated once at startup before any IO: an invalid value or an unavailable backend prints `error: MVMC_RS_SR_BACKEND: ...` and exits with status 2 (collectively under MPI), never a fallback. See [chapter 12](12-accelerated-backends.md#124-selecting-a-backend). |
+| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | source of the Pfaffian/inverse tables of the measurement: `calc-m-all` (default, C-order kernels), or `c-order`, `tenferro`, `cuda[:N]` to build them with one batched `PfaffianStages` call per batch (real, non-FSZ mode only). `c-order` is byte-identical to the default; a backend without the stage or an unsupported mode is an error, never a fallback. Like `MVMC_RS_SR_BACKEND` it is validated once at startup before any IO (invalid value or unavailable backend: `error: MVMC_RS_MEASURE_PF_BACKEND: ...`, exit status 2). |
 | `MVMC_RS_INNER_THRESHOLD` | same | a positive value selects the plain item-count gate: a region uses the worker pool when it has at least this many items (used by the worker-invariance tests; small values force pooled execution of tiny inputs). Unset, empty, invalid or 0 selects the automatic gate below (reported `threshold` stays 32) |
 | `MVMC_RS_INNER_MIN_WORK_NS` | same | automatic gate: minimum estimated serial work of one region in nanoseconds; default 100000 |
 | `MVMC_RS_INNER_MIN_SIZE` | same | automatic gate: minimum electron-matrix dimension `n_size` (number of electrons) for regions that scale with the matrices; default `120*w/(w-1)` for `w` workers (160 for 4, 240 for 2) |

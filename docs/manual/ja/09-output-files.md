@@ -138,7 +138,7 @@ VMCParaOpt                  [2]      4.02351
 
 (最適化実行では51行、[0] から SR のサブタイマーまで **(観測)**。PhysCal では `VMCPhysCal [2]` を使います)。`zvo_CalcTimerDiag.dat` は、さらに診断用の
 スロット(ID は 966 まで。計測されないスロットは 0)を列挙します。Rust ではファイル名は**常に `zvo_...`** です。タイマーの書き出し関数はリテラルの接頭辞
-`"zvo"` で呼び出されます(`run.rs`、`crates/mvmc-cli/src/main.rs`)。一方 C は `CDataFileHead` を使います(`vmcclock.c:79`)。タイマーは包含的です。親セクションは、子セクションが計測されている間も動き続けます。
+`"zvo"` で呼び出されます(`run.rs`、`crates/mvmc-cli/src/lib.rs`)。一方 C は `CDataFileHead` を使います(`vmcclock.c:79`)。タイマーは包含的です。親セクションは、子セクションが計測されている間も動き続けます。
 
 > **実装**
 > - C: `OutputTimerParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcclock.c:79`

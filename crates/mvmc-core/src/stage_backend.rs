@@ -391,15 +391,71 @@ pub fn set_stage_backend_override(kind: Option<StageBackendKind>) {
 
 /// The backend chosen by the override, then the environment, then the default (C order).
 ///
-/// An invalid environment value is a hard error, never a silent fallback.
-pub fn selected_stage_backend() -> StageBackendKind {
+/// An invalid environment value is an error, never a silent fallback.
+pub fn try_selected_stage_backend() -> Result<StageBackendKind, String> {
     if let Some(kind) = *OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
-        return kind;
+        return Ok(kind);
     }
     match std::env::var(SR_BACKEND_VARIABLE) {
-        Ok(v) => parse_stage_backend(&v).unwrap_or_else(|e| panic!("{e}")),
-        Err(_) => StageBackendKind::COrder,
+        Ok(v) => parse_stage_backend(&v),
+        Err(std::env::VarError::NotPresent) => Ok(StageBackendKind::COrder),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(format!("{SR_BACKEND_VARIABLE} is not valid UTF-8"))
+        }
     }
+}
+
+/// Like [`try_selected_stage_backend`], but panics on an invalid value (library callers that
+/// reached production code without the CLI preflight; the CLI uses
+/// [`validate_selected_stage_backend`] before any IO).
+pub fn selected_stage_backend() -> StageBackendKind {
+    try_selected_stage_backend().unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// Startup preflight: resolve the selected backend and, for a non-default kind, open (and
+/// cache) it, so that an invalid selector or an unavailable backend (no `gpu-cuda` feature, no
+/// registered provider, device ordinal out of range) is reported as an error before any IO
+/// instead of a panic in the first SR step. The default C-order backend needs no opening.
+///
+/// # Errors
+///
+/// A message that names [`SR_BACKEND_VARIABLE`].
+pub fn validate_selected_stage_backend() -> Result<StageBackendKind, String> {
+    let kind = try_selected_stage_backend()?;
+    preflight_stage_backend(kind, SR_BACKEND_VARIABLE)?;
+    Ok(kind)
+}
+
+/// Open (and cache) a non-default backend `kind` selected through `variable`, reporting every
+/// failure, including a provider panic, as an error message that names the variable. The
+/// C-order backend needs no opening. Used by the startup preflight of every selector that
+/// resolves to a [`StageBackendKind`].
+///
+/// # Errors
+///
+/// A message that names `variable`.
+pub fn preflight_stage_backend(kind: StageBackendKind, variable: &str) -> Result<(), String> {
+    if kind != StageBackendKind::COrder {
+        // A provider may panic while loading a driver library (cudarc panics when `libcudart`
+        // is missing); report that as an error too, with the panic message and without the
+        // default hook's output.
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let opened = std::panic::catch_unwind(|| shared(kind).map(|_| ()));
+        std::panic::set_hook(previous);
+        match opened {
+            Ok(result) => result.map_err(|e| format!("{variable}: {e}"))?,
+            Err(payload) => {
+                let text = payload
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                    .unwrap_or_else(|| "backend initialization panicked".to_string());
+                return Err(format!("{variable}: backend unavailable: {text}"));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Construct a fresh backend of the given kind.
