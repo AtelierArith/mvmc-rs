@@ -100,7 +100,7 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:985`
 > - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
-> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
+> - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
 > - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
@@ -148,8 +148,8 @@ configuration arrays (`ele_idx.txt`, `ele_cfg.txt`, `ele_num.txt`, `ele_proj_cnt
 > **Implementation**
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
 > - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
-> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:517`
-> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:840`
+> - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
+> - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
 > - Parity: `vmc_phys_cal_in_place_timed` forces `vmc_calc_mode = 1` on its working copy (`run.rs:811`), as C's PhysCal branch implies.
 
@@ -228,8 +228,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `validate_grouped_runtime` — `crates/mvmc-core/src/validation.rs:23`
-> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1457`
-> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1750`
+> - Rust: `run_para_opt_from_namelist_with_reducer` — `crates/mvmc-core/src/run.rs:1525`
+> - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
 > - Parity: communicator widths follow `vmcmain.c:239-256` (`NSplitSize` is the communicator *width*, not the number of chains); sample ranges follow `SplitLoop`; the C Green-function reduction goes to rank 0 only whereas Rust reduces the accumulators with an all-reduce and lets the root write, which yields the same file contents.
 
 ## 8.5 Environment variables
