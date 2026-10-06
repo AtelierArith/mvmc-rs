@@ -187,11 +187,59 @@ CG はステップごとには比較**しません**。サンプルから作ら�
 
 ## 12.9 ベンチマークと検証スイート(#450)
 
-issue #450 は、保守者が別のサーバーで実行する A100 で、保留中のサンプラ側の作業を再評価できるように、移植可能な関数レベルの CPU/GPU ベンチマークスイートを構築します。バッチ Pfaffian、SR、サンプラステージ、転送、CPU ベースラインの各ファミリーをビルドして実行する 1 つのエントリポイントがあり、すべての結果を C 順序のオラクルと照合し、1 つの `results-<host>-<date>.tar.gz`(ファミリーごとの CSV、Markdown レポート、生ログ、メタデータブロック)を書き出します。さらに、アーカイブを速度向上の表と関数ごとの「GPU 化すべきか」の推奨に変える解析スクリプトも含まれます。
+issue #450 は実装済みです([PR #462](https://github.com/AtelierArith/mvmc-rs/pull/462))。これは移植可能な関数レベルのスイートで、GPU・tenferro・CPU の各バリアントの**数値**をまず C 順序のオラクルと照合し、その後で初めて時間を記録します。保守者が別サーバーで実行する FP64 性能の高い GPU(A100)で、保留中のサンプラ側の作業を再評価するためです。正式なリファレンスは `benchmark/function_suite/README.md`、ハーネスは `gpu/mvmc-gpu-cuda` の `function_suite` example、RTX 3060 での参考レポートは `benchmark/function_suite/results/rtx3060-reference.md` です。
 
-> **#450 が完了したら補完する。** 執筆時点でこのスイートは作業中でプルリクエストもありません。このマニュアルは、まだ存在しないコマンドを説明しません。完了後は、その使い方(エントリポイント、`--quick`/`--full` プロファイル、native と docker の要件、解析スクリプト、アーカイブの送り返し方)が `benchmark/function_suite/README.md` に記述され、それが正式なリファレンスになります。そのときにこの節をその要約に更新してください。
+### 実行方法
 
-それまでは、[12.3](#各構成要素のベンチマーク) の構成要素ごとのスクリプトと [12.3](#cuda-ゲートnative-または-docker) のゲートが、すでに存在する 3 つのファミリーについて同種のデータを与えます。
+```bash
+git submodule update --init --recursive
+scripts/bench/run_all.sh --native --quick --out bench-out          # 約 10 分の動作確認
+scripts/bench/run_all.sh --native --full --gpu 0 --out bench-out   # 1 GPU で約 2 時間
+scripts/bench/run_all.sh --docker --full --gpu 0 --out bench-out   # ホストのツールキットの代わりに nvidia/cuda イメージ
+scripts/bench/run_all.sh --native --preflight-only                 # チェックのみ
+```
+
+- **要件。** NVIDIA ドライバ(`nvidia-smi` が動くこと)、Rust 1.96 以上、python3、および(native)NVRTC・cuBLAS・cuSOLVER を含む CUDA ツールキット 12.6 以上と OpenBLAS の開発ファイル(`libopenblas.so`)、または(docker)NVIDIA Container Toolkit 付きの docker。イメージは `MVMC_RS_CUDA_IMAGE` を設定しない限り `nvidia/cuda:12.9.1-devel-ubuntu24.04` で、OpenBLAS はコンテナ内にインストールされ、ホストの `~/.rustup` と `~/.cargo` がマウントされます。
+- **プリフライト。** ドライバ、`--gpu` で指定した GPU、rustc、ツールキットのバージョン、CUDA ライブラリ、OpenBLAS のいずれかがない場合、ビルド前にメッセージを出して停止します。`--native`/`--docker` を省略すると、ツールキットがあれば native、なければ docker を選びます。
+- **手順。** リリースビルド、Rust の StdFace 移植(`mvmc --dry-run`)による Hubbard 鎖の入力生成(`--full` では L = 16〜256)、続いて `pfaffian`、`sr`(別途 1 コアの CPU パス付き)、`sr_resident`、`sampler`、`transfers` の各ファミリー。あるファミリーが失敗しても他は実行されます。`--full` のサンプラ計時グリッドは `W * L^2 <= 2.1e6` に制限され(`MVMC_BENCH_WORK_CAP` で引き上げ可)、省略された点は明示的な `SKIPPED` 行になります。
+- **出力。** `DIR/results-<host>-<date>.tar.gz`。ファミリーごとの CSV(`csv/`)、`report.md`、生ログ(`logs/`)、`metadata.txt`(GPU 型番、compute capability、スクリプトの表にあれば FP64 ピーク、ドライバ、CUDA・tenferro・cudarc のバージョン、CPU、OS、rustc、git リビジョン、スレッド環境)を含みます。CSV のスキーマは `family,function,variant,dtype,params,reps,median_s,min_s,max_s,dev_metric,dev_value,dev_bound,dev_ratio,verdict,note` です。
+- **デバイス常駐 SR のフック(#447)。** `run_all.sh` は `gpu/mvmc-gpu-cuda/examples/bench_sr_resident.rs` があればそれを実行し、なければ `NotAvailable` 行を 1 つ記録します。数値をでっち上げることはありません。既存の `bench_sr_device` example は別のプログラムで、このスキーマをまだ書かないため、現時点ではこのファミリーは `NotAvailable` です。
+
+### 判定の意味
+
+**数値判定が主要な結果**であり、`FAIL` か `ERROR` が 1 つでもあればプロセスは非 0 で終了します。時間(ウォームアップ後の中央値・最小・最大)は副次的な参考列であり、レポートの「GPU 化すべきか」の推奨は、チェックに失敗した関数に対して `YES` になることはありません。
+
+| 判定 | 意味 |
+|---------|---------|
+| `PASS` | オラクルからの偏差が上限以内(`dev_ratio` = 観測値/上限 <= 1)、または厳密チェック(RNG 状態、乱数消費数、配置、ステータスコード、ビット一致のコピー)が成立 |
+| `FAIL` | 上限を超えた、または厳密チェックが失敗 |
+| `ERROR` | 予期しない実行時エラー。失敗として数える |
+| `ORACLE` | 基準の行そのもの(pfapack、OpenBLAS を使う `COrderSr`、CPU サンプラ) |
+| `INFO` | 計時のみ |
+| `NotAvailable` | この環境に関数またはフックが存在しない。数値なし |
+| `SKIPPED` | 実行しなかった(メモリや計算量の上限)。note に理由 |
+| `KNOWN-ISSUE` | CSV の値ではなくレポート上のラベル。追跡中の不具合に該当する `FAIL`([#465](https://github.com/AtelierArith/mvmc-rs/issues/465) サンプラのウォーカーの常駐逆行列、[#466](https://github.com/AtelierArith/mvmc-rs/issues/466) tenferro-native の c64 Pfaffian n = 128)。`FAIL` として数えることに変わりはなく、追跡されていない失敗は `NEW` と表示される |
+
+ファミリーごとの上限(導出は `gpu/mvmc-gpu-cuda/examples/function_suite/*.rs` のソースヘッダにあります。デバイスに合わせて調整したものではなく、実行を通すために緩めてはなりません)。
+
+- **Pfaffian と逆行列:** 平面ごとに `max(逆行列の相対誤差, Pfaffian の相対誤差) <= 16 n eps cond(A)`(`cond = ||A||_F ||A^-1||_F` は実際の平面のもの)。加えて独立な不変量 `A inv = I`、`inv` の歪対称性、`Pf^2 = det`、および平面ごとのステータスコード(ゼロピボット、NaN)がオラクルと一致すること。
+- **SR ステージ:** `COrderSr` に対する相対最大ノルムで、上限は `4 k eps`(Gram)、`8 eps`(S/g)、`8 n eps kappa`(Cholesky 求解、kappa は Gershgorin)、`4 (k + n) eps`(CG 積)、`2 K kappa 4 (k + n) eps`(K 反復の CG 求解)。
+- **サンプラ:** 厳密なものが必須条件です。RNG 状態と乱数消費数、電子配置、自由実行の判定列が CPU とビット単位で一致し、#424 の teacher による乱数不一致と説明のつかない判定反転(「defects」)が 0 であること。自由実行の発散は、teacher が判定反転を特定した場合にのみ、数値方針が許す範囲として合格になります。teacher 強制実行の重み偏差は、さらにウォーカーごとに `2 * 16 * (n + s) * eps * kappa / sqrt(w_min)` と照合されます。
+- **転送:** ビット単位で一致する往復(コピーに演算はありません)。
+
+サンプラの重みの上限は、証明ではなく明示した仮定に基づきます。定数 16 は Pfaffian の上限と同じ値です。再計算の間の更新数 `s` は、再計算の区間内の提案がすべて採択される最悪の場合としています。`kappa` は平面の条件数の最大値で、各ウォーカーの実行の開始時と終了時にのみ採取します(軌跡に沿ってではありません)。`w_min`(参照の非ゼロ重みの最小値)は比の内積の桁落ち因子の代わりであり、射影因子も含みます。このため上限は緩く、RTX 3060 で観測した偏差の 600〜20000 倍です(L = 16〜256 で観測値/許容値は 5e-5〜1.7e-3)。厳しくするには、teacher が提案ごとの偏差を公開する必要があります。
+
+### 結果の送り返しとマシン間の比較
+
+アーカイブ `bench-out/results-<host>-<date>.tar.gz`(数百キロバイト)1 つを送ってください。終了コードが非 0 なのは `FAIL` か `ERROR` が記録されたことを意味しますが、アーカイブはどちらの場合も書かれ、どちらの場合も送るべきです。アーカイブを統合するには(標準ライブラリのみ)次のようにします。
+
+```bash
+uv run --no-project scripts/bench/analyze.py results-a100.tar.gz results-rtx3060.tar.gz --out comparison.md
+```
+
+各引数が 1 台のマシン(アーカイブまたは展開済みディレクトリ)です。レポートは次の順です。(1) 数値検証: マシンごとの判定数、KNOWN-ISSUE または NEW ラベル付きの失敗一覧、関数・バリアントごとのマシン横断の最悪偏差/上限。(2) 参考としての時間: 速度向上の表と損益分岐点(バッチサイズ、NPara、ウォーカー数)。(3) 数値でゲートされた関数ごとの「GPU 化すべきか」の推奨。(4) `NotAvailable` と `SKIPPED` の行。続いて各マシンのメタデータ。
+
+サンプラの時間は GPU と同じくらいホストのコア数に依存する(そのホスト側はウォーカーごとに 1 スレッドで動く)ので、同じマシンの CPU multichain の行と比較してください。CPU の行は他の負荷に敏感なので、空いているホストで実行してください。
 
 ## 12.10 数値の再現
 

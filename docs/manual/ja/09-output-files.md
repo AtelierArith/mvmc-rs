@@ -259,4 +259,4 @@ Fortran 版との違い(Fortran 側の挙動は欠陥またはコンパイラの
 | `benchmark/gpu_pfaffian/results/pfaffian_batched.csv`(と `.md`) | `scripts/run_pfaffian_bench.sh` | バッチ Pfaffian/逆行列の時間(CPU と tenferro、CUDA の比較) |
 | `benchmark/gpu_device_sampler/results/device_sampler*.csv`(と `.md`) | `scripts/run_device_sampler_bench.sh` | デバイス常駐サンプラと CPU マルチチェーンランナーの比較 |
 | `benchmark/gpu_sr_device/results/sr_device.csv`(と `.md`) | `scripts/run_sr_device_bench.sh` | デバイス常駐 SR ステップ |
-| `results-<host>-<date>.tar.gz` | issue #450 のスイート(**完了したら補完**、[12.9](12-accelerated-backends.md#129-ベンチマークと検証スイート450)) | 関数ファミリーごとの CSV、Markdown レポート、ログ、メタデータ |
+| `results-<host>-<date>.tar.gz` | issue #450 のスイート(`scripts/bench/run_all.sh` が書き出す、[12.9](12-accelerated-backends.md#129-ベンチマークと検証スイート450)) | 関数ファミリーごとの CSV、Markdown レポート、ログ、メタデータ |

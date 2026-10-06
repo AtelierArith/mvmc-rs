@@ -261,4 +261,4 @@ A normal run with an accelerated SR backend (`MVMC_RS_SR_BACKEND=tenferro`, [cha
 | `benchmark/gpu_pfaffian/results/pfaffian_batched.csv` (and `.md`) | `scripts/run_pfaffian_bench.sh` | batched Pfaffian/inverse timings, CPU against tenferro and CUDA |
 | `benchmark/gpu_device_sampler/results/device_sampler*.csv` (and `.md`) | `scripts/run_device_sampler_bench.sh` | device-resident sampler against the CPU multi-chain runner |
 | `benchmark/gpu_sr_device/results/sr_device.csv` (and `.md`) | `scripts/run_sr_device_bench.sh` | device-resident SR step |
-| `results-<host>-<date>.tar.gz` | the suite of issue #450 (**to be completed when it lands**, [12.9](12-accelerated-backends.md#129-the-benchmark-and-validation-suite-450)) | CSV per function family, Markdown report, logs and metadata |
+| `results-<host>-<date>.tar.gz` | the suite of issue #450 (written by `scripts/bench/run_all.sh`, [12.9](12-accelerated-backends.md#129-the-benchmark-and-validation-suite-450)) | CSV per function family, Markdown report, logs and metadata |
