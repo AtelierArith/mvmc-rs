@@ -1,6 +1,6 @@
 # 11. Compatibility and differences
 
-[Contents](README.md) · Previous: [10. Tutorial](10-tutorial.md) · Next: [Appendix: how the citations were checked](appendix-checks.md)
+[Contents](README.md) · Previous: [10. Tutorial](10-tutorial.md) · Next: [12. Accelerated and GPU backends](12-accelerated-backends.md)
 
 ## 11.1 Authority and function correspondence
 
@@ -69,6 +69,7 @@ Differences that a user can observe:
 | 19 | MPI Green-function reduction | `MPI_Reduce` to rank 0 | all-reduce, root writes |
 | 20 | Negative `DSROptStepDt` | sets `SRFlag = 1` ("Diagonalization Mode" remark, header `sEigenMax sEigenMin`) and replaces `dt` by `-dt` (`readdef.c:746-752`) | not handled: a negative value is used as given, which reverses the direction of the SR step |
 | 21 | Key for $N_e$ in `modpara.def` | `Nelectron`, `Ne` | `NElec`, `Nelec` (the C spellings are ignored) |
+| 22 | SR stages with `MVMC_RS_SR_BACKEND=tenferro` or `cuda` | not applicable | opt-in Rust extension ([chapter 12](12-accelerated-backends.md)): same RNG draws and Metropolis protocol; the SR Gram, solve and CG product agree with the C-order path within derived bounds, not byte-identical; the default `c-order` path is unchanged |
 
 ## 11.4 Numerical comparison policy
 

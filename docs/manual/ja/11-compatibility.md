@@ -1,6 +1,6 @@
 # 11. 互換性と相違点
 
-[目次](README.md) · 前へ: [10. チュートリアル: 16サイトのHubbard鎖](10-tutorial.md) · 次へ: [付録: 引用のチェック方法](appendix-checks.md)
+[目次](README.md) · 前へ: [10. チュートリアル: 16サイトのHubbard鎖](10-tutorial.md) · 次へ: [12. アクセラレータ(GPU)バックエンド](12-accelerated-backends.md)
 
 ## 11.1 基準実装と関数の対応
 
@@ -69,6 +69,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 19 | MPIのグリーン関数のリダクション | ランク0への `MPI_Reduce` | all-reduce、ルートが書き出し |
 | 20 | 負の `DSROptStepDt` | `SRFlag = 1`(「Diagonalization Mode」の注記、ヘッダー `sEigenMax sEigenMin`)を設定し、`dt` を `-dt` に置き換える(`readdef.c:746-752`) | 処理されない: 負の値はそのまま使われ、SRステップの向きが逆になる |
 | 21 | `modpara.def` における $N_e$ のキー | `Nelectron`, `Ne` | `NElec`, `Nelec`(Cの綴りは無視される) |
+| 22 | `MVMC_RS_SR_BACKEND=tenferro` または `cuda` での SR ステージ | 該当なし | オプトインの Rust 拡張([第 12 章](12-accelerated-backends.md)): RNG の消費と Metropolis のプロトコルは同じ。SR の Gram、求解、CG 積は C 順序パスと導出された境界内で一致し、バイト単位では一致しない。デフォルトの `c-order` パスは変更なし |
 
 ## 11.4 数値比較ポリシー
 

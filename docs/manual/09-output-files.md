@@ -250,3 +250,15 @@ Other tools in `extern/mVMC-1.3.0/tool/` are not ported; they are independent of
 > - Rust: `fourier_cor` — `crates/mvmc-greenr2k/src/lib.rs:998`
 > - Rust: `list_real` — `crates/mvmc-greenr2k/src/fortran_fmt.rs:142`
 > - Parity: fixtures from the compiled Fortran tool (`tests/fixtures/greenr2k/PROVENANCE.md`); text layout exact, numbers within one unit of the printed digit plus a `1e-13` floor ([NUMERICAL_COMPARISONS.md](../NUMERICAL_COMPARISONS.md)).
+
+## 9.10 Files of the accelerated-backend tools
+
+A normal run with an accelerated SR backend (`MVMC_RS_SR_BACKEND=tenferro`, [chapter 12](12-accelerated-backends.md)) writes the **same set of files with the same formats** as the default; only the low-order digits of the SR-dependent values can differ ([12.4](12-accelerated-backends.md#124-selecting-a-backend)). The multi-walker runner (`run_para_opt_multichain`, library API) writes the output files from walker 0 only, as the output root of the equivalent MPI run ([12.7](12-accelerated-backends.md#127-multi-walker-runs)). The GPU gates and benchmarks write their own reports, none of which is read back by `mvmc`:
+
+| File | Written by | Content |
+|------|-----------|---------|
+| `gpu/mvmc-gpu-cuda/results/cuda-gate.md`, `cuda-validation.md`, `cuda-roundtrip.md`, `cuda-transfer.md` | `scripts/run_cuda_gate.sh` (paths overridable with `MVMC_RS_CUDA_GATE_OUT` and its siblings); the directory is ignored by version control | device report (device, compute capability, memory, driver, CUDA driver API, NVRTC, cuBLAS, cuSOLVER and tenferro versions), micro-benchmark, validation-harness report, host-device round-trip floor, transfer sweep |
+| `benchmark/gpu_pfaffian/results/pfaffian_batched.csv` (and `.md`) | `scripts/run_pfaffian_bench.sh` | batched Pfaffian/inverse timings, CPU against tenferro and CUDA |
+| `benchmark/gpu_device_sampler/results/device_sampler*.csv` (and `.md`) | `scripts/run_device_sampler_bench.sh` | device-resident sampler against the CPU multi-chain runner |
+| `benchmark/gpu_sr_device/results/sr_device.csv` (and `.md`) | `scripts/run_sr_device_bench.sh` | device-resident SR step |
+| `results-<host>-<date>.tar.gz` | the suite of issue #450 (**to be completed when it lands**, [12.9](12-accelerated-backends.md#129-the-benchmark-and-validation-suite-450)) | CSV per function family, Markdown report, logs and metadata |

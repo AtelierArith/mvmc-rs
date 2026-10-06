@@ -7,7 +7,7 @@ package mVMC (`mvmc-rs`). It starts from the theory and maps every key equation
 to the C function that defines the reference behaviour and to the Rust function
 that implements it. The later chapters are usage references: input files,
 command line, parallel execution, output files, a worked tutorial and the
-differences from the C and Julia implementations.
+differences from the C and Julia implementations, and the optional accelerated (tenferro/CUDA) backends.
 
 The manual is written in plain GitHub-rendered Markdown. Equations use
 `$...$` and `$$...$$` (rendered by GitHub). A Japanese translation is available in
@@ -28,6 +28,7 @@ The manual is written in plain GitHub-rendered Markdown. Equations use
 | 9 | [Output files](09-output-files.md) | Every file Rust writes, its columns and which rank writes it |
 | 10 | [Tutorial](10-tutorial.md) | A complete Hubbard-chain optimization followed by a physical-quantity calculation, with real output |
 | 11 | [Compatibility and differences](11-compatibility.md) | Differences from C and Julia, numerical comparison policy, open observations |
+| 12 | [Accelerated and GPU backends](12-accelerated-backends.md) | Optional tenferro/CUDA backends: what exists, build and run (native, docker, `gpu-cuda`), `MVMC_RS_SR_BACKEND`, validation and tolerances, multi-walker runs, known limits, the #450 benchmark suite |
 | A | [Appendix: how the citations were checked](appendix-checks.md) | Citation checker, provenance of the observed output, what was not verified |
 
 ## How to read the "Implementation" boxes
