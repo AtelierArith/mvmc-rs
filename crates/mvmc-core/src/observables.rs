@@ -2402,7 +2402,153 @@ fn lanczos_task_state(
     task
 }
 
+/// Bring the Slater tables of `task` from the sample configuration `ele_idx` to `moved_idx`
+/// the way C's `calHCA1`/`calHCACA1` do: a rank-one `UpdateMAll` for one moved electron and
+/// the rank-two `UpdateMAllTwo` (electron `ml` of spin `second_spin` first, then `mj`) for two,
+/// instead of a full Pfaffian and inverse recomputation per moved configuration. The caller
+/// restores the tables afterwards (C's `copyMAll`). A configuration that differs in anything
+/// else (more electrons, or two electrons of the same spin) falls back to the full
+/// recomputation.
+fn lanczos_move_tables(
+    task: &mut VmcOptimizationState,
+    ele_idx: &[i64],
+    moved_idx: &[i64],
+    second_spin: u8,
+    all_complex: bool,
+    n_site: usize,
+    n_elec: usize,
+    n_qp_full: usize,
+    pool: &crate::state::ThreadedPfaPackWorkspace,
+) -> bool {
+    use crate::sampling::updates::{
+        update_m_all_complex_flat, update_m_all_real_flat, update_m_all_two_complex_flat,
+        update_m_all_two_real_flat,
+    };
+    let diffs: Vec<usize> = (0..ele_idx.len())
+        .filter(|&slot| ele_idx[slot] != moved_idx[slot])
+        .collect();
+    let split = |slot: usize| (slot % n_elec, (slot / n_elec) as u8);
+    let stride = (2 * n_elec).pow(2) + 1;
+    let slater = &mut task.slater_matrix;
+    match diffs.as_slice() {
+        [] => true,
+        &[slot] => {
+            let (ma, spin) = split(slot);
+            if all_complex {
+                update_m_all_complex_flat(
+                    ma,
+                    spin,
+                    moved_idx,
+                    &slater.slater_elm,
+                    slater.inv_m.as_mut_slice(),
+                    stride,
+                    &mut slater.pf_m,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                );
+            } else {
+                update_m_all_real_flat(
+                    ma,
+                    spin,
+                    moved_idx,
+                    &slater.slater_elm_real,
+                    slater.inv_m_real.as_mut_slice(),
+                    stride,
+                    &mut slater.pf_m_real,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                );
+            }
+            true
+        }
+        &[first, second] if split(first).1 != split(second).1 => {
+            let (l_slot, j_slot) = if split(first).1 == second_spin {
+                (first, second)
+            } else {
+                (second, first)
+            };
+            let (ml, sk) = split(l_slot);
+            let (mj, si) = split(j_slot);
+            let rl = ele_idx[l_slot] as usize;
+            let rj = ele_idx[j_slot] as usize;
+            if all_complex {
+                update_m_all_two_complex_flat(
+                    ml,
+                    sk,
+                    mj,
+                    si,
+                    rl,
+                    rj,
+                    moved_idx,
+                    &slater.slater_elm,
+                    slater.inv_m.as_mut_slice(),
+                    stride,
+                    &mut slater.pf_m,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                );
+            } else {
+                update_m_all_two_real_flat(
+                    ml,
+                    sk,
+                    mj,
+                    si,
+                    rl,
+                    rj,
+                    moved_idx,
+                    &slater.slater_elm_real,
+                    slater.inv_m_real.as_mut_slice(),
+                    stride,
+                    &mut slater.pf_m_real,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                );
+            }
+            true
+        }
+        _ => {
+            if all_complex {
+                crate::pfaffian::calc_m_all_complex_c_compat(
+                    moved_idx,
+                    &slater.slater_elm,
+                    &mut slater.inv_m,
+                    &mut slater.pf_m,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                    pool,
+                )
+                .is_ok()
+            } else {
+                crate::pfaffian::calc_m_all_real(
+                    moved_idx,
+                    &slater.slater_elm_real,
+                    &mut slater.inv_m_real,
+                    &mut slater.pf_m_real,
+                    0,
+                    n_qp_full,
+                    n_site,
+                    n_elec,
+                    pool,
+                )
+                .is_ok()
+            }
+        }
+    }
+}
+
 fn lanczos_evaluate_moved(
+    ele_idx: &[i64],
+    second_spin: u8,
     moved_idx: &[i64],
     moved_cfg: &[i64],
     moved_num: &[i64],
@@ -2416,32 +2562,18 @@ fn lanczos_evaluate_moved(
     n_qp_full: usize,
     pool: &crate::state::ThreadedPfaPackWorkspace,
 ) -> Option<Complex64> {
-    let calculation = if all_complex {
-        crate::pfaffian::calc_m_all_complex_c_compat(
-            moved_idx,
-            &state.slater_matrix.slater_elm,
-            &mut state.slater_matrix.inv_m,
-            &mut state.slater_matrix.pf_m,
-            0,
-            n_qp_full,
-            n_site,
-            n_elec,
-            pool,
-        )
-    } else {
-        crate::pfaffian::calc_m_all_real(
-            moved_idx,
-            &state.slater_matrix.slater_elm_real,
-            &mut state.slater_matrix.inv_m_real,
-            &mut state.slater_matrix.pf_m_real,
-            0,
-            n_qp_full,
-            n_site,
-            n_elec,
-            pool,
-        )
-    };
-    if calculation.is_err() {
+    let moved = lanczos_move_tables(
+        state,
+        ele_idx,
+        moved_idx,
+        second_spin,
+        all_complex,
+        n_site,
+        n_elec,
+        n_qp_full,
+        pool,
+    );
+    if !moved {
         state.slater_matrix.restore_tables_from(original_slater);
         return None;
     }
@@ -2534,6 +2666,8 @@ pub(crate) fn calculate_lanczos_green(
             data,
         ) {
             if let Some(moved_h) = lanczos_evaluate_moved(
+                ele_idx,
+                0,
                 &moved_idx,
                 &moved_cfg,
                 &moved_num,
@@ -2628,6 +2762,8 @@ pub(crate) fn calculate_lanczos_green(
             data,
         ) {
             if let Some(moved_h) = lanczos_evaluate_moved(
+                ele_idx,
+                second_spin,
                 &moved_idx,
                 &moved_cfg,
                 &moved_num,
@@ -2729,38 +2865,28 @@ pub(crate) fn calculate_lanczos_h2_transfer(
 
     // Moved-configuration Pfaffians for the current `moved_idx`; `task` is restored
     // by the caller after the local energy has been evaluated.
-    let moved_ip_of = |task: &mut VmcOptimizationState, moved_idx: &[i64]| -> Complex64 {
-        if all_complex {
-            let _ = crate::pfaffian::calc_m_all_complex_c_compat(
+    let moved_ip_of =
+        |task: &mut VmcOptimizationState, moved_idx: &[i64], second_spin: u8| -> Complex64 {
+            let _ = lanczos_move_tables(
+                task,
+                ele_idx,
                 moved_idx,
-                &task.slater_matrix.slater_elm,
-                &mut task.slater_matrix.inv_m,
-                &mut task.slater_matrix.pf_m,
-                0,
-                n_qp_full,
+                second_spin,
+                all_complex,
                 n_site,
                 n_elec,
-                &pool,
-            );
-            calculate_ip_complex(&task.slater_matrix.pf_m, 0, n_qp_full, data)
-        } else {
-            let _ = crate::pfaffian::calc_m_all_real(
-                moved_idx,
-                &task.slater_matrix.slater_elm_real,
-                &mut task.slater_matrix.inv_m_real,
-                &mut task.slater_matrix.pf_m_real,
-                0,
                 n_qp_full,
-                n_site,
-                n_elec,
                 &pool,
             );
-            Complex64::new(
-                calculate_ip_real(&task.slater_matrix.pf_m_real, 0, n_qp_full, data),
-                0.0,
-            )
-        }
-    };
+            if all_complex {
+                calculate_ip_complex(&task.slater_matrix.pf_m, 0, n_qp_full, data)
+            } else {
+                Complex64::new(
+                    calculate_ip_real(&task.slater_matrix.pf_m_real, 0, n_qp_full, data),
+                    0.0,
+                )
+            }
+        };
 
     // C `calham*.c` runs the Hamiltonian term loops under `omp for`. Each term's value is
     // evaluated on a per-task copy of the Slater state (restored after every term) and
@@ -2809,7 +2935,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         let electron = ele_cfg[src].checked_abs().map(|v| v as usize)?;
         moved_cfg[src] = -1;
         moved_cfg[dst] = electron as i64;
-        let moved_ip = moved_ip_of(task, &moved_idx);
+        let moved_ip = moved_ip_of(task, &moved_idx, 0);
         let mut contribution = None;
         if moved_ip.norm() > 0.0 {
             let moved_h = calculate_local_energy(
@@ -2867,7 +2993,7 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         if green.norm() == 0.0 {
             return None;
         }
-        let moved_ip = moved_ip_of(task, &moved_idx);
+        let moved_ip = moved_ip_of(task, &moved_idx, 1);
         let mut contribution = None;
         if moved_ip.norm() > 0.0 {
             let moved_h = calculate_local_energy(
@@ -2928,6 +3054,8 @@ pub(crate) fn calculate_lanczos_h2_transfer(
                 continue;
             }
             if let Some(moved_h) = lanczos_evaluate_moved(
+                ele_idx,
+                second_spin,
                 &moved_idx,
                 &moved_cfg,
                 &moved_num,
@@ -4004,6 +4132,84 @@ mod tests {
             accumulator,
             vec![Complex64::new(-0.3125, -0.625), Complex64::new(-1.25, -2.5),]
         );
+    }
+
+    /// The rank-one / rank-two table moves of the Lanczos terms (C `UpdateMAll`/`UpdateMAllTwo`)
+    /// agree with a full recomputation of the moved configuration to roundoff (issue #478).
+    #[test]
+    fn lanczos_rank_updates_match_full_recomputation() {
+        let (n_site, n_elec, n_qp) = (6usize, 3usize, 2usize);
+        let n2 = 2 * n_site;
+        let n_size = 2 * n_elec;
+        let mut state = VmcOptimizationState::zeros(n_site, n_elec, 0, 0, n_qp, 0, false, false);
+        let mut seed = 12345_u64;
+        let mut rand = || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((seed >> 11) as f64 / (1u64 << 53) as f64) - 0.5
+        };
+        for qp in 0..n_qp {
+            for i in 0..n2 {
+                for j in (i + 1)..n2 {
+                    let v = rand();
+                    state.slater_matrix.slater_elm_real.set(qp, i, j, v);
+                    state.slater_matrix.slater_elm_real.set(qp, j, i, -v);
+                }
+            }
+        }
+        let pool = crate::state::ThreadedPfaPackWorkspace::new(n_size, 1);
+        let recompute = |tables: &mut crate::state::SlaterMatrixData, idx: &[i64]| {
+            crate::pfaffian::calc_m_all_real(
+                idx,
+                &tables.slater_elm_real,
+                &mut tables.inv_m_real,
+                &mut tables.pf_m_real,
+                0,
+                n_qp,
+                n_site,
+                n_elec,
+                &pool,
+            )
+            .unwrap();
+        };
+        let base_idx: Vec<i64> = vec![0, 2, 4, 1, 3, 5];
+        recompute(&mut state.slater_matrix, &base_idx);
+        let base = state.slater_matrix.clone();
+        // (moved configuration, spin of C's second hop): one up hop, one down hop, both
+        // (up first), both (down first).
+        let cases: Vec<(Vec<i64>, u8)> = vec![
+            (vec![0, 2, 5, 1, 3, 5], 0),
+            (vec![0, 2, 4, 1, 3, 0], 1),
+            (vec![0, 2, 5, 1, 3, 0], 1),
+            (vec![0, 3, 4, 1, 2, 5], 0),
+        ];
+        for (moved_idx, second_spin) in cases {
+            let mut task = VmcOptimizationState::zeros(n_site, n_elec, 0, 0, n_qp, 0, false, false);
+            task.slater_matrix = base.clone();
+            assert!(lanczos_move_tables(
+                &mut task,
+                &base_idx,
+                &moved_idx,
+                second_spin,
+                false,
+                n_site,
+                n_elec,
+                n_qp,
+                &pool,
+            ));
+            let mut full = base.clone();
+            recompute(&mut full, &moved_idx);
+            for qp in 0..n_qp {
+                let (a, b) = (task.slater_matrix.pf_m_real[qp], full.pf_m_real[qp]);
+                assert!((a - b).abs() <= 1e-10 * b.abs().max(1e-3), "pf {a} vs {b}");
+                let ia = task.slater_matrix.inv_m_real.qp_matrix_slice(qp);
+                let ib = full.inv_m_real.qp_matrix_slice(qp);
+                for (x, y) in ia.iter().zip(ib) {
+                    assert!((x - y).abs() <= 1e-8 * (1.0 + y.abs()), "inv {x} vs {y}");
+                }
+            }
+        }
     }
 }
 
