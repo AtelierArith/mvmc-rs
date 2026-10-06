@@ -109,7 +109,7 @@ fn check(c: &Case, walkers: usize) {
         &mut HostService::new(),
         LockstepOptions {
             teachers,
-            passes: 0,
+            ..LockstepOptions::default()
         },
     )
     .unwrap();

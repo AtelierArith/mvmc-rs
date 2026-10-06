@@ -42,8 +42,10 @@
 //! formulas of `sampling/updates.rs` verbatim.
 
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::c_timer::CTimer;
 use crate::pfaffian::calc_m_all_real;
@@ -121,29 +123,55 @@ pub struct RecomputeReq {
     pub ele_idx: Vec<i64>,
 }
 
-/// Requests collected for one lock-step pass, in the order they must be processed.
+/// Fast-path requests of one round: accepted moves and proposals. A round answers every
+/// proposal before the next round starts.
 #[derive(Debug, Default)]
-pub struct Batch {
-    /// Walkers to initialize.
-    pub begins: Vec<BeginReq>,
-    /// Walkers whose pending proposal was accepted.
+pub struct FastBatch {
+    /// Walkers whose pending proposal was accepted (applied before anything else of the round).
     pub accepts: Vec<usize>,
-    /// Recomputations.
-    pub recomputes: Vec<RecomputeReq>,
     /// Proposals.
     pub proposes: Vec<ProposeReq>,
 }
 
-/// Answers of one pass.
+/// Slow-path requests: initial table construction and the periodic recomputation (a batched
+/// Pfaffian/inverse, hundreds of microseconds of device latency). They run asynchronously on a
+/// second lane so that they do not stall the proposals of the other walkers.
 #[derive(Debug, Default)]
-pub struct BatchReply {
-    /// For each recompute: `(failed, pf)`; `pf` is empty on failure.
-    pub recomputes: Vec<(bool, Vec<f64>)>,
-    /// Proposal ratios, `proposes.len() * n_qp` values in request order.
-    pub pf_new: Vec<f64>,
+pub struct SlowBatch {
+    /// Walkers to initialize.
+    pub begins: Vec<BeginReq>,
+    /// Recomputations.
+    pub recomputes: Vec<RecomputeReq>,
+}
+
+impl SlowBatch {
+    /// Number of walkers waiting for this batch.
+    pub fn walkers(&self) -> usize {
+        self.begins.len() + self.recomputes.len()
+    }
+}
+
+/// Completed slow batch.
+#[derive(Debug, Default)]
+pub struct SlowReply {
+    /// Walkers whose `Begin` completed.
+    pub begins: Vec<usize>,
+    /// `(walker, failed, pf)` per recompute; `pf` is empty on failure.
+    pub recomputes: Vec<(usize, bool, Vec<f64>)>,
+}
+
+impl SlowReply {
+    /// Number of walkers answered by this reply.
+    pub fn walkers(&self) -> usize {
+        self.begins.len() + self.recomputes.len()
+    }
 }
 
 /// A backend that holds the walkers' inverse tables and executes the Pfaffian stages in batches.
+///
+/// Per-walker program order is guaranteed by the runner (a walker has at most one blocking request
+/// outstanding and its accept precedes its next request); the backend must apply the accepts of a
+/// round before it reads or recomputes the accepted walkers' tables.
 pub trait DeviceService {
     /// Register the shared Slater table `key` (copied or uploaded once). Called before the first
     /// `Begin` that uses it.
@@ -157,8 +185,13 @@ pub trait DeviceService {
     /// Prepare for `walkers` walkers.
     fn prepare(&mut self, geom: Geometry, walkers: usize) -> Result<(), String>;
 
-    /// Run one pass. Order: `begins`, `accepts`, `recomputes`, `proposes`.
-    fn process(&mut self, batch: &Batch) -> Result<BatchReply, String>;
+    /// One round: apply `fast.accepts`, start `slow` (asynchronously where the backend can),
+    /// run `fast.proposes` and return their ratios, `proposes.len() * n_qp` values in order.
+    fn round(&mut self, fast: &FastBatch, slow: &SlowBatch) -> Result<Vec<f64>, String>;
+
+    /// Completed slow batches, oldest first. With `block`, waits until at least one completed
+    /// when any is in flight.
+    fn poll_slow(&mut self, block: bool) -> Result<Vec<SlowReply>, String>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -171,6 +204,82 @@ enum Msg {
     Accept(usize),
     Recompute(RecomputeReq),
     Done,
+}
+
+/// One-shot reply slot of a walker: the walker spins for `spin` and then parks, the service sets
+/// the value and unparks. A futex wake per walker per round from the single service thread costs
+/// several microseconds each (hundreds of microseconds at 64 walkers), so replies of one round are
+/// delivered through a wake tree ([`deliver`]): the service unparks [`WAKE_FANOUT`] walkers and
+/// every woken walker unparks its children before it continues.
+struct ReplySlot {
+    ready: AtomicBool,
+    data: Mutex<Option<Reply>>,
+    thread: Mutex<Option<std::thread::Thread>>,
+    children: Mutex<Vec<std::thread::Thread>>,
+}
+
+const WAKE_FANOUT: usize = 8;
+
+impl ReplySlot {
+    fn new() -> Self {
+        Self {
+            ready: AtomicBool::new(false),
+            data: Mutex::new(None),
+            thread: Mutex::new(None),
+            children: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn put(&self, reply: Reply) {
+        *self.data.lock().expect("reply slot") = Some(reply);
+        self.ready.store(true, Ordering::Release);
+        if let Some(t) = self.thread.lock().expect("reply thread").as_ref() {
+            t.unpark();
+        }
+    }
+
+    fn take(&self, spin: Duration) -> Option<Reply> {
+        let t0 = Instant::now();
+        loop {
+            if self.ready.load(Ordering::Acquire) {
+                self.ready.store(false, Ordering::Relaxed);
+                let children: Vec<_> = self.children.lock().expect("children").drain(..).collect();
+                for c in children {
+                    c.unpark();
+                }
+                return self.data.lock().expect("reply slot").take();
+            }
+            if t0.elapsed() < spin {
+                std::hint::spin_loop();
+            } else {
+                std::thread::park_timeout(Duration::from_micros(200));
+            }
+        }
+    }
+}
+
+/// Deliver the replies of one round: data and children first, then the ready flags, then the
+/// wake tree (service wakes the first `WAKE_FANOUT`; node `i` wakes `WAKE_FANOUT*(i+1)..`).
+fn deliver(slots: &[Arc<ReplySlot>], replies: Vec<(usize, Reply)>) {
+    let order: Vec<usize> = replies.iter().map(|(w, _)| *w).collect();
+    let threads: Vec<Option<std::thread::Thread>> = order
+        .iter()
+        .map(|&w| slots[w].thread.lock().expect("reply thread").clone())
+        .collect();
+    for (i, &w) in order.iter().enumerate() {
+        let lo = WAKE_FANOUT * (i + 1);
+        let kids: Vec<std::thread::Thread> = (lo..(lo + WAKE_FANOUT).min(order.len()))
+            .filter_map(|j| threads[j].clone())
+            .collect();
+        *slots[w].children.lock().expect("children") = kids;
+    }
+    for (w, reply) in replies {
+        *slots[w].data.lock().expect("reply slot") = Some(reply);
+        slots[w].ready.store(true, Ordering::Release);
+    }
+    for t in threads.iter().take(WAKE_FANOUT).flatten() {
+        t.unpark();
+    }
 }
 
 enum Reply {
@@ -259,7 +368,8 @@ struct TeacherState {
 pub struct WalkerStage {
     walker: usize,
     tx: Sender<Msg>,
-    rx: Receiver<Reply>,
+    slot: Arc<ReplySlot>,
+    spin: Duration,
     registry: Arc<SlaterRegistry>,
     teacher: Option<TeacherState>,
     geom: Geometry,
@@ -273,10 +383,10 @@ impl WalkerStage {
         self.tx
             .send(msg)
             .map_err(|_| "device service stopped".to_string())?;
-        match self.rx.recv() {
-            Ok(Reply::Err(e)) => Err(e),
-            Ok(r) => Ok(r),
-            Err(_) => Err("device service stopped".to_string()),
+        match self.slot.take(self.spin) {
+            Some(Reply::Err(e)) => Err(e),
+            Some(r) => Ok(r),
+            None => Err("device service stopped".to_string()),
         }
     }
 
@@ -463,12 +573,26 @@ pub struct WalkerRun {
 }
 
 /// Options of [`run_lockstep_real`].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LockstepOptions {
     /// One teacher per walker (same length as the walkers), or empty.
     pub teachers: Vec<Teacher>,
     /// Number of lock-step passes executed (output).
     pub passes: usize,
+    /// How long a parked walker spins for the reply before parking, in microseconds
+    /// (`0` parks immediately); `None` spins 50 us when the walkers do not outnumber the cores
+    /// and parks immediately otherwise (spinning walkers would starve the service thread).
+    pub spin_us: Option<u64>,
+}
+
+impl Default for LockstepOptions {
+    fn default() -> Self {
+        Self {
+            teachers: Vec::new(),
+            passes: 0,
+            spin_us: None,
+        }
+    }
 }
 
 /// Statistics of the service loop.
@@ -484,6 +608,12 @@ pub struct LockstepStats {
     pub recomputes: usize,
     /// Largest batch (blocking requests in one pass).
     pub max_batch: usize,
+    /// Seconds the service thread spent waiting for walker requests.
+    pub recv_s: f64,
+    /// Seconds inside `DeviceService::round`.
+    pub round_s: f64,
+    /// Seconds delivering replies (wake tree).
+    pub deliver_s: f64,
 }
 
 /// Geometry of a prepared walker.
@@ -536,13 +666,9 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
 
     let count = walkers.len();
     let (tx, rx) = channel::<Msg>();
-    let mut reply_tx: Vec<Sender<Reply>> = Vec::with_capacity(count);
-    let mut reply_rx: Vec<Option<Receiver<Reply>>> = Vec::with_capacity(count);
-    for _ in 0..count {
-        let (t, r) = channel::<Reply>();
-        reply_tx.push(t);
-        reply_rx.push(Some(r));
-    }
+    let slots: Vec<Arc<ReplySlot>> = (0..count).map(|_| Arc::new(ReplySlot::new())).collect();
+    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let spin = Duration::from_micros(opts.spin_us.unwrap_or(if count < cores { 50 } else { 0 }));
     let teachers = std::mem::take(&mut opts.teachers);
     let mut loop_stats = LockstepStats::default();
     let mut service_error: Option<String> = None;
@@ -554,7 +680,8 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
             let stage = WalkerStage {
                 walker: w,
                 tx: tx.clone(),
-                rx: reply_rx[w].take().expect("reply receiver"),
+                slot: slots[w].clone(),
+                spin,
                 registry: registry.clone(),
                 teacher: teachers.get(w).map(|t| TeacherState {
                     t: t.clone(),
@@ -577,6 +704,7 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
                 }
                 let _guard = DoneGuard(done_tx);
                 let mut stage = stage;
+                *stage.slot.thread.lock().expect("reply thread") = Some(std::thread::current());
                 trace::start_decisions();
                 sync_slater_real(&mut walker.state);
                 let result = vmc_make_sample_real_staged(
@@ -597,34 +725,112 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
         }
         drop(tx);
 
-        // Service loop.
+        // Service loop. A round fires when every live walker is parked on the fast path or is
+        // waiting for a slow batch (pending or in flight): a recompute that is in flight does not
+        // hold up the proposals of the other walkers.
         let mut live = count;
-        let mut waiting: Vec<usize> = Vec::new();
-        let mut batch = Batch::default();
-        while live > 0 {
-            let Ok(msg) = rx.recv() else { break };
-            match msg {
-                Msg::Done => live -= 1,
-                Msg::Accept(w) => batch.accepts.push(w),
-                Msg::Begin(b) => {
-                    waiting.push(b.walker);
-                    batch.begins.push(b);
-                }
-                Msg::Recompute(r) => {
-                    waiting.push(r.walker);
-                    batch.recomputes.push(r);
-                }
-                Msg::Propose(p) => {
-                    waiting.push(p.walker);
-                    batch.proposes.push(p);
+        let mut fast = FastBatch::default();
+        let mut slow = SlowBatch::default();
+        let mut inflight: Vec<usize> = Vec::new();
+        let mut pending_walkers: Vec<usize> = Vec::new();
+        let mut disconnected = false;
+        let nq = geom.n_qp;
+        let fail = |e: &str, who: &[usize]| {
+            for &w in who {
+                slots[w].put(Reply::Err(e.to_string()));
+            }
+        };
+        'service: loop {
+            if live == 0 {
+                break;
+            }
+            // 1. receive; block only when nothing else can progress
+            let t_recv = Instant::now();
+            let mut got = false;
+            loop {
+                let msg = if got || !inflight.is_empty() {
+                    rx.try_recv().ok()
+                } else {
+                    match rx.recv() {
+                        Ok(m) => Some(m),
+                        Err(_) => {
+                            disconnected = true;
+                            None
+                        }
+                    }
+                };
+                let Some(msg) = msg else { break };
+                got = true;
+                match msg {
+                    Msg::Done => live -= 1,
+                    Msg::Accept(w) => fast.accepts.push(w),
+                    Msg::Begin(b) => {
+                        if let Some(e) = &service_error {
+                            slots[b.walker].put(Reply::Err(e.clone()));
+                        } else {
+                            pending_walkers.push(b.walker);
+                            slow.begins.push(b);
+                        }
+                    }
+                    Msg::Recompute(r) => {
+                        if let Some(e) = &service_error {
+                            slots[r.walker].put(Reply::Err(e.clone()));
+                        } else {
+                            pending_walkers.push(r.walker);
+                            slow.recomputes.push(r);
+                        }
+                    }
+                    Msg::Propose(p) => {
+                        if let Some(e) = &service_error {
+                            slots[p.walker].put(Reply::Err(e.clone()));
+                        } else {
+                            fast.proposes.push(p);
+                        }
+                    }
                 }
             }
-            if live == 0 || waiting.len() < live {
+            loop_stats.recv_s += t_recv.elapsed().as_secs_f64();
+            if disconnected {
+                break;
+            }
+            // 2. completed slow batches
+            if !inflight.is_empty() {
+                match service.poll_slow(false) {
+                    Ok(done) => {
+                        let mut out = Vec::new();
+                        for reply in done {
+                            for &w in &reply.begins {
+                                out.push((w, Reply::Unit));
+                                inflight.retain(|&x| x != w);
+                            }
+                            for (w, failed, pf) in reply.recomputes {
+                                out.push((w, Reply::Recompute(failed, pf)));
+                                inflight.retain(|&x| x != w);
+                            }
+                        }
+                        deliver(&slots, out);
+                    }
+                    Err(e) => {
+                        service_error = Some(e.clone());
+                        fail(&e, &inflight);
+                        inflight.clear();
+                    }
+                }
+            }
+            // 3. fire a round
+            let waiting = fast.proposes.len() + pending_walkers.len() + inflight.len();
+            if service_error.is_some() {
+                // everything still parked was answered with the error; walkers are unwinding
+                let who: Vec<usize> = fast.proposes.iter().map(|p| p.walker).collect();
+                fail(service_error.as_deref().unwrap_or(""), &who);
+                fast = FastBatch::default();
+                fail(service_error.as_deref().unwrap_or(""), &pending_walkers);
+                pending_walkers.clear();
+                slow = SlowBatch::default();
                 continue;
             }
-            // every live walker is parked: one pass
-            if service_error.is_none() {
-                for b in &batch.begins {
+            if waiting == live && (!fast.proposes.is_empty() || !pending_walkers.is_empty()) {
+                for b in &slow.begins {
                     if !known_slater.contains(&b.slater) {
                         let table = registry
                             .tables
@@ -644,42 +850,81 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
                         }
                     }
                 }
-            }
-            let outcome = if let Some(e) = &service_error {
-                Err(e.clone())
-            } else {
-                // A panicking service must not leave parked walkers waiting forever.
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| service.process(&batch)))
+                let t_round = Instant::now();
+                let outcome = if let Some(e) = &service_error {
+                    Err(e.clone())
+                } else {
+                    // A panicking service must not leave parked walkers waiting forever.
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        service.round(&fast, &slow)
+                    }))
                     .unwrap_or_else(|_| Err("device service panicked".to_string()))
-            };
-            loop_stats.passes += 1;
-            loop_stats.proposals += batch.proposes.len();
-            loop_stats.accepts += batch.accepts.len();
-            loop_stats.recomputes += batch.recomputes.len();
-            loop_stats.max_batch = loop_stats.max_batch.max(waiting.len());
-            match outcome {
-                Ok(reply) => {
-                    for b in &batch.begins {
-                        let _ = reply_tx[b.walker].send(Reply::Unit);
+                };
+                loop_stats.round_s += t_round.elapsed().as_secs_f64();
+                loop_stats.passes += 1;
+                loop_stats.proposals += fast.proposes.len();
+                loop_stats.accepts += fast.accepts.len();
+                loop_stats.recomputes += slow.recomputes.len();
+                loop_stats.max_batch = loop_stats.max_batch.max(fast.proposes.len());
+                match outcome {
+                    Ok(pf_new) => {
+                        let out: Vec<(usize, Reply)> = fast
+                            .proposes
+                            .iter()
+                            .enumerate()
+                            .map(|(i, p)| {
+                                (p.walker, Reply::Pf(pf_new[i * nq..(i + 1) * nq].to_vec()))
+                            })
+                            .collect();
+                        let t_deliver = Instant::now();
+                        deliver(&slots, out);
+                        loop_stats.deliver_s += t_deliver.elapsed().as_secs_f64();
+                        inflight.append(&mut pending_walkers);
                     }
-                    for (r, (failed, pf)) in batch.recomputes.iter().zip(reply.recomputes) {
-                        let _ = reply_tx[r.walker].send(Reply::Recompute(failed, pf));
-                    }
-                    for (i, p) in batch.proposes.iter().enumerate() {
-                        let nq = geom.n_qp;
-                        let _ = reply_tx[p.walker]
-                            .send(Reply::Pf(reply.pf_new[i * nq..(i + 1) * nq].to_vec()));
+                    Err(e) => {
+                        service_error = Some(e.clone());
+                        let who: Vec<usize> = fast
+                            .proposes
+                            .iter()
+                            .map(|p| p.walker)
+                            .chain(pending_walkers.iter().copied())
+                            .chain(inflight.iter().copied())
+                            .collect();
+                        fail(&e, &who);
+                        pending_walkers.clear();
+                        inflight.clear();
                     }
                 }
-                Err(e) => {
-                    service_error = Some(e.clone());
-                    for &w in &waiting {
-                        let _ = reply_tx[w].send(Reply::Err(e.clone()));
-                    }
-                }
+                fast = FastBatch::default();
+                slow = SlowBatch::default();
+                continue 'service;
             }
-            batch = Batch::default();
-            waiting.clear();
+            // everyone is waiting on slow work: block for it instead of spinning
+            if waiting == live && !inflight.is_empty() {
+                match service.poll_slow(true) {
+                    Ok(done) => {
+                        let mut out = Vec::new();
+                        for reply in done {
+                            for &w in &reply.begins {
+                                out.push((w, Reply::Unit));
+                                inflight.retain(|&x| x != w);
+                            }
+                            for (w, failed, pf) in reply.recomputes {
+                                out.push((w, Reply::Recompute(failed, pf)));
+                                inflight.retain(|&x| x != w);
+                            }
+                        }
+                        deliver(&slots, out);
+                    }
+                    Err(e) => {
+                        service_error = Some(e.clone());
+                        fail(&e, &inflight);
+                        inflight.clear();
+                    }
+                }
+            } else if !inflight.is_empty() {
+                std::hint::spin_loop();
+            }
         }
         handles
             .into_iter()
@@ -713,6 +958,7 @@ pub struct HostService {
     walkers: Vec<Option<HostWalker>>,
     slater: HashMap<u64, SlaterElmFlat<f64>>,
     pool: Option<ThreadedPfaPackWorkspace>,
+    done: std::collections::VecDeque<SlowReply>,
 }
 
 impl Default for HostService {
@@ -729,6 +975,7 @@ impl HostService {
             walkers: Vec::new(),
             slater: HashMap::new(),
             pool: None,
+            done: std::collections::VecDeque::new(),
         }
     }
 }
@@ -762,36 +1009,12 @@ impl DeviceService for HostService {
         Ok(())
     }
 
-    fn process(&mut self, batch: &Batch) -> Result<BatchReply, String> {
+    fn round(&mut self, fast: &FastBatch, slow: &SlowBatch) -> Result<Vec<f64>, String> {
         let geom = self.geom.ok_or("service not prepared")?;
         let pool = self.pool.as_ref().ok_or("service not prepared")?;
         let n_size = geom.n_size();
         let inv_stride = n_size * n_size + 1;
-        for b in &batch.begins {
-            let slater = self.slater.get(&b.slater).ok_or("unknown Slater table")?;
-            let mut inv = InvMColMajor::<f64>::zeros(geom.n_qp, geom.n_elec);
-            let mut pf = vec![0.0; geom.n_qp];
-            calc_m_all_real(
-                &b.ele_idx,
-                slater,
-                &mut inv,
-                &mut pf,
-                0,
-                geom.n_qp,
-                geom.n_site,
-                geom.n_elec,
-                pool,
-            )
-            .map_err(|e| format!("initial recompute failed: {e:?}"))?;
-            self.walkers[b.walker] = Some(HostWalker {
-                ele_idx: b.ele_idx.clone(),
-                inv,
-                pf: b.pf.clone(),
-                pending: None,
-                slater: b.slater,
-            });
-        }
-        for &w in &batch.accepts {
+        for &w in &fast.accepts {
             let hw = self.walkers[w].as_mut().ok_or("walker not begun")?;
             let (req, cand, pf_new) = hw.pending.take().ok_or("accept without proposal")?;
             let slater = &self.slater[&hw.slater];
@@ -839,28 +1062,60 @@ impl DeviceService for HostService {
             }
             hw.ele_idx = cand;
         }
-        let mut reply = BatchReply::default();
-        for r in &batch.recomputes {
-            let hw = self.walkers[r.walker].as_mut().ok_or("walker not begun")?;
-            let slater = &self.slater[&hw.slater];
-            let failed = calc_m_all_real(
-                &r.ele_idx,
-                slater,
-                &mut hw.inv,
-                &mut hw.pf,
-                0,
-                geom.n_qp,
-                geom.n_site,
-                geom.n_elec,
-                pool,
-            )
-            .is_err();
-            hw.ele_idx = r.ele_idx.clone();
-            reply
-                .recomputes
-                .push((failed, if failed { Vec::new() } else { hw.pf.clone() }));
+        // slow batch: the host executes it immediately and queues the completed reply
+        if slow.walkers() > 0 {
+            let mut reply = SlowReply::default();
+            for b in &slow.begins {
+                let slater = self.slater.get(&b.slater).ok_or("unknown Slater table")?;
+                let mut inv = InvMColMajor::<f64>::zeros(geom.n_qp, geom.n_elec);
+                let mut pf = vec![0.0; geom.n_qp];
+                calc_m_all_real(
+                    &b.ele_idx,
+                    slater,
+                    &mut inv,
+                    &mut pf,
+                    0,
+                    geom.n_qp,
+                    geom.n_site,
+                    geom.n_elec,
+                    pool,
+                )
+                .map_err(|e| format!("initial recompute failed: {e:?}"))?;
+                self.walkers[b.walker] = Some(HostWalker {
+                    ele_idx: b.ele_idx.clone(),
+                    inv,
+                    pf: b.pf.clone(),
+                    pending: None,
+                    slater: b.slater,
+                });
+                reply.begins.push(b.walker);
+            }
+            for r in &slow.recomputes {
+                let hw = self.walkers[r.walker].as_mut().ok_or("walker not begun")?;
+                let slater = &self.slater[&hw.slater];
+                let failed = calc_m_all_real(
+                    &r.ele_idx,
+                    slater,
+                    &mut hw.inv,
+                    &mut hw.pf,
+                    0,
+                    geom.n_qp,
+                    geom.n_site,
+                    geom.n_elec,
+                    pool,
+                )
+                .is_err();
+                hw.ele_idx = r.ele_idx.clone();
+                reply.recomputes.push((
+                    r.walker,
+                    failed,
+                    if failed { Vec::new() } else { hw.pf.clone() },
+                ));
+            }
+            self.done.push_back(reply);
         }
-        for p in &batch.proposes {
+        let mut pf_out = Vec::with_capacity(fast.proposes.len() * geom.n_qp);
+        for p in &fast.proposes {
             let hw = self.walkers[p.walker].as_mut().ok_or("walker not begun")?;
             let slater = &self.slater[&hw.slater];
             let cand = candidate_of(&hw.ele_idx, p);
@@ -898,9 +1153,13 @@ impl DeviceService for HostService {
                     geom.n_elec,
                 ),
             }
-            reply.pf_new.extend_from_slice(&pf_new);
+            pf_out.extend_from_slice(&pf_new);
             hw.pending = Some((*p, cand, pf_new));
         }
-        Ok(reply)
+        Ok(pf_out)
+    }
+
+    fn poll_slow(&mut self, _block: bool) -> Result<Vec<SlowReply>, String> {
+        Ok(self.done.drain(..).collect())
     }
 }
