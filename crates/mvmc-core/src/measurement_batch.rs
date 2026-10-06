@@ -745,4 +745,31 @@ mod tests {
         );
         assert!(parse_measurement_pfaffian("nope").is_err());
     }
+
+    /// Stage A writes whole planes through the revalidating full-overwrite writer, so a slot
+    /// table left stale by a device run (issue #454) is valid again afterwards and readable.
+    #[test]
+    fn stage_a_overwrites_and_revalidates_stale_slot_tables() {
+        let (n_site, n_elec, n_qp) = (4usize, 2usize, 2usize);
+        let slater = skew_slater(n_qp, n_site);
+        let configs = vec![vec![0, 2, 1, 3]];
+        let mut batch = setup(n_site, n_elec, n_qp, &configs);
+        batch.real[0]
+            .inv
+            .mark_stale("test: device-resident sampler");
+        assert!(batch.real[0].inv.is_stale());
+        stage_a_pfaffian(
+            &mut COrderPfaffian,
+            &slater,
+            &mut batch,
+            &[0],
+            n_site,
+            n_elec,
+            n_qp,
+        )
+        .unwrap();
+        assert_eq!(batch.status[0], SlotStatus::Ready);
+        assert!(!batch.real[0].inv.is_stale());
+        let _ = batch.real[0].inv.qp_matrix_slice(0); // would panic if still stale
+    }
 }
