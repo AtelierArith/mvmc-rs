@@ -70,6 +70,24 @@ The task writes `target/bench/physcal_hubbard.csv` and
 `results/`. With `MVMC_C_TIMER=1` and `--keep-output`, each side's
 `zvo_CalcTimer.dat` is kept for the section breakdown.
 
+## Observable comparison
+
+`bench-physcal` and `bench-physcal-hubbard` also compare the measured PhysCal
+observables, not only the energy. For the last measured repetition they walk the
+Rust and Julia output directories, match files by name and compare them token by
+token:
+
+- families: `zvo_cisajs`, `zvo_cisajscktalt`, `zvo_cisajscktaltex`, and, when
+  `NLanczosMode > 0`, `zvo_ls_out`, `zvo_ls_qqqq`, `zvo_ls_cisajs`,
+  `zvo_ls_cisajscktalt`, `zvo_ls_cisajscktaltex`;
+- integer/discrete columns must match exactly; floating-point values are checked
+  componentwise against the documented PhysCal bounds (absolute `1e-10`,
+  relative `1e-9`);
+- a row/column count or discrete-token difference aborts the benchmark.
+
+`bench-physcal` prints the per-family `files`, `values`, `max|Δ|`, `max_rel` and
+`status`; `bench-physcal-hubbard` adds the same table to its Markdown report.
+
 `--julia-root` selects the reference checkout. The Julia section timer needs
 the `julia-patch` branch (PR tmisawa/Julia-mVMC#54); the committed reference
 `extern/Julia-mVMC` still runs the benchmark without timers.

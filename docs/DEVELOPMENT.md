@@ -15,6 +15,37 @@ cargo nextest run --workspace --locked --cargo-profile test-fast \
 cargo test --workspace --locked --doc
 ```
 
+## Reference runner setup (Julia and C)
+
+Normal Rust tests read committed fixtures and do not need Julia, the C sources or
+the native reference libraries. The `extern/` submodules, Julia 1.13.1 and the
+OpenBLAS/LAPACK development packages are only required to run the live
+Rust-vs-Julia benchmarks (`xtask bench-julia`, `bench-hubbard`, `bench-physcal`,
+`bench-physcal-hubbard`) and the reference scripts.
+
+```sh
+# Reference sources are nested submodules: extern/Julia-mVMC has its own
+# PfaPack.jl and SFMT.jl submodules.
+git submodule update --init --recursive
+
+# Julia 1.13.1 (the pinned reference; juliaup channel name may be `release`).
+juliaup add 1.13.1
+julia +1.13.1 --project=extern/Julia-mVMC -e 'using Pkg; Pkg.instantiate()'
+
+# Native libraries the Julia reference loads. SFMT.jl builds libsfmt.so from its
+# bundled C sources; PfaPack.jl builds libltl2inv.so (C++, needs g++) and the
+# zsktf2/dsktf2 Fortran wrappers (needs gfortran).
+julia +1.13.1 --project=extern/Julia-mVMC -e 'using Pkg; Pkg.build()'
+```
+
+On a host without `make`/`gfortran`, `Pkg.build()` fails; install them (for
+example `sudo apt-get install -y build-essential gfortran libopenblas-dev
+liblapack-dev`) or build `libsfmt.so`/`libltl2inv.so` directly as
+`SFMT.jl/deps/build.jl` and `PfaPack.jl/deps/build.jl` do. The Rust optimizer
+links `-lopenblas`, so the same OpenBLAS/LAPACK packages satisfy both sides on
+Linux; macOS uses Homebrew OpenBLAS (see the top-level README). Keep BLAS threads
+pinned (`--threads 1` or the `*_NUM_THREADS=1` variables) for comparable runs.
+
 ## Build profiles
 
 Normal `cargo build`, `cargo check` and `cargo nextest run` use development
