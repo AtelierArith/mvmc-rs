@@ -38,6 +38,7 @@ mod fsz_green;
 pub use fsz_green::{green_func2_fsz, green_func2_fsz_complex, green_func2_fsz_real};
 mod fsz_measurements;
 mod green_measurements;
+mod lanczos_nodal;
 pub use fsz_measurements::{
     calculate_green_func_fsz, calculate_green_func_fsz_timed, weight_average_green_func_fsz,
 };
@@ -2615,7 +2616,7 @@ fn lanczos_local_value(value: Complex64, all_complex: bool) -> Complex64 {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn calculate_lanczos_green(
     h1: Complex64,
-    _ip: Complex64,
+    ip: Complex64,
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     ele_idx: &[i64],
@@ -2654,6 +2655,20 @@ pub(crate) fn calculate_lanczos_green(
     let one_body_value = |index: usize, task: &mut VmcOptimizationState| -> Option<Complex64> {
         let term = &data.green_one_terms[index];
         let (create, annihilate, spin) = lanczos_one_body_indices(term, n_site)?;
+        // C `calHCA`: a hop with a vanishing Pfaffian ratio takes the `calHCA2` expansion.
+        if let Some(nodal) = (lanczos_nodal::NodalContext {
+            data,
+            state: &*task,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ip,
+        })
+        .nodal_hca(create, annihilate, spin)
+        {
+            return Some(lanczos_local_value(nodal, all_complex));
+        }
         let mut value = Complex64::new(0.0, 0.0);
         for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_one_body_terms(
             ele_idx,
@@ -2747,6 +2762,78 @@ pub(crate) fn calculate_lanczos_green(
         let first_annihilate = usize::try_from(term.site2).ok()?;
         let second_create = usize::try_from(term.site3).ok()?;
         let second_annihilate = usize::try_from(term.site4).ok()?;
+        // C `calHCACA`: coincident indices reduce to `calHCA`/`h1`; four distinct spin orbitals
+        // take `calHCACA2` when the two-hop Pfaffian ratio vanishes.
+        let ctx = lanczos_nodal::NodalContext {
+            data,
+            state: &*task,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ip,
+        };
+        match ctx.plan_hcaca(
+            first_create,
+            first_annihilate,
+            second_create,
+            second_annihilate,
+            first_spin,
+            second_spin,
+        ) {
+            lanczos_nodal::Reduced::Zero => return Some(Complex64::new(0.0, 0.0)),
+            lanczos_nodal::Reduced::H1(sign) => {
+                return Some(lanczos_local_value(h1 * sign, all_complex));
+            }
+            lanczos_nodal::Reduced::Hop { sign, ri, rj, s } => {
+                let value = if let Some(nodal) = ctx.nodal_hca(ri, rj, s) {
+                    nodal
+                } else {
+                    let green = ctx.green1(ri, rj, s);
+                    let (moved_idx, moved_cfg, moved_num, moved_proj) = lanczos_apply_one_body(
+                        ele_idx,
+                        ele_cfg,
+                        ele_num,
+                        ele_proj_cnt,
+                        ri,
+                        rj,
+                        s,
+                        data,
+                    )?;
+                    let moved_h = lanczos_evaluate_moved(
+                        ele_idx,
+                        s,
+                        &moved_idx,
+                        &moved_cfg,
+                        &moved_num,
+                        &moved_proj,
+                        data,
+                        task,
+                        &original_slater,
+                        all_complex,
+                        n_site,
+                        n_elec,
+                        n_qp_full,
+                        &pool,
+                    )
+                    .unwrap_or_default();
+                    green * moved_h
+                };
+                return Some(lanczos_local_value(value * sign, all_complex));
+            }
+            lanczos_nodal::Reduced::General => {
+                if let Some(nodal) = ctx.nodal_hcaca(
+                    first_create,
+                    first_annihilate,
+                    second_create,
+                    second_annihilate,
+                    first_spin,
+                    second_spin,
+                ) {
+                    return Some(lanczos_local_value(nodal, all_complex));
+                }
+            }
+        }
         let mut value = Complex64::new(0.0, 0.0);
         for (_coef, (moved_idx, moved_cfg, moved_num, moved_proj)) in lanczos_apply_two_body_terms(
             ele_idx,
@@ -2908,6 +2995,25 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         {
             return None;
         }
+        // C `calHCA`: the `calHCA2` expansion when the hopped Pfaffian ratio vanishes.
+        if let Some(hca) = (lanczos_nodal::NodalContext {
+            data,
+            state: &*task,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ip,
+        })
+        .nodal_hca(ri as usize, rj as usize, spin_create)
+        {
+            let coefficient = if all_complex {
+                term.value
+            } else {
+                Complex64::new(term.value.re, 0.0)
+            };
+            return Some(-coefficient * hca);
+        }
         let green = green_func1_impl::<false, true, false>(
             ri as usize,
             rj as usize,
@@ -2970,6 +3076,20 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             source,
             data,
         )?;
+        // C `calHCACA`: the `calHCACA2` expansion when the two-hop Pfaffian ratio vanishes.
+        if let Some(hcaca) = (lanczos_nodal::NodalContext {
+            data,
+            state: &*task,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ip,
+        })
+        .nodal_hcaca(destination, source, destination, source, 0, 1)
+        {
+            return Some(term.value * hcaca);
+        }
         let pairhop_green = if all_complex {
             green_func2_complex
         } else {
@@ -3035,6 +3155,20 @@ pub(crate) fn calculate_lanczos_h2_transfer(
             ) else {
                 continue;
             };
+            if let Some(hcaca) = (lanczos_nodal::NodalContext {
+                data,
+                state: &*task,
+                ele_idx,
+                ele_cfg,
+                ele_num,
+                ele_proj_cnt,
+                ip,
+            })
+            .nodal_hcaca(ri, rj, rj, ri, first_spin, second_spin)
+            {
+                exchange += hcaca;
+                continue;
+            }
             let green = green_func2(
                 ri,
                 rj,
