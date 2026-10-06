@@ -139,7 +139,7 @@ VMCParaOpt                  [2]      4.02351
 
 (51 lines for an optimization run, from [0] to the SR sub-timers **(observed)**; PhysCal uses `VMCPhysCal [2]`). `zvo_CalcTimerDiag.dat` additionally lists the diagnostic
 slots (ids up to 966; uninstrumented slots read 0). The file name is **always `zvo_...`** in Rust — the timer writers are called with the literal prefix
-`"zvo"` (`run.rs`, `crates/mvmc-cli/src/main.rs`), whereas C uses `CDataFileHead` (`vmcclock.c:79`). Timers are inclusive: a parent section keeps running while its children are timed.
+`"zvo"` (`run.rs`, `crates/mvmc-cli/src/lib.rs`), whereas C uses `CDataFileHead` (`vmcclock.c:79`). Timers are inclusive: a parent section keeps running while its children are timed.
 
 > **Implementation**
 > - C: `OutputTimerParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcclock.c:79`

@@ -142,15 +142,39 @@ pub fn set_measurement_backend_override(source: Option<MeasurementPfaffian>) {
 }
 
 /// The measurement Pfaffian source: override, then environment, then the C-order default.
-/// An invalid environment value is a hard error.
-pub fn selected_measurement_pfaffian() -> MeasurementPfaffian {
+/// An invalid environment value is an error.
+pub fn try_selected_measurement_pfaffian() -> Result<MeasurementPfaffian, String> {
     if let Some(source) = *MEASURE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
-        return source;
+        return Ok(source);
     }
     match std::env::var(MEASURE_PF_VARIABLE) {
-        Ok(v) => parse_measurement_pfaffian(&v).unwrap_or_else(|e| panic!("{e}")),
-        Err(_) => MeasurementPfaffian::CalcMAll,
+        Ok(v) => parse_measurement_pfaffian(&v),
+        Err(std::env::VarError::NotPresent) => Ok(MeasurementPfaffian::CalcMAll),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(format!("{MEASURE_PF_VARIABLE} is not valid UTF-8"))
+        }
     }
+}
+
+/// Like [`try_selected_measurement_pfaffian`] but a hard error (panic) on an invalid value,
+/// for callers that did not run [`validate_measurement_pfaffian`] first.
+pub fn selected_measurement_pfaffian() -> MeasurementPfaffian {
+    try_selected_measurement_pfaffian().unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// Startup preflight (issue #464): resolve [`MEASURE_PF_VARIABLE`] and, for a backend other
+/// than the C-order kernels, open it, so that an invalid value or an unavailable backend is an
+/// error before any IO instead of a panic in the first measurement batch.
+///
+/// # Errors
+///
+/// A message that names [`MEASURE_PF_VARIABLE`].
+pub fn validate_measurement_pfaffian() -> Result<MeasurementPfaffian, String> {
+    let source = try_selected_measurement_pfaffian()?;
+    if let MeasurementPfaffian::Stage(kind) = source {
+        crate::stage_backend::preflight_stage_backend(kind, MEASURE_PF_VARIABLE)?;
+    }
+    Ok(source)
 }
 
 /// Smallest squared plane entry that `calc_m_all_real` accepts (its `MIN_ABS2`).

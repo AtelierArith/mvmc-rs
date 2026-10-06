@@ -27,6 +27,7 @@ publish = false
 [dependencies]
 mvmc-core = { path = "../../crates/mvmc-core", features = ["gpu-cuda"] }
 mvmc-gpu = { path = "../../crates/mvmc-gpu" }
+mvmc-cli = { path = "../../crates/mvmc-cli", features = ["gpu-cuda"] }
 sfmt19937 = { path = "../../crates/sfmt19937" }
 # Versions must match the root workspace (crates.io 0.7.1; the git revisions used by
 # tenferro-decision-rs have a different with_backend_session signature, tenferro #1971).

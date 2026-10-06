@@ -187,11 +187,11 @@ PhysCal の列は `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`)
 | `NQPOptTrans > 1` / `OptTrans` | 受理(C が定義) |
 | `NSplitSize > 1` だがリデューサがグループ通信子でない(`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:47-66`) | 拒否("requires an MPI group communicator") |
 
-### コマンドラインレベル(`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/main.rs`)
+### コマンドラインレベル(`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/lib.rs`)
 
 | 条件 | 結果 |
 |-----------|--------|
-| `NVMCCalMode = 0` での `--physcal`、`--physcal` なしでの `NVMCCalMode = 1`、または 0/1 以外の `NVMCCalMode` | パース直後、初期化や出力より前に `select_calculation` (`crates/mvmc-cli/src/main.rs:429`)で拒否 |
+| `NVMCCalMode = 0` での `--physcal`、`--physcal` なしでの `NVMCCalMode = 1`、または 0/1 以外の `NVMCCalMode` | パース直後、初期化や出力より前に `select_calculation` (`crates/mvmc-cli/src/lib.rs:429`)で拒否 |
 | `--nsteps <= 0` で PhysCal でない(`NSROptItrStep = 0` も含む) | 拒否("nothing to run") |
 | ウィンドウ `nsmp > nsteps` | 拒否(`validate_optimization_window`, `run.rs:1306`) |
 | シリアルの `--physcal` 実行でない `--physcal-trace` | 拒否 |

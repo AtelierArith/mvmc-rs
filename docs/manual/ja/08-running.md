@@ -4,7 +4,7 @@
 
 ## 8.1 `mvmc`コマンド
 
-バイナリは `crates/mvmc-cli/src/main.rs` からビルドされます(`cargo build --release -p mvmc-cli` で
+バイナリは `crates/mvmc-cli/src/lib.rs` からビルドされます(`cargo build --release -p mvmc-cli` で
 `target/release/mvmc` が得られます。`cargo run -p mvmc-cli -- ...` でも動作します)。書式:
 
 ```text
@@ -84,7 +84,7 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 | 0 | `--physcal` 指定 | エラー: "`--physcal` requires NVMCCalMode=1 in ModPara" |
 | その他 | – | エラー: "unsupported NVMCCalMode=… the CLI supports 0 (optimization) and 1 (PhysCal)" |
 
-この振り分け規則は PR #340(`select_calculation`, `crates/mvmc-cli/src/main.rs`)で導入されました。CLI は振り分けの*前に*入力を解析・
+この振り分け規則は PR #340(`select_calculation`, `crates/mvmc-cli/src/lib.rs`)で導入されました。CLI は振り分けの*前に*入力を解析・
 検証するため、`NVMCCalMode=1` の入力でのパラメータ最適化の実行は `select_calculation` のメッセージで拒否されます。検証メッセージ "cannot run parameter optimization; use fixed-parameter PhysCal"
 (`validate_para_opt`)は、ライブラリレベルでの対応物です。
 
@@ -92,16 +92,16 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 > - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
 > - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
 > - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - Rust: `main` — `crates/mvmc-cli/src/main.rs:175`
-> - Rust: `parse_c_int` — `crates/mvmc-cli/src/main.rs:149`
-> - Rust: `select_calculation` — `crates/mvmc-cli/src/main.rs:937`
-> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/main.rs:1169`
-> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/main.rs:953`
-> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/main.rs:1122`
+> - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
+> - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
+> - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:969`
+> - Rust: `run_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:1201`
+> - Rust: `run_physcal_with_selected_backend` — `crates/mvmc-cli/src/lib.rs:985`
+> - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1444`
 > - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
-> - Rust: `init_multi_def` — `crates/mvmc-cli/src/main.rs:815`
+> - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
 > - 整合性: `main` の「定義ファイルの読み込み → メモリ設定 → パラメータ初期化(RNG は `RndSeed + group` でシード) → `InitFile` → 実行 → タイマーの書き出し」という順序は `run_para_opt_from_namelist` に踏襲されています。C ドライバーの `-m` オプションは [MultiDef モード](#multidef-モード-m) として移植されています(#348)。
@@ -240,9 +240,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
 | `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
 | `MVMC_RS_MEASURE_BATCH` | `measurement_batch::resolve_batch_size` | 測定バッチあたりのサンプル数(B サンプル分のテーブルを作ってから、サンプルごとの処理を順番に実行)。デフォルトは 4。出力バイトは値に依存しません。 |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` は `gpu-cuda` ビルド**と**、呼び出し側プログラムが登録したプロバイダー(`mvmc_gpu_cuda::install()`)が必要で、標準の `mvmc` バイナリには無いためそこでは中断します。不正な値や利用できないバックエンドは panic(終了ステータス 101)で、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` は `gpu-cuda` ビルドと登録済みプロバイダが必要で、無ければエラーです。不正な値はエラーで、フォールバックしません。 |
-| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | 測定で使う Pfaffian/逆行列テーブルの生成元。`calc-m-all`(デフォルト、C 順序カーネル)、または `c-order`、`tenferro`、`cuda[:N]`(バッチごとに 1 回の `PfaffianStages` 呼び出しで生成。実数かつ非 FSZ のみ)。`c-order` はデフォルトとバイト一致。ステージを持たないバックエンドや非対応モードはエラーで、フォールバックしません。 |
+| `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` には `gpu/mvmc-gpu-cuda` の `mvmc-cuda` バイナリが必要です(CUDA プロバイダーを登録してから、この同じ CLI を実行します)。標準の `mvmc` は拒否します。セレクタは起動時に IO の前に一度だけ検証され、不正な値や利用できないバックエンドは `error: MVMC_RS_SR_BACKEND: ...` を出力して終了ステータス 2(MPI では集団で)で終了し、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
+| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | 測定で使う Pfaffian/逆行列テーブルの生成元。`calc-m-all`(デフォルト、C 順序カーネル)、または `c-order`、`tenferro`、`cuda[:N]`(バッチごとに 1 回の `PfaffianStages` 呼び出しで生成。実数かつ非 FSZ のみ)。`c-order` はデフォルトとバイト一致。ステージを持たないバックエンドや非対応モードはエラーで、フォールバックしません。 `MVMC_RS_SR_BACKEND` と同様、起動時に IO の前に一度だけ検証されます(不正な値や利用できないバックエンド: `error: MVMC_RS_MEASURE_PF_BACKEND: ...`、終了ステータス 2)。 |
 | `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
 | `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000 |
 | `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。デフォルトはワーカー数 `w` に対して `120*w/(w-1)`(4 で 160、2 で 240) |

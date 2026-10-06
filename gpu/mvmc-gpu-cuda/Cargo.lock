@@ -1421,6 +1421,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mvmc-cli"
+version = "0.0.0"
+dependencies = [
+ "mvmc-core",
+ "mvmc-expert-parsers",
+ "mvmc-stdface",
+ "mvmc-uhf",
+ "sfmt19937",
+ "tracing",
+]
+
+[[package]]
 name = "mvmc-core"
 version = "0.0.0"
 dependencies = [
@@ -1471,6 +1483,7 @@ version = "0.0.0"
 dependencies = [
  "cudarc",
  "libloading 0.8.9",
+ "mvmc-cli",
  "mvmc-core",
  "mvmc-gpu",
  "num-complex",
@@ -1480,6 +1493,21 @@ dependencies = [
  "tenferro-gpu",
  "tenferro-linalg",
  "tenferro-tensor",
+]
+
+[[package]]
+name = "mvmc-stdface"
+version = "0.0.0"
+
+[[package]]
+name = "mvmc-uhf"
+version = "0.0.0"
+dependencies = [
+ "blas",
+ "lapack",
+ "num-complex",
+ "sfmt19937",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

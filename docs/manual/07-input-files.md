@@ -209,11 +209,11 @@ check; this asymmetry was observed with a release build and is listed in [11.5](
 | `NQPOptTrans > 1` / `OptTrans` | accepted (C defines it) |
 | `NSplitSize > 1` but the reducer is not a group communicator (`validate_reducer_rank`, `crates/mvmc-core/src/validation.rs:47-66`) | rejected ("requires an MPI group communicator") |
 
-### Command-line level (`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/main.rs`)
+### Command-line level (`crates/mvmc-core/src/run.rs`, `crates/mvmc-cli/src/lib.rs`)
 
 | Condition | Result |
 |-----------|--------|
-| `--physcal` with `NVMCCalMode = 0`, `NVMCCalMode = 1` without `--physcal`, or `NVMCCalMode` other than 0/1 | rejected by `select_calculation` (`crates/mvmc-cli/src/main.rs:429`) right after parsing, before any initialization or output |
+| `--physcal` with `NVMCCalMode = 0`, `NVMCCalMode = 1` without `--physcal`, or `NVMCCalMode` other than 0/1 | rejected by `select_calculation` (`crates/mvmc-cli/src/lib.rs:429`) right after parsing, before any initialization or output |
 | `--nsteps <= 0` and not PhysCal (also `NSROptItrStep = 0`) | rejected ("nothing to run") |
 | window `nsmp > nsteps` | rejected (`validate_optimization_window`, `run.rs:1306`) |
 | `--physcal-trace` without a serial `--physcal` run | rejected |

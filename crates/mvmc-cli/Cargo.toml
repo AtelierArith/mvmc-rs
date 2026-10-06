@@ -8,6 +8,10 @@ authors.workspace = true
 repository.workspace = true
 publish = false
 
+[lib]
+name = "mvmc_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "mvmc"
 path = "src/main.rs"

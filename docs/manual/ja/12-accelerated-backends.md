@@ -46,7 +46,7 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
 CUDA の依存ツリー(`cuda` 付きの `tenferro-gpu`、cudarc、パッチ済みの `lru`)は単体ワークスペース `gpu/mvmc-gpu-cuda`(独自の `[workspace]` と `Cargo.lock` を持ち、ルートのワークスペースから除外)にあります(設計 10.1、10.2)。ルートのロックファイルに入れないのは意図的です。オプション依存として `tenferro-gpu` を追加すると、ロックファイルと、すべてのデフォルトビルドの監査対象が約 2000 行増えました。利用者への影響:
 
 - GPU 関連は **`gpu/mvmc-gpu-cuda` からビルド**します(`cd gpu/mvmc-gpu-cuda && cargo ...`)。ルートで `cargo build --features gpu-cuda` としても CUDA にはリンクされません。
-- プロバイダーは、CUDA を使いたいプログラムが `mvmc_gpu_cuda::install()`(`gpu/mvmc-gpu-cuda/src/lib.rs:69`)を呼んで登録します。標準の `mvmc` バイナリはこれを呼ばないため、そこで `MVMC_RS_SR_BACKEND=cuda` を指定するとエラーになります([12.4](#124-バックエンドの選択))。
+- プロバイダーは、CUDA を使いたいプログラムが `mvmc_gpu_cuda::install()`(`gpu/mvmc-gpu-cuda/src/lib.rs:69`)を呼んで登録します。標準の `mvmc` バイナリはこれを呼ばないため、そこで `MVMC_RS_SR_BACKEND=cuda` を指定すると使用法エラーで拒否されます([12.4](#124-バックエンドの選択))。**CUDA 対応のコマンドは `mvmc-cuda` です**: 単体ワークスペースの薄いバイナリ(`gpu/mvmc-gpu-cuda/src/bin/mvmc-cuda.rs`)で、`install()` を呼んだ後、変更のない `mvmc` ドライバ(`mvmc_cli::run_cli`)を実行します。したがってオプションは [8.1](08-running.md#81-mvmcコマンド) とまったく同じです(`mpi` feature は転送しません)。`gpu/mvmc-gpu-cuda` からビルドして実行します: `cargo build --release --bin mvmc-cuda`、続けて `MVMC_RS_SR_BACKEND=cuda target/release/mvmc-cuda namelist.def`。docker では `scripts/run_cuda_gate.sh` のイメージとマウントを使います。
 - CUDA 実行の要件: CUDA ドライバ(`libcuda`)と、実行時に cuBLAS、cuSOLVER、NVRTC の CUDA ツールキットライブラリ(`dlopen` で読み込まれ、*ビルド*にはツールキット不要)。issue #417 の tenferro 調査では CUDA 12.6.2 が下限(完全な機能には 12.8)とされ、測定は 12.9 ツールキットで行われました。tenferro のリンクはホステッドランナーのディスクを使い切ることがあるため、単体ワークスペースは `debug = 0` にしています。
 
 ### CUDA ゲート(native または docker)
@@ -78,21 +78,21 @@ MVMC_RS_CUDA_IMAGE=my/cuda:tag scripts/run_cuda_gate.sh docker
 
 ## 12.4 バックエンドの選択
 
-`MVMC_RS_SR_BACKEND`([8.5](08-running.md#85-環境変数))は、本番が SR ステージに使うバックエンドを選びます。`selected_stage_backend`(`crates/mvmc-core/src/stage_backend.rs:395`)が読み、`parse_stage_backend`(`crates/mvmc-core/src/stage_backend.rs:370`)が解析します。
+`MVMC_RS_SR_BACKEND`([8.5](08-running.md#85-環境変数))は、本番が SR ステージに使うバックエンドを選びます。`selected_stage_backend`(`crates/mvmc-core/src/stage_backend.rs:411`)が読み、`parse_stage_backend`(`crates/mvmc-core/src/stage_backend.rs:370`)が解析します。
 
 | 値 | バックエンド | 備考 |
 |-------|---------|-------|
 | 未設定、空、`c`、`c-order`、`corder`、`default` | C 順序 CPU(`COrderSr` + `COrderPfaffian`) | デフォルトであり整合性のオラクル。従来のインラインコードとバイト単位で同一 |
 | `tenferro`、`tenferro-cpu` | CPU 上の tenferro eager 演算(`cpu-faer`)、`TenferroSr`。Pfaffian スロットは `Unsupported` | 実現性確認用の経路: 1 スレッドでは OpenBLAS/LAPACK より 1.1〜4 倍**遅い**(SYRK ではなく faer の GEMM、ステージごとのテンソルのアップロード/ダウンロード) |
-| `cuda`、`cuda:N` | デバイス `N`(デフォルト 0)上の tenferro CUDA: デバイス上の `TenferroSr` とバッチ CUDA Pfaffian カーネル | `gpu-cuda` feature **と**登録済みプロバイダー(`mvmc_gpu_cuda::install()`)が必要 |
+| `cuda`、`cuda:N` | デバイス `N`(デフォルト 0)上の tenferro CUDA: デバイス上の `TenferroSr` とバッチ CUDA Pfaffian カーネル | `mvmc-cuda` バイナリ(`gpu-cuda` feature と登録済みプロバイダー `mvmc_gpu_cuda::install()`)が必要 |
 
 規則:
 
-- **不正な値はエラーで、フォールバックはしません。** `selected_stage_backend` は `MVMC_RS_SR_BACKEND="..." is not one of c-order, tenferro, cuda[:N]` で panic し、選ばれたバックエンドを開けない場合(feature なし、プロバイダーなし、デバイス番号が範囲外)は `acquire` が理由付きで panic します。これは処理済みの使用法エラーではなく Rust の panic であり、プロセスは [8.1](08-running.md#81-mvmcコマンド) の `1`/`2` ではなく終了ステータス 101 で終了します **(観測)**。
+- **不正な値はエラーで、フォールバックはしません。** CLI は起動時に、ファイルを読み書きする前に一度だけセレクタを検証します(`stage_backend::validate_selected_stage_backend`)。不正な値(`MVMC_RS_SR_BACKEND is not one of c-order, tenferro, cuda[:N]`)や利用できないバックエンド(`gpu-cuda` feature なし、プロバイダー未登録、デバイス番号が範囲外、CUDA ランタイムライブラリがない)は、`error: MVMC_RS_SR_BACKEND: ...` を出力して、他のオプションエラーと同じ使用法エラーの終了ステータス `2` で終了します([8.1](08-running.md#81-mvmcコマンド))。出力ディレクトリは作られません。MPI では全ランクが合意に参加するので、全ランクが一緒に停止します。同じ事前検査が `MVMC_RS_MEASURE_PF_BACKEND`(測定の Pfaffian の生成元、[8.5](08-running.md#85-環境変数))も同じ契約で対象にします。この事前検査を経ずに本番コードに到達するライブラリ呼び出し(`selected_stage_backend`、`acquire`)は、同じメッセージで panic します。issue #464 より前は、CLI がここで panic して終了ステータス 101 でした。
 - **ルーティングされる範囲。** SR ステージのみです。Gram 積(`observables.rs` の `finalize_oo_store_real` と複素版ファイナライザ)、S/g の組み立てと Cholesky 求解(`sr.rs`)、CG 積(`sr_cg.rs`)。サンプラと測定の Pfaffian(`calc_m_all_*`)は常に C 順序カーネルを使います。
 - **デフォルト以外のバックエンドはプロセスごとに 1 回だけ構築され**共有されます(tenferro ランタイムや CUDA コンテキストは高価です)。定数の CG オペランドは、明示的なバージョンカウンタをキーにキャッシュされます。
 - **デバイス常駐 SR ステップは、この変数からは到達できません。** `cuda_resident_stage_backend`(`gpu/mvmc-gpu-cuda/src/stages.rs:198`)は、`direct_step`/`cg_step` をデバイス上で実行するオプトインのバックエンドを作りますが、本番の `sr.rs` と `sr_cg.rs` は依然としてホストの `OO` 配列から S/g を組み立てるため、実際の最適化実行でこれを選ぶのは後続課題の #452(保留)です。
-- **標準の CLI から。** `MVMC_RS_SR_BACKEND=tenferro mvmc ...` は、リリース済みバイナリで動作するデフォルト以外の唯一の選択です。プロセスがプロバイダーを登録していなければ `MVMC_RS_SR_BACKEND=cuda` はエラーで中断します。ルートワークスペースの `mvmc` バイナリは `gpu/mvmc-gpu-cuda` をリンクしていません。**(観測)** デフォルト feature のリリースビルド(`cargo build --release -p mvmc-cli`、Linux x86_64)で `benchmark/hubbard_chain/inputs/hubbard_chain_L16`、`--nsteps 3 --nsmp 2` を実行した結果: `tenferro` は動作し、`c-order` と同じファイル集合(`zqp_opt.dat`、`zqp_*_opt.dat`、`zvo_out.dat`、`zvo_var.dat`、`zvo_SRinfo.dat`、`zvo_time_001.dat`)を書きます。`zvo_out.dat` の最初の 2 ステップは同一で、3 ステップ目は末尾の桁が異なり(例: `3.112621571293834677e+02` と `3.112621571293834108e+02`)、`zqp_opt.dat` の差は絶対値で最大 `5.7e-14` でした。同じ `tenferro` を 2 回実行すると `zvo_out.dat` と `zqp_opt.dat` はバイト単位で一致しました。`cuda` は ``MVMC_RS_SR_BACKEND: unsupported: built without the `gpu-cuda` feature`` で panic します(feature があってもプロバイダーがなければ、`BackendError` のプロバイダーなしエラーになります)。したがって `tenferro` の出力はデフォルトと**バイト単位では一致しません**。これがオプトインであり、許容誤差で検証される理由です([12.5](#125-数値的保証と検証内容))。この短い 1 回の実行は例示であり、検証ではありません。
+- **どのバイナリか。** `MVMC_RS_SR_BACKEND=tenferro mvmc ...` は標準のバイナリで動作します。`cuda[:N]` には `mvmc-cuda` が必要です([12.3](#gpu-cuda-feature-と単体ワークスペース))。**(観測)** デフォルト feature のリリースビルド(Linux x86_64)で `benchmark/hubbard_chain/inputs/hubbard_chain_L16`、`--nsteps 3 --nsmp 2` を実行: `tenferro` は `c-order` と同じファイル集合(`zqp_opt.dat`、`zqp_*_opt.dat`、`zvo_out.dat`、`zvo_var.dat`、`zvo_SRinfo.dat`、`zvo_time_001.dat`)を書き、`zvo_out.dat` の最初の 2 ステップは同一、3 ステップ目は末尾の桁が異なり、`zqp_opt.dat` の差は絶対値で最大 `5.7e-14` で、`tenferro` を 2 回実行するとバイト単位で一致しました。`mvmc-cuda` をゲートの docker イメージ内でビルドして RTX 3060(ドライバ 580.178.04、CUDA 12.9.2)で、同じ入力に `MVMC_RS_SR_BACKEND=cuda` を指定して実行すると、3 ステップとも実行され、`zvo_out.dat` は `c-order` と最大相対 `2.4e-15`、`zqp_opt.dat` は絶対値 `8.0e-14` で一致しました(同じコンテナでの `tenferro` は `8.6e-15` と `7.1e-15`)。[12.5](#125-数値的保証と検証内容) の SR の境界の十分内側です。GPU が 2 枚のこのホストで `cuda:9` は `CUDA device 9 requested but 2 device(s) found` で終了ステータス `2` になります。CUDA ランタイムライブラリのないホストでネイティブに実行すると、`mvmc-cuda` は `backend unavailable: Unable to dynamically load the "cudart" shared library` で終了ステータス `2` になります。`tenferro` と `cuda` の出力はデフォルトとバイト単位では**一致しません**。これがオプトインであり、境界で検証される理由です。これらの短い実行は例示であり、検証ではありません。
 - **状態はプロセス全体のものです。** バックエンドを指定する `mvmc` のコマンドラインオプションはありません。テストは `set_stage_backend_override` を使います。
 
 ### Rust からバックエンドを使う
