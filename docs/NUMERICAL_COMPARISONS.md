@@ -460,18 +460,20 @@ CI pins `OPENBLAS_CORETYPE=HASWELL` (Linux) and `NEOVERSEN1` (macOS ARM64), whic
 green. Thread count is not a factor.
 
 **Matrix** (Linux x86_64, Xeon E5-2699 v3, Ubuntu OpenBLAS 0.3.26 pthread, LAPACK 3.12;
-`mvmc-core` + `mvmc-cli` with `--cargo-profile test-fast`, 1052 tests, same source otherwise).
-"before" is `main` at `640213dd` (strict bounds everywhere), "after" is this change.
+`mvmc-core` + `mvmc-cli` with `--cargo-profile test-fast`, 1070 tests, re-run on `main` after
+#453, #463, #467-#469 and #472 were merged; the first investigation on `640213dd` gave the same
+results with 1052 tests). "before" is the strict bounds everywhere (`MVMC_BLAS_KERNEL_CLASS=reference`,
+identical to `main`), "after" is this change.
 
 | provider / kernel | threads | before | after |
 |---|---|---|---|
-| OpenBLAS Haswell (native) | 1 / 2 / 36 | 1052 pass | 1052 pass (strict bounds) |
-| OpenBLAS Zen kernel set (`OPENBLAS_CORETYPE=Zen`) | 1 | 1052 pass | 1052 pass with the strict bounds forced (`MVMC_BLAS_KERNEL_CLASS=reference`) |
-| OpenBLAS Sandybridge | 1 / 36 | 16 fail | 1052 pass |
-| OpenBLAS Nehalem | 1 | 16 fail | 1052 pass |
-| OpenBLAS Prescott | 1 | 16 fail | 1052 pass |
-| Reference BLAS + LAPACK (`LD_PRELOAD`, `MVMC_BLAS_KERNEL_CLASS=unverified`) | 1 | 16 fail | 1052 pass (the PhysCal energy record needed its own relaxation, see below) |
-| Sandybridge with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
+| OpenBLAS Haswell (native) | 1 / 2 / 36 | 1070 pass | 1070 pass (strict bounds) |
+| OpenBLAS Zen kernel set (`OPENBLAS_CORETYPE=Zen`) | 1 | 1070 pass | 1070 pass with the strict bounds forced (`MVMC_BLAS_KERNEL_CLASS=reference`) |
+| OpenBLAS Sandybridge | 1 / 36 | 16 fail | 1070 pass |
+| OpenBLAS Nehalem | 1 | 16 fail | 1070 pass |
+| OpenBLAS Prescott | 1 | 16 fail | 1070 pass |
+| Reference BLAS + LAPACK (`LD_PRELOAD`, `MVMC_BLAS_KERNEL_CLASS=unverified`) | 1 | 16 fail | 1070 pass |
+| Sandybridge / reference BLAS with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
 | GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | 1 and default | same 16 (+4 stderr-comparison artefacts of `OPENBLAS_VERBOSE`) | pass (`BLAS matrix` workflow, PR #459) |
 | GitHub macOS 15 ARM64 VM (Apple M1 Virtual), Homebrew OpenBLAS 0.3.34, `OPENBLAS_CORETYPE` unset (core `armv8`) | 1 and default | same 16 (+4 artefacts) | pass (`BLAS matrix` workflow, PR #459) |
 | macOS Accelerate | n/a | link error | unsupported: `mvmc-core/build.rs` links `openblas` unconditionally (`ld: library 'openblas' not found`); not changed here |
