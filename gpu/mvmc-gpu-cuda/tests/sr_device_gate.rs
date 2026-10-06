@@ -381,3 +381,58 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
         }
     }
 }
+
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn device_direct_sr_is_bitwise_repeatable() {
+    let Some(mut dev) = gate() else { return };
+    let (n, samples) = (257, 600);
+    let p = make_problem(n, samples, 50, 0.4, 6, 77);
+    dev.upload_store(&p.store, n, samples).unwrap();
+    let x1 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
+    // re-upload and re-solve: same inputs give identical bits
+    dev.upload_store(&p.store, n, samples).unwrap();
+    let x2 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
+    assert!(x1.iter().zip(&x2).all(|(a, b)| a.to_bits() == b.to_bits()));
+}
+
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn device_cg_operator_with_imaginary_samples_matches_c_order() {
+    let Some(mut dev) = gate() else { return };
+    let (n, samples) = (200, 500);
+    let pr = make_problem(n, samples, 30, 0.4, 3, 31);
+    let pi = make_problem(n, samples, 30, 0.4, 3, 32);
+    let a = cg_inputs(&pr, 0.003);
+    let b = cg_inputs(&pi, 0.003);
+    let comp = pr.map.len();
+    let mut op = SampledSrOperator::new(comp, samples, true);
+    op.mean.copy_from_slice(&a.mean);
+    op.diagonal.copy_from_slice(&a.diagonal);
+    op.real_samples.copy_from_slice(&a.operand);
+    op.imag_samples.copy_from_slice(&b.operand);
+    let x: Vec<f64> = (0..comp)
+        .map(|i| ((i * 13 % 57) as f64 - 28.0) / 28.0)
+        .collect();
+    let mut z_h = vec![0.0; comp];
+    op.apply(&mut z_h, &x, 1.0, 0.01);
+    dev.set_cg_operand(&a.operand, Some(&b.operand), comp, samples)
+        .unwrap();
+    let z_d = dev
+        .apply_operator(&x, &a.mean, &a.diagonal, 1.0, 0.01)
+        .unwrap();
+    let scale = z_h.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let worst = z_d
+        .iter()
+        .zip(&z_h)
+        .fold(0.0f64, |m, (d, h)| m.max((d - h).abs()));
+    eprintln!(
+        "operator with imaginary samples: max |dz| / max |z| = {:.2e}",
+        worst / scale
+    );
+    // two matrices of k products each: 4 (2k + m) eps relative to the largest entry scale
+    assert!(
+        worst <= 4.0 * (2 * samples + comp) as f64 * EPS * scale * 10.0,
+        "{worst}"
+    );
+}

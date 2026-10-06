@@ -1770,12 +1770,15 @@ device in a production step (`download_gram`/`download_s_g` exist for the gate).
 is `8 (n^2 + n_active^2 + n samples)` bytes (direct) or `8 n samples` (CG); a 10^4 x 10^4 step
 needs 2.4 GB of the 12 GB.
 
-**Where the unified backend (#437) fits.** `DeviceSr` is the device implementation of the
-fused SR step. It is deliberately a separate object with host-slice inputs: the per-stage
-`SrStages` methods (`gram_real`, `assemble_s_g`, `cholesky_solve`, `cg_local_product`) return
-host data and would re-introduce the round trips this issue removes, so the device step is added
-as one more composite stage next to `sr_s_g` once #446 has landed (see the PR description for
-the exact status of the wiring).
+**Opt-in and the unified backend (#437).** The device step is opt-in by construction: it is only
+reachable through the explicit `DeviceSr` API of the standalone `gpu/mvmc-gpu-cuda` crate; the
+default build, `mvmc-core` and the C-order SR path (the oracle) are untouched. It is not yet
+selected by `MVMC_RS_SR_BACKEND` or routed from `sr.rs`/`sr_cg.rs`: the unification PR (#446,
+`SrStages`/`StageBackend`) was still open, and the per-stage `SrStages` methods (`gram_real`,
+`assemble_s_g`, `cholesky_solve`, `cg_local_product`) return host data, so they cannot express a
+resident step. The follow-up after #446 merges adds the fused direct step and the resident CG
+solve as composite stages next to `sr_s_g` and routes single-process runs to them. Per the
+priority decision (correct numerics first) this PR stops at the validated, opt-in pipeline.
 
 ### 14.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
 
@@ -1805,6 +1808,13 @@ Bounds are derived, not tuned:
   repeatability: the gate asserts that the device trajectory is bitwise repeatable and finite, and
   compares against the host only where the amplification has not set in (up to 2 iterations at
   `1e-8`, observed `3e-16`).
+
+Also gated: bitwise repeatability of the direct solve (re-upload and re-solve give identical
+bits) and the CG operator with an imaginary sample matrix (`1e-15` of the largest entry).
+No numerical discrepancy was found: every difference above is within its derived bound, the
+only large difference (`6.7e-4`) is the CG amplification of #358 and is not a defect of either
+side. Limits of the validation: the operands are synthetic (real-store structure, controlled
+conditioning), not a sampled run of the optimizer, and there is one device (RTX 3060).
 
 The C-order CPU path stays the default and the oracle; the device path never changes it.
 
