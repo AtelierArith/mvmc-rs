@@ -106,6 +106,28 @@ fn tolerance(name: &str, file: &str) -> (f64, f64) {
     }
 }
 
+/// Largest absolute and relative difference over the numeric tokens of two outputs
+/// (measurement aid for choosing tolerances; enabled by `MVMC_RS_REPORT_MAXDIFF`).
+fn max_differences(produced: &str, reference: &str) -> (f64, f64) {
+    let (mut abs, mut rel) = (0.0_f64, 0.0_f64);
+    for (a, b) in produced
+        .split_whitespace()
+        .zip(reference.split_whitespace())
+    {
+        if let (Ok(a), Ok(b)) = (a.parse::<f64>(), b.parse::<f64>()) {
+            if a.is_finite() && b.is_finite() {
+                let d = (a - b).abs();
+                abs = abs.max(d);
+                let scale = a.abs().max(b.abs());
+                if scale > 0.0 {
+                    rel = rel.max(d / scale);
+                }
+            }
+        }
+    }
+    (abs, rel)
+}
+
 fn run(name: &str, check_numbers: bool) {
     run_with(name, check_numbers, 1, 1);
 }
@@ -316,6 +338,10 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
             continue;
         }
         let (absolute, relative) = tolerance(name, &file);
+        if std::env::var_os("MVMC_RS_REPORT_MAXDIFF").is_some() {
+            let (abs, rel) = max_differences(produced.trim_end(), reference.trim_end());
+            eprintln!("NATIVE181 {name}/{file} max_abs {abs:.3e} max_rel {rel:.3e}");
+        }
         numerical_comparison::assert_numeric_text(
             produced.trim_end(),
             reference.trim_end(),

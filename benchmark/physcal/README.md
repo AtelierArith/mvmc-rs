@@ -103,6 +103,11 @@ benchmark after the issue #442 fix. After the fix Rust is faster at L16 (1.12x)
 and L24 (1.06x) and within ~2% at L32; `|ΔE|=0` and every observable family
 matched.
 
+`physcal_hubbard_2026-10-06_c_order.md` records the issue #449 change (the two-hop kernel, the
+complex Pfaffian refresh and the Gram follow the C operation order instead of Julia's
+FMA/lane-split order): no slowdown, observables now differ from Julia at roundoff level
+(max|diff| <= 2.5e-13) because the Julia reduction order is no longer reproduced.
+
 Reproduce both tasks (four `physcal_ref` fixtures and the Hubbard L16/L24/L32
 chain) with:
 

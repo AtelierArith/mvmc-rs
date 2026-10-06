@@ -3901,7 +3901,7 @@ mod tests {
     }
 
     #[test]
-    fn real_gram_matches_julia_generic_and_syrk_dispatch_boundary() {
+    fn real_gram_is_within_reordering_bound_of_archived_julia_values() {
         let fixture = include_str!("../../../tests/fixtures/sr_direct/small_gram.txt");
         let mut lines = fixture.lines().filter(|s| !s.starts_with('#'));
         while let Some(dimensions) = lines.next() {

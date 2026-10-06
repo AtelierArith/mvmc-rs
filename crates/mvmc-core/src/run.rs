@@ -2971,7 +2971,8 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                 refresh_fsz_observation_matrix(data, state, all_complex, ele_idx, &ele_spn, &pool)
                     .err()
             } else if all_complex {
-                crate::pfaffian::calc_m_all_complex(
+                // C `CalculateMAll` operation order (#449), as the other measurement paths.
+                crate::pfaffian::calc_m_all_complex_production(
                     ele_idx,
                     &state.slater_matrix.slater_elm,
                     &mut state.slater_matrix.inv_m,
@@ -5361,6 +5362,9 @@ mod callback_tests {
     }
 
     fn check_sr_prefixes(case: &str, cg: bool, store: i64) {
+        // Archived Julia 1.11 trajectories: they embed Julia's @turbo complex Pfaffian roundoff
+        // in the periodic recalculation (historical fixtures, issue #449).
+        let _julia_kernel = crate::pfaffian::use_julia_complex_kernel();
         // The `rbm_fsz` references come from Julia/C samplers that omit the RBM factor
         // (issue #403); validate their other kernels with the factor switched off.
         crate::sampling::driver::LEGACY_FSZ_SAMPLER_WITHOUT_RBM

@@ -65,7 +65,8 @@ pub use parameters::{
     ParameterAccessError,
 };
 pub use pfaffian::{
-    calc_m_all_complex, calc_m_all_fsz_complex, calc_m_all_fsz_real, calc_m_all_real, CalcMAllError,
+    calc_m_all_complex, calc_m_all_fsz_complex, calc_m_all_fsz_real, calc_m_all_real,
+    use_julia_complex_kernel, CalcMAllError, JuliaComplexKernelGuard,
 };
 pub use reducer::{Reducer, SingleProcessReducer};
 pub use run::{

@@ -226,47 +226,32 @@ pub struct COrderSr {
     y_imag: Vec<f64>,
 }
 
-/// Real store Gram `O O^T` exactly as Julia `mul!(C, O, transpose(O))` selects it: SYRK for
-/// `max(n, samples) >= 4`, `muladd` accumulation below (see `finalize_oo_store_real`).
+/// Real store Gram `O O^T` as C `calculateOO_Store_real` computes it: one `DGEMM('N', 'T')`
+/// of the `[n, samples]` store with itself (`vmccal.c:685-689`), full matrix, for every size.
+///
+/// Julia selected SYRK for `max(n, samples) >= 4` and a generic `muladd` loop below; neither is
+/// C's call (issue #449). The summation inside DGEMM is the BLAS provider's; the sampled sum per
+/// entry runs over the samples in order.
 pub(crate) fn c_order_gram_real(store: &[f64], n: usize, sample_size: usize, out: &mut [f64]) {
     let dim = i32::try_from(n).expect("SR Gram dimension must fit BLAS LP64");
     let samples = i32::try_from(sample_size).expect("sample count must fit BLAS LP64");
-    // Julia mul!(C, O, transpose(O)) recognizes the shared operand and
-    // selects SYRK. Below its max(n,samples)>=4 cutoff, generic_syrk!
-    // accumulates with muladd instead. Both paths copy the upper triangle.
-    if n.max(sample_size) < 4 {
-        out[..n * n].fill(0.0);
-        for sample in 0..sample_size {
-            for j in 0..n {
-                let oj = store[j + sample * n];
-                for i in 0..=j {
-                    let index = i + j * n;
-                    out[index] = store[i + sample * n].mul_add(oj, out[index]);
-                }
-            }
-        }
-    } else {
-        // SAFETY: O is [n,samples], leading n; the writable output has n*n
-        // entries. SYRK reads O and overwrites the output's upper triangle.
-        unsafe {
-            blas::dsyrk(
-                b'U',
-                b'N',
-                dim,
-                samples,
-                1.0,
-                store,
-                dim,
-                0.0,
-                &mut out[..n * n],
-                dim,
-            );
-        }
-    }
-    for j in 0..n {
-        for i in j + 1..n {
-            out[i + j * n] = out[j + i * n];
-        }
+    // SAFETY: O is [n, samples] with leading dimension n; the output has n*n entries.
+    unsafe {
+        blas::dgemm(
+            b'N',
+            b'T',
+            dim,
+            dim,
+            samples,
+            1.0,
+            store,
+            dim,
+            store,
+            dim,
+            0.0,
+            &mut out[..n * n],
+            dim,
+        );
     }
 }
 
