@@ -60,8 +60,9 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 | フィーチャー | 対象 | 意味 |
 |---------|-------|---------|
 | `blas-backend` | `pfapack` | パフィアンカーネルに BLAS/LAPACK ルーチン(`dger`, `zgeru`, `dtrtri`, `dtrmm`, `dscal`, ...)を使用します。**`mvmc-core` は常にこれを有効にします**(`crates/mvmc-core/Cargo.toml` の `pfapack = { features = ["blas-backend"] }`)。そのため、オプティマイザーは常に BLAS/LAPACK バックエンドを使います。単体の `pfapack` クレートは、デフォルトではスカラーのリファレンスバックエンドを使います。 |
-| `simd-backend` | `pfapack` | 単体の `pfapack` クレートで SIMD(`pulp`)カーネルを有効にします。`mvmc-core` や `mvmc-cli` からは**転送されません**(`crates/mvmc-cli/Cargo.toml` が定義するのは `mpi` のみです)。PfaPack のテストとベンチマークに使用します: `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`。 |
+| `simd-backend` | `pfapack` | 単体の `pfapack` クレートで SIMD(`pulp`)カーネルを有効にします。`mvmc-core` や `mvmc-cli` からは**転送されません**(`crates/mvmc-cli/Cargo.toml` が定義するのは `mpi` と `gpu-cuda` のみです)。PfaPack のテストとベンチマークに使用します: `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`。 |
 | `mpi` | `mvmc-core`, `mvmc-cli` | MPI サポート(`MpiContext`, `MpiGroupContext`)をコンパイルします。これがない場合、ランチャーが検出したマルチランク実行は、`--features mpi` で再ビルドするよう求めるエラーで拒否されます。 |
+| `gpu-cuda` | `mvmc-core`, `mvmc-cli` | デフォルトで無効。依存を追加せず `Cargo.lock` も変更しません。`mvmc_core::backend` に tenferro CUDA プロバイダーを登録できるようにします(無効時の `BackendKind::Cuda` はエラーで、CPU への暗黙のフォールバックはありません)。CUDA の依存ツリーは独立したワークスペース `gpu/mvmc-gpu-cuda` で別にビルドします。オプションのゲートは `scripts/run_cuda_gate.sh` です(`MVMC_RS_CUDA_GATE=1` ではデバイスがなければ失敗し、未設定では「skipped, no device」と明示します)。`docs/design/gpu-readiness.md` の第 10 節を参照してください。 |
 
 ## 1.6 ビルドとスモークテスト
 

@@ -29,6 +29,16 @@ name: Explicit bounded optional gates
         required: false
         default: false
         type: boolean
+      cuda_gate:
+        description: >-
+          Run the optional CUDA gate (issue #420: tenferro CUDA dot_general/Cholesky vs the CPU
+          reference, with device/driver/CUDA/cuBLAS/cuSOLVER versions) on a self-hosted GPU
+          runner. Outside the bounded-family ledger: its own job status is the verdict (NotRun
+          when not selected; fails closed when no device is present). Use family=none to
+          dispatch only this job.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -241,6 +251,41 @@ jobs:
             ${{ runner.temp }}/explicit-mpi-gates-${{ github.run_id }}-${{ github.run_attempt }}/*.log
             ${{ runner.temp }}/explicit-mpi-provider-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
+
+  cuda-gate:
+    # Outside the bounded-family aggregate ledger (like mpi-explicit): the job status is the
+    # verdict. Skipped (NotRun) unless explicitly selected. Hosted runners have no GPU, so this
+    # needs a self-hosted runner carrying the labels below (placeholder: adjust to the runner
+    # fleet). MVMC_RS_CUDA_GATE=1 makes a missing device a hard failure, never a silent pass.
+    name: Explicit CUDA gate (self-hosted GPU runner)
+    if: inputs.cuda_gate
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: never
+      MVMC_RS_CUDA_GATE: '1'
+      MVMC_RS_CUDA_GATE_OUT: ${{ github.workspace }}/gpu/mvmc-gpu-cuda/results/cuda-gate.md
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Run the CUDA gate natively (CUDA toolkit libraries and driver required)
+        run: scripts/run_cuda_gate.sh native
+      - name: Report status (not run / no device is not Pass)
+        if: always()
+        run: |
+          if [ -f "$MVMC_RS_CUDA_GATE_OUT" ]; then
+            cat "$MVMC_RS_CUDA_GATE_OUT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### CUDA gate: no report recorded (failed before or without a device)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain CUDA gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-cuda-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/gpu/mvmc-gpu-cuda/results/cuda-gate.md
+          if-no-files-found: warn
 
   aggregate:
     name: Validate bounded evidence ledger (not full coverage)

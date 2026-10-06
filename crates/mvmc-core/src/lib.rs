@@ -18,6 +18,7 @@
 mod julia_fixture;
 
 pub mod average;
+pub mod backend;
 mod c_complex;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod c_complex_gnu;

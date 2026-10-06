@@ -79,8 +79,9 @@ builds and tests do not need `c_toolbox/`.
 | Feature | Where | Meaning |
 |---------|-------|---------|
 | `blas-backend` | `pfapack` | Use BLAS/LAPACK routines (`dger`, `zgeru`, `dtrtri`, `dtrmm`, `dscal`, ...) for the Pfaffian kernels. **`mvmc-core` always enables it** (`pfapack = { features = ["blas-backend"] }` in `crates/mvmc-core/Cargo.toml`), so the optimizer always uses the BLAS/LAPACK backend. The standalone `pfapack` crate defaults to its scalar reference backend. |
-| `simd-backend` | `pfapack` | Enable SIMD (`pulp`) kernels in the standalone `pfapack` crate. It is **not forwarded** by `mvmc-core` or `mvmc-cli` (`crates/mvmc-cli/Cargo.toml` defines only `mpi`). Use it for the PfaPack tests and benchmarks: `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`. |
+| `simd-backend` | `pfapack` | Enable SIMD (`pulp`) kernels in the standalone `pfapack` crate. It is **not forwarded** by `mvmc-core` or `mvmc-cli` (`crates/mvmc-cli/Cargo.toml` defines only `mpi` and `gpu-cuda`). Use it for the PfaPack tests and benchmarks: `cargo nextest run -p pfapack --features 'simd-backend blas-backend'`. |
 | `mpi` | `mvmc-core`, `mvmc-cli` | Compile MPI support (`MpiContext`, `MpiGroupContext`). Without it a launcher-detected multi-rank run is rejected with an error asking to rebuild with `--features mpi`. |
+| `gpu-cuda` | `mvmc-core`, `mvmc-cli` | Off by default; adds no dependency and does not change `Cargo.lock`. Enables the registration of a tenferro CUDA provider for `mvmc_core::backend` (`BackendKind::Cuda` is an error otherwise; there is no silent CPU fallback). The CUDA dependency tree is built separately from the standalone workspace `gpu/mvmc-gpu-cuda`; the optional gate is `scripts/run_cuda_gate.sh` (`MVMC_RS_CUDA_GATE=1` fails without a device; otherwise "skipped, no device"). See `docs/design/gpu-readiness.md` section 10. |
 
 ## 1.6 Build and smoke test
 

@@ -1,0 +1,1704 @@
+use cubecl::client::ComputeClient;
+use cubecl::prelude::*;
+use cubecl_cuda::CudaRuntime as CubeclCudaRuntime;
+
+use crate::config::CompareDir;
+use crate::cubecl::CudaRuntime;
+use crate::types::{
+    CubeclBuffer, DeviceId, DeviceKind, GpuBackendKind, MemoryKind, Placement, StorageBuffer,
+    Tensor, TensorRank, TypedTensor, TypedTensorView, TypedTensorViewMut,
+};
+use tenferro_tensor::{
+    CapabilityAxis, CapabilityQuery, DType, DeviceAccessError, DeviceAccessRequest,
+    PreparedDeviceAccess, TensorBackendCapability as TensorBackendCapabilityTrait, TensorScalar,
+};
+
+/// The Rust scalar type behind a preset variant name a macro received.
+#[allow(unused_macros)]
+macro_rules! preset_scalar {
+    (F32) => {
+        f32
+    };
+    (F64) => {
+        f64
+    };
+    (I32) => {
+        i32
+    };
+    (I64) => {
+        i64
+    };
+    (Bool) => {
+        bool
+    };
+    (C32) => {
+        num_complex::Complex32
+    };
+    (C64) => {
+        num_complex::Complex64
+    };
+}
+pub(crate) const DEFAULT_CUBE_DIM_X: u32 = 256;
+
+pub(crate) struct CubeclPreparedAccess {
+    handle: cubecl_runtime::server::Handle,
+    shape: Vec<usize>,
+    strides: Vec<usize>,
+}
+
+impl CubeclPreparedAccess {
+    pub(crate) fn into_binding(self) -> TensorBinding<CubeclCudaRuntime> {
+        // SAFETY: the storage root validated the logical layout before
+        // preparation, and this exact prepared handle is consumed once by the
+        // binding that performs the launch.
+        unsafe {
+            TensorBinding::from_raw_parts(self.handle, self.strides.into(), self.shape.into())
+        }
+    }
+
+    pub(crate) fn into_array_arg(self, len: usize) -> ArrayArg<CubeclCudaRuntime> {
+        // SAFETY: the storage root prepared the provider handle for this
+        // access; callers choose only a typed logical length within that root.
+        unsafe { ArrayArg::from_raw_parts(self.handle, len) }
+    }
+
+    pub(crate) fn into_handle(self) -> cubecl_runtime::server::Handle {
+        self.handle
+    }
+
+    pub(crate) fn byte_len(&self, op: &'static str) -> crate::Result<usize> {
+        usize::try_from(self.handle.size()).map_err(|_| {
+            crate::Error::invalid_argument(
+                op,
+                "buffer_size",
+                "CubeCL buffer size exceeds the host usize range",
+            )
+        })
+    }
+}
+
+impl std::fmt::Debug for CubeclPreparedAccess {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CubeclPreparedAccess")
+            .finish_non_exhaustive()
+    }
+}
+
+impl PreparedDeviceAccess for CubeclPreparedAccess {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+}
+
+pub(crate) fn prepare_cubecl_access(
+    buffer: &CubeclBuffer,
+    request: DeviceAccessRequest<'_>,
+) -> Result<CubeclPreparedAccess, DeviceAccessError> {
+    let (shape, strides) = cubecl_shape_and_strides(request.shape()).map_err(|error| {
+        DeviceAccessError::InvalidRequest {
+            message: error.to_string(),
+        }
+    })?;
+    Ok(CubeclPreparedAccess {
+        // The provider preparation retains one handle. Binding conversion
+        // consumes it later, so preparation does not clone a second owner.
+        handle: buffer.handle().clone(),
+        shape,
+        strides,
+    })
+}
+
+pub(crate) fn cube_count_for_len(len: usize) -> crate::Result<CubeCount> {
+    let cubes = len.div_ceil(DEFAULT_CUBE_DIM_X as usize);
+    let cubes = u32::try_from(cubes).map_err(|_| {
+        crate::Error::invalid_argument(
+            "cube_count_for_len",
+            "length",
+            format!(
+                "1D CubeCL launch for {len} elements requires {cubes} cubes, \
+                 which exceeds u32::MAX"
+            ),
+        )
+    })?;
+    Ok(CubeCount::Static(cubes.max(1), 1, 1))
+}
+
+pub(crate) fn cube_dim_1d() -> CubeDim {
+    CubeDim::new_1d(DEFAULT_CUBE_DIM_X)
+}
+
+pub(crate) fn comptime_sequence<T>(values: &[T]) -> Sequence<T>
+where
+    T: CubeType + Clone,
+{
+    let mut out = Sequence::new();
+    for value in values {
+        out.push(value.clone());
+    }
+    out
+}
+
+pub(crate) fn cubecl_buffer<'a, T: 'static>(
+    tensor: &'a TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<&'a CubeclBuffer> {
+    match tensor.buffer() {
+        StorageBuffer::Host(_) => Err(crate::Error::runtime_state(
+            op,
+            "expected CubeCL GPU tensor, got host tensor. \
+                      Use upload_tensor() to transfer to GPU before calling GPU ops.",
+        )),
+        StorageBuffer::Backend(buffer) => buffer
+            .as_any()
+            .downcast_ref::<CubeclBuffer>()
+            .ok_or_else(|| {
+                crate::Error::runtime_state(
+                    op,
+                    format!(
+                        "expected CubeCL GPU tensor, got backend buffer family `{}`",
+                        buffer.backend_family()
+                    ),
+                )
+            }),
+    }
+}
+
+pub(crate) fn cubecl_view_buffer<'a, T: 'static>(
+    view: &'a TypedTensorView<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<&'a CubeclBuffer> {
+    let buffer = view.backend_buffer().ok_or_else(|| {
+        crate::Error::runtime_state(
+            op,
+            "expected CubeCL GPU tensor view, got host tensor. \
+                      Use upload_tensor() to transfer to GPU before calling GPU ops.",
+        )
+    })?;
+    buffer
+        .as_any()
+        .downcast_ref::<CubeclBuffer>()
+        .ok_or_else(|| {
+            crate::Error::runtime_state(
+                op,
+                format!(
+                    "expected CubeCL GPU tensor view, got backend buffer family `{}`",
+                    buffer.backend_family()
+                ),
+            )
+        })
+}
+
+pub(crate) fn cubecl_view_mut_buffer<'a, T: 'static>(
+    view: &'a TypedTensorViewMut<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<&'a CubeclBuffer> {
+    let buffer = view.backend_buffer().ok_or_else(|| {
+        crate::Error::runtime_state(
+            op,
+            "expected CubeCL GPU tensor view, got host tensor. \
+                      Use upload_tensor() to transfer to GPU before calling GPU ops.",
+        )
+    })?;
+    buffer
+        .as_any()
+        .downcast_ref::<CubeclBuffer>()
+        .ok_or_else(|| {
+            crate::Error::runtime_state(
+                op,
+                format!(
+                    "expected CubeCL GPU tensor view, got backend buffer family `{}`",
+                    buffer.backend_family()
+                ),
+            )
+        })
+}
+
+pub(crate) fn cubecl_shape_and_strides(shape: &[usize]) -> crate::Result<(Vec<usize>, Vec<usize>)> {
+    // CubeCL CUDA kernels still receive a dynamic metadata pointer for tensor
+    // args. Rank-0 tensors need one dense metadata element so that launch
+    // argument layout stays consistent, while tenferro keeps the public shape
+    // as `[]` and passes the logical rank separately where needed.
+    if shape.is_empty() {
+        return Ok((vec![1], vec![1]));
+    }
+    let strides = crate::types::col_major_strides(shape)?
+        .into_iter()
+        // INVARIANT: `col_major_strides` starts from `1isize` and uses
+        // checked multiplication over non-negative extents, so strides cannot
+        // be negative before this CubeCL metadata conversion.
+        .map(|stride| stride as usize)
+        .collect();
+    Ok((shape.to_vec(), strides))
+}
+
+fn checked_shape_product(op: &'static str, shape: &[usize]) -> crate::Result<usize> {
+    shape
+        .iter()
+        .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
+        .ok_or_else(|| {
+            crate::Error::invalid_argument(
+                op,
+                "shape",
+                format!("shape product overflow for CubeCL tensor shape {shape:?}"),
+            )
+        })
+}
+
+fn validate_raw_unary_shapes<TIn>(
+    input: &TypedTensor<TIn>,
+    out_shape: &[usize],
+    op: &'static str,
+) -> crate::Result<()> {
+    ensure_same_shape(op, input.shape(), out_shape)
+}
+
+fn validate_raw_binary_shapes<TLhs, TRhs>(
+    lhs: &TypedTensor<TLhs>,
+    rhs: &TypedTensor<TRhs>,
+    out_shape: &[usize],
+    op: &'static str,
+) -> crate::Result<()> {
+    ensure_same_shape(op, lhs.shape(), out_shape)?;
+    ensure_same_shape(op, rhs.shape(), out_shape)
+}
+
+fn validate_raw_ternary_shapes<TA, TB, TC>(
+    a: &TypedTensor<TA>,
+    b: &TypedTensor<TB>,
+    c: &TypedTensor<TC>,
+    out_shape: &[usize],
+    op: &'static str,
+) -> crate::Result<()> {
+    ensure_same_shape(op, a.shape(), out_shape)?;
+    ensure_same_shape(op, b.shape(), out_shape)?;
+    ensure_same_shape(op, c.shape(), out_shape)
+}
+
+fn downcast_prepared(
+    prepared: Box<dyn PreparedDeviceAccess + '_>,
+    op: &'static str,
+) -> crate::Result<CubeclPreparedAccess> {
+    prepared
+        .into_any()
+        .downcast::<CubeclPreparedAccess>()
+        .map(|prepared| *prepared)
+        .map_err(|_| {
+            crate::Error::runtime_state(op, "prepared access belongs to another GPU provider")
+        })
+}
+
+pub(crate) fn typed_tensor_binding<T: TensorScalar + Clone + 'static>(
+    tensor: &TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<TensorBinding<CubeclCudaRuntime>> {
+    Ok(downcast_prepared(tensor.prepare_device_read(op)?, op)?.into_binding())
+}
+
+pub(crate) fn prepared_tensor_access<T: TensorScalar + 'static>(
+    tensor: &TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<CubeclPreparedAccess> {
+    downcast_prepared(tensor.prepare_device_read(op)?, op)
+}
+
+/// Prepare an owned typed tensor for an exclusive provider-native write.
+pub(crate) fn prepared_view_access<T: TensorScalar + 'static>(
+    view: &TypedTensorView<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<CubeclPreparedAccess> {
+    downcast_prepared(view.prepare_device_read(op)?, op)
+}
+
+/// Prepare an owned typed tensor for an exclusive provider-native write.
+pub(crate) fn prepared_tensor_mut_access<T: TensorScalar + 'static>(
+    tensor: &mut TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<CubeclPreparedAccess> {
+    downcast_prepared(tensor.prepare_device_write(op)?, op)
+}
+
+pub(crate) fn prepared_view_mut_access<T: TensorScalar + 'static>(
+    view: &mut TypedTensorViewMut<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<CubeclPreparedAccess> {
+    downcast_prepared(view.prepare_device_write(op)?, op)
+}
+
+pub(crate) fn typed_view_binding<T: TensorScalar + Clone + 'static>(
+    view: &TypedTensorView<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<TensorBinding<CubeclCudaRuntime>> {
+    if view.offset() != 0 || !view.is_col_major_contiguous()? {
+        return Err(crate::Error::invalid_argument(
+            op,
+            "source",
+            "CUDA compact view binding requires a zero-offset column-major view",
+        ));
+    }
+    Ok(downcast_prepared(view.prepare_device_read(op)?, op)?.into_binding())
+}
+
+pub(crate) fn launch_unary_bool_tensor(
+    rt: &CudaRuntime,
+    input: &TypedTensor<bool>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<bool>> {
+    ensure_resident_on_runtime(rt, input, op)?;
+    let input_arg = typed_tensor_binding(input, op)?;
+    let output_len = checked_shape_product(op, out_shape)?;
+    let launch_count = if output_len == 0 {
+        None
+    } else {
+        Some(cube_count_for_len(output_len)?)
+    };
+    let output = alloc_bool_output(rt, out_shape)?;
+    let Some(launch_count) = launch_count else {
+        return Ok(output);
+    };
+    let output_arg = typed_tensor_binding(&output, op)?;
+    launch(
+        rt.client(),
+        launch_count,
+        cube_dim_1d(),
+        output_arg,
+        input_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_binary_bool_tensor<I: CubeElement + TensorScalar + Clone>(
+    rt: &CudaRuntime,
+    input: &TypedTensor<bool>,
+    indices: &TypedTensor<I>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<bool>> {
+    ensure_resident_on_runtime(rt, input, op)?;
+    ensure_resident_on_runtime(rt, indices, op)?;
+    let input_arg = typed_tensor_binding(input, op)?;
+    let indices_arg = typed_tensor_binding(indices, op)?;
+    let output_len = checked_shape_product(op, out_shape)?;
+    let launch_count = if output_len == 0 {
+        None
+    } else {
+        Some(cube_count_for_len(output_len)?)
+    };
+    let output = alloc_bool_output(rt, out_shape)?;
+    let Some(launch_count) = launch_count else {
+        return Ok(output);
+    };
+    let output_arg = typed_tensor_binding(&output, op)?;
+    launch(
+        rt.client(),
+        launch_count,
+        cube_dim_1d(),
+        output_arg,
+        input_arg,
+        indices_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_bool_tensor_into(
+    rt: &CudaRuntime,
+    output: &TypedTensor<bool>,
+    input: &TypedTensor<bool>,
+    op: &'static str,
+    count: CubeCount,
+    dim: CubeDim,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<()> {
+    ensure_resident_on_runtime(rt, output, op)?;
+    ensure_resident_on_runtime(rt, input, op)?;
+    // A queued kernel is about to write this buffer, so any memoized device
+    // address must go: the next raw-FFI access has to resolve through
+    // `get_resource`, whose blocking server round trip also pushes this
+    // kernel onto the CUstream. See issue #1868.
+    cubecl_buffer(output, op)?.invalidate_device_addr();
+    let output_arg = typed_tensor_binding(output, op)?;
+    let input_arg = typed_tensor_binding(input, op)?;
+    if output.n_elements() != 0 {
+        launch(rt.client(), count, dim, output_arg, input_arg);
+    }
+    Ok(())
+}
+
+pub(crate) fn launch_nullary_bool_into(
+    rt: &CudaRuntime,
+    output: &TypedTensor<bool>,
+    op: &'static str,
+    count: CubeCount,
+    dim: CubeDim,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<()> {
+    ensure_resident_on_runtime(rt, output, op)?;
+    // A queued kernel is about to write this buffer, so any memoized device
+    // address must go: the next raw-FFI access has to resolve through
+    // `get_resource`, whose blocking server round trip also pushes this
+    // kernel onto the CUstream. See issue #1868.
+    cubecl_buffer(output, op)?.invalidate_device_addr();
+    let output_arg = bool_tensor_array_arg(output, op)?;
+    if output.n_elements() != 0 {
+        launch(rt.client(), count, dim, output_arg);
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_resident_on_runtime<T: 'static>(
+    rt: &CudaRuntime,
+    tensor: &TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<()> {
+    let buffer = cubecl_buffer(tensor, op)?;
+    ensure_allocation_domain(buffer, rt, op)?;
+    ensure_placement_resident_on_runtime(rt, tensor.placement(), op)
+}
+
+pub(crate) fn ensure_view_resident_on_runtime<T: 'static>(
+    rt: &CudaRuntime,
+    view: &TypedTensorView<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<()> {
+    let buffer = cubecl_view_buffer(view, op)?;
+    ensure_allocation_domain(buffer, rt, op)?;
+    ensure_placement_resident_on_runtime(rt, view.placement(), op)
+}
+
+pub(crate) fn ensure_view_mut_resident_on_runtime<T: 'static>(
+    rt: &CudaRuntime,
+    view: &TypedTensorViewMut<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<()> {
+    let buffer = cubecl_view_mut_buffer(view, op)?;
+    ensure_allocation_domain(buffer, rt, op)?;
+    ensure_placement_resident_on_runtime(rt, view.placement(), op)
+}
+
+fn ensure_allocation_domain(
+    buffer: &CubeclBuffer,
+    rt: &CudaRuntime,
+    op: &'static str,
+) -> crate::Result<()> {
+    if buffer.allocation_domain() != rt.allocation_domain_id() {
+        return Err(crate::Error::runtime_state(
+            op,
+            "CubeCL allocation belongs to a different runtime domain",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_placement_resident_on_runtime(
+    rt: &CudaRuntime,
+    placement: &Placement,
+    op: &'static str,
+) -> crate::Result<()> {
+    if !matches!(&placement.memory_kind, MemoryKind::Device) {
+        return Err(crate::Error::runtime_state(
+            op,
+            format!(
+                "expected GPU tensor placement, got {:?}",
+                placement.memory_kind
+            ),
+        ));
+    }
+    match &placement.device {
+        Some(device)
+            if device.kind == DeviceKind::Gpu(GpuBackendKind::Cuda)
+                && device.ordinal == rt.device_ordinal() =>
+        {
+            Ok(())
+        }
+        Some(device) => Err(crate::Error::runtime_state(
+            op,
+            format!(
+                "expected GPU tensor resident on cuda:{}, got {:?}:{}",
+                rt.device_ordinal(),
+                device.kind,
+                device.ordinal
+            ),
+        )),
+        None => Err(crate::Error::runtime_state(
+            op,
+            format!(
+                "expected GPU tensor resident on cuda:{}, got missing device metadata",
+                rt.device_ordinal()
+            ),
+        )),
+    }
+}
+
+pub(crate) fn typed_from_cubecl<T: TensorScalar + Send + Sync + 'static>(
+    shape: Vec<usize>,
+    buffer: CubeclBuffer,
+    device_ordinal: usize,
+) -> crate::Result<TypedTensor<T>> {
+    TypedTensor::from_buffer_col_major(
+        shape,
+        StorageBuffer::Backend(Box::new(buffer)),
+        Placement {
+            memory_kind: MemoryKind::Device,
+            device: Some(DeviceId {
+                kind: DeviceKind::Gpu(GpuBackendKind::Cuda),
+                ordinal: device_ordinal,
+            }),
+            cpu_affinity: None,
+        },
+    )
+}
+
+pub(crate) fn alloc_output<T: CubeElement + TensorScalar + Clone + Send + Sync + 'static>(
+    rt: &CudaRuntime,
+    shape: &[usize],
+) -> crate::Result<TypedTensor<T>> {
+    let len = checked_shape_product("cubecl_alloc_output", shape)?;
+    let byte_len = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
+        crate::Error::invalid_argument(
+            "cubecl_alloc_output",
+            "shape",
+            format!("output byte length overflow for shape {shape:?}"),
+        )
+    })?;
+    let handle = rt.client().empty(byte_len);
+    typed_from_cubecl(
+        shape.to_vec(),
+        CubeclBuffer::new(
+            handle,
+            byte_len,
+            rt.device_ordinal(),
+            rt.allocation_domain_id(),
+        ),
+        rt.device_ordinal(),
+    )
+}
+
+pub(crate) fn alloc_bool_output(
+    rt: &CudaRuntime,
+    shape: &[usize],
+) -> crate::Result<TypedTensor<bool>> {
+    let len = checked_shape_product("cubecl_alloc_bool_output", shape)?;
+    let handle = rt.client().empty(len);
+    typed_from_cubecl(
+        shape.to_vec(),
+        CubeclBuffer::new(handle, len, rt.device_ordinal(), rt.allocation_domain_id()),
+        rt.device_ordinal(),
+    )
+}
+
+pub(crate) fn typed_tensor_array_arg<T: CubeElement + TensorScalar + Clone>(
+    tensor: &TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>> {
+    let prepared = downcast_prepared(tensor.prepare_device_read(op)?, op)?;
+    Ok(prepared.into_array_arg(tensor.n_elements()))
+}
+
+pub(crate) fn typed_tensor_mut_array_arg<T: CubeElement + TensorScalar + Clone>(
+    tensor: &mut TypedTensor<T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>> {
+    let len = tensor.n_elements();
+    let prepared = downcast_prepared(tensor.prepare_device_write(op)?, op)?;
+    Ok(prepared.into_array_arg(len))
+}
+
+pub(crate) fn typed_view_array_arg<T: CubeElement + TensorScalar + Clone>(
+    view: &TypedTensorView<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>> {
+    let prepared = downcast_prepared(view.prepare_device_read(op)?, op)?;
+    Ok(prepared.into_array_arg(view.n_elements()))
+}
+
+pub(crate) fn typed_view_mut_array_arg<T: CubeElement + TensorScalar + Clone>(
+    view: &mut TypedTensorViewMut<'_, T, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>> {
+    let prepared = downcast_prepared(view.prepare_device_write(op)?, op)?;
+    Ok(prepared.into_array_arg(view.n_elements()))
+}
+
+pub(crate) fn bool_tensor_array_arg(
+    tensor: &TypedTensor<bool, impl TensorRank>,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>> {
+    let prepared = downcast_prepared(tensor.prepare_device_read(op)?, op)?;
+    Ok(prepared.into_array_arg(tensor.n_elements()))
+}
+
+pub(crate) fn typed_tensor_array_arg_as<T, U>(
+    tensor: &TypedTensor<T, impl TensorRank>,
+    len: usize,
+    op: &'static str,
+) -> crate::Result<ArrayArg<CubeclCudaRuntime>>
+where
+    T: CubeElement + TensorScalar + Clone,
+    U: CubeElement + Clone,
+{
+    let prepared = downcast_prepared(tensor.prepare_device_read(op)?, op)?;
+    let requested_bytes = len.checked_mul(core::mem::size_of::<U>()).ok_or_else(|| {
+        crate::Error::invalid_argument(
+            op,
+            "length",
+            format!("reinterpreted CubeCL array length overflow for len {len}"),
+        )
+    })?;
+    let available_bytes = prepared.byte_len(op)?;
+    if requested_bytes > available_bytes {
+        return Err(crate::Error::runtime_state(op, format!(
+                "reinterpreted CubeCL array needs {requested_bytes} bytes, buffer has {available_bytes}"
+            )));
+    }
+
+    Ok(prepared.into_array_arg(len))
+}
+
+pub(crate) fn launch_unary<TIn, TOut>(
+    rt: &CudaRuntime,
+    input: &TypedTensor<TIn>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TIn: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    validate_raw_unary_shapes(input, out_shape, op)?;
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, input, op)?;
+    let input_arg = typed_tensor_array_arg(input, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    // SAFETY: This helper is the host-side unchecked launch boundary for raw
+    // shape-preserving unary kernels. The shape validation above proves input
+    // and output have the same dense element count; `typed_tensor_array_arg`
+    // proves each raw array length matches its tensor shape. The launch domain
+    // covers `len == output.n_elements()`, and these kernels guard writes with
+    // `ABSOLUTE_POS < out.len()`.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        input_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_unary_tensor<TIn, TOut>(
+    rt: &CudaRuntime,
+    input: &TypedTensor<TIn>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TIn: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, input, op)?;
+    let input_arg = typed_tensor_binding(input, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_binding(&output, op)?;
+    // SAFETY: Logical tensor kernels use `TensorBinding`, whose construction
+    // validates shape product against the CubeCL allocation length. The caller
+    // supplies output shape and launch metadata already validated for the
+    // specific structural/indexing operation, and the kernels guard their
+    // launched index domain before mapping logical indices.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        input_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_nullary_into<TOut>(
+    rt: &CudaRuntime,
+    output: &TypedTensor<TOut>,
+    op: &'static str,
+    count: CubeCount,
+    dim: CubeDim,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<()>
+where
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    ensure_resident_on_runtime(rt, output, op)?;
+    // A queued kernel is about to write this buffer, so any memoized device
+    // address must go: the next raw-FFI access has to resolve through
+    // `get_resource`, whose blocking server round trip also pushes this
+    // kernel onto the CUstream. See issue #1868.
+    cubecl_buffer(output, op)?.invalidate_device_addr();
+    let output_arg = typed_tensor_array_arg(output, op)?;
+    if output.n_elements() == 0 {
+        return Ok(());
+    }
+    // SAFETY: Nullary raw kernels write only to the validated output array.
+    // The caller-supplied `count`/`dim` must describe the initialized domain,
+    // and kernels using this path guard with `ABSOLUTE_POS < out.len()`.
+    launch(rt.client(), count, dim, output_arg);
+    Ok(())
+}
+
+pub(crate) fn launch_unary_tensor_into<TIn, TOut>(
+    rt: &CudaRuntime,
+    output: &TypedTensor<TOut>,
+    input: &TypedTensor<TIn>,
+    op: &'static str,
+    count: CubeCount,
+    dim: CubeDim,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<()>
+where
+    TIn: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    ensure_resident_on_runtime(rt, output, op)?;
+    ensure_resident_on_runtime(rt, input, op)?;
+    // A queued kernel is about to write this buffer, so any memoized device
+    // address must go: the next raw-FFI access has to resolve through
+    // `get_resource`, whose blocking server round trip also pushes this
+    // kernel onto the CUstream. See issue #1868.
+    cubecl_buffer(output, op)?.invalidate_device_addr();
+    let output_arg = typed_tensor_binding(output, op)?;
+    let input_arg = typed_tensor_binding(input, op)?;
+    if output.n_elements() == 0 {
+        return Ok(());
+    }
+    // SAFETY: `TensorBinding` construction validates shape and backing buffer
+    // length for both tensors. The caller supplies a launch domain derived
+    // from validated operation metadata, and the target kernel guards the
+    // output or update domain before logical tensor indexing.
+    launch(rt.client(), count, dim, output_arg, input_arg);
+    Ok(())
+}
+
+pub(crate) fn launch_binary<TLhs, TRhs, TOut>(
+    rt: &CudaRuntime,
+    lhs: &TypedTensor<TLhs>,
+    rhs: &TypedTensor<TRhs>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TLhs: CubeElement + TensorScalar + Clone,
+    TRhs: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    validate_raw_binary_shapes(lhs, rhs, out_shape, op)?;
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, lhs, op)?;
+    ensure_resident_on_runtime(rt, rhs, op)?;
+    let lhs_arg = typed_tensor_array_arg(lhs, op)?;
+    let rhs_arg = typed_tensor_array_arg(rhs, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    // SAFETY: This helper is the host-side unchecked launch boundary for raw
+    // shape-preserving binary kernels. The shared shape validation above
+    // proves all arrays have the same dense element count; the raw array
+    // helpers prove every CubeCL buffer length matches its tensor shape. The
+    // launch covers `len == output.n_elements()`, and elementwise kernels guard
+    // with `ABSOLUTE_POS < out.len()`.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        lhs_arg,
+        rhs_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_unary_view<TIn, TOut>(
+    rt: &CudaRuntime,
+    input: &TypedTensorView<'_, TIn>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TIn: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    ensure_same_shape(op, input.shape(), out_shape)?;
+    if input.offset() != 0 || !input.is_col_major_contiguous()? {
+        return Err(crate::Error::unsupported(
+            op,
+            "native elementwise read requires a zero-offset compact view",
+        ));
+    }
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_view_resident_on_runtime(rt, input, op)?;
+    // INVARIANT: the zero-offset compact check above makes the raw array's
+    // logical order identical to the view's element order.
+    let input_arg = typed_view_array_arg(input, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    launch(
+        rt.client(),
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        input_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_binary_views<TLhs, TRhs, TOut>(
+    rt: &CudaRuntime,
+    lhs: &TypedTensorView<'_, TLhs>,
+    rhs: &TypedTensorView<'_, TRhs>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TLhs: CubeElement + TensorScalar + Clone,
+    TRhs: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    ensure_same_shape(op, lhs.shape(), out_shape)?;
+    ensure_same_shape(op, rhs.shape(), out_shape)?;
+    for view in [lhs.offset(), rhs.offset()] {
+        if view != 0 {
+            return Err(crate::Error::unsupported(
+                op,
+                "native elementwise read requires a zero-offset compact view",
+            ));
+        }
+    }
+    if !lhs.is_col_major_contiguous()? || !rhs.is_col_major_contiguous()? {
+        return Err(crate::Error::unsupported(
+            op,
+            "native elementwise read requires a zero-offset compact view",
+        ));
+    }
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_view_resident_on_runtime(rt, lhs, op)?;
+    ensure_view_resident_on_runtime(rt, rhs, op)?;
+    // INVARIANT: the zero-offset compact checks above make both raw arrays'
+    // logical order identical to their view element order.
+    let lhs_arg = typed_view_array_arg(lhs, op)?;
+    let rhs_arg = typed_view_array_arg(rhs, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    launch(
+        rt.client(),
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        lhs_arg,
+        rhs_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_compare_bool<T>(
+    rt: &CudaRuntime,
+    lhs: &TypedTensor<T>,
+    rhs: &TypedTensor<T>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<bool>>
+where
+    T: CubeElement + TensorScalar + Clone,
+{
+    validate_raw_binary_shapes(lhs, rhs, out_shape, op)?;
+    let output = alloc_bool_output(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, lhs, op)?;
+    ensure_resident_on_runtime(rt, rhs, op)?;
+    let lhs_arg = typed_tensor_array_arg(lhs, op)?;
+    let rhs_arg = typed_tensor_array_arg(rhs, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = bool_tensor_array_arg(&output, op)?;
+    // SAFETY: Shape validation proves all raw arrays share the dense element
+    // count. Bool output storage uses one byte per element and the kernel
+    // guards with `ABSOLUTE_POS < out.len()`.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        lhs_arg,
+        rhs_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_binary_tensor<TLhs, TRhs, TOut>(
+    rt: &CudaRuntime,
+    lhs: &TypedTensor<TLhs>,
+    rhs: &TypedTensor<TRhs>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TLhs: CubeElement + TensorScalar + Clone,
+    TRhs: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, lhs, op)?;
+    ensure_resident_on_runtime(rt, rhs, op)?;
+    let lhs_arg = typed_tensor_binding(lhs, op)?;
+    let rhs_arg = typed_tensor_binding(rhs, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_binding(&output, op)?;
+    // SAFETY: Logical tensor kernels receive only `TensorBinding` arguments,
+    // each validated against its backing buffer length. Shape/config
+    // compatibility is checked by the operation-specific metadata builder
+    // before this launch helper is called, and the kernel guards its launched
+    // index domain.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        lhs_arg,
+        rhs_arg,
+    );
+    Ok(output)
+}
+
+/// Launch a binary tensor kernel from already prepared operand bindings.
+///
+/// [`launch_binary_tensor`] derives the operand bindings from owned tensors.
+/// Fused entry points that also accept a compact borrowed view build the
+/// bindings themselves and reuse this helper for the output allocation and
+/// launch.
+pub(crate) fn launch_binary_bindings<TOut>(
+    rt: &CudaRuntime,
+    lhs_arg: TensorBinding<CubeclCudaRuntime>,
+    rhs_arg: TensorBinding<CubeclCudaRuntime>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+        TensorBinding<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_binding(&output, op)?;
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        lhs_arg,
+        rhs_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_select_bool<T>(
+    rt: &CudaRuntime,
+    pred: &TypedTensor<bool>,
+    on_true: &TypedTensor<T>,
+    on_false: &TypedTensor<T>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<T>>
+where
+    T: CubeElement + TensorScalar + Clone,
+{
+    validate_raw_ternary_shapes(pred, on_true, on_false, out_shape, op)?;
+    let output = alloc_output::<T>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, pred, op)?;
+    ensure_resident_on_runtime(rt, on_true, op)?;
+    ensure_resident_on_runtime(rt, on_false, op)?;
+    let pred_arg = bool_tensor_array_arg(pred, op)?;
+    let true_arg = typed_tensor_array_arg(on_true, op)?;
+    let false_arg = typed_tensor_array_arg(on_false, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    // SAFETY: Shape validation proves all raw arrays share the dense element
+    // count. The predicate buffer is a validated one-byte Bool tensor buffer,
+    // matching the Array<bool> kernel view.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        pred_arg,
+        true_arg,
+        false_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn launch_ternary<TA, TB, TC, TOut>(
+    rt: &CudaRuntime,
+    a: &TypedTensor<TA>,
+    b: &TypedTensor<TB>,
+    c: &TypedTensor<TC>,
+    out_shape: &[usize],
+    op: &'static str,
+    launch: impl FnOnce(
+        &ComputeClient<CubeclCudaRuntime>,
+        CubeCount,
+        CubeDim,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+        ArrayArg<CubeclCudaRuntime>,
+    ),
+) -> crate::Result<TypedTensor<TOut>>
+where
+    TA: CubeElement + TensorScalar + Clone,
+    TB: CubeElement + TensorScalar + Clone,
+    TC: CubeElement + TensorScalar + Clone,
+    TOut: CubeElement + TensorScalar + Clone,
+{
+    validate_raw_ternary_shapes(a, b, c, out_shape, op)?;
+    let output = alloc_output::<TOut>(rt, out_shape)?;
+    let len = output.n_elements();
+    ensure_resident_on_runtime(rt, a, op)?;
+    ensure_resident_on_runtime(rt, b, op)?;
+    ensure_resident_on_runtime(rt, c, op)?;
+    let a_arg = typed_tensor_array_arg(a, op)?;
+    let b_arg = typed_tensor_array_arg(b, op)?;
+    let c_arg = typed_tensor_array_arg(c, op)?;
+    if len == 0 {
+        return Ok(output);
+    }
+    let client = rt.client();
+    let output_arg = typed_tensor_array_arg(&output, op)?;
+    // SAFETY: This helper is the host-side unchecked launch boundary for raw
+    // shape-preserving ternary kernels. The shared shape validation above
+    // proves all inputs and output have the same dense element count; raw array
+    // construction validates each backing buffer length. Kernels launched by
+    // this helper guard with `ABSOLUTE_POS < out.len()`.
+    launch(
+        client,
+        cube_count_for_len(len)?,
+        cube_dim_1d(),
+        output_arg,
+        a_arg,
+        b_arg,
+        c_arg,
+    );
+    Ok(output)
+}
+
+pub(crate) fn dtype_mismatch(op: &'static str, lhs: &Tensor, rhs: &Tensor) -> crate::Error {
+    crate::Error::dtype_mismatch(op, lhs.dtype(), rhs.dtype())
+}
+
+pub(crate) fn ternary_dtype_mismatch(
+    op: &'static str,
+    first: &Tensor,
+    second: &Tensor,
+    third: &Tensor,
+) -> crate::Error {
+    let (expected, actual) = if first.dtype() != second.dtype() {
+        (first.dtype(), second.dtype())
+    } else {
+        (first.dtype(), third.dtype())
+    };
+    crate::Error::dtype_mismatch(op, expected, actual)
+}
+
+pub(crate) fn ensure_same_shape(
+    op: &'static str,
+    lhs: &[usize],
+    rhs: &[usize],
+) -> crate::Result<()> {
+    if lhs != rhs {
+        return Err(crate::Error::shape_mismatch(op, lhs.to_vec(), rhs.to_vec()));
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_rank(op: &'static str, expected: usize, actual: usize) -> crate::Result<()> {
+    if expected != actual {
+        return Err(crate::Error::rank_mismatch(op, expected, actual));
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_axis(op: &'static str, axis: usize, rank: usize) -> crate::Result<()> {
+    if axis >= rank {
+        return Err(crate::Error::axis_out_of_bounds(op, axis, rank));
+    }
+    Ok(())
+}
+
+pub(crate) fn require_owned_capability<B>(
+    backend: &B,
+    kind: tenferro_core_ops::PrimitiveOpKind,
+    dtype: DType,
+) -> crate::Result<()>
+where
+    B: TensorBackendCapabilityTrait + ?Sized,
+{
+    match backend.require_capability(
+        CapabilityQuery::new(kind, dtype),
+        CapabilityAxis::OwnedResult,
+    ) {
+        Ok(_) => Ok(()),
+        Err(crate::Error::UnsupportedDType { .. }) => Err(crate::cubecl::unsupported_dtype(
+            tenferro_core_ops::descriptor(kind).name,
+            dtype,
+        )),
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) fn ensure_axes_unique(
+    op: &'static str,
+    role: &'static str,
+    axes: &[usize],
+    rank: usize,
+) -> crate::Result<()> {
+    let mut seen = vec![false; rank];
+    for &axis in axes {
+        ensure_axis(op, axis, rank)?;
+        if seen[axis] {
+            return Err(crate::Error::duplicate_axis(op, axis, role));
+        }
+        seen[axis] = true;
+    }
+    Ok(())
+}
+
+pub(crate) fn compare_mode(dir: &CompareDir) -> usize {
+    match dir {
+        CompareDir::Eq => 0,
+        CompareDir::Lt => 1,
+        CompareDir::Le => 2,
+        CompareDir::Gt => 3,
+        CompareDir::Ge => 4,
+    }
+}
+
+macro_rules! launch_binary_elementwise_kernel {
+    ($backend:expr, $lhs:ident, $rhs:ident, $op:expr, $kernel:ident, $scalar:ty, $variant:ident) => {
+        launch_binary(
+            $backend.runtime(),
+            $lhs,
+            $rhs,
+            $lhs.shape(),
+            $op,
+            |client, count, dim, out, lhs_arg, rhs_arg| unsafe {
+                crate::kernels::elementwise::$kernel::launch_unchecked::<$scalar, CubeclCudaRuntime>(
+                    client, count, dim, out, lhs_arg, rhs_arg,
+                );
+            },
+        )
+        .map(Tensor::from_typed::<preset_scalar!($variant)>)
+    };
+}
+
+macro_rules! launch_unary_elementwise_kernel {
+    ($backend:expr, $input:ident, $op:expr, $kernel:ident, $scalar:ty, $variant:ident) => {
+        launch_unary(
+            $backend.runtime(),
+            $input,
+            $input.shape(),
+            $op,
+            |client, count, dim, out, input_arg| unsafe {
+                crate::kernels::elementwise::$kernel::launch_unchecked::<$scalar, CubeclCudaRuntime>(
+                    client, count, dim, out, input_arg,
+                );
+            },
+        )
+        .map(Tensor::from_typed::<preset_scalar!($variant)>)
+    };
+}
+
+macro_rules! dispatch_binary_float_complex_int {
+    ($backend:expr, $lhs:expr, $rhs:expr, $kind:expr, $float_kernel:ident, $int_kernel:ident, $complex_kernel:ident) => {{
+        let descriptor = $crate::cubecl::op_descriptor::require_gpu_descriptor(
+            $kind,
+            $crate::cubecl::op_descriptor::GpuLaunchKind::BinaryFloatComplexInt,
+        )?;
+        let op = descriptor.name;
+        match ($lhs.dtype(), $rhs.dtype()) {
+            (DType::F32, DType::F32) => {
+                let lhs = $lhs.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $float_kernel,
+                    f32,
+                    F32
+                )
+            }
+            (DType::F64, DType::F64) => {
+                let lhs = $lhs.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $float_kernel,
+                    f64,
+                    F64
+                )
+            }
+            (DType::I32, DType::I32) => {
+                let lhs = $lhs.as_typed::<i32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<i32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $int_kernel,
+                    i32,
+                    I32
+                )
+            }
+            (DType::I64, DType::I64) => {
+                let lhs = $lhs.as_typed::<i64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<i64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $int_kernel,
+                    i64,
+                    I64
+                )
+            }
+            (DType::C32, DType::C32) => {
+                let lhs = $lhs.as_typed::<Complex32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<Complex32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $complex_kernel,
+                    num_complex::Complex32,
+                    C32
+                )
+            }
+            (DType::C64, DType::C64) => {
+                let lhs = $lhs.as_typed::<Complex64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<Complex64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $complex_kernel,
+                    num_complex::Complex64,
+                    C64
+                )
+            }
+            _ => Err(dtype_mismatch(op, $lhs, $rhs)),
+        }
+    }};
+}
+
+macro_rules! dispatch_binary_float_int {
+    ($backend:expr, $lhs:expr, $rhs:expr, $kind:expr, $float_kernel:ident, $int_kernel:ident) => {{
+        let descriptor = $crate::cubecl::op_descriptor::require_gpu_descriptor(
+            $kind,
+            $crate::cubecl::op_descriptor::GpuLaunchKind::BinaryFloatInt,
+        )?;
+        let op = descriptor.name;
+        match ($lhs.dtype(), $rhs.dtype()) {
+            (DType::F32, DType::F32) => {
+                let lhs = $lhs.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $float_kernel,
+                    f32,
+                    F32
+                )
+            }
+            (DType::F64, DType::F64) => {
+                let lhs = $lhs.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $float_kernel,
+                    f64,
+                    F64
+                )
+            }
+            (DType::I32, DType::I32) => {
+                let lhs = $lhs.as_typed::<i32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<i32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $int_kernel,
+                    i32,
+                    I32
+                )
+            }
+            (DType::I64, DType::I64) => {
+                let lhs = $lhs.as_typed::<i64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                let rhs = $rhs.as_typed::<i64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_binary_elementwise_kernel!(
+                    $backend,
+                    lhs,
+                    rhs,
+                    op,
+                    $int_kernel,
+                    i64,
+                    I64
+                )
+            }
+            (DType::C32, DType::C32) | (DType::C64, DType::C64) => {
+                Err($crate::cubecl::unsupported_dtype(op, $lhs.dtype()))
+            }
+            _ => Err(dtype_mismatch(op, $lhs, $rhs)),
+        }
+    }};
+}
+
+macro_rules! dispatch_unary_float_complex_int {
+    ($backend:expr, $input:expr, $kind:expr, $float_kernel:ident, $int_kernel:ident, $complex_kernel:ident) => {{
+        let descriptor = $crate::cubecl::op_descriptor::require_gpu_descriptor(
+            $kind,
+            $crate::cubecl::op_descriptor::GpuLaunchKind::UnaryFloatComplexInt,
+        )?;
+        let op = descriptor.name;
+        let input = $input;
+        $crate::cubecl::dispatch::require_owned_capability($backend, $kind, input.dtype())?;
+        match input.dtype() {
+            DType::F32 => {
+                let tensor = input.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $float_kernel,
+                    f32,
+                    F32
+                )
+            }
+            DType::F64 => {
+                let tensor = input.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $float_kernel,
+                    f64,
+                    F64
+                )
+            }
+            DType::I32 => {
+                let tensor = input.as_typed::<i32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $int_kernel,
+                    i32,
+                    I32
+                )
+            }
+            DType::I64 => {
+                let tensor = input.as_typed::<i64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $int_kernel,
+                    i64,
+                    I64
+                )
+            }
+            DType::C32 => {
+                let tensor = input.as_typed::<num_complex::Complex32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $complex_kernel,
+                    num_complex::Complex32,
+                    C32
+                )
+            }
+            DType::C64 => {
+                let tensor = input.as_typed::<num_complex::Complex64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $complex_kernel,
+                    num_complex::Complex64,
+                    C64
+                )
+            }
+            DType::Bool => Err($crate::cubecl::unsupported_dtype(op, input.dtype())),
+            // A caller-owned payload has no GPU implementation for this operation.
+            DType::External(_) => Err(crate::Error::unsupported(
+                "compare_mode",
+                "an externally defined payload is not supported by this GPU operation",
+            )),
+        }
+    }};
+}
+
+macro_rules! dispatch_unary_float_only {
+    ($backend:expr, $input:expr, $kind:expr, $float_kernel:ident) => {{
+        let descriptor = $crate::cubecl::op_descriptor::require_gpu_descriptor(
+            $kind,
+            $crate::cubecl::op_descriptor::GpuLaunchKind::UnaryFloatOnly,
+        )?;
+        let op = descriptor.name;
+        let input = $input;
+        $crate::cubecl::dispatch::require_owned_capability($backend, $kind, input.dtype())?;
+        match input.dtype() {
+            DType::F32 => {
+                let tensor = input.as_typed::<f32>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $float_kernel,
+                    f32,
+                    F32
+                )
+            }
+            DType::F64 => {
+                let tensor = input.as_typed::<f64>().ok_or_else(|| {
+                    crate::Error::unsupported(op, "the GPU dispatch requires a preset scalar")
+                })?;
+                $crate::cubecl::dispatch::launch_unary_elementwise_kernel!(
+                    $backend,
+                    tensor,
+                    op,
+                    $float_kernel,
+                    f64,
+                    F64
+                )
+            }
+            _ => Err($crate::cubecl::unsupported_dtype(op, input.dtype())),
+        }
+    }};
+}
+
+pub(crate) use dispatch_binary_float_complex_int;
+pub(crate) use dispatch_binary_float_int;
+pub(crate) use dispatch_unary_float_complex_int;
+pub(crate) use dispatch_unary_float_only;
+pub(crate) use launch_binary_elementwise_kernel;
+pub(crate) use launch_unary_elementwise_kernel;
+
+#[cfg(test)]
+mod tests;

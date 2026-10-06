@@ -32,3 +32,13 @@ The packages declare MIT OR Apache-2.0 but their published archives omit the lic
 The repository workspace excludes these packages as members and patches them as dependencies. The standalone benchmark workspace repeats all four patches. The ad crate is optional with default features but remains covered when autodiff is enabled. The packaged upstream test sources include references to files in the upstream monorepo; these packages are dependency snapshots, not a standalone copy of that monorepo's test environment.
 
 Remove the path patches and these snapshots when a supported tenferro release requires an advisory-safe lru version. Update both consumer locks, rerun locked checks and audits, and confirm that no vulnerable lru remains. Do not dismiss the GitHub alert to account for the temporary patch.
+
+## tenferro-gpu (issue #420)
+
+`third_party/tenferro-gpu` is a fifth snapshot of the registry package `tenferro-gpu` 0.7.1
+(archive SHA-256 `8d18c094294ab7f19ec1886266f67ccef685b3edfdd8f6fe6ccd1f7a87bd8efd`, source
+revision `8a1839febeb3c868a502e26397ca10761bbc568d`) with the same single change: the `lru`
+requirement `0.12` is raised to `0.18.5` (`lru` is optional and enabled by the `cuda` feature).
+It is excluded from the root workspace and used only through the standalone, opt-in
+`gpu/mvmc-gpu-cuda` workspace, so the root `Cargo.toml` `[patch]` section and `Cargo.lock`
+are unchanged. Remove it together with the other four snapshots.

@@ -1,0 +1,120 @@
+[package]
+name = "tenferro-gpu"
+autotests = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "CubeCL-backed CUDA and WebGPU provider backends for tenferro tensors."
+rust-version.workspace = true
+keywords = ["tensor", "gpu", "cuda", "webgpu"]
+categories = ["science", "hardware-support", "mathematics"]
+documentation = "https://docs.rs/tenferro-gpu"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+features = ["cpu-faer", "cuda", "webgpu"]
+
+[lib]
+name = "tenferro_gpu"
+
+[features]
+default = ["cpu-faer"]
+cpu-faer = ["tenferro-cpu/cpu-faer"]
+cpu-blas = ["tenferro-cpu/cpu-blas"]
+blas-openblas = ["tenferro-cpu/blas-openblas"]
+blas-accelerate = ["tenferro-cpu/blas-accelerate"]
+blas-mkl = ["tenferro-cpu/blas-mkl"]
+cpu-reference = []
+cuda = [
+    "dep:cubecl",
+    "dep:lru",
+    "cubecl/std",
+    "cubecl/stdlib",
+    "cubecl/cuda",
+    "dep:cubecl-cuda",
+    "dep:cubecl-runtime",
+    "dep:cudarc",
+]
+webgpu = [
+    "dep:cubecl",
+    "cubecl/std",
+    "cubecl/stdlib",
+    "cubecl/wgpu",
+    "dep:cubecl-common",
+    "dep:cubecl-runtime",
+    "dep:cubecl-wgpu",
+    "dep:cubek-matmul",
+    "dep:cubek-std",
+    "dep:cubek-fft",
+]
+rocm = []
+
+[dependencies]
+tenferro-core-ops = { path = "../tenferro-core-ops", version = "0.7.1" }
+tenferro-tensor = { path = "../tenferro-tensor", version = "0.7.1", default-features = false }
+tenferro-cpu = { path = "../tenferro-cpu", version = "0.7.1", default-features = false }
+tenferro-runtime = { path = "../tenferro-runtime", version = "0.7.1", default-features = false }
+cubecl = { workspace = true, optional = true }
+cubecl-cuda = { workspace = true, optional = true }
+cubecl-common = { workspace = true, optional = true }
+cubecl-runtime = { workspace = true, optional = true }
+cubecl-wgpu = { workspace = true, optional = true }
+cubek-matmul = { workspace = true, optional = true }
+cubek-std = { workspace = true, optional = true }
+cubek-fft = { workspace = true, optional = true }
+cudarc = { workspace = true, optional = true, features = ["cublas"] }
+libloading.workspace = true
+lru = { workspace = true, optional = true }
+num-complex.workspace = true
+num-traits.workspace = true
+smallvec.workspace = true
+strided-perm.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+trybuild.workspace = true
+
+[[example]]
+name = "cuda_quickstart"
+required-features = ["cuda"]
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "apple_context"
+path = "tests/integration/apple_context.rs"
+required-features = ["webgpu"]
+
+[[test]]
+name = "blas1_cuda"
+path = "tests/blas1_cuda.rs"
+
+[[test]]
+name = "storage_provider_cuda_progress"
+path = "tests/storage_provider_cuda_progress.rs"
+
+[[test]]
+name = "storage_provider_cuda"
+path = "tests/storage_provider_cuda.rs"
+
+[[test]]
+name = "storage_provider_webgpu"
+path = "tests/storage_provider_webgpu.rs"
+
+[[test]]
+name = "storage_provider_webgpu_progress"
+path = "tests/storage_provider_webgpu_progress.rs"
+
+[[bench]]
+name = "cutensor_plan_cache"
+path = "benches/cutensor_plan_cache.rs"
+harness = false
+required-features = ["cuda"]

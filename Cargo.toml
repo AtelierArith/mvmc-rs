@@ -19,6 +19,8 @@ exclude = [
     "third_party/tenferro-cpu",
     "third_party/tenferro-einsum",
     "third_party/tenferro-runtime",
+    "third_party/tenferro-gpu",
+    "gpu/mvmc-gpu-cuda",
 ]
 
 # Temporary security patches for #192; see docs/security/dependabot-alert-5.md.

@@ -11,6 +11,9 @@ publish = false
 [features]
 default = []
 mpi = ["dep:mpi"]
+# Marks that a CUDA provider (standalone gpu/mvmc-gpu-cuda, which owns the tenferro-gpu
+# dependency) may be registered. Adds no dependency, so Cargo.lock is unchanged (#420).
+gpu-cuda = []
 
 [dependencies]
 sfmt19937 = { workspace = true }
