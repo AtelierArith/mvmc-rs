@@ -308,3 +308,18 @@ that is unsupported. Use the same thread count on both sides of a comparison.
 Reference environment: Linux x86_64, as above. GPU results are labelled with the metadata block
 and are an optional gate; ordinary Rust tests (including the CPU variants of this harness) run
 without a GPU, `c_toolbox/` or any C/Julia oracle program.
+
+## Multi-walker optimization reductions (#435)
+
+`run_para_opt_multichain` reproduces the ungrouped (`NSplitSize = 1`) multi-rank C runs of
+`tests/fixtures/mpi_matrix_179` with in-process walkers and a `Reducer` that replaces the MPI
+communicator. Per walker the counters, saved configurations and the complete SFMT state are
+compared exactly (the RNG contract is independent of the reduction); the reduced `<HO>`,
+`<OO>`, `<O>` and the step energy use `|a - b| <= 1e-13 + 1e-12 |b|`. The first numerical
+divergence from C is the order of the cross-walker sum: the Rust reducer is a rank-order left
+fold, `MPI_Allreduce` leaves the order to the MPI library; for two walkers it is a single
+two-term sum and agrees with C to the last bit or within roundoff, for four walkers to the
+bound above (observed worst case well inside it in every cell). `W = 1` is byte-identical to the
+serial optimization. Beyond the first, well-conditioned step the SR solve amplifies reduction
+roundoff (#358): trajectories are checked for bitwise repeatability (thread scheduling does not
+change the rank-ordered sums), not forced onto C.

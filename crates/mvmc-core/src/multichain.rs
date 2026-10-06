@@ -37,6 +37,31 @@
 //! still recomputes its tables on its own thread (a lock-step batched recomputation across
 //! walkers needs the device-resident planes this layout feeds; see the design document).
 //!
+//! # Multi-walker optimization (ParaOpt, issue #435)
+//!
+//! [`run_para_opt_multichain`] runs the whole optimization (`NSROptItrStep` SR steps) on `W`
+//! walkers. C runs `W` independent chains as `W` MPI ranks of an ungrouped run
+//! (`NSplitSize = 1`): every rank samples its own chain (seed `RndSeed + rank`), `HO`, `OO`,
+//! the energy and the weights are summed over all ranks with `MPI_Allreduce(MPI_SUM)`, every
+//! rank then solves the same SR system and applies the same parameter update (the update is
+//! deterministic given the reduced operands; `SROptO` stays rank-local as in C). The
+//! optimizer is already written against the [`Reducer`] trait, so the multi-walker run is the
+//! unchanged optimizer with an in-process reducer, [`ThreadReducer`], that replaces the MPI
+//! communicator by shared memory between `W` walker threads: no SR code is duplicated and the
+//! collective sequence, seeds and draw order are exactly those of the MPI run.
+//!
+//! Reduction order: [`ThreadReducer`] sums the contributions in rank order, as a left fold
+//! `((v0 + v1) + v2) + ...`, identical on every walker. `MPI_Allreduce` leaves the order to the
+//! MPI library, so the Rust sums can differ from C by last-bit roundoff for `W > 2`
+//! (`W = 1` and `W = 2` are exact: one sum of two terms). Tolerances against the C fixtures
+//! follow `tests/fixtures/mpi_matrix_179/README.md`.
+//!
+//! Thread budget: the collectives need all walkers running at once, so the runner uses one OS
+//! thread per walker (not a pool smaller than `W`); every walker is single-threaded inside.
+//! Intra-group splitting (`NSplitSize > 1`: QP and sample split of one chain over several
+//! ranks) is not part of the walker model; `W = ranks / NSplitSize` groups of such a C run
+//! compute the same chains and operands to reduction-order roundoff.
+//!
 //! # Decision margins
 //!
 //! The Metropolis `(weight, draw)` pairs of every walker are recorded (observationally; no RNG
@@ -315,4 +340,285 @@ mod tests {
         assert!(s.min_margin <= 1e-13);
         assert_eq!(s.near_flip, 1);
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// In-process collectives and multi-walker optimization (issue #435)
+// ---------------------------------------------------------------------------------------------
+
+use std::sync::{Arc, Condvar, Mutex};
+
+use num_complex::Complex64;
+
+use crate::reducer::Reducer;
+use crate::run::{run_para_opt_from_namelist_observed, RunConfig, RunSummary};
+use crate::state::VmcOptimizationState;
+
+#[derive(Debug)]
+struct CommState {
+    /// Number of participants that arrived at the current barrier generation.
+    arrived: usize,
+    generation: u64,
+    /// Per-rank contribution slots of the current collective.
+    f64s: Vec<Vec<f64>>,
+    c64s: Vec<Vec<Complex64>>,
+    i64s: Vec<Vec<i64>>,
+}
+
+/// Shared state of `W` walker threads standing in for one MPI communicator.
+#[derive(Debug)]
+pub struct ThreadComm {
+    size: usize,
+    state: Mutex<CommState>,
+    cv: Condvar,
+}
+
+impl ThreadComm {
+    /// A communicator of `size` walkers.
+    pub fn new(size: usize) -> Arc<Self> {
+        Arc::new(Self {
+            size,
+            state: Mutex::new(CommState {
+                arrived: 0,
+                generation: 0,
+                f64s: vec![Vec::new(); size],
+                c64s: vec![Vec::new(); size],
+                i64s: vec![Vec::new(); size],
+            }),
+            cv: Condvar::new(),
+        })
+    }
+
+    /// Block until all `size` walkers called `barrier` (reusable).
+    fn barrier(&self) {
+        let mut st = self.state.lock().expect("thread comm lock");
+        let generation = st.generation;
+        st.arrived += 1;
+        if st.arrived == self.size {
+            st.arrived = 0;
+            st.generation += 1;
+            self.cv.notify_all();
+        } else {
+            while st.generation == generation {
+                st = self.cv.wait(st).expect("thread comm wait");
+            }
+        }
+    }
+
+    /// Deposit this rank's data, wait for all, read everything, wait again (so the slots can be
+    /// reused by the next collective).
+    fn gather<T: Clone>(
+        &self,
+        rank: usize,
+        data: &[T],
+        slots: impl Fn(&mut CommState) -> &mut Vec<Vec<T>>,
+    ) -> Vec<Vec<T>> {
+        {
+            let mut st = self.state.lock().expect("thread comm lock");
+            slots(&mut st)[rank] = data.to_vec();
+        }
+        self.barrier();
+        let all = {
+            let mut st = self.state.lock().expect("thread comm lock");
+            slots(&mut st).clone()
+        };
+        self.barrier();
+        all
+    }
+}
+
+/// [`Reducer`] over `W` walker threads: the in-process equivalent of an ungrouped
+/// `MpiContext` (`NSplitSize = 1`, every rank its own chain).
+#[derive(Debug, Clone)]
+pub struct ThreadReducer {
+    comm: Arc<ThreadComm>,
+    rank: usize,
+    group_base: usize,
+}
+
+impl ThreadReducer {
+    /// Handle of walker `rank` (0-based) in `comm`; walker `rank` is seeded with the offset
+    /// `group_base + rank`.
+    pub fn new(comm: Arc<ThreadComm>, rank: usize, group_base: usize) -> Self {
+        assert!(rank < comm.size);
+        Self {
+            comm,
+            rank,
+            group_base,
+        }
+    }
+}
+
+impl Reducer for ThreadReducer {
+    fn allreduce_sum_f64(&self, buf: &mut [f64]) {
+        if self.comm.size == 1 {
+            return;
+        }
+        let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
+        for (i, slot) in buf.iter_mut().enumerate() {
+            let mut acc = all[0][i];
+            for v in &all[1..] {
+                acc += v[i];
+            }
+            *slot = acc;
+        }
+    }
+
+    fn allreduce_sum_c64(&self, buf: &mut [Complex64]) {
+        if self.comm.size == 1 {
+            return;
+        }
+        let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
+        for (i, slot) in buf.iter_mut().enumerate() {
+            // real and imaginary parts are reduced separately, as the MPI path does
+            let (mut re, mut im) = (all[0][i].re, all[0][i].im);
+            for v in &all[1..] {
+                re += v[i].re;
+                im += v[i].im;
+            }
+            *slot = Complex64::new(re, im);
+        }
+    }
+
+    fn allreduce_sum_i64(&self, buf: &mut [i64]) {
+        if self.comm.size == 1 {
+            return;
+        }
+        let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
+        for (i, slot) in buf.iter_mut().enumerate() {
+            *slot = all.iter().map(|v| v[i]).sum();
+        }
+    }
+
+    fn broadcast_f64(&self, root: usize, buf: &mut [f64]) -> Result<(), String> {
+        if self.comm.size > 1 {
+            let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
+            buf.copy_from_slice(&all[root]);
+        }
+        Ok(())
+    }
+
+    fn broadcast_c64(&self, root: usize, buf: &mut [Complex64]) {
+        if self.comm.size > 1 {
+            let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
+            buf.copy_from_slice(&all[root]);
+        }
+    }
+
+    fn broadcast_i64(&self, root: usize, buf: &mut [i64]) -> Result<(), String> {
+        if self.comm.size > 1 {
+            let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
+            buf.copy_from_slice(&all[root]);
+        }
+        Ok(())
+    }
+
+    fn barrier(&self) {
+        if self.comm.size > 1 {
+            self.comm.barrier();
+        }
+    }
+
+    fn sampling_max_info(&self, info: i32) -> Result<i32, String> {
+        if self.comm.size == 1 {
+            return Ok(info);
+        }
+        let all = self
+            .comm
+            .gather(self.rank, &[i64::from(info)], |s| &mut s.i64s);
+        Ok(all.iter().map(|v| v[0]).max().expect("nonempty") as i32)
+    }
+
+    fn world_size(&self) -> usize {
+        self.comm.size
+    }
+
+    fn rank(&self) -> usize {
+        self.rank
+    }
+
+    fn seed_offset(&self) -> usize {
+        self.group_base + self.rank
+    }
+}
+
+/// Configuration of a multi-walker optimization.
+#[derive(Debug, Clone)]
+pub struct ParaOptMultiChainConfig {
+    /// `namelist.def` (shared by all walkers).
+    pub namelist: PathBuf,
+    /// Optimization run configuration (steps, mode, seed override, output directory, ...).
+    /// Only walker 0 (the output root) writes the output files.
+    pub run: RunConfig,
+    /// Group index of the first walker; walker `w` uses the seed offset `group_base + w`.
+    pub group_base: usize,
+    /// Number of walkers `W >= 1`.
+    pub walkers: usize,
+}
+
+/// Outcome of one walker of a multi-walker optimization.
+#[derive(Debug)]
+pub struct ParaOptWalker {
+    /// Walker index (MPI rank in the equivalent ungrouped C run).
+    pub walker: usize,
+    /// Run summary (the reduced optimization output; identical on every walker).
+    pub summary: RunSummary,
+    /// Final sampler/SR state of this walker (`SROptO` is walker-local, as in C).
+    pub state: VmcOptimizationState,
+    /// Final RNG stream of this walker.
+    pub rng: Sfmt19937Rng,
+}
+
+/// Run the optimization on `cfg.walkers` walkers with C-compatible cross-walker reductions.
+///
+/// `W = 1` is the serial optimization. All walkers must run concurrently (they synchronize in
+/// every reduction), so one thread per walker is used. If any walker fails, every walker
+/// reports the failure through the collective failure agreement of the optimizer (no
+/// deadlock); the first failing walker's error is returned.
+///
+/// # Errors
+///
+/// Returns the optimizer's error text or a configuration error.
+pub fn run_para_opt_multichain(
+    cfg: &ParaOptMultiChainConfig,
+) -> Result<Vec<ParaOptWalker>, String> {
+    if cfg.walkers == 0 {
+        return Err("multi-walker optimization needs at least one walker".to_string());
+    }
+    crate::serial_blas::initialize();
+    let comm = ThreadComm::new(cfg.walkers);
+    let results: Vec<Result<ParaOptWalker, String>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..cfg.walkers)
+            .map(|w| {
+                let reducer = ThreadReducer::new(comm.clone(), w, cfg.group_base);
+                let namelist = cfg.namelist.clone();
+                let run = cfg.run.clone();
+                std::thread::Builder::new()
+                    .name(format!("mvmc-walker-{w}"))
+                    .spawn_scoped(scope, move || {
+                        let (summary, state, rng) =
+                            run_para_opt_from_namelist_observed(namelist, run, &reducer)?;
+                        Ok(ParaOptWalker {
+                            walker: w,
+                            summary,
+                            state,
+                            rng,
+                        })
+                    })
+                    .expect("spawn walker thread")
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err("walker thread panicked".to_string()))
+            })
+            .collect()
+    });
+    let mut out = Vec::with_capacity(cfg.walkers);
+    for r in results {
+        out.push(r?);
+    }
+    Ok(out)
 }

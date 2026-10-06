@@ -969,6 +969,54 @@ building the planes on the device (#425, #426): even at pinned speed 67 MB takes
 An upstream request draft with these numbers is in
 `docs/design/tenferro-transfer-request-draft.md` (not filed; filing needs approval).
 
+### 10.8 Multi-walker optimization with C-compatible reductions (issue #435)
+
+`mvmc_core::multichain::run_para_opt_multichain` extends the #425 runner from fixed-parameter
+PhysCal to the whole optimization (ParaOpt, `NSROptItrStep` SR steps). C runs `W` independent
+chains as the `W` ranks of an ungrouped run (`NSplitSize = 1`): walker `w` samples its own chain
+(seed `RndSeed + w`), `HO`, `OO`, the energy and the weights are summed over all ranks with
+`MPI_Allreduce(MPI_SUM)`, every rank solves the same SR system and applies the same update,
+and `SROptO` stays rank-local. The Rust optimizer is already written against the `Reducer`
+trait, so the multi-walker run is the unchanged optimizer with `ThreadReducer`, an in-process
+reducer in which `W` walker threads stand in for the MPI communicator (sums, broadcasts, MAX of
+the comm1 INFO, barrier, `rank`/`world_size`/`seed_offset`). No SR code is duplicated, and the
+collective sequence, seeds and draw order are those of the MPI run; the SR assembly can run
+through either backend of #421 (`MVMC_RS_SR_BACKEND`).
+
+* **Reduction order.** `ThreadReducer` sums in rank order as a left fold,
+  `((v0 + v1) + v2) + ...`, identical on every walker and independent of thread scheduling.
+  `MPI_Allreduce` leaves the order to the MPI library, so Rust and C can differ by last-bit
+  roundoff for `W > 2` (`W <= 2` is a single sum of two terms; observed agreement is within the
+  1e-13 + 1e-12 relative bound of `tests/fixtures/mpi_matrix_179/README.md` in every cell).
+* **Threads.** The collectives need all walkers running, so one OS thread per walker is used
+  (not a pool smaller than `W`); everything inside a walker is single-threaded. The SR tenferro
+  backend is a process-wide, mutex-guarded runtime (one runtime built once), so walkers
+  serialize on it during an SR solve; no collective is issued while it is held.
+* **Not covered.** Intra-group splitting (`NSplitSize > 1`: QP/sample split of one chain over
+  several ranks) is not a walker; the `W = ranks / NSplitSize` groups of such a C run compute the
+  same chains and operands (test below) to reduction-order roundoff. Output files are written by
+  walker 0 only, as the output root of the MPI run.
+
+Validation (`crates/mvmc-core/tests/multiwalker_sr_435.rs`, no MPI, C or Julia needed):
+
+* every ungrouped C cell of the #179 matrix with 2 and 4 ranks and width 1 (models real, cmp,
+  FSZ with `NQPFull` 1 and 2, OptTrans; solvers direct `NStore` 0 and 1 and SR-CG; including
+  the uneven-work cells) is reproduced per walker: `Counter[0..6]`, every saved `EleIdx` and the
+  full SFMT state exactly, the reduced `<HO>`, `<OO>`, `<O>` (walker 0) and the step energy
+  within the bound above (OptTrans real-mode derivative slots excluded as in the MPI gate,
+  #370);
+* two walkers equal the two groups of the 4-rank, `NSplitSize = 2` C cells (chains with seeds 0
+  and 1: group leaders' configurations and RNG states exactly, reduced operands within the bound);
+* `W = 1` is byte-identical to the serial optimization (output files except wall-clock timing
+  files, the whole final state and the RNG) over four steps and 40 samples for real, cmp, fsz2
+  and ot;
+* beyond step 1 (ill-conditioned SR, #358) a four-step 4-walker run is bitwise repeatable and
+  all walkers agree on the reduced energy; solver trajectories are not forced onto C;
+* the same checks hold with the SR assembly on the tenferro backend (sampling and the reduced
+  operands do not depend on the solver at step 1; `W = 1` equals the serial tenferro run);
+* `ThreadReducer` collectives follow the MPI contract (rank-ordered sum, broadcast from the
+  root, MAX, seed offsets).
+
 ## 11. Batched Pfaffian and inverse (issue #423)
 
 Status: implemented, validated and benchmarked on hardware (2x RTX 3060). Not wired into the
