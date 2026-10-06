@@ -23,9 +23,6 @@ jobs:
     name: ${{ matrix.variant.name }}
     runs-on: ${{ matrix.variant.os }}
     timeout-minutes: 90
-    # The strict-bounds probe forces the reference-kernel bounds on a provider that does not
-    # have them, to record how far it is from them; its failures are findings, not CI failures.
-    continue-on-error: ${{ matrix.variant.probe == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +66,10 @@ jobs:
       - name: Record the OpenBLAS kernel in use
         run: OPENBLAS_VERBOSE=2 cargo nextest list -p mvmc-core --test sr_cg --cargo-profile ci --locked 2>&1 | grep -E "^Core" | head -1 || true
       - name: Run tests
+        # The strict-bounds probe forces the reference-kernel bounds on a provider that does not
+        # have them, to record how far it is from them; its failures are findings, not CI failures
+        # (the step is marked failed, the job stays green).
+        continue-on-error: ${{ matrix.variant.probe == true }}
         run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0
       - name: Record the linked BLAS/LAPACK libraries
         if: always()
