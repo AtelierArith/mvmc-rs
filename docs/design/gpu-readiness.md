@@ -1437,10 +1437,10 @@ through cudarc on the service's own streams, bypassing tenferro's `upload`/`down
 test `pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses` validates the `*_raw`
 helpers of #432 against device addresses owned by a tenferro raw session (a `DeviceBytes`
 workspace uploaded and downloaded through `upload_raw`/`download_raw` while tenferro launches
-the kernel). Use of `AcceleratedStages` is confined to the one adapter `mvmc_gpu::stages::
-BatchedStages` of #430 (the sampler needs the finer `RealPfStage` operations, which the
-single-matrix `pfaffian_inverse` stage cannot express), so the unification of #437 touches one
-place.
+the kernel). The sampler keeps its own seam `RealPfStage` (it needs the finer per-step operations, which
+the batched `PfaffianStages::pfaffian_inverse_batch` of the unified `StageBackend` cannot
+express); the only other backend interface it touches is `PfaffianStages` through
+`mvmc_gpu::stages::BatchedStages` (section 14).
 
 **Wavefunction sharing.** The benchmark and the gate build all walkers on the wavefunction
 (parameters) of walker 0 with independent chains, the physically relevant multi-walker case.
