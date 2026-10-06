@@ -1447,10 +1447,21 @@ express); the only other backend interface it touches is `PfaffianStages` throug
 Walkers with different parameters (the `init_parameter` random initialization of the no-file path
 differs per seed) get one resident Slater table each; the service supports both.
 
-After a device run the host's `inv_m_real` table and, after exchange moves, `pf_m_real` are
-stale (the device holds the truth). The next `vmc_make_sample_real` call recomputes both from the
-configuration, and the measurement stage recomputes per sample, so nothing reads them; a caller
-that needs the host tables must download them (`download_walker` in the test API).
+**Stale host tables (issue #454).** The device holds the current inverses, so after a device run
+the host `inv_m_real` is out of date. This is tracked explicitly: `run_lockstep_real` calls
+`InvMColMajor::mark_stale` on each walker's `inv_m_real` when the run ends. Every read of a stale
+plane (`as_slice`, `get`, `qp_matrix_slice`, `pad_slot`, plane views) and every incremental update
+(`as_mut_slice`, `set`) panics with "stale inverse table read" naming the reason; the
+full-overwrite writer `qp_matrix_slice_mut`, which every `calc_m_all_*` recompute uses, validates
+the plane again, so the next `vmc_make_sample_real` call (which recomputes all planes first)
+restores a valid table. A table never marked stale carries no tracking cost beyond an `Option`
+check and the default CPU path is unchanged. The host Pfaffian buffer `pf_m_real` needs no flag:
+the stage keeps it current (hop and recompute copies as before, and since #454 the exchange accept
+copies the proposed Pfaffians too, matching the CPU in-place update). Audit of the readers: the
+sampler, measurement, Lanczos, SR derivative and output stages all run after a `calc_m_all_*`
+recompute on the CPU path; none is reached from `run_lockstep_real` today, and a future reader
+that skipped the recompute now fails loudly. A caller that needs the device tables downloads them
+(`download_walker` in the test API).
 
 ### 13.2 Validation
 

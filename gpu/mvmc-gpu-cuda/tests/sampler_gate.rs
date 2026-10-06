@@ -204,6 +204,19 @@ fn check_case(c: &Case, walkers: usize) {
             ref_walker.state.electron_config.ele_idx
         );
     }
+    // issue #454: the host inverse table is marked stale (a read panics) and the host Pfaffian
+    // buffer, which the stage keeps current, matches the CPU sampler's
+    for (w, walker) in ws.iter().enumerate() {
+        assert!(
+            walker.state.slater_matrix.inv_m_real.is_stale(),
+            "walker {w}: host inverse table must be marked stale"
+        );
+        let host_pf_err = rel_diff(
+            &walker.state.slater_matrix.pf_m_real,
+            &reference[w].1.state.slater_matrix.pf_m_real,
+        );
+        assert!(host_pf_err < 1e-8, "walker {w}: host pf differs by {host_pf_err}");
+    }
     // resident inverses vs the CPU tables (mVMC convention); includes accepted-move updates
     let n_qp = ws[0].state.slater_matrix.slater_elm_real.n_qp_full();
     #[allow(clippy::needless_range_loop)]

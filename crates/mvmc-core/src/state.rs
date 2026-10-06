@@ -167,11 +167,24 @@ impl<T: TensorScalar + PartialEq> PartialEq for SlaterElmFlat<T> {
 /// Inverse-matrix table, **column-major** in `(mi + si * Ne, mj + sj * Ne)`
 /// inside one QP plane, with the upstream `+1` pad slot per QP that
 /// `vmc_sampling.jl:3236` reserves for the Pfaffian buffer.
+///
+/// # Staleness (issue #454)
+///
+/// A device-resident sampler (`device_sampler`) holds the current inverses on the accelerator
+/// and leaves the host table out of date. [`Self::mark_stale`] records that per QP plane;
+/// every read of a stale plane (`as_slice`, `get`, `qp_matrix_slice`, `pad_slot`, the plane
+/// views) and every incremental update (`as_mut_slice`) **panics** with the reason instead of
+/// returning wrong numbers. A full overwrite of a plane (`qp_matrix_slice_mut`, which is how
+/// every `calc_m_all_*` recompute writes) makes that plane valid again, so recomputing the
+/// table is the (only) way back. A table that was never marked stale (the whole C-order path)
+/// has no tracking state and behaves exactly as before.
 #[derive(Debug)]
 pub struct InvMColMajor<T> {
     data: TypedTensor<T>,
     n_qp_full: usize,
     n_size: usize, // 2 * n_elec
+    /// `Some((reason, per-plane stale flags))` while any plane is stale.
+    stale: Option<(&'static str, Vec<bool>)>,
 }
 
 impl<T: TensorScalar + Default> InvMColMajor<T> {
@@ -188,15 +201,83 @@ impl<T: TensorScalar + Default> InvMColMajor<T> {
             .expect("InvMColMajor shape and data length must match"),
             n_qp_full,
             n_size,
+            stale: None,
         }
     }
 }
 
 impl<T: TensorScalar> InvMColMajor<T> {
-    fn host_storage(&self) -> &[T] {
+    /// Unchecked read of the backing storage (no staleness assertion).
+    fn raw(&self) -> &[T] {
         self.data
             .host_data()
             .expect("InvMColMajor requires host-backed tenferro storage")
+    }
+
+    /// Unchecked mutable access (writers that fully overwrite what they touch).
+    fn raw_mut(&mut self) -> &mut [T] {
+        self.data
+            .host_data_mut()
+            .expect("InvMColMajor::as_mut_slice requires host-backed storage")
+    }
+
+    fn host_storage(&self) -> &[T] {
+        self.assert_valid(None);
+        self.raw()
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn stale_panic(reason: &str, qp: Option<usize>) -> ! {
+        panic!(
+            "stale inverse table read{}: the host table is out of date ({reason}); \
+             recompute it (calc_m_all_*) before reading (issue #454)",
+            qp.map_or(String::new(), |q| format!(" (QP plane {q})"))
+        )
+    }
+
+    /// Panic if the whole table (`qp == None`) or plane `qp` is stale.
+    #[inline]
+    fn assert_valid(&self, qp: Option<usize>) {
+        if let Some((reason, planes)) = &self.stale {
+            let bad = match qp {
+                Some(q) => planes.get(q).copied().unwrap_or(false),
+                None => planes.iter().any(|&b| b),
+            };
+            if bad {
+                Self::stale_panic(reason, qp);
+            }
+        }
+    }
+
+    /// Mark every plane stale: the authoritative inverses live elsewhere (a device-resident
+    /// sampler). `reason` names the owner and is part of the panic message of a stale read.
+    pub fn mark_stale(&mut self, reason: &'static str) {
+        self.stale = Some((reason, vec![true; self.n_qp_full]));
+    }
+
+    /// True while any plane is stale.
+    pub fn is_stale(&self) -> bool {
+        self.stale
+            .as_ref()
+            .is_some_and(|(_, planes)| planes.iter().any(|&b| b))
+    }
+
+    /// Declare the whole table valid (use only after the table was recomputed by other means;
+    /// `calc_m_all_*` already validate plane by plane through their writes).
+    pub fn mark_valid(&mut self) {
+        self.stale = None;
+    }
+
+    fn validate_plane(&mut self, qp: usize) {
+        if let Some((_, planes)) = &mut self.stale {
+            if let Some(b) = planes.get_mut(qp) {
+                *b = false;
+            }
+            if planes.iter().all(|&b| !b) {
+                self.stale = None;
+            }
+        }
     }
 }
 
@@ -213,12 +294,12 @@ impl<T: TensorScalar> InvMColMajor<T> {
 
     /// Total entries, including the per-QP pad slot.
     pub fn len(&self) -> usize {
-        self.as_slice().len()
+        self.raw().len()
     }
 
     /// True iff the table holds zero entries.
     pub fn is_empty(&self) -> bool {
-        self.as_slice().is_empty()
+        self.raw().is_empty()
     }
 
     /// Column-major linear index, **0-based**. Within one QP plane the
@@ -235,14 +316,16 @@ impl<T: TensorScalar> InvMColMajor<T> {
     /// Read `inv_m[qp][row, col]`.
     #[inline]
     pub fn get(&self, qp: usize, row: usize, col: usize) -> T {
-        self.as_slice()[self.idx(qp, row, col)]
+        self.assert_valid(Some(qp));
+        self.raw()[self.idx(qp, row, col)]
     }
 
     /// Write `inv_m[qp][row, col] = value`.
     #[inline]
     pub fn set(&mut self, qp: usize, row: usize, col: usize, value: T) {
+        self.assert_valid(Some(qp));
         let k = self.idx(qp, row, col);
-        self.as_mut_slice()[k] = value;
+        self.raw_mut()[k] = value;
     }
 
     /// Borrow the whole backing storage (including the per-QP pad slots).
@@ -252,9 +335,9 @@ impl<T: TensorScalar> InvMColMajor<T> {
 
     /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        self.data
-            .host_data_mut()
-            .expect("InvMColMajor::as_mut_slice requires host-backed storage")
+        // an incremental update of a stale table would build on wrong numbers
+        self.assert_valid(None);
+        self.raw_mut()
     }
 
     /// Borrow one QP plane as a contiguous column-major slice of length
@@ -263,28 +346,33 @@ impl<T: TensorScalar> InvMColMajor<T> {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
         let end = start + self.n_size * self.n_size;
-        &self.as_slice()[start..end]
+        self.assert_valid(Some(qp));
+        &self.raw()[start..end]
     }
 
-    /// Mutably borrow one QP plane (matrix portion only).
+    /// Mutably borrow one QP plane (matrix portion only). This is the full-overwrite writer
+    /// of the recompute kernels: it does not read the old contents, and it makes the plane
+    /// valid again if it was stale.
     pub fn qp_matrix_slice_mut(&mut self, qp: usize) -> &mut [T] {
         let stride = self.n_size * self.n_size + 1;
         let start = qp * stride;
         let end = start + self.n_size * self.n_size;
-        &mut self.as_mut_slice()[start..end]
+        self.validate_plane(qp);
+        &mut self.raw_mut()[start..end]
     }
 
     /// Read the Pfaffian-pad slot for one QP.
     pub fn pad_slot(&self, qp: usize) -> T {
         let stride = self.n_size * self.n_size + 1;
-        self.as_slice()[qp * stride + self.n_size * self.n_size]
+        self.assert_valid(Some(qp));
+        self.raw()[qp * stride + self.n_size * self.n_size]
     }
 
     /// Write the Pfaffian-pad slot for one QP.
     pub fn set_pad_slot(&mut self, qp: usize, value: T) {
         let stride = self.n_size * self.n_size + 1;
         let k = qp * stride + self.n_size * self.n_size;
-        self.as_mut_slice()[k] = value;
+        self.raw_mut()[k] = value;
     }
 
     /// Borrow one QP plane as a column-major matrix view.
@@ -309,6 +397,7 @@ impl<T: TensorScalar> Clone for InvMColMajor<T> {
                 .expect("InvMColMajor requires host-backed tenferro storage"),
             n_qp_full: self.n_qp_full,
             n_size: self.n_size,
+            stale: self.stale.clone(),
         }
     }
 }
