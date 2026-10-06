@@ -31,6 +31,14 @@ A user manual that starts from the theory (variational Monte Carlo, the Pfaffian
 
 ## Quick start
 
+The reference implementations under `extern/` are git submodules. Initialize them after cloning (or clone with `--recursive`), otherwise the reference/parity tests and the Julia/C comparison tooling cannot find their sources:
+
+```bash
+git submodule update --init --recursive
+```
+
+Then build and test:
+
 ```bash
 cargo check --workspace
 cargo nextest run --workspace --cargo-profile test-fast
