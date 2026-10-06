@@ -827,6 +827,52 @@ pub fn vmc_phys_cal_with_reducer_and_callback_timed<const TIMED: bool, R: Reduce
     })
 }
 
+/// A walker ready for the sampling stage: data, initialized state and the RNG positioned as
+/// `vmc_phys_cal` leaves it immediately before the first `vmc_make_sample` (issue #434).
+#[derive(Debug)]
+pub struct SamplingWalker {
+    /// Expert data after PhysCal's QP-weight setup.
+    pub data: ExpertModeData,
+    /// State with the Slater table filled.
+    pub state: VmcOptimizationState,
+    /// Host SFMT stream.
+    pub rng: Sfmt19937Rng,
+}
+
+/// Run PhysCal's initialization (the C `InitParameter` draw block unless already consumed,
+/// QP weights, state construction, `UpdateSlaterElm`) and stop before the first sample. Real
+/// normal mode only; the following `vmc_make_sample_real` continues exactly as
+/// `vmc_phys_cal` would.
+///
+/// # Errors
+///
+/// Validation errors, or `Err` for complex/FSZ inputs.
+pub fn prepare_sampling_walker(mut prep: PhysCalPreparation) -> Result<SamplingWalker, String> {
+    let data = &mut prep.data;
+    crate::validation::validate_phys_cal(data)?;
+    if get_all_complex_flag(data)? || data.i_flg_orbital_general != 0 {
+        return Err("device sampler supports real normal mode only".to_string());
+    }
+    if !prep.initialization_consumed {
+        let mut init_data = data.clone();
+        init_parameter(&mut init_data, &mut prep.rng).map_err(str::to_string)?;
+    }
+    if data.modpara.nmp_trans == 0 {
+        data.modpara.nmp_trans = 1;
+    } else if data.modpara.nmp_trans < 0 {
+        data.modpara.nmp_trans = data.modpara.nmp_trans.abs();
+    }
+    data.modpara.vmc_calc_mode = 1;
+    init_qp_weight(data);
+    let mut state = state_from_data(data)?;
+    update_slater_elm(data, &mut state);
+    Ok(SamplingWalker {
+        data: prep.data,
+        state,
+        rng: prep.rng,
+    })
+}
+
 /// Run fixed-parameter PhysCal using caller-owned data, state and RNG.
 ///
 /// Like Julia's vmc_phys_cal!, this consumes the initialization draw block

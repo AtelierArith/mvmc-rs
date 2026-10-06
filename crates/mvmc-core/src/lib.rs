@@ -34,6 +34,7 @@ pub mod mpi;
 pub mod multichain;
 pub mod multidef;
 pub use pfapack::julia_complex;
+pub mod device_sampler;
 pub mod observables;
 pub mod output_files;
 pub mod parallel;
