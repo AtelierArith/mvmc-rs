@@ -1373,7 +1373,65 @@ fn two_hop_bilinear_fsz_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &
 /// Julia LoopVectorization's AVX2 reduction: four inner lanes and six outer
 /// accumulators. Keep this tree explicit; a scalar fold or blanket FMA changes
 /// Green ratios and eventually the SR-CG gradient even with identical samples.
+///
+/// `f64::mul_add` is a correctly rounded fused multiply-add, so the hardware
+/// FMA and the scalar fallback produce identical bits. On a baseline x86-64
+/// target (no `+fma`) `mul_add` lowers to a software implementation, which is
+/// several times slower; the runtime-dispatched `+fma,+avx2` build below
+/// recovers the hardware instruction (parity-safe) while staying portable to
+/// CPUs without those features. See issue #442.
 fn two_hop_bilinear_real(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if hardware_fma_available() {
+            // SAFETY: guarded by the runtime feature check above.
+            return unsafe { two_hop_bilinear_real_hw(inv, base, n, a, b) };
+        }
+    }
+    two_hop_bilinear_real_scalar(inv, base, n, a, b)
+}
+
+fn two_hop_bilinear_real_scalar(inv: &[f64], base: usize, n: usize, a: &[f64], b: &[f64]) -> f64 {
+    let mut outer = [0.0_f64; 6];
+    for i in 0..n {
+        let mut inner = [0.0_f64; 4];
+        for j in 0..n {
+            let lane = j % 4;
+            inner[lane] = inv[base + i * n + j].mul_add(a[j], inner[lane]);
+        }
+        let dot = (inner[0] + inner[2]) + (inner[1] + inner[3]);
+        let lane = i % 6;
+        outer[lane] = b[i].mul_add(dot, outer[lane]);
+    }
+    (outer[4] + (outer[0] + outer[2])) + (outer[5] + (outer[3] + outer[1]))
+}
+
+#[cfg(target_arch = "x86_64")]
+fn hardware_fma_available() -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    // 0 = unknown, 1 = available, 2 = unavailable.
+    static STATE: AtomicU8 = AtomicU8::new(0);
+    match STATE.load(Ordering::Relaxed) {
+        1 => true,
+        2 => false,
+        _ => {
+            let available = std::arch::is_x86_feature_detected!("fma")
+                && std::arch::is_x86_feature_detected!("avx2");
+            STATE.store(if available { 1 } else { 2 }, Ordering::Relaxed);
+            available
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma,avx2")]
+unsafe fn two_hop_bilinear_real_hw(
+    inv: &[f64],
+    base: usize,
+    n: usize,
+    a: &[f64],
+    b: &[f64],
+) -> f64 {
     let mut outer = [0.0_f64; 6];
     for i in 0..n {
         let mut inner = [0.0_f64; 4];
