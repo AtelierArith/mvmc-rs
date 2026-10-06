@@ -355,7 +355,7 @@ cases, so the contract is "default C build". The archived Julia values
 | `sr_backend.rs` real Gram `O O^T` | `calculateOO_Store_real`: `DGEMM('N','T')` for every size (`vmccal.c:685-689`) | `DSYRK` for `max(n, samples) >= 4`, `muladd` loop below (Julia `mul!` dispatch) | now `DGEMM('N','T')`, full matrix; the Julia small-case `mul_add` is gone |
 | `c_complex.rs` `divide` (`mul_add` on macOS aarch64) | native ARM compiler-rt contraction | C behaviour on that target | kept (it is the C-faithful emulation) |
 | `mvmc-stdface/ccomplex.rs` `x2y2m1` | glibc `__x2y2m1` exact error-free sum | none (C emulation) | kept |
-| `mvmc-expert-parsers/utils/julia_{trig,log,exp}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | kept: deterministic across platforms (swapping to the host libm would make results platform-dependent); math-function roundoff is permitted by the policy above; candidate follow-up |
+| `mvmc-expert-parsers/utils/julia_{trig,log,exp,hypot}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | replaced by the platform libm in #457 (below); Julia's implementations are an explicit opt-in |
 | `pfapack` `simd-backend` (`mul_add_c64s`) | none (SIMD) | opt-in feature, not default | kept, documented opt-in |
 | tenferro SR backend (`MVMC_RS_SR_BACKEND=tenferro`) | BLAS/LAPACK | different GEMM/Cholesky order | kept, documented opt-in |
 
@@ -377,3 +377,47 @@ the 16 failures reported in #444 were not reproducible here (see the PR descript
 Measurement aid:
 `MVMC_RS_REPORT_MAXDIFF=1 cargo nextest run -p mvmc-cli --test issue181_native_c_physcal
 --no-capture` prints the largest absolute and relative difference per output file.
+
+## Platform libm instead of Julia's math functions (#457)
+
+C mVMC calls the platform libm (`exp`, `log`, `sin`, `cos`, `cabs`/`hypot`, `atan2`, ...).
+Julia ships its own software implementations, which agree with glibc to within one ulp but not
+bit for bit. The parity path now uses the functions C uses: `mvmc_expert_parsers::utils::c_math`
+maps each to the Rust `f64` method of the same name, which is the platform libm (glibc on Linux,
+the system libm on macOS). Julia's implementations (`julia_exp`, `julia_log`, `julia_trig`,
+`julia_hypot`) are kept only as the explicit, process-wide opt-in `c_math::use_julia_libm()`
+(guarded and serialized), used by the archived Julia SR prefix tests next to
+`pfaffian::use_julia_complex_kernel()`.
+
+| helper | callers on the parity path | C call site |
+|---|---|---|
+| `exp` | Metropolis weight `sampling/metropolis.rs:48`, FSZ real accept `sampling/fsz_real.rs:452`, projection ratio and Green ratios `observables.rs` (`c_exp`), `observables/fsz_green.rs:353,358`, RBM `cexp` real part `sampling/rbm_math.rs` | `w = exp(2.0*(x + logIpNew - logIpOld))` `vmcmake_real.c:176,251,496,560`, `vmcmake.c:194,278,721,783`, `vmcmake_fsz*.c`; `ProjRatio` `projection.c:56`; `cexp` in `rbm.c` |
+| `log` | `LogIP` `sampling/driver.rs:72`, `observables.rs:175`, RBM `clog` real part | `log(fabs(ip))`; `clog` in `rbm.c` |
+| `log1p`, `tan`, `atan2`, `sinh` | RBM complex `log`/`log1p`/`tanh` (`sampling/rbm_math.rs`) | `clog`, `ctanh` in `rbm.c:345-369` |
+| `sin`, `cos` | `qp_weight.rs` (Gauss-Legendre nodes and `SPGLCos/SPGLSin`), `parameter_init.rs:105-106` | `gauleg.c:42`, `qp.c:67-73`; RBM initialization `cexp(2 I pi u)` `parameter.c:53` |
+| `hypot` | `sync.rs:91` and `parameter_init.rs:252` amplitude normalization | `cabs` `parameter.c:155-167` |
+
+Not changed here (algorithm, not a libm emulation): the complex RBM functions `rbm_math::{log,
+log1p, tanh}` and `log_cosh_stable` keep Julia's complex algorithms (C evaluates `clog(ccosh(z))`
+and glibc's `clog`/`ctanh` formulas); only their real building blocks now use the libm. A port of
+glibc's complex functions is a follow-up.
+
+**Effect on the fixtures.** The 69 PhysCal tests of `native_c_physcal_181` pass with unchanged
+bounds. Only 8 of the 566 output files change at all (scenarios `spin_chain_lanczos1/2`,
+`hubbard_chain_dh_rbm_opttrans`, `fsz_dh24_rbm_opttrans_zero_physcal`), at the last bits: the
+largest absolute deviation from C over the changed files is 3.525e-12 before and 3.526e-12 after
+(the Lanczos-amplified entry), the others move by 1e-17 to 2e-14. Against Julia (Hubbard
+L16/L24/L32 PhysCal, `zvo_cisajs`) the observables were bit-equal after #449 and now differ at
+1e-17 to 1e-16 (max relative 3e-15 to 2e-14), `zvo_cisajscktalt` unchanged (2.1e-15, 3.1e-14,
+2.5e-13), energies |dE| = 0, i.e. the one place where the libm emulation still gave exact Julia
+equality. The four `physcal_ref` fixtures stay `ok` against Julia. The archived Julia SR prefix
+tests need the opt-in: six of them fail without it (RBM and OptTrans trajectories embed Julia's
+`exp` rounding).
+
+**Platform caveat.** glibc and the macOS libm are different implementations; a quantity that
+depends on the last bit of a transcendental function (an acceptance decision at a razor-thin
+margin, an SR step amplified by ill-conditioning) can differ between Linux and macOS, and the
+macOS-versus-Linux difference is of the same size as the Julia-versus-glibc difference this
+section removes. Linux (glibc, the platform of the C reference outputs) is the numerical
+reference; tests compare computed values within the explicit bounds above on both platforms and
+keep RNG state, draw counts and the decisions on identical control paths exact.

@@ -102,8 +102,8 @@ pub fn init_parameter(
             if all_complex {
                 let radius = 1e-2 * rng.genrand_real2();
                 let phase = (2.0 * std::f64::consts::PI) * rng.genrand_real2();
-                let sin = super::julia_trig::sin(phase);
-                let cos = super::julia_trig::cos(phase);
+                let sin = super::c_math::sin(phase);
+                let cos = super::c_math::cos(phase);
                 *slot = Complex64::new(radius * cos, radius * sin);
             } else {
                 *slot = Complex64::new(0.01 * (rng.genrand_real2() - 0.5) / divisor, 0.0);
@@ -249,7 +249,7 @@ pub fn sync_modified_parameter(data: &mut ExpertModeData, shift_correlations: bo
 
     let mut xmax = 0.0;
     for value in &data.slater_params {
-        let abs_val = super::julia_hypot::hypot(value.re, value.im);
+        let abs_val = super::c_math::hypot(value.re, value.im);
         if abs_val > xmax {
             xmax = abs_val;
         }

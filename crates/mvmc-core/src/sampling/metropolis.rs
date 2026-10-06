@@ -45,7 +45,7 @@ pub fn metropolis_weight(
     log_ip_old: Complex64,
 ) -> f64 {
     let exponent = 2.0 * ((log_proj_delta + log_rbm_delta.re + log_ip_new.re) - log_ip_old.re);
-    let weight = mvmc_expert_parsers::utils::julia_exp::exp(exponent);
+    let weight = mvmc_expert_parsers::utils::c_math::exp(exponent);
     if weight.is_finite() {
         weight
     } else {
@@ -93,7 +93,7 @@ mod tests {
         );
         crate::numerical_comparison::assert_close(
             actual,
-            mvmc_expert_parsers::utils::julia_exp::exp(2.0),
+            mvmc_expert_parsers::utils::c_math::exp(2.0),
             0.0,
             4.0 * f64::EPSILON,
             "acceptance exponential",

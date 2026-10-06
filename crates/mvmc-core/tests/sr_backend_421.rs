@@ -549,9 +549,15 @@ fn cg_difference_is_within_the_conditioning_spread() {
             / scale
     };
     let base = solve(StageBackendKind::COrder, 0.0, 1);
-    let spread = [(1e-16, 2u64), (1e-16, 3), (1e-15, 4)]
+    // Perturbations from 1e-16 to 3e-15 relative (about 1 to 14 ulp): the range of the
+    // reordering error of a sum of `samples` terms, which is what a different GEMM/summation
+    // order does. Sixteen draws instead of three make the maximum independent of which
+    // platform libm produced the sampled operands (#457: macOS and glibc differ by an ulp
+    // in the sampler, hence in this system).
+    let spread = [1e-16, 3e-16, 1e-15, 3e-15]
         .iter()
-        .map(|&(noise, seed)| relative(&solve(StageBackendKind::COrder, noise, seed), &base))
+        .flat_map(|&noise| (0..4u64).map(move |k| (noise, 2 + k)))
+        .map(|(noise, seed)| relative(&solve(StageBackendKind::COrder, noise, seed), &base))
         .fold(0.0_f64, f64::max);
     let backend_difference = relative(&solve(StageBackendKind::TenferroCpu, 0.0, 1), &base);
     set_stage_backend_override(None);

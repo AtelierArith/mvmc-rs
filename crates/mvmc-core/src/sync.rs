@@ -88,7 +88,7 @@ pub fn sync_modified_parameter_local(data: &mut ExpertModeData, shift_correlatio
     sync_inner(data, shift_correlations);
     let mut xmax = 0.0_f64;
     for value in &data.opt_trans {
-        let amplitude = mvmc_expert_parsers::utils::julia_hypot::hypot(value.re, value.im);
+        let amplitude = mvmc_expert_parsers::utils::c_math::hypot(value.re, value.im);
         if amplitude.is_nan() {
             xmax = f64::NAN;
             break;

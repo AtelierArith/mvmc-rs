@@ -5423,6 +5423,9 @@ mod callback_tests {
         // Archived Julia 1.11 trajectories: they embed Julia's @turbo complex Pfaffian roundoff
         // in the periodic recalculation (historical fixtures, issue #449).
         let _julia_kernel = crate::pfaffian::use_julia_complex_kernel();
+        // ... and Julia's libm (exp, log, sin, cos, ...) in the Metropolis weights, projection and
+        // RBM ratios (issue #457).
+        let _julia_libm = mvmc_expert_parsers::utils::c_math::use_julia_libm();
         // The `rbm_fsz` references come from Julia/C samplers that omit the RBM factor
         // (issue #403); validate their other kernels with the factor switched off.
         crate::sampling::driver::LEGACY_FSZ_SAMPLER_WITHOUT_RBM

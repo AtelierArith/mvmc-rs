@@ -1,6 +1,6 @@
 //! General FSZ four-fermion ratios, using explicit spin labels for each operator.
 
-use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
+use mvmc_expert_parsers::utils::c_math::exp as c_exp;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
 
@@ -357,7 +357,7 @@ fn green_func2_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
     let ratio = if C_KERNEL {
         Complex64::new(log_ratio.exp(), 0.0)
     } else {
-        super::with_rbm_ratio(julia_exp(log_ratio), &num, ele_num, data)
+        super::with_rbm_ratio(c_exp(log_ratio), &num, ele_num, data)
     };
     let mut pf = vec![zero; nq];
     calculate_new_pf_m_two_fsz_complex_flat(

@@ -31,7 +31,7 @@ use crate::sampling::updates::{
     calculate_new_pf_m_two2_real_flat,
 };
 use crate::state::{TransferGreenScratch as GreenScratch, VmcOptimizationState};
-use mvmc_expert_parsers::utils::julia_exp::exp as julia_exp;
+use mvmc_expert_parsers::utils::c_math::exp as c_exp;
 
 mod fsz_energy;
 mod fsz_green;
@@ -172,7 +172,7 @@ pub fn calculate_log_ip_real(
     data: &ExpertModeData,
 ) -> f64 {
     let ip = calculate_ip_real(pf_m_real, qp_start, qp_end, data);
-    mvmc_expert_parsers::utils::julia_log::log(ip.abs())
+    mvmc_expert_parsers::utils::c_math::log(ip.abs())
 }
 
 /// Complex `calculate_log_ip_fcmp` mirror.
@@ -831,7 +831,7 @@ fn green_func2_impl<const C_KERNEL: bool>(
             Complex64::new(log_proj_delta.exp(), 0.0)
         }
     } else {
-        with_rbm_ratio(julia_exp(log_proj_delta), &my_ele_num, ele_num, data)
+        with_rbm_ratio(c_exp(log_proj_delta), &my_ele_num, ele_num, data)
     };
 
     // Fast path: rank-2 Woodbury Pfaffian update for real mode.
@@ -1142,7 +1142,7 @@ fn green_func1_fsz_impl<const C_KERNEL: bool, const C_REAL: bool>(
         if C_KERNEL {
             log_ratio.exp()
         } else {
-            julia_exp(log_ratio)
+            c_exp(log_ratio)
         }
     };
 
@@ -1650,7 +1650,7 @@ fn calh1_direct_projection_ratio(
             z += (row_dest[site] - row_source[site]) * charge(site) as f64;
         }
     }
-    julia_exp(z)
+    c_exp(z)
 }
 
 /// [`calh1_direct_projection_ratio`] for the hop of one electron of `spin` from `source`
@@ -1689,7 +1689,7 @@ fn calh1_direct_projection_ratio_moved(
             z += (row_dest[site] - row_source[site]) * charge(site) as f64;
         }
     }
-    julia_exp(z)
+    c_exp(z)
 }
 
 /// Serial real CalHamiltonian1 transfer section (Julia's CalH1 fast path, diagnostics
@@ -1959,7 +1959,7 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
     } else if C_KERNEL {
         crate::sampling::projection::log_proj_ratio(&scratch.proj_new, ele_proj_cnt, data).exp()
     } else if n_proj > 0 {
-        julia_exp(crate::sampling::projection::log_proj_ratio(
+        c_exp(crate::sampling::projection::log_proj_ratio(
             &scratch.proj_new,
             ele_proj_cnt,
             data,
@@ -3561,7 +3561,7 @@ mod tests {
                         z += (jastrow(dest, site) - jastrow(source, site)) * charge(site) as f64;
                     }
                 }
-                let expected = julia_exp(z);
+                let expected = c_exp(z);
                 let actual = calh1_direct_projection_ratio(source, dest, &ele_num, &tables);
                 assert_eq!(actual.to_bits(), expected.to_bits(), "hop {source}->{dest}");
             }
