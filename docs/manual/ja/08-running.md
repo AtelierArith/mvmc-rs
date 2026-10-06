@@ -240,7 +240,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
 | `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
 | `MVMC_RS_MEASURE_BATCH` | `measurement_batch::resolve_batch_size` | 測定バッチあたりのサンプル数(B サンプル分のテーブルを作ってから、サンプルごとの処理を順番に実行)。デフォルトは 4。出力バイトは値に依存しません。 |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` は `gpu-cuda` ビルドと登録済みプロバイダが必要で、無ければエラーです。不正な値はエラーで、フォールバックしません。 |
+| `MVMC_RS_SR_BACKEND` | `stage_backend::selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` は `gpu-cuda` ビルド**と**、呼び出し側プログラムが登録したプロバイダー(`mvmc_gpu_cuda::install()`)が必要で、標準の `mvmc` バイナリには無いためそこでは中断します。不正な値や利用できないバックエンドは panic(終了ステータス 101)で、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
 | `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
 | `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000 |
 | `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。デフォルトはワーカー数 `w` に対して `120*w/(w-1)`(4 で 160、2 で 240) |
@@ -248,6 +248,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | ランチャーの検出([8.4](#84-mpiとグループ実行)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |
 | `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS(`mvmc-rs` は読み取りません) | BLAS のスレッド設定 |
+
+GPU 関連ツールは、`mvmc` のオプションではない変数も使います: `MVMC_RS_CUDA_GATE`(`1`/`require` で、CUDA デバイスがないことがゲートのハードな失敗になる)、`MVMC_RS_CUDA_IMAGE`(`scripts/run_cuda_gate.sh` の docker イメージ)、`MVMC_RS_CUDA_GATE_OUT` とその仲間(レポートのパス)、`MVMC_RS_SAMPLER_CORES`(デバイスサンプラのベンチマークで使うホストコア)。[12.3](12-accelerated-backends.md#123-ビルドと実行)を参照。
 
 元の issue で言及された Julia 固有のデバッグダンプ `MVMC_DEBUG_*` は Rust には実装されて**いません**。`MVMC_RS_PHASE`,
 `MVMC_RS_CTEST_*`, `MVMC_RS_THREADED_*`, `MVMC_CG_DIAGNOSTICS`, `MVMC_GREEN_INDEX_CHILD` などの変数はテストコードにのみ現れ、ユーザー向けオプションではありません。
@@ -265,3 +267,5 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 `--seed 5` で繰り返され、`cmp` は `zvo_out.dat` が同一であると報告しました **(観測)**。BLAS プロバイダー、プラットフォーム、スレッド配置が異なると、
 浮動小数点の和の下位ビットが変わることがあり、メトロポリス判定を通じて後続の配置も変わりえます。これは想定された挙動であり、実装間の
 比較で許容誤差を用いる理由でもあります([11.4](11-compatibility.md#114-数値比較ポリシー))。
+
+高速化 SR バックエンド(`MVMC_RS_SR_BACKEND=tenferro`、[第 12 章](12-accelerated-backends.md))も、実装・デバイス・ライブラリのバージョンを固定すれば再現可能です(3 ステップの `tenferro` 実行を 2 回行うと、`zvo_out.dat` と `zqp_opt.dat` はバイト単位で同一でした **(観測)**)。ただし、デフォルトの `c-order` パスとはバイト単位では**一致しません**: RNG の消費と Metropolis のプロトコルは同じで、SR 行列と解は導出された境界内で一致し、後のステップでは末尾の桁が異なりえます **(観測)**。1 プロセス内の複数の独立チェーン(`run_para_opt_multichain`、ライブラリ API のみで `mvmc` のフラグはなし)は、C のグループシード規則 `RndSeed + group_base + ウォーカー` に従います([12.7](12-accelerated-backends.md#127-マルチウォーカー実行))。

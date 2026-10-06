@@ -1,6 +1,6 @@
 # Appendix: how the citations were checked
 
-[Contents](README.md) · Previous: [11. Compatibility and differences](11-compatibility.md)
+[Contents](README.md) · Previous: [12. Accelerated and GPU backends](12-accelerated-backends.md)
 
 ## A.1 Citation check
 
@@ -45,3 +45,4 @@ The numbers in the tutorial are results of one build and platform; other BLAS pr
 - Runs with FSZ/general orbitals, complex wave functions, RBM, OptTrans (`-o`), `InterAll`, local spins, `NExUpdatePath` other than 0, and `NSRCG = 1` beyond the 5-step demonstration.
 - Numerical parity of any run with C or Julia; the tutorial compares nothing against a reference.
 - The Japanese manual `extern/mVMC-1.3.0/doc/ja` was not read; the English manual (`doc/en`) is the source for all paraphrases.
+- [Chapter 12](12-accelerated-backends.md): the CUDA gates, the CUDA kernels and every GPU or device-resident number were **not run** for this manual; they are copied from `docs/design/gpu-readiness.md` and `docs/NUMERICAL_COMPARISONS.md`. Only the CPU-side statements marked **(observed)** (the `tenferro` and `cuda` selections of the stock `mvmc` binary on `hubbard_chain_L16`) were reproduced here. The benchmark suite of issue #450 did not exist yet.
