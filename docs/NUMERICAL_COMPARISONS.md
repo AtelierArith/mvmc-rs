@@ -244,3 +244,66 @@ unmodified C `vmc.out` therefore uses:
 - completeness: the Rust block must contain every parameter of the text `zvo_var` output.
 
 Evidence and the C run: `tests/fixtures/issue347_varbin/PROVENANCE.md`.
+
+## Accelerated-backend validation (#424)
+
+An accelerated implementation of a tensor-shaped stage (tenferro on CPU or CUDA, a batched
+Pfaffian kernel) changes summation order. It is validated against the C-order CPU path stage by
+stage, never against long Monte Carlo averages, and never bitwise. The harness is
+`mvmc_core::accel_validation` (module docs describe the model); a backend implements the trait
+`AcceleratedStages` (`pfaffian_inverse`, `sr_s_g`; further stages extend the trait). The C-order
+oracle is `CpuOracle` (the production PfaPack sequence and scalar loops). Variants:
+`TenferroCpuStages` runs in normal CI; the CUDA variant (`gpu/mvmc-gpu-cuda::stages::EagerStages`)
+runs in the optional gate (`scripts/run_cuda_gate.sh`, see `docs/design/gpu-readiness.md`
+section 10). A stage a backend does not implement reports `Unsupported` and is listed as not
+compared; it is never replaced by the CPU result. Today tenferro 0.7.1 provides `S` and `g`
+through `dot_general` but no Pfaffian, so the Pfaffian stages are exercised against `CpuOracle`
+and against deliberately perturbed backends that prove the detector works; the batched
+Pfaffian API of #423 plugs in by implementing `pfaffian_inverse`.
+
+**Teacher-forced replay.** The oracle drives a Metropolis trajectory (its decisions advance the
+configuration and consume the RNG). At each step the backend under test evaluates the same
+candidate and current configurations, so differences never compound through diverging
+trajectories. The report gives, for each of `pf`, `invM`, the acceptance weight
+`(pf_new / pf_old)^2`, the O store, `S` and `g`: the number of entries compared, the maximum
+absolute and relative deviation and the number of entries outside the bound. The bound is
+`|a - b| <= abs + rel * max(|a|, |b|)` per quantity (`Tolerances`; defaults `abs = 1e-12`,
+`rel = 1e-10`, justified by `n = 6` electrons, O(1) entries, a Pfaffian condition number below
+about 1e3 and at most a few hundred summed terms, so reordering errors are O(10) eps with a
+margin of about 1e4 that still catches a layout, sign or dtype defect). Tolerances are chosen
+from the measured first divergence for a new backend and must not be raised to hide a defect.
+
+**Decision recording and flips.** Each proposal records the oracle weight, the backend weight,
+the draw `u`, both decisions (`u < w`), the margin `|w_oracle - u|` and the weight error
+`|w_backend - w_oracle|`. A flip needs `u` between the two weights, so its margin cannot exceed
+the weight error unless the decision logic itself differs. A flip is a *defect* when its margin
+is larger than the measured weight error or larger than the weight bound the tolerance allows
+(`abs + rel * w`). A flip inside both is a legitimate consequence of reordering and is only
+counted. The report also lists the smallest margin of the run and how many proposals were
+inside the allowed weight bound (a flip was possible). Teacher forcing keeps the trajectory
+identical after a legitimate flip, so no long-run divergence needs to be explained.
+
+**RNG contract.** Each proposal draws the electron, the empty-site index and the acceptance draw
+(always three draws, also for rejected proposals). The draw sequence, the final configuration
+and the final RNG state are independent of the backend under test; a test asserts that a backend
+returning wrong weights does not change RNG consumption. RNG state is exact, as in the rest of
+this document.
+
+**Repeatability.** `repeatability` runs the same backend twice with the same input and seed for
+20 steps by default. Moves, decisions, draw bits, the final configuration and the final RNG
+state agree exactly; weights, `S` and `g` agree within the bounds; the deviation classification
+agrees. This is the same-implementation criterion of the 20-step long-run rule above.
+
+**Benchmark metadata.** Every benchmark or validation result carries a `BenchMetadata` block
+(following tenferro-decision-rs `docs/agents/specs/docs/05_TESTING_BENCHMARKS.md` section 5):
+source revision, CPU model and available threads, GPU and driver/CUDA/cuBLAS/cuSOLVER versions
+(`none` on CPU), OS and architecture, rustc, tenferro version, provider, thread settings
+(`RAYON_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`), dtype, batch size, warm-ups,
+iterations and whether upload and download are timed. The stage benchmark `bench_stages` reports
+the median of 30 iterations after 5 warm-ups (`DEFAULT_ITERATIONS`, `DEFAULT_WARMUPS`) with
+upload and download inside the timed region for device backends, and `None` (not 0) for a stage
+that is unsupported. Use the same thread count on both sides of a comparison.
+
+Reference environment: Linux x86_64, as above. GPU results are labelled with the metadata block
+and are an optional gate; ordinary Rust tests (including the CPU variants of this harness) run
+without a GPU, `c_toolbox/` or any C/Julia oracle program.

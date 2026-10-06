@@ -7,6 +7,7 @@
 //! The CPU C-order path stays the parity reference; nothing here changes RNG draw order.
 
 pub mod bench;
+pub mod stages;
 pub mod versions;
 
 use mvmc_core::backend::{register_cuda_provider, CudaProvider, DeviceReport};
