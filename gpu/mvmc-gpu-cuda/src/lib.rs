@@ -9,6 +9,8 @@
 pub mod bench;
 pub mod pfaffian;
 pub mod stages;
+pub mod transfer;
+pub mod transfer_bench;
 pub mod versions;
 
 use mvmc_core::backend::{register_cuda_provider, CudaProvider, DeviceReport};

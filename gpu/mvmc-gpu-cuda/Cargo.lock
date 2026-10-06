@@ -1467,6 +1467,7 @@ dependencies = [
 name = "mvmc-gpu-cuda"
 version = "0.0.0"
 dependencies = [
+ "cudarc",
  "libloading 0.8.9",
  "mvmc-core",
  "mvmc-gpu",

@@ -36,6 +36,9 @@ tenferro-tensor = { version = "0.7.1", default-features = false }
 tenferro-cpu = { version = "0.7.1", default-features = false, features = ["cpu-faer"] }
 num-complex = "0.4"
 libloading = "0.8"
+# Same version and features as tenferro-gpu's own cudarc (one copy in the lock): pinned host
+# memory, streams and events for the transfer helper of issue #432.
+cudarc = { version = "0.19", default-features = false, features = ["driver", "nvrtc", "dynamic-loading", "cuda-12080"] }
 
 # Linking tenferro can exhaust hosted-runner disk: keep debuginfo off.
 [profile.dev]
