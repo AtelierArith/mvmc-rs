@@ -1,0 +1,62 @@
+# Optional BLAS provider / kernel matrix for the numerical tests (#455).
+# The main CI pins OPENBLAS_CORETYPE (HASWELL / NEOVERSEN1) with Homebrew or apt OpenBLAS.
+# This workflow runs the same tests with the provider variants developers can hit:
+# macOS Accelerate (Homebrew OpenBLAS removed), macOS and Linux OpenBLAS with the kernel
+# chosen by the CPU, and unpinned thread counts. Manual, or when this file changes.
+name: BLAS matrix
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/blas-matrix.yml']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    name: ${{ matrix.variant.name }}
+    runs-on: ${{ matrix.variant.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - { name: macOS ARM64 Accelerate (threads 1), os: macos-15, arch: ARM64, cache: macos-arm64, accelerate: '1', coretype: '', threads: '1' }
+          - { name: macOS ARM64 OpenBLAS native kernel (threads 1), os: macos-15, arch: ARM64, cache: macos-arm64, accelerate: '0', coretype: '', threads: '1' }
+          - { name: macOS ARM64 OpenBLAS native kernel (threads default), os: macos-15, arch: ARM64, cache: macos-arm64, accelerate: '0', coretype: '', threads: '' }
+          - { name: Linux x86_64 OpenBLAS native kernel (threads 1), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '1' }
+          - { name: Linux x86_64 OpenBLAS native kernel (threads default), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '' }
+    env:
+      OPENBLAS_CORETYPE: ${{ matrix.variant.coretype }}
+      OPENBLAS_NUM_THREADS: ${{ matrix.variant.threads }}
+      OMP_NUM_THREADS: ${{ matrix.variant.threads }}
+      MVMC_CG_DIAGNOSTICS: '1'
+      MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
+      OPENBLAS_VERBOSE: '2'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          arch: ${{ matrix.variant.arch }}
+          platform: ${{ matrix.variant.cache }}
+          cache-key: blas-matrix
+          tools: nextest
+      - name: Use Accelerate instead of Homebrew OpenBLAS
+        if: matrix.variant.accelerate == '1'
+        run: |
+          brew uninstall --ignore-dependencies openblas
+          ! test -e /opt/homebrew/opt/openblas/lib
+          echo "PKG_CONFIG_PATH=" >> "$GITHUB_ENV"
+      - name: Record provider
+        run: |
+          uname -a
+          if test "$RUNNER_OS" = Linux; then lscpu | grep -E 'Model name|Flags' | cut -c1-300; dpkg -l | grep -E 'openblas|liblapack' || true; else sysctl -n machdep.cpu.brand_string; brew list --versions openblas || echo "no Homebrew openblas (Accelerate)"; fi
+      - name: Run tests
+        run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 --status-level fail --final-status-level fail
