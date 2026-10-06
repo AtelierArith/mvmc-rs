@@ -5,8 +5,9 @@
 use std::path::{Path, PathBuf};
 
 use mvmc_core::device_sampler::{run_lockstep_real, HostService, LockstepOptions, Teacher};
-use mvmc_core::run::{prepare_sampling_walker, SamplingWalker};
+use mvmc_core::run::{prepare_sampling_walker, PhysCalPreparation, SamplingWalker};
 use mvmc_core::sampling::driver::{trace, vmc_make_sample_real};
+use sfmt19937::Sfmt19937Rng;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -238,5 +239,81 @@ fn recompute_after_device_run_makes_the_table_valid_again() {
     assert_eq!(a.len(), b.len());
     for (x, y) in a.iter().zip(b) {
         assert!((x - y).abs() <= 1e-9 * y.abs().max(1.0), "inv {x} vs {y}");
+    }
+}
+
+/// `count` walkers sharing the wavefunction of one preparation with SFMT streams `1 + w` (the
+/// benchmark setup of the #450 suite, as opposed to `walker`, which prepares every walker with
+/// its own seed offset).
+fn shared_walkers(c: &Case, count: usize) -> Vec<SamplingWalker> {
+    let mut base = mvmc_core::prepare_phys_cal_with_seed_offset(
+        &c.namelist,
+        c.opt.as_deref(),
+        "real",
+        Some(1),
+        true,
+        0,
+    )
+    .unwrap();
+    base.data.modpara.nvmc_sample = c.samples;
+    (0..count)
+        .map(|w| {
+            prepare_sampling_walker(PhysCalPreparation {
+                data: base.data.clone(),
+                rng: Sfmt19937Rng::new(1 + w as u32),
+                n_para_consumed: 0,
+                binary_output: false,
+                initialization_consumed: true,
+            })
+            .unwrap()
+        })
+        .collect()
+}
+
+/// Issue #465: the last accepted move of a walker arrives right before its `Done` and used to be
+/// dropped when the last walkers finished (no further round), leaving the resident inverse and
+/// Pfaffian one move behind the walker's configuration. With walkers sharing one wavefunction,
+/// every walker's resident tables must equal the CPU sampler's at the end of the run.
+#[test]
+fn resident_tables_after_shared_wavefunction_run_equal_cpu_sampler() {
+    for c in [hubbard(), heisenberg()] {
+        for count in [1usize, 3, 5] {
+            let mut cpu = shared_walkers(&c, count);
+            for w in cpu.iter_mut() {
+                vmc_make_sample_real(&w.data, &mut w.state, &mut w.rng).unwrap();
+            }
+            let mut ws = shared_walkers(&c, count);
+            let mut service = HostService::new();
+            let (runs, stats) =
+                run_lockstep_real(&mut ws, &mut service, LockstepOptions::default()).unwrap();
+            assert!(stats.accepts > 0);
+            for w in 0..count {
+                runs[w].stats.as_ref().unwrap();
+                assert_eq!(
+                    ws[w].state.electron_config.ele_idx, cpu[w].state.electron_config.ele_idx,
+                    "walker {w} configuration"
+                );
+                let (inv, pf) = service.download_walker(w).unwrap();
+                let cpu_sm = &cpu[w].state.slater_matrix;
+                let n_qp = cpu_sm.pf_m_real.len();
+                let nn = inv.len() / n_qp;
+                for q in 0..n_qp {
+                    let want = cpu_sm.inv_m_real.qp_matrix_slice(q);
+                    let got = &inv[q * nn..(q + 1) * nn];
+                    for (x, y) in got.iter().zip(want) {
+                        assert!(
+                            (x - y).abs() <= 1e-9 * y.abs().max(1.0),
+                            "walker {w}/{count} qp {q}: resident inverse {x} vs CPU {y}"
+                        );
+                    }
+                    assert!(
+                        (pf[q] - cpu_sm.pf_m_real[q]).abs() <= 1e-9 * cpu_sm.pf_m_real[q].abs(),
+                        "walker {w}/{count} qp {q}: resident pf {} vs CPU {}",
+                        pf[q],
+                        cpu_sm.pf_m_real[q]
+                    );
+                }
+            }
+        }
     }
 }

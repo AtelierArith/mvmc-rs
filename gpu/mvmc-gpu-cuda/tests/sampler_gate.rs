@@ -12,9 +12,12 @@ use mvmc_core::backend::{
 use mvmc_core::device_sampler::{
     run_lockstep_real, DeviceService, LockstepOptions, Teacher, TeacherReport,
 };
-use mvmc_core::run::{prepare_sampling_walker, SamplingWalker};
+use mvmc_core::run::{prepare_sampling_walker, PhysCalPreparation, SamplingWalker};
 use mvmc_core::sampling::driver::{trace, vmc_make_sample_real};
-use mvmc_gpu_cuda::device_sampler::{CudaSamplerService, PageableTransfer, PinnedTransfer};
+use mvmc_gpu_cuda::device_sampler::{
+    CudaSamplerService, PageableTransfer, PinnedTransfer, TransferPath,
+};
+use sfmt19937::Sfmt19937Rng;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -329,3 +332,115 @@ extern "C" __global__ void twice(double* x, int n) {
 
 #[allow(dead_code)]
 fn _link(_: PinnedTransfer, _: PageableTransfer) {}
+
+/// `count` walkers sharing the wavefunction of one preparation (seed 1), SFMT streams `1 + w`:
+/// the benchmark setup of the #450 suite (issue #465), unlike `walker`, which prepares each
+/// walker with its own seed offset.
+fn shared_walkers(c: &Case, count: usize) -> Vec<SamplingWalker> {
+    let mut base = mvmc_core::prepare_phys_cal_with_seed_offset(
+        &c.namelist,
+        c.opt.as_deref(),
+        "real",
+        Some(1),
+        true,
+        0,
+    )
+    .unwrap();
+    base.data.modpara.nvmc_sample = c.samples;
+    (0..count)
+        .map(|w| {
+            prepare_sampling_walker(PhysCalPreparation {
+                data: base.data.clone(),
+                rng: Sfmt19937Rng::new(1 + w as u32),
+                n_para_consumed: 0,
+                binary_output: false,
+                initialization_consumed: true,
+            })
+            .unwrap()
+        })
+        .collect()
+}
+
+/// Run the shared-wavefunction walkers on `service` and compare every walker's resident tables
+/// with the CPU tables, with the first download right after the run (no wait).
+fn run_and_compare<T: TransferPath>(
+    label: &str,
+    mut service: CudaSamplerService<T>,
+    c: &Case,
+    l: usize,
+    walkers: usize,
+    cpu: &[SamplingWalker],
+) {
+    let mut ws = shared_walkers(c, walkers);
+    let n_qp = ws[0].state.slater_matrix.slater_elm_real.n_qp_full();
+    let (runs, _) =
+        run_lockstep_real(&mut ws, &mut service, LockstepOptions::default()).expect("device run");
+    for (w, run) in runs.iter().enumerate() {
+        run.stats.as_ref().expect("walker run");
+        // a flip (numerical acceptance difference) would legitimately change the walker
+        assert_eq!(
+            ws[w].state.electron_config.ele_idx, cpu[w].state.electron_config.ele_idx,
+            "L={l} walker {w}: trajectory diverged (flip); resident table comparison void"
+        );
+    }
+    for (w, cpu_w) in cpu.iter().enumerate() {
+        let (inv, pf) = service.download_walker(w).expect("download");
+        let cpu_inv = cpu_w.state.slater_matrix.inv_m_real.as_slice();
+        let nn = inv.len() / n_qp;
+        let mut flat = Vec::with_capacity(inv.len());
+        for q in 0..n_qp {
+            flat.extend_from_slice(&cpu_inv[q * (nn + 1)..q * (nn + 1) + nn]);
+        }
+        let ri = rel_diff(&inv, &flat);
+        let rp = rel_diff(&pf, &cpu_w.state.slater_matrix.pf_m_real);
+        eprintln!(
+            "  shared L={l} W={walkers} {label} walker {w}: inv rel {ri:.2e} pf rel {rp:.2e}"
+        );
+        assert!(
+            ri < 1e-6,
+            "L={l} walker {w}: resident inverse differs by {ri}"
+        );
+        assert!(rp < 1e-8, "L={l} walker {w}: resident pf differs by {rp}");
+    }
+}
+
+/// Issue #465 regression: with walkers sharing one wavefunction the resident inverse and Pfaffian
+/// of EVERY walker must equal the CPU tables right after the run, for both transfer paths. The
+/// last accepted move of the last walkers used to be dropped at the end of the run, which left
+/// the resident tables one move behind the configuration.
+fn check_shared(l: usize, walkers: usize, samples: i64) {
+    let mut c = hubbard(l);
+    c.samples = samples;
+    let mut cpu = shared_walkers(&c, walkers);
+    for w in cpu.iter_mut() {
+        vmc_make_sample_real(&w.data, &mut w.state, &mut w.rng).unwrap();
+    }
+    run_and_compare(
+        "pinned",
+        CudaSamplerService::new_pinned(0).expect("pinned service"),
+        &c,
+        l,
+        walkers,
+        &cpu,
+    );
+    run_and_compare(
+        "pageable",
+        CudaSamplerService::new_pageable(0).expect("pageable service"),
+        &c,
+        l,
+        walkers,
+        &cpu,
+    );
+}
+
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker() {
+    if !gate() {
+        return;
+    }
+    check_shared(16, 4, 5);
+    check_shared(32, 4, 5);
+    check_shared(64, 3, 3);
+    check_shared(128, 3, 2);
+}
