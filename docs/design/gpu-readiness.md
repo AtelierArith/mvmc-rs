@@ -839,6 +839,128 @@ these are upper bounds on the cost of the runner itself, not a property of it.
 | 16 | 5761.5 | 360.1 | 0.31 |
 | 32 | 15427.9 | 482.1 | 0.12 |
 
+### 10.7 Host-device transfer diagnosis and the in-repo pinned/async helper (issue #432)
+
+Measured in the standalone workspace (`gpu/mvmc-gpu-cuda`, ignored gate test
+`transfer_microbenchmark_report`, `scripts/run_cuda_gate.sh docker`): RTX 3060 (sm_86, PCIe 4.0
+x16, 28 SMs), driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, cuBLAS 12.9.2, cuSOLVER
+11.7.5, tenferro 0.7.1 (CubeCL CUDA), cudarc 0.19, Linux x86_64, single process, host
+otherwise lightly loaded (load average about 2). **GPU copy engines: `asyncEngineCount = 2`**
+(host-to-device and device-to-host copies can run concurrently with each other and with a
+kernel), `concurrentKernels = 1`. Medians over 5 to 60 repetitions (fewer for large sizes);
+three runs of the sweep agreed to within a few percent except where noted.
+
+#### Per-call time and bandwidth versus size
+
+(1) cudarc pinned memcpy, (2) cudarc pageable memcpy, (3) tenferro `upload_tensor` /
+`download_tensor` (`CudaBackend` runtime, F64 vector, synchronized). Sizes of the planes
+`[n, n, NQP = 8, B]` of #423: n = 16, B = 8: 131 KB; n = 32, B = 64: 4.2 MB; n = 64, B = 64:
+16.8 MB; n = 128, B = 64: 67 MB. Per-walker vectors are 4 KB to 1 MB.
+
+| bytes | pageable up ms (GB/s) | pageable down ms (GB/s) | pinned WC up ms (GB/s) | pinned cached up ms (GB/s) | pinned down ms (GB/s) | pinned up enqueue ms | tenferro up ms (GB/s) | tenferro down ms (GB/s) |
+|---|---|---|---|---|---|---|---|---|
+| 8 | 0.0056 (0.00) | 0.0068 (0.00) | 0.0092 (0.00) | 0.0061 (0.00) | 0.0071 (0.00) | 0.0038 | 0.0214 (0.00) | 0.0264 (0.00) |
+| 512 | 0.0073 (0.07) | 0.0075 (0.07) | 0.0153 (0.03) | 0.0065 (0.08) | 0.0072 (0.07) | 0.0099 | 0.0227 (0.02) | 0.0269 (0.02) |
+| 4096 | 0.0088 (0.47) | 0.0083 (0.50) | 0.0521 (0.08) | 0.0071 (0.58) | 0.0075 (0.54) | 0.0466 | 0.0316 (0.13) | 0.0278 (0.15) |
+| 32768 | 0.0184 (1.78) | 0.0141 (2.33) | 0.0104 (3.14) | 0.0092 (3.57) | 0.0096 (3.40) | 0.0035 | 0.0389 (0.84) | 0.0295 (1.11) |
+| 131072 | 0.0397 (3.30) | 0.0331 (3.96) | 0.0193 (6.79) | 0.0170 (7.70) | 0.0173 (7.58) | 0.0036 | 0.0864 (1.52) | 0.0468 (2.80) |
+| 1048576 | 0.2339 (4.48) | 0.2217 (4.73) | 0.0947 (11.07) | 0.0916 (11.44) | 0.0885 (11.85) | 0.0043 | 0.6585 (1.59) | 0.2117 (4.95) |
+| 4194304 | 0.6848 (6.13) | 0.5812 (7.22) | 0.3486 (12.03) | 0.3442 (12.18) | 0.3338 (12.56) | 0.0043 | 5.8194 (0.72) | 4.2021 (1.00) |
+| 16777216 | 2.4114 (6.96) | 2.1493 (7.81) | 1.3626 (12.31) | 1.3571 (12.36) | 1.3171 (12.74) | 0.0043 | 18.4228 (0.91) | 5.0354 (3.33) |
+| 67108864 | 8.6923 (7.72) | 6.6501 (10.09) | 5.4070 (12.41) | 5.3975 (12.43) | 5.0960 (13.17) | 0.0065 | 130.0937 (0.52) | 49.2461 (1.36) |
+| 268435456 | 34.4588 (7.79) | 22.2363 (12.07) | 21.5796 (12.44) | 21.5610 (12.45) | 20.3493 (13.19) | 0.0064 | 509.0499 (0.53) | 187.1178 (1.43) |
+
+"pinned WC" is write-combined pinned memory (cudarc's default `alloc_pinned`), "pinned cached"
+ordinary pinned memory; the download column is cached pinned memory; "enqueue" is the host time
+of one pinned copy call that does not wait.
+
+#### Cause of the slow tenferro transfers
+
+* The PCIe link and the driver are not the limit: pageable cudarc copies reach 7 to 8 GB/s
+  up and 8 to 12 GB/s down for 16 to 256 MB, pinned 12.4 to 13.2 GB/s (about the practical
+  PCIe 4.0 x16 limit).
+* tenferro 0.7.1 reaches only 0.5 to 1.7 GB/s up and 1.0 to 5 GB/s down (the 0.5 and 0.8 GB/s
+  of the #423 report): 1.5 to 15 times slower than plain pageable cudarc at 1 MB and larger
+  (15x up and 8x down at 256 MB), and its per-call fixed cost is 19 to 26 us against 5 to 9 us
+  for cudarc (about 3.5 times).
+* Missing pinned memory is therefore not the main cause: pageable cudarc is already faster than
+  tenferro by the factors above. The code path (`upload_tensor`: CubeCL `create_from_slice`;
+  `download_tensor`: `rt.synchronize()`, CubeCL `read_one`, then a second host copy
+  `T::from_bytes(..).to_vec()`; `third_party/tenferro-gpu/src/cubecl/memory.rs`) adds a device
+  synchronization, CubeCL staging and extra host copies. Attributing the remaining cost inside
+  CubeCL would need a profiler; the request draft below asks upstream to do that.
+* Write-combined memory is a trap for small copies: a 4 KB host-to-device copy takes 51 us from
+  write-combined pinned memory against 7 us from cached pinned memory (reproduced in every run),
+  and 11 us for 32 KB; the bandwidth is the same for 1 MB and larger. `PinnedKind::for_upload`
+  therefore uses cached pinned memory below 32 KB.
+* For small per-step transfers (up to 64 KB, the walker configuration and pf/energy vectors)
+  pageable cudarc is within 2 to 3 us of pinned; pinned memory pays for large copies
+  (16 MB: 1.8x up and 1.6x down; 256 MB: 1.6x up and 1.1x down) and, more importantly,
+  makes the copy asynchronous with respect to the host: enqueueing a 16 MB pinned copy takes
+  about 4 us while the pageable call blocks the host for 2.3 ms.
+
+#### Overlap with a concurrent kernel
+
+copy size 16777216 bytes, kernel calibrated to 1.368 ms
+
+| scenario | copy ms | kernel ms | both ms | overlap |
+|---|---|---|---|---|
+| pinned host-to-device + kernel | 1.365 | 1.368 | 1.371 | 1.00 |
+| pinned device-to-host + kernel | 1.279 | 1.369 | 1.370 | 1.00 |
+| pinned both directions + kernel | 1.762 | 1.368 | 1.767 | 1.00 |
+| pageable host-to-device (on a second stream) + kernel | 1.458 | 1.370 | 1.464 | 1.00 |
+| pageable device-to-host (on a second stream) + kernel | 1.368 | 1.369 | 1.375 | 1.00 |
+
+(copy and kernel on different streams; overlap = (copy + kernel - both) / min(copy, kernel),
+1.00 = the shorter one is completely hidden.) Pinned copies hide completely behind a kernel and
+both directions run concurrently with it (two copy engines); pageable cudarc copies on a
+separate stream also overlap on the device, but block the calling host thread for their whole
+duration, so only pinned copies free the host to decide the next step while the device works.
+
+#### Ping-pong of two walker groups
+
+Group A and group B on two streams: while the device runs group A's kernel and copies, the host
+decides group B (a busy wait standing for the Metropolis decision and SFMT draws), then they
+swap. Baselines run the same 2 x steps cycles on one stream with a full wait every step, with
+pageable synchronous copies ("current practice") and with pinned asynchronous copies.
+
+| in bytes | out bytes | kernel ms | host us | steps/group | serial pageable ms | serial pinned ms | ping-pong ms | speedup vs pageable | speedup vs pinned serial |
+|---|---|---|---|---|---|---|---|---|---|
+| 4096 | 4096 | 0.05 | 20 | 400 | 66.1 | 68.4 | 41.6 | 1.59x | 1.64x |
+| 4096 | 65536 | 0.30 | 100 | 200 | 170.1 | 169.8 | 120.0 | 1.42x | 1.41x |
+| 4096 | 65536 | 1.00 | 300 | 200 | 530.2 | 529.4 | 399.5 | 1.33x | 1.33x |
+| 65536 | 1048576 | 1.00 | 200 | 100 | 277.7 | 262.1 | 199.9 | 1.39x | 1.31x |
+
+Reading: two groups hide 25 to 40 % of the per-step time (the ideal for two groups when host
+and device time are equal is 2x); the benefit comes from the pipeline, not from pinning alone
+(the two serial baselines are equal within noise because the host decision dominates). The gain
+grows with the number of groups in flight; #434 should use more than two streams or groups when
+the host decision time is shorter than the device time.
+
+#### Decision and helper
+
+tenferro's transfer path is the bottleneck, not PCIe and not pinned memory. The hot transfers of
+the device-resident sampler (#434) should therefore bypass `upload_tensor` / `download_tensor`:
+`gpu/mvmc-gpu-cuda/src/transfer.rs` provides
+
+* `PinnedBuf` / `PinnedPool` (cached or write-combined pinned memory, size-class reuse; pinned
+  allocation costs about a millisecond and must not happen per step),
+* `TransferStream::{upload_async, download_async}` returning a `Pending` that borrows the host
+  buffer until the copy completed (the borrow checker prevents touching a buffer the device may
+  still use; dropping a `Pending` waits) and `record` / `wait_event` / `wait_pending` for
+  device-side cross-stream dependencies (no device-wide synchronize),
+* `unsafe upload_raw` / `download_raw` for device memory owned by another allocator (for
+  example a tenferro raw session address; not exercised by the gate),
+* `disable_event_tracking`: cudarc's implicit event tracking must be off so the safe wrappers do
+  not add hidden synchronization; the helper orders everything with explicit events.
+
+The gate test `transfer_helper_is_correct_and_orders_streams` checks data integrity, pool reuse
+and event ordering on the device. Large plane uploads should still be avoided altogether by
+building the planes on the device (#425, #426): even at pinned speed 67 MB takes 5.4 ms.
+
+An upstream request draft with these numbers is in
+`docs/design/tenferro-transfer-request-draft.md` (not filed; filing needs approval).
+
 ## 11. Batched Pfaffian and inverse (issue #423)
 
 Status: implemented, validated and benchmarked on hardware (2x RTX 3060). Not wired into the
@@ -1105,6 +1227,7 @@ cargo nextest run -p mvmc-gpu --cargo-profile test-fast        # CPU, ExtensionO
 MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # GPU gate incl. pfaffian_gate
 scripts/run_pfaffian_bench.sh docker                           # benchmark, writes the CSV
 ```
+
 
 ## 9. Japanese summary / 日本語要約
 
