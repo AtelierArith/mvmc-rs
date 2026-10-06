@@ -1874,6 +1874,20 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
                 .zip(["one.txt", "factored.txt", "direct.txt"])
             {
                 let numbers = read_values(&stage.join(file));
+                // The accumulated two-body "direct" array of the FSZ record sums
+                // cancelling terms: the one-ulp GEMV/ztrmm differences of a kernel
+                // without the reference lineage's FMA arithmetic (inverse entries first,
+                // docs/NUMERICAL_COMPARISONS.md "BLAS provider matrix", #455) reach
+                // 1.9e-9 relative / 6e-11 absolute there (Sandybridge, Nehalem), while
+                // the one-body and factored arrays stay within the strict bound.
+                let (abs_bound, rel_bound) = if file == "direct.txt"
+                    && julia_fixture::kernel_class(&fixtures)
+                        == julia_fixture::KernelClass::Unverified
+                {
+                    (1e-9_f64, 1e-7_f64)
+                } else {
+                    (1e-12_f64, 1e-10_f64)
+                };
                 let (pairs, remainder) = numbers.as_chunks::<2>();
                 assert!(remainder.is_empty(), "complete raw complex records");
                 assert_eq!(
@@ -1886,7 +1900,7 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
                     for (a, e) in [(actual.re, expected[0]), (actual.im, expected[1])] {
                         assert!(a.is_finite() && e.is_finite());
                         assert!(
-                            (a - e).abs() <= 1e-12_f64.max(1e-10 * a.abs().max(e.abs())),
+                            (a - e).abs() <= abs_bound.max(rel_bound * a.abs().max(e.abs())),
                             "{} sample {sample} raw {file} column {column}: {a} != {e}",
                             model.name
                         );
@@ -1927,11 +1941,24 @@ fn two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs() {
                     "{} sample {sample} reduction {file} shape",
                     model.name
                 );
+                // The FSZ accumulated energy inherits the same cancellation as the raw
+                // "direct" array above: 7e-11 absolute / 1.8e-10 relative on reference
+                // BLAS (the only other-provider deviation; Sandybridge, Nehalem and
+                // Prescott stay within the strict bound for the energy record).
+                let (abs_bound, rel_bound) = if file == "energy.txt"
+                    && model.name == "heisenberg_chain_fsz"
+                    && julia_fixture::kernel_class(&fixtures)
+                        == julia_fixture::KernelClass::Unverified
+                {
+                    (1e-9_f64, 1e-7_f64)
+                } else {
+                    (1e-12_f64, 1e-10_f64)
+                };
                 for (column, (a, e)) in actual.iter().zip(expected).enumerate() {
                     for (a, e) in [(a.re, e.re), (a.im, e.im)] {
                         assert!(a.is_finite() && e.is_finite());
                         assert!(
-                            (a - e).abs() <= 1e-12_f64.max(1e-10 * a.abs().max(e.abs())),
+                            (a - e).abs() <= abs_bound.max(rel_bound * a.abs().max(e.abs())),
                             "{} sample {sample} {stage} {file} column {column}: {a} != {e}",
                             model.name
                         );

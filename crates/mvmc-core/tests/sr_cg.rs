@@ -421,6 +421,22 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
                     format!("{name} limit {limit} explicit residual {row}"),
                 );
             }
+            // The reference trajectory is a chaotic recurrence (tol = 0 on a 32 x 48
+            // operand, 41 iterations without convergence). Bitwise-compatible FMA
+            // kernels (OpenBLAS Haswell, the checked-in ARM cores) reproduce it at every
+            // limit. A kernel with different GEMV rounding differs by one ulp at
+            // iteration 2 and grows about 1e4 per two iterations from iteration 5
+            // (measured on Sandybridge, Nehalem, Prescott: max |dx|/|x| 2e-16 at limit 5,
+            // 1e-15 at 6, 2e-14 at 7, O(1e-2) after 13), so only the first limits are a
+            // meaningful forward comparison there. The explicit-residual (backward error)
+            // check above holds at every limit on every kernel.
+            let forward_limit = match julia_fixture::kernel_class(&fixtures) {
+                julia_fixture::KernelClass::Reference => usize::MAX,
+                julia_fixture::KernelClass::Unverified => 5,
+            };
+            if limit > forward_limit {
+                continue;
+            }
             for (stage, actual, expected) in [
                 ("solution", &result.solution, &expected),
                 ("residual", &result.residual, &expected_residual),

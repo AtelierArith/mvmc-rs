@@ -5238,7 +5238,18 @@ mod callback_tests {
         };
         let (a, e) = (columns(actual), columns(expected));
         assert_eq!(a.len(), e.len(), "{case} {steps} SRinfo width");
-        for column in [0usize, 1, 2, 3, 8] {
+        // Column 8 is the CG iteration count, which follows the amplified solve; on
+        // kernels outside the reference lineage it is not a portable reference
+        // (e.g. pairhop_fsz 142 vs 140 iterations on OpenBLAS Sandybridge, #455).
+        let exact: &[usize] = if julia_fixture::kernel_class(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures"),
+        ) == julia_fixture::KernelClass::Unverified
+        {
+            &[0, 1, 2, 3]
+        } else {
+            &[0, 1, 2, 3, 8]
+        };
+        for &column in exact {
             assert_eq!(
                 a[column], e[column],
                 "{case} {steps} SRinfo column {column}"
@@ -5266,11 +5277,12 @@ mod callback_tests {
         read: &impl Fn(&str) -> String,
         _read_fixture: &impl Fn(&str) -> String,
     ) {
-        let _ = data;
         if steps != 1 {
             return;
         }
-        assert_c_step_one_operands(case, cg, store, state);
+        if c_order_amplified_family(case, cg, store) {
+            assert_c_step_one_operands(case, cg, store, state);
+        }
         let scalars = |text: String| -> Vec<f64> {
             text.split_whitespace()
                 .map(|v| f64::from_bits(u64::from_str_radix(v, 16).unwrap()))
@@ -5285,12 +5297,25 @@ mod callback_tests {
             format!("{case} step 1 energy"),
         );
         if cg {
-            assert_srinfo_conditioned_columns(
-                case,
-                steps,
-                &fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap(),
-                &read("SRinfo"),
-            );
+            // The Julia fixtures print OFFSET*NPara in column 0; C prints NPara.
+            let offset = if get_all_complex_flag(data).unwrap() {
+                2
+            } else {
+                1
+            };
+            let rust_srinfo = fs::read_to_string(dir.join("zvo_SRinfo.dat"))
+                .unwrap()
+                .lines()
+                .map(
+                    |line| match line.get(..5).map(str::trim).map(str::parse::<usize>) {
+                        Some(Ok(n_para)) if !line.starts_with('#') => {
+                            format!("{:5}{}\n", n_para * offset, &line[5..])
+                        }
+                        _ => format!("{line}\n"),
+                    },
+                )
+                .collect::<String>();
+            assert_srinfo_conditioned_columns(case, steps, &rust_srinfo, &read("SRinfo"));
         }
     }
 
@@ -5430,6 +5455,15 @@ mod callback_tests {
         // (issue #403); validate their other kernels with the factor switched off.
         crate::sampling::driver::LEGACY_FSZ_SAMPLER_WITHOUT_RBM
             .with(|flag| flag.set(case == "rbm_fsz"));
+        // Kernels outside the reference lineages (no FMA, AVX512, other ARM cores,
+        // Accelerate) differ by one ulp per GEMV; the SR solve amplifies that to the
+        // step-1 parameters (docs/NUMERICAL_COMPARISONS.md, "BLAS provider matrix",
+        // #455). On them every family uses the amplified-family policy: sampling,
+        // step-1 energy and SR diagnostics against the references, the parameter
+        // trajectory by repeatability.
+        let unverified_kernel = julia_fixture::kernel_class(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures"),
+        ) == julia_fixture::KernelClass::Unverified;
         let reference_case = if case == "general" { "fsz" } else { case };
         // C's counter grouping and subthreshold Slater retention differ from
         // Julia. These cases use a separately labelled mixed reference whose
@@ -5768,7 +5802,7 @@ mod callback_tests {
             if !(case == "pairhop_real" && steps >= 3) {
                 assert_sampling_checkpoint(case, steps, &state, &mut rng, &read);
             }
-            if c_order_amplified_family(case, cg, store) {
+            if c_order_amplified_family(case, cg, store) || unverified_kernel {
                 // See docs/NUMERICAL_COMPARISONS.md ("C-order real kernels and
                 // CG amplification"): after step 1 the optimizer trajectory of
                 // this family is not a portable reference, so only the
