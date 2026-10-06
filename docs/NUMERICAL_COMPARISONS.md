@@ -472,7 +472,9 @@ green. Thread count is not a factor.
 | OpenBLAS Prescott | 1 | 16 fail | 1052 pass |
 | Reference BLAS + LAPACK (`LD_PRELOAD`, `MVMC_BLAS_KERNEL_CLASS=unverified`) | 1 | 16 fail | 1052 pass (the PhysCal energy record needed its own relaxation, see below) |
 | Sandybridge with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
-| GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | default | same 16 | see the CI matrix below |
+| GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | 1 and default | same 16 | CI result in the PR (see below) |
+| GitHub macOS 15 ARM64 VM (Apple M1 Virtual), Homebrew OpenBLAS 0.3.34, `OPENBLAS_CORETYPE` unset (core `armv8`) | 1 and default | same 16 | CI result in the PR (see below) |
+| macOS Accelerate | n/a | link error | unsupported: `mvmc-core/build.rs` links `openblas` unconditionally (`ld: library 'openblas' not found`); not changed here |
 | macOS ARM64 `NEOVERSEN1` (main CI, Homebrew OpenBLAS, overlay references) | 1 | pass | pass (strict bounds) |
 
 The four extra `mvmc-cli::issue348_multidef` failures in the first run of the optional workflow
@@ -481,9 +483,9 @@ workflow no longer sets it.
 
 **Kernel class.** `tests/support/julia_fixture.rs::kernel_class` returns `Reference` for Linux
 x86_64 OpenBLAS `Haswell`/`Zen` and for macOS ARM64 cores that have an overlay under
-`tests/fixtures/macos_arm_julia/<core>/`, `Unverified` otherwise (including a provider that does
-not export `openblas_get_corename`, such as Accelerate; the core name is resolved with `dlsym`,
-so test binaries link against such providers). `MVMC_BLAS_KERNEL_CLASS=reference|unverified`
+`tests/fixtures/macos_arm_julia/<core>/`, `Unverified` otherwise (hosted macOS VMs report the generic `armv8` core; a provider that does
+not export `openblas_get_corename` is also `Unverified`; the core name is resolved with `dlsym`
+so the test support code does not add an undefined symbol). `MVMC_BLAS_KERNEL_CLASS=reference|unverified`
 overrides the detection (reference BLAS under `LD_PRELOAD` still reports the OpenBLAS core).
 The strict bounds are unchanged on `Reference` kernels; the first divergence of every
 `Unverified` case is below.
@@ -527,5 +529,5 @@ difference"; no defect was found, the backward-error and invariant checks pass o
 Reproduction: `OPENBLAS_NUM_THREADS=1 OPENBLAS_CORETYPE=Sandybridge cargo nextest run -p mvmc-core
 -p mvmc-cli --cargo-profile test-fast --no-fail-fast`; add `MVMC_BLAS_KERNEL_CLASS=reference` to
 see the 16 failures again. The optional `BLAS matrix` workflow (`workflow_dispatch`) runs the
-suite on macOS ARM64 with Accelerate, with Homebrew OpenBLAS (native kernel, pinned and default
-threads) and on Linux with the native kernel.
+suite on macOS ARM64 with Homebrew OpenBLAS (native kernel, pinned and default threads) and on
+Linux with the native kernel.

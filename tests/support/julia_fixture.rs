@@ -28,7 +28,7 @@ pub fn exists(path: &Path) -> bool {
 }
 
 /// Name of the linked OpenBLAS kernel (`openblas_get_corename`), or `None` when the
-/// BLAS provider does not export it (macOS Accelerate, reference BLAS).
+/// BLAS provider does not export it (reference BLAS).
 ///
 /// Resolved with `dlsym` so that test binaries still link against providers that lack
 /// the symbol.
@@ -64,7 +64,7 @@ pub fn openblas_core_name() -> Option<String> {
 /// (Linux x86_64; the Zen kernel set reproduces them, checked with OPENBLAS_CORETYPE=Zen) or with the per-core macOS ARM overlays under `macos_arm_julia/`. On
 /// those kernels the amplified comparisons (CG recurrences, ill-conditioned solves,
 /// cancelling Green-function sums) reproduce the references at the strict bounds. Other
-/// kernels (Sandybridge/Nehalem without FMA, AVX512, other ARM cores, Accelerate) differ
+/// kernels (Sandybridge/Nehalem without FMA, AVX512, other ARM cores such as the generic armv8) differ
 /// by one ulp per GEMV and legitimately exceed those bounds, see
 /// docs/NUMERICAL_COMPARISONS.md ("BLAS provider matrix", #455).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
