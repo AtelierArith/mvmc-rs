@@ -86,7 +86,13 @@ fn cuda_without_a_registered_provider_is_a_usage_error_before_io() {
     let (root, inputs) = setup("cuda");
     let out = root.join("out");
     let output = run(&inputs, &out, Some("cuda"));
-    assert_usage_error(&output, &out, "gpu-cuda");
+    // Without the feature: "built without the `gpu-cuda` feature"; with it: "no CUDA provider registered".
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(
+        stderr.contains("gpu-cuda") || stderr.contains("CUDA provider"),
+        "stderr: {stderr}"
+    );
+    assert_usage_error(&output, &out, "unsupported");
     let _ = fs::remove_dir_all(root);
 }
 
