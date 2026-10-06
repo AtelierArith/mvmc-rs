@@ -26,6 +26,7 @@ pub mod counter;
 pub mod initial_params;
 pub mod io;
 pub mod lanczos;
+pub mod measurement_batch;
 #[cfg(feature = "mpi")]
 pub mod mpi;
 pub mod multidef;
