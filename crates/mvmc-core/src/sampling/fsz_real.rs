@@ -452,6 +452,7 @@ fn accept(delta: f64, log_ip_new: f64, log_ip_old: f64, rng: &mut Sfmt19937Rng) 
     let w = mvmc_expert_parsers::utils::julia_exp::exp(2.0 * (delta + (log_ip_new - log_ip_old)));
     let w = if w.is_finite() { w } else { -1.0 };
     let draw = crate::sampling::driver::trace::draw_real2(rng);
+    super::driver::trace::record_decision(w, draw);
     super::driver::trace::record(7, &[i64::from(w > draw), (draw * 4294967296.0) as i64]);
     w > draw
 }

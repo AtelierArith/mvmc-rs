@@ -532,6 +532,27 @@ pub fn prepare_phys_cal_from_namelist(
     )
 }
 
+/// Prepare one PhysCal walker with an explicit seed offset (`RndSeed + offset`, C
+/// `init_gen_rand(RndSeed + group1)`), single-process. Used by the multi-chain runner (#425).
+pub fn prepare_phys_cal_with_seed_offset(
+    namelist_path: impl AsRef<Path>,
+    opt_para_path: Option<&Path>,
+    mode: &str,
+    seed: Option<i64>,
+    enable_opt_trans: bool,
+    seed_offset: usize,
+) -> Result<PhysCalPreparation, String> {
+    prepare_phys_cal_from_namelist_with_seed_offset(
+        namelist_path,
+        opt_para_path,
+        mode,
+        seed,
+        enable_opt_trans,
+        seed_offset,
+        &SingleProcessReducer,
+    )
+}
+
 /// Prepare PhysCal with an explicit MPI group seed offset.
 ///
 /// Julia adds the group index before initializing each independent sampling

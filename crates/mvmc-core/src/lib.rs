@@ -31,6 +31,7 @@ pub mod lanczos;
 pub mod measurement_batch;
 #[cfg(feature = "mpi")]
 pub mod mpi;
+pub mod multichain;
 pub mod multidef;
 pub use pfapack::julia_complex;
 pub mod observables;
@@ -68,7 +69,7 @@ pub use reducer::{Reducer, SingleProcessReducer};
 pub use run::{
     get_all_complex_flag, prepare_phys_cal_from_namelist,
     prepare_phys_cal_from_namelist_with_reducer,
-    prepare_phys_cal_from_namelist_with_reducer_and_opt_trans,
+    prepare_phys_cal_from_namelist_with_reducer_and_opt_trans, prepare_phys_cal_with_seed_offset,
     prepare_phys_cal_without_parameter_file_with_reducer_and_opt_trans, resolve_rnd_seed,
     run_para_opt_from_namelist, run_para_opt_from_namelist_observed,
     run_para_opt_from_namelist_with_reducer, vmc_para_opt, vmc_para_opt_timed, vmc_phys_cal,
