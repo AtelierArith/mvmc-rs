@@ -1092,7 +1092,46 @@ mod tests {
                 assert!(rows.next().is_none());
             }
             compare("factor", &s, &expected_factor);
-            compare("solution", &g, &expected_solution);
+            if julia_fixture::kernel_class(&fixtures) == julia_fixture::KernelClass::Reference {
+                compare("solution", &g, &expected_solution);
+            } else {
+                // Other kernels round the factorization and substitutions differently
+                // (the factor above still agrees at the strict bound; the first
+                // divergence is the solve, e.g. real/store0 solution[1] 1.8e-11 on
+                // OpenBLAS Sandybridge against a 7.1e-13 bound).
+                // Componentwise (Skeel) forward bound of a backward-stable solve:
+                //   |dx_i| <= 4 n eps (|S^-1| (|S| |x| + |b|))_i
+                // (first-order constant about 3). S^-1 columns come from the original
+                // matrix, independent of the stored solution. Observed worst error /
+                // bound over all 49 cases: 4e-3 Sandybridge, 8e-3 Nehalem, 4e-3
+                // Prescott. The reference-kernel bound above is unchanged.
+                let mut skeel = vec![0.0; n];
+                for j in 0..n {
+                    let mut work = matrix.clone();
+                    let mut unit = vec![0.0; n];
+                    unit[j] = 1.0;
+                    cholesky_solve(&mut work, &mut unit, n).unwrap();
+                    // t_j = (|S| |x| + |b|)_j; `unit` is column j of S^-1.
+                    let t: f64 = (0..n)
+                        .map(|k| matrix[j + n * k].abs() * expected_solution[k].abs())
+                        .sum::<f64>()
+                        + rhs[j].abs();
+                    for (acc, v) in skeel.iter_mut().zip(&unit) {
+                        *acc += v.abs() * t;
+                    }
+                }
+                let mut worst_ratio = 0.0_f64;
+                for (i, (actual, expected)) in g.iter().zip(&expected_solution).enumerate() {
+                    let bound = 4.0 * n as f64 * f64::EPSILON * skeel[i];
+                    let error = (actual - expected).abs();
+                    worst_ratio = worst_ratio.max(error / bound.max(f64::MIN_POSITIVE));
+                    assert!(
+                        error <= bound,
+                        "{case} solution[{i}]: forward error {error:e} exceeds the Skeel bound {bound:e}"
+                    );
+                }
+                eprintln!("{case} direct solution: worst error / Skeel bound {worst_ratio:.3e}");
+            }
             // A forward comparison alone can accept a bad solution to an
             // ill-conditioned system. Independently check backward error
             // using the original, unfactored covariance and gradient.

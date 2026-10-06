@@ -447,3 +447,85 @@ algorithms remain only behind `c_math::use_julia_libm()` (the archived Julia pre
   fixture is compared to 16 eps per component (plus four subnormal quanta); exact equality is a
   Linux/glibc contract. glibc also selects different `exp`/`log`/`sin`/`cos` code paths (ifunc)
   on CPUs without FMA; the fixture records the generating CPU.
+
+## BLAS provider and kernel matrix (#455)
+
+PR #444 reported 16 local failures (SR-CG and direct-SR prefix tests and the
+`heisenberg_chain_fsz` PhysCal record) that CI did not show. They reproduce exactly, and only,
+when the linked BLAS does not use the arithmetic of the kernels the archived references were
+generated with: the 16 tests below fail on every OpenBLAS kernel except Haswell (and Zen, which
+selects the same kernels), on reference BLAS/LAPACK, and on the GitHub Linux runner when
+`OPENBLAS_CORETYPE` is not pinned (AMD EPYC 9V74, OpenBLAS 0.3.26 selects `Cooperlake`). The main
+CI pins `OPENBLAS_CORETYPE=HASWELL` (Linux) and `NEOVERSEN1` (macOS ARM64), which is why it is
+green. Thread count is not a factor.
+
+**Matrix** (Linux x86_64, Xeon E5-2699 v3, Ubuntu OpenBLAS 0.3.26 pthread, LAPACK 3.12;
+`mvmc-core` + `mvmc-cli` with `--cargo-profile test-fast`, 1052 tests, same source otherwise).
+"before" is `main` at `640213dd` (strict bounds everywhere), "after" is this change.
+
+| provider / kernel | threads | before | after |
+|---|---|---|---|
+| OpenBLAS Haswell (native) | 1 / 2 / 36 | 1052 pass | 1052 pass (strict bounds) |
+| OpenBLAS Zen kernel set (`OPENBLAS_CORETYPE=Zen`) | 1 | 1052 pass | 1052 pass with the strict bounds forced (`MVMC_BLAS_KERNEL_CLASS=reference`) |
+| OpenBLAS Sandybridge | 1 / 36 | 16 fail | 1052 pass |
+| OpenBLAS Nehalem | 1 | 16 fail | 1052 pass |
+| OpenBLAS Prescott | 1 | 16 fail | 1052 pass |
+| Reference BLAS + LAPACK (`LD_PRELOAD`, `MVMC_BLAS_KERNEL_CLASS=unverified`) | 1 | 16 fail | 1052 pass (the PhysCal energy record needed its own relaxation, see below) |
+| Sandybridge with the strict bounds forced | 1 | 16 fail | 16 fail (the same 16: the gating, not a change of arithmetic, removes them) |
+| GitHub Linux x86_64, `OPENBLAS_CORETYPE` unset (EPYC 9V74, core `Cooperlake`) | default | same 16 | see the CI matrix below |
+| macOS ARM64 `NEOVERSEN1` (main CI, Homebrew OpenBLAS, overlay references) | 1 | pass | pass (strict bounds) |
+
+The four extra `mvmc-cli::issue348_multidef` failures in the first run of the optional workflow
+came from `OPENBLAS_VERBOSE=2` writing the kernel name to the stderr those tests compare; the
+workflow no longer sets it.
+
+**Kernel class.** `tests/support/julia_fixture.rs::kernel_class` returns `Reference` for Linux
+x86_64 OpenBLAS `Haswell`/`Zen` and for macOS ARM64 cores that have an overlay under
+`tests/fixtures/macos_arm_julia/<core>/`, `Unverified` otherwise (including a provider that does
+not export `openblas_get_corename`, such as Accelerate; the core name is resolved with `dlsym`,
+so test binaries link against such providers). `MVMC_BLAS_KERNEL_CLASS=reference|unverified`
+overrides the detection (reference BLAS under `LD_PRELOAD` still reports the OpenBLAS core).
+The strict bounds are unchanged on `Reference` kernels; the first divergence of every
+`Unverified` case is below.
+
+**First divergence and classification** (all "tolerance too tight for a legitimate provider
+difference"; no defect was found, the backward-error and invariant checks pass on every kernel):
+
+- `sr_cg::cg_fixed_input_matches_c_through_residual_refresh`. Operands are dyadic, so the first
+  divergence is the GEMV of iteration 2 (limit 2, max |dx|/|x| 3.1e-16, one ulp of the FMA versus
+  non-FMA reduction); Haswell reproduces the C fixture with 0 difference at all 41 limits. The
+  recurrence then grows the error about 1e4 per two iterations from iteration 5 (limit 5 2e-16,
+  6 1.2e-15, 7 1.8e-14, limit 13 2e-2 to 5e-2, up to 0.5 at limit 41; the same on Sandybridge,
+  Nehalem, Prescott). This is the #358 amplification of a non-converging CG (`tol = 0`, 41
+  iterations on a 32 x 48 operand). On `Unverified` kernels the forward comparison covers limits
+  <= 5 (ratio to the budget <= 0.02); the explicit-residual (backward error) check, with its
+  own budget, runs at all 41 limits on every kernel.
+- 12 `callback_tests` CG/direct prefix tests (complex, FSZ, general, interall, dh2, dh4/dh24,
+  pairhop, opttrans, rbm real/complex/fsz/dh24, canonical general RBM). Sampling operands, step-1
+  energy and RNG agree; the step-1 parameters differ by 4e-11 (complex, step 1) to 1.9e-5
+  (rbm real/complex) after the CG/Cholesky solve. These are the cases #358 already handles with
+  the amplified-family policy. On `Unverified` kernels every family now follows that policy
+  (sampling checkpoints, step-1 energy, S-diagonal SR diagnostics; parameter trajectory by
+  repeatability, finiteness and a nonzero update). The SR iteration count (column 8) is not
+  compared there (e.g. pairhop_fsz 142 versus 140 iterations).
+- `sr::tests::sampled_direct_sr_matrix_gradient_factor_and_solution_match_julia`. Matrix, gradient
+  and Cholesky factor agree at the strict bound; the first divergence is the solve (real/store0
+  solution[1] 1.8e-11 versus the 7.1e-13 bound; kappa_1(S) up to 4e7). On `Unverified` kernels the
+  solution uses the componentwise Skeel bound `4 n eps (|S^-1| (|S||x| + |b|))_i` built from the
+  original matrix; observed worst error / bound over the 49 cases is 4e-3 (Sandybridge), 8e-3
+  (Nehalem), 4e-3 (Prescott). The existing backward-error check is unchanged.
+- `physcal_issue181::two_sample_runners_match_independent_saved_states_rng_and_ordered_outputs`.
+  Only `heisenberg_chain_fsz`: weights, one-body and factored arrays agree at 1e-12/1e-10; the raw
+  two-body `direct` array of the sample differs by up to 6e-11 absolute / 1.9e-9 relative
+  (Sandybridge 3e-10, Nehalem and Prescott 1.9e-9, reference BLAS 1.3e-9) and, on reference BLAS
+  only, the accumulated FSZ energy by 7e-11 / 1.8e-10: ulp-level differences of the complex
+  inverse amplified by the cancelling Green sum (the "one-configuration sensitivity" of #449).
+  On `Unverified` kernels those two records use `abs 1e-9, rel 1e-7` (at least 16 times the
+  observed deviation); Haswell reproduces all of them at the strict bound and the
+  independently generated native-C Green fixtures keep the strict bound on every kernel.
+
+Reproduction: `OPENBLAS_NUM_THREADS=1 OPENBLAS_CORETYPE=Sandybridge cargo nextest run -p mvmc-core
+-p mvmc-cli --cargo-profile test-fast --no-fail-fast`; add `MVMC_BLAS_KERNEL_CLASS=reference` to
+see the 16 failures again. The optional `BLAS matrix` workflow (`workflow_dispatch`) runs the
+suite on macOS ARM64 with Accelerate, with Homebrew OpenBLAS (native kernel, pinned and default
+threads) and on Linux with the native kernel.

@@ -32,12 +32,8 @@ jobs:
           - { name: Linux x86_64 OpenBLAS native kernel (threads 1), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '1' }
           - { name: Linux x86_64 OpenBLAS native kernel (threads default), os: ubuntu-24.04, arch: X64, cache: linux-x86_64, accelerate: '0', coretype: '', threads: '' }
     env:
-      OPENBLAS_CORETYPE: ${{ matrix.variant.coretype }}
-      OPENBLAS_NUM_THREADS: ${{ matrix.variant.threads }}
-      OMP_NUM_THREADS: ${{ matrix.variant.threads }}
       MVMC_CG_DIAGNOSTICS: '1'
       MVMC_PHYSCAL181_FSZ_DIAGNOSTIC: '1'
-      OPENBLAS_VERBOSE: '2'
     steps:
       - uses: actions/checkout@v5
         with:
@@ -54,9 +50,22 @@ jobs:
           brew uninstall --ignore-dependencies openblas
           ! test -e /opt/homebrew/opt/openblas/lib
           echo "PKG_CONFIG_PATH=" >> "$GITHUB_ENV"
+      - name: Select BLAS threads and kernel
+        run: |
+          # Unset variables, not empty strings: OpenBLAS treats an empty
+          # OPENBLAS_CORETYPE as an unknown core name.
+          if test -n "${{ matrix.variant.threads }}"; then
+            echo "OPENBLAS_NUM_THREADS=${{ matrix.variant.threads }}" >> "$GITHUB_ENV"
+            echo "OMP_NUM_THREADS=${{ matrix.variant.threads }}" >> "$GITHUB_ENV"
+          fi
+          if test -n "${{ matrix.variant.coretype }}"; then
+            echo "OPENBLAS_CORETYPE=${{ matrix.variant.coretype }}" >> "$GITHUB_ENV"
+          fi
       - name: Record provider
         run: |
           uname -a
           if test "$RUNNER_OS" = Linux; then lscpu | grep -E 'Model name|Flags' | cut -c1-300; dpkg -l | grep -E 'openblas|liblapack' || true; else sysctl -n machdep.cpu.brand_string; brew list --versions openblas || echo "no Homebrew openblas (Accelerate)"; fi
+      - name: Record the OpenBLAS kernel in use
+        run: OPENBLAS_VERBOSE=2 cargo nextest list -p mvmc-core --test sr_cg --cargo-profile ci --locked 2>&1 | grep -E "^Core" | head -1 || true
       - name: Run tests
         run: cargo nextest run --workspace --locked --cargo-profile ci --no-fail-fast --retries 0 --status-level fail --final-status-level fail

@@ -27,16 +27,92 @@ pub fn exists(path: &Path) -> bool {
     path.is_file() || compressed_path(path).is_file()
 }
 
+/// Name of the linked OpenBLAS kernel (`openblas_get_corename`), or `None` when the
+/// BLAS provider does not export it (macOS Accelerate, reference BLAS).
+///
+/// Resolved with `dlsym` so that test binaries still link against providers that lack
+/// the symbol.
+#[allow(dead_code)]
+pub fn openblas_core_name() -> Option<String> {
+    use std::ffi::{c_char, c_void, CStr};
+    extern "C" {
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    #[cfg(target_os = "macos")]
+    let rtld_default = -2isize as *mut c_void;
+    #[cfg(not(target_os = "macos"))]
+    let rtld_default = std::ptr::null_mut::<c_void>();
+    // SAFETY: `dlsym` is passed a valid NUL-terminated name and the documented
+    // RTLD_DEFAULT handle; the resolved symbol has the C signature below.
+    let symbol = unsafe { dlsym(rtld_default, c"openblas_get_corename".as_ptr()) };
+    if symbol.is_null() {
+        return None;
+    }
+    let function: extern "C" fn() -> *const c_char = unsafe { std::mem::transmute(symbol) };
+    let name = unsafe { CStr::from_ptr(function()) }
+        .to_str()
+        .ok()?
+        .to_owned();
+    name.bytes()
+        .all(|b| b.is_ascii_alphanumeric())
+        .then_some(name)
+}
+
+/// Whether the linked BLAS reproduces the arithmetic of the checked-in reference lineage.
+///
+/// The archived Julia/C fixtures were generated with FMA-based OpenBLAS Haswell kernels
+/// (Linux x86_64; the Zen kernel set reproduces them, checked with OPENBLAS_CORETYPE=Zen) or with the per-core macOS ARM overlays under `macos_arm_julia/`. On
+/// those kernels the amplified comparisons (CG recurrences, ill-conditioned solves,
+/// cancelling Green-function sums) reproduce the references at the strict bounds. Other
+/// kernels (Sandybridge/Nehalem without FMA, AVX512, other ARM cores, Accelerate) differ
+/// by one ulp per GEMV and legitimately exceed those bounds, see
+/// docs/NUMERICAL_COMPARISONS.md ("BLAS provider matrix", #455).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum KernelClass {
+    Reference,
+    Unverified,
+}
+
+#[allow(dead_code)]
+pub fn kernel_class(fixtures: &Path) -> KernelClass {
+    match std::env::var("MVMC_BLAS_KERNEL_CLASS").as_deref() {
+        Ok("reference") => return KernelClass::Reference,
+        Ok("unverified") => return KernelClass::Unverified,
+        _ => {}
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        if arm_directory(fixtures).is_some_and(|dir| dir.is_dir()) {
+            KernelClass::Reference
+        } else {
+            KernelClass::Unverified
+        }
+    }
+    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+    {
+        let _ = fixtures;
+        let haswell_linux = cfg!(all(
+            target_os = "linux",
+            target_env = "gnu",
+            target_arch = "x86_64"
+        )) && openblas_core_name().is_some_and(|core| {
+            ["haswell", "zen"]
+                .iter()
+                .any(|k| core.eq_ignore_ascii_case(k))
+        });
+        if haswell_linux {
+            KernelClass::Reference
+        } else {
+            KernelClass::Unverified
+        }
+    }
+}
+
 pub fn arm_directory(fixtures: &Path) -> Option<PathBuf> {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
-        extern "C" {
-            fn openblas_get_corename() -> *const std::ffi::c_char;
-        }
-        let core = unsafe { std::ffi::CStr::from_ptr(openblas_get_corename()) }
-            .to_str()
-            .expect("OpenBLAS core name");
-        assert!(core.bytes().all(|b| b.is_ascii_alphanumeric()));
+        let core = openblas_core_name()?;
         Some(fixtures.join("macos_arm_julia").join(core))
     }
     #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
