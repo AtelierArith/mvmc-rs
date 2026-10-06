@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Optional CUDA gate (issue #420): build and run the tenferro CUDA gate on a GPU host.
+# Optional CUDA gate (issues #420 and #423): build and run the tenferro CUDA gate (device report,
+# dot_general/Cholesky) and the batched Pfaffian gate on a GPU host.
 #
 # Usage:
 #   scripts/run_cuda_gate.sh [native|docker] [extra cargo-test args]
@@ -29,7 +30,7 @@ vout="${MVMC_RS_CUDA_GATE_VALIDATION_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-v
 rout="${MVMC_RS_CUDA_GATE_ROUNDTRIP_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-roundtrip.md}"
 mkdir -p "$(dirname "$out")"
 
-inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_gate -- --ignored --nocapture --test-threads=1'
+inner='cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --test cuda_gate --test pfaffian_gate -- --ignored --nocapture --test-threads=1'
 
 case "$mode" in
   native)

@@ -992,6 +992,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mvmc-gpu"
+version = "0.0.0"
+dependencies = [
+ "mvmc-core",
+ "num-complex",
+ "pfapack",
+ "rayon",
+ "tenferro-cpu",
+ "tenferro-runtime",
+ "tenferro-tensor",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "mvmc-greenr2k"
 version = "0.0.0"
 
