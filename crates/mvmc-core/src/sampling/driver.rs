@@ -55,6 +55,7 @@ pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
     rng: &mut Sfmt19937Rng,
     reducer: &R,
 ) -> Result<SampleStats, super::initial::SamplingInitializationError> {
+    let _hot = crate::threading::hot_scope();
     super::fsz_real::vmc_make_sample_fsz_real_with_reducer(data, state, rng, reducer)
 }
 
@@ -133,6 +134,8 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
     reducer: &R,
     stage: &mut S,
 ) -> Result<SampleStats, NormalInitializationError> {
+    // Regions inside the sampler loop follow each other every few us: hot dispatch gate.
+    let _hot = crate::threading::hot_scope();
     timer.start(30);
     // This writes LocSpin workspace before typed preflight; the no-mutation
     // contract on rejection covers electron configuration and RNG, not all state.
@@ -658,6 +661,8 @@ pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) -> Result<SampleStats, NormalInitializationError> {
+    // Regions inside the sampler loop follow each other every few us: hot dispatch gate.
+    let _hot = crate::threading::hot_scope();
     timer.start(30);
     // This writes LocSpin workspace before typed preflight; the no-mutation
     // contract on rejection covers electron configuration and RNG, not all state.
@@ -1216,6 +1221,8 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) -> SampleStats {
+    // Regions inside the sampler loop follow each other every few us: hot dispatch gate.
+    let _hot = crate::threading::hot_scope();
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;

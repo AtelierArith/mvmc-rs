@@ -106,44 +106,56 @@ individual files stay at the 1e-16 to 1e-13 level, so the native-C Lanczos fixtu
 tolerances. The Lanczos output files are no longer byte-identical to the previous Rust binary (rank-one update
 instead of full recomputation, as in C); all other outputs of the A/B run are unchanged.
 
-## Thread sweep with the spin pool (issue #479, `results/inner479_inner{1,4,8,16}.csv`)
+## Thread sweep, Rayon only (issue #479, `results/inner479_inner{1,4,8,16}.csv`)
 
 Diagnosis (L64 optimization, `MVMC_RS_INNER_PROFILE=1`, 8 workers, gate bypassed): the Rayon pool paid 15 to 30 us
-per region (wake-up of sleeping workers, `install`, join) and the per-region tables of the Pfaffian kernels. Pooled
-`UpdateMAll` (8 planes, 31 us serial) took 26 us and `CalculateNewPfM2` (0.8 us serial) 7.3 us, so only the Pfaffian
-region (847 us serial, 300 us pooled) paid off, and the size gate (`n_size >= 138` at 8 workers) rightly kept
-everything serial. Fix: a spin pool (`crates/mvmc-core/src/spin_pool.rs`, workers spin for 300 us after each region,
-caller runs block 0, static blocks, no per-region allocation: 1 to 2 us per empty 8-block region, measured by the
-`dispatch_latency_of_empty_regions` micro-benchmark), the region helpers and the Pfaffian kernels on it with a reusable
-staging buffer instead of per-block tables, and gates recalibrated to the new dispatch cost (work estimate of at least
-20 us, size gate off). Pooled `UpdateMAll` now takes 6.7 us, `CalculateMAll` at L64 146 us (ideal 110 us); results are
-byte-identical for 1, 2, 3, 4 and 8 workers (`threaded_issue182/360/361` invariance tests and the
-`ident479` byte comparison of every output file on Hubbard L16/L32, DH, Kondo, RBM+OptTrans, Heisenberg complex and FSZ,
-also with the gate bypassed), and the default one-thread outputs are byte-identical to `main` with the same timing
-(`results/ab_inner479_1thread_before_after.csv`).
+per region and the Pfaffian kernels built per-block tables. Pooled `UpdateMAll` (8 planes, 31 us serial) took 26 us and
+`CalculateNewPfM2` (0.8 us serial) 7.3 us, so only the Pfaffian region (847 us serial, 300 us pooled) paid off, and the
+size gate (`n_size >= 138` at 8 workers) rightly kept everything serial. The dispatch micro-benchmark
+(`tests/rayon_dispatch_479.rs`, ignored, 8 workers, quiet host, per empty 8-block region) separates the causes:
 
-Seconds, median of 2, Rust and native C interleaved (host load before/after every run is in the CSVs; the Rust run
-and the 1T/4T C runs saw median load 2.4/2.9, the 8T runs 5.8 and the 16T runs 11.3, so the 8T and 16T columns,
-Rust and C alike, are pessimistic):
+| variant | gap 0 | gap 20 us | gap 60 us |
+|---|---|---|---|
+| outside the pool: `install` + `scope` | 7.1 us | 17.8 us | 33.2 us |
+| outside the pool: `par_iter` + `with_min_len(1)` | 8.3 us | 14.6 us | 30.2 us |
+| outside the pool: `ThreadPool::broadcast` | 4.7 us | 4.3 us | 25.5 us |
+| inside one hoisted `install`: `scope` | 3.1 us | 6.6 us | 19.9 us |
+| inside one hoisted `install`: `broadcast` | 2.8 us | 2.8 us | 18.6 us |
+| (spin-pool prototype, replaced) | 1.4 us | 1.3 us | n/a |
+
+Two effects: (1) the caller of `install`/`broadcast` from outside sleeps on a latch, which costs a wake-up per region;
+a driver that runs inside the pool joins by running or stealing jobs and never sleeps; (2) Rayon's workers spin only
+about 30 us, then sleep, and a region after a longer serial phase pays 19 to 33 us in the micro-benchmark and 100 us or
+more in the real kernels (core wake-up). Changes made within Rayon: static blocks with one `broadcast` per region (no
+`par_iter` splitting, one scratch per block), the Pfaffian kernels on a reusable staging buffer instead of per-block
+tables (keeping the "a failed parallel region leaves the table untouched" boundary), nested regions run inline, a 64 MiB
+worker stack so that the `mvmc` binary can run its whole driver inside the pool (`install` in `main`, only when
+`MVMC_RS_INNER_THREADS > 1`), and gates that distinguish the context: outside the pool the Rayon-calibrated 100 us work
+gate and `n_size` gate are unchanged; inside it 40 us for the sampler loop (regions every few us, workers awake), 400 us for
+everything else (workers asleep), no `n_size` gate. Results are byte-identical for 1, 2, 3, 4 and 8 workers
+(`threaded_issue182/360/361` and the byte comparison of every output file on Hubbard L16/L32/L64, DH, Kondo, RBM+OptTrans,
+Heisenberg complex and FSZ, PhysCal L16, also with the gates bypassed), and the default one-thread outputs are
+byte-identical to `main` with the same timing (`results/ab_inner479_1thread_before_after.csv`, 0.99x to 1.03x).
+
+Seconds, median of 2, Rust and native C interleaved (host load before/after every run is in the CSVs; the 4T runs saw
+median load 2.6, 8T 4.9, 16T 10.2, so those columns are pessimistic for Rust and C alike):
 
 | workload | Rust 1T | 4T | 8T | 16T | C 1T | C 4T | C 8T | C 16T |
 |---|---|---|---|---|---|---|---|---|
-| opt_hubbard_L64 | 6.35 | 2.81 | 2.29 | 2.29 | 7.06 | 2.88 | 2.35 | 2.67 |
-| opt_hubbard_L32 | 3.69 | 2.61 | 2.62 | 2.63 | 4.45 | 2.55 | 2.45 | 3.34 |
-| phys_hubbard_L32 | 10.54 | 7.94 | 6.87 | 6.43 | 16.03 | 8.06 | 7.35 | 8.39 |
-| opt_heisenberg_cmp | 13.70 | 13.80 | 13.74 | 13.82 | 18.09 | 14.76 | 17.51 | 23.46 |
-| opt_heisenberg_fsz | 4.14 | 4.25 | 3.89 | 3.76 | 4.66 | 8.18 | 11.14 | 16.35 |
-| opt_hubbard_rbm_opttrans | 8.22 | 8.13 | 8.68 | 8.82 | 11.33 | 10.49 | 13.15 | 20.63 |
+| opt_hubbard_L64 | 6.26 | 3.63 | 3.11 | 3.45 | 7.05 | 2.90 | 2.36 | 2.70 |
+| opt_hubbard_L32 | 3.68 | 3.69 | 3.70 | 3.71 | 4.45 | 2.51 | 2.46 | 3.26 |
+| phys_hubbard_L32 | 10.38 | 10.46 | 10.42 | 10.49 | 16.14 | 7.90 | 7.42 | 8.34 |
+| opt_heisenberg_cmp | 13.73 | 13.81 | 13.68 | 13.77 | 18.06 | 14.77 | 17.59 | 23.30 |
+| opt_heisenberg_fsz | 4.10 | 4.20 | 3.93 | 3.85 | 4.71 | 8.26 | 11.12 | 16.53 |
+| opt_hubbard_rbm_opttrans | 8.27 | 8.04 | 7.58 | 7.39 | 11.26 | 10.68 | 13.17 | 20.62 |
+| opt_kondo_real | 7.49 | 7.72 | 7.71 | 7.79 | 9.79 | 12.09 | 15.44 | 19.73 |
 
-L64 optimization scales 2.8x at 4 workers and 2.8x at 8 (equal to C's OpenMP, 2.35 s), PhysCal L32 1.5x at 8 and 1.6x at
-16 (C 7.35 s and 8.4 s), L32 optimization 1.4x. The small models stay at their 1T times (the gate keeps their
-sub-20-us regions serial, where C's OpenMP gets slower with threads: 1.9x on FSZ at 8T).
+Achieved: L64 optimization 1.7x at 4 workers and 2.0x at 8 (C's OpenMP 2.4x and 3.0x; a throw-away spin-pool prototype
+reached 2.2x and 2.7x: 2.81 s and 2.29 s in the first version of this PR). The remaining Rayon gap is the
+sleep/wake behavior: Rayon offers no spin-window control, so the 3 us hot dispatch is only reachable for regions that
+follow each other within 30 us, i.e. the sampler loop. Not reachable with Rayon: PhysCal at 32 sites (the prototype
+reached 1.6x; there the regions follow serial phases of ms, the workers are asleep, and pooled regions lose, so the
+400 us gate keeps them serial: 10.4 s at every thread count) and the 32-site optimization (its `UpdateMAll` regions are
+8 us serial, below the 40 us gate; with `MVMC_RS_INNER_MIN_WORK_NS=10000` a hoisted 8-worker run takes 2.4 s, but that gate also pools the 11 us Kondo Pfaffian regions and the RBM kernels, which lose). The small models stay
+within 3 % of their 1T times, where C's OpenMP gets slower with threads (FSZ 3.9x at 16 threads).
 
-Limits. (1) L32 optimization stops at 1.4x: its `UpdateMAll` regions (8 planes, about 8 us serial) fall below the 20 us
-gate. `MVMC_RS_INNER_MIN_WORK_NS=10000` takes L32 to 2.05 s (1.8x) but makes Kondo 35 % slower (7.5 s -> 10.1 s,
-its 8-plane `CalculateMAll` costs 11 us serial and about 16 us pooled: the staged kernel carries a fixed
-per-region overhead of about 10 us beyond the 1 to 2 us dispatch), so one uniform gate cannot serve both; separate
-per-kernel estimates or a cheaper staged Pfaffian region would. (2) The serial remainder (the 0.8 us per-proposal
-regions, the local energy at small `n_size`, Slater derivative) bounds the speed-up (Amdahl): at L64 `CalculateMAll`
-and `UpdateMAll` were 85 % of the serial time. (3) Timings at 8 and 16 workers were taken while other jobs ran on the
-host (load 6 to 11), which lowers every multi-worker number.

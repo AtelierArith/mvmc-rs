@@ -215,7 +215,10 @@ fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
     let parallel = !NATIVE_STATUS
-        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        && crate::threading::inner_parallel_work_cold(
+            qp_end - qp_start,
+            pfaffian_qp_cost_ns(n_size),
+        );
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if !parallel {
@@ -531,7 +534,10 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: boo
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
     let parallel = !NATIVE_STATUS
-        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        && crate::threading::inner_parallel_work_cold(
+            qp_end - qp_start,
+            pfaffian_qp_cost_ns(n_size),
+        );
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if !parallel {
@@ -605,7 +611,7 @@ pub fn calc_m_all_fsz_complex(
     let mut inv_temp = InvMColMajor::zeros(qp_end, n_elec);
     let mut pf_temp = vec![Complex64::default(); qp_end];
     let parallel =
-        crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        crate::threading::inner_parallel_work_cold(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if parallel {

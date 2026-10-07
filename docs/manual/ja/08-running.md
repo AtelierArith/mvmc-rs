@@ -159,13 +159,18 @@ C コードとまったく同じように乱数を消費します。独立な作
 `OO`/`HO` の累積と保存されたグラム積の行、実数波動関数に対するローカルエネルギーの遷移項、対角項・PairHop・Exchange・InterAll のエネルギー項、`update_m_all_*`/`calculate_new_pf_m*` の QP ループ、Slater 要素の平面、doublon-holon カウンター、RBM の隠れユニットとその微分、Lanczos のハミルトニアン・グリーン関数項、SR 行列の構築と CG のベクトル更新、グリーン関数の要素)
 は
 `MVMC_RS_INNER_THREADS`([8.5](#85-環境変数))で有効になります。これはマルコフ連鎖や、各結果が形成される順序を変えません。
-ワーカーは低レイテンシのスピンプール(`crates/mvmc-core/src/spin_pool.rs`)です。`threads - 1` 本のスレッドが各領域の後に約 300 us スピンし
-(その後は待機状態に入るので、逐次区間でコアを消費しません)、呼び出しスレッドが OpenMP のマスターのようにブロック 0 を実行します。
-8 ワーカーでの 1 領域のディスパッチと結合は約 1〜3 us です(置き換えた Rayon プールは 15〜30 us)。ブロックは項目の静的な `omp for` 分割で、
-各出力要素の生成者は 1 つだけなので、結果はどのワーカー数でもビット単位で同一です。デフォルト(`MVMC_RS_INNER_THRESHOLD` なし)では
-推定逐次作業量が 20 us 以上の領域がプールを使い、提案ごとの 1 us 未満の領域は逐次のままです。8 ワーカーの Hubbard 鎖では、
-32 サイトで 1.9 倍、64 サイトの最適化で 2.7 倍、32 サイトの PhysCal で 1.5 倍になります(C の OpenMP 領域と同程度)。ゲート未満の領域しかない入力
-(Heisenberg、Kondo、FSZ、RBM)はこれまでどおりです([ベンチマーク結果](../../../benchmark/cpu_round/README.md))。
+領域は 1 回の `ThreadPool::broadcast` で静的ブロックとして Rayon プールに渡され(ブロック `k` をワーカー `k` へ。`omp for` の静的スケジュール、領域ごとの割り当てなし)、
+各出力要素の生成者は 1 つだけなので、結果はどのワーカー数でもビット単位で同一です。Rayon のワーカーはアイドル時にスリープするため、領域のコストは呼び出し元に依存します。
+プール外のスレッドから呼ぶと 7〜18 us(呼び出し側がラッチ上で眠る)、ワーカーが眠った後(約 30 us 以上の逐次区間の後)は 20〜30 us 以上です。
+そのためデフォルト(`MVMC_RS_INNER_THRESHOLD` なし)では、プール外から呼ばれる領域は電子行列が大きく(`n_size` が 8 ワーカーで 138 以上、4 で 160、2 で 240)、
+かつ推定作業量が 100 us 以上の場合だけプールを使います。
+
+`mvmc` バイナリは `MVMC_RS_INNER_THREADS > 1` のとき、ドライバー全体をプール内で実行します(`mvmc_core::threading::install`。ライブラリ利用者も同様に自分の実行を包めます)。
+領域はプールのワーカーから発行され、ワーカーが起きている間は約 3 us のコストで、ゲートは、サンプラーループの領域(数 us 間隔で連続)は推定作業量 40 us、
+その他の領域(パフィアン再計算や測定カーネルは逐次区間の後でワーカーが眠っており、起こすのに 100 us 以上かかる)は 400 us、`n_size` ゲートはなしです。
+8 ワーカーの Hubbard 鎖では 64 サイトの最適化で 2.0 倍(4 ワーカーで 1.7 倍。C の OpenMP は 3.0 倍、スピンプールの試作は 2.7 倍)になり、
+ゲート未満の領域しかない入力(32 サイト、PhysCal、Heisenberg、Kondo、FSZ、RBM)は、ドライバーがプールのスレッドで動くため 3 % 程度の範囲でこれまでどおりです。
+Rayon は離れた領域の間でワーカーを起こしたままにできず、それが PhysCal と 32 サイトの入力を制限します([ベンチマーク結果](../../../benchmark/cpu_round/README.md))。
 密な線形代数(`dgemv`, `dpotrf`, パフィアンカーネル)は OpenBLAS で実行され、そのスレッド数は通常の
 `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` 変数で制御されます(`mvmc-rs` は読み取りません。プロジェクトのベンチマークでは 1 に固定しています)。
 
@@ -246,8 +251,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` には `gpu/mvmc-gpu-cuda` の `mvmc-cuda` バイナリが必要です(CUDA プロバイダーを登録してから、この同じ CLI を実行します)。標準の `mvmc` は拒否します。セレクタは起動時に IO の前に一度だけ検証され、不正な値や利用できないバックエンドは `error: MVMC_RS_SR_BACKEND: ...` を出力して終了ステータス 2(MPI では集団で)で終了し、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
 | `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | 測定で使う Pfaffian/逆行列テーブルの生成元。`calc-m-all`(デフォルト、C 順序カーネル)、または `c-order`、`tenferro`、`cuda[:N]`(バッチごとに 1 回の `PfaffianStages` 呼び出しで生成。実数かつ非 FSZ のみ)。`c-order` はデフォルトとバイト一致。ステージを持たないバックエンドや非対応モードはエラーで、フォールバックしません。 `MVMC_RS_SR_BACKEND` と同様、起動時に IO の前に一度だけ検証されます(不正な値や利用できないバックエンド: `error: MVMC_RS_MEASURE_PF_BACKEND: ...`、終了ステータス 2)。 |
 | `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
-| `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 20000 |
-| `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。デフォルトは 1(無効。推定作業量だけで判断します。従来の Rayon プールでは `120*w/(w-1)` でした) |
+| `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000(ドライバーがプール内のときはサンプラーループの領域に 40000、その他に 400000。この変数を設定するとどこでもその値) |
+| `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。プール外から発行される領域ではデフォルトは `120*w/(w-1)`(4 で 160、2 で 240)。プール内のドライバーでは、この変数を設定しない限り `n_size` ゲートはありません |
 | `MVMC_RS_INNER_PROFILE` | `threading::dispatch_profile` | `1` にすると、CLI が実行後に stderr へ内部カーネルの各呼び出し箇所(逐次・プール)の呼び出し数・項目数・時間を出力します |
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | ランチャーの検出([8.4](#84-mpiとグループ実行)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |

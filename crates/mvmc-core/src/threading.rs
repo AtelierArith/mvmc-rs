@@ -1,10 +1,10 @@
 //! Runtime control for deterministic shared-memory inner kernels.
 //!
 //! The per-region helpers (`for_each_*`, `qp_fill*`, `qp_update`, `collect_terms`,
-//! `static_blocks`) run on the low-latency spin pool of [`crate::spin_pool`] (issue #479):
-//! static blocks of the items, one producer per output element, so every result is
-//! independent of the worker count. [`install`]/`install_inner` keep the Rayon pool for the
-//! few large regions that still use `par_iter` directly.
+//! `static_blocks`) hand static blocks of the items to the Rayon pool with one
+//! `ThreadPool::broadcast` per region (issue #479): one producer per output element, so every
+//! result is independent of the worker count. [`install`]/`install_inner` keep `par_iter` for
+//! the few large regions that still use it directly.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -170,20 +170,14 @@ impl KernelObservation {
         }
         counters.items[parallel][self.kind as usize].fetch_add(1, Ordering::Relaxed);
         if self.parallel {
-            if let Some(worker) = crate::spin_pool::current_worker() {
-                // Spin-pool block (worker 0 is the calling thread, like the OpenMP master).
-                counters.worker_entries.fetch_add(1, Ordering::Relaxed);
-                counters.workers.lock().unwrap().insert(worker);
-            } else {
-                let thread = std::thread::current();
-                if thread
-                    .name()
-                    .is_some_and(|name| name.starts_with("mvmc-inner-"))
-                {
-                    if let Some(worker) = rayon::current_thread_index() {
-                        counters.worker_entries.fetch_add(1, Ordering::Relaxed);
-                        counters.workers.lock().unwrap().insert(worker);
-                    }
+            let thread = std::thread::current();
+            if thread
+                .name()
+                .is_some_and(|name| name.starts_with("mvmc-inner-"))
+            {
+                if let Some(worker) = rayon::current_thread_index() {
+                    counters.worker_entries.fetch_add(1, Ordering::Relaxed);
+                    counters.workers.lock().unwrap().insert(worker);
                 }
             }
         }
@@ -196,13 +190,48 @@ impl KernelObservation {
 pub const DEFAULT_INNER_THRESHOLD: usize = 32;
 
 /// Default minimum estimated serial work (nanoseconds) of one region before the
-/// inner pool is used. A region on the spin pool ([`crate::spin_pool`]) costs about
-/// 1-3 us to dispatch and join at 8 workers (measured with the dispatch micro-benchmark of
-/// that module; the Rayon pool this replaced cost 15-30 us), so a region must carry several
-/// times that to gain from two or more workers. 20 us keeps the many sub-microsecond
-/// per-proposal regions (`CalculateNewPfM2`) serial and pools `UpdateMAll` and
-/// `CalculateMAll` from `n_size` about 32 and 16 upward (issue #479).
-pub const DEFAULT_MIN_PARALLEL_WORK_NS: u64 = 20_000;
+/// inner pool is used when the region is dispatched from a thread outside the pool.
+/// Waking the pool and joining costs about 15-30 us per region on the reference host
+/// (`docs/reference/c-to-julia/performance/`; the caller sleeps on a latch and the workers
+/// have to be woken), so a region must carry several times that to gain from two or more
+/// workers. See [`HOISTED_MIN_PARALLEL_WORK_NS`] for the hoisted case.
+pub const DEFAULT_MIN_PARALLEL_WORK_NS: u64 = 100_000;
+
+/// The gate for *hot* regions when the driver runs inside the pool ([`install`] around a
+/// whole run, as the `mvmc` binary does with `MVMC_RS_INNER_THREADS > 1`, issue #479).
+///
+/// A hoisted driver is itself a pool worker: it never sleeps on a latch and joins by running or
+/// stealing jobs, and the idle workers stay in Rayon's spin window between nearby regions, so a
+/// broadcast costs about 3 us (against 7-18 us from outside). That holds only for regions that
+/// follow each other within about 30 us, the per-hop regions of the sampler loop ([`hot_scope`]);
+/// 40 us keeps its sub-microsecond regions serial.
+pub const HOISTED_MIN_PARALLEL_WORK_NS: u64 = 40_000;
+
+/// The gate for *cold* regions (everything outside [`hot_scope`], notably the Pfaffian
+/// recomputation and the measurement kernels) when the driver runs inside the pool. After a
+/// serial phase of more than about 30 us Rayon's workers are asleep and waking them costs 100 us
+/// or more (measured: a pooled 8-plane Pfaffian at 32 sites, 241 us serial, is not faster pooled
+/// at 4 workers; at 64 sites, 847 us serial, it is 2.4x faster), so such a region must carry
+/// several hundred us of work.
+pub const HOISTED_COLD_MIN_PARALLEL_WORK_NS: u64 = 400_000;
+
+thread_local! {
+    static HOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Marks the regions dispatched by the current thread, until dropped, as hot (see
+/// [`HOISTED_MIN_PARALLEL_WORK_NS`]); used by the sampler loops.
+pub(crate) struct HotScope(bool);
+
+impl Drop for HotScope {
+    fn drop(&mut self) {
+        HOT.with(|flag| flag.set(self.0));
+    }
+}
+
+pub(crate) fn hot_scope() -> HotScope {
+    HotScope(HOT.with(|flag| flag.replace(true)))
+}
 
 /// Estimated serial cost (ns) of one trivially cheap element (a copy or an axpy).
 pub const ELEMENT_COST_NS: usize = 2;
@@ -215,28 +244,61 @@ pub fn green_cost_ns(n_size: usize, bodies: usize) -> usize {
     scaled_cost_ns(n_size, bodies * (12 * n_size + 60))
 }
 
-/// Default minimum electron-matrix dimension for the automatic gate: 1, i.e. the size gate
-/// is off and the per-region work estimate decides alone.
+/// Electron-matrix dimension (`n_size`) at which an infinitely fast pool would break
+/// even; the automatic gate requires `DEFAULT_MIN_PARALLEL_SIZE * w / (w - 1)` for `w`
+/// workers, because the benefit `(1 - 1/w) * work` has to pay a dispatch cost that does
+/// not shrink with `w`.
 ///
-/// With the Rayon pool the gate was `120 w / (w - 1)` (138 at 8 workers): dispatch cost
-/// 15-30 us per region made pooling lose for `n_size` below about 128 and only the largest
-/// inputs gained. With the spin pool the dispatch cost is 1-3 us, the work estimate
-/// ([`DEFAULT_MIN_PARALLEL_WORK_NS`]) already excludes the regions that are too small, and
-/// pooling every admitted region is a gain from `n_size` 16 upward (issue #479, measured on
-/// the Hubbard chain and the Heisenberg/Kondo/DH/RBM inputs of `scripts/bench_cpu_round.py`).
-/// `MVMC_RS_INNER_MIN_SIZE` still restores a size gate.
-pub const DEFAULT_MIN_PARALLEL_SIZE: usize = 1;
+/// Dispatching a region wakes sleeping workers and moves the QP planes between their
+/// caches and the caller's. Pooling only some regions of a sample therefore loses
+/// (a region that is faster pooled slows the serial regions that follow it), while
+/// pooling every region only wins once the per-sample matrices are large. Measured on
+/// the Hubbard chain (`docs/reference/c-to-julia/performance/`): with 4 workers
+/// `n_size` 16..64 loses up to 2x, 128 is neutral, 160 is about 10% faster and 192
+/// about 15% faster; with 2 workers 192 still loses 10% while 256 is 1.35x faster
+/// (4 workers 1.7x, 8 workers 2.0x). This applies to regions dispatched from outside the
+/// pool; a hoisted run ([`HOISTED_MIN_PARALLEL_WORK_NS`]) has no size gate.
+pub const DEFAULT_MIN_PARALLEL_SIZE: usize = 120;
 
-/// Default `min_size` for `threads` workers (independent of the worker count since #479).
-pub fn default_min_size(_threads: usize) -> usize {
-    DEFAULT_MIN_PARALLEL_SIZE
+/// Default `min_size` for `threads` workers: `DEFAULT_MIN_PARALLEL_SIZE * w / (w - 1)`.
+pub fn default_min_size(threads: usize) -> usize {
+    let w = threads.max(2);
+    (DEFAULT_MIN_PARALLEL_SIZE * w).div_ceil(w - 1)
+}
+
+/// Whether the calling thread is an inner-pool worker that is not inside a block of a
+/// running region: the driver was hoisted into the pool (see [`HOISTED_MIN_PARALLEL_WORK_NS`]).
+fn hoisted() -> bool {
+    !IN_BLOCK.with(std::cell::Cell::get)
+        && POOL
+            .get()
+            .is_some_and(|pool| pool.current_thread_index().is_some())
+}
+
+/// `min_work_ns` for the current dispatch context: the hoisted defaults apply only while the
+/// configured value is still the outside default (an explicit `MVMC_RS_INNER_MIN_WORK_NS`
+/// wins in every context). `cold` ignores the hot scope.
+fn effective_min_work_ns(config: &InnerThreadConfig, cold: bool) -> u64 {
+    if config.min_work_ns != DEFAULT_MIN_PARALLEL_WORK_NS || !hoisted() {
+        config.min_work_ns
+    } else if !cold && HOT.with(std::cell::Cell::get) {
+        HOISTED_MIN_PARALLEL_WORK_NS
+    } else {
+        HOISTED_COLD_MIN_PARALLEL_WORK_NS
+    }
 }
 
 /// Cost estimate of an `n_size`-dependent region: `cost_ns`, or 0 (always serial) when
 /// the automatic gate is active and the matrices are below `min_size`. An explicit
 /// `MVMC_RS_INNER_THRESHOLD` ignores costs, so it is unaffected.
 pub fn scaled_cost_ns(n_size: usize, cost_ns: usize) -> usize {
-    if n_size >= inner_thread_config().min_size {
+    let config = inner_thread_config();
+    let min_size = if hoisted() && config.min_size == default_min_size(config.threads) {
+        1
+    } else {
+        config.min_size
+    };
+    if n_size >= min_size {
         cost_ns
     } else {
         0
@@ -311,6 +373,16 @@ pub fn inner_parallel_enabled(work_items: usize) -> bool {
 /// the pool costs more than running it (issue #361). The choice never changes any
 /// result, only which threads form it.
 pub fn inner_parallel_work(items: usize, cost_ns: usize) -> bool {
+    parallel_work(items, cost_ns, false)
+}
+
+/// [`inner_parallel_work`] for regions that run after long serial phases (the workers are
+/// asleep): never uses the hot gate of a [`hot_scope`].
+pub fn inner_parallel_work_cold(items: usize, cost_ns: usize) -> bool {
+    parallel_work(items, cost_ns, true)
+}
+
+fn parallel_work(items: usize, cost_ns: usize, cold: bool) -> bool {
     let config = inner_thread_config();
     if config.threads <= 1 {
         return false;
@@ -318,7 +390,8 @@ pub fn inner_parallel_work(items: usize, cost_ns: usize) -> bool {
     if config.threshold_explicit {
         return items >= config.threshold;
     }
-    items >= 2 && (items as u64).saturating_mul(cost_ns as u64) >= config.min_work_ns
+    items >= 2
+        && (items as u64).saturating_mul(cost_ns as u64) >= effective_min_work_ns(&config, cold)
 }
 
 /// Number of workers to provision for a work range already admitted by
@@ -434,12 +507,16 @@ pub fn install<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
     install_inner(operation)
 }
 
+static POOL: OnceLock<ThreadPool> = OnceLock::new();
+
 fn pool() -> &'static ThreadPool {
-    static POOL: OnceLock<ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
         ThreadPoolBuilder::new()
             .num_threads(inner_thread_config().threads.max(1))
             .thread_name(|index| format!("mvmc-inner-{index}"))
+            // A hoisted driver (the whole `mvmc` run) executes on a pool worker, which needs
+            // the main thread's stack budget, not the 2 MiB spawned-thread default.
+            .stack_size(64 << 20)
             .build()
             .expect("inner Rayon pool must build")
     })
@@ -463,14 +540,51 @@ fn partition(count: usize) -> (usize, usize) {
     (count.div_ceil(len.max(1)), len.max(1))
 }
 
-/// Run `body(block)` for `blocks` static blocks on the low-latency spin pool
-/// ([`crate::spin_pool`]), binding the caller's observer on every worker.
+/// Run `body(block)` for `blocks` static blocks (`blocks <= threads`) on the inner Rayon pool.
+///
+/// One `ThreadPool::broadcast` hands block `k` to worker `k` (the C `omp for` static
+/// schedule). From a thread outside the pool this costs about 4 us per region while the
+/// workers are still in Rayon's idle spin window (gaps of up to about 30 us), against 7 to 18
+/// us for `install` plus `scope`/`par_iter` (issue #479: `rayon_dispatch_variants`
+/// measurements in `benchmark/cpu_round/README.md`); it needs no allocation per task and no
+/// work stealing. A region requested from inside the pool (a nested kernel) runs its blocks
+/// inline in order: a nested broadcast would wait for workers that are busy with the outer
+/// blocks. Block boundaries never depend on timing, so both give the same result.
 fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
     let observer = OBSERVER.with(|slot| slot.borrow().clone());
-    crate::spin_pool::run_blocks(blocks, &|block| {
+    let pool = pool();
+    if IN_BLOCK.with(std::cell::Cell::get) {
+        for block in 0..blocks {
+            let _binding = bind_observer(observer.clone());
+            body(block);
+        }
+        return;
+    }
+    let run = |block: usize| {
         let _binding = bind_observer(observer.clone());
+        IN_BLOCK.with(|flag| flag.set(true));
         body(block);
+        IN_BLOCK.with(|flag| flag.set(false));
+    };
+    if pool.current_thread_index().is_some() {
+        // Hoisted driver: the caller is itself a pool worker and takes part as a block.
+        rayon::broadcast(|context| {
+            if context.index() < blocks {
+                run(context.index());
+            }
+        });
+        return;
+    }
+    pool.broadcast(|context| {
+        if context.index() < blocks {
+            run(context.index());
+        }
     });
+}
+
+thread_local! {
+    /// True while a block of a region runs on this thread (nested regions then run inline).
+    static IN_BLOCK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Static block schedule on the inner pool (the C `omp for` default): worker `k` always
