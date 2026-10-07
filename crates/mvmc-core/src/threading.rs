@@ -1,4 +1,10 @@
 //! Runtime control for deterministic shared-memory inner kernels.
+//!
+//! The per-region helpers (`for_each_*`, `qp_fill*`, `qp_update`, `collect_terms`,
+//! `static_blocks`) hand static blocks of the items to the Rayon pool with one
+//! `ThreadPool::broadcast` per region (issue #479): one producer per output element, so every
+//! result is independent of the worker count. [`install`]/`install_inner` keep `par_iter` for
+//! the few large regions that still use it directly.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -9,7 +15,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use num_complex::Complex64;
-use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 /// Observed kernel entries, not requested pool capacity or install calls.
@@ -185,10 +190,48 @@ impl KernelObservation {
 pub const DEFAULT_INNER_THRESHOLD: usize = 32;
 
 /// Default minimum estimated serial work (nanoseconds) of one region before the
-/// inner pool is used. Waking the pool and joining costs about 15-30 us per region
-/// on the reference host (`docs/reference/c-to-julia/performance/`), so a region
-/// must carry several times that to gain from two or more workers.
+/// inner pool is used when the region is dispatched from a thread outside the pool.
+/// Waking the pool and joining costs about 15-30 us per region on the reference host
+/// (`docs/reference/c-to-julia/performance/`; the caller sleeps on a latch and the workers
+/// have to be woken), so a region must carry several times that to gain from two or more
+/// workers. See [`HOISTED_MIN_PARALLEL_WORK_NS`] for the hoisted case.
 pub const DEFAULT_MIN_PARALLEL_WORK_NS: u64 = 100_000;
+
+/// The gate for *hot* regions when the driver runs inside the pool ([`install`] around a
+/// whole run, as the `mvmc` binary does with `MVMC_RS_INNER_THREADS > 1`, issue #479).
+///
+/// A hoisted driver is itself a pool worker: it never sleeps on a latch and joins by running or
+/// stealing jobs, and the idle workers stay in Rayon's spin window between nearby regions, so a
+/// broadcast costs about 3 us (against 7-18 us from outside). That holds only for regions that
+/// follow each other within about 30 us, the per-hop regions of the sampler loop ([`hot_scope`]);
+/// 40 us keeps its sub-microsecond regions serial.
+pub const HOISTED_MIN_PARALLEL_WORK_NS: u64 = 40_000;
+
+/// The gate for *cold* regions (everything outside [`hot_scope`], notably the Pfaffian
+/// recomputation and the measurement kernels) when the driver runs inside the pool. After a
+/// serial phase of more than about 30 us Rayon's workers are asleep and waking them costs 100 us
+/// or more (measured: a pooled 8-plane Pfaffian at 32 sites, 241 us serial, is not faster pooled
+/// at 4 workers; at 64 sites, 847 us serial, it is 2.4x faster), so such a region must carry
+/// several hundred us of work.
+pub const HOISTED_COLD_MIN_PARALLEL_WORK_NS: u64 = 400_000;
+
+thread_local! {
+    static HOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Marks the regions dispatched by the current thread, until dropped, as hot (see
+/// [`HOISTED_MIN_PARALLEL_WORK_NS`]); used by the sampler loops.
+pub(crate) struct HotScope(bool);
+
+impl Drop for HotScope {
+    fn drop(&mut self) {
+        HOT.with(|flag| flag.set(self.0));
+    }
+}
+
+pub(crate) fn hot_scope() -> HotScope {
+    HotScope(HOT.with(|flag| flag.replace(true)))
+}
 
 /// Estimated serial cost (ns) of one trivially cheap element (a copy or an axpy).
 pub const ELEMENT_COST_NS: usize = 2;
@@ -213,7 +256,8 @@ pub fn green_cost_ns(n_size: usize, bodies: usize) -> usize {
 /// the Hubbard chain (`docs/reference/c-to-julia/performance/`): with 4 workers
 /// `n_size` 16..64 loses up to 2x, 128 is neutral, 160 is about 10% faster and 192
 /// about 15% faster; with 2 workers 192 still loses 10% while 256 is 1.35x faster
-/// (4 workers 1.7x, 8 workers 2.0x).
+/// (4 workers 1.7x, 8 workers 2.0x). This applies to regions dispatched from outside the
+/// pool; a hoisted run ([`HOISTED_MIN_PARALLEL_WORK_NS`]) has no size gate.
 pub const DEFAULT_MIN_PARALLEL_SIZE: usize = 120;
 
 /// Default `min_size` for `threads` workers: `DEFAULT_MIN_PARALLEL_SIZE * w / (w - 1)`.
@@ -222,11 +266,39 @@ pub fn default_min_size(threads: usize) -> usize {
     (DEFAULT_MIN_PARALLEL_SIZE * w).div_ceil(w - 1)
 }
 
+/// Whether the calling thread is an inner-pool worker that is not inside a block of a
+/// running region: the driver was hoisted into the pool (see [`HOISTED_MIN_PARALLEL_WORK_NS`]).
+fn hoisted() -> bool {
+    !IN_BLOCK.with(std::cell::Cell::get)
+        && POOL
+            .get()
+            .is_some_and(|pool| pool.current_thread_index().is_some())
+}
+
+/// `min_work_ns` for the current dispatch context: the hoisted defaults apply only while the
+/// configured value is still the outside default (an explicit `MVMC_RS_INNER_MIN_WORK_NS`
+/// wins in every context). `cold` ignores the hot scope.
+fn effective_min_work_ns(config: &InnerThreadConfig, cold: bool) -> u64 {
+    if config.min_work_ns != DEFAULT_MIN_PARALLEL_WORK_NS || !hoisted() {
+        config.min_work_ns
+    } else if !cold && HOT.with(std::cell::Cell::get) {
+        HOISTED_MIN_PARALLEL_WORK_NS
+    } else {
+        HOISTED_COLD_MIN_PARALLEL_WORK_NS
+    }
+}
+
 /// Cost estimate of an `n_size`-dependent region: `cost_ns`, or 0 (always serial) when
 /// the automatic gate is active and the matrices are below `min_size`. An explicit
 /// `MVMC_RS_INNER_THRESHOLD` ignores costs, so it is unaffected.
 pub fn scaled_cost_ns(n_size: usize, cost_ns: usize) -> usize {
-    if n_size >= inner_thread_config().min_size {
+    let config = inner_thread_config();
+    let min_size = if hoisted() && config.min_size == default_min_size(config.threads) {
+        1
+    } else {
+        config.min_size
+    };
+    if n_size >= min_size {
         cost_ns
     } else {
         0
@@ -301,6 +373,16 @@ pub fn inner_parallel_enabled(work_items: usize) -> bool {
 /// the pool costs more than running it (issue #361). The choice never changes any
 /// result, only which threads form it.
 pub fn inner_parallel_work(items: usize, cost_ns: usize) -> bool {
+    parallel_work(items, cost_ns, false)
+}
+
+/// [`inner_parallel_work`] for regions that run after long serial phases (the workers are
+/// asleep): never uses the hot gate of a [`hot_scope`].
+pub fn inner_parallel_work_cold(items: usize, cost_ns: usize) -> bool {
+    parallel_work(items, cost_ns, true)
+}
+
+fn parallel_work(items: usize, cost_ns: usize, cold: bool) -> bool {
     let config = inner_thread_config();
     if config.threads <= 1 {
         return false;
@@ -308,7 +390,8 @@ pub fn inner_parallel_work(items: usize, cost_ns: usize) -> bool {
     if config.threshold_explicit {
         return items >= config.threshold;
     }
-    items >= 2 && (items as u64).saturating_mul(cost_ns as u64) >= config.min_work_ns
+    items >= 2
+        && (items as u64).saturating_mul(cost_ns as u64) >= effective_min_work_ns(&config, cold)
 }
 
 /// Number of workers to provision for a work range already admitted by
@@ -424,12 +507,16 @@ pub fn install<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
     install_inner(operation)
 }
 
+static POOL: OnceLock<ThreadPool> = OnceLock::new();
+
 fn pool() -> &'static ThreadPool {
-    static POOL: OnceLock<ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
         ThreadPoolBuilder::new()
             .num_threads(inner_thread_config().threads.max(1))
             .thread_name(|index| format!("mvmc-inner-{index}"))
+            // A hoisted driver (the whole `mvmc` run) executes on a pool worker, which needs
+            // the main thread's stack budget, not the 2 MiB spawned-thread default.
+            .stack_size(64 << 20)
             .build()
             .expect("inner Rayon pool must build")
     })
@@ -444,6 +531,62 @@ pub(crate) fn install_inner<R: Send>(operation: impl FnOnce() -> R + Send) -> R 
     })
 }
 
+/// Split `count` items into static blocks: `(block count, items per block)`. The partition
+/// depends only on `count` and the configured worker count (the C `omp for` static
+/// schedule), never on timing.
+fn partition(count: usize) -> (usize, usize) {
+    let blocks = inner_worker_count(count).min(count).max(1);
+    let len = count.div_ceil(blocks);
+    (count.div_ceil(len.max(1)), len.max(1))
+}
+
+/// Run `body(block)` for `blocks` static blocks (`blocks <= threads`) on the inner Rayon pool.
+///
+/// One `ThreadPool::broadcast` hands block `k` to worker `k` (the C `omp for` static
+/// schedule). From a thread outside the pool this costs about 4 us per region while the
+/// workers are still in Rayon's idle spin window (gaps of up to about 30 us), against 7 to 18
+/// us for `install` plus `scope`/`par_iter` (issue #479: `rayon_dispatch_variants`
+/// measurements in `benchmark/cpu_round/README.md`); it needs no allocation per task and no
+/// work stealing. A region requested from inside the pool (a nested kernel) runs its blocks
+/// inline in order: a nested broadcast would wait for workers that are busy with the outer
+/// blocks. Block boundaries never depend on timing, so both give the same result.
+fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
+    let observer = OBSERVER.with(|slot| slot.borrow().clone());
+    let pool = pool();
+    if IN_BLOCK.with(std::cell::Cell::get) {
+        for block in 0..blocks {
+            let _binding = bind_observer(observer.clone());
+            body(block);
+        }
+        return;
+    }
+    let run = |block: usize| {
+        let _binding = bind_observer(observer.clone());
+        IN_BLOCK.with(|flag| flag.set(true));
+        body(block);
+        IN_BLOCK.with(|flag| flag.set(false));
+    };
+    if pool.current_thread_index().is_some() {
+        // Hoisted driver: the caller is itself a pool worker and takes part as a block.
+        rayon::broadcast(|context| {
+            if context.index() < blocks {
+                run(context.index());
+            }
+        });
+        return;
+    }
+    pool.broadcast(|context| {
+        if context.index() < blocks {
+            run(context.index());
+        }
+    });
+}
+
+thread_local! {
+    /// True while a block of a region runs on this thread (nested regions then run inline).
+    static IN_BLOCK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Static block schedule on the inner pool (the C `omp for` default): worker `k` always
 /// handles the same contiguous block `k` of `0..count`, so per-QP data stays in that
 /// worker's cache from one call to the next. Returns `body(start, end)` of each
@@ -452,21 +595,19 @@ pub(crate) fn static_blocks<R: Send>(
     count: usize,
     body: impl Fn(usize, usize) -> R + Send + Sync,
 ) -> Vec<R> {
-    let blocks = inner_worker_count(count).min(count).max(1);
-    let block = count.div_ceil(blocks);
-    let results = Mutex::new(Vec::with_capacity(blocks));
-    let observer = OBSERVER.with(|slot| slot.borrow().clone());
-    pool().broadcast(|context| {
-        let start = context.index() * block;
+    let (blocks, len) = partition(count);
+    let results: Vec<Mutex<Option<R>>> = (0..blocks).map(|_| Mutex::new(None)).collect();
+    fork(blocks, |block| {
+        let start = block * len;
         if start < count {
-            let _binding = bind_observer(observer.clone());
-            let value = body(start, (start + block).min(count));
-            results.lock().unwrap().push((context.index(), value));
+            let value = body(start, (start + len).min(count));
+            *results[block].lock().unwrap() = Some(value);
         }
     });
-    let mut results = results.into_inner().unwrap();
-    results.sort_by_key(|(index, _)| *index);
-    results.into_iter().map(|(_, value)| value).collect()
+    results
+        .into_iter()
+        .filter_map(|slot| slot.into_inner().unwrap())
+        .collect()
 }
 
 /// Visit independent output entries; reductions inside an entry remain serial.
@@ -479,16 +620,18 @@ pub fn for_each_mut<T: Send>(
     let parallel = inner_parallel_work(items.len(), cost_ns);
     let _scope = ProfileScope::start(parallel, items.len());
     let observed = observe_kernel(ObservedWork::Entry, parallel);
-    let operation = |i, value| {
+    let operation = |i: usize, value: &mut T| {
         let _entry = observed.enter_item();
         operation(i, value);
     };
     if parallel {
-        install_inner(|| {
-            items
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(i, value)| operation(i, value))
+        let (blocks, len) = partition(items.len());
+        let chunks: Vec<Mutex<&mut [T]>> = items.chunks_mut(len).map(Mutex::new).collect();
+        fork(blocks, |block| {
+            let mut chunk = chunks[block].lock().unwrap();
+            for (j, value) in chunk.iter_mut().enumerate() {
+                operation(block * len + j, value);
+            }
         });
     } else {
         items
@@ -496,6 +639,29 @@ pub fn for_each_mut<T: Send>(
             .enumerate()
             .for_each(|(i, value)| operation(i, value));
     }
+}
+
+/// Visit consecutive `chunk_len`-long output windows on the spin pool without gating or
+/// observation (the caller decided to go parallel and counts its own items). Window `i` is
+/// handed to `operation(i, window)`; each window has one producer, so the result does not
+/// depend on the worker count.
+pub(crate) fn par_chunks_mut<T: Send>(
+    items: &mut [T],
+    chunk_len: usize,
+    operation: impl Fn(usize, &mut [T]) + Send + Sync,
+) {
+    if chunk_len == 0 || items.is_empty() {
+        return;
+    }
+    let count = items.len().div_ceil(chunk_len);
+    let (blocks, len) = partition(count);
+    let supers: Vec<Mutex<&mut [T]>> = items.chunks_mut(len * chunk_len).map(Mutex::new).collect();
+    fork(blocks, |block| {
+        let mut sup = supers[block].lock().unwrap();
+        for (j, window) in sup.chunks_mut(chunk_len).enumerate() {
+            operation(block * len + j, window);
+        }
+    });
 }
 
 /// Visit consecutive `chunk_len`-long output windows (`chunk_len == 0` visits nothing).
@@ -519,11 +685,14 @@ pub fn for_each_chunk_mut<T: Send>(
         operation(i, window);
     };
     if parallel {
-        install_inner(|| {
-            items
-                .par_chunks_mut(chunk_len)
-                .enumerate()
-                .for_each(|(i, window)| operation(i, window))
+        let (blocks, len) = partition(count);
+        let supers: Vec<Mutex<&mut [T]>> =
+            items.chunks_mut(len * chunk_len).map(Mutex::new).collect();
+        fork(blocks, |block| {
+            let mut sup = supers[block].lock().unwrap();
+            for (j, window) in sup.chunks_mut(chunk_len).enumerate() {
+                operation(block * len + j, window);
+            }
         });
     } else {
         items
@@ -558,11 +727,22 @@ pub fn for_each_chunk_pair_mut<A: Send, B: Send>(
         operation(i, a, b);
     };
     if parallel {
-        install_inner(|| {
-            left.par_chunks_mut(left_len)
-                .zip(right.par_chunks_mut(right_len))
+        let (blocks, len) = partition(count);
+        let supers: Vec<Mutex<(&mut [A], &mut [B])>> = left
+            .chunks_mut(len * left_len)
+            .zip(right.chunks_mut(len * right_len))
+            .map(Mutex::new)
+            .collect();
+        fork(blocks, |block| {
+            let mut guard = supers[block].lock().unwrap();
+            let (sa, sb) = &mut *guard;
+            for (j, (a, b)) in sa
+                .chunks_mut(left_len)
+                .zip(sb.chunks_mut(right_len))
                 .enumerate()
-                .for_each(|(i, (a, b))| operation(i, a, b))
+            {
+                operation(block * len + j, a, b);
+            }
         });
     } else {
         left.chunks_mut(left_len)
@@ -584,16 +764,23 @@ pub fn for_each_pair_mut<A: Send, B: Send>(
     let parallel = inner_parallel_work(left.len(), cost_ns);
     let _scope = ProfileScope::start(parallel, left.len());
     let observed = observe_kernel(ObservedWork::Entry, parallel);
-    let operation = |i, a, b| {
+    let operation = |i: usize, a: &mut A, b: &mut B| {
         let _entry = observed.enter_item();
         operation(i, a, b);
     };
     if parallel {
-        install_inner(|| {
-            left.par_iter_mut()
-                .zip(right.par_iter_mut())
-                .enumerate()
-                .for_each(|(i, (a, b))| operation(i, a, b))
+        let (blocks, len) = partition(left.len());
+        let supers: Vec<Mutex<(&mut [A], &mut [B])>> = left
+            .chunks_mut(len)
+            .zip(right.chunks_mut(len))
+            .map(Mutex::new)
+            .collect();
+        fork(blocks, |block| {
+            let mut guard = supers[block].lock().unwrap();
+            let (sa, sb) = &mut *guard;
+            for (j, (a, b)) in sa.iter_mut().zip(sb.iter_mut()).enumerate() {
+                operation(block * len + j, a, b);
+            }
         });
     } else {
         left.iter_mut()
@@ -627,14 +814,16 @@ pub(crate) fn qp_fill<T: Send, S>(
     let _scope = ProfileScope::start(parallel, count);
     let observed = observe_kernel(ObservedWork::Qp, parallel);
     if parallel {
-        install_inner(|| {
-            out[qp_start..end].par_iter_mut().enumerate().for_each_init(
-                &init,
-                |scratch, (i, slot)| {
-                    let _entry = observed.enter_item();
-                    *slot = body(scratch, qp_start + i);
-                },
-            )
+        let (blocks, len) = partition(count);
+        let chunks: Vec<Mutex<&mut [T]>> =
+            out[qp_start..end].chunks_mut(len).map(Mutex::new).collect();
+        fork(blocks, |block| {
+            let mut chunk = chunks[block].lock().unwrap();
+            let mut scratch = init();
+            for (j, slot) in chunk.iter_mut().enumerate() {
+                let _entry = observed.enter_item();
+                *slot = body(&mut scratch, qp_start + block * len + j);
+            }
         });
     } else {
         let mut scratch = init();
@@ -678,11 +867,18 @@ pub(crate) fn qp_fill_blocks<T: Send>(
         body(first, chunk);
     };
     if parallel {
-        install_inner(|| {
-            out[qp_start..end]
-                .par_chunks_mut(block)
-                .enumerate()
-                .for_each(|(i, chunk)| run(qp_start + i * block, chunk))
+        // Partition at the granularity of kernel blocks so a block never straddles workers.
+        let units = count.div_ceil(block);
+        let (blocks, len) = partition(units);
+        let supers: Vec<Mutex<&mut [T]>> = out[qp_start..end]
+            .chunks_mut(len * block)
+            .map(Mutex::new)
+            .collect();
+        fork(blocks, |worker| {
+            let mut sup = supers[worker].lock().unwrap();
+            for (j, chunk) in sup.chunks_mut(block).enumerate() {
+                run(qp_start + (worker * len + j) * block, chunk);
+            }
         });
     } else {
         for (i, chunk) in out[qp_start..end].chunks_mut(block).enumerate() {
@@ -710,15 +906,16 @@ pub(crate) fn collect_terms<T: Send, S>(
     }
     let _scope = ProfileScope::start(true, count);
     let observed = observe_kernel(ObservedWork::Region, true);
-    Some(install_inner(|| {
-        (0..count)
-            .into_par_iter()
-            .map_init(&init, |scratch, index| {
+    let blocks = static_blocks(count, |start, end| {
+        let mut scratch = init();
+        (start..end)
+            .map(|index| {
                 let _entry = observed.enter_item();
-                body(scratch, index)
+                body(&mut scratch, index)
             })
-            .collect()
-    }))
+            .collect::<Vec<T>>()
+    });
+    Some(blocks.into_iter().flatten().collect())
 }
 
 /// Visit `qp in qp_start..qp_end` (clamped to `values.len()`), giving each QP its
@@ -752,15 +949,21 @@ pub(crate) fn qp_update<T: Send, U: Send, S>(
     let observed = observe_kernel(ObservedWork::Qp, parallel);
     let inv = &mut inv[qp_start * stride..];
     if parallel {
-        install_inner(|| {
-            values[qp_start..end]
-                .par_iter_mut()
-                .zip(inv.par_chunks_mut(stride))
-                .enumerate()
-                .for_each_init(&init, |scratch, (i, (value, window))| {
-                    let _entry = observed.enter_item();
-                    body(scratch, qp_start + i, value, window);
-                })
+        let (blocks, len) = partition(count);
+        let supers: Vec<Mutex<(&mut [T], &mut [U])>> = values[qp_start..end]
+            .chunks_mut(len)
+            .zip(inv.chunks_mut(len * stride))
+            .map(Mutex::new)
+            .collect();
+        fork(blocks, |block| {
+            let mut guard = supers[block].lock().unwrap();
+            let (vals, windows) = &mut *guard;
+            let mut scratch = init();
+            for (j, (value, window)) in vals.iter_mut().zip(windows.chunks_mut(stride)).enumerate()
+            {
+                let _entry = observed.enter_item();
+                body(&mut scratch, qp_start + block * len + j, value, window);
+            }
         });
     } else {
         let mut scratch = init();

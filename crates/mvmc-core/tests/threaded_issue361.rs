@@ -22,7 +22,8 @@ type Case = (
     Option<&'static str>,
 );
 
-const CASES: [Case; 5] = [
+const CASES: [Case; 6] = [
+    ("hoisted-gate", "4", None, None),
     ("serial-never-pools", "1", None, None),
     ("auto-default", "4", None, None),
     ("auto-custom-min-work", "4", None, Some("1000")),
@@ -113,6 +114,29 @@ fn gate_child() {
             // The item-count gate used by the legacy predicate is unchanged.
             assert!(inner_parallel_enabled(32));
             assert!(!inner_parallel_enabled(31));
+        }
+        "hoisted-gate" => {
+            use mvmc_core::threading::{
+                inner_parallel_work_cold, install, HOISTED_COLD_MIN_PARALLEL_WORK_NS,
+                HOISTED_MIN_PARALLEL_WORK_NS,
+            };
+            assert_eq!(HOISTED_MIN_PARALLEL_WORK_NS, 40_000);
+            assert_eq!(HOISTED_COLD_MIN_PARALLEL_WORK_NS, 400_000);
+            // From outside the pool the Rayon-calibrated gate and size gate apply.
+            assert!(!inner_parallel_work(8, 12_499));
+            assert_eq!(scaled_cost_ns(config.min_size - 1, 1 << 30), 0);
+            // Inside the pool (a hoisted driver) regions are cold by default (400 us) and the
+            // size gate is off; the sampler marks its loop hot (40 us, checked in the library).
+            install(|| {
+                assert!(!inner_parallel_work(8, 49_999));
+                assert!(inner_parallel_work(8, 50_000));
+                assert!(!inner_parallel_work_cold(8, 49_999));
+                assert!(inner_parallel_work_cold(8, 50_000));
+                assert!(!inner_parallel_work(1, usize::MAX));
+                assert_eq!(scaled_cost_ns(1, 1 << 30), 1 << 30);
+                assert_eq!(scaled_cost_ns(0, 1 << 30), 0);
+            });
+            assert!(!inner_parallel_work(8, 12_499));
         }
         "auto-custom-min-work" => {
             assert_eq!(config.min_work_ns, 1000);

@@ -512,12 +512,7 @@ pub(crate) fn c_order_gram_complex(
         gram_block(raw, n, samples, j0, cols, block);
     };
     if parallel {
-        use rayon::prelude::*;
-        crate::threading::install_inner(|| {
-            gram.par_chunks_mut(BLOCK * n)
-                .enumerate()
-                .for_each(|(b, block)| update(b, block))
-        });
+        crate::threading::par_chunks_mut(&mut gram, BLOCK * n, update);
     } else if n > 0 {
         gram.chunks_mut(BLOCK * n)
             .enumerate()

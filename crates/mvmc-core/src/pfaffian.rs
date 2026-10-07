@@ -215,7 +215,10 @@ fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
     let parallel = !NATIVE_STATUS
-        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        && crate::threading::inner_parallel_work_cold(
+            qp_end - qp_start,
+            pfaffian_qp_cost_ns(n_size),
+        );
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if !parallel {
@@ -237,40 +240,89 @@ fn calc_m_all_real_with_status<const NATIVE_STATUS: bool>(
         return result;
     }
 
-    let workers = crate::threading::inner_worker_count(qp_end - qp_start);
-    pool.ensure_capacity(workers);
-    let chunks: Vec<Result<_, CalcMAllError>> =
-        crate::threading::static_blocks(qp_end - qp_start, |first, last| {
-            let (start, end) = (qp_start + first, qp_start + last);
+    run_staged_planes(
+        &STAGE_REAL,
+        inv_m,
+        pf_m,
+        qp_start,
+        qp_end,
+        n_size * n_size,
+        pool,
+        &observed,
+        |qp, plane, pf_slot, ws| {
+            calc_m_all_plane_real::<NATIVE_STATUS>(
+                qp, ele_idx, slater_elm, plane, pf_slot, n_site, n_elec, ws,
+            )
+        },
+    )
+}
+
+thread_local! {
+    /// Reusable staging planes of the parallel real kernel (grown once, never shrunk).
+    static STAGE_REAL: std::cell::RefCell<Vec<f64>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Reusable staging planes of the parallel complex kernel.
+    static STAGE_COMPLEX: std::cell::RefCell<Vec<Complex64>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Parallel QP kernel with the worker-local publication boundary of the serial-vs-pooled
+/// contract: every plane is computed into a staging window (one producer per plane, disjoint
+/// windows, no per-region allocation: the staging buffer is reused across calls), and the
+/// staged planes and Pfaffians are copied into `inv_m` / `pf_m` only if every plane succeeded
+/// (`threaded_issue182` pins that a failing parallel region leaves the table untouched).
+#[allow(clippy::too_many_arguments)]
+fn run_staged_planes<T>(
+    stage: &'static std::thread::LocalKey<std::cell::RefCell<Vec<T>>>,
+    inv_m: &mut InvMColMajor<T>,
+    pf_m: &mut [T],
+    qp_start: usize,
+    qp_end: usize,
+    plane_len: usize,
+    pool: &ThreadedPfaPackWorkspace,
+    observed: &crate::threading::KernelObservation,
+    kernel: impl Fn(usize, &mut [T], &mut T, &mut PfaPackWorkspace) -> Result<(), CalcMAllError> + Sync,
+) -> Result<(), CalcMAllError>
+where
+    T: tenferro_tensor::TensorScalar + Default + Copy + Send,
+{
+    let count = qp_end - qp_start;
+    pool.ensure_capacity(crate::threading::inner_worker_count(count));
+    let mut staging = stage.take();
+    if staging.len() < count * plane_len {
+        staging.resize(count * plane_len, T::default());
+    }
+    let mut pf_stage = vec![T::default(); count];
+    let results: Vec<Result<(), CalcMAllError>> = {
+        let items: Vec<std::sync::Mutex<(&mut [T], &mut T)>> = staging[..count * plane_len]
+            .chunks_mut(plane_len)
+            .zip(pf_stage.iter_mut())
+            .map(std::sync::Mutex::new)
+            .collect();
+        crate::threading::static_blocks(count, |first, last| {
             let mut ws = pool.take();
-            let mut local_inv = InvMColMajor::zeros(end, n_elec);
-            let mut local_pf = vec![0.0_f64; end];
-            let result = (start..end).try_for_each(|qp| {
+            let result = (first..last).try_for_each(|j| {
                 let _entry = observed.enter_item();
-                calc_m_all_child_real::<NATIVE_STATUS>(
-                    qp,
-                    ele_idx,
-                    slater_elm,
-                    &mut local_inv,
-                    &mut local_pf[qp],
-                    n_site,
-                    n_elec,
-                    &mut ws,
-                )
+                let mut guard = items[j].lock().unwrap();
+                let (plane, pf_slot) = &mut *guard;
+                kernel(qp_start + j, plane, pf_slot, &mut ws)
             });
             pool.release(ws);
-            result.map(|()| (start, end, local_inv, local_pf))
-        });
-    let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
-    let chunks = chunks?;
-    for (start, end, local_inv, local_pf) in chunks {
-        pf_m[start..end].copy_from_slice(&local_pf[start..end]);
-        for qp in start..end {
-            let source = local_inv.qp_matrix_slice(qp);
-            inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
+            result
+        })
+    };
+    // Blocks are ordered and contiguous, so the first failing block holds the lowest failing
+    // QP, the error the serial loop reports.
+    let outcome: Result<(), CalcMAllError> = results.into_iter().collect();
+    if outcome.is_ok() {
+        pf_m[qp_start..qp_end].copy_from_slice(&pf_stage);
+        for (j, plane) in staging[..count * plane_len].chunks(plane_len).enumerate() {
+            inv_m
+                .qp_matrix_slice_mut(qp_start + j)
+                .copy_from_slice(plane);
         }
     }
-    Ok(())
+    stage.set(staging);
+    outcome
 }
 
 /// Complex `calculate_m_all` over the half-open QP range `[qp_start, qp_end)`.
@@ -482,7 +534,10 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: boo
     debug_assert_eq!(slater_elm.n_site2(), 2 * n_site);
 
     let parallel = !NATIVE_STATUS
-        && crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        && crate::threading::inner_parallel_work_cold(
+            qp_end - qp_start,
+            pfaffian_qp_cost_ns(n_size),
+        );
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if !parallel {
@@ -504,48 +559,21 @@ fn calc_m_all_complex_with_kernel<const C_COMPAT: bool, const NATIVE_STATUS: boo
         return result;
     }
 
-    let workers = crate::threading::inner_worker_count(qp_end - qp_start);
-    pool.ensure_capacity(workers);
-    let chunk = (qp_end - qp_start).div_ceil(workers);
-    let ranges: Vec<_> = (qp_start..qp_end)
-        .step_by(chunk)
-        .map(|start| (start, (start + chunk).min(qp_end)))
-        .collect();
-    crate::threading::install_inner(|| {
-        let chunks: Vec<Result<_, CalcMAllError>> = ranges
-            .into_par_iter()
-            .map(|(start, end)| {
-                let mut ws = pool.take();
-                let mut local_inv = InvMColMajor::zeros(end, n_elec);
-                let mut local_pf = vec![Complex64::default(); end];
-                let result = (start..end).try_for_each(|qp| {
-                    let _entry = observed.enter_item();
-                    calc_m_all_child_complex::<C_COMPAT, NATIVE_STATUS>(
-                        qp,
-                        ele_idx,
-                        slater_elm,
-                        &mut local_inv,
-                        &mut local_pf[qp],
-                        n_site,
-                        n_elec,
-                        &mut ws,
-                    )
-                });
-                pool.release(ws);
-                result.map(|()| (start, end, local_inv, local_pf))
-            })
-            .collect();
-        let chunks: Result<Vec<_>, CalcMAllError> = chunks.into_iter().collect();
-        let chunks = chunks?;
-        for (start, end, local_inv, local_pf) in chunks {
-            pf_m[start..end].copy_from_slice(&local_pf[start..end]);
-            for qp in start..end {
-                let source = local_inv.qp_matrix_slice(qp);
-                inv_m.qp_matrix_slice_mut(qp).copy_from_slice(source);
-            }
-        }
-        Ok(())
-    })
+    run_staged_planes(
+        &STAGE_COMPLEX,
+        inv_m,
+        pf_m,
+        qp_start,
+        qp_end,
+        n_size * n_size,
+        pool,
+        &observed,
+        |qp, plane, pf_slot, ws| {
+            calc_m_all_plane_complex::<C_COMPAT, NATIVE_STATUS>(
+                qp, ele_idx, slater_elm, plane, pf_slot, n_site, n_elec, ws,
+            )
+        },
+    )
 }
 
 /// Complex FSZ `calculate_m_all_fsz!` over `[qp_start, qp_end)`.
@@ -583,7 +611,7 @@ pub fn calc_m_all_fsz_complex(
     let mut inv_temp = InvMColMajor::zeros(qp_end, n_elec);
     let mut pf_temp = vec![Complex64::default(); qp_end];
     let parallel =
-        crate::threading::inner_parallel_work(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
+        crate::threading::inner_parallel_work_cold(qp_end - qp_start, pfaffian_qp_cost_ns(n_size));
     let _scope = crate::threading::profile_scope(parallel, qp_end - qp_start);
     let observed = crate::threading::observe_kernel(crate::threading::ObservedWork::Qp, parallel);
     if parallel {
@@ -843,14 +871,32 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     n_elec: usize,
     ws: &mut PfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    let plane = inv_m.qp_matrix_slice_mut(qp);
+    calc_m_all_plane_real::<NATIVE_STATUS>(
+        qp, ele_idx, slater_elm, plane, pf_slot, n_site, n_elec, ws,
+    )
+}
+
+/// One QP plane of `calculate_m_all` on its own matrix window (so parallel blocks can fill
+/// disjoint planes of the inverse table in place).
+fn calc_m_all_plane_real<const NATIVE_STATUS: bool>(
+    qp: usize,
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<f64>,
+    plane: &mut [f64],
+    pf_slot: &mut f64,
+    n_site: usize,
+    n_elec: usize,
+    ws: &mut PfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
     let ne = n_elec; // electrons per spin
     let n_size = 2 * ne;
     let n_site2 = 2 * n_site;
 
     let fused_max_abs2 =
-        assemble_inv_m_real(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
+        assemble_inv_m_real_plane(qp, ele_idx, slater_elm, plane, n_site, ne, n_size, n_site2)?;
     if !NATIVE_STATUS {
-        let max_abs2 = fused_max_abs2.unwrap_or_else(|| frobenius_norm_sqr_real(inv_m, qp));
+        let max_abs2 = fused_max_abs2.unwrap_or_else(|| max_abs2_real(plane));
         if max_abs2 < MIN_ABS2 {
             return Err(CalcMAllError::AllZero { qp });
         }
@@ -858,8 +904,7 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
 
     ensure_workspace_real(ws, n_size);
     let pf_value = {
-        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let mut a = SqMat::new(qp_buf, n_size);
+        let mut a = SqMat::new(&mut *plane, n_size);
         dsktf2(&mut a, &mut ws.pivots[..n_size])
             .map_err(|info| CalcMAllError::ZeroPivot { qp, info })?;
         utu2pfa_real(&a, &ws.pivots[..n_size])
@@ -870,8 +915,7 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     *pf_slot = pf_value;
 
     {
-        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let mut a = SqMat::new(qp_buf, n_size);
+        let mut a = SqMat::new(&mut *plane, n_size);
         let mut m_work = SqMat::new(&mut ws.m_work_real[..n_size * n_size], n_size);
         utu2inv_real(
             &mut a,
@@ -882,7 +926,7 @@ fn calc_m_all_child_real<const NATIVE_STATUS: bool>(
     }
 
     // `M_DSCAL(&nsq, &minus_one, invM, &one)` -- final sign flip.
-    for x in inv_m.qp_matrix_slice_mut(qp) {
+    for x in plane.iter_mut() {
         *x = -*x;
     }
     Ok(())
@@ -898,19 +942,36 @@ fn calc_m_all_child_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     n_elec: usize,
     ws: &mut PfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
+    let plane = inv_m.qp_matrix_slice_mut(qp);
+    calc_m_all_plane_complex::<C_COMPAT, NATIVE_STATUS>(
+        qp, ele_idx, slater_elm, plane, pf_slot, n_site, n_elec, ws,
+    )
+}
+
+/// One QP plane of the complex `calculate_m_all` on its own matrix window (parallel blocks
+/// fill disjoint planes of the table in place).
+fn calc_m_all_plane_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
+    qp: usize,
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    plane: &mut [Complex64],
+    pf_slot: &mut Complex64,
+    n_site: usize,
+    n_elec: usize,
+    ws: &mut PfaPackWorkspace,
+) -> Result<(), CalcMAllError> {
     let ne = n_elec; // electrons per spin
     let n_size = 2 * ne;
     let n_site2 = 2 * n_site;
 
-    assemble_inv_m_complex(qp, ele_idx, slater_elm, inv_m, n_site, ne, n_size, n_site2)?;
-    if !NATIVE_STATUS && frobenius_norm_sqr_complex(inv_m, qp) < MIN_ABS2 {
+    assemble_inv_m_complex_plane(qp, ele_idx, slater_elm, plane, n_site, ne, n_size, n_site2)?;
+    if !NATIVE_STATUS && max_abs2_complex(plane) < MIN_ABS2 {
         return Err(CalcMAllError::AllZero { qp });
     }
 
     ensure_workspace_complex(ws, n_size);
     let pf_value = {
-        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let mut a = SqMat::new(qp_buf, n_size);
+        let mut a = SqMat::new(&mut *plane, n_size);
         let result = if C_COMPAT {
             zsktf2_c_compat(&mut a, &mut ws.pivots[..n_size])
         } else {
@@ -929,8 +990,7 @@ fn calc_m_all_child_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     *pf_slot = pf_value;
 
     {
-        let qp_buf = inv_m.qp_matrix_slice_mut(qp);
-        let mut a = SqMat::new(qp_buf, n_size);
+        let mut a = SqMat::new(&mut *plane, n_size);
         let mut m_work = SqMat::new(&mut ws.m_work_complex[..n_size * n_size], n_size);
         utu2inv_complex(
             &mut a,
@@ -941,7 +1001,7 @@ fn calc_m_all_child_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     }
 
     // `M_ZSCAL(&nsq, &minus_one, invM, &one)` -- final sign flip.
-    for z in inv_m.qp_matrix_slice_mut(qp) {
+    for z in plane.iter_mut() {
         *z = -*z;
     }
     Ok(())
@@ -1021,6 +1081,7 @@ fn fsz_inverse_divide(a: Complex64, b: Complex64) -> Complex64 {
 // inv_m assembly + diagnostics
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn assemble_inv_m_real(
     qp: usize,
     ele_idx: &[i64],
@@ -1031,11 +1092,24 @@ fn assemble_inv_m_real(
     n_size: usize,
     n_site2: usize,
 ) -> Result<Option<f64>, CalcMAllError> {
+    let plane = inv_m.qp_matrix_slice_mut(qp);
+    assemble_inv_m_real_plane(qp, ele_idx, slater_elm, plane, n_site, ne, n_size, n_site2)
+}
+
+fn assemble_inv_m_real_plane(
+    qp: usize,
+    ele_idx: &[i64],
+    slater_elm: &SlaterElmFlat<f64>,
+    plane: &mut [f64],
+    n_site: usize,
+    ne: usize,
+    n_size: usize,
+    n_site2: usize,
+) -> Result<Option<f64>, CalcMAllError> {
     // Plane/row slices instead of per-element `get`/`set` (each of which re-resolves
     // the tensor storage); same visiting order, so an out-of-range site leaves the same
     // partially written plane as before.
     let slater = slater_elm.as_slice();
-    let plane = inv_m.qp_matrix_slice_mut(qp);
     // Fast path: the spin-shifted source indices depend only on the electron slot, so
     // resolve and validate them once per plane instead of once per matrix entry. When
     // every index is in range the plane is the same; otherwise fall through to the
@@ -1093,11 +1167,11 @@ fn assemble_inv_m_real(
     Ok(None)
 }
 
-fn assemble_inv_m_complex(
+fn assemble_inv_m_complex_plane(
     qp: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
-    inv_m: &mut InvMColMajor<Complex64>,
+    plane: &mut [Complex64],
     n_site: usize,
     ne: usize,
     n_size: usize,
@@ -1107,7 +1181,6 @@ fn assemble_inv_m_complex(
     // the tensor storage); same visiting order, so an out-of-range site leaves the same
     // partially written plane as before.
     let slater = slater_elm.as_slice();
-    let plane = inv_m.qp_matrix_slice_mut(qp);
     for msi in 0..n_size {
         let si = msi / ne;
         let ri = ele_idx[msi];
@@ -1162,17 +1235,20 @@ fn assemble_inv_m_fsz_complex(
     Ok(())
 }
 
+#[cfg(test)]
 fn frobenius_norm_sqr_real(inv_m: &InvMColMajor<f64>, qp: usize) -> f64 {
+    max_abs2_real(inv_m.qp_matrix_slice(qp))
+}
+
+fn max_abs2_real(plane: &[f64]) -> f64 {
     // Column-major plane order, as the former `(col, row)` loops.
-    inv_m
-        .qp_matrix_slice(qp)
+    plane
         .iter()
         .fold(0.0_f64, |max_abs2, &v| max_abs2.max(v * v))
 }
 
-fn frobenius_norm_sqr_complex(inv_m: &InvMColMajor<Complex64>, qp: usize) -> f64 {
-    inv_m
-        .qp_matrix_slice(qp)
+fn max_abs2_complex(plane: &[Complex64]) -> f64 {
+    plane
         .iter()
         .fold(0.0_f64, |max_abs2, v| max_abs2.max(v.norm_sqr()))
 }
