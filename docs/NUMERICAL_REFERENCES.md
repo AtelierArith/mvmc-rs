@@ -11,6 +11,14 @@ C is the numerical authority. Julia provides port/design comparisons and
 historical references. The script never runs Rust to produce expected values,
 and normal Cargo tests never invoke the script or a reference runtime.
 
+`extern/Julia-mVMC` pins a reviewed commit from
+[upstream `main`](https://github.com/tmisawa/Julia-mVMC), including
+[PR #54](https://github.com/tmisawa/Julia-mVMC/pull/54), merged on 2026-10-06.
+Use `git submodule sync --recursive` followed by
+`git submodule update --init --recursive` to synchronize existing checkouts.
+Historical fixtures and reports retain their original source commits and
+runtime provenance; updating the submodule does not reverify those results.
+
 After issue #186, reference numerical execution uses Linux. On macOS, run the
 numerical generators in the DevContainer. Rust tests continue to run natively
 on both operating systems. Compiler, libm and BLAS differences are recorded;
