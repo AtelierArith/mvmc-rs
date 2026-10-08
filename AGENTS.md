@@ -17,6 +17,7 @@ This repository is a Rust port of mVMC organized as a Cargo workspace. Core crat
 - `cargo run -p xtask -- bench-julia --steps 50 --reps 5 --warmups 1 --threads 1`: compare Rust and Julia workloads.
 - `cargo run -p xtask -- bench-hubbard --steps 300 --reps 3 --warmups 1 --threads 1`: compare Rust and Julia on the report Hubbard-chain inputs (`L=16/24/32`).
 - `scripts/run_all.sh`: run the PfaPack comparison suite and generate a report.
+- `scripts/run_julia_comparison.sh`: reproduce the single-thread Rust-vs-Julia optimization and PhysCal comparison; see [benchmark/julia_comparison/README.md](benchmark/julia_comparison/README.md) for the pinned Julia lock and timing scope.
 
 ## Coding Style & Naming Conventions
 

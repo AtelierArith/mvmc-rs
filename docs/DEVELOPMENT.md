@@ -46,6 +46,14 @@ links `-lopenblas`, so the same OpenBLAS/LAPACK packages satisfy both sides on
 Linux; macOS uses Homebrew OpenBLAS (see the top-level README). Keep BLAS threads
 pinned (`--threads 1` or the `*_NUM_THREADS=1` variables) for comparable runs.
 
+To reproduce the 2026-10-08 single-thread comparison, run
+`scripts/run_julia_comparison.sh`. It runs small-model and Hubbard-chain
+optimization and PhysCal benchmarks sequentially, restores the historical
+Julia 1.13 lock for the measurement, and saves CSVs, reports and environment
+metadata in a new `target/bench/` directory. See
+[the comparison instructions](../benchmark/julia_comparison/README.md)
+for the original source commits, prerequisites and timing limitations.
+
 ## Build profiles
 
 Normal `cargo build`, `cargo check` and `cargo nextest run` use development
