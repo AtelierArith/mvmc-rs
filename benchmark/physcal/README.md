@@ -88,9 +88,10 @@ token:
 `bench-physcal` prints the per-family `files`, `values`, `max|Δ|`, `max_rel` and
 `status`; `bench-physcal-hubbard` adds the same table to its Markdown report.
 
-`--julia-root` selects the reference checkout. The Julia section timer needs
-the `julia-patch` branch (PR tmisawa/Julia-mVMC#54); the committed reference
-`extern/Julia-mVMC` still runs the benchmark without timers.
+`--julia-root` selects the reference checkout. The committed reference
+`extern/Julia-mVMC` pins upstream `main` including the section timer changes
+merged in [Julia PR #54](https://github.com/tmisawa/Julia-mVMC/pull/54).
+A separate `julia-patch` checkout is no longer required for section timings.
 
 ## Results
 
@@ -114,4 +115,3 @@ chain) with:
 ```sh
 scripts/run_physcal_benchmark.sh [reps] [warmups] [threads]
 ```
-

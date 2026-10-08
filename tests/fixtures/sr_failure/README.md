@@ -7,7 +7,9 @@ POTRS: an indefinite matrix could produce a finite invalid parameter update
 and report success. These rows document an unsafe historical behavior, not
 C-compatible production expectations. The published Julia patch head
 `62b0f97f076fb55c71c3ab0caa041a9adff94e04` also contains this defect; its repair
-is being coordinated through the existing upstream `julia-patch` PR54.
+was included in [upstream PR #54](https://github.com/tmisawa/Julia-mVMC/pull/54),
+merged on 2026-10-06. The current reference submodule pins upstream `main`
+containing that repair; these archived fixture values remain historical.
 
 The authoritative C path is `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c`,
 `stcOptMain`: DPOSV returns positive INFO on failed factorization without
