@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "cases": [
+    {
+      "sites": 32,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 20,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 64,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 20,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 32,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 300,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 64,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 300,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 32,
+      "ranks": 4,
+      "threads": 4,
+      "steps": 300,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 64,
+      "ranks": 4,
+      "threads": 4,
+      "steps": 300,
+      "exact_rng_and_integer_state": true,
+      "output_max_abs_observed": 0.0
+    }
+  ],
+  "exact_rank_pairs": 12,
+  "float_absolute_tolerance": 1e-11,
+  "float_relative_tolerance": 1e-11
+}
