@@ -182,6 +182,13 @@ Julia threads default to one for deterministic reference work.
 
 ## MPI benchmark environment upkeep (#490 / #491)
 
+The container allocates 1 GiB to `/dev/shm` using `--shm-size=1g` (#510).
+Docker's default 64 MiB is insufficient for the 16-rank MPICH/UCX benchmark:
+UCX requests approximately 4.3 MB per rank and can fail during `MPI_Init`.
+This increases shared-memory capacity without changing the MPI transport.
+Use **Dev Containers: Rebuild Container** after updating this setting; an
+already running container retains its original shared-memory capacity.
+
 `postCreateCommand` now checks genuine 2- and 4-rank MPICH worlds, including
 thread support and a collective integer sum. Recheck an existing container with
 `bash .devcontainer/verify-mpi.sh`; launching four processes alone does not prove
