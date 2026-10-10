@@ -1,0 +1,20 @@
+{
+  "SROptOO": {
+    "c_length": 20736,
+    "rust_length": 21024,
+    "max_absolute": 1.942890293094024e-15,
+    "common_prefix": true
+  },
+  "SROptHO": {
+    "c_length": 144,
+    "rust_length": 144,
+    "max_absolute": 3.552713678800501e-15,
+    "common_prefix": true
+  },
+  "draws": true,
+  "next624": true,
+  "ele_idx": true,
+  "ele_cfg": true,
+  "counter": true,
+  "active_map": true
+}

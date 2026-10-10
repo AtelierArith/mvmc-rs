@@ -1,0 +1,6 @@
+cpu=AMD Ryzen 9 PRO 8945HS w/ Radeon 780M Graphics
+threads_available=16
+os=Linux-7.0.0-38-generic-x86_64-with-glibc2.39
+inner=4
+load_start=3.08
+load_end=4.14

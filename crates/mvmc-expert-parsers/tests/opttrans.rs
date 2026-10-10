@@ -56,6 +56,19 @@ fn c_opttrans_flag_base_is_declared_projection_plus_slater_width() {
     assert_eq!(&data.optimization_flags[..7], &[0, 0, 0, 1, 1, 0, 0]);
 }
 
+#[test]
+fn c_opttrans_unwritten_tail_does_not_inherit_active_reservation_defaults() {
+    let mut data = ExpertModeData::new();
+    data.n_gutzwiller_idx = 3;
+    data.modpara.n_orbital_idx = 4;
+    data.opt_trans = vec![Complex64::new(1.0, 0.0); 2];
+    data.optimization_flags = vec![7; 18];
+    mvmc_expert_parsers::set_opt_trans_c_opt_flags(&mut data);
+    assert_eq!(&data.optimization_flags[14..18], &[0, 0, 0, 0]);
+    assert_eq!(&data.optimization_flags[7..9], &[1, 1]);
+    assert_eq!(&data.optimization_flags[..7], &[7; 7]);
+}
+
 // Initial coefficients use only a few scale/divide/trig operations;
 // 1e-14 covers their rounding while SFMT words and layout stay exact.
 fn computed_values(values: impl IntoIterator<Item = Complex64>, expected: &str, label: &str) {

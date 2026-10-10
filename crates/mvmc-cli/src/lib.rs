@@ -768,6 +768,7 @@ pub fn run_cli() {
                 process::exit(1);
             }
         }
+        report_inner_profile();
     } else {
         // C `ReadInitParameter(fileInitPara)` for a positional initpara (mode 0).
         if let Some(path) = &parameter_file {

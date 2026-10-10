@@ -1,0 +1,157 @@
+Sat Oct 10 02:15:46 UTC 2026
+72ca4e99e6b5c0e24b653a1b6176dea7c9540d48
+ M .devcontainer/devcontainer.json
+ M .devcontainer/setup.sh
+ M .gitignore
+ M crates/mvmc-core/Cargo.toml
+ M docs/DEV_CONTAINER.md
+ M extern/Julia-mVMC
+?? .devcontainer/verify-mpi.sh
+?? benchmark/c_comparison/
+?? benchmark/mpi_comparison/
+?? crates/mvmc-core/examples/mpi_benchmark.rs
+?? scripts/bench_mpi.py
+?? scripts/test_bench_mpi.py
+d73d06bd529d3b2573f38eb5817c4a5f52971006
+rustc 1.99.0 (b940084d7 2026-09-28)
+binary: rustc
+commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+commit-date: 2026-09-28
+host: x86_64-unknown-linux-gnu
+release: 1.99.0
+LLVM version: 23.1.1
+cargo 1.99.0 (5f94df478 2026-08-27)
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+cmake version 3.28.3
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+MPICH Version:      4.2.0
+MPICH Release date: Fri Feb  9 12:29:21 CST 2024
+MPICH ABI:          16:0:4
+MPICH Device:       ch4:ucx
+MPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix
+MPICH CC:           gcc    -O2
+MPICH CXX:          g++   -O2
+MPICH F77:          gfortran   -O2
+MPICH FC:           gfortran   -O2
+MPICH features:     threadcomm
+
+0.3.26
+ldd (Ubuntu GLIBC 2.39-0ubuntu8.6) 2.39
+Copyright (C) 2024 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+Written by Roland McGrath and Ulrich Drepper.
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           48 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  16
+On-line CPU(s) list:                     0-15
+Vendor ID:                               AuthenticAMD
+Model name:                              AMD Ryzen 9 PRO 8945HS w/ Radeon 780M Graphics
+CPU family:                              25
+Model:                                   117
+Thread(s) per core:                      2
+Core(s) per socket:                      8
+Socket(s):                               1
+Stepping:                                2
+Frequency boost:                         enabled
+CPU(s) scaling MHz:                      59%
+CPU max MHz:                             5263.0610
+CPU min MHz:                             402.7860
+BogoMIPS:                                7984.63
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca fsrm flush_l1d amd_lbr_pmc_freeze
+Virtualization:                          AMD-V
+L1d cache:                               256 KiB (8 instances)
+L1i cache:                               256 KiB (8 instances)
+L2 cache:                                8 MiB (8 instances)
+L3 cache:                                16 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-15
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Mitigation; Safe RET
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP always-on; PBRSB-eIBRS Not affected; BHI Not affected
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Mitigation; Clear CPU buffers
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Mitigation; IBPB before exit to userspace
+uv 0.12.21 (x86_64-unknown-linux-gnu)
+BLIS_NUM_THREADS=1
+CARGO_HOME=/home/vscode/.cargo
+CARGO_TARGET_DIR=/home/vscode/.cache/mvmc/target/linux-x86_64
+MKL_NUM_THREADS=1
+OMP_NUM_THREADS=1
+OPENBLAS_NUM_THREADS=1
+RUSTC_WRAPPER=/opt/devtools/bin/kache
+RUSTUP_HOME=/opt/rustup
+538b2b2e8bd9e56456fcfe804b828798ee3e7a214ab222b953e3883a17b00771  /home/vscode/.cache/mvmc/target/linux-x86_64/release/mvmc
+6ae44625e227ccd6b9c38d2a7731fb445955108772e8741b452f70c6a641ac28  /home/vscode/.cache/mvmc/c-benchmark-independent-20261010/build/src/mVMC/vmc.out
+25c023234aceb6647c0ebcba8a5fc3f7cc3d5ad7866172acb2f7d56f48be7fec  /home/vscode/.cache/mvmc/c-benchmark-independent-20261010/build/libblis_artifact.tar.gz
+	linux-vdso.so.1 (0x0000796f9eb67000)
+	libopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x0000796f99c20000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000796f9eb2d000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x0000796f99b37000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x0000796f99925000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000796f9eb69000)
+	libgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x0000796f99607000)
+	linux-vdso.so.1 (0x0000729d9a33b000)
+	libopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x0000729d97620000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x0000729d97537000)
+	libmpi.so.12 => /opt/mpich/lib/libmpi.so.12 (0x0000729d94be3000)
+	libgomp.so.1 => /lib/x86_64-linux-gnu/libgomp.so.1 (0x0000729d9a2d9000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000729d9a2ab000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x0000729d949d1000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000729d9a33d000)
+	libgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x0000729d946b3000)
+	libucp.so.0 => /lib/x86_64-linux-gnu/libucp.so.0 (0x0000729d94550000)
+	libucs.so.0 => /lib/x86_64-linux-gnu/libucs.so.0 (0x0000729d944ea000)
+	libuct.so.0 => /lib/x86_64-linux-gnu/libuct.so.0 (0x0000729d9a263000)
+	libucm.so.0 => /lib/x86_64-linux-gnu/libucm.so.0 (0x0000729d944cd000)
+# CMAKE generated file: DO NOT EDIT!
+# Generated by "Unix Makefiles" Generator, CMake Version 3.28
+
+# compile C with /usr/bin/gcc
+C_DEFINES = -DBLAS_EXTERNAL -DMEXP=19937 -D_lapack -D_mVMC -D_mpi_use
+
+C_INCLUDES = -I/opt/mpich/include -I/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/build/include/blis -I/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/include -I/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../common -I/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/StdFace/src
+
+C_FLAGS =  -O3 -DNDEBUG -fopenmp -O3 -DNDEBUG
+
+/usr/bin/g++ -O3 -DNDEBUG  -fopenmp  -Wl,-rpath -Wl,/opt/mpich/lib -Wl,--enable-new-dtags -rdynamic CMakeFiles/vmc.out.dir/vmcmain.c.o CMakeFiles/vmc.out.dir/physcal_lanczos.c.o CMakeFiles/vmc.out.dir/splitloop.c.o CMakeFiles/vmc.out.dir/__/sfmt/SFMT.c.o -o vmc.out   -L/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack  -Wl,-rpath,/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack:/opt/mpich/lib: ../StdFace/src/libStdFace_mvmc.a -lm ../pfapack/fortran/libpfapack.a ../ltl2inv/libltl2inv.a ../../lib/libblis.a -lpthread -lopenblas -lm -ldl -lm /opt/mpich/lib/libmpi.so -lpthread /opt/mpich/lib/libmpi.so -lopenblas -lm -ldl -lgfortran -lquadmath 
+diff --git a/crates/mvmc-core/Cargo.toml b/crates/mvmc-core/Cargo.toml
+index dd472f31..58f52245 100644
+--- a/crates/mvmc-core/Cargo.toml
++++ b/crates/mvmc-core/Cargo.toml
+@@ -39,6 +39,10 @@ flate2 = "1"
+ serde_json = "1"
+ sha2 = "0.10"
+ 
++[[example]]
++name = "mpi_benchmark"
++required-features = ["mpi"]
++
+ # Production Pfaffian/inverse and SR kernels use the BLAS/LAPACK backend,
+ # matching the pure Julia implementation's LinearAlgebra calls. Scalar
+ # Pfaffian references remain available in the standalone pfapack crate.

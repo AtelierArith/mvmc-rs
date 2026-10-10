@@ -1,0 +1,77 @@
+{
+  "arguments": {
+    "rust": "/home/vscode/.cache/mvmc/target/linux-x86_64/release/mvmc",
+    "c": "/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/build/src/mVMC/vmc.out",
+    "out": "/home/vscode/.cache/mvmc/issue492-numerical-final",
+    "workloads": "opt_hubbard_L16,opt_hubbard_L32,opt_hubbard_L64,opt_heisenberg_real,opt_heisenberg_cmp,opt_heisenberg_fsz,opt_kondo_real,opt_hubbard_dh,opt_hubbard_rbm_opttrans,phys_hubbard_L16,phys_hubbard_L32,phys_heisenberg_real,phys_lanczos",
+    "threads": [
+      1,
+      4
+    ],
+    "reps": 1,
+    "steps": 1,
+    "samples": null,
+    "data_count": 1,
+    "absolute": null,
+    "relative": null,
+    "timeout": 1800,
+    "observe": false
+  },
+  "binary_sha256": {
+    "rust": "a9cd5d6883109d6ba76cebea8abcc831e77205b4802566ff71556311bdbb2245",
+    "c": "6ae44625e227ccd6b9c38d2a7731fb445955108772e8741b452f70c6a641ac28"
+  },
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "source_sha256": {
+    "crates/mvmc-core/src/threading.rs": "d97b092194d15342c161b444d98b00b42968ab7323ec275fdf63d7519cd5d1fe",
+    "crates/mvmc-core/src/sr.rs": "8b22e7466168d212ced0b1595e82bddedc83dd79cfb3069b1a6273e9ac3b817b",
+    "crates/mvmc-core/src/observables.rs": "bc856bc5ff4cf5e73b396e73811c1b365f345b7e893443e7abc689f602763467",
+    "crates/mvmc-cli/src/main.rs": "a2baf5e3bce60d464fd63bdaad5c1ed11582785c201768055bfe1c1b764836f2",
+    "crates/mvmc-expert-parsers/src/utils/opt_flag.rs": "8cee3bbbe321965195636f7304ddd2933824d8363220bf868966a294395280c7",
+    "extern/mVMC-1.3.0/src/mVMC/vmccal.c": "c2db5fd32c5c83be189ffd9fbb89684f0696bab7fff5f7d36abaa370274d9d2f",
+    "scripts/bench_native_c.py": "084af42f649e6f85882e5ca770878ba1edbfbb3da0575ee24041d0fece570a5c"
+  },
+  "cpu": "\t: AMD Ryzen 9 PRO 8945HS w/ Radeon 780M Graphics",
+  "tools": {
+    "rust": {
+      "returncode": 0,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": ""
+    },
+    "gcc": {
+      "returncode": 0,
+      "stdout": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": ""
+    },
+    "blas": {
+      "returncode": 0,
+      "stdout": "0.3.26\n",
+      "stderr": ""
+    },
+    "mpi": {
+      "returncode": 0,
+      "stdout": "MPICH Version:      4.2.0\nMPICH Release date: Fri Feb  9 12:29:21 CST 2024\nMPICH ABI:          16:0:4\nMPICH Device:       ch4:ucx\nMPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix\nMPICH CC:           gcc    -O2\nMPICH CXX:          g++   -O2\nMPICH F77:          gfortran   -O2\nMPICH FC:           gfortran   -O2\nMPICH features:     threadcomm\n\n",
+      "stderr": ""
+    },
+    "rust_libraries": {
+      "returncode": 0,
+      "stdout": "\tlinux-vdso.so.1 (0x00007e8f114dd000)\n\tlibopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007e8f0c420000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007e8f114a3000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007e8f113ba000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007e8f0c20e000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007e8f114df000)\n\tlibgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x00007e8f0bef0000)\n",
+      "stderr": ""
+    },
+    "c_libraries": {
+      "returncode": 0,
+      "stdout": "\tlinux-vdso.so.1 (0x0000719d259a6000)\n\tlibopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x0000719d22c20000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x0000719d258b1000)\n\tlibmpi.so.12 => /opt/mpich/lib/libmpi.so.12 (0x0000719d202cc000)\n\tlibgomp.so.1 => /lib/x86_64-linux-gnu/libgomp.so.1 (0x0000719d2585b000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000719d2029e000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x0000719d2008c000)\n\t/lib64/ld-linux-x86-64.so.2 (0x0000719d259a8000)\n\tlibgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x0000719d1fd6e000)\n\tlibucp.so.0 => /lib/x86_64-linux-gnu/libucp.so.0 (0x0000719d1fc0b000)\n\tlibucs.so.0 => /lib/x86_64-linux-gnu/libucs.so.0 (0x0000719d1fba5000)\n\tlibuct.so.0 => /lib/x86_64-linux-gnu/libuct.so.0 (0x0000719d1fb5f000)\n\tlibucm.so.0 => /lib/x86_64-linux-gnu/libucm.so.0 (0x0000719d1fb42000)\n",
+      "stderr": ""
+    },
+    "commit": {
+      "returncode": 0,
+      "stdout": "72ca4e99e6b5c0e24b653a1b6176dea7c9540d48\n",
+      "stderr": ""
+    },
+    "dirty": {
+      "returncode": 0,
+      "stdout": " M .devcontainer/devcontainer.json\n M .devcontainer/setup.sh\n M .gitignore\n M crates/mvmc-cli/src/lib.rs\n M crates/mvmc-cli/src/main.rs\n M crates/mvmc-core/Cargo.toml\n M crates/mvmc-core/src/observables.rs\n M crates/mvmc-core/src/sr.rs\n M crates/mvmc-core/src/threading.rs\n M crates/mvmc-core/tests/threaded_issue361.rs\n M crates/mvmc-expert-parsers/src/utils/opt_flag.rs\n M crates/mvmc-expert-parsers/tests/opttrans.rs\n M docs/DEV_CONTAINER.md\n M extern/Julia-mVMC\n?? .devcontainer/verify-mpi.sh\n?? benchmark/c_comparison/\n?? benchmark/mpi_comparison/\n?? c_toolbox/native_comparison_492/\n?? crates/mvmc-core/examples/mpi_benchmark.rs\n?? crates/mvmc-core/examples/native_c_diagnostics.rs\n?? crates/mvmc-core/tests/native_comparison_492.rs\n?? scripts/audit_native_c_system.py\n?? scripts/bench_mpi.py\n?? scripts/bench_native_c.py\n?? scripts/capture_native_c.py\n?? scripts/test_bench_mpi.py\n?? scripts/test_bench_native_c.py\n?? tests/fixtures/native_comparison_492/\n",
+      "stderr": ""
+    }
+  }
+}

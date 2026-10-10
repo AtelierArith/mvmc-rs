@@ -121,17 +121,17 @@ fn gate_child() {
                 HOISTED_MIN_PARALLEL_WORK_NS,
             };
             assert_eq!(HOISTED_MIN_PARALLEL_WORK_NS, 40_000);
-            assert_eq!(HOISTED_COLD_MIN_PARALLEL_WORK_NS, 400_000);
+            assert_eq!(HOISTED_COLD_MIN_PARALLEL_WORK_NS, 40_000);
             // From outside the pool the Rayon-calibrated gate and size gate apply.
             assert!(!inner_parallel_work(8, 12_499));
             assert_eq!(scaled_cost_ns(config.min_size - 1, 1 << 30), 0);
-            // Inside the pool (a hoisted driver) regions are cold by default (400 us) and the
-            // size gate is off; the sampler marks its loop hot (40 us, checked in the library).
+            // Inside the pool, #492 allows the profitable 40 us measurement regions
+            // on the Ryzen reference; the outside-pool and size controls remain intact.
             install(|| {
-                assert!(!inner_parallel_work(8, 49_999));
-                assert!(inner_parallel_work(8, 50_000));
-                assert!(!inner_parallel_work_cold(8, 49_999));
-                assert!(inner_parallel_work_cold(8, 50_000));
+                assert!(!inner_parallel_work(8, 4_999));
+                assert!(inner_parallel_work(8, 5_000));
+                assert!(!inner_parallel_work_cold(8, 4_999));
+                assert!(inner_parallel_work_cold(8, 5_000));
                 assert!(!inner_parallel_work(1, usize::MAX));
                 assert_eq!(scaled_cost_ns(1, 1 << 30), 1 << 30);
                 assert_eq!(scaled_cost_ns(0, 1 << 30), 0);

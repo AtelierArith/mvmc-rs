@@ -20,22 +20,10 @@ use crate::c_timer::CTimer;
 use crate::output_files::SrInfoRow;
 use crate::state::VmcOptimizationState;
 
-/// Select an SR component using either Rust's pair layout or C's native
-/// consecutive OptTrans flag writes.
+/// Select the actual component flag, as C's stcOptInit does. Native
+/// GetInfoOptTrans writes are already represented in optimization_flags;
+/// remapping them here would activate components C never selects.
 pub(crate) fn component_is_optimized(data: &ExpertModeData, component: usize) -> bool {
-    let layout = data.projection_layout();
-    let opt_start = layout.n_proj + data.count_rbm_parameters() + n_slater(data);
-    let parameter = component / 2;
-    if data.c_opt_trans_flags
-        && parameter >= opt_start
-        && parameter < opt_start + data.count_opt_trans_parameters()
-    {
-        if !component.is_multiple_of(2) {
-            return false;
-        }
-        let c_index = layout.n_proj + n_slater(data) + (parameter - opt_start);
-        return data.optimization_flags.get(c_index).copied() == Some(1);
-    }
     data.optimization_flags.get(component).copied() == Some(1)
 }
 
@@ -554,15 +542,17 @@ mod opttrans_tests {
     }
 
     #[test]
-    fn c_opttrans_flags_select_native_consecutive_writes() {
+    fn c_opttrans_flags_are_not_remapped_to_parameter_tail() {
         let mut data = ExpertModeData::new();
         data.n_gutzwiller_idx = 3;
         data.opt_trans = vec![Complex64::new(0.5, 0.0), Complex64::new(0.75, 0.0)];
         data.c_opt_trans_flags = true;
         data.optimization_flags = vec![0, 0, 0, 1, 1, 0, 0];
-        assert!(component_is_optimized(&data, 6));
+        assert!(component_is_optimized(&data, 3));
+        assert!(component_is_optimized(&data, 4));
+        assert!(!component_is_optimized(&data, 6));
         assert!(!component_is_optimized(&data, 7));
-        assert!(component_is_optimized(&data, 8));
+        assert!(!component_is_optimized(&data, 8));
         assert!(!component_is_optimized(&data, 9));
     }
 
