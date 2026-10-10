@@ -1,0 +1,33 @@
+diff --git a/crates/mvmc-core/src/run.rs b/crates/mvmc-core/src/run.rs
+index 809778e0..d8d206c1 100644
+--- a/crates/mvmc-core/src/run.rs
++++ b/crates/mvmc-core/src/run.rs
+@@ -2889,10 +2889,28 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
+         state.sr_oo_deferred = false;
+         return;
+     }
++    let diag = timer.diagnostics.maincal && !use_fsz;
++    // Temporary issue #496 experiment: callers clear aggregates immediately
++    // before this scope, so measure directly into their uniquely owned buffers.
++    if std::env::var_os("MVMC_RS_SR_IN_PLACE_PROBE").is_some() {
++        let deferred =
++            accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
++        crate::sr_accumulator::publish_physcal_in_place(&mut state.sr_opt);
++        state.sr_oo_deferred = deferred;
++        return;
++    }
++    timer.start_diag(940, diag);
++    timer.start_diag(950, diag);
+     let mut local = crate::sr_accumulator::SrMeasurement::begin(state);
++    timer.stop_diag(950, diag);
++    timer.stop_diag(940, diag);
+     let deferred =
+         accumulate_observables_local(data, local.state(), all_complex, use_fsz, timer, reducer);
++    timer.start_diag(940, diag);
++    timer.start_diag(950, diag);
+     local.finish();
++    timer.stop_diag(950, diag);
++    timer.stop_diag(940, diag);
+     // Set after `finish`, which swaps the local buffers back: the flag belongs to the state.
+     state.sr_oo_deferred = deferred;
+ }

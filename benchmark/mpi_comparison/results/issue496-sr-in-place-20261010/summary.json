@@ -1,0 +1,24 @@
+{
+  "policy": "L64, MPI4 x threads4, BLAS1; warmup1 repetitions3, sequential modes; same binary, diagnostic flag only",
+  "baseline": {
+    "seconds": [
+      13.83960647,
+      13.869856086,
+      13.889442735
+    ],
+    "median": 13.869856086
+  },
+  "inplace": {
+    "seconds": [
+      13.124357207,
+      13.273518574,
+      13.247782067
+    ],
+    "median": 13.247782067
+  },
+  "max_abs_output_by_rep": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

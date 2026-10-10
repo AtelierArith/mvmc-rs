@@ -1,0 +1,80 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling pfapack v0.0.0 (/workspaces/mvmc-rs/crates/pfapack)
+   Compiling mvmc-core v0.0.0 (/workspaces/mvmc-rs/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 10.16s
+────────────
+ Nextest run ID c3f48e34-15ed-40dd-ac92-c8019c25fe41 with nextest profile: default
+    Starting 58 tests across 116 binaries (933 tests skipped)
+        PASS [   0.064s] ( 1/58) mvmc-core run::callback_tests::callback_errors_propagate_and_failed_sr_does_not_call_callback
+        PASS [   0.079s] ( 2/58) mvmc-core run::callback_tests::callbacks_observe_post_sync_parameters_and_do_not_change_rng_trajectory
+        PASS [   0.080s] ( 3/58) mvmc-core run::callback_tests::cg_accumulation_forces_store_even_when_nstore_is_zero
+        PASS [   0.080s] ( 4/58) mvmc-core run::callback_tests::final_window_history_is_stored_before_callback_and_uses_initial_window
+        PASS [   0.206s] ( 5/58) mvmc-core run::callback_tests::dh24_real_direct_output_matches_independent_complete_c_windows
+        PASS [   0.227s] ( 6/58) mvmc-core run::callback_tests::canonical_cg_fixed_seed_same_configuration_is_repeatable
+        PASS [   0.122s] ( 7/58) mvmc-core run::callback_tests::fsz_measurements_preserve_real_and_complex_optimization_sampling_and_rng
+        PASS [   0.278s] ( 8/58) mvmc-core run::callback_tests::enabled_sections_preserve_parameters_samples_energy_and_rng
+        PASS [   0.346s] ( 9/58) mvmc-core run::callback_tests::fsz_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks
+        PASS [   0.427s] (10/58) mvmc-core run::callback_tests::dh2_loaded_values_and_rng_match_julia_with_history_in_c_declared_order
+        PASS [   0.192s] (11/58) mvmc-core run::callback_tests::hubbard_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks
+        PASS [   0.540s] (12/58) mvmc-core run::callback_tests::actual_cg_sampling_observer_preserves_configs_rng_count_and_next624
+        PASS [   0.341s] (13/58) mvmc-core run::callback_tests::general_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks
+        PASS [   0.588s] (14/58) mvmc-core run::callback_tests::complex_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks
+        PASS [   0.054s] (15/58) mvmc-core run::callback_tests::interall_fsz_initial_flags_parameters_and_rng_match_julia_before_sampling
+        PASS [   0.063s] (16/58) mvmc-core run::callback_tests::invalid_saved_walkers_clear_previous_sample_store
+        PASS [   0.055s] (17/58) mvmc-core run::callback_tests::mpi_measurement_partition_preserves_full_chain_count_and_rng
+        PASS [   0.083s] (18/58) mvmc-core run::callback_tests::nonfinite_local_energy_skips_energy_sr_and_sample_store
+        PASS [   0.337s] (19/58) mvmc-core run::callback_tests::interall_fsz_cg_prefixes_match_julia_parameters_spins_samples_energy_and_rng
+        PASS [   0.126s] (20/58) mvmc-core run::callback_tests::nstore_controls_production_buffers_without_changing_sampling
+        PASS [   0.804s] (21/58) mvmc-core run::callback_tests::dh4_loaded_values_and_rng_match_julia_with_history_in_c_declared_order
+        PASS [   0.171s] (22/58) mvmc-core run::callback_tests::nsrcg_two_with_store_follows_nsrcg_one_control_path
+        PASS [   0.202s] (23/58) mvmc-core run::callback_tests::normal_interall_equivalents_preserve_sr_parameters_samples_energy_and_rng
+        PASS [   0.690s] (24/58) mvmc-core run::callback_tests::fsz_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng
+        PASS [   0.055s] (25/58) mvmc-core run::callback_tests::optimization_measurement_observer_rejects_nesting_and_cleans_up_unwind
+        PASS [   0.066s] (26/58) mvmc-core run::callback_tests::opttrans_initial_flags_parameters_and_rng_match_julia_before_sampling
+        PASS [   0.055s] (27/58) mvmc-core run::callback_tests::oversized_optimization_window_rejects_before_mutation_output_or_rng
+        PASS [   0.198s] (28/58) mvmc-core run::callback_tests::nstore_preserves_three_step_optimization_trajectory
+        PASS [   0.657s] (29/58) mvmc-core run::callback_tests::general_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng
+        PASS [   0.061s] (30/58) mvmc-core run::callback_tests::pairhop_real_and_fsz_initial_flags_parameters_and_rng_match_julia
+        PASS [   1.224s] (31/58) mvmc-core run::callback_tests::cmp_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng
+        PASS [   0.723s] (32/58) mvmc-core run::callback_tests::interall_fsz_direct_prefixes_match_julia_parameters_spins_samples_energy_and_rng
+        PASS [   0.892s] (33/58) mvmc-core run::callback_tests::hubbard_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng
+        PASS [   0.576s] (34/58) mvmc-core run::callback_tests::rbm_complex_direct_prefixes_match_source_parameters_samples_energy_and_rng
+        PASS [   1.219s] (35/58) mvmc-core run::callback_tests::opttrans_real_direct_prefixes_match_c_kernel_reference_parameters_samples_and_rng
+        PASS [   1.109s] (36/58) mvmc-core run::callback_tests::rbm_real_and_complex_cg_prefixes_match_explicit_kernel_references
+        PASS [   0.901s] (37/58) mvmc-core run::callback_tests::rbm_real_and_general_complex_direct_prefixes_match_explicit_kernel_references
+        PASS [   2.071s] (38/58) mvmc-core run::callback_tests::rbm_dh24_direct_and_cg_prefixes_match_source
+        PASS [   0.362s] (39/58) mvmc-core run::callback_tests::real_cg_prefixes_match_julia_parameters_samples_energy_and_full_rng_blocks
+        PASS [   0.063s] (40/58) mvmc-core run::callback_tests::real_mode_opttrans_derivatives_use_their_own_slots
+        PASS [   0.064s] (41/58) mvmc-core run::callback_tests::remote_sr_failure_restores_successful_local_parameter_update
+        PASS [   0.087s] (42/58) mvmc-core run::callback_tests::sampling_only_stops_after_one_output_and_before_sr_or_final_parameters
+        PASS [   0.161s] (43/58) mvmc-core run::callback_tests::standard_cg_runs_three_steps_and_writes_srinfo
+        PASS [   0.586s] (44/58) mvmc-core run::callback_tests::real_direct_sr_prefixes_match_julia_parameters_samples_energy_and_rng
+        PASS [   4.623s] (45/58) mvmc-core run::callback_tests::canonical_general_rbm_complex_reference_uses_native_c_counter_order
+        PASS [   4.731s] (46/58) mvmc-core run::callback_tests::pairhop_real_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [   4.614s] (47/58) mvmc-core run::callback_tests::rbm_fsz_cg_prefixes_match_source_including_empty_weight_steps
+        PASS [   5.955s] (48/58) mvmc-core run::callback_tests::dh2_real_complex_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [   7.652s] (49/58) mvmc-core run::callback_tests::opttrans_cg_prefixes_match_source
+        PASS [   8.084s] (50/58) mvmc-core run::callback_tests::opttrans_stored_direct_prefixes_match_explicit_kernel_references
+        PASS [   6.647s] (51/58) mvmc-core run::callback_tests::rbm_stored_direct_prefixes_match_explicit_kernel_references
+        PASS [  11.267s] (52/58) mvmc-core run::callback_tests::dh4_and_dh24_real_complex_and_fsz_cg_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [  11.189s] (53/58) mvmc-core run::callback_tests::rbm_fsz_direct_prefixes_match_source_including_failure_state
+        PASS [  14.351s] (54/58) mvmc-core run::callback_tests::dh2_real_complex_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [  14.539s] (55/58) mvmc-core run::callback_tests::opttrans_complex_fsz_and_all_factor_direct_prefixes_match_source
+        PASS [  14.710s] (56/58) mvmc-core run::callback_tests::pairhop_real_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [  15.801s] (57/58) mvmc-core run::callback_tests::dh4_real_complex_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng
+        PASS [  16.796s] (58/58) mvmc-core run::callback_tests::dh24_real_complex_and_fsz_direct_prefixes_match_julia_updates_samples_energy_and_rng
+────────────
+     Summary [  16.796s] 58 tests run: 58 passed, 933 skipped

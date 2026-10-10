@@ -1,0 +1,130 @@
+[
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 0,
+    "exact_state_config_count": true,
+    "words_consumed": 244168,
+    "energy_delta": 0.0
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 1,
+    "exact_state_config_count": true,
+    "words_consumed": 244519,
+    "energy_delta": null
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 2,
+    "exact_state_config_count": true,
+    "words_consumed": 244337,
+    "energy_delta": null
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 3,
+    "exact_state_config_count": true,
+    "words_consumed": 244882,
+    "energy_delta": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 0,
+    "exact_state_config_count": true,
+    "words_consumed": 3649235,
+    "energy_delta": 0.0
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 1,
+    "exact_state_config_count": true,
+    "words_consumed": 3649438,
+    "energy_delta": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 2,
+    "exact_state_config_count": true,
+    "words_consumed": 3650364,
+    "energy_delta": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 3,
+    "exact_state_config_count": true,
+    "words_consumed": 3649930,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 0,
+    "exact_state_config_count": true,
+    "words_consumed": 489365,
+    "energy_delta": 0.0
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 1,
+    "exact_state_config_count": true,
+    "words_consumed": 489684,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 2,
+    "exact_state_config_count": true,
+    "words_consumed": 490229,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 3,
+    "exact_state_config_count": true,
+    "words_consumed": 490237,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 0,
+    "exact_state_config_count": true,
+    "words_consumed": 7296192,
+    "energy_delta": 0.0
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 1,
+    "exact_state_config_count": true,
+    "words_consumed": 7298797,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 2,
+    "exact_state_config_count": true,
+    "words_consumed": 7300385,
+    "energy_delta": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 3,
+    "exact_state_config_count": true,
+    "words_consumed": 7300231,
+    "energy_delta": null
+  }
+]

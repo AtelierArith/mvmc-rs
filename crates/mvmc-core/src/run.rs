@@ -2881,20 +2881,13 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) {
-    if data.modpara.vmc_calc_mode == 1 {
-        // PhysCal does not need an owned SR cache. Retain its existing
-        // in-place publication arithmetic without allocating a local shape.
-        accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
-        crate::sr_accumulator::publish_physcal_in_place(&mut state.sr_opt);
-        state.sr_oo_deferred = false;
-        return;
-    }
-    let mut local = crate::sr_accumulator::SrMeasurement::begin(state);
-    let deferred =
-        accumulate_observables_local(data, local.state(), all_complex, use_fsz, timer, reducer);
-    local.finish();
-    // Set after `finish`, which swaps the local buffers back: the flag belongs to the state.
-    state.sr_oo_deferred = deferred;
+    // Both runner lifecycles clear aggregates/scratch before entering this
+    // scope. Samples are processed in their original order into the uniquely
+    // owned rank-local buffers, just as in C VMCMainCal. A second cache would
+    // duplicate the clear and copy the completed aggregates back into zeros.
+    let deferred = accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
+    crate::sr_accumulator::publish_measurement_in_place(&mut state.sr_opt);
+    state.sr_oo_deferred = data.modpara.vmc_calc_mode != 1 && deferred;
 }
 
 fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
