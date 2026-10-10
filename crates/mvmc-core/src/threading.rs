@@ -1,10 +1,11 @@
 //! Runtime control for deterministic shared-memory inner kernels.
 //!
 //! The per-region helpers (`for_each_*`, `qp_fill*`, `qp_update`, `collect_terms`,
-//! `static_blocks`) hand static blocks of the items to the Rayon pool with one
-//! `ThreadPool::broadcast` per region (issue #479): one producer per output element, so every
-//! result is independent of the worker count. [`install`]/`install_inner` keep `par_iter` for
-//! the few large regions that still use it directly.
+//! `static_blocks`) partition the items into fixed blocks with one producer per output
+//! element. Ordinary regions use Rayon's broadcast (issue #479). The normal-real
+//! saved-sample calculation can reuse a bounded Spindle team when QP width is smaller
+//! than the pool; its scheduling preserves the same blocks and per-element arithmetic.
+//! [`install`]/`install_inner` keep `par_iter` for the few regions that use it directly.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -532,6 +533,50 @@ pub(crate) fn install_inner<R: Send>(operation: impl FnOnce() -> R + Send) -> R 
     })
 }
 
+// A bounded team is confined to the non-MPI, normal-real saved-sample
+// calculation. Public install and callers outside that region retain Rayon.
+thread_local! {
+    static REGION_TEAM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+struct RegionTeamScope(bool);
+
+impl Drop for RegionTeamScope {
+    fn drop(&mut self) {
+        REGION_TEAM.with(|flag| flag.set(self.0));
+    }
+}
+
+pub(crate) fn with_qp_region_team<R: Send>(
+    qp_count: usize,
+    cost_ns: usize,
+    operation: impl FnOnce() -> R + Send,
+) -> R {
+    let threads = inner_thread_config().threads;
+    if !hoisted()
+        || qp_count < 2
+        || qp_count >= threads
+        || REGION_TEAM.with(std::cell::Cell::get)
+        || !inner_parallel_work_cold(qp_count, cost_ns)
+    {
+        return operation();
+    }
+    // The QP width supplies the budget; no physical-core or host-specific cap.
+    // All workers return before the caller reaches sampling/MPI/SR work.
+    spindle::with_lock(qp_count, || {
+        let _team = RegionTeamScope(REGION_TEAM.with(|flag| flag.replace(true)));
+        operation()
+    })
+}
+
+struct BlockScope(bool);
+
+impl Drop for BlockScope {
+    fn drop(&mut self) {
+        IN_BLOCK.with(|flag| flag.set(self.0));
+    }
+}
+
 /// Split `count` items into static blocks: `(block count, items per block)`. The partition
 /// depends only on `count` and the configured worker count (the C `omp for` static
 /// schedule), never on timing.
@@ -548,9 +593,10 @@ fn partition(count: usize) -> (usize, usize) {
 /// workers are still in Rayon's idle spin window (gaps of up to about 30 us), against 7 to 18
 /// us for `install` plus `scope`/`par_iter` (issue #479: `rayon_dispatch_variants`
 /// measurements in `benchmark/cpu_round/README.md`); it needs no allocation per task and no
-/// work stealing. A region requested from inside the pool (a nested kernel) runs its blocks
-/// inline in order: a nested broadcast would wait for workers that are busy with the outer
-/// blocks. Block boundaries never depend on timing, so both give the same result.
+/// work stealing. Within a bounded saved-sample team, Spindle instead dispatches these
+/// same blocks across that team; worker ownership can vary. A region requested from a
+/// block (a nested kernel) runs inline in order, avoiding nested dispatch to busy workers.
+/// Block boundaries and the producer of each output never depend on scheduling.
 fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
     let observer = OBSERVER.with(|slot| slot.borrow().clone());
     let pool = pool();
@@ -563,10 +609,13 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
     }
     let run = |block: usize| {
         let _binding = bind_observer(observer.clone());
-        IN_BLOCK.with(|flag| flag.set(true));
+        let _block = BlockScope(IN_BLOCK.with(|flag| flag.replace(true)));
         body(block);
-        IN_BLOCK.with(|flag| flag.set(false));
     };
+    if REGION_TEAM.with(std::cell::Cell::get) {
+        spindle::for_each_raw(blocks, run);
+        return;
+    }
     if pool.current_thread_index().is_some() {
         // Hoisted driver: the caller is itself a pool worker and takes part as a block.
         rayon::broadcast(|context| {
@@ -588,9 +637,10 @@ thread_local! {
     static IN_BLOCK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Static block schedule on the inner pool (the C `omp for` default): worker `k` always
-/// handles the same contiguous block `k` of `0..count`, so per-QP data stays in that
-/// worker's cache from one call to the next. Returns `body(start, end)` of each
+/// Static block partition of `0..count` (the C `omp for` default). Ordinary Rayon
+/// regions keep each block on the same worker; bounded saved-sample teams can schedule
+/// a block on different workers while retaining its contiguous range and sole producer.
+/// Returns `body(start, end)` of each
 /// non-empty block in block order. Which thread forms which block never affects results.
 pub(crate) fn static_blocks<R: Send>(
     count: usize,
@@ -999,6 +1049,129 @@ pub fn copy_complex_realpart(dst: &mut [f64], src: &[Complex64]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn saved_sample_team_preserves_ownership_and_releases_workers() {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                "threading::tests::saved_sample_team_child",
+                "--nocapture",
+            ])
+            .env("MVMC_RS_INNER_THREADS", "16")
+            .env("MVMC_RS_INNER_THRESHOLD", "1")
+            .env("SAVED_SAMPLE_TEAM_CHILD", "1")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "saved-sample team child failed: {status}");
+                break;
+            }
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("saved-sample team did not finish; possible dispatch deadlock");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    #[ignore = "process-scoped helper"]
+    fn saved_sample_team_child() {
+        use std::sync::Barrier;
+        assert_eq!(std::env::var("SAVED_SAMPLE_TEAM_CHILD").unwrap(), "1");
+        fn ownership(qp_count: usize) {
+            let mut entries = vec![usize::MAX; 33];
+            let workers = std::sync::Mutex::new(std::collections::BTreeSet::new());
+            with_qp_region_team(qp_count, 100_000, || {
+                assert_eq!(
+                    REGION_TEAM.with(std::cell::Cell::get),
+                    (2..16).contains(&qp_count)
+                );
+                for_each_mut(&mut entries, 1, |index, value| {
+                    workers
+                        .lock()
+                        .unwrap()
+                        .insert(rayon::current_thread_index().unwrap());
+                    let mut nested = [0; 3];
+                    for_each_mut(&mut nested, 1, |j, value| *value = index * 7 + j);
+                    assert_eq!(nested, [index * 7, index * 7 + 1, index * 7 + 2]);
+                    *value = index * 11;
+                });
+                if (2..16).contains(&qp_count) {
+                    // Spindle starts workers lazily: the budget caps the team,
+                    // but does not promise a simultaneous gang for a Barrier.
+                    assert_eq!(spindle::max_num_threads(), qp_count);
+                    assert!((1..=qp_count).contains(&spindle::current_num_threads()));
+                    assert!(workers.lock().unwrap().len() <= qp_count);
+                    with_qp_region_team(qp_count, 1, || {
+                        assert!(REGION_TEAM.with(std::cell::Cell::get));
+                    });
+                }
+            });
+            assert!(!REGION_TEAM.with(std::cell::Cell::get));
+            for (index, value) in entries.into_iter().enumerate() {
+                assert_eq!(value, index * 11);
+            }
+        }
+        install(|| {
+            for _ in 0..3 {
+                for qp_count in [0, 1, 2, 3, 8, 15, 16, 17] {
+                    ownership(qp_count);
+                }
+            }
+            assert!(std::panic::catch_unwind(|| {
+                with_qp_region_team(8, 100_000, || panic!("scope cleanup probe"))
+            })
+            .is_err());
+            assert!(!REGION_TEAM.with(std::cell::Cell::get));
+            assert!(std::panic::catch_unwind(|| {
+                with_qp_region_team(8, 100_000, || {
+                    fork(8, |index| {
+                        if index == 3 {
+                            panic!("block cleanup probe");
+                        }
+                    })
+                })
+            })
+            .is_err());
+            assert!(!REGION_TEAM.with(std::cell::Cell::get));
+            ownership(8);
+            // Public Rayon work may use every worker after the bounded region,
+            // including after its root or an item panics.
+            let barrier = Barrier::new(16);
+            rayon::scope(|scope| {
+                for _ in 0..16 {
+                    scope.spawn(|_| {
+                        barrier.wait();
+                    });
+                }
+            });
+        });
+        // More callers than pool workers must still complete: each bounded
+        // team leader can process its jobs without a simultaneous worker gang.
+        for (callers, iterations) in [(4, 8), (32, 2)] {
+            let starts = Barrier::new(callers);
+            std::thread::scope(|scope| {
+                for _ in 0..callers {
+                    scope.spawn(|| {
+                        starts.wait();
+                        for _ in 0..iterations {
+                            install(|| ownership(8));
+                        }
+                    });
+                }
+            });
+        }
+    }
+
     use super::*;
 
     #[test]

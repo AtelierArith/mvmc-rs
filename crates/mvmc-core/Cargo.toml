@@ -31,6 +31,7 @@ lapack = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 rayon = { workspace = true }
+spindle = "=0.2.6"
 mpi = { workspace = true, optional = true }
 
 [dev-dependencies]

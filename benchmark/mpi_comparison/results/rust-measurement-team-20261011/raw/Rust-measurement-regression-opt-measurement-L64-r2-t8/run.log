@@ -1,0 +1,13 @@
+BLAS_THREADS 0 1
+WORLD 0 2
+THREADS 0 8
+BLAS_THREADS 1 1
+WORLD 1 2
+THREADS 1 8
+EXECUTION 1 86200 8
+EXECUTION_DETAIL 1 ExecutionSnapshot { parallel_calls: 86200, serial_calls: 213137, executed_qp_items: 2291176, parallel_qp_items: 637760, serial_qp_items: 1653416, executed_term_items: 819200, parallel_term_items: 819200, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5681380, serial_entry_items: 1293700, worker_entries: 7138340, distinct_workers: 8, worker_ids: [0, 1, 2, 3, 4, 5, 6, 7] }
+EXECUTION 0 85464 8
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 85464, serial_calls: 213137, executed_qp_items: 2285288, parallel_qp_items: 631872, serial_qp_items: 1653416, executed_term_items: 819200, parallel_term_items: 819200, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5681380, serial_entry_items: 1293700, worker_entries: 7132452, distinct_workers: 8, worker_ids: [0, 1, 2, 3, 4, 5, 6, 7] }
+BENCH 1 18.109209732 -4.74790936713511524e-1
+BENCH 2 18.378432834 -4.74790936713511524e-1
+BENCH 3 18.251541667 -4.74790936713511524e-1
