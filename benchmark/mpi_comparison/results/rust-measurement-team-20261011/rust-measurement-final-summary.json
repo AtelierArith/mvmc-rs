@@ -1,0 +1,1245 @@
+{
+  "atol": 1.4210854715202004e-14,
+  "rtol": 1.4210854715202004e-14,
+  "warmups": 1,
+  "reps": 3,
+  "total_samples": 320,
+  "cases": [
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 1,
+      "threads": 16,
+      "measurement_team_max_budget": 8,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            8.414024351,
+            8.4104877,
+            8.482473558
+          ],
+          "median_seconds": 8.414024351,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            8.522998341,
+            8.453597081,
+            8.484255394
+          ],
+          "median_seconds": 8.484255394,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            7.194067695,
+            7.09797391,
+            7.188427044
+          ],
+          "median_seconds": 7.188427044,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "improvement_percent": {
+        "baseline": 14.566125029746779,
+        "baseline-after": 15.27333030210759
+      },
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 1,
+      "threads": 16,
+      "measurement_team_max_budget": 8,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            3.395185178,
+            3.396054094,
+            3.431154792
+          ],
+          "median_seconds": 3.396054094,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            3.449214007,
+            3.506836335,
+            3.461867502
+          ],
+          "median_seconds": 3.461867502,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            2.667014009,
+            2.646758217,
+            2.646836855
+          ],
+          "median_seconds": 2.646836855,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "improvement_percent": {
+        "baseline": 22.061404743925728,
+        "baseline-after": 23.543091886940736
+      },
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 1,
+      "threads": 16,
+      "measurement_team_max_budget": 8,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            31.756628667,
+            31.786989028,
+            32.241387007
+          ],
+          "median_seconds": 31.786989028,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            32.437864804,
+            32.581863798,
+            32.597895088
+          ],
+          "median_seconds": 32.581863798,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            28.08276575,
+            28.204132697,
+            28.066045226
+          ],
+          "median_seconds": 28.08276575,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "improvement_percent": {
+        "baseline": 11.653268809880313,
+        "baseline-after": 13.808596327985912
+      },
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 1,
+      "threads": 16,
+      "measurement_team_max_budget": 8,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            12.358423611,
+            12.371060319,
+            12.440999703
+          ],
+          "median_seconds": 12.371060319,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            12.428207143,
+            12.533700244,
+            12.417155779
+          ],
+          "median_seconds": 12.428207143,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            10.529345345,
+            10.583044349,
+            10.547704697
+          ],
+          "median_seconds": 10.547704697,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "improvement_percent": {
+        "baseline": 14.738879085405577,
+        "baseline-after": 15.130922942969804
+      },
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 1,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            11.973140675,
+            11.978790557,
+            11.959091977
+          ],
+          "median_seconds": 11.973140675,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            11.948693708,
+            11.938168193,
+            11.928166735
+          ],
+          "median_seconds": 11.938168193,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": -0.29209113088450867,
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 1,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            4.608784646,
+            4.587873573,
+            4.588083017
+          ],
+          "median_seconds": 4.588083017,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            4.632813462,
+            4.637275476,
+            4.6397423
+          ],
+          "median_seconds": 4.637275476,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": 1.0721789212995825,
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 1,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            55.611644877,
+            55.566143313,
+            55.579236202
+          ],
+          "median_seconds": 55.579236202,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            56.671923027,
+            57.076209571,
+            56.692426966
+          ],
+          "median_seconds": 56.692426966,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            55.454217752,
+            55.287337181,
+            55.316931811
+          ],
+          "median_seconds": 55.316931811,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        }
+      },
+      "change_percent": 2.002889640214134,
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 1,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            22.205959083,
+            22.288984978,
+            22.47275084
+          ],
+          "median_seconds": 22.288984978,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            22.28485662,
+            22.231377177,
+            22.27279824
+          ],
+          "median_seconds": 22.27279824,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -0.07262214055945293,
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 2,
+      "threads": 8,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            4.794166294,
+            4.758645244,
+            4.73620757
+          ],
+          "median_seconds": 4.758645244,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            4.724456063,
+            4.661812426,
+            4.669132533
+          ],
+          "median_seconds": 4.669132533,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": -1.8810545104799181,
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 2,
+      "threads": 8,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            2.115955603,
+            2.098662854,
+            2.083912487
+          ],
+          "median_seconds": 2.098662854,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            2.115292794,
+            2.105936582,
+            2.058060127
+          ],
+          "median_seconds": 2.105936582,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": 0.34658868555930145,
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 2,
+      "threads": 8,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            18.242703974,
+            18.31833398,
+            18.093692712
+          ],
+          "median_seconds": 18.242703974,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            18.109209732,
+            18.378432834,
+            18.251541667
+          ],
+          "median_seconds": 18.251541667,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": 0.04844508255243962,
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 2,
+      "threads": 8,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            7.762084333,
+            7.85768834,
+            7.814639756
+          ],
+          "median_seconds": 7.814639756,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            7.93588006,
+            7.932006237,
+            7.853972472
+          ],
+          "median_seconds": 7.932006237,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": 1.5018796088442476,
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 4,
+      "threads": 4,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            3.409353456,
+            3.356612944,
+            3.394082196
+          ],
+          "median_seconds": 3.394082196,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            3.403560253,
+            3.324317472,
+            3.354438961
+          ],
+          "median_seconds": 3.354438961,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": -1.1680104579294026,
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 4,
+      "threads": 4,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            1.477256213,
+            1.46114842,
+            1.462630881
+          ],
+          "median_seconds": 1.462630881,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            1.420117947,
+            1.43872459,
+            1.4196249
+          ],
+          "median_seconds": 1.420117947,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -2.9066071660495685,
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 4,
+      "threads": 4,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            14.171306303,
+            14.396014965,
+            14.218863089
+          ],
+          "median_seconds": 14.218863089,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            14.091514013,
+            14.10090345,
+            14.184640486
+          ],
+          "median_seconds": 14.10090345,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": -0.8295996540768069,
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 4,
+      "threads": 4,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            5.800167919,
+            5.8353349,
+            5.865640445
+          ],
+          "median_seconds": 5.8353349,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            5.897418672,
+            5.835689614,
+            5.865686706
+          ],
+          "median_seconds": 5.865686706,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": 0.5201382014937916,
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 8,
+      "threads": 2,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            3.029192283,
+            3.051310906,
+            3.042869542
+          ],
+          "median_seconds": 3.042869542,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            3.080339626,
+            3.043048216,
+            3.055498316
+          ],
+          "median_seconds": 3.055498316,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": 0.41502844028269426,
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 8,
+      "threads": 2,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            1.129875511,
+            1.10530857,
+            1.138048173
+          ],
+          "median_seconds": 1.129875511,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            1.119637165,
+            1.147221883,
+            1.109442767
+          ],
+          "median_seconds": 1.119637165,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -0.9061481464394672,
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 8,
+      "threads": 2,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            13.625254931,
+            13.433603461,
+            13.486081495
+          ],
+          "median_seconds": 13.486081495,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            13.28166103,
+            13.373426983,
+            13.372300535
+          ],
+          "median_seconds": 13.372300535,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": -0.8436917724558013,
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 8,
+      "threads": 2,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            4.882858173,
+            4.872908228,
+            4.886992141
+          ],
+          "median_seconds": 4.882858173,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            4.866259737,
+            4.876071526,
+            4.928782598
+          ],
+          "median_seconds": 4.876071526,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -0.13898923047831468,
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 32,
+      "ranks": 16,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            3.614577145,
+            3.511176107,
+            3.50243644
+          ],
+          "median_seconds": 3.511176107,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            3.725659288,
+            3.536048133,
+            3.581390819
+          ],
+          "median_seconds": 3.581390819,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        }
+      },
+      "change_percent": 1.9997490829359865,
+      "checks": [
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 183582,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 32,
+      "ranks": 16,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            1.063919762,
+            1.061344318,
+            1.068876045
+          ],
+          "median_seconds": 1.063919762,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            1.039033211,
+            1.069889749,
+            1.050568924
+          ],
+          "median_seconds": 1.050568924,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -1.254872639540272,
+      "checks": [
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 290400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "opt",
+      "sites": 64,
+      "ranks": 16,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            16.933170591,
+            16.147007865,
+            16.081311761
+          ],
+          "median_seconds": 16.147007865,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        },
+        "measurement": {
+          "times_seconds": [
+            16.378323846,
+            19.936323839,
+            16.918122941
+          ],
+          "median_seconds": 16.918122941,
+          "binary_sha256": "c69db4e9df7e95291df9a89d1c9df97c0a1d91b376d0702a3216b65a572860fe"
+        },
+        "baseline-after": {
+          "times_seconds": [
+            16.448955785,
+            16.480247692,
+            16.395904813
+          ],
+          "median_seconds": 16.448955785,
+          "binary_sha256": "bcc84101e11cd7b8426bc0cf847c40d08df10c4fdb89c069ff4b2e62487a0872"
+        }
+      },
+      "change_percent": 4.77559113395527,
+      "checks": [
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 7,
+          "values": 357534,
+          "max_abs_delta": 0.0
+        }
+      ]
+    },
+    {
+      "mode": "phys",
+      "sites": 64,
+      "ranks": 16,
+      "threads": 1,
+      "measurement_team_max_budget": null,
+      "timings": {
+        "baseline": {
+          "times_seconds": [
+            4.905398873,
+            4.971490903,
+            5.066132315
+          ],
+          "median_seconds": 4.971490903,
+          "binary_sha256": "fcf4bd260489c974c304237323bcf2deef43c2b2d90837a43287e964f43e86c3"
+        },
+        "measurement": {
+          "times_seconds": [
+            4.927424826,
+            4.851469938,
+            4.928095005
+          ],
+          "median_seconds": 4.927424826,
+          "binary_sha256": "ed0e175c8b0b67c1d8b0b91ea7a4cd58f08e5253e84db1434545be845a517cb5"
+        }
+      },
+      "change_percent": -0.8863754929815726,
+      "checks": [
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        },
+        {
+          "files": 400,
+          "values": 578400,
+          "max_abs_delta": 0.0
+        }
+      ]
+    }
+  ]
+}

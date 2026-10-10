@@ -1,0 +1,43 @@
+BLAS_THREADS 0 1
+WORLD 0 8
+THREADS 0 2
+BLAS_THREADS 1 1
+WORLD 1 8
+THREADS 1 2
+BLAS_THREADS 2 1
+WORLD 2 8
+THREADS 2 2
+BLAS_THREADS 3 1
+WORLD 3 8
+THREADS 3 2
+BLAS_THREADS 5 1
+WORLD 5 8
+THREADS 5 2
+BLAS_THREADS 6 1
+WORLD 6 8
+THREADS 6 2
+BLAS_THREADS 7 1
+WORLD 7 8
+THREADS 7 2
+BLAS_THREADS 4 1
+WORLD 4 8
+THREADS 4 2
+EXECUTION 0 22313 2
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 22313, serial_calls: 54737, executed_qp_items: 589680, parallel_qp_items: 165064, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6032044, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 1 21726 2
+EXECUTION_DETAIL 1 ExecutionSnapshot { parallel_calls: 21726, serial_calls: 54737, executed_qp_items: 584984, parallel_qp_items: 160368, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6027348, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 2 21875 2
+EXECUTION_DETAIL 2 ExecutionSnapshot { parallel_calls: 21875, serial_calls: 54737, executed_qp_items: 586176, parallel_qp_items: 161560, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6028540, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 3 22017 2
+EXECUTION_DETAIL 3 ExecutionSnapshot { parallel_calls: 22017, serial_calls: 54737, executed_qp_items: 587312, parallel_qp_items: 162696, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6029676, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 4 21765 2
+EXECUTION_DETAIL 4 ExecutionSnapshot { parallel_calls: 21765, serial_calls: 54737, executed_qp_items: 585296, parallel_qp_items: 160680, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6027660, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 5 22054 2
+EXECUTION_DETAIL 5 ExecutionSnapshot { parallel_calls: 22054, serial_calls: 54737, executed_qp_items: 587608, parallel_qp_items: 162992, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6029972, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 6 22184 2
+EXECUTION_DETAIL 6 ExecutionSnapshot { parallel_calls: 22184, serial_calls: 54737, executed_qp_items: 588648, parallel_qp_items: 164032, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6031012, distinct_workers: 2, worker_ids: [0, 1] }
+EXECUTION 7 21864 2
+EXECUTION_DETAIL 7 ExecutionSnapshot { parallel_calls: 21864, serial_calls: 54737, executed_qp_items: 586088, parallel_qp_items: 161472, serial_qp_items: 424616, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5662180, serial_entry_items: 340900, worker_entries: 6028452, distinct_workers: 2, worker_ids: [0, 1] }
+BENCH 1 13.281661030 -4.77587156639788457e-1
+BENCH 2 13.373426983 -4.77587156639788457e-1
+BENCH 3 13.372300535 -4.77587156639788457e-1

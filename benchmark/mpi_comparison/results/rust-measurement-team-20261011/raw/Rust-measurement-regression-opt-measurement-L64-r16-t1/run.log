@@ -1,0 +1,83 @@
+BLAS_THREADS 0 1
+WORLD 0 16
+THREADS 0 1
+BLAS_THREADS 3 1
+WORLD 3 16
+THREADS 3 1
+BLAS_THREADS 4 1
+WORLD 4 16
+THREADS 4 1
+BLAS_THREADS 6 1
+WORLD 6 16
+THREADS 6 1
+BLAS_THREADS 7 1
+WORLD 7 16
+THREADS 7 1
+BLAS_THREADS 8 1
+WORLD 8 16
+THREADS 8 1
+BLAS_THREADS 10 1
+WORLD 10 16
+THREADS 10 1
+BLAS_THREADS 11 1
+WORLD 11 16
+THREADS 11 1
+BLAS_THREADS 12 1
+WORLD 12 16
+THREADS 12 1
+BLAS_THREADS 14 1
+WORLD 14 16
+THREADS 14 1
+BLAS_THREADS 15 1
+WORLD 15 16
+THREADS 15 1
+BLAS_THREADS 2 1
+WORLD 2 16
+THREADS 2 1
+BLAS_THREADS 1 1
+WORLD 1 16
+THREADS 1 1
+BLAS_THREADS 5 1
+WORLD 5 16
+THREADS 5 1
+BLAS_THREADS 9 1
+WORLD 9 16
+THREADS 9 1
+BLAS_THREADS 13 1
+WORLD 13 16
+THREADS 13 1
+EXECUTION 0 0 0
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39769, executed_qp_items: 304232, parallel_qp_items: 0, serial_qp_items: 304232, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 1 0 0
+EXECUTION_DETAIL 1 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39866, executed_qp_items: 305008, parallel_qp_items: 0, serial_qp_items: 305008, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 2 0 0
+EXECUTION_DETAIL 2 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39677, executed_qp_items: 303496, parallel_qp_items: 0, serial_qp_items: 303496, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 3 0 0
+EXECUTION_DETAIL 3 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39712, executed_qp_items: 303776, parallel_qp_items: 0, serial_qp_items: 303776, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 4 0 0
+EXECUTION_DETAIL 4 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39751, executed_qp_items: 304088, parallel_qp_items: 0, serial_qp_items: 304088, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 5 0 0
+EXECUTION_DETAIL 5 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39825, executed_qp_items: 304680, parallel_qp_items: 0, serial_qp_items: 304680, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 6 0 0
+EXECUTION_DETAIL 6 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39965, executed_qp_items: 305800, parallel_qp_items: 0, serial_qp_items: 305800, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 7 0 0
+EXECUTION_DETAIL 7 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39728, executed_qp_items: 303904, parallel_qp_items: 0, serial_qp_items: 303904, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 8 0 0
+EXECUTION_DETAIL 8 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39887, executed_qp_items: 305176, parallel_qp_items: 0, serial_qp_items: 305176, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 9 0 0
+EXECUTION_DETAIL 9 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39781, executed_qp_items: 304328, parallel_qp_items: 0, serial_qp_items: 304328, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 10 0 0
+EXECUTION_DETAIL 10 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39687, executed_qp_items: 303576, parallel_qp_items: 0, serial_qp_items: 303576, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 11 0 0
+EXECUTION_DETAIL 11 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39953, executed_qp_items: 305704, parallel_qp_items: 0, serial_qp_items: 305704, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 12 0 0
+EXECUTION_DETAIL 12 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39890, executed_qp_items: 305200, parallel_qp_items: 0, serial_qp_items: 305200, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 13 0 0
+EXECUTION_DETAIL 13 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39757, executed_qp_items: 304136, parallel_qp_items: 0, serial_qp_items: 304136, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 14 0 0
+EXECUTION_DETAIL 14 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39938, executed_qp_items: 305584, parallel_qp_items: 0, serial_qp_items: 305584, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+EXECUTION 15 0 0
+EXECUTION_DETAIL 15 ExecutionSnapshot { parallel_calls: 0, serial_calls: 39769, executed_qp_items: 304232, parallel_qp_items: 0, serial_qp_items: 304232, executed_term_items: 102400, parallel_term_items: 0, serial_term_items: 102400, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 5841080, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+BENCH 1 16.378323846 -4.66056399534736210e-1
+BENCH 2 19.936323839 -4.66056399534736210e-1
+BENCH 3 16.918122941 -4.66056399534736210e-1

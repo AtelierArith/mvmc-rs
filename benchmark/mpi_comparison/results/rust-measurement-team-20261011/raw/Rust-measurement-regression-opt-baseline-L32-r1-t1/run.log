@@ -1,0 +1,8 @@
+BLAS_THREADS 0 1
+WORLD 0 1
+THREADS 0 1
+EXECUTION 0 0 0
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 0, serial_calls: 314652, executed_qp_items: 2311296, parallel_qp_items: 0, serial_qp_items: 2311296, executed_term_items: 819200, parallel_term_items: 0, serial_term_items: 819200, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 0, serial_entry_items: 2810600, worker_entries: 0, distinct_workers: 0, worker_ids: [] }
+BENCH 1 11.973140675 -4.78593635009213203e-1
+BENCH 2 11.978790557 -4.78593635009213203e-1
+BENCH 3 11.959091977 -4.78593635009213203e-1

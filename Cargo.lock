@@ -971,6 +971,7 @@ dependencies = [
  "rayon",
  "serde_json",
  "sfmt19937",
+ "spindle",
  "sha2",
  "tenferro-ad",
  "tenferro-cpu",

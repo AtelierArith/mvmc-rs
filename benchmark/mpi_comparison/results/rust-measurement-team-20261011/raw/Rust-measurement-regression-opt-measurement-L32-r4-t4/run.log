@@ -1,0 +1,23 @@
+BLAS_THREADS 0 1
+WORLD 0 4
+THREADS 0 4
+BLAS_THREADS 1 1
+WORLD 1 4
+THREADS 1 4
+BLAS_THREADS 2 1
+WORLD 2 4
+THREADS 2 4
+BLAS_THREADS 3 1
+WORLD 3 4
+THREADS 3 4
+EXECUTION 0 5440 4
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 5440, serial_calls: 74263, executed_qp_items: 585304, parallel_qp_items: 17280, serial_qp_items: 568024, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1448420, serial_entry_items: 339780, worker_entries: 1670500, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 1 5436 4
+EXECUTION_DETAIL 1 ExecutionSnapshot { parallel_calls: 5436, serial_calls: 74097, executed_qp_items: 583944, parallel_qp_items: 17248, serial_qp_items: 566696, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1448420, serial_entry_items: 339780, worker_entries: 1670468, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 3 5433 4
+EXECUTION_DETAIL 3 ExecutionSnapshot { parallel_calls: 5433, serial_calls: 73972, executed_qp_items: 582920, parallel_qp_items: 17224, serial_qp_items: 565696, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1448420, serial_entry_items: 339780, worker_entries: 1670444, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 2 5445 4
+EXECUTION_DETAIL 2 ExecutionSnapshot { parallel_calls: 5445, serial_calls: 74385, executed_qp_items: 586320, parallel_qp_items: 17320, serial_qp_items: 569000, executed_term_items: 204800, parallel_term_items: 204800, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1448420, serial_entry_items: 339780, worker_entries: 1670540, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+BENCH 1 3.403560253 -5.28220337935055295e-1
+BENCH 2 3.324317472 -5.28220337935055295e-1
+BENCH 3 3.354438961 -5.28220337935055295e-1

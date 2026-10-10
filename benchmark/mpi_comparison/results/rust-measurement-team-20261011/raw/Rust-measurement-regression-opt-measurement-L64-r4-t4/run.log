@@ -1,0 +1,23 @@
+BLAS_THREADS 0 1
+WORLD 0 4
+THREADS 0 4
+BLAS_THREADS 2 1
+WORLD 2 4
+THREADS 2 4
+BLAS_THREADS 1 1
+WORLD 1 4
+THREADS 1 4
+BLAS_THREADS 3 1
+WORLD 3 4
+THREADS 3 4
+EXECUTION 0 43550 4
+EXECUTION_DETAIL 0 ExecutionSnapshot { parallel_calls: 43550, serial_calls: 107537, executed_qp_items: 1156376, parallel_qp_items: 322160, serial_qp_items: 834216, executed_term_items: 409600, parallel_term_items: 409600, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5668580, serial_entry_items: 658500, worker_entries: 6400340, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 1 43839 4
+EXECUTION_DETAIL 1 ExecutionSnapshot { parallel_calls: 43839, serial_calls: 107537, executed_qp_items: 1158688, parallel_qp_items: 324472, serial_qp_items: 834216, executed_term_items: 409600, parallel_term_items: 409600, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5668580, serial_entry_items: 658500, worker_entries: 6402652, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 2 43271 4
+EXECUTION_DETAIL 2 ExecutionSnapshot { parallel_calls: 43271, serial_calls: 107537, executed_qp_items: 1154144, parallel_qp_items: 319928, serial_qp_items: 834216, executed_term_items: 409600, parallel_term_items: 409600, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5668580, serial_entry_items: 658500, worker_entries: 6398108, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+EXECUTION 3 43262 4
+EXECUTION_DETAIL 3 ExecutionSnapshot { parallel_calls: 43262, serial_calls: 107537, executed_qp_items: 1154072, parallel_qp_items: 319856, serial_qp_items: 834216, executed_term_items: 409600, parallel_term_items: 409600, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 5668580, serial_entry_items: 658500, worker_entries: 6398036, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+BENCH 1 14.091514013 -4.61905343642051880e-1
+BENCH 2 14.100903450 -4.61905343642051880e-1
+BENCH 3 14.184640486 -4.61905343642051880e-1

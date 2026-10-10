@@ -2949,310 +2949,265 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             Some(kind)
         }
     };
-    for chunk in samples.chunks(batch_size) {
-        if let Some(kind) = stage_kind {
-            // ---- stage A through the stage backend: one batched call per chunk ------------
-            let mut active = Vec::with_capacity(chunk.len());
+    let mut calculate_samples = || {
+        for chunk in samples.chunks(batch_size) {
+            if let Some(kind) = stage_kind {
+                // ---- stage A through the stage backend: one batched call per chunk ------------
+                let mut active = Vec::with_capacity(chunk.len());
+                for (slot, &sample) in chunk.iter().enumerate() {
+                    timer.start_diag(940, diag);
+                    timer.start_diag(942, diag);
+                    let ele_idx = state.electron_config.ele_idx_slice(sample);
+                    if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
+                        batch.status[slot] = SlotStatus::Skipped;
+                    } else {
+                        batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
+                        batch.status[slot] = SlotStatus::Ready;
+                        active.push(slot);
+                    }
+                    timer.stop_diag(942, diag);
+                    timer.stop_diag(940, diag);
+                }
+                timer.start(40);
+                let mut handle = crate::stage_backend::acquire_kind(kind);
+                crate::measurement_batch::stage_a_pfaffian(
+                    handle.backend().pfaffian(),
+                    &state.slater_matrix.slater_elm_real,
+                    &mut batch,
+                    &active,
+                    n_site,
+                    n_elec,
+                    n_qp_full,
+                )
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "{}: measurement Pfaffian stage failed: {e}",
+                        crate::measurement_batch::MEASURE_PF_VARIABLE
+                    )
+                });
+                timer.stop(40);
+                drop(handle);
+            } else {
+                // ---- stage A: tables for every sample of the batch -------------------------------
+                for (slot, &sample) in chunk.iter().enumerate() {
+                    timer.start_diag(940, diag);
+                    timer.start_diag(942, diag);
+                    let ele_idx = state.electron_config.ele_idx_slice(sample);
+                    if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
+                        batch.status[slot] = SlotStatus::Skipped;
+                        timer.stop_diag(942, diag);
+                        timer.stop_diag(940, diag);
+                        continue;
+                    }
+                    batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
+                    timer.stop_diag(942, diag);
+                    timer.stop_diag(940, diag);
+                    // The batch slot's tables become the working tables while the sample is built
+                    // (pointer swap, no copy) and are swapped back afterwards.
+                    swap_batch_tables(
+                        state,
+                        &mut batch.real,
+                        &mut batch.complex,
+                        slot,
+                        all_complex,
+                    );
+                    timer.start(40);
+                    // Refresh Pfaffian for the saved walker.
+                    let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
+                    let info = if use_fsz {
+                        let ele_spn = state.electron_config.ele_spn_slice(sample).to_vec();
+                        refresh_fsz_observation_matrix(
+                            data,
+                            state,
+                            all_complex,
+                            ele_idx,
+                            &ele_spn,
+                            &pool,
+                        )
+                        .err()
+                    } else if all_complex {
+                        // C `CalculateMAll` operation order (#449), as the other measurement paths.
+                        crate::pfaffian::calc_m_all_complex_production(
+                            ele_idx,
+                            &state.slater_matrix.slater_elm,
+                            &mut state.slater_matrix.inv_m,
+                            &mut state.slater_matrix.pf_m,
+                            0,
+                            n_qp_full,
+                            n_site,
+                            n_elec,
+                            &pool,
+                        )
+                        .err()
+                    } else {
+                        crate::pfaffian::calc_m_all_real(
+                            ele_idx,
+                            &state.slater_matrix.slater_elm_real,
+                            &mut state.slater_matrix.inv_m_real,
+                            &mut state.slater_matrix.pf_m_real,
+                            0,
+                            n_qp_full,
+                            n_site,
+                            n_elec,
+                            &pool,
+                        )
+                        .err()
+                    };
+                    timer.stop(40);
+                    swap_batch_tables(
+                        state,
+                        &mut batch.real,
+                        &mut batch.complex,
+                        slot,
+                        all_complex,
+                    );
+                    if info.is_some() {
+                        batch.status[slot] = SlotStatus::Failed;
+                        continue;
+                    }
+                    batch.status[slot] = SlotStatus::Ready;
+                }
+            }
+            // ---- stage B: per-sample consumers, in sample order -------------------------------
             for (slot, &sample) in chunk.iter().enumerate() {
+                if batch.status[slot] != SlotStatus::Ready {
+                    continue;
+                }
                 timer.start_diag(940, diag);
                 timer.start_diag(942, diag);
-                let ele_idx = state.electron_config.ele_idx_slice(sample);
-                if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
-                    batch.status[slot] = SlotStatus::Skipped;
+                let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
+                let ele_cfg = state.electron_config.ele_cfg_slice(sample).to_vec();
+                let ele_num = state.electron_config.ele_num_slice(sample).to_vec();
+                let ele_spn = if use_fsz {
+                    state.electron_config.ele_spn_slice(sample).to_vec()
                 } else {
-                    batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
-                    batch.status[slot] = SlotStatus::Ready;
-                    active.push(slot);
-                }
+                    Vec::new()
+                };
+                let ele_proj_cnt = if n_proj > 0 {
+                    state.electron_config.ele_proj_cnt_slice(sample).to_vec()
+                } else {
+                    Vec::new()
+                };
                 timer.stop_diag(942, diag);
                 timer.stop_diag(940, diag);
-            }
-            timer.start(40);
-            let mut handle = crate::stage_backend::acquire_kind(kind);
-            crate::measurement_batch::stage_a_pfaffian(
-                handle.backend().pfaffian(),
-                &state.slater_matrix.slater_elm_real,
-                &mut batch,
-                &active,
-                n_site,
-                n_elec,
-                n_qp_full,
-            )
-            .unwrap_or_else(|e| {
-                panic!(
-                    "{}: measurement Pfaffian stage failed: {e}",
-                    crate::measurement_batch::MEASURE_PF_VARIABLE
-                )
-            });
-            timer.stop(40);
-            drop(handle);
-        } else {
-            // ---- stage A: tables for every sample of the batch -------------------------------
-            for (slot, &sample) in chunk.iter().enumerate() {
                 timer.start_diag(940, diag);
-                timer.start_diag(942, diag);
-                let ele_idx = state.electron_config.ele_idx_slice(sample);
-                if ele_idx.iter().all(|&v| v == 0) || ele_idx.iter().all(|&v| v < 0) {
-                    batch.status[slot] = SlotStatus::Skipped;
-                    timer.stop_diag(942, diag);
+                timer.start_diag(943, diag);
+                swap_batch_tables(
+                    state,
+                    &mut batch.real,
+                    &mut batch.complex,
+                    slot,
+                    all_complex,
+                );
+                if !all_complex {
+                    // The real Slater derivative reads the real inverse; refresh the complex
+                    // inverse planes only for consumers that still need them.
+                    // PhysCal without SR (no SlaterElmDiff) and without Lanczos reads only
+                    // the real tables, so skip the full real->complex inverse copy there.
+                    let physcal_without_sr =
+                        data.modpara.vmc_calc_mode != 0 && data.modpara.lanczos_mode == 0;
+                    if !physcal_without_sr
+                        && (use_fsz
+                            || data.modpara.vmc_calc_mode != 0
+                            || !crate::slater_derivative::real_slater_derivative_available(
+                                data, n_qp_full,
+                            ))
+                    {
+                        for qp in 0..n_qp_full {
+                            let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
+                            // Copy only the matrix, leaving the per-QP inverse pad untouched.
+                            crate::threading::copy_real_to_complex(
+                                &mut state.slater_matrix.inv_m.qp_matrix_slice_mut(qp)
+                                    [..n_size * n_size],
+                                &real_plane[..n_size * n_size],
+                            );
+                        }
+                    }
+                    crate::threading::copy_real_to_complex(
+                        &mut state.slater_matrix.pf_m[..n_qp_full],
+                        &state.slater_matrix.pf_m_real[..n_qp_full],
+                    );
+                }
+                timer.stop_diag(943, diag);
+                timer.stop_diag(940, diag);
+                timer.start_diag(940, diag);
+                timer.start_diag(944, diag);
+                let ip = if all_complex {
+                    crate::observables::calculate_ip_complex(
+                        &state.slater_matrix.pf_m,
+                        0,
+                        n_qp_full,
+                        data,
+                    )
+                } else {
+                    Complex64::new(
+                        crate::observables::calculate_ip_real(
+                            &state.slater_matrix.pf_m_real,
+                            0,
+                            n_qp_full,
+                            data,
+                        ),
+                        0.0,
+                    )
+                };
+                timer.stop_diag(944, diag);
+                timer.stop_diag(940, diag);
+                timer.start_diag(940, diag);
+                timer.start_diag(945, diag);
+                if ip.norm() < 1.0e-100 {
+                    timer.stop_diag(945, diag);
                     timer.stop_diag(940, diag);
                     continue;
                 }
-                batch.ele_idx[slot * n_size..(slot + 1) * n_size].copy_from_slice(ele_idx);
-                timer.stop_diag(942, diag);
-                timer.stop_diag(940, diag);
-                // The batch slot's tables become the working tables while the sample is built
-                // (pointer swap, no copy) and are swapped back afterwards.
-                swap_batch_tables(
-                    state,
-                    &mut batch.real,
-                    &mut batch.complex,
-                    slot,
-                    all_complex,
-                );
-                timer.start(40);
-                // Refresh Pfaffian for the saved walker.
-                let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
-                let info = if use_fsz {
-                    let ele_spn = state.electron_config.ele_spn_slice(sample).to_vec();
-                    refresh_fsz_observation_matrix(
-                        data,
-                        state,
-                        all_complex,
-                        ele_idx,
-                        &ele_spn,
-                        &pool,
-                    )
-                    .err()
-                } else if all_complex {
-                    // C `CalculateMAll` operation order (#449), as the other measurement paths.
-                    crate::pfaffian::calc_m_all_complex_production(
-                        ele_idx,
-                        &state.slater_matrix.slater_elm,
-                        &mut state.slater_matrix.inv_m,
-                        &mut state.slater_matrix.pf_m,
-                        0,
-                        n_qp_full,
-                        n_site,
-                        n_elec,
-                        &pool,
-                    )
-                    .err()
-                } else {
-                    crate::pfaffian::calc_m_all_real(
-                        ele_idx,
-                        &state.slater_matrix.slater_elm_real,
-                        &mut state.slater_matrix.inv_m_real,
-                        &mut state.slater_matrix.pf_m_real,
-                        0,
-                        n_qp_full,
-                        n_site,
-                        n_elec,
-                        &pool,
-                    )
-                    .err()
-                };
-                timer.stop(40);
-                swap_batch_tables(
-                    state,
-                    &mut batch.real,
-                    &mut batch.complex,
-                    slot,
-                    all_complex,
-                );
-                if info.is_some() {
-                    batch.status[slot] = SlotStatus::Failed;
-                    continue;
-                }
-                batch.status[slot] = SlotStatus::Ready;
-            }
-        }
-        // ---- stage B: per-sample consumers, in sample order -------------------------------
-        for (slot, &sample) in chunk.iter().enumerate() {
-            if batch.status[slot] != SlotStatus::Ready {
-                continue;
-            }
-            timer.start_diag(940, diag);
-            timer.start_diag(942, diag);
-            let ele_idx = &batch.ele_idx[slot * n_size..(slot + 1) * n_size];
-            let ele_cfg = state.electron_config.ele_cfg_slice(sample).to_vec();
-            let ele_num = state.electron_config.ele_num_slice(sample).to_vec();
-            let ele_spn = if use_fsz {
-                state.electron_config.ele_spn_slice(sample).to_vec()
-            } else {
-                Vec::new()
-            };
-            let ele_proj_cnt = if n_proj > 0 {
-                state.electron_config.ele_proj_cnt_slice(sample).to_vec()
-            } else {
-                Vec::new()
-            };
-            timer.stop_diag(942, diag);
-            timer.stop_diag(940, diag);
-            timer.start_diag(940, diag);
-            timer.start_diag(943, diag);
-            swap_batch_tables(
-                state,
-                &mut batch.real,
-                &mut batch.complex,
-                slot,
-                all_complex,
-            );
-            if !all_complex {
-                // The real Slater derivative reads the real inverse; refresh the complex
-                // inverse planes only for consumers that still need them.
-                // PhysCal without SR (no SlaterElmDiff) and without Lanczos reads only
-                // the real tables, so skip the full real->complex inverse copy there.
-                let physcal_without_sr =
-                    data.modpara.vmc_calc_mode != 0 && data.modpara.lanczos_mode == 0;
-                if !physcal_without_sr
-                    && (use_fsz
-                        || data.modpara.vmc_calc_mode != 0
-                        || !crate::slater_derivative::real_slater_derivative_available(
-                            data, n_qp_full,
-                        ))
-                {
-                    for qp in 0..n_qp_full {
-                        let real_plane = state.slater_matrix.inv_m_real.qp_matrix_slice(qp);
-                        // Copy only the matrix, leaving the per-QP inverse pad untouched.
-                        crate::threading::copy_real_to_complex(
-                            &mut state.slater_matrix.inv_m.qp_matrix_slice_mut(qp)
-                                [..n_size * n_size],
-                            &real_plane[..n_size * n_size],
-                        );
-                    }
-                }
-                crate::threading::copy_real_to_complex(
-                    &mut state.slater_matrix.pf_m[..n_qp_full],
-                    &state.slater_matrix.pf_m_real[..n_qp_full],
-                );
-            }
-            timer.stop_diag(943, diag);
-            timer.stop_diag(940, diag);
-            timer.start_diag(940, diag);
-            timer.start_diag(944, diag);
-            let ip = if all_complex {
-                crate::observables::calculate_ip_complex(
-                    &state.slater_matrix.pf_m,
-                    0,
-                    n_qp_full,
-                    data,
-                )
-            } else {
-                Complex64::new(
-                    crate::observables::calculate_ip_real(
-                        &state.slater_matrix.pf_m_real,
-                        0,
-                        n_qp_full,
-                        data,
-                    ),
-                    0.0,
-                )
-            };
-            timer.stop_diag(944, diag);
-            timer.stop_diag(940, diag);
-            timer.start_diag(940, diag);
-            timer.start_diag(945, diag);
-            if ip.norm() < 1.0e-100 {
+                let w = 1.0;
                 timer.stop_diag(945, diag);
                 timer.stop_diag(940, diag);
-                continue;
-            }
-            let w = 1.0;
-            timer.stop_diag(945, diag);
-            timer.stop_diag(940, diag);
-            timer.start(41);
-            let e = if use_fsz {
-                crate::observables::calculate_local_energy_fsz_timed(
-                    ip,
-                    data,
-                    state,
-                    ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                    &ele_spn,
-                    timer,
-                )
-            } else {
-                crate::observables::calculate_local_energy_timed(
-                    ip,
-                    data,
-                    state,
-                    ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                    timer,
-                )
-            };
-            timer.stop(41);
-            // Julia rejects the sum, including overflow of otherwise finite parts.
-            if !(e.re + e.im).is_finite() {
-                continue;
-            }
-            timer.start_diag(940, diag);
-            timer.start_diag(946, diag);
-            let sz = crate::observables::calculate_sz(&ele_num, n_site);
-
-            state.energy.wc += Complex64::new(w, 0.0);
-            state.energy.etot += Complex64::new(w, 0.0) * e;
-            state.energy.etot2 += Complex64::new(w, 0.0) * e.conj() * e;
-            state.energy.sztot += Complex64::new(w * sz, 0.0);
-            state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
-
-            // The Lanczos path evaluates H on each moved configuration. Transfer
-            // Transfer, PairHop and Exchange use the Julia operator order;
-            // InterAll and FSZ remain gated until their operator moves are
-            // ported.
-            if data.modpara.lanczos_mode > 0 && data.inter_all_terms.is_empty() && !use_fsz {
-                let h2 = crate::observables::calculate_lanczos_h2_transfer(
-                    e,
-                    ip,
-                    data,
-                    state,
-                    ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                    all_complex,
-                );
-                if let Some(phys) = state.phys_quantities.as_mut() {
-                    let _ = crate::lanczos::accumulate_lanczos_qqqq(
-                        &mut phys.phys_lanczos_qqqq,
-                        w,
-                        e,
-                        h2,
-                        all_complex,
-                    );
+                timer.start(41);
+                let e = if use_fsz {
+                    crate::observables::calculate_local_energy_fsz_timed(
+                        ip,
+                        data,
+                        state,
+                        ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                        &ele_spn,
+                        timer,
+                    )
+                } else {
+                    crate::observables::calculate_local_energy_timed(
+                        ip,
+                        data,
+                        state,
+                        ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                        timer,
+                    )
+                };
+                timer.stop(41);
+                // Julia rejects the sum, including overflow of otherwise finite parts.
+                if !(e.re + e.im).is_finite() {
+                    continue;
                 }
-            }
+                timer.start_diag(940, diag);
+                timer.start_diag(946, diag);
+                let sz = crate::observables::calculate_sz(&ele_num, n_site);
 
-            if state.phys_quantities.is_some() && use_fsz {
-                crate::observables::calculate_green_func_fsz_timed(
-                    data,
-                    state,
-                    w,
-                    ip,
-                    ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                    &ele_spn,
-                    timer,
-                );
-            } else if state.phys_quantities.is_some() {
-                let (one_body, direct) = crate::observables::ordinary_green_values(
-                    data,
-                    state,
-                    ip,
-                    ele_idx,
-                    &ele_cfg,
-                    &ele_num,
-                    &ele_proj_cnt,
-                );
-                let lanczos_green = if data.modpara.lanczos_mode > 1 {
-                    Some(crate::observables::calculate_lanczos_green(
+                state.energy.wc += Complex64::new(w, 0.0);
+                state.energy.etot += Complex64::new(w, 0.0) * e;
+                state.energy.etot2 += Complex64::new(w, 0.0) * e.conj() * e;
+                state.energy.sztot += Complex64::new(w * sz, 0.0);
+                state.energy.sztot2 += Complex64::new(w * sz * sz, 0.0);
+
+                // The Lanczos path evaluates H on each moved configuration. Transfer
+                // Transfer, PairHop and Exchange use the Julia operator order;
+                // InterAll and FSZ remain gated until their operator moves are
+                // ported.
+                if data.modpara.lanczos_mode > 0 && data.inter_all_terms.is_empty() && !use_fsz {
+                    let h2 = crate::observables::calculate_lanczos_h2_transfer(
                         e,
                         ip,
                         data,
@@ -3261,186 +3216,244 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         &ele_cfg,
                         &ele_num,
                         &ele_proj_cnt,
-                        &one_body,
-                        &direct,
                         all_complex,
-                    ))
-                } else {
-                    None
-                };
-                let phys = state.phys_quantities.as_mut().expect("checked above");
-                for (index, value) in one_body.iter().copied().enumerate() {
-                    phys.local_cis_ajs[index] = value;
-                    phys.phys_cis_ajs[index] += value;
-                }
-                crate::observables::accumulate_two_body_gex_sample(
-                    &mut phys.phys_cis_ajs_ckt_alt,
-                    &one_body,
-                    &data.green_two_ex_indices,
-                    Complex64::new(w, 0.0),
-                );
-                for (index, value) in direct.into_iter().enumerate() {
-                    phys.local_cis_ajs_ckt_alt_dc[index] = value;
-                    phys.phys_cis_ajs_ckt_alt_dc[index] += value;
-                }
-                if let Some(values) = lanczos_green {
-                    for (dst, src) in phys.phys_lanczos_qcisajsq.iter_mut().zip(values.one_body) {
-                        *dst += src;
-                    }
-                    for (dst, src) in phys
-                        .phys_lanczos_qcisajscktaltq
-                        .iter_mut()
-                        .zip(values.factored_two_body)
-                    {
-                        *dst += src;
-                    }
-                    for (dst, src) in phys
-                        .phys_lanczos_qcisajscktaltq_dc
-                        .iter_mut()
-                        .zip(values.direct_two_body)
-                    {
-                        *dst += src;
-                    }
-                }
-            }
-
-            timer.stop_diag(946, diag);
-            timer.stop_diag(940, diag);
-            // C `VMCMainCal` builds the SR `O` vector, `SlaterElmDiff` and the
-            // OO/HO accumulators only for NVMCCalMode==0 (`vmccal.c:195`). PhysCal
-            // (NVMCCalMode=1) computes the Green functions only, so skip this
-            // wasted per-sample work.
-            if data.modpara.vmc_calc_mode == 0 {
-                timer.start_diag(940, diag);
-                timer.start_diag(948, diag);
-                // SR `O` vector — projection diff fills the leading block.
-                for slot in state.sr_opt.sr_opt_o.iter_mut() {
-                    *slot = Complex64::new(0.0, 0.0);
-                }
-                crate::observables::set_projection_diff(
-                    &mut state.sr_opt.sr_opt_o,
-                    &ele_proj_cnt,
-                    n_proj,
-                );
-                // Normal Julia main-calculation reserves all RBM derivative slots.
-                // Its FSZ main-calculation places Slater immediately after projection.
-                if !use_fsz && n_rbm > 0 {
-                    let cfg = crate::sampling::rbm::RbmConfig::from(data);
-                    let cnt = crate::sampling::rbm::make_rbm_cnt(&ele_num, &cfg);
-                    let offset = 2 * (1 + n_proj);
-                    crate::sampling::rbm::set_rbm_diff(
-                        &mut state.sr_opt.sr_opt_o[offset..offset + 2 * n_rbm],
-                        &cnt,
-                        &ele_num,
-                        &cfg,
                     );
-                }
-                let slater_offset = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
-                timer.stop_diag(948, diag);
-                timer.stop_diag(940, diag);
-                if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
-                    timer.start(42);
-                    let n_copy = (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
-                    let slater_o =
-                        &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
-                    if use_fsz {
-                        crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
-                            slater_o,
-                            ip,
-                            ele_idx,
-                            &ele_spn,
-                            data,
-                            &state.slater_matrix,
-                            &mut slater_derivative_scratch,
-                        );
-                    } else {
-                        timer.start_diag(930, timer.diagnostics.slater);
-                        crate::slater_derivative::slater_elm_diff_with_scratch_timed(
-                            slater_o,
-                            ip,
-                            ele_idx,
-                            data,
-                            &state.slater_matrix,
-                            !all_complex,
-                            &mut slater_derivative_scratch,
-                            timer,
-                        );
-                        timer.stop_diag(930, timer.diagnostics.slater);
-                    }
-                    timer.stop(42);
-                }
-                let n_opt = data.count_opt_trans_parameters();
-                let opt_offset = slater_offset + 2 * n_orb_total;
-                let opt_end = opt_offset + 2 * n_opt;
-                if n_opt > 0 && opt_end <= state.sr_opt.sr_opt_o.len() {
-                    let diag = !use_fsz && timer.diagnostics.maincal;
-                    timer.start_diag(940, diag);
-                    timer.start_diag(949, diag);
-                    crate::observables::opt_trans_diff(
-                        &mut state.sr_opt.sr_opt_o[opt_offset..opt_end],
-                        ip,
-                        data,
-                        &state.slater_matrix.pf_m,
-                    );
-                    timer.stop_diag(949, diag);
-                    timer.stop_diag(940, diag);
-                }
-                observe_optimization_measurement(OptimizationMeasurementView {
-                    data,
-                    state,
-                    sample,
-                    overlap: ip,
-                    local_energy: e,
-                    weight: w,
-                });
-                timer.start(43);
-                if all_complex && use_store {
-                    crate::observables::calculate_oo_store(
-                        &mut state.sr_opt.sr_opt_ho,
-                        &mut state.sr_opt.sr_opt_o_store,
-                        &state.sr_opt.sr_opt_o,
-                        w,
-                        e,
-                        sample,
-                        sr_opt_size,
-                    );
-                } else if all_complex {
-                    crate::observables::calculate_oo(
-                        &mut state.sr_opt.sr_opt_oo,
-                        &mut state.sr_opt.sr_opt_ho,
-                        &state.sr_opt.sr_opt_o,
-                        w,
-                        e,
-                        sr_opt_size,
-                    );
-                } else {
-                    for i in 0..sr_opt_size {
-                        state.sr_opt.sr_opt_o_real[i] = state.sr_opt.sr_opt_o[2 * i].re;
-                    }
-                    if use_store {
-                        crate::observables::calculate_oo_store_real(
-                            &mut state.sr_opt.sr_opt_ho_real,
-                            &mut state.sr_opt.sr_opt_o_store_real,
-                            &state.sr_opt.sr_opt_o_real,
+                    if let Some(phys) = state.phys_quantities.as_mut() {
+                        let _ = crate::lanczos::accumulate_lanczos_qqqq(
+                            &mut phys.phys_lanczos_qqqq,
                             w,
-                            e.re,
+                            e,
+                            h2,
+                            all_complex,
+                        );
+                    }
+                }
+
+                if state.phys_quantities.is_some() && use_fsz {
+                    crate::observables::calculate_green_func_fsz_timed(
+                        data,
+                        state,
+                        w,
+                        ip,
+                        ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                        &ele_spn,
+                        timer,
+                    );
+                } else if state.phys_quantities.is_some() {
+                    let (one_body, direct) = crate::observables::ordinary_green_values(
+                        data,
+                        state,
+                        ip,
+                        ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                    );
+                    let lanczos_green = if data.modpara.lanczos_mode > 1 {
+                        Some(crate::observables::calculate_lanczos_green(
+                            e,
+                            ip,
+                            data,
+                            state,
+                            ele_idx,
+                            &ele_cfg,
+                            &ele_num,
+                            &ele_proj_cnt,
+                            &one_body,
+                            &direct,
+                            all_complex,
+                        ))
+                    } else {
+                        None
+                    };
+                    let phys = state.phys_quantities.as_mut().expect("checked above");
+                    for (index, value) in one_body.iter().copied().enumerate() {
+                        phys.local_cis_ajs[index] = value;
+                        phys.phys_cis_ajs[index] += value;
+                    }
+                    crate::observables::accumulate_two_body_gex_sample(
+                        &mut phys.phys_cis_ajs_ckt_alt,
+                        &one_body,
+                        &data.green_two_ex_indices,
+                        Complex64::new(w, 0.0),
+                    );
+                    for (index, value) in direct.into_iter().enumerate() {
+                        phys.local_cis_ajs_ckt_alt_dc[index] = value;
+                        phys.phys_cis_ajs_ckt_alt_dc[index] += value;
+                    }
+                    if let Some(values) = lanczos_green {
+                        for (dst, src) in phys.phys_lanczos_qcisajsq.iter_mut().zip(values.one_body)
+                        {
+                            *dst += src;
+                        }
+                        for (dst, src) in phys
+                            .phys_lanczos_qcisajscktaltq
+                            .iter_mut()
+                            .zip(values.factored_two_body)
+                        {
+                            *dst += src;
+                        }
+                        for (dst, src) in phys
+                            .phys_lanczos_qcisajscktaltq_dc
+                            .iter_mut()
+                            .zip(values.direct_two_body)
+                        {
+                            *dst += src;
+                        }
+                    }
+                }
+
+                timer.stop_diag(946, diag);
+                timer.stop_diag(940, diag);
+                // C `VMCMainCal` builds the SR `O` vector, `SlaterElmDiff` and the
+                // OO/HO accumulators only for NVMCCalMode==0 (`vmccal.c:195`). PhysCal
+                // (NVMCCalMode=1) computes the Green functions only, so skip this
+                // wasted per-sample work.
+                if data.modpara.vmc_calc_mode == 0 {
+                    timer.start_diag(940, diag);
+                    timer.start_diag(948, diag);
+                    // SR `O` vector — projection diff fills the leading block.
+                    for slot in state.sr_opt.sr_opt_o.iter_mut() {
+                        *slot = Complex64::new(0.0, 0.0);
+                    }
+                    crate::observables::set_projection_diff(
+                        &mut state.sr_opt.sr_opt_o,
+                        &ele_proj_cnt,
+                        n_proj,
+                    );
+                    // Normal Julia main-calculation reserves all RBM derivative slots.
+                    // Its FSZ main-calculation places Slater immediately after projection.
+                    if !use_fsz && n_rbm > 0 {
+                        let cfg = crate::sampling::rbm::RbmConfig::from(data);
+                        let cnt = crate::sampling::rbm::make_rbm_cnt(&ele_num, &cfg);
+                        let offset = 2 * (1 + n_proj);
+                        crate::sampling::rbm::set_rbm_diff(
+                            &mut state.sr_opt.sr_opt_o[offset..offset + 2 * n_rbm],
+                            &cnt,
+                            &ele_num,
+                            &cfg,
+                        );
+                    }
+                    let slater_offset = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
+                    timer.stop_diag(948, diag);
+                    timer.stop_diag(940, diag);
+                    if n_orb_total > 0 && slater_offset < state.sr_opt.sr_opt_o.len() {
+                        timer.start(42);
+                        let n_copy =
+                            (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
+                        let slater_o =
+                            &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
+                        if use_fsz {
+                            crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
+                                slater_o,
+                                ip,
+                                ele_idx,
+                                &ele_spn,
+                                data,
+                                &state.slater_matrix,
+                                &mut slater_derivative_scratch,
+                            );
+                        } else {
+                            timer.start_diag(930, timer.diagnostics.slater);
+                            crate::slater_derivative::slater_elm_diff_with_scratch_timed(
+                                slater_o,
+                                ip,
+                                ele_idx,
+                                data,
+                                &state.slater_matrix,
+                                !all_complex,
+                                &mut slater_derivative_scratch,
+                                timer,
+                            );
+                            timer.stop_diag(930, timer.diagnostics.slater);
+                        }
+                        timer.stop(42);
+                    }
+                    let n_opt = data.count_opt_trans_parameters();
+                    let opt_offset = slater_offset + 2 * n_orb_total;
+                    let opt_end = opt_offset + 2 * n_opt;
+                    if n_opt > 0 && opt_end <= state.sr_opt.sr_opt_o.len() {
+                        let diag = !use_fsz && timer.diagnostics.maincal;
+                        timer.start_diag(940, diag);
+                        timer.start_diag(949, diag);
+                        crate::observables::opt_trans_diff(
+                            &mut state.sr_opt.sr_opt_o[opt_offset..opt_end],
+                            ip,
+                            data,
+                            &state.slater_matrix.pf_m,
+                        );
+                        timer.stop_diag(949, diag);
+                        timer.stop_diag(940, diag);
+                    }
+                    observe_optimization_measurement(OptimizationMeasurementView {
+                        data,
+                        state,
+                        sample,
+                        overlap: ip,
+                        local_energy: e,
+                        weight: w,
+                    });
+                    timer.start(43);
+                    if all_complex && use_store {
+                        crate::observables::calculate_oo_store(
+                            &mut state.sr_opt.sr_opt_ho,
+                            &mut state.sr_opt.sr_opt_o_store,
+                            &state.sr_opt.sr_opt_o,
+                            w,
+                            e,
                             sample,
                             sr_opt_size,
                         );
-                    } else {
-                        crate::observables::calculate_oo_real(
-                            &mut state.sr_opt.sr_opt_oo_real,
-                            &mut state.sr_opt.sr_opt_ho_real,
-                            &state.sr_opt.sr_opt_o_real,
+                    } else if all_complex {
+                        crate::observables::calculate_oo(
+                            &mut state.sr_opt.sr_opt_oo,
+                            &mut state.sr_opt.sr_opt_ho,
+                            &state.sr_opt.sr_opt_o,
                             w,
-                            e.re,
+                            e,
                             sr_opt_size,
                         );
+                    } else {
+                        for i in 0..sr_opt_size {
+                            state.sr_opt.sr_opt_o_real[i] = state.sr_opt.sr_opt_o[2 * i].re;
+                        }
+                        if use_store {
+                            crate::observables::calculate_oo_store_real(
+                                &mut state.sr_opt.sr_opt_ho_real,
+                                &mut state.sr_opt.sr_opt_o_store_real,
+                                &state.sr_opt.sr_opt_o_real,
+                                w,
+                                e.re,
+                                sample,
+                                sr_opt_size,
+                            );
+                        } else {
+                            crate::observables::calculate_oo_real(
+                                &mut state.sr_opt.sr_opt_oo_real,
+                                &mut state.sr_opt.sr_opt_ho_real,
+                                &state.sr_opt.sr_opt_o_real,
+                                w,
+                                e.re,
+                                sr_opt_size,
+                            );
+                        }
                     }
+                    timer.stop(43);
                 }
-                timer.stop(43);
             }
         }
+    };
+    if !all_complex && !use_fsz && stage_kind.is_none() {
+        crate::threading::with_qp_region_team(
+            n_qp_full,
+            crate::pfaffian::pfaffian_qp_cost_ns(n_size),
+            calculate_samples,
+        );
+    } else {
+        calculate_samples();
     }
     state.measurement_batch = batch;
     observe_physcal_green(data, state, use_fsz);
