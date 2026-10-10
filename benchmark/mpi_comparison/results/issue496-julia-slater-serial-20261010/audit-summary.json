@@ -1,0 +1,32 @@
+{
+  "production_commit": "043ec52b9c9a1542083c233bd1923fe24f36d03c",
+  "base_upstream_commit": "7b7f63a",
+  "baseline_control": "b672e05 owned-typed-production",
+  "sites": [32, 64],
+  "steps": [20, 300],
+  "ranks": [0, 1, 2, 3],
+  "cases": 16,
+  "native_sfmt_624_words_index_draw_count_reseeds_exact": true,
+  "saved_temporary_burn_configurations_and_counters_exact": true,
+  "existing_inverse_cache_budget_passed": true,
+  "unit_tests_passed": 41339,
+  "slater_tests_passed": 25,
+  "base_tests_passed": 15,
+  "focused_assertions_included": 33,
+  "same_mpi_primary_printed_output_rows_per_rep": 300,
+  "same_mpi_primary_printed_output_columns": 6,
+  "same_mpi_primary_printed_output_max_abs_observed": 0,
+  "same_mpi_primary_repetitions_per_mode": 3,
+  "timing_boundary": "rank maximum wall including parse/init/sample/SR/output/returned result; startup excluded, both variants warmed",
+  "L32_baseline_median_seconds": 3.588680265,
+  "L32_checked_median_seconds": 3.355968996,
+  "L64_baseline_median_seconds": 13.485768732,
+  "L64_checked_median_seconds": 12.586608366,
+  "fresh_C_comparison": "pending root paired confirmation",
+  "production_audit_directories": [
+    "issue496-julia-rng-audit/L32-20-production-slater-serial",
+    "issue496-julia-rng-audit/L64-20-production-slater-serial",
+    "issue496-julia-rng-audit/L32-production-slater-serial",
+    "issue496-julia-rng-audit/L64-production-slater-serial"
+  ]
+}
