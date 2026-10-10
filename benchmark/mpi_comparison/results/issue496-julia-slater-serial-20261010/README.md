@@ -35,3 +35,19 @@ Raw suite/component/worker logs and C timers are retained unchanged in `raw-evid
 A separate full300 CTimer/Profile run keeps the installed043ec52 source, 4×4 workers and BLAS1; MAINCAL/SLATER/WEIGHTAVG diagnostics are enabled and CALHAM1 diagnostics are disabled to preserve the production Hamiltonian path. These are instrumented observations, not primary timings. Timer stages may nest and include waits. `profile-summary.json` and per-rank CTimer files retain measured stages.
 
 L32 Slater update20 falls from the preceding owned/typed profile0.18927s to0.02354s; current output22 costs0.08733s and parameter sync23 costs0.03096s. L64 current Slater update20 is0.08865s, output22 is0.34822s and sync23 is0.10674s. Repeated parameter packing in output/sync/SR preprocessing is the next measured investigation. Full sampling profiles remain in `/home/vscode/.cache/mvmc/issue496-profile/slater-serial-final-L{32,64}-full300/`.
+
+## Findings and remaining scope
+
+The Slater update regression was avoidable repeated dynamic work inside a small numerical loop: the checked typed kernel improves whole Opt timing by approximately 6.5%, while retaining the original arithmetic and fallback behavior. After this fix, inverse construction, sampling and Slater derivatives remain larger costs than Slater-cache construction:
+
+| Instrumented stage (s) | L32 | L64 |
+|---|---:|---:|
+| Sampling | 1.14745 | 4.36787 |
+| Inverse construction | 0.79128 | 3.82406 |
+| Energy | 0.38787 | 0.74504 |
+| Slater derivative | 0.30631 | 0.90416 |
+| Slater-cache update | 0.02354 | 0.08865 |
+
+These nested diagnostic stages cannot be added to estimate total time, nor do they alone establish a corresponding C-stage slowdown. Future material improvement would require measured changes to these remaining kernels or batching/workspace reuse, preserving RNG, arithmetic/reduction order and failure publication. The current evidence does not show that further optimization is impossible, or that Julia has a stable L32 advantage.
+
+A separate fresh-process `-O2`/`-O3` trial was stopped at the user's request. Completed L32 three-repeat medians were 3.458373154s and 3.454652726s (0.108% difference, not a meaningful demonstrated improvement); all completed L32 output tables had observed maximum absolute difference zero. L64 completed only one pair, so no L64 median or general compiler-option claim is made. The prior 20-step native RNG/configuration audit passed all eight rank/site cases. Partial raw evidence is retained in `/home/vscode/.cache/mvmc/issue496-julia-O2-O3-alternating/INCOMPLETE.txt`; the production source and default compiler options were not changed.
