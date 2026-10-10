@@ -1,0 +1,74 @@
+[
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 1,
+    "seconds": 3.42657
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 1,
+    "seconds": 3.534901111
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 2,
+    "seconds": 3.618407784
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 2,
+    "seconds": 3.4366
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 3,
+    "seconds": 3.41012
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 3,
+    "seconds": 3.581715848
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 1,
+    "seconds": 13.48546
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 1,
+    "seconds": 13.550214897
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 2,
+    "seconds": 13.468801475
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 2,
+    "seconds": 13.78772
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 3,
+    "seconds": 13.50508
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 3,
+    "seconds": 13.563671179
+  }
+]

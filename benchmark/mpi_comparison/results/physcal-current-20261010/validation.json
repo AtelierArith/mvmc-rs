@@ -1,0 +1,13 @@
+{
+  "rust_commit": "8b582ff37782382a0b927995e3c7868598278b8d",
+  "julia_commit": "b672e05587cf9d4cd72f567c3ac43b8a4542e1e6",
+  "validated_physcal_energy_files": {
+    "L32-C": 400,
+    "L32-Julia": 500,
+    "L32-Rust": 400,
+    "L64-C": 400,
+    "L64-Julia": 500,
+    "L64-Rust": 400
+  },
+  "note": "Finite outputs and execution checks do not establish cross-implementation numerical/RNG parity."
+}
