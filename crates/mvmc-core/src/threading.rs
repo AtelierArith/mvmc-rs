@@ -208,12 +208,13 @@ pub const DEFAULT_MIN_PARALLEL_WORK_NS: u64 = 100_000;
 pub const HOISTED_MIN_PARALLEL_WORK_NS: u64 = 40_000;
 
 /// The gate for *cold* regions (everything outside [`hot_scope`], notably the Pfaffian
-/// recomputation and the measurement kernels) when the driver runs inside the pool. After a
-/// serial phase of more than about 30 us Rayon's workers are asleep and waking them costs 100 us
-/// or more (measured: a pooled 8-plane Pfaffian at 32 sites, 241 us serial, is not faster pooled
-/// at 4 workers; at 64 sites, 847 us serial, it is 2.4x faster), so such a region must carry
-/// several hundred us of work.
-pub const HOISTED_COLD_MIN_PARALLEL_WORK_NS: u64 = 400_000;
+/// recomputation and the measurement kernels) when the driver runs inside the pool.
+/// The original 400 us gate was calibrated on a Xeon host with expensive worker wakeups.
+/// On the Ryzen Linux reference for #492 it keeps profitable L32 Pfaffian and measurement
+/// regions serial: lowering it to 40 us reduces L32 optimization from 1.53 s to 1.05 s and
+/// PhysCal from 4.37 s to 3.36 s at four workers. Small regions still remain serial; explicit
+/// work controls override the automatic gate on hosts with different dispatch costs.
+pub const HOISTED_COLD_MIN_PARALLEL_WORK_NS: u64 = 40_000;
 
 thread_local! {
     static HOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };

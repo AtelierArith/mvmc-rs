@@ -1,0 +1,377 @@
+{
+  "opt_hubbard_L16": {
+    "source": "benchmark/hubbard_chain/inputs/hubbard_chain_L16",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "40",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "300",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "StdFace.def": "f980b2936eb843794aad0732abc9de368e72246faf6d365a9881465984ba048e",
+      "coulombintra.def": "8bd9499491d53c4f8b758e9b40edd9ef6a7ae663ec2e1674dc7b9e6fe2edea50",
+      "greenone.def": "5e569a3aeaa23d3f9940cf9638c44f3860f5b6271e6067a50522efb18837c819",
+      "greentwo.def": "877eeb8d62d90684586d83845451aff60678a26d637f82967c4744e4bf4675a5",
+      "gutzwilleridx.def": "c9f7a2da366ce8d64e6f1c432797dca1642bb621994e695703bd83c80b60dd80",
+      "jastrowidx.def": "c18d2a09aa0209386fae5e21fe9ad4afbd1f6c354928ab991c9f8f85bbe7da5b",
+      "locspn.def": "385a438ff452a810dadfa4043aa54c65d1704a099a5c72a3d1892aff21ea44a0",
+      "modpara.def": "82c66871347655d2c4c7d7e12d281b12a5ee72e568d3af5a690773f19f1aa5ea",
+      "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+      "orbitalidx.def": "1d8e8134cb3e2ff7242c74365ea9c8894fbce9b87d2df0d65d836b36f0199828",
+      "qptransidx.def": "25715a81bbc8127724cbd666f55a4c9187c7907240ce03e201989fce963c0d16",
+      "trans.def": "dcf42e00265fa2917f9710cf832a888f71c6193e881dea09c04abf5ac3629123"
+    }
+  },
+  "opt_hubbard_L32": {
+    "source": "benchmark/hubbard_chain/inputs/hubbard_chain_L32",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "30",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "300",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "StdFace.def": "464cd4cb784e9807fd03276decba5922a385d0aa1d98c37fd1c86278441c3932",
+      "coulombintra.def": "ca1fda117f360150d47fd510fef9c8315a34bc509f32a654276efe4f0dff7875",
+      "greenone.def": "89330e9a63b1c7b9fd46895b62edb8926aacf279492e70ff605dedfae46e2617",
+      "greentwo.def": "053b11bed230b76c9adc435ff51df0ce7a7f53b1695ece5749f03dd41fc63311",
+      "gutzwilleridx.def": "47531a1cb251127321fc9e784016b66cb8482eed28a0d2680ed097a6d8a44f6a",
+      "jastrowidx.def": "9a605a76ad5f2ae76ac5a8509e00b066e5dea4153446ead0ee1b451a09cad11a",
+      "locspn.def": "30857eaf487c3a890d6d9780dcf874a16f66fd6c7137aa9fcdeb8894c3a4edb1",
+      "modpara.def": "dfc968e5a919cc16464635eade98f46f19d60b3dfd528a9853f71eef0f20249f",
+      "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+      "orbitalidx.def": "306e2bbcff99889940c4af11d6e3a566b65cfdb76cc513e8429a8d71954fdf0e",
+      "qptransidx.def": "4581ea8d142a8edaaacbb0ac659df02ede5e6de96aed7f332ef8ff706b21c2d1",
+      "trans.def": "dde2ff33525bd8b92581fd46d50d764b1ce795d4385ef4f864fad4722e20d99f"
+    }
+  },
+  "opt_hubbard_L64": {
+    "source": "benchmark/hubbard_chain/inputs/hubbard_chain_L64",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "10",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "300",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "StdFace.def": "6ca90fd8fbe698063ca6eb2f27f866fcdbf2930f6d14f6c7502e1f6045e743cd",
+      "coulombintra.def": "7b6e84d7bcad43643e6de55fd152156299be400298d15b5e23efaa518cb95608",
+      "greenone.def": "d3559a6f31dcb02604dc0c28bf49bac5e9a11bc190ad739776ec85fee6705de3",
+      "greentwo.def": "6c2f6eabed79580dc1f20e9d2704c53c65d064fdb21ba5fc1cd4364e971cdeb1",
+      "gutzwilleridx.def": "cddb9dfaa24ec0ea341bb94d3f4d18bf1d793a40158d7ca45b2dbc8d4fa344c0",
+      "jastrowidx.def": "e29f4a21c6b358285cbfd9567882095c956fcd3cd689d0988ce05fa5a42e7b78",
+      "locspn.def": "0d76abfab368290f8dec96171081a312dc46dda4f4c1f925434f4715fdc549e7",
+      "modpara.def": "9dedf24c62306bb23b24edc1bc53fafb83bd8787cd7f6669a566ef82867d415c",
+      "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+      "orbitalidx.def": "2a22e8c956aecede894eb2ef19ceee20a5ddbac360c37702d0ec4ce06cf33beb",
+      "qptransidx.def": "56c97bbfcfc2c2283f24589eeca72daafd2892a5d60caf46f8a1cf5f3bfc06cc",
+      "trans.def": "391e0c5c274b3fb1ce8459d339b8cbcc0946788c18e2624f2cfdd213f070fd03"
+    }
+  },
+  "opt_heisenberg_real": {
+    "source": "tests/fixtures/physcal_181/heisenberg_chain_real/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "100",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "2000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "coulombinter.def": "df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814",
+      "exchange.def": "29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e",
+      "greenone.def": "79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "8d02240044852e341d9bdd83166c4947eaa4630fc32fa3ee7717d940b502a3ba",
+      "gutzwilleridx.def": "c1362e2dcf537556dc4db465322ff4126962c77e28dc52e18c0ac363f4e82ae4",
+      "hund.def": "645c5873dfd9377a1a5ce90259055d00891d540b64f7e62179b3a600fbdf60e4",
+      "jastrowidx.def": "cc5206fe01738c353efdbbcbf1bb6f6730a532c04466a39efd9307c04c7f9fe0",
+      "locspn.def": "f43dccfbc58d7f6c3716644b86c2a8277723d3c4fb706da4e93a0f846b0367a6",
+      "modpara.def": "96d5aee8c5d317cfb7d2fe747bac314ed59cff0020a16aaedcbc9bb8aefc885b",
+      "namelist.def": "3df55df5d3e65cf3f31846bb69f2e16f6c2cdd410d241f87596a489ca1440116",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "bfadd2c5fee83496acda945324dec4dd2620c7295d1cc94a631e47a8efef24a5"
+    }
+  },
+  "opt_heisenberg_cmp": {
+    "source": "tests/fixtures/physcal_181/heisenberg_chain_cmp/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "100",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "2000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "coulombinter.def": "df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814",
+      "exchange.def": "29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e",
+      "greenone.def": "79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "8d02240044852e341d9bdd83166c4947eaa4630fc32fa3ee7717d940b502a3ba",
+      "gutzwilleridx.def": "c1362e2dcf537556dc4db465322ff4126962c77e28dc52e18c0ac363f4e82ae4",
+      "hund.def": "645c5873dfd9377a1a5ce90259055d00891d540b64f7e62179b3a600fbdf60e4",
+      "jastrowidx.def": "cc5206fe01738c353efdbbcbf1bb6f6730a532c04466a39efd9307c04c7f9fe0",
+      "locspn.def": "f43dccfbc58d7f6c3716644b86c2a8277723d3c4fb706da4e93a0f846b0367a6",
+      "modpara.def": "96d5aee8c5d317cfb7d2fe747bac314ed59cff0020a16aaedcbc9bb8aefc885b",
+      "namelist.def": "3df55df5d3e65cf3f31846bb69f2e16f6c2cdd410d241f87596a489ca1440116",
+      "orbitalidx.def": "3d77dce00bdc1cc6e364862edc9e776e7a8b6cb0b894df55289701785bbd238d",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "bfadd2c5fee83496acda945324dec4dd2620c7295d1cc94a631e47a8efef24a5"
+    }
+  },
+  "opt_heisenberg_fsz": {
+    "source": "tests/fixtures/physcal_181/heisenberg_chain_fsz/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "100",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "2000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "coulombinter.def": "df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814",
+      "exchange.def": "29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e",
+      "greenone.def": "79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "29f550119e3f1409b8aadc5caaab2050320ba4ffe8c5024e4ce1848addfae715",
+      "gutzwilleridx.def": "c1362e2dcf537556dc4db465322ff4126962c77e28dc52e18c0ac363f4e82ae4",
+      "hund.def": "645c5873dfd9377a1a5ce90259055d00891d540b64f7e62179b3a600fbdf60e4",
+      "initial.def": "31dd164560e3a9c7be77ca01f00533d2caa8ae524ec710e53e47edbd662ae889",
+      "jastrowidx.def": "cc5206fe01738c353efdbbcbf1bb6f6730a532c04466a39efd9307c04c7f9fe0",
+      "locspn.def": "44b6017ae392849e46774bc172795b8e016685a0135064d60a99c96989b4cc78",
+      "modpara.def": "100080855465c5b5bc30ead249dbb60c4407e267b9a683737793443b77f8b975",
+      "namelist.def": "56b30b327b7bb5b6ffa7563147f8cc42a4d9749496af7836c1fd0a9d76b4e335",
+      "orbitalidx.def": "3d77dce00bdc1cc6e364862edc9e776e7a8b6cb0b894df55289701785bbd238d",
+      "orbitalidxgen.def": "64f0f123ee87a72ec7837a68e265e10ac2b347ef2aaad60d565b3799bf2eb683",
+      "orbitalidxpara.def": "c6017847383f857580e38b198b962774e5ad0d4c5d7cb6d8e590d7e9c42aa071",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "54110436898ada9ade777ff885aa600ece771d6e128859ecaf35d8a5f88758ee"
+    }
+  },
+  "opt_kondo_real": {
+    "source": "tests/fixtures/physcal_181/kondo_chain_real/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "100",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "2000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "coulombinter.def": "fec96cc08d12cbc26863374ca46c805df32db9b34b5f18a0ac3c60a4e67aede7",
+      "exchange.def": "48d704682e0c66b3c688204eb5b4bfdf47208dc80bcc043b87783ac9f6a5657a",
+      "greenone.def": "f2f64c40786a6c3c995dae6e7692056e3a02a06e61231925bf37eccc51c669a1",
+      "greentwo.def": "34c77de3f4440dd0099d175ee06f19e1a7ec3359645b774a9196492b1567f6aa",
+      "greentwoex.def": "4135407df5514db191146659f342a3dba49d8df614639d72bb94f35be00acb9b",
+      "gutzwilleridx.def": "b44361db255b488fbafcb2f98d3af1df17626a2790bc947f7c6412b6525038bc",
+      "hund.def": "fd02119fca30c9390dd6e8564461910261725da27e673784d81fcb4b28083ffb",
+      "jastrowidx.def": "6daf70601c34c80a60c1ad3c1a1365209edd69e036ab504413a4c46da3dcef70",
+      "locspn.def": "1d6700243cd35d4f502cff5a197586312d4fbf9c72d920fe4e16eeb3f4115bfb",
+      "modpara.def": "90cc7b4bb5736fff2bde1920fd131e50eb6001187af0ffe11285e8a5b92902fd",
+      "namelist.def": "3df55df5d3e65cf3f31846bb69f2e16f6c2cdd410d241f87596a489ca1440116",
+      "orbitalidx.def": "69769f878c78b81627eca51d8918a00deb828502c8343bf8720736d8ef6968b7",
+      "qptransidx.def": "2edfdd63f7011752dfe87ec361ab68aa1cff944a2cfe109bd406cce14692caaf",
+      "trans.def": "ba941a4878d4beda06e3b161ae635fb64582a4dc32b533bfdc4847de81526b88"
+    }
+  },
+  "opt_hubbard_dh": {
+    "source": "tests/fixtures/physcal_181/hubbard_chain_dh_real/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "100",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "2000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [],
+    "initial_parameters": null,
+    "input_sha256": {
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "dh2.def": "2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273",
+      "dh4.def": "4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "f50a9df260591b7af7464b1e2eb6b0df37f126a0b75711772fb67b057c8b588f",
+      "namelist.def": "d39f94ae08d394451d44c428f4cfa86f40480b3de930674d74889aa63141fec6",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6"
+    }
+  },
+  "opt_hubbard_rbm_opttrans": {
+    "source": "tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/inputs",
+    "overrides": {
+      "NVMCCalMode": "0",
+      "NLanczosMode": "0",
+      "NSROptItrStep": "60",
+      "NSROptItrSmp": "10",
+      "NVMCSample": "1000",
+      "NDataQtySmp": "1"
+    },
+    "flags": [
+      "-o"
+    ],
+    "initial_parameters": null,
+    "input_sha256": {
+      "ChargeRBM_HiddenLayer.def": "653329772046dff7cfd8afe52361d4d0b2a2f1e16728a930e96f63c916e5e3c2",
+      "ChargeRBM_PhysHidden.def": "6e162a8b42d403fa343cd084732b228f15a00b8477a5f4cac0b8dd2776596122",
+      "ChargeRBM_PhysLayer.def": "f6851e8a256ae7a66ce43cca4bd7232c48646e84b11b2d7b30a3b2c59f1dbf9b",
+      "GeneralRBM_HiddenLayer.def": "b257b42a27b4b6aa661698f920a33d02c0875868eca0abeadebacb3b61f8677e",
+      "GeneralRBM_PhysHidden.def": "1cc1367042e79ea2a2465d7d7153af8c9258cbf3a676430892039cc57290aad4",
+      "GeneralRBM_PhysLayer.def": "d766aa0b87d5a98f2cc226a6975f10b796516eb46845e6a44fb53e2c28bc6a53",
+      "SpinRBM_HiddenLayer.def": "653329772046dff7cfd8afe52361d4d0b2a2f1e16728a930e96f63c916e5e3c2",
+      "SpinRBM_PhysHidden.def": "6e162a8b42d403fa343cd084732b228f15a00b8477a5f4cac0b8dd2776596122",
+      "SpinRBM_PhysLayer.def": "f6851e8a256ae7a66ce43cca4bd7232c48646e84b11b2d7b30a3b2c59f1dbf9b",
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "dh2.def": "2107456412a203c48ad3ef8e65f993223442c9099cc4d3bf9f5fc386068c8273",
+      "dh4.def": "4f4d39f552d8f0a9ef1bc24383c58699e4af6f55d49ccec43c57d2c6f2f97255",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "indh2.def": "a3a827426ef69c7ed50927084c8115aa5cba2f96eb9e27af20f5117312d969a4",
+      "indh4.def": "0b24777d1ae1581863dd0dee3556cbffa537d9fcb75601a866407f73d119ff97",
+      "inopttrans.def": "1328411cfa2a313837f698c7ce4f2a1e591890cd6901bedc01e46f05d97ccf10",
+      "inrbm.def": "f641c2e2e3aff524223a44bc24fa1de4b64e8ae986ceed54456e4ce7f05a0dc7",
+      "inrbmhidden.def": "dd0f271802006e28895388696b85e62d2f243a665cc6142c2ec21fa522c16d1b",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "553db2312778d0030d5cd79cbe3278cc592d905e46045d17c4259662d6a2cc55",
+      "namelist.def": "a7e3d8d28272ef1976ad47a862137acb66411dfa453ccadbcb15d9dab51feb96",
+      "opttrans.def": "22aa05e116cc28bba957ed994373de2e952422b282e6811ad668a7cd7052b77f",
+      "orbitalidx.def": "9e98dcc573d82cfbe936ebc7d2f2d8ca2163752cac622cc071830ea7dd169829",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6"
+    }
+  },
+  "phys_hubbard_L16": {
+    "source": "benchmark/physcal/inputs/hubbard_chain_L16",
+    "overrides": {
+      "NVMCCalMode": "1"
+    },
+    "flags": [],
+    "initial_parameters": "zqp_opt.dat",
+    "input_sha256": {
+      "StdFace.def": "f980b2936eb843794aad0732abc9de368e72246faf6d365a9881465984ba048e",
+      "coulombintra.def": "8bd9499491d53c4f8b758e9b40edd9ef6a7ae663ec2e1674dc7b9e6fe2edea50",
+      "greenone.def": "5e569a3aeaa23d3f9940cf9638c44f3860f5b6271e6067a50522efb18837c819",
+      "greentwo.def": "877eeb8d62d90684586d83845451aff60678a26d637f82967c4744e4bf4675a5",
+      "gutzwilleridx.def": "c9f7a2da366ce8d64e6f1c432797dca1642bb621994e695703bd83c80b60dd80",
+      "jastrowidx.def": "c18d2a09aa0209386fae5e21fe9ad4afbd1f6c354928ab991c9f8f85bbe7da5b",
+      "locspn.def": "385a438ff452a810dadfa4043aa54c65d1704a099a5c72a3d1892aff21ea44a0",
+      "modpara.def": "6f6d46053f83a053b91efdb6d694dd47b5d719461dcbb16ae4ecc4f5d430573b",
+      "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+      "orbitalidx.def": "1d8e8134cb3e2ff7242c74365ea9c8894fbce9b87d2df0d65d836b36f0199828",
+      "qptransidx.def": "25715a81bbc8127724cbd666f55a4c9187c7907240ce03e201989fce963c0d16",
+      "trans.def": "dcf42e00265fa2917f9710cf832a888f71c6193e881dea09c04abf5ac3629123",
+      "zqp_opt.dat": "7d4062337e3e069fb9f659567350bc547ccd1dc73beb199c402c28ddccca04dd"
+    }
+  },
+  "phys_hubbard_L32": {
+    "source": "benchmark/physcal/inputs/hubbard_chain_L32",
+    "overrides": {
+      "NVMCCalMode": "1"
+    },
+    "flags": [],
+    "initial_parameters": "zqp_opt.dat",
+    "input_sha256": {
+      "StdFace.def": "464cd4cb784e9807fd03276decba5922a385d0aa1d98c37fd1c86278441c3932",
+      "coulombintra.def": "ca1fda117f360150d47fd510fef9c8315a34bc509f32a654276efe4f0dff7875",
+      "greenone.def": "89330e9a63b1c7b9fd46895b62edb8926aacf279492e70ff605dedfae46e2617",
+      "greentwo.def": "053b11bed230b76c9adc435ff51df0ce7a7f53b1695ece5749f03dd41fc63311",
+      "gutzwilleridx.def": "47531a1cb251127321fc9e784016b66cb8482eed28a0d2680ed097a6d8a44f6a",
+      "jastrowidx.def": "9a605a76ad5f2ae76ac5a8509e00b066e5dea4153446ead0ee1b451a09cad11a",
+      "locspn.def": "30857eaf487c3a890d6d9780dcf874a16f66fd6c7137aa9fcdeb8894c3a4edb1",
+      "modpara.def": "19a89525f4bd30c01b808bc91de057bbacf0a3c595496ff39cf64933cf8d1718",
+      "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+      "orbitalidx.def": "306e2bbcff99889940c4af11d6e3a566b65cfdb76cc513e8429a8d71954fdf0e",
+      "qptransidx.def": "4581ea8d142a8edaaacbb0ac659df02ede5e6de96aed7f332ef8ff706b21c2d1",
+      "trans.def": "dde2ff33525bd8b92581fd46d50d764b1ce795d4385ef4f864fad4722e20d99f",
+      "zqp_opt.dat": "2b984a8c1dc01b1e5a306a635a07805c61af3b921498fe863bc5399907d991f5"
+    }
+  },
+  "phys_heisenberg_real": {
+    "source": "tests/fixtures/physcal_181/heisenberg_chain_real/inputs",
+    "overrides": {
+      "NVMCCalMode": "1",
+      "NVMCSample": "20000",
+      "NDataQtySmp": "20"
+    },
+    "flags": [],
+    "initial_parameters": "../zqp_opt.dat",
+    "input_sha256": {
+      "coulombinter.def": "df6e2db8ac27356525a7b20f0168e382ac04272a34d4853cd1c092e616d5a814",
+      "exchange.def": "29ab16dfba41c9d705a08853fc934d934da0bc83b7238886f6f677f41755237e",
+      "greenone.def": "79855770f5dec7e429e53a65ba25a8edee2070d717c4d75033ab3d6efd9584d6",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "8d02240044852e341d9bdd83166c4947eaa4630fc32fa3ee7717d940b502a3ba",
+      "gutzwilleridx.def": "c1362e2dcf537556dc4db465322ff4126962c77e28dc52e18c0ac363f4e82ae4",
+      "hund.def": "645c5873dfd9377a1a5ce90259055d00891d540b64f7e62179b3a600fbdf60e4",
+      "jastrowidx.def": "cc5206fe01738c353efdbbcbf1bb6f6730a532c04466a39efd9307c04c7f9fe0",
+      "locspn.def": "f43dccfbc58d7f6c3716644b86c2a8277723d3c4fb706da4e93a0f846b0367a6",
+      "modpara.def": "96d5aee8c5d317cfb7d2fe747bac314ed59cff0020a16aaedcbc9bb8aefc885b",
+      "namelist.def": "3df55df5d3e65cf3f31846bb69f2e16f6c2cdd410d241f87596a489ca1440116",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "bfadd2c5fee83496acda945324dec4dd2620c7295d1cc94a631e47a8efef24a5"
+    }
+  },
+  "phys_lanczos": {
+    "source": "tests/fixtures/physcal_181/hubbard_all_terms_lanczos1/inputs",
+    "overrides": {
+      "NVMCCalMode": "1",
+      "NVMCSample": "20000",
+      "NDataQtySmp": "20"
+    },
+    "flags": [],
+    "initial_parameters": "../zqp_opt.dat",
+    "input_sha256": {
+      "coulombinter.def": "ca9bed2fca709f648f203da1c7a53d02d51b7495fddf7f71c84010eba80e8ea5",
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "exchange.def": "11fd56ca2701d6758fb353b77bc7d52644b19f2fe1c5c3be38798119c98c1dd6",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "hund.def": "4e494817b26db8891019811e2fa8c0db24f0db8a3f8488efa572fe28ebcef4b4",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "c248f95978f567a26f543ef54fbad276b2e3a61f7b3985871095e92499420c98",
+      "namelist.def": "b89dee7ea7523ac3a01aca39129932ee1752ca1a10de3b1b76976516ec5e45b5",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "pairhop.def": "4d2338d072caaabbe657cd23b7e123063e4857a90612ceaa18fc29df8c73f44c",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6"
+    }
+  }
+}
