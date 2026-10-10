@@ -1,0 +1,37 @@
+{
+  "arguments": {
+    "sites": [
+      32,
+      64
+    ],
+    "ranks": 4,
+    "threads": 4,
+    "steps": 300,
+    "groups": 100,
+    "samples": 300,
+    "reps": 3,
+    "warmups": 1,
+    "timeout": 3600,
+    "output": "bench-out/julia76-opt-physcal-20261010",
+    "mpi_prefix": "/opt/mpich",
+    "julia_bin": "/home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia",
+    "julia_source": "/workspaces/mvmc-rs/extern/Julia-mVMC"
+  },
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "JULIA_NUM_THREADS": "4,0",
+    "JULIA_NUM_GC_THREADS": "1",
+    "MVMC_RS_INNER_THREADS": "4",
+    "JULIA_MVMC_MPI": "1",
+    "JULIA_MVMC_INNER_THREADS": "1",
+    "JULIA_MVMC_PFAPACK_THREADS": "0",
+    "MVMC_BLAS_PROVIDER": "openblas",
+    "MVMC_RS_SR_BACKEND": "c-order",
+    "MVMC_RS_MEASURE_PF_BACKEND": "calc-m-all",
+    "UCX_ERROR_SIGNALS": "SIGILL,SIGBUS,SIGFPE",
+    "UCX_MEMTYPE_CACHE": "no"
+  }
+}
