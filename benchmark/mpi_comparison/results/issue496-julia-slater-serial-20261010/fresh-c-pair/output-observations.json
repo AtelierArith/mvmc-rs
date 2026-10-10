@@ -1,0 +1,86 @@
+[
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 0,
+    "max_abs_all_columns": 1.8168066162616014e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 1,
+    "max_abs_all_columns": 1.8146238289773464e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 1,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 2,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 2,
+    "max_abs_all_columns": 3.958120942115784e-09
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 3,
+    "max_abs_all_columns": 9.211362339556217e-09
+  },
+  {
+    "sites": 32,
+    "implementation": "julia",
+    "rep": 3,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 0,
+    "max_abs_all_columns": 1.1625525075942278e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 1,
+    "max_abs_all_columns": 8.230563253164291e-08
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 1,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 2,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 2,
+    "max_abs_all_columns": 3.91672074329108e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 3,
+    "max_abs_all_columns": 1.363951014354825e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "julia",
+    "rep": 3,
+    "max_abs_all_columns": 0.0
+  }
+]

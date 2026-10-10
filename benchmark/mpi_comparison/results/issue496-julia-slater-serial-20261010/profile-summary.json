@@ -1,0 +1,30 @@
+[
+  {
+    "sites": 32,
+    "timer_seconds": {
+      "All": 3.53537,
+      "sampling": 1.14745,
+      "inverse": 0.79128,
+      "energy": 0.38787,
+      "slater_derivative": 0.30631,
+      "OO_HO": 0.11316,
+      "slater_update": 0.02354,
+      "output": 0.08733,
+      "sync_parameters": 0.03096
+    }
+  },
+  {
+    "sites": 64,
+    "timer_seconds": {
+      "All": 13.197,
+      "sampling": 4.36787,
+      "inverse": 3.82406,
+      "energy": 0.74504,
+      "slater_derivative": 0.90416,
+      "OO_HO": 0.13041,
+      "slater_update": 0.08865,
+      "output": 0.34822,
+      "sync_parameters": 0.10674
+    }
+  }
+]

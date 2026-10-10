@@ -1,0 +1,1 @@
+seconds=13.197405507 allocated_bytes=1115063184 gc_seconds=0.151135141

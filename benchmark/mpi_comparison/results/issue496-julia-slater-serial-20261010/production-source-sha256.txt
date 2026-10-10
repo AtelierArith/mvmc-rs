@@ -1,0 +1,6 @@
+05a61c3ffe8309f1a2304795138e2b87cbf82f9dbd58e2fa30caaa723850f829  /home/vscode/.cache/mvmc/julia-issue496-slater/MVMCOptimizers.jl/src/slater_update.jl
+688c221d5b717b099c2b479bb77005794bd39137d8f69b0c7a60eca6bf1be8e2  /home/vscode/.cache/mvmc/julia-issue496-slater/MVMCOptimizers.jl/test_unit/test_unit_slater_checked_kernel.jl
+b484c0deabfe627eb3daed263b7b618b51e000dcb0b7754ee55c386c7b9098c9  /home/vscode/.cache/mvmc/julia-issue496-slater/MVMCOptimizers.jl/test/runtests.jl
+09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc  /home/vscode/.cache/mvmc/julia-issue496-slater-project/Manifest-v1.13.toml
+7b71e96b08818d5b949a2f750186b86cf27d7ecb47f65580779fedd18874a8e4  /home/vscode/.cache/mvmc/julia-issue496-slater-project/Project.toml
+aa08d112885e20430be7fd45eafa44985f07fa937a531fb1c3b0bf1b67c025b3  /home/vscode/.cache/mvmc/julia-issue496-slater-project/LocalPreferences.toml
