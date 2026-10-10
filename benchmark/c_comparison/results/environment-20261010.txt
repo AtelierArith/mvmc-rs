@@ -139,7 +139,7 @@ C_INCLUDES = -I/opt/mpich/include -I/home/vscode/.cache/mvmc/c-benchmark-indepen
 
 C_FLAGS =  -O3 -DNDEBUG -fopenmp -O3 -DNDEBUG
 
-/usr/bin/g++ -O3 -DNDEBUG  -fopenmp  -Wl,-rpath -Wl,/opt/mpich/lib -Wl,--enable-new-dtags -rdynamic CMakeFiles/vmc.out.dir/vmcmain.c.o CMakeFiles/vmc.out.dir/physcal_lanczos.c.o CMakeFiles/vmc.out.dir/splitloop.c.o CMakeFiles/vmc.out.dir/__/sfmt/SFMT.c.o -o vmc.out   -L/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack  -Wl,-rpath,/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack:/opt/mpich/lib: ../StdFace/src/libStdFace_mvmc.a -lm ../pfapack/fortran/libpfapack.a ../ltl2inv/libltl2inv.a ../../lib/libblis.a -lpthread -lopenblas -lm -ldl -lm /opt/mpich/lib/libmpi.so -lpthread /opt/mpich/lib/libmpi.so -lopenblas -lm -ldl -lgfortran -lquadmath 
+/usr/bin/g++ -O3 -DNDEBUG  -fopenmp  -Wl,-rpath -Wl,/opt/mpich/lib -Wl,--enable-new-dtags -rdynamic CMakeFiles/vmc.out.dir/vmcmain.c.o CMakeFiles/vmc.out.dir/physcal_lanczos.c.o CMakeFiles/vmc.out.dir/splitloop.c.o CMakeFiles/vmc.out.dir/__/sfmt/SFMT.c.o -o vmc.out   -L/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack  -Wl,-rpath,/home/vscode/.cache/mvmc/c-benchmark-independent-20261010/src/src/mVMC/../pfapack:/opt/mpich/lib: ../StdFace/src/libStdFace_mvmc.a -lm ../pfapack/fortran/libpfapack.a ../ltl2inv/libltl2inv.a ../../lib/libblis.a -lpthread -lopenblas -lm -ldl -lm /opt/mpich/lib/libmpi.so -lpthread /opt/mpich/lib/libmpi.so -lopenblas -lm -ldl -lgfortran -lquadmath
 diff --git a/crates/mvmc-core/Cargo.toml b/crates/mvmc-core/Cargo.toml
 index dd472f31..58f52245 100644
 --- a/crates/mvmc-core/Cargo.toml
@@ -147,7 +147,7 @@ index dd472f31..58f52245 100644
 @@ -39,6 +39,10 @@ flate2 = "1"
  serde_json = "1"
  sha2 = "0.10"
- 
+
 +[[example]]
 +name = "mpi_benchmark"
 +required-features = ["mpi"]
