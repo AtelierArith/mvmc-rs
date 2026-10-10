@@ -1,0 +1,86 @@
+[
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 0,
+    "max_abs_all_columns": 2.3144821170717478e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 1,
+    "max_abs_all_columns": 2.8339854907244444e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "rust",
+    "rep": 1,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 32,
+    "implementation": "rust",
+    "rep": 2,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 2,
+    "max_abs_all_columns": 2.937304088845849e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "c",
+    "rep": 3,
+    "max_abs_all_columns": 2.4730979930609465e-08
+  },
+  {
+    "sites": 32,
+    "implementation": "rust",
+    "rep": 3,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 0,
+    "max_abs_all_columns": 1.4735996956005692e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 1,
+    "max_abs_all_columns": 5.632609827443957e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "rust",
+    "rep": 1,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "rust",
+    "rep": 2,
+    "max_abs_all_columns": 0.0
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 2,
+    "max_abs_all_columns": 4.781177267432213e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "rep": 3,
+    "max_abs_all_columns": 5.976253305561841e-07
+  },
+  {
+    "sites": 64,
+    "implementation": "rust",
+    "rep": 3,
+    "max_abs_all_columns": 0.0
+  }
+]

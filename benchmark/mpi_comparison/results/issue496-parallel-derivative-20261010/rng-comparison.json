@@ -1,0 +1,274 @@
+[
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 0,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": 0.0
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 1,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 2,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 3,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 0,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": 0.0
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 1,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 2,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 3,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 0,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": 0.0
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 1,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 2,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 3,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 0,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": 0.0
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 1,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 2,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 3,
+    "exact_fields": [
+      "rng_words",
+      "rng_index",
+      "rng_words_consumed",
+      "ele_idx",
+      "ele_cfg",
+      "ele_num",
+      "ele_spn",
+      "ele_proj_cnt",
+      "counter"
+    ],
+    "energy_abs_difference": null
+  }
+]
