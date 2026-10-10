@@ -1,0 +1,22 @@
+[
+  {
+    "sites": 32,
+    "implementation": "c",
+    "median_seconds": 3.49653
+  },
+  {
+    "sites": 32,
+    "implementation": "rust",
+    "median_seconds": 3.401365597
+  },
+  {
+    "sites": 64,
+    "implementation": "c",
+    "median_seconds": 13.75617
+  },
+  {
+    "sites": 64,
+    "implementation": "rust",
+    "median_seconds": 13.594021077
+  }
+]
