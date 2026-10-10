@@ -1295,8 +1295,6 @@ pub struct VmcOptimizationState {
     pub electron_config: ElectronConfiguration,
     /// SR buffers.
     pub sr_opt: SROptData,
-    /// Reusable rank-local aggregates/scratch; stores have one owner in sr_opt.
-    pub(crate) sr_local: Option<crate::sr_accumulator::SrAccumulator>,
     /// Optimisation history.
     pub opt_data: Vec<OptDataPoint>,
     /// Sampling workspace.
@@ -1360,7 +1358,6 @@ impl VmcOptimizationState {
                 use_fsz,
             ),
             sr_opt: SROptData::zeros(1 + n_para, n_vmc_sample, all_complex),
-            sr_local: None,
             opt_data: Vec::new(),
             workspace: SamplingWorkspace::zeros(n_size, n_qp_full, n_proj, n_site),
             phys_quantities: None,

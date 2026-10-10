@@ -1,0 +1,201 @@
+   Compiling num-traits v0.2.19
+   Compiling bytemuck v1.25.0
+   Compiling bitflags v2.11.1
+   Compiling reborrow v0.5.5
+   Compiling pulp-wasm-simd-flag v0.1.0
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.15.2
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.21
+   Compiling libm v0.2.16
+   Compiling foldhash v0.2.0
+   Compiling thiserror v1.0.69
+   Compiling thiserror v2.0.18
+   Compiling tenferro-core-ops v0.7.1
+   Compiling nano-gemm-core v0.2.1
+   Compiling equator v0.4.2
+   Compiling raw-cpuid v11.6.0
+   Compiling zerocopy v0.8.48
+   Compiling equator v0.2.2
+   Compiling generativity v1.2.1
+   Compiling computegraph v0.1.0
+   Compiling num-complex v0.4.6
+   Compiling crossbeam-epoch v0.9.18
+   Compiling dyn-stack v0.13.2
+   Compiling hashbrown v0.17.1
+   Compiling crossbeam-channel v0.5.15
+   Compiling crossbeam-queue v0.3.12
+   Compiling getrandom v0.3.4
+   Compiling atomic-wait v1.1.0
+   Compiling num_cpus v1.17.0
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling rand_core v0.6.4
+   Compiling lapack-sys v0.14.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling blas-sys v0.7.1
+   Compiling equator v0.6.0
+   Compiling serde_core v1.0.228
+   Compiling rand_core v0.9.5
+   Compiling equivalent v1.0.2
+   Compiling lru v0.18.5
+   Compiling strided-traits v0.4.4
+   Compiling pulp v0.22.2
+   Compiling tenferro-tensor-core v0.7.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling zmij v1.0.21
+   Compiling rayon-core v1.13.0
+   Compiling crossbeam v0.8.4
+   Compiling ppv-lite86 v0.2.21
+   Compiling sfmt19937 v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/sfmt19937)
+   Compiling blas v0.22.0
+   Compiling indexmap v2.14.0
+   Compiling lapack v0.19.0
+   Compiling tracing-core v0.1.36
+   Compiling tenferro-tensor v0.7.1
+   Compiling strided-view v0.4.4
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling pfapack v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/pfapack)
+   Compiling serde v1.0.228
+   Compiling rayon v1.12.0
+   Compiling qd v0.8.0
+   Compiling rawpointer v0.2.1
+   Compiling rand_chacha v0.9.0
+   Compiling nano-gemm v0.2.2
+   Compiling num-integer v0.1.46
+   Compiling priority-queue v2.7.0
+   Compiling mvmc-core v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-core)
+   Compiling typenum v1.20.1
+   Compiling serde_json v1.0.150
+   Compiling tracing v0.1.44
+   Compiling tenferro-internal-ops v0.7.1
+   Compiling mvmc-uhf v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-uhf)
+   Compiling linux-raw-sys v0.12.1
+   Compiling faer-traits v0.24.0
+   Compiling matrixmultiply v0.3.10
+   Compiling gemm-common v0.19.0
+   Compiling strided-perm v0.4.4
+   Compiling spindle v0.2.6
+   Compiling rand v0.9.4
+   Compiling getrandom v0.4.2
+   Compiling approx v0.5.1
+   Compiling generic-array v0.14.7
+   Compiling fastrand v2.4.1
+   Compiling mvmc-expert-parsers v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-expert-parsers)
+   Compiling tenferro-runtime v0.7.1 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/third_party/tenferro-runtime)
+   Compiling rustix v1.1.4
+   Compiling wait-timeout v0.2.1
+   Compiling ndarray v0.16.1
+   Compiling strided-basic v0.4.4
+   Compiling private-gemm-x86 v0.1.20
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm-f64 v0.19.0
+   Compiling omeco v0.2.4
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling quick-error v1.2.3
+   Compiling tempfile v3.27.0
+   Compiling bit-vec v0.8.0
+   Compiling simd-adler32 v0.3.10
+   Compiling fnv v1.0.7
+   Compiling mvmc-stdface v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-stdface)
+   Compiling adler2 v2.0.1
+   Compiling digest v0.10.7
+   Compiling crc32fast v1.5.2
+   Compiling rand_xorshift v0.4.0
+   Compiling gemm v0.19.0
+   Compiling regex-syntax v0.8.10
+   Compiling unarray v0.1.4
+   Compiling cpufeatures v0.2.17
+   Compiling rusty-fork v0.3.1
+   Compiling mvmc-greenr2k v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-greenr2k)
+   Compiling bit-set v0.8.0
+   Compiling miniz_oxide v0.9.1
+   Compiling faer v0.24.4
+   Compiling sha2 v0.10.9
+   Compiling strided-fused v0.4.4
+   Compiling tenferro-cpu-basic v0.7.1
+   Compiling proptest v1.11.0
+   Compiling flate2 v1.1.10
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling strided-kernel v0.4.4
+   Compiling tenferro-cpu-fused v0.7.1
+   Compiling tenferro-internal-cpu-kernels v0.7.1
+   Compiling tenferro-cpu v0.7.1 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/third_party/tenferro-cpu)
+   Compiling tenferro-ad v0.7.1 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/third_party/tenferro-ad)
+   Compiling tenferro-einsum v0.7.1 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/third_party/tenferro-einsum)
+   Compiling tenferro-linalg v0.7.1
+   Compiling mvmc-gpu v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-gpu)
+   Compiling mvmc-cli v0.0.0 (/home/vscode/.cache/mvmc/issue496-direct-sr-final/crates/mvmc-cli)
+    Finished `test` profile [unoptimized] target(s) in 5.86s
+   Doc-tests mvmc_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_expert_parsers
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_greenr2k
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_stdface
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mvmc_uhf
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pfapack
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sfmt19937
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

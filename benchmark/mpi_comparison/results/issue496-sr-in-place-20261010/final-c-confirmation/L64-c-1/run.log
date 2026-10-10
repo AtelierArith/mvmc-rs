@@ -1,0 +1,73 @@
+WORLD 2 4
+THREADS 2 4
+BLAS_THREADS 2 1
+WORLD 3 4
+THREADS 3 4
+BLAS_THREADS 3 1
+WORLD 0 4
+THREADS 0 4
+BLAS_THREADS 0 1
+WORLD 1 4
+THREADS 1 4
+BLAS_THREADS 1 1
+Start: Read *def files.
+  Read File namelist.def .
+Start: Read ModPara File .
+End: Read ModPara File .
+  Read File 'modpara.def' for ModPara.
+  Read File 'locspn.def' for LocSpin.
+  Read File 'trans.def' for Trans.
+  Read File 'coulombintra.def' for CoulombIntra.
+  Read File 'gutzwilleridx.def' for Gutzwiller.
+  Read File 'jastrowidx.def' for Jastrow.
+  Read File 'orbitalidx.def' for Orbital.
+  Read File 'qptransidx.def' for TransSym.
+  Read File 'greenone.def' for OneBodyG.
+  Read File 'greentwo.def' for TwoBodyG.
+End  : Read *def files.
+Start: Read parameters from *def files.
+     locspn.def
+     trans.def
+     coulombintra.def
+     gutzwilleridx.def
+     jastrowidx.def
+     orbitalidx.def
+     qptransidx.def
+     greenone.def
+     greentwo.def
+finish reading parameters.
+End  : Read parameters from *def files.
+Start: Set memories.
+remark: FlagShift ( GJ ) is turned on.
+End  : Set memories.
+Start: Initialize parameters.
+End  : Initialize parameters.
+Start: Initialize variables for quantum projection.
+End  : Initialize variables for quantum projection.
+Start: Optimize VMC parameters.
+Progress of Optimization: 0 %.
+Progress of Optimization: 5 %.
+Progress of Optimization: 10 %.
+Progress of Optimization: 15 %.
+Progress of Optimization: 20 %.
+Progress of Optimization: 25 %.
+Progress of Optimization: 30 %.
+Progress of Optimization: 35 %.
+Progress of Optimization: 40 %.
+Progress of Optimization: 45 %.
+Progress of Optimization: 50 %.
+Progress of Optimization: 55 %.
+Progress of Optimization: 60 %.
+Progress of Optimization: 65 %.
+Progress of Optimization: 70 %.
+Progress of Optimization: 75 %.
+Progress of Optimization: 80 %.
+Progress of Optimization: 85 %.
+Progress of Optimization: 90 %.
+Progress of Optimization: 95 %.
+Start: Output opt params.
+End: Output opt params.
+End  : Optimize VMC parameters.
+Start: Free Memory.
+End: Free Memory.
+Finish calculation.
