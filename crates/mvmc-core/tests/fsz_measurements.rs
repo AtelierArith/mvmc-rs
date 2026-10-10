@@ -12,8 +12,16 @@ use num_complex::Complex64;
 fn supported_fsz_native_fixture_covers_worker_processes_without_new_goldens() {
     // Same independently acquired 12-case native fixture and existing budgets.
     // Each process owns OnceLock configuration; no in-process environment edits.
-    for workers in [1, 2, 4] {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
+    for (workers, forced_threshold) in [
+        (1, false),
+        (2, false),
+        (4, false),
+        (1, true),
+        (2, true),
+        (4, true),
+    ] {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
             .args([
                 "--exact",
                 "fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators",
@@ -21,22 +29,25 @@ fn supported_fsz_native_fixture_covers_worker_processes_without_new_goldens() {
                 "--test-threads=1",
             ])
             .env("MVMC_RS_INNER_THREADS", workers.to_string())
-            .env("MVMC_RS_INNER_THRESHOLD", "32")
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("OMP_NUM_THREADS", "1")
             .env("MKL_NUM_THREADS", "1")
-            .env("BLIS_NUM_THREADS", "1")
-            .output()
-            .unwrap();
+            .env("BLIS_NUM_THREADS", "1");
+        if forced_threshold {
+            command.env("MVMC_RS_INNER_THRESHOLD", "32");
+        } else {
+            command.env_remove("MVMC_RS_INNER_THRESHOLD");
+        }
+        let output = command.output().unwrap();
         assert!(
             output.status.success(),
-            "native fixture workers={workers}:\n{}\n{}",
+            "native fixture workers={workers}, forced_threshold={forced_threshold}:\n{}\n{}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"));
         println!(
-            "native_fixture_worker={workers}\n{}",
+            "native_fixture_worker={workers} forced_threshold={forced_threshold}\n{}",
             String::from_utf8_lossy(&output.stdout)
         );
     }
@@ -213,8 +224,14 @@ fn fsz_measurements_match_native_c_locals_and_ordered_weighted_accumulators() {
                 &data, &mut state, weight, ip, &idx, &cfg, &num, &cnt, &spins,
             );
             let observed = observer.finish();
-            let p1 = mvmc_core::threading::inner_parallel_enabled(64);
-            let p2 = mvmc_core::threading::inner_parallel_enabled(4098);
+            let p1 = mvmc_core::threading::inner_parallel_work(
+                64,
+                mvmc_core::threading::green_cost_ns(idx.len(), 1),
+            );
+            let p2 = mvmc_core::threading::inner_parallel_work(
+                4098,
+                mvmc_core::threading::green_cost_ns(idx.len(), 2),
+            );
             let parallel_items = (if p1 { 64 } else { 0 }) + (if p2 { 4098 } else { 0 });
             assert_eq!(observed.parallel_entry_items, parallel_items);
             assert_eq!(observed.serial_entry_items, 4162 - parallel_items);
