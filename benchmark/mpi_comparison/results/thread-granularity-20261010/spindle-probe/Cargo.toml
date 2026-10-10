@@ -1,0 +1,15 @@
+[package]
+name = "mvmc-rayon-region-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+rayon = "=1.12.0"
+spindle = "=0.2.6"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
