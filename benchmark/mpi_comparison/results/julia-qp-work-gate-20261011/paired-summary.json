@@ -1,0 +1,105 @@
+{
+  "cases": [
+    {
+      "sites": 32,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 300,
+      "times": {
+        "baseline": {
+          "1": 11.807304858,
+          "2": 11.69109786,
+          "3": 11.555981047
+        },
+        "candidate": {
+          "1": 11.662297699,
+          "2": 11.550628942,
+          "3": 11.595805614
+        }
+      },
+      "medians": {
+        "baseline": 11.69109786,
+        "candidate": 11.595805614
+      },
+      "candidate_percent_change": -0.81508381112807,
+      "pair_wins": 2,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 32,
+      "ranks": 4,
+      "threads": 4,
+      "steps": 300,
+      "times": {
+        "baseline": {
+          "1": 3.43413831,
+          "2": 3.549769116,
+          "3": 3.419175271
+        },
+        "candidate": {
+          "1": 3.489048103,
+          "2": 3.476772879,
+          "3": 3.639948423
+        }
+      },
+      "medians": {
+        "baseline": 3.43413831,
+        "candidate": 3.489048103
+      },
+      "candidate_percent_change": 1.5989394731163342,
+      "pair_wins": 1,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 64,
+      "ranks": 1,
+      "threads": 16,
+      "steps": 300,
+      "times": {
+        "baseline": {
+          "1": 57.176603167,
+          "2": 57.083206408,
+          "3": 56.844546619
+        },
+        "candidate": {
+          "1": 36.732064661,
+          "2": 36.194223117,
+          "3": 36.594073237
+        }
+      },
+      "medians": {
+        "baseline": 57.083206408,
+        "candidate": 36.594073237
+      },
+      "candidate_percent_change": -35.8934517878248,
+      "pair_wins": 3,
+      "output_max_abs_observed": 0.0
+    },
+    {
+      "sites": 64,
+      "ranks": 4,
+      "threads": 4,
+      "steps": 300,
+      "times": {
+        "baseline": {
+          "1": 13.231588614,
+          "2": 13.928440719,
+          "3": 12.957356788
+        },
+        "candidate": {
+          "1": 13.115252803,
+          "2": 13.170109666,
+          "3": 13.263472681
+        }
+      },
+      "medians": {
+        "baseline": 13.231588614,
+        "candidate": 13.170109666
+      },
+      "candidate_percent_change": -0.4646376923701401,
+      "pair_wins": 2,
+      "output_max_abs_observed": 0.0
+    }
+  ],
+  "complete": true
+}
