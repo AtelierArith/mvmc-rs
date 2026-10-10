@@ -40,6 +40,12 @@ RNG calls and other threading gates remain unchanged. The baseline source is
 main 02afdae0a19732c727e0d09132d9761c57d68fcb. Candidate PR head is
 85f9ea12c49e46639b8284334388116d5f16a337.
 
+PR #77 merged after all seven upstream checks passed (Linux/macOS Julia
+1.11, 1.12 and 1.13, plus documentation). The reference submodule is pinned to
+upstream main `d493f113ecc009d44e70327ffcbb500a566a1380`, whose tracked tree is
+identical to the measured candidate head. This pin does not reverify historical
+fixtures or alter their provenance.
+
 Local verification passed 41,392 optimizer assertions, 25 Slater assertions and
 15 base assertions. The new 53-assertion storage suite also passed at one and
 sixteen threads. Eight 20-or-300-step size/layout audits checked twenty paired
