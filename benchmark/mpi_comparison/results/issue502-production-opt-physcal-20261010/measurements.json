@@ -1,0 +1,254 @@
+[
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 3.38246
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 3.43383
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 3.35056
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 3.892245197
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 3.889591696
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 3.921541871
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 3.27053289
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 3.301009981
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 3.306073063
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 1.47355
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 1.46873
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 1.46894
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 1.409846645
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 1.399919281
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 1.306513672
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 1.343844484
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 1.340140293
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 1.355011515
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 13.66077
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 13.60178
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 13.53485
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 14.660833374
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 14.586651687
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 14.560447048
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 13.529839072
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 13.77798121
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 13.882219128
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 6.60285
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 6.5387
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 6.44012
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 5.007858801
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 5.210938583
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 4.991015828
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 5.513976872
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 5.562190874
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 5.552527065
+  }
+]

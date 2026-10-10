@@ -1,0 +1,11 @@
+MPICH Version:      4.2.0
+MPICH Release date: Fri Feb  9 12:29:21 CST 2024
+MPICH ABI:          16:0:4
+MPICH Device:       ch4:ucx
+MPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix
+MPICH CC:           gcc    -O2
+MPICH CXX:          g++   -O2
+MPICH F77:          gfortran   -O2
+MPICH FC:           gfortran   -O2
+MPICH features:     threadcomm
+

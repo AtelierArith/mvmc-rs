@@ -1,0 +1,19 @@
+/home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia --project=/workspaces/mvmc-rs/bench-out/issue502-production-opt-physcal-20261010/julia-project --startup-file=no -e 'using MPI, LinearAlgebra, Libdl, PfaPack; BLAS.set_num_threads(1); println("Julia: ", VERSION); println("MPI: ", MPI.Get_library_version()); println("BLAS: ", BLAS.get_config()); println("BLAS threads: ", BLAS.get_num_threads()); library = first(BLAS.get_config().loaded_libs); println("BLAS path: ", Libdl.dlpath(library.handle)); native = Libdl.dlopen(PfaPack.libltl2inv); native_threads = ccall(Libdl.dlsym(native, :openblas_get_num_threads), Cint, ()); @assert native_threads == 1; println("Native BLAS threads: ", native_threads); println("Native BLAS version: ", unsafe_string(ccall(Libdl.dlsym(native, :openblas_get_config), Cstring, ()))); println("BLAS version: ", unsafe_string(ccall(Libdl.dlsym(library.handle, Symbol("openblas_get_config", library.suffix)), Cstring, ())))'
+Julia: 1.13.1
+MPI: MPICH Version:      4.2.0
+MPICH Release date: Fri Feb  9 12:29:21 CST 2024
+MPICH ABI:          16:0:4
+MPICH Device:       ch4:ucx
+MPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix
+MPICH CC:           gcc    -O2
+MPICH CXX:          g++   -O2
+MPICH F77:          gfortran   -O2
+MPICH FC:           gfortran   -O2
+MPICH features:     threadcomm
+
+BLAS: LBTConfig([ILP64] libopenblas64_.so)
+BLAS threads: 1
+BLAS path: /home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/../lib/julia/libopenblas64_.so
+Native BLAS threads: 1
+Native BLAS version: OpenBLAS 0.3.26 NO_LAPACKE DYNAMIC_ARCH NO_AFFINITY Cooperlake MAX_THREADS=64
+BLAS version: OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Cooperlake MAX_THREADS=512

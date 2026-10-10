@@ -73,6 +73,7 @@ def report(rows, args):
              f"Opt: {args.steps} SR steps; PhysCal: {args.groups} measurement groups.",
              f"Warmups: {args.warmups}; measured repetitions: {args.reps}; times are medians in seconds.",
              "PhysCal uses the same C-generated parameter file for all implementations.", "",
+             "Rust measurement path: calc-m-all (production default C-order kernels).", "",
              "| Workload | Sites | C (s) | Julia (s) | Rust (s) | Julia/C | Rust/C |",
              "|---|---:|---:|---:|---:|---:|---:|"]
     for mode in ("Opt", "PhysCal"):
@@ -129,10 +130,12 @@ def main():
                MVMC_RS_INNER_THREADS=str(args.threads), JULIA_MVMC_MPI="1",
                JULIA_MVMC_INNER_THREADS="1", JULIA_MVMC_PFAPACK_THREADS="0",
                MPICC=str(prefix / "bin/mpicc"), MVMC_BLAS_PROVIDER="openblas",
-               MVMC_RS_SR_BACKEND="c-order", MVMC_RS_MEASURE_PF_BACKEND="c-order",
+               MVMC_RS_SR_BACKEND="c-order", MVMC_RS_MEASURE_PF_BACKEND="calc-m-all",
                UCX_ERROR_SIGNALS="SIGILL,SIGBUS,SIGFPE", UCX_MEMTYPE_CACHE="no")
     env["LD_LIBRARY_PATH"] = str(prefix / "lib") + ":" + env.get("LD_LIBRARY_PATH", "")
-    for key in ("LD_PRELOAD", "MVMC_C_TIMER", "MVMC_CALHAM_DIAGNOSTICS", "MVMC_RS_INNER_PROFILE",
+    for key in ("LD_PRELOAD", "MVMC_C_TIMER", "MVMC_TIMER", "MVMC_CALHAM1_DIAG",
+                "MVMC_SLATER_DIAG", "MVMC_MAINCAL_DIAG", "MVMC_WEIGHTAVG_DIAG",
+                "MVMC_CALHAM_DIAGNOSTICS", "MVMC_RS_INNER_PROFILE",
                 "MVMC_RS_INNER_THRESHOLD", "MVMC_RS_INNER_MIN_WORK_NS", "MVMC_RS_INNER_MIN_SIZE"):
         env.pop(key, None)
     metadata = dict(arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
