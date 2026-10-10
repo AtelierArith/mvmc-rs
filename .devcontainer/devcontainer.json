@@ -47,6 +47,7 @@
   ],
   "remoteEnv": {
     "JULIA_PROJECT": "@.",
+    "JULIA_DEPOT_PATH": "/home/vscode/.cache/mvmc/julia-depot",
     "JULIA_NUM_THREADS": "1"
   }
 }

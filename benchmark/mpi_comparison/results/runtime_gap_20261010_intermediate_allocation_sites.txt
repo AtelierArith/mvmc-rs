@@ -1,0 +1,66 @@
+820 26240 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/slater_update.jl:372 update_slater_elm_fcmp!
+790 25280 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/slater_update.jl:369 update_slater_elm_fcmp!
+341 10912 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/slater_update.jl:366 update_slater_elm_fcmp!
+315 10080 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/slater_update.jl:375 update_slater_elm_fcmp!
+386 6176 Base.RefValue{Float64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parallel.jl:266 #allreduce_sum_scalar#18
+5 3395 String /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:113 #225
+115 3088 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:238 get_parameter_value
+94 2576 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:248 _set_parameter_value_direct!
+77 2464 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:174 #sync_modified_parameter!#210
+9 1584 MVMCOptimizers.var"#92#93"{Vector{Int64}, MVMCOptimizers.PfaPackWorkspace, SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}, SubArray{Float64, 3, Array{Float64, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, UnitRange{Int64}}, true}, SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}, Int64, Int64, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_sampling.jl:4988 #calculate_m_all_real!#90
+69 1104 Base.RefValue{Float64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/calculate_m_all.jl:728 calculate_m_all_real!
+4 1088 Memory{Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_sampling.jl:39 get_loc_spn_array
+9 792 Memory{SubString{String}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+3 720 NTuple{15, Pair{Symbol, Int64}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:248 _set_parameter_value_direct!
+15 720 SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_sampling.jl:4988 #calculate_m_all_real!#90
+22 704 Tuple{MVMCExpertModeParsers.OrbitalTerm, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:174 #sync_modified_parameter!#210
+4 576 @NamedTuple{layout::MVMCExpertModeParsers.ProjectionLayout, n_proj::Int64, n_rbm::Int64, n_orbital_idx::Int64, n_opt_trans::Int64, n_para::Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:239 get_parameter_value
+15 480 Tuple{MVMCExpertModeParsers.OrbitalTerm, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:92 #sync_modified_parameter!#210
+15 480 Vector{SubString{String}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+2 480 NTuple{15, Pair{Symbol, Int64}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:238 get_parameter_value
+7 448 SubArray{Float64, 3, Array{Float64, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, UnitRange{Int64}}, true} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_sampling.jl:4988 #calculate_m_all_real!#90
+24 384 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:92 #sync_modified_parameter!#210
+7 336 SubArray{Int64, 1, Vector{Int64}, Tuple{UnitRange{Int64}}, true} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_main_cal.jl:3858 process_sample_range!
+6 304 Memory{String} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+15 300 String /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+27 270 String /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/threading.jl:10 vmc_inner_threading_requested
+5 240 SubArray{Int64, 1, Vector{Int64}, Tuple{UnitRange{Int64}}, true} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_main_cal.jl:3859 process_sample_range!
+1 240 NTuple{15, Pair{Symbol, Int64}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:172 #sync_modified_parameter!#210
+7 224 Vector{UInt8} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:113 #225
+5 160 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:242 get_parameter_value
+4 128 Vector{String} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+2 128 MVMCExpertModeParsers.OrbitalTerm /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+16 128 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_main_cal.jl:3843 process_sample_range!
+6 96 Tuple{Vector{ComplexF64}, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:238 get_parameter_value
+12 96 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:92 #sync_modified_parameter!#210
+3 96 Tuple{MVMCExpertModeParsers.OrbitalTerm, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:186 #run_para_opt_from_namelist#281
+6 96 Tuple{Vector{ComplexF64}, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:248 _set_parameter_value_direct!
+3 96 Vector{Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_sampling.jl:39 get_loc_spn_array
+1 80 Tuple{Vector{MVMCExpertModeParsers.ChargeRBMPhysLayerTerm}, Vector{MVMCExpertModeParsers.SpinRBMPhysLayerTerm}, Vector{MVMCExpertModeParsers.GeneralRBMPhysLayerTerm}, Vector{MVMCExpertModeParsers.ChargeRBMHiddenLayerTerm}, Vector{MVMCExpertModeParsers.SpinRBMHiddenLayerTerm}, Vector{MVMCExpertModeParsers.GeneralRBMHiddenLayerTerm}, Vector{MVMCExpertModeParsers.ChargeRBMPhysHiddenTerm}, Vector{MVMCExpertModeParsers.SpinRBMPhysHiddenTerm}, Vector{MVMCExpertModeParsers.GeneralRBMPhysHiddenTerm}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:111 _foreach_parameter_location
+10 80 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:174 #sync_modified_parameter!#210
+3 72 MVMCOptimizers.var"#get_parameter_value##0#get_parameter_value##1"{MVMCExpertModeParsers.ExpertModeData, Int64, Vector{ComplexF64}} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:239 get_parameter_value
+4 64 Base.RefValue{Bool} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:250 _set_parameter_value_direct!
+4 64 Tuple{Int64, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:238 get_parameter_value
+2 64 Tuple{Int64, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:92 #sync_modified_parameter!#210
+4 64 Base.RefValue{Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parallel.jl:271 #allreduce_max_scalar#19
+2 64 Tuple{Int64, Float64, Float64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:204 #244
+2 64 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:239 pack_parameters
+1 64 ReentrantLock /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:98 #output_data!#220
+1 64 Memory{ComplexF64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:134 #output_opt_data!#227
+6 60 String /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/threading.jl:21 vmc_pfapack_threading_requested
+3 48 Tuple{Int64, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/stochastic_opt.jl:248 _set_parameter_value_direct!
+2 48 Memory{UInt8} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:113 #225
+3 48 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+6 48 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_main_cal.jl:3844 process_sample_range!
+1 32 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:243 pack_parameters
+1 32 Tuple{MVMCExpertModeParsers.OrbitalTerm, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+1 32 Tuple{ComplexF64, Float64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:203 #244
+1 24 Memory{MVMCExpertModeParsers.OrbitalTerm} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/slater_update.jl:216 update_slater_elm_fcmp!
+3 24 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:186 #run_para_opt_from_namelist#281
+3 24 Int64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/vmc_main_cal.jl:3842 process_sample_range!
+1 16 Base.RefValue{Bool} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:253 unpack_parameters!
+1 16 Memory{Nothing} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:112 #run_para_opt_from_namelist#281
+1 16 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:174 #sync_modified_parameter!#210
+1 16 Pair{Symbol, Int64} /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/parameter_sync.jl:252 unpack_parameters!
+1 16 ComplexF64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/run_para_opt_from_namelist.jl:186 #run_para_opt_from_namelist#281
+1 8 Float64 /workspaces/mvmc-rs/target/bench/mpi-hybrid-julia-opt-setup-20261010/julia-project/MVMCOptimizers.jl/src/data_io.jl:204 #244
