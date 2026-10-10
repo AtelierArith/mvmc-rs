@@ -8,7 +8,8 @@
     ]
   },
   "runArgs": [
-    "--platform=linux/amd64"
+    "--platform=linux/amd64",
+    "--shm-size=1g"
   ],
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
