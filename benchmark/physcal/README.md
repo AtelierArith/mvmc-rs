@@ -21,8 +21,10 @@ inputs/hubbard_chain_L16/
 Models: `hubbard_chain_L16`, `hubbard_chain_L24`, `hubbard_chain_L32`.
 Hubbard chain, `Lsub=4`, `U=4.0`, `t=1.0`; half filling (`Ncond=L`, `2Sz=0`);
 `NSPGaussLeg=8`, `NSPStot=0`; `NSplitSize=1`, `NStore=1`, `RndSeed=1`;
-`NDataQtySmp=100` (the PhysCal sample count; PhysCal ignores
-`NSROptItrStep`/`NVMCSample`).
+`NDataQtySmp=100` (the number of measurement groups). Each group calls the
+sampler, which uses `NVMCSample` to determine the number of saved configurations;
+`NSROptItrStep` does not control PhysCal. See C `vmcmain.c`'s `VMCPhysCal` loop
+and `vmcmake.c`'s `nOutStep`/saved-sample bounds.
 
 ## Provenance
 
