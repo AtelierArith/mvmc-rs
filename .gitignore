@@ -1,4 +1,6 @@
 /target
+/.cargo/config.toml
+__pycache__/
 /output
 **/*.rs.bk
 *.log

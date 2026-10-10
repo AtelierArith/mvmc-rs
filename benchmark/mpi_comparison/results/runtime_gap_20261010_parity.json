@@ -1,0 +1,230 @@
+{
+  "prefix": {
+    "cases": 9,
+    "rng_blocks": 42,
+    "numeric_fields": 88794,
+    "max_absolute_difference": 0.0,
+    "absolute_tolerance": 1e-11,
+    "relative_tolerance": 1e-11,
+    "rng_sha256": {
+      "ranks1-threads4/L16/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks1-threads4/L16/rng-next-rank-0.txt": "2161e17bc5706229e9d6880d3f74be6527e533a4e2703ff633cd1a964d5b2cb6",
+      "ranks1-threads4/L24/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks1-threads4/L24/rng-next-rank-0.txt": "90af97e7809b91b540731df600895b55f86a97200b5f1021e08246b06f6ee02e",
+      "ranks1-threads4/L32/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks1-threads4/L32/rng-next-rank-0.txt": "34de31105ce1330c666a68cc0df1b4ce1056bb7065187ef152a90016bf494012",
+      "ranks2-threads2/L16/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks2-threads2/L16/rng-next-rank-0.txt": "609f9a10efaced89f34fa25b3409ca7527a3c75689c5ec8da0a61f74ce6b29bb",
+      "ranks2-threads2/L16/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks2-threads2/L16/rng-next-rank-1.txt": "6e4d852c7ee55020b27a442de225ce05723193697df0749bf0b81231f7ddfe70",
+      "ranks2-threads2/L24/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks2-threads2/L24/rng-next-rank-0.txt": "9173241b0134ffd57cc183193a4c323def303f319c069baf8c96fa08583c263f",
+      "ranks2-threads2/L24/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks2-threads2/L24/rng-next-rank-1.txt": "1150c82793da49365f68695a20beb1f425d7b23950e2e0ccd464ce1400a2283f",
+      "ranks2-threads2/L32/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks2-threads2/L32/rng-next-rank-0.txt": "b363f3057e6de361277d35978a6a06a4c7756868d128ac1ba7441ea58b942190",
+      "ranks2-threads2/L32/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks2-threads2/L32/rng-next-rank-1.txt": "0493c95b931b200d52a06cb83b97cfacb11fba863b434c935fe52084b3dcdba0",
+      "ranks4-threads1/L16/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks4-threads1/L16/rng-next-rank-0.txt": "06ae7289e38767268574ad5b16aa2918a9c01d923cba44a1b4c97f443df5614c",
+      "ranks4-threads1/L16/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks4-threads1/L16/rng-next-rank-1.txt": "f3945664c51fa3a37aca7f27600277ac270d58e900d4ee06d7eac16bc1792843",
+      "ranks4-threads1/L16/rng-initial-rank-2.txt": "abdd78090b2243c7dabf824386e8a719736bba423040dba099ff20e4567a9765",
+      "ranks4-threads1/L16/rng-next-rank-2.txt": "bdb511a066a051cb6241519f29dbc6f711c9069a106f2c92edc736ffdc0bfe32",
+      "ranks4-threads1/L16/rng-initial-rank-3.txt": "1b5c3c4b6446cb69d2866b9e3d0bf18974a0c42fdb57f918a6f9fbcd5dbccfb5",
+      "ranks4-threads1/L16/rng-next-rank-3.txt": "b6b1e3cf8c0eab9480078f2e568b968759d62c6614e91e9c1205dbe04e2e5296",
+      "ranks4-threads1/L24/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks4-threads1/L24/rng-next-rank-0.txt": "ad72dc5f4feb07b06769a3fd085f722591494517de9989489932c7cb4720c526",
+      "ranks4-threads1/L24/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks4-threads1/L24/rng-next-rank-1.txt": "706c004860ca3c48e4b656512505dd42707b7af5eeb480af27d70d6d8e9496ba",
+      "ranks4-threads1/L24/rng-initial-rank-2.txt": "abdd78090b2243c7dabf824386e8a719736bba423040dba099ff20e4567a9765",
+      "ranks4-threads1/L24/rng-next-rank-2.txt": "6ab6b6d0e4e4213afef0c875c1cbe33fc96a00e79006de15fab91e70c8049df5",
+      "ranks4-threads1/L24/rng-initial-rank-3.txt": "1b5c3c4b6446cb69d2866b9e3d0bf18974a0c42fdb57f918a6f9fbcd5dbccfb5",
+      "ranks4-threads1/L24/rng-next-rank-3.txt": "bd99e02acc837faf14d5dfd51303c47b9a67b47d0cbd442be8a880536fbe5776",
+      "ranks4-threads1/L32/rng-initial-rank-0.txt": "185ecfb133adce00043bc786c3932e6760f86b5f50a2d8399cf9ce633cfa682b",
+      "ranks4-threads1/L32/rng-next-rank-0.txt": "f111f211f03d5a0b45af1b2a124e6868c57ae93a350d87b547329e054ab08c36",
+      "ranks4-threads1/L32/rng-initial-rank-1.txt": "6e963a98737bdfd6aca2377eeb5ae87d7629b116dbdb664c58f08ea19f22dc39",
+      "ranks4-threads1/L32/rng-next-rank-1.txt": "56b051b29bb53122dfb38c7212b8ae5cb3bf3618aec665f507a0bb64d5a06d53",
+      "ranks4-threads1/L32/rng-initial-rank-2.txt": "abdd78090b2243c7dabf824386e8a719736bba423040dba099ff20e4567a9765",
+      "ranks4-threads1/L32/rng-next-rank-2.txt": "e907f16d9f154ece35851cb39dc6f617653ea3b616ba1bf8a7773859574fd280",
+      "ranks4-threads1/L32/rng-initial-rank-3.txt": "1b5c3c4b6446cb69d2866b9e3d0bf18974a0c42fdb57f918a6f9fbcd5dbccfb5",
+      "ranks4-threads1/L32/rng-next-rank-3.txt": "0c1c2985edd60aa0688d8166b6c6a92afae10a0c3ea020b5e5443b56d7f80c33"
+    }
+  },
+  "primitive_trace": {
+    "paired_rank_model_traces": 21,
+    "all_integer_word_kind_seed_streams_exact": true,
+    "u32_draws": 6550581,
+    "real2_draws": 2016,
+    "records": {
+      "ranks1-threads4/L16/rng-trace-rank-0.txt": {
+        "u32": 482045,
+        "real2": 64,
+        "words": 482109,
+        "seed": 1,
+        "stream_sha256": "9d7c4232987b92b9ce48716fcdc9cc53af066750464195a07b32055d56015f96",
+        "record_sha256": "cd77a3acfd4512882db4db6155222f13775ddeef5534845ff8b3a0377658bb1d"
+      },
+      "ranks1-threads4/L24/rng-trace-rank-0.txt": {
+        "u32": 722619,
+        "real2": 96,
+        "words": 722715,
+        "seed": 1,
+        "stream_sha256": "2cfce53998838b49b8fe1e31f7e0589353e9e84c8e89ef663cfa2d0653854cfe",
+        "record_sha256": "c32fbb13b6fd642b23b958497bce9910e755d9faa8e8995a3fd5e543cd130836"
+      },
+      "ranks1-threads4/L32/rng-trace-rank-0.txt": {
+        "u32": 965108,
+        "real2": 128,
+        "words": 965236,
+        "seed": 1,
+        "stream_sha256": "6d96a6b3a0dfcbacfa2167d154cf076aa9841e37375145cdda527d39db3b7eac",
+        "record_sha256": "8887c3ed791502ebb52eef0df61428d1dc3239442987c0b479dba64975c217c9"
+      },
+      "ranks2-threads2/L16/rng-trace-rank-0.txt": {
+        "u32": 241828,
+        "real2": 64,
+        "words": 241892,
+        "seed": 1,
+        "stream_sha256": "21ad3551d23c45dc8a9be84afd78ae021db0059848d5da1ad962abe0b46447d4",
+        "record_sha256": "605b892949e6e9f85d32d4afdff58b0844655a5dc0ba47cb0c503040989a9bd0"
+      },
+      "ranks2-threads2/L16/rng-trace-rank-1.txt": {
+        "u32": 242630,
+        "real2": 64,
+        "words": 242694,
+        "seed": 2,
+        "stream_sha256": "d527c1f9d7bdc053a56241d5e6a0ca72aa48eb529824a9d0b34dd55a099fde10",
+        "record_sha256": "79b5fd24af285670c42e909464da902fc62a79b00433996a8960768708fe4f98"
+      },
+      "ranks2-threads2/L24/rng-trace-rank-0.txt": {
+        "u32": 363881,
+        "real2": 96,
+        "words": 363977,
+        "seed": 1,
+        "stream_sha256": "062e92c6488100072fe65fd65f1cea3250d71fb7104b6b781bf73d198ba6efc9",
+        "record_sha256": "5a36c9c6e31a657f47dff391bb5a59cd5e5606547c07dfb18e322d32909d87e2"
+      },
+      "ranks2-threads2/L24/rng-trace-rank-1.txt": {
+        "u32": 362917,
+        "real2": 96,
+        "words": 363013,
+        "seed": 2,
+        "stream_sha256": "554fe678e951751abe23f070f670650f0cc35aecd08f48c02e1a3529eb0abce4",
+        "record_sha256": "d6202cfe98cd594a0b8b3f9e34fd2b06a5fe976e6b8452eb57baaa114658d8d4"
+      },
+      "ranks2-threads2/L32/rng-trace-rank-0.txt": {
+        "u32": 484472,
+        "real2": 128,
+        "words": 484600,
+        "seed": 1,
+        "stream_sha256": "4592bbc1c5b1f2a5fe78d252f4f55869b3694b7e4a39b2755753efaf9cee1ed1",
+        "record_sha256": "d81c9abdff0cf741a7ace6840310b5201a7d9f14f30e16f3f8ef6996e7f5e6ab"
+      },
+      "ranks2-threads2/L32/rng-trace-rank-1.txt": {
+        "u32": 484789,
+        "real2": 128,
+        "words": 484917,
+        "seed": 2,
+        "stream_sha256": "b5ea2ad34c7b42ec2c4adf95f0a5cdf5247298217fcd6dc06b8884393428fa77",
+        "record_sha256": "e52513377f7e6fc8d43813bdd9d0f9ef47184982ea9409081d46b30924fa5a5b"
+      },
+      "ranks4-threads1/L16/rng-trace-rank-0.txt": {
+        "u32": 122091,
+        "real2": 64,
+        "words": 122155,
+        "seed": 1,
+        "stream_sha256": "1dff464fcab14b1c40b672d42624094f3bfc6c1316aa76228f2909b5d06deac1",
+        "record_sha256": "e2896d3887e4eab35b92b9c7a6c8effd540438701bd2732f3ad4b044c03d672f"
+      },
+      "ranks4-threads1/L16/rng-trace-rank-1.txt": {
+        "u32": 122552,
+        "real2": 64,
+        "words": 122616,
+        "seed": 2,
+        "stream_sha256": "b306d47dd54c3303b27a861d74dd70a7dbd26363f32bb135c9272ac06bda00c9",
+        "record_sha256": "cf816d1390192d8e9f7daab9aff5225d6b28daf23fe25d852d7bafc78faa8917"
+      },
+      "ranks4-threads1/L16/rng-trace-rank-2.txt": {
+        "u32": 122440,
+        "real2": 64,
+        "words": 122504,
+        "seed": 3,
+        "stream_sha256": "7264a8f436c95872e0900ad23f338357561a1b60ff61dc5e898ba0db243d1c60",
+        "record_sha256": "eb58ae03004e95291acaf71ed68f9b0e9b7af18fb95b19d8c1d9871e129ec4b3"
+      },
+      "ranks4-threads1/L16/rng-trace-rank-3.txt": {
+        "u32": 122255,
+        "real2": 64,
+        "words": 122319,
+        "seed": 4,
+        "stream_sha256": "19e012491915a79641276697e3649ea7cf78caf6c52de340a2207e3591072223",
+        "record_sha256": "682033f67ab3b5753f39adb001fe81fe0c1e0b2d831de6a5defb7c4e028b2643"
+      },
+      "ranks4-threads1/L24/rng-trace-rank-0.txt": {
+        "u32": 183513,
+        "real2": 96,
+        "words": 183609,
+        "seed": 1,
+        "stream_sha256": "a8fd82235a04f8d14322075528562fecda03b39e5389f469570917f33bb0e6a0",
+        "record_sha256": "8074d7e98b23d53eb03ca6bdb3e99e2cf3ca30533f6d948bd2b271d79bcd8732"
+      },
+      "ranks4-threads1/L24/rng-trace-rank-1.txt": {
+        "u32": 183767,
+        "real2": 96,
+        "words": 183863,
+        "seed": 2,
+        "stream_sha256": "db4e373c2a8510bcfa9f9f39dc623e9e735e6dbc3c838211f194eac76aa7fa2c",
+        "record_sha256": "186b1b7aa591a1b702369fff21561a2e8d2bc972b6a1f36d089ef735e7166ccf"
+      },
+      "ranks4-threads1/L24/rng-trace-rank-2.txt": {
+        "u32": 182965,
+        "real2": 96,
+        "words": 183061,
+        "seed": 3,
+        "stream_sha256": "b0cb6401e101cd9549447a648a20c2dd08e155f439083643699deb23e804c45b",
+        "record_sha256": "c3d95fde056cc64e6651406f96d2a0e55ad7f5634427ae1728a534489290273e"
+      },
+      "ranks4-threads1/L24/rng-trace-rank-3.txt": {
+        "u32": 183315,
+        "real2": 96,
+        "words": 183411,
+        "seed": 4,
+        "stream_sha256": "3a09fea426237de0239e8b2c8431bcc80f1c4e13f0b513798e7719631ad4f72f",
+        "record_sha256": "6f803436d9eb6ad93fdda9c564d5a0fadaa492e456cdbf770d7dd4929cf4d8d6"
+      },
+      "ranks4-threads1/L32/rng-trace-rank-0.txt": {
+        "u32": 244040,
+        "real2": 128,
+        "words": 244168,
+        "seed": 1,
+        "stream_sha256": "2388b2fa3978ce39a8ab9f022b11f9d81d1531a73e91abdc4d28f42614a951cf",
+        "record_sha256": "136020f64b0d99bc8f98b95d81fd04ebc90325ad939e81a4f30f41173c34b564"
+      },
+      "ranks4-threads1/L32/rng-trace-rank-1.txt": {
+        "u32": 244391,
+        "real2": 128,
+        "words": 244519,
+        "seed": 2,
+        "stream_sha256": "a420e21c995bd72894c0439ea94518ce2cc756f36b3b84e189c3ebe92d798da9",
+        "record_sha256": "c3b6ba90b1d42d41600077701fbab906ef22f23422744fb8d4c7acbc5bb20322"
+      },
+      "ranks4-threads1/L32/rng-trace-rank-2.txt": {
+        "u32": 244209,
+        "real2": 128,
+        "words": 244337,
+        "seed": 3,
+        "stream_sha256": "864db7423fb719cf444903aa2e54a4d6c1a31c7a1066850881780fe294e09881",
+        "record_sha256": "f8c27ed77d7e54e51e912dd1035a36fbcf2a596b4116f7ae94583f23e4f6a2e8"
+      },
+      "ranks4-threads1/L32/rng-trace-rank-3.txt": {
+        "u32": 244754,
+        "real2": 128,
+        "words": 244882,
+        "seed": 4,
+        "stream_sha256": "bbe0dfd6fdc8066508b6b0d8f1125f0f0e90a455259e1af69eeea5cb1a243d0c",
+        "record_sha256": "ade65ce5940a1188c0e384d913b04d71e43dd7b91724afde0431a65dfb3f99bb"
+      }
+    }
+  }
+}

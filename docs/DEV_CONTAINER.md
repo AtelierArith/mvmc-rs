@@ -180,6 +180,48 @@ callback arithmetic therefore remain verified separately from Linux.
 The previous Julia editor project setting `JULIA_PROJECT=@.` is preserved;
 Julia threads default to one for deterministic reference work.
 
+## MPI benchmark environment upkeep (#490 / #491)
+
+`postCreateCommand` now checks genuine 2- and 4-rank MPICH worlds, including
+thread support and a collective integer sum. Recheck an existing container with
+`bash .devcontainer/verify-mpi.sh`; launching four processes alone does not prove
+they share a world. The probe is process-manager health, not a numerical oracle.
+
+Julia's optional depot is under the persistent cache volume at
+`/home/vscode/.cache/mvmc/julia-depot` via `JULIA_DEPOT_PATH`. Install the pinned
+Julia with `bash .devcontainer/install-julia.sh`. The
+[MPI comparison runner](../benchmark/mpi_comparison/README.md) creates isolated
+Julia preferences selecting the same `/opt/mpich` library/launcher as Rust;
+the reference checkout's preferences and manifest are preserved.
+
+For a stale container, use **Dev Containers: Rebuild Container** in VS Code, or:
+
+```sh
+devcontainer up --workspace-folder "$PWD" --remove-existing-container
+devcontainer exec --workspace-folder "$PWD" bash .devcontainer/verify-mpi.sh
+```
+
+Rebuilding preserves the named Cargo/cache volumes. Tool and reference pins
+remain deliberate; the image rebuild refreshes installed Ubuntu packages and
+the `stable` Rust toolchain without changing the numerical reference lock.
+
+The [2026-10-09 Linux MPI report](../benchmark/mpi_comparison/results/linux-x86_64-20261009.md)
+records the rebuilt image, a verified kache hit, 1,583 passing workspace tests,
+and Julia/Rust measurements with genuine four-rank worlds.
+
+Hybrid Julia/Rust benchmarks use `scripts/bench_mpi.py --layout 1x4 2x2 4x1`.
+The runner fixes BLAS at one thread, sets Julia's default compute pool with
+`JULIA_NUM_THREADS=N,0`, and fixes `JULIA_NUM_GC_THREADS=1`. With the pinned
+MPICH `ch4:ucx` build, set `UCX_ERROR_SIGNALS=SIGILL,SIGBUS,SIGFPE` **before
+starting Julia**, as the runner does. UCX loads before MPI.jl's initialization
+hook and otherwise intercepts Julia's threaded-GC safepoint SIGSEGV. This was
+reproduced with an ordinary threaded allocation/GC probe and resolved by the
+startup environment; the MPI provider and reference lock stay the same.
+See [MPI.jl's documented signal interaction](https://juliaparallel.org/MPI.jl/v0.13/knownissues.html).
+Configured computation threads alone are insufficient evidence: Rust's work
+gates can keep these small inputs serial. The benchmark records actual kernel
+workers and separately supports an explicit item threshold for pooled runs.
+
 ## Explicit MPI gates (#392)
 
 The `#[ignore]`d MPI tests are invisible to ordinary CI. Run all of them (2 and 4
@@ -187,3 +229,5 @@ ranks, every parameter cell they need, plus the `mvmc-cli` MPI tests) inside the
 container with `scripts/run_explicit_mpi_gates.sh /tmp/new-scratch-dir`; every line
 must end in `rc=0`. Run it after changing validation, initialization, run-log output
 files or the grouped (`NSplitSize`) paths.
+
+2026-10-10 hybrid measurements and Julia optimization: [report](../benchmark/mpi_comparison/results/linux-x86_64-hybrid-20261010.md).

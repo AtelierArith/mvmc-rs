@@ -39,6 +39,10 @@ flate2 = "1"
 serde_json = "1"
 sha2 = "0.10"
 
+[[example]]
+name = "mpi_benchmark"
+required-features = ["mpi"]
+
 # Production Pfaffian/inverse and SR kernels use the BLAS/LAPACK backend,
 # matching the pure Julia implementation's LinearAlgebra calls. Scalar
 # Pfaffian references remain available in the standalone pfapack crate.

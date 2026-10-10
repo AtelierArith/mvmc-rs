@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-09",
+  "platform": "Linux x86_64",
+  "container": "Image=sha256:803cdee63c3bea8d2a9604295eeb5a18352b4eb8519286b3ffdb4276458c33c4 CpuQuota=0 NanoCpus=0 Memory=0",
+  "source": "git rev-parse HEAD\n72ca4e99e6b5c0e24b653a1b6176dea7c9540d48\n",
+  "references": "git submodule status --recursive\n 8d815db0eec0ba12dea88aa9edb3d5f74d7b5ccd extern/Julia-mVMC (remotes/origin/fix/normal-interall-indices-3-g8d815db)\n 9161cda40d6f69370b4104db865805de947686d9 extern/Julia-mVMC/PfaPack.jl (v0.1.0-2-g9161cda)\n 1526553009f318ae78338151460fda78beadddc2 extern/Julia-mVMC/SFMT.jl (v0.1.0)\n 0dcf52c15caec63516d0703f36bfc8a4bc0e58d0 extern/PfaPack.jl (v0.1.0)\n d73d06bd529d3b2573f38eb5817c4a5f52971006 extern/mVMC-1.3.0 (v1.3.0)\n 6fa4ef1f6809001a24b6501bd08f988bdc8cb7c4 extern/mVMC-1.3.0/src/StdFace (v0.3-81-g6fa4ef1)\n a32257eeab2e9946e71546a05a1847a39341ec6b extern/mVMC-1.3.0/src/blis (0.7.0-196-ga32257ee)\n ebaa11b722dbb5f1ddc62da607592d2e301c0c4a extern/mVMC-1.3.0/src/pfapack (remotes/origin/gemmt)\n",
+  "rust": "rustc -Vv\nrustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+  "mpi": "/opt/mpich/bin/mpichversion\nMPICH Version:      4.2.0\nMPICH Release date: Fri Feb  9 12:29:21 CST 2024\nMPICH ABI:          16:0:4\nMPICH Device:       ch4:ucx\nMPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix\nMPICH CC:           gcc    -O2\nMPICH CXX:          g++   -O2\nMPICH F77:          gfortran   -O2\nMPICH FC:           gfortran   -O2\nMPICH features:     threadcomm\n\n",
+  "julia_and_blas": "/home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia --project=/workspaces/mvmc-rs/target/bench/mpi-total-20261009/julia-project --startup-file=no -e 'using MPI, LinearAlgebra, Libdl; BLAS.set_num_threads(1); println(\"Julia: \", VERSION); println(\"MPI: \", MPI.Get_library_version()); println(\"BLAS: \", BLAS.get_config()); println(\"BLAS threads: \", BLAS.get_num_threads()); library = first(BLAS.get_config().loaded_libs); println(\"BLAS version: \", unsafe_string(ccall(Libdl.dlsym(library.handle, Symbol(\"openblas_get_config\", library.suffix)), Cstring, ())))'\nJulia: 1.13.1\nMPI: MPICH Version:      4.2.0\nMPICH Release date: Fri Feb  9 12:29:21 CST 2024\nMPICH ABI:          16:0:4\nMPICH Device:       ch4:ucx\nMPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix\nMPICH CC:           gcc    -O2\nMPICH CXX:          g++   -O2\nMPICH F77:          gfortran   -O2\nMPICH FC:           gfortran   -O2\nMPICH features:     threadcomm\n\nBLAS: LBTConfig([ILP64] libopenblas64_.so)\nBLAS threads: 1\nBLAS version: OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Cooperlake MAX_THREADS=512\n",
+  "rust_linkage": "ldd /home/vscode/.cache/mvmc/target/linux-x86_64/release/examples/mpi_benchmark\n\tlinux-vdso.so.1 (0x00007fc602aa3000)\n\tlibopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007fc5fdc20000)\n\tlibmpi.so.12 => /opt/mpich/lib/libmpi.so.12 (0x00007fc5fb2cc000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fc602a69000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fc5fb1e3000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fc5fafd1000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fc602aa5000)\n\tlibgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x00007fc5facb3000)\n\tlibucp.so.0 => /lib/x86_64-linux-gnu/libucp.so.0 (0x00007fc5fab50000)\n\tlibucs.so.0 => /lib/x86_64-linux-gnu/libucs.so.0 (0x00007fc5faaea000)\n\tlibuct.so.0 => /lib/x86_64-linux-gnu/libuct.so.0 (0x00007fc5faaa4000)\n\tlibucm.so.0 => /lib/x86_64-linux-gnu/libucm.so.0 (0x00007fc5faa87000)\n",
+  "julia_native_linkage": "ldd /workspaces/mvmc-rs/target/bench/mpi-total-20261009/julia-project/PfaPack.jl/deps/libltl2inv.so\n\tlinux-vdso.so.1 (0x00007cf3d9fea000)\n\tlibblas.so.3 => /lib/x86_64-linux-gnu/libblas.so.3 (0x00007cf3d9f63000)\n\tliblapack.so.3 => /lib/x86_64-linux-gnu/liblapack.so.3 (0x00007cf3d98e6000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007cf3d98b8000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007cf3d96a6000)\n\tlibopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007cf3d72c8000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007cf3d71dd000)\n\tlibgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x00007cf3d6ebf000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007cf3d9fec000)\n",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "verified_shared_artifact_hashes": {
+    "/release/examples/mpi_benchmark": "e2bc5462170b5416656752f82213004bb4e5fb99a3253b75f2bae2a53760883a",
+    "/worker.jl": "7220b6ff911937b2db65a678f15199941cebb71cbb5046f6f8a1f7d5a01c059e",
+    "/mpi_benchmark.rs": "8303c5eef15318d8ca1437f88206228033aa58f979e5017381387bf9dfebc75d",
+    "/Manifest-v1.13.toml": "09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc",
+    "/libltl2inv.so": "081cf7e7a0eb99b05719195b4e5ce7739894893fe5a14cb3fa7c69264bc2e994",
+    "/libmpi.so": "638c51116955894e0a8fd91b3f7091246ad3155c37141780958e39f5e102da11",
+    "/mpiexec": "cafded108741c4ae9cbc20c79880b3edac7926ae5385e18b3ab2c853919fd6fa",
+    "/mpicc": "7b7ba7fede64d9a1987895f424e86ef05fc532fc47c1d9d6da9e0d62988b7ec3"
+  },
+  "rank1_baseline": "total-20261009.csv rows with ranks=1, reused unchanged in per-rank-20261009.csv",
+  "runs": {
+    "total": {
+      "metadata": {
+        "arguments": {
+          "output": "target/bench/mpi-total-20261009",
+          "model": [
+            16,
+            24,
+            32
+          ],
+          "ranks": [
+            1,
+            4
+          ],
+          "steps": 300,
+          "samples": 300,
+          "sample_policy": "total",
+          "reps": 3,
+          "warmups": 1,
+          "timeout": 1800,
+          "prepare_only": false,
+          "mpi_prefix": "/opt/mpich",
+          "julia_bin": "/home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia"
+        },
+        "environment": {
+          "BLIS_NUM_THREADS": "1",
+          "CARGO_TARGET_DIR": "/home/vscode/.cache/mvmc/target/linux-x86_64",
+          "JULIA_DEPOT_PATH": "/home/vscode/.cache/mvmc/julia-depot",
+          "JULIA_NUM_THREADS": "1",
+          "JULIA_PROJECT": "@.",
+          "KACHE_CONFIG": "/opt/devcontainer/kache.toml",
+          "LD_LIBRARY_PATH": "/opt/mpich/lib:/opt/mpich/lib",
+          "LIBCLANG_PATH": "/usr/lib/llvm-18/lib",
+          "MKL_NUM_THREADS": "1",
+          "MPICC": "/opt/mpich/bin/mpicc",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "RUSTC_WRAPPER": "/opt/devtools/bin/kache",
+          "MVMC_RS_INNER_THREADS": "1",
+          "MVMC_BLAS_PROVIDER": "openblas",
+          "JULIA_MVMC_MPI": "1",
+          "MVMC_RS_SR_BACKEND": "c-order",
+          "MVMC_RS_MEASURE_PF_BACKEND": "c-order"
+        },
+        "utc": "2026-10-09T12:36:57Z"
+      },
+      "hashes": {
+        "/home/vscode/.cache/mvmc/target/linux-x86_64/release/examples/mpi_benchmark": "e2bc5462170b5416656752f82213004bb4e5fb99a3253b75f2bae2a53760883a",
+        "/workspaces/mvmc-rs/benchmark/mpi_comparison/worker.jl": "7220b6ff911937b2db65a678f15199941cebb71cbb5046f6f8a1f7d5a01c059e",
+        "/workspaces/mvmc-rs/crates/mvmc-core/examples/mpi_benchmark.rs": "8303c5eef15318d8ca1437f88206228033aa58f979e5017381387bf9dfebc75d",
+        "/workspaces/mvmc-rs/scripts/bench_mpi.py": "6e13d920d2562bf2eb8ff7f0a5ce2a2ed46f4d2158e9f7616eb36786ddacab2a",
+        "/workspaces/mvmc-rs/target/bench/mpi-total-20261009/julia-project/Manifest-v1.13.toml": "09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc",
+        "/workspaces/mvmc-rs/target/bench/mpi-total-20261009/julia-project/LocalPreferences.toml": "aa08d112885e20430be7fd45eafa44985f07fa937a531fb1c3b0bf1b67c025b3",
+        "/workspaces/mvmc-rs/target/bench/mpi-total-20261009/julia-project/PfaPack.jl/deps/libltl2inv.so": "081cf7e7a0eb99b05719195b4e5ce7739894893fe5a14cb3fa7c69264bc2e994",
+        "/opt/mpich/lib/libmpi.so": "638c51116955894e0a8fd91b3f7091246ad3155c37141780958e39f5e102da11",
+        "/opt/mpich/bin/mpiexec": "cafded108741c4ae9cbc20c79880b3edac7926ae5385e18b3ab2c853919fd6fa",
+        "/opt/mpich/bin/mpicc": "7b7ba7fede64d9a1987895f424e86ef05fc532fc47c1d9d6da9e0d62988b7ec3"
+      }
+    },
+    "per-rank": {
+      "metadata": {
+        "arguments": {
+          "output": "target/bench/mpi-per-rank-20261009",
+          "model": [
+            16,
+            24,
+            32
+          ],
+          "ranks": [
+            4
+          ],
+          "steps": 300,
+          "samples": 300,
+          "sample_policy": "per-rank",
+          "reps": 3,
+          "warmups": 1,
+          "timeout": 1800,
+          "prepare_only": false,
+          "mpi_prefix": "/opt/mpich",
+          "julia_bin": "/home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia"
+        },
+        "environment": {
+          "BLIS_NUM_THREADS": "1",
+          "CARGO_TARGET_DIR": "/home/vscode/.cache/mvmc/target/linux-x86_64",
+          "JULIA_DEPOT_PATH": "/home/vscode/.cache/mvmc/julia-depot",
+          "JULIA_NUM_THREADS": "1",
+          "JULIA_PROJECT": "@.",
+          "KACHE_CONFIG": "/opt/devcontainer/kache.toml",
+          "LD_LIBRARY_PATH": "/opt/mpich/lib:/opt/mpich/lib",
+          "LIBCLANG_PATH": "/usr/lib/llvm-18/lib",
+          "MKL_NUM_THREADS": "1",
+          "MPICC": "/opt/mpich/bin/mpicc",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "RUSTC_WRAPPER": "/opt/devtools/bin/kache",
+          "MVMC_RS_INNER_THREADS": "1",
+          "MVMC_BLAS_PROVIDER": "openblas",
+          "JULIA_MVMC_MPI": "1",
+          "MVMC_RS_SR_BACKEND": "c-order",
+          "MVMC_RS_MEASURE_PF_BACKEND": "c-order"
+        },
+        "utc": "2026-10-09T12:46:06Z"
+      },
+      "hashes": {
+        "/home/vscode/.cache/mvmc/target/linux-x86_64/release/examples/mpi_benchmark": "e2bc5462170b5416656752f82213004bb4e5fb99a3253b75f2bae2a53760883a",
+        "/workspaces/mvmc-rs/benchmark/mpi_comparison/worker.jl": "7220b6ff911937b2db65a678f15199941cebb71cbb5046f6f8a1f7d5a01c059e",
+        "/workspaces/mvmc-rs/crates/mvmc-core/examples/mpi_benchmark.rs": "8303c5eef15318d8ca1437f88206228033aa58f979e5017381387bf9dfebc75d",
+        "/workspaces/mvmc-rs/scripts/bench_mpi.py": "45b4556df5631cb4905e36b6ce09f123a674ac75c9d0734d3bb8f5d154ee15de",
+        "/workspaces/mvmc-rs/target/bench/mpi-per-rank-20261009/julia-project/Manifest-v1.13.toml": "09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc",
+        "/workspaces/mvmc-rs/target/bench/mpi-per-rank-20261009/julia-project/LocalPreferences.toml": "aa08d112885e20430be7fd45eafa44985f07fa937a531fb1c3b0bf1b67c025b3",
+        "/workspaces/mvmc-rs/target/bench/mpi-per-rank-20261009/julia-project/PfaPack.jl/deps/libltl2inv.so": "081cf7e7a0eb99b05719195b4e5ce7739894893fe5a14cb3fa7c69264bc2e994",
+        "/opt/mpich/lib/libmpi.so": "638c51116955894e0a8fd91b3f7091246ad3155c37141780958e39f5e102da11",
+        "/opt/mpich/bin/mpiexec": "cafded108741c4ae9cbc20c79880b3edac7926ae5385e18b3ab2c853919fd6fa",
+        "/opt/mpich/bin/mpicc": "7b7ba7fede64d9a1987895f424e86ef05fc532fc47c1d9d6da9e0d62988b7ec3"
+      }
+    }
+  },
+  "report_generator_sha256": "7f3e04f9bd33d74fac002fae6c26624f5e2e8df8f69eba8facee4a6277d19818",
+  "compiler_versions": {
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "gfortran": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "clang-18": "Ubuntu clang version 18.1.3 (1ubuntu1)"
+  }
+}
