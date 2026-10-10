@@ -1241,6 +1241,8 @@ pub(crate) struct DirectProjectionTables {
 /// avoids allocating four temporary vectors for every local-energy evaluation.
 #[derive(Debug, Default)]
 pub(crate) struct TransferGreenScratch {
+    /// Independent transfer ratios, retained across local-energy evaluations.
+    pub(crate) values: Vec<Complex64>,
     pub(crate) ele_idx: Vec<i64>,
     pub(crate) ele_num: Vec<i64>,
     pub(crate) proj_new: Vec<i64>,

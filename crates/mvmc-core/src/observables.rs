@@ -1768,6 +1768,62 @@ fn calh1_fast_path_available(state: &VmcOptimizationState) -> bool {
         && state.slater_matrix.pf_m_real.len() == state.slater_matrix.pf_m.len()
 }
 
+/// Scratch-free real Green ratio for an independent Transfer term. Uses the
+/// same projection and PfM2/IP operations as the serial fast path; the caller
+/// still folds term contributions in input order.
+fn calh1_real_fast_green(
+    index: usize,
+    ip: f64,
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+    ele_cfg: &[i64],
+    ele_idx: &[i64],
+    ele_num: &[i64],
+) -> f64 {
+    let n_site = data.modpara.nsite as usize;
+    let n_elec = data.modpara.nelec as usize;
+    let term = &state.transfer_cache.terms[index];
+    let (ri, rj) = (term.site1, term.site2);
+    let (spin_create, spin_annihilate) = (term.spin1, term.spin2);
+    let dst = ri + spin_create as usize * n_site;
+    let src = rj + spin_annihilate as usize * n_site;
+    if spin_create == spin_annihilate && ri == rj {
+        return ele_num[src] as f64;
+    }
+    if spin_create != spin_annihilate || ele_num[dst] == 1 || ele_num[src] == 0 || ele_cfg[src] < 0
+    {
+        return 0.0;
+    }
+    let mj = ele_cfg[src] as usize;
+    let msj = mj + spin_annihilate as usize * n_elec;
+    let tables = state
+        .transfer_cache
+        .direct_tables
+        .as_ref()
+        .expect("eligible real transfer");
+    let proj_ratio =
+        calh1_direct_projection_ratio_moved(rj, ri, spin_annihilate as usize, ele_num, tables);
+    let weights = data
+        .qp_weights
+        .as_ref()
+        .map_or(&[][..], |w| w.qp_full_weight.as_slice());
+    let sm = &state.slater_matrix;
+    let new_ip = calculate_new_pf_m2_ip_real_flat(
+        mj,
+        spin_annihilate,
+        (msj, ri as i64),
+        ele_idx,
+        &sm.slater_elm_real,
+        sm.inv_m_real.as_slice(),
+        (2 * n_elec).pow(2) + 1,
+        &sm.pf_m_real,
+        weights,
+        n_site,
+        n_elec,
+    );
+    proj_ratio * new_ip / ip
+}
+
 /// Evaluate Transfer's main-calculation one-body kernel with section timers.
 /// Real mode follows its direct-projection and real-quotient arithmetic.
 pub fn green_func1_timed<const TIMED: bool>(
@@ -3295,8 +3351,29 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             parallel_transfer,
         );
         // Serial real path: Julia's CalH1 fast path (no per-term scratch copies).
-        let fast_transfer = !parallel_transfer && calh1_fast_path_available(state);
-        let parallel_green = if parallel_transfer {
+        let fast_transfer = calh1_fast_path_available(state);
+        if parallel_transfer && fast_transfer {
+            green_scratch
+                .values
+                .resize(state.transfer_cache.terms.len(), Complex64::new(0.0, 0.0));
+            let shared_state = &*state;
+            crate::threading::par_chunks_mut(&mut green_scratch.values, 1, |index, value| {
+                let _entry = observed.enter_item();
+                value[0] = Complex64::new(
+                    calh1_real_fast_green(
+                        index,
+                        ip.re,
+                        data,
+                        shared_state,
+                        ele_cfg,
+                        ele_idx,
+                        ele_num,
+                    ),
+                    0.0,
+                );
+            });
+        }
+        let parallel_green = if parallel_transfer && !fast_transfer {
             let shared_state = &*state;
             let terms = &shared_state.transfer_cache.terms;
             // One scratch per static block, terms evaluated independently and returned in
@@ -3332,7 +3409,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
         } else {
             None
         };
-        if fast_transfer {
+        if fast_transfer && !parallel_transfer {
             let combined = calh1_real_fast(
                 ip.re, data, state, ele_cfg, ele_idx, ele_num, &observed, timer,
             );
@@ -3340,7 +3417,7 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             transfer_energy = combined;
             timer.stop_diag(929, timer.diagnostics.calham1);
         }
-        let generic_terms = if fast_transfer {
+        let generic_terms = if fast_transfer && !parallel_transfer {
             0..0
         } else {
             0..state.transfer_cache.terms.len()
@@ -3353,7 +3430,9 @@ pub fn calculate_local_energy_timed<const TIMED: bool>(
             let spin_annihilate = term.spin2;
             let diag = timer.diagnostics.calham1 && !state.all_complex;
             timer.start_diag(920, diag);
-            let g1 = if let Some(values) = &parallel_green {
+            let g1 = if parallel_transfer && fast_transfer {
+                green_scratch.values[index]
+            } else if let Some(values) = &parallel_green {
                 values[index]
             } else {
                 let _entry = observed.enter_item();
@@ -3963,6 +4042,15 @@ mod tests {
             "fast/generic Green",
         );
         assert_eq!(fast.im, generic.im);
+
+        let independent = calh1_real_fast_green(0, ip.re, &data, &state, &cfg, &idx, &num);
+        crate::numerical_comparison::assert_close(
+            independent,
+            generic.re,
+            64.0 * f64::EPSILON,
+            64.0 * f64::EPSILON,
+            "independent fast/generic Green",
+        );
 
         let energy = calculate_local_energy(ip, &data, &mut state, &idx, &cfg, &num, &counts);
         assert_eq!(energy.re, -data.transfer_terms[0].value.re * generic.re);

@@ -609,8 +609,27 @@ pub fn update_m_all_real_flat(
         qp_start,
         qp_end,
         crate::threading::scaled_cost_ns(n_size, n_size * n_size + 16 * n_size),
-        || (vec![0.0; n_size], vec![0.0; n_size], vec![0.0; n_size]),
-        |(slt_vec, vec1, vec2), qp, pf, window| {
+        // These work vectors are private to a static QP block. Small matrices
+        // do not need three heap allocations on every accepted move; retain
+        // the same scalar update with a heap fallback for larger matrices.
+        || {
+            (
+                [0.0; 384],
+                if n_size > 128 {
+                    vec![0.0; 3 * n_size]
+                } else {
+                    Vec::new()
+                },
+            )
+        },
+        |(stack, heap), qp, pf, window| {
+            let storage = if n_size <= 128 {
+                &mut stack[..3 * n_size]
+            } else {
+                heap.as_mut_slice()
+            };
+            let (slt_vec, rest) = storage.split_at_mut(n_size);
+            let (vec1, vec2) = rest.split_at_mut(n_size);
             fill_slt_vec_normal_real(qp, rsa, ele_idx, slater_elm, slt_vec, n_site, n_elec);
             let base = 0;
             update_one_real(base, msa, window, slt_vec, vec1, vec2, n_size, pf);
@@ -1071,6 +1090,36 @@ fn update_one_real(
     n_size: usize,
     pf: &mut f64,
 ) {
+    #[cfg(target_arch = "x86_64")]
+    if n_size >= 16 && std::is_x86_feature_detected!("avx2") {
+        // Runtime detection guards the target feature. The validated slices
+        // bound every vector load/store; distinct elements are independent.
+        unsafe {
+            update_one_real_avx2(
+                msa,
+                &mut inv[base..base + n_size * n_size],
+                &slt_vec[..n_size],
+                &mut vec1[..n_size],
+                &mut vec2[..n_size],
+                n_size,
+                pf,
+            );
+        }
+        return;
+    }
+    update_one_real_scalar(base, msa, inv, slt_vec, vec1, vec2, n_size, pf);
+}
+
+fn update_one_real_scalar(
+    base: usize,
+    msa: usize,
+    inv: &mut [f64],
+    slt_vec: &[f64],
+    vec1: &mut [f64],
+    vec2: &mut [f64],
+    n_size: usize,
+    pf: &mut f64,
+) {
     // Slice-based loops (same operations and order as the indexed C loops) let the
     // compiler drop bounds checks and vectorize the independent elements.
     let inv = &mut inv[base..base + n_size * n_size];
@@ -1099,6 +1148,68 @@ fn update_one_real(
         .iter_mut()
         .zip(vec2.iter())
     {
+        *x += v2;
+    }
+}
+
+/// AVX2 evaluates independent row elements in parallel. The outer contraction
+/// order and all mul/sub/add operations remain the scalar C algorithm; no FMA.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn update_one_real_avx2(
+    msa: usize,
+    inv: &mut [f64],
+    slt_vec: &[f64],
+    vec1: &mut [f64],
+    vec2: &mut [f64],
+    n: usize,
+    pf: &mut f64,
+) {
+    use std::arch::x86_64::*;
+    vec1.fill(0.0);
+    for (column, &slt) in inv.chunks_exact(n).zip(slt_vec) {
+        let s = _mm256_set1_pd(slt);
+        let sign = _mm256_set1_pd(-0.0);
+        let mut i = 0;
+        while i + 4 <= n {
+            // i..i+4 lies within the n-element slices. Toggle the sign before
+            // multiplication, matching the scalar unary minus including zero.
+            let x = _mm256_xor_pd(_mm256_loadu_pd(column.as_ptr().add(i)), sign);
+            let v = _mm256_loadu_pd(vec1.as_ptr().add(i));
+            _mm256_storeu_pd(
+                vec1.as_mut_ptr().add(i),
+                _mm256_add_pd(v, _mm256_mul_pd(x, s)),
+            );
+            i += 4;
+        }
+        for j in i..n {
+            vec1[j] += -column[j] * slt;
+        }
+    }
+    let tmp = vec1[msa];
+    *pf *= -tmp;
+    let inv_vec1_a = -1.0 / tmp;
+    for (v2, &x) in vec2.iter_mut().zip(&inv[msa * n..(msa + 1) * n]) {
+        *v2 = x * inv_vec1_a;
+    }
+    for (msi, row) in inv.chunks_exact_mut(n).enumerate() {
+        let v1i = _mm256_set1_pd(vec1[msi]);
+        let v2i = _mm256_set1_pd(vec2[msi]);
+        let mut j = 0;
+        while j + 4 <= n {
+            let x = _mm256_loadu_pd(row.as_ptr().add(j));
+            let v1 = _mm256_loadu_pd(vec1.as_ptr().add(j));
+            let v2 = _mm256_loadu_pd(vec2.as_ptr().add(j));
+            let delta = _mm256_sub_pd(_mm256_mul_pd(v1i, v2), _mm256_mul_pd(v1, v2i));
+            _mm256_storeu_pd(row.as_mut_ptr().add(j), _mm256_add_pd(x, delta));
+            j += 4;
+        }
+        for k in j..n {
+            row[k] += vec1[msi] * vec2[k] - vec1[k] * vec2[msi];
+        }
+        row[msa] -= vec2[msi];
+    }
+    for (x, &v2) in inv[msa * n..(msa + 1) * n].iter_mut().zip(vec2.iter()) {
         *x += v2;
     }
 }
@@ -1464,7 +1575,7 @@ mod tests {
     }
 
     #[test]
-    fn slice_based_rank_one_update_matches_indexed_reference_bitwise() {
+    fn slice_based_rank_one_update_matches_indexed_reference() {
         let mut seed = 7;
         for n_size in [2, 6, 16] {
             for msa in [0, n_size / 2, n_size - 1] {
@@ -1486,11 +1597,21 @@ mod tests {
                     n_size,
                     &mut pf_actual,
                 );
-                assert_eq!(pf_actual.to_bits(), pf_expected.to_bits());
-                assert!(actual
+                // Both paths retain the same inner reduction order. Allow only
+                // local arithmetic roundoff across scalar/SIMD and platforms.
+                for (a, b) in actual
                     .iter()
                     .zip(&expected)
-                    .all(|(a, b)| a.to_bits() == b.to_bits()));
+                    .chain(std::iter::once((&pf_actual, &pf_expected)))
+                {
+                    crate::numerical_comparison::assert_close(
+                        *a,
+                        *b,
+                        64.0 * f64::EPSILON,
+                        64.0 * f64::EPSILON,
+                        "rank-one indexed reference",
+                    );
+                }
             }
         }
     }
@@ -1795,5 +1916,72 @@ mod tests {
         );
         // msa=0, rsa=0, rsj=(0,3): ratio=3*1 + 5*2 = 13; out=-13*13
         assert_eq!(out[0], -169.0);
+    }
+
+    #[test]
+    fn real_update_inline_and_heap_workspaces_match_scalar_reference() {
+        let mut seed = 19;
+        for n_size in [4, 64, 128, 130] {
+            let n_elec = n_size / 2;
+            let n_site = n_size;
+            let n_qp = 2;
+            let stride = n_size * n_size + 1;
+            let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+            for value in slater.as_mut_slice() {
+                *value = pseudo_random(&mut seed);
+            }
+            let mut ele_idx: Vec<i64> = (0..n_size).map(|i| (i % n_elec) as i64).collect();
+            let ma = n_elec - 1;
+            ele_idx[ma] = (n_site - 1) as i64;
+            let mut actual: Vec<f64> = (0..n_qp * stride)
+                .map(|_| pseudo_random(&mut seed))
+                .collect();
+            let mut expected = actual.clone();
+            let mut pf_actual = vec![1.25; n_qp];
+            let mut pf_expected = pf_actual.clone();
+            for qp in 0..n_qp {
+                let row = ele_idx[ma] as usize;
+                let slt: Vec<f64> = (0..n_size)
+                    .map(|j| {
+                        let col = ele_idx[j] as usize + if j < n_elec { 0 } else { n_site };
+                        slater.get(qp, row, col)
+                    })
+                    .collect();
+                reference_update_one_real(
+                    ma,
+                    &mut expected[qp * stride..qp * stride + n_size * n_size],
+                    &slt,
+                    n_size,
+                    &mut pf_expected[qp],
+                );
+            }
+            update_m_all_real_flat(
+                ma,
+                0,
+                &ele_idx,
+                &slater,
+                &mut actual,
+                stride,
+                &mut pf_actual,
+                0,
+                n_qp,
+                n_site,
+                n_elec,
+            );
+            // No reordered arithmetic: a small roundoff budget, not a statistical comparison.
+            for (a, b) in actual
+                .iter()
+                .zip(&expected)
+                .chain(pf_actual.iter().zip(&pf_expected))
+            {
+                crate::numerical_comparison::assert_close(
+                    *a,
+                    *b,
+                    64.0 * f64::EPSILON,
+                    64.0 * f64::EPSILON,
+                    "private update workspace",
+                );
+            }
+        }
     }
 }

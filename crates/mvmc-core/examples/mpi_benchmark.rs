@@ -85,6 +85,20 @@ fn benchmark(world: &MpiContext) -> Result<(), String> {
             }
         }
     }
+    let sites = mvmc_core::threading::dispatch_profile();
+    if !sites.is_empty() {
+        use std::io::Write;
+        let path = PathBuf::from(&args[4]).join(format!("dispatch-rank-{}.tsv", world.rank()));
+        let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        for site in sites {
+            writeln!(
+                file,
+                "{}\t{}\t{}\t{}\t{}",
+                site.site, site.parallel, site.calls, site.items, site.nanos
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 

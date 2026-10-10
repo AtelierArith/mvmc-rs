@@ -1,0 +1,16 @@
+{
+  "diagnostic_only": true,
+  "profile": "test-fast",
+  "binary_sha256": {
+    "baseline": "f758e6ef9db3258cd0ca7a96a39db43fb595a55230cac580b2ca1af7abdf5d10",
+    "candidate": "aa851c5f5eec9a0f234c6bbf8c071a2513a1f025903c49307e747b4b98fefb68"
+  },
+  "environment": {
+    "MVMC_RS_INNER_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "BLIS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "LD_LIBRARY_PATH": "/opt/mpich/lib",
+    "UCX_MEMTYPE_CACHE": "no"
+  }
+}

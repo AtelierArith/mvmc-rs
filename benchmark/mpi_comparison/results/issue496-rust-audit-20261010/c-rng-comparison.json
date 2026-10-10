@@ -1,0 +1,130 @@
+[
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 0,
+    "rng_state_matches": true,
+    "rng_index": 184,
+    "rust_counted_words": 244168
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 1,
+    "rng_state_matches": true,
+    "rng_index": 535,
+    "rust_counted_words": 244519
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 2,
+    "rng_state_matches": true,
+    "rng_index": 353,
+    "rust_counted_words": 244337
+  },
+  {
+    "sites": 32,
+    "steps": 20,
+    "rank": 3,
+    "rng_state_matches": true,
+    "rng_index": 274,
+    "rust_counted_words": 244882
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 0,
+    "rng_state_matches": true,
+    "rng_index": 83,
+    "rust_counted_words": 3649235
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 1,
+    "rng_state_matches": true,
+    "rng_index": 286,
+    "rust_counted_words": 3649438
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 2,
+    "rng_state_matches": true,
+    "rng_index": 588,
+    "rust_counted_words": 3650364
+  },
+  {
+    "sites": 32,
+    "steps": 300,
+    "rank": 3,
+    "rng_state_matches": true,
+    "rng_index": 154,
+    "rust_counted_words": 3649930
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 0,
+    "rng_state_matches": true,
+    "rng_index": 149,
+    "rust_counted_words": 489365
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 1,
+    "rng_state_matches": true,
+    "rng_index": 468,
+    "rust_counted_words": 489684
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 2,
+    "rng_state_matches": true,
+    "rng_index": 389,
+    "rust_counted_words": 490229
+  },
+  {
+    "sites": 64,
+    "steps": 20,
+    "rank": 3,
+    "rng_state_matches": true,
+    "rng_index": 397,
+    "rust_counted_words": 490237
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 0,
+    "rng_state_matches": true,
+    "rng_index": 384,
+    "rust_counted_words": 7296192
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 1,
+    "rng_state_matches": true,
+    "rng_index": 493,
+    "rust_counted_words": 7298797
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 2,
+    "rng_state_matches": true,
+    "rng_index": 209,
+    "rust_counted_words": 7300385
+  },
+  {
+    "sites": 64,
+    "steps": 300,
+    "rank": 3,
+    "rng_state_matches": true,
+    "rng_index": 55,
+    "rust_counted_words": 7300231
+  }
+]

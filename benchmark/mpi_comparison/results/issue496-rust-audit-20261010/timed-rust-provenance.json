@@ -1,0 +1,9 @@
+{
+  "binary_sha256": "89bc67682cf690406d2fac63ccb6deabaa37ac580187b10f3d72591666d78d26",
+  "sources": {
+    "crates/mvmc-core/src/observables.rs": "252719740f118942e5369e0deca4ab8bfff18eb9f6c5f147437f809396903303",
+    "crates/mvmc-core/src/state.rs": "fff0e2388a5f88967e0d999e00a65fe46548c36b1ca2d623fb411eccc700aee0",
+    "crates/mvmc-core/src/sampling/updates.rs": "5de713be8d42366e16d6a35bf837c56432a6dca92a9b2a6aab8c1fe38a108810",
+    "crates/mvmc-core/examples/mpi_benchmark.rs": "807c992716ce97a56c4d275af8283306ffab8660df23265113d478a3f1a0aa16"
+  }
+}
