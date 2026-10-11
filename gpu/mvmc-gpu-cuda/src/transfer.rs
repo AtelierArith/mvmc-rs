@@ -209,6 +209,12 @@ impl TransferEvent {
     pub fn elapsed_ms(&self, later: &TransferEvent) -> Result<f32, DriverError> {
         self.0.elapsed_ms(&later.0)
     }
+
+    /// Re-record this event at the current end of `stream`. CUDA keeps the work captured by
+    /// earlier `wait_event` calls, so reusing one event across rounds does not disturb them.
+    pub fn record_on(&self, stream: &CudaStream) -> Result<(), DriverError> {
+        self.0.record(stream)
+    }
 }
 
 /// An in-flight copy. Borrows the host buffer until the copy completed; dropping waits.
@@ -317,6 +323,41 @@ impl TransferStream {
         let src = std::slice::from_raw_parts(host, bytes);
         result::memcpy_htod_async(dev, src, self.stream.cu_stream())?;
         self.pending()
+    }
+
+    /// Raw host-to-device copy without a completion event.
+    ///
+    /// # Safety
+    ///
+    /// As [`upload_raw`](Self::upload_raw). The caller must order any reuse of `host` after the
+    /// copy by other means, for example a later event recorded on the same in-order stream.
+    pub unsafe fn upload_raw_noevent(
+        &self,
+        host: *const u8,
+        dev: sys::CUdeviceptr,
+        bytes: usize,
+    ) -> Result<(), DriverError> {
+        self.ctx.bind_to_thread()?;
+        let src = std::slice::from_raw_parts(host, bytes);
+        result::memcpy_htod_async(dev, src, self.stream.cu_stream())
+    }
+
+    /// Raw device-to-host copy recorded into the reusable `event` (recorded after the copy).
+    ///
+    /// # Safety
+    ///
+    /// As [`download_raw`](Self::download_raw), with `event` a live (non-null) event.
+    pub unsafe fn download_raw_into(
+        &self,
+        dev: sys::CUdeviceptr,
+        host: *mut u8,
+        bytes: usize,
+        event: &TransferEvent,
+    ) -> Result<(), DriverError> {
+        self.ctx.bind_to_thread()?;
+        let dst = std::slice::from_raw_parts_mut(host, bytes);
+        result::memcpy_dtoh_async(dst, dev, self.stream.cu_stream())?;
+        event.record_on(&self.stream)
     }
 
     /// Raw device-to-host copy.

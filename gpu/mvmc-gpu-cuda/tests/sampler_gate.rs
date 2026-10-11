@@ -218,7 +218,10 @@ fn check_case(c: &Case, walkers: usize) {
             &walker.state.slater_matrix.pf_m_real,
             &reference[w].1.state.slater_matrix.pf_m_real,
         );
-        assert!(host_pf_err < 1e-8, "walker {w}: host pf differs by {host_pf_err}");
+        assert!(
+            host_pf_err < 1e-8,
+            "walker {w}: host pf differs by {host_pf_err}"
+        );
     }
     // resident inverses vs the CPU tables (mVMC convention); includes accepted-move updates
     let n_qp = ws[0].state.slater_matrix.slater_elm_real.n_qp_full();

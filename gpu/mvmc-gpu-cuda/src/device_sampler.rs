@@ -27,7 +27,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use cudarc::driver::{
     CudaContext, CudaEvent, CudaFunction, CudaSlice, DevicePtr, DevicePtrMut, LaunchConfig,
@@ -70,7 +70,9 @@ pub struct PinnedTransfer {
     pool: PinnedPool,
     up: Option<PinnedBuf>,
     down: Option<PinnedBuf>,
+    /// Reusable completion event of this lane's downloads (created once, re-recorded per copy).
     event: Option<TransferEvent>,
+    down_active: bool,
     down_n: usize,
 }
 
@@ -83,6 +85,7 @@ impl PinnedTransfer {
             up: None,
             down: None,
             event: None,
+            down_active: false,
             down_n: 0,
         }
     }
@@ -113,13 +116,13 @@ impl TransferPath for PinnedTransfer {
         // lane, which happens after the kernels that depend on this copy and the download behind
         // them completed (the lane's stream is in-order and its owner waits for the download
         // before the next round); `dev` holds at least `bytes` (callers size the staging buffer).
-        let pending = unsafe {
+        // No completion event is recorded: nothing waits on the upload, and the download event of
+        // the same in-order stream (recorded after the kernels) already implies it finished.
+        unsafe {
             self.ts
-                .upload_raw(host.as_f64().as_ptr().cast::<u8>(), ptr, bytes)
+                .upload_raw_noevent(host.as_f64().as_ptr().cast::<u8>(), ptr, bytes)
         }
         .map_err(cu)?;
-        // SAFETY: see above; the event is dropped without being waited for.
-        drop(unsafe { pending.detach() });
         Ok(())
     }
 
@@ -134,28 +137,48 @@ impl TransferPath for PinnedTransfer {
         }
         let host = self.down.as_mut().expect("pinned download buffer");
         let (ptr, _g) = dev.device_ptr(self.ts.stream());
-        // SAFETY: `host` is pinned, exclusively ours until `download_finish` observed the event.
-        let pending = unsafe {
-            self.ts
-                .download_raw(ptr, host.as_f64_mut().as_mut_ptr().cast(), bytes)
+        match self.event.take() {
+            // SAFETY: `host` is pinned, exclusively ours until `download_finish` observed the
+            // re-recorded event; the event is recorded after this copy on the same stream.
+            Some(ev) => {
+                unsafe {
+                    self.ts.download_raw_into(
+                        ptr,
+                        host.as_f64_mut().as_mut_ptr().cast(),
+                        bytes,
+                        &ev,
+                    )
+                }
+                .map_err(cu)?;
+                self.event = Some(ev);
+            }
+            None => {
+                // SAFETY: `host` is pinned, exclusively ours until `download_finish` observed the
+                // event; the returned event is stored and waited for before the buffer is read.
+                let pending = unsafe {
+                    self.ts
+                        .download_raw(ptr, host.as_f64_mut().as_mut_ptr().cast(), bytes)
+                }
+                .map_err(cu)?;
+                self.event = Some(unsafe { pending.detach() });
+            }
         }
-        .map_err(cu)?;
-        // SAFETY: the returned event is stored and waited for before the buffer is read.
-        self.event = Some(unsafe { pending.detach() });
+        self.down_active = true;
         self.down_n = n;
         Ok(())
     }
 
     fn download_finish(&mut self, block: bool, out: &mut Vec<f64>) -> Result<bool, String> {
-        let Some(ev) = self.event.as_ref() else {
+        if !self.down_active {
             return Err("no download in flight".to_string());
-        };
+        }
+        let ev = self.event.as_ref().expect("download event");
         if block {
             ev.wait_host().map_err(cu)?;
         } else if !ev.is_complete() {
             return Ok(false);
         }
-        self.event = None;
+        self.down_active = false;
         let host = self.down.as_ref().expect("pinned download buffer");
         out.clear();
         out.extend_from_slice(&host.as_f64()[..self.down_n]);
@@ -286,6 +309,12 @@ struct SlowInflight {
 /// Number of concurrent slow lanes (recompute batches in flight).
 pub const SLOW_LANES: usize = 8;
 
+/// Minimum spacing of the non-blocking slow-lane completion queries. The service loop polls
+/// `poll_slow(false)` on every spin iteration; querying the device events each time cost millions of
+/// `cuEventQuery` calls per run. A completed slow batch only holds back the walkers that wait on it,
+/// and the blocking reap serves all of them at once, so the non-blocking check can be paced.
+const SLOW_QUERY_INTERVAL: Duration = Duration::from_micros(100);
+
 struct SlowLane<T: TransferPath> {
     lane: Lane<T>,
     inflight: Option<SlowInflight>,
@@ -303,6 +332,11 @@ pub struct CudaSamplerService<T: TransferPath> {
     slater: HashMap<u64, CudaSlice<f64>>,
     completed: VecDeque<SlowReply>,
     fast_out: Vec<f64>,
+    /// Reusable fast-lane event: re-recorded after each round's accepted moves so a slow lane can
+    /// wait (on the device) for them, and used as the proposal-phase start for the device timings.
+    accept_ev: CudaEvent,
+    /// Earliest time of the next non-blocking slow-lane device query (`poll_slow(false)`).
+    next_slow_query: Instant,
     /// Phase timings of all rounds so far.
     pub timings: ServiceTimings,
     /// Record CUDA events around the phases for the device-time fields of [`ServiceTimings`]
@@ -389,6 +423,9 @@ impl<T: TransferPath> CudaSamplerService<T> {
                 out: Vec::new(),
             });
         }
+        let accept_ev = ctx
+            .new_event(Some(cudarc::driver::sys::CUevent_flags::CU_EVENT_DEFAULT))
+            .map_err(cu)?;
         Ok(Self {
             ctx,
             funcs,
@@ -399,6 +436,8 @@ impl<T: TransferPath> CudaSamplerService<T> {
             slater: HashMap::new(),
             completed: VecDeque::new(),
             fast_out: Vec::new(),
+            accept_ev,
+            next_slow_query: Instant::now(),
             timings: ServiceTimings::default(),
             profile: false,
         })
@@ -746,11 +785,13 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             }
             .map_err(cu)?;
         }
-        let e_acc = if self.profile || slow.walkers() > 0 {
-            Some(record(&self.ctx, &self.fast.ts)?)
-        } else {
-            None
-        };
+        // Re-record the fast lane's reusable event after the accepted moves when a slow lane must
+        // wait (on the device) for them, or when the device timings are enabled (it is also the
+        // proposal-phase start). Re-recording it later does not change already-enqueued waits.
+        let e_acc = self.profile || slow.walkers() > 0;
+        if e_acc {
+            self.accept_ev.record(self.fast.ts.stream()).map_err(cu)?;
+        }
         self.timings.launch_s += t_launch.elapsed().as_secs_f64();
 
         // ---- slow lane: begin / recompute, asynchronous ---------------------------------------
@@ -809,8 +850,13 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
 
             let t_up = Instant::now();
             // the slow lane waits (on the device) for this round's accepted moves
-            if let Some(e) = e_acc.as_ref() {
-                self.slows[li].lane.ts.stream().wait(e).map_err(cu)?;
+            if e_acc {
+                self.slows[li]
+                    .lane
+                    .ts
+                    .stream()
+                    .wait(&self.accept_ev)
+                    .map_err(cu)?;
             }
             if ptrs_dirty {
                 let res = self.res.as_mut().expect("res");
@@ -940,9 +986,9 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             self.timings.wait_s += t_wait.elapsed().as_secs_f64();
             pf_out = out[..np * nq].to_vec();
             self.fast_out = out;
-            if let (Some(a), Some(b), Some(c)) = (&e_start, &e_acc, &e_end) {
-                self.timings.dev_accept_s += ms(a, b);
-                self.timings.dev_propose_s += ms(b, c);
+            if let (Some(a), Some(c)) = (&e_start, &e_end) {
+                self.timings.dev_accept_s += ms(a, &self.accept_ev);
+                self.timings.dev_propose_s += ms(&self.accept_ev, c);
             }
         }
         self.timings.passes += 1;
@@ -950,6 +996,15 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
     }
 
     fn poll_slow(&mut self, block: bool) -> Result<Vec<SlowReply>, String> {
+        // The caller polls on every spin iteration; query the device events at most once per
+        // `SLOW_QUERY_INTERVAL`. The blocking path always queries.
+        if !block {
+            let now = Instant::now();
+            if now < self.next_slow_query {
+                return Ok(Vec::new());
+            }
+            self.next_slow_query = now + SLOW_QUERY_INTERVAL;
+        }
         let mut any_inflight = false;
         let mut progressed = false;
         for i in 0..self.slows.len() {
