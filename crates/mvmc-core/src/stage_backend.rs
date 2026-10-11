@@ -42,6 +42,7 @@ use num_complex::Complex64;
 use pfapack::{dsktf2, utu2inv_real, utu2pfa_real, PivotIndex1Based, SqMat};
 
 use crate::c_timer::{CTimer, TimerEnv, CTIMER_N};
+use crate::measurement_backend::TenferroMeasurement;
 use crate::slater_derivative::SlaterDerivativeScratch;
 use crate::sr_backend::{COrderSr, SrStages, TenferroSr, TenferroStats};
 use crate::state::VmcOptimizationState;
@@ -523,14 +524,26 @@ impl<'a> StageBackend<'a> {
         .with_measurement(Box::new(COrderMeasurement::default()))
     }
 
-    /// tenferro CPU (`cpu-faer`): SR stages through eager ops; the Pfaffian stage is
-    /// unsupported by tenferro 0.7.1.
+    /// tenferro CPU (`cpu-faer`): SR stages through eager ops and the real, non-FSZ
+    /// measurement stage (local energy + Slater derivative) through tensor contractions;
+    /// the Pfaffian stage is unsupported by tenferro 0.7.1.
     pub fn tenferro_cpu() -> Result<StageBackend<'static>, StageError> {
+        let ctx = tenferro_ad::EagerRuntime::with_cpu_backend(tenferro_cpu::CpuBackend::new())
+            .map_err(|e| StageError::Failed(e.to_string()))?;
         Ok(StageBackend::new(
             "tenferro-cpu",
-            Box::new(TenferroSr::new_cpu()?),
+            Box::new(TenferroSr::with_runtime(
+                ctx.clone(),
+                crate::sr_backend::Placement::Host,
+                "tenferro cpu-faer".to_string(),
+            )),
             Box::new(UnsupportedPfaffian::tenferro()),
-        ))
+        )
+        .with_measurement(Box::new(TenferroMeasurement::with_runtime(
+            ctx,
+            crate::sr_backend::Placement::Host,
+            "tenferro-measurement cpu-faer".to_string(),
+        ))))
     }
 
     /// Replace the Pfaffian stage (for example by the batched CUDA kernel), relabelled.

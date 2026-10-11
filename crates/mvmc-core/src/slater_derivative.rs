@@ -172,37 +172,34 @@ impl Default for SlaterDerivativeScratch {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
-    sr_opt_o: &mut [Complex64],
-    ip: Complex64,
-    ele_idx: &[i64],
-    data: &ExpertModeData,
-    slater_matrix: &SlaterMatrixData,
-    use_real: bool,
-    scratch: &mut SlaterDerivativeScratch,
-    timer: &mut CTimer<TIMED>,
-) {
+/// Translation/orbital scatter tables of one sample, built identically by the C-order kernel
+/// and the tenferro measurement stage (issue #518).
+pub(crate) struct TransOrbTables {
+    /// `trans_orb_idx[t][msi][msj]` flattened (`-1` = no orbital).
+    pub trans_orb_idx: Vec<i64>,
+    /// `trans_orb_sgn[t][msi][msj]` flattened (interaction sign).
+    pub trans_orb_sgn: Vec<i64>,
+    /// QP sectors per Gaussian-Legendre point (`NSPGaussLeg`).
+    pub n_sp_gauss_leg: usize,
+    /// Fixed translation sectors (`NMPTrans`).
+    pub n_mp_trans: usize,
+    /// Total sectors of the tables (`n_mp_trans * n_qp_opt_trans`).
+    pub n_trans: usize,
+    /// Number of unique Slater parameters.
+    pub n_slater: usize,
+    /// `2 * Ne`.
+    pub n_size: usize,
+}
+
+/// Build [`TransOrbTables`] for the real, non-FSZ measurement (the exact construction of
+/// `slater_elm_diff_with_scratch_timed`).
+pub(crate) fn build_trans_orb_tables(data: &ExpertModeData, ele_idx: &[i64]) -> TransOrbTables {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
     let n_size = 2 * n_elec;
-    if n_site == 0 || n_elec == 0 || ip.norm() == 0.0 {
-        return;
-    }
-    let weights = match data.qp_weights.as_ref() {
-        Some(weights) => weights,
-        None => return,
-    };
-    let n_qp_full = weights.qp_full_weight.len().min(slater_matrix.pf_m.len());
-    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
     let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
+    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
     let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
-    if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
-        return;
-    }
-
-    let diag = timer.diagnostics.slater;
-    timer.start_diag(932, diag);
     // The orbital index/sign matrices are fixed by the input; reuse the cached ones
     // instead of rebuilding them from the term list for every sample.
     let built;
@@ -214,7 +211,6 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
                 (&built.0, &built.1)
             }
         };
-
     let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
     let mut trans_orb_idx = vec![-1_i64; n_trans * n_size * n_size];
     let mut trans_orb_sgn = vec![1_i64; n_trans * n_size * n_size];
@@ -249,6 +245,58 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
             }
         }
     }
+    TransOrbTables {
+        trans_orb_idx,
+        trans_orb_sgn,
+        n_sp_gauss_leg,
+        n_mp_trans,
+        n_trans,
+        n_slater,
+        n_size,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
+    sr_opt_o: &mut [Complex64],
+    ip: Complex64,
+    ele_idx: &[i64],
+    data: &ExpertModeData,
+    slater_matrix: &SlaterMatrixData,
+    use_real: bool,
+    scratch: &mut SlaterDerivativeScratch,
+    timer: &mut CTimer<TIMED>,
+) {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_size = 2 * n_elec;
+    if n_site == 0 || n_elec == 0 || ip.norm() == 0.0 {
+        return;
+    }
+    let weights = match data.qp_weights.as_ref() {
+        Some(weights) => weights,
+        None => return,
+    };
+    let n_qp_full = weights.qp_full_weight.len().min(slater_matrix.pf_m.len());
+    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
+    let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    if n_qp_full == 0 || n_slater == 0 || sr_opt_o.len() < 2 * n_slater {
+        return;
+    }
+
+    let diag = timer.diagnostics.slater;
+    timer.start_diag(932, diag);
+    // The orbital index/sign matrices and the per-sector translation tables are fixed by the
+    // input; `build_trans_orb_tables` reuses the cached matrices instead of rebuilding them
+    // from the term list for every sample.
+    let tables = build_trans_orb_tables(data, ele_idx);
+    let trans_orb_idx = tables.trans_orb_idx;
+    let trans_orb_sgn = tables.trans_orb_sgn;
+    debug_assert_eq!(
+        tables.n_trans * tables.n_size * tables.n_size,
+        trans_orb_idx.len()
+    );
 
     timer.stop_diag(932, diag);
     timer.start_diag(931, diag);
@@ -256,33 +304,7 @@ pub(crate) fn slater_elm_diff_with_scratch_timed<const TIMED: bool>(
     scratch.zero_qp_orbital();
     timer.stop_diag(931, diag);
     timer.start_diag(933, diag);
-    let n_opt = data.n_qp_opt_trans.max(1) as usize;
-    let complete_maps = data.qp_opt_trans.len() >= n_opt
-        && data.qp_opt_trans_sgn.len() >= n_opt
-        && data
-            .qp_opt_trans
-            .iter()
-            .take(n_opt)
-            .all(|row| row.len() >= n_site)
-        && data
-            .qp_opt_trans_sgn
-            .iter()
-            .take(n_opt)
-            .all(|row| row.len() >= n_site)
-        && data.qp_trans_entries.len() >= n_mp_trans
-        && data
-            .qp_trans_entries
-            .iter()
-            .take(n_mp_trans)
-            .all(|t| t.site_map.len() >= n_site && t.site_sign.len() >= n_site)
-        && [&data.orbital_idx_matrix, &data.orbital_sgn_matrix]
-            .iter()
-            .all(|matrix| {
-                matrix.as_ref().is_some_and(|matrix| {
-                    matrix.len() >= n_site
-                        && matrix.iter().take(n_site).all(|row| row.len() >= n_site)
-                })
-            });
+    let complete_maps = complete_translation_maps(data);
     if use_real
         && !slater_matrix.pf_m_real.is_empty()
         && real_slater_weights(weights, n_qp_full, n_sp_gauss_leg)
@@ -386,7 +408,7 @@ pub(crate) fn real_slater_derivative_available(data: &ExpertModeData, n_qp_full:
 }
 
 /// The real fast path needs every weight it multiplies to be purely real.
-fn real_slater_weights(
+pub(crate) fn real_slater_weights(
     weights: &mvmc_expert_parsers::types::QuantumProjectionWeights,
     n_qp_full: usize,
     n_sp_gauss_leg: usize,
@@ -396,6 +418,42 @@ fn real_slater_weights(
         && real(&weights.spgl_cos_sin, n_sp_gauss_leg)
         && real(&weights.spgl_cos_cos, n_sp_gauss_leg)
         && real(&weights.spgl_sin_sin, n_sp_gauss_leg)
+}
+
+/// Whether every translation map and the cached orbital matrices cover the full sites, so
+/// the measurement consumes all `n_mp_trans * n_qp_opt_trans` sectors. This is the exact
+/// predicate of the C-order `SlaterElmDiff` fast path; the tenferro stage (issue #518) uses
+/// it to decide which sectors its per-sector reductions include.
+pub(crate) fn complete_translation_maps(data: &ExpertModeData) -> bool {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_opt = data.n_qp_opt_trans.max(1) as usize;
+    let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
+    data.qp_opt_trans.len() >= n_opt
+        && data.qp_opt_trans_sgn.len() >= n_opt
+        && data
+            .qp_opt_trans
+            .iter()
+            .take(n_opt)
+            .all(|row| row.len() >= n_site)
+        && data
+            .qp_opt_trans_sgn
+            .iter()
+            .take(n_opt)
+            .all(|row| row.len() >= n_site)
+        && data.qp_trans_entries.len() >= n_mp_trans
+        && data
+            .qp_trans_entries
+            .iter()
+            .take(n_mp_trans)
+            .all(|t| t.site_map.len() >= n_site && t.site_sign.len() >= n_site)
+        && [&data.orbital_idx_matrix, &data.orbital_sgn_matrix]
+            .iter()
+            .all(|matrix| {
+                matrix.as_ref().is_some_and(|matrix| {
+                    matrix.len() >= n_site
+                        && matrix.iter().take(n_site).all(|row| row.len() >= n_site)
+                })
+            })
 }
 
 /// Real-mode `accumulate_slater_diff` over all QPs: same loop order and the same

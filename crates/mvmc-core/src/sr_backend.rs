@@ -730,10 +730,66 @@ pub struct TenferroStats {
     pub cg_uploads: u64,
 }
 
+/// Explicit host/runtime tensor transfer for one tenferro eager runtime (issue #421; shared
+/// with the measurement stage of issue #518). [`Placement`] decides whether the runtime's
+/// tensors are host memory or device memory; tenferro never transfers implicitly, so device
+/// placement always uploads on creation and downloads on read.
+pub(crate) struct EagerTransfer {
+    pub(crate) ctx: Arc<EagerRuntime>,
+    pub(crate) placement: Placement,
+}
+
+impl EagerTransfer {
+    pub(crate) fn new(ctx: Arc<EagerRuntime>, placement: Placement) -> Self {
+        Self { ctx, placement }
+    }
+
+    pub(crate) fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
+        let tensor = match self.placement {
+            Placement::Host => host,
+            Placement::Device => self
+                .ctx
+                .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(&host)))
+                .map_err(err)?
+                .map_err(err)?,
+        };
+        EagerTensor::from_tensor_in(tensor, self.ctx.clone()).map_err(err)
+    }
+
+    pub(crate) fn upload_real(
+        &self,
+        shape: Vec<usize>,
+        data: Vec<f64>,
+    ) -> Result<EagerTensor, StageError> {
+        // Column-major on purpose: every buffer in this module is column-major.
+        self.upload(Tensor::from_vec_col_major(shape, data).map_err(err)?)
+    }
+
+    pub(crate) fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
+        self.ctx.synchronize().map_err(err)?;
+        let dev = t.to_tensor().map_err(err)?;
+        match self.placement {
+            Placement::Host => Ok(dev),
+            Placement::Device => self
+                .ctx
+                .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev)))
+                .map_err(err)?
+                .map_err(err),
+        }
+    }
+
+    pub(crate) fn download_f64(&self, t: &EagerTensor) -> Result<Vec<f64>, StageError> {
+        let host = self.download(t)?;
+        let typed = host
+            .into_typed::<f64>()
+            .map_err(|_| err("expected an F64 tensor"))?;
+        Ok(typed.host_data().map_err(err)?.to_vec())
+    }
+}
+
 /// SR stages through tenferro eager ops.
 pub struct TenferroSr {
-    ctx: Arc<EagerRuntime>,
-    placement: Placement,
+    io: EagerTransfer,
     label: String,
     cg: Option<CgOperand>,
     stats: TenferroStats,
@@ -743,7 +799,7 @@ impl std::fmt::Debug for TenferroSr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TenferroSr")
             .field("label", &self.label)
-            .field("placement", &self.placement)
+            .field("placement", &self.io.placement)
             .field("stats", &self.stats)
             .finish()
     }
@@ -763,8 +819,7 @@ impl TenferroSr {
     /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
     pub fn with_runtime(ctx: Arc<EagerRuntime>, placement: Placement, label: String) -> Self {
         Self {
-            ctx,
-            placement,
+            io: EagerTransfer::new(ctx, placement),
             label,
             cg: None,
             stats: TenferroStats::default(),
@@ -777,41 +832,19 @@ impl TenferroSr {
     }
 
     fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
-        let tensor = match self.placement {
-            Placement::Host => host,
-            Placement::Device => self
-                .ctx
-                .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(&host)))
-                .map_err(err)?
-                .map_err(err)?,
-        };
-        EagerTensor::from_tensor_in(tensor, self.ctx.clone()).map_err(err)
+        self.io.upload(host)
     }
 
     fn upload_real(&self, shape: Vec<usize>, data: Vec<f64>) -> Result<EagerTensor, StageError> {
-        // Column-major on purpose: every buffer in this module is column-major.
-        self.upload(Tensor::from_vec_col_major(shape, data).map_err(err)?)
+        self.io.upload_real(shape, data)
     }
 
     fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
-        self.ctx.synchronize().map_err(err)?;
-        let dev = t.to_tensor().map_err(err)?;
-        match self.placement {
-            Placement::Host => Ok(dev),
-            Placement::Device => self
-                .ctx
-                .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev)))
-                .map_err(err)?
-                .map_err(err),
-        }
+        self.io.download(t)
     }
 
     fn download_f64(&self, t: &EagerTensor) -> Result<Vec<f64>, StageError> {
-        let host = self.download(t)?;
-        let typed = host
-            .into_typed::<f64>()
-            .map_err(|_| err("expected an F64 tensor"))?;
-        Ok(typed.host_data().map_err(err)?.to_vec())
+        self.io.download_f64(t)
     }
 }
 
@@ -834,7 +867,7 @@ impl SrStages for TenferroSr {
     }
 
     fn provider(&self) -> String {
-        match self.placement {
+        match self.io.placement {
             Placement::Host => "tenferro-ad EagerRuntime + CpuBackend (cpu-faer)".to_string(),
             Placement::Device => {
                 "tenferro-ad EagerRuntime + tenferro-gpu CudaBackend (cuBLAS/cuSOLVER)".to_string()

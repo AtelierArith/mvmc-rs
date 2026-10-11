@@ -478,7 +478,10 @@ fn qp_weighted_orbital_sum_einsum(
 /// Diagonal-only Hamiltonian terms (no off-diagonal Green-function calls).
 /// Mirrors the CoulombIntra / CoulombInter / Hund sums in
 /// `calculate_hamiltonian`.
-fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Complex64 {
+///
+/// Shared with the tenferro measurement stage (issue #518), which starts from the same
+/// diagonal and adds the tensor-formulated transfer energy.
+pub(crate) fn calculate_hamiltonian_diagonal(ele_num: &[i64], data: &ExpertModeData) -> Complex64 {
     let n_site = data.modpara.nsite.max(0) as usize;
     if n_site == 0 || ele_num.len() < 2 * n_site {
         return Complex64::new(0.0, 0.0);
@@ -1496,7 +1499,7 @@ fn transfer_cache_signature(data: &ExpertModeData, all_complex: bool) -> u64 {
     hash
 }
 
-fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationState) {
+pub(crate) fn refresh_transfer_cache(data: &ExpertModeData, state: &mut VmcOptimizationState) {
     let signature = transfer_cache_signature(data, state.all_complex);
     if state.transfer_cache.signature == signature {
         return;
@@ -1638,7 +1641,7 @@ fn calh1_direct_projection_ratio(
 /// [`calh1_direct_projection_ratio`] for the hop of one electron of `spin` from `source`
 /// to `dest`, evaluated on the unmoved occupations (`ele_num` is not copied): only the
 /// two touched `(site, spin)` entries differ, and only the source/dest terms read them.
-fn calh1_direct_projection_ratio_moved(
+pub(crate) fn calh1_direct_projection_ratio_moved(
     source: usize,
     dest: usize,
     spin: usize,
@@ -1758,8 +1761,10 @@ fn calh1_real_fast<const TIMED: bool>(
 }
 
 /// The serial CalH1 fast path applies to the real main calculation without RBM, with the
-/// direct projection tables built and one real Pfaffian per full QP.
-fn calh1_fast_path_available(state: &VmcOptimizationState) -> bool {
+/// direct projection tables built and one real Pfaffian per full QP. Shared with the
+/// tenferro measurement stage (issue #518), which evaluates the same fast path with the
+/// `new_ip` ratios formulated as tensor contractions.
+pub(crate) fn calh1_fast_path_available(state: &VmcOptimizationState) -> bool {
     state.transfer_cache.all_real
         && !state.all_complex
         && state.transfer_cache.direct_projection_eligible

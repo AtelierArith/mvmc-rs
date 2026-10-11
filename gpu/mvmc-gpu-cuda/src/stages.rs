@@ -10,6 +10,7 @@
 //!   runtime (tenferro 0.7.1 has no skew-symmetric factorization or Pfaffian). No CPU
 //!   fallback.
 
+use mvmc_core::measurement_backend::TenferroMeasurement;
 use mvmc_core::sr_backend::{
     CgSamples, CgStepInput, CgStepResult, DirectSolveInput, DirectStepInput, GramSummary,
     Placement, ResidentCounters, SrAssembleInput, SrStages, TenferroSr,
@@ -17,28 +18,38 @@ use mvmc_core::sr_backend::{
 use mvmc_core::stage_backend::{StageBackend, StageError, UnsupportedPfaffian};
 use mvmc_gpu::stages::BatchedStages;
 use mvmc_gpu::Backend;
+use std::sync::Arc;
+use tenferro_ad::EagerRuntime;
 
 use crate::pfaffian::PersistentCudaEngine;
 use crate::sr_device::{DeviceSr, SrDeviceError};
 
-/// tenferro CPU eager runtime: SR stages through eager ops, Pfaffian unsupported.
+/// tenferro CPU eager runtime: SR stages and the real, non-FSZ measurement stage through
+/// eager ops, Pfaffian unsupported.
 pub fn cpu_eager_stage_backend() -> Result<StageBackend<'static>, String> {
+    let ctx = crate::bench::cpu_runtime()?;
     Ok(StageBackend::new(
         "tenferro-eager-cpu",
         Box::new(TenferroSr::with_runtime(
-            crate::bench::cpu_runtime()?,
+            ctx.clone(),
             Placement::Host,
             "tenferro eager cpu".to_string(),
         )),
         Box::new(UnsupportedPfaffian::tenferro()),
-    ))
+    )
+    .with_measurement(Box::new(TenferroMeasurement::with_runtime(
+        ctx,
+        Placement::Host,
+        "tenferro-measurement eager cpu".to_string(),
+    ))))
 }
 
-/// CUDA stage backend on `ordinal`: tenferro SR stages on the device plus the batched CUDA
-/// Pfaffian kernel.
+/// CUDA stage backend on `ordinal`: tenferro SR stages and the measurement stage on the
+/// device plus the batched CUDA Pfaffian kernel.
 pub fn cuda_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, String> {
+    let ctx = crate::bench::cuda_runtime(ordinal)?;
     let sr = TenferroSr::with_runtime(
-        crate::bench::cuda_runtime(ordinal)?,
+        ctx.clone(),
         Placement::Device,
         format!("tenferro cuda:{ordinal}"),
     );
@@ -52,7 +63,12 @@ pub fn cuda_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, Strin
         &format!("cuda:{ordinal}"),
         Box::new(sr),
         Box::new(pfaffian),
-    ))
+    )
+    .with_measurement(Box::new(TenferroMeasurement::with_runtime(
+        ctx,
+        Placement::Device,
+        format!("tenferro-measurement cuda:{ordinal}"),
+    ))))
 }
 
 /// SR stages with a device-resident fused step (issue #447): every per-stage method delegates to
@@ -70,16 +86,24 @@ pub struct ResidentCudaSr {
 impl ResidentCudaSr {
     /// Resident SR stages on `ordinal` (the device pipeline is created on first use).
     pub fn new(ordinal: usize) -> Result<Self, String> {
-        Ok(Self {
+        Ok(Self::with_runtime(
+            ordinal,
+            crate::bench::cuda_runtime(ordinal)?,
+        ))
+    }
+
+    /// Resident SR stages on an existing device runtime (shared with the measurement stage).
+    pub fn with_runtime(ordinal: usize, ctx: Arc<EagerRuntime>) -> Self {
+        Self {
             inner: TenferroSr::with_runtime(
-                crate::bench::cuda_runtime(ordinal)?,
+                ctx,
                 Placement::Device,
                 format!("tenferro cuda:{ordinal}"),
             ),
             device: ordinal,
             dev: None,
             counters: ResidentCounters::default(),
-        })
+        }
     }
 
     fn pipeline(&mut self) -> Result<&mut DeviceSr, StageError> {
@@ -246,14 +270,21 @@ impl SrStages for ResidentCudaSr {
 }
 
 /// CUDA stage backend with the resident SR step (opt-in; SR stages through
-/// [`ResidentCudaSr`], Pfaffian as in [`cuda_stage_backend`]).
+/// [`ResidentCudaSr`], Pfaffian as in [`cuda_stage_backend`], and the tenferro measurement
+/// stage on the shared device runtime).
 pub fn cuda_resident_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, String> {
+    let ctx = crate::bench::cuda_runtime(ordinal)?;
     let engine: &'static PersistentCudaEngine =
         Box::leak(Box::new(PersistentCudaEngine::new(ordinal)));
     let pfaffian = BatchedStages::new(Backend::Engine(engine), &format!("cuda:{ordinal}"));
     Ok(StageBackend::new(
         &format!("cuda-resident:{ordinal}"),
-        Box::new(ResidentCudaSr::new(ordinal)?),
+        Box::new(ResidentCudaSr::with_runtime(ordinal, ctx.clone())),
         Box::new(pfaffian),
-    ))
+    )
+    .with_measurement(Box::new(TenferroMeasurement::with_runtime(
+        ctx,
+        Placement::Device,
+        format!("tenferro-measurement cuda:{ordinal}"),
+    ))))
 }

@@ -2955,12 +2955,22 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     };
     // Stage B consumer (issue #519): the local energy and the Slater derivative of each real,
     // non-FSZ sample run through the selected backend's measurement stage (default: the
-    // C-order oracle, byte-identical to the inline kernels). Complex and FSZ modes keep the
-    // inline calls (out of scope for this milestone).
+    // C-order oracle, byte-identical to the inline kernels). Complex and FSZ modes have no
+    // stage implementation: the default C-order consumer keeps the inline kernels, while any
+    // other selected backend is a hard error, never a silent CPU fallback (issue #518).
     let measure_stage = match crate::measurement_batch::selected_measurement_consumer() {
         crate::measurement_batch::MeasurementConsumer::Direct => None,
         crate::measurement_batch::MeasurementConsumer::Stage(kind) => {
-            (!all_complex && !use_fsz).then_some(kind)
+            if !all_complex && !use_fsz {
+                Some(kind)
+            } else {
+                assert!(
+                    kind == crate::stage_backend::StageBackendKind::COrder,
+                    "{}: the stage-backend measurement supports only real, non-FSZ mode",
+                    crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
+                );
+                None
+            }
         }
     };
     let slater_offset_stage_b = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
