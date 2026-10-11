@@ -132,7 +132,7 @@ if [ "$mode" = docker ] && [ "$inner" = 0 ]; then
     -e MVMC_BENCH_IMAGE="$image" -e MVMC_RS_REVISION="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)" \
     -e CARGO_TARGET_DIR=/work/target-bench-docker \
     "${extra[@]}" -v "$root:/work" -v "$out_abs:/out" -w /work "$image" \
-    bash -lc "(( [ -e /usr/lib/x86_64-linux-gnu/libopenblas.so ] || [ -e /usr/lib/aarch64-linux-gnu/libopenblas.so ] ) && command -v pkg-config >/dev/null ) || { apt-get update -qq >/dev/null && apt-get install -y -qq libopenblas-dev liblapack-dev pkg-config >/dev/null; } \
+    bash -lc "{ [ -e /usr/lib/x86_64-linux-gnu/libopenblas.so ] || [ -e /usr/lib/aarch64-linux-gnu/libopenblas.so ]; } && command -v pkg-config >/dev/null && command -v python3 >/dev/null && { [ -e /usr/lib/x86_64-linux-gnu/libcutensor.so.2 ] || [ -e /usr/lib/aarch64-linux-gnu/libcutensor.so.2 ]; } || { apt-get update -qq >/dev/null && apt-get install -y -qq libopenblas-dev liblapack-dev pkg-config python3 libcutensor2 >/dev/null; } \
       && exec setpriv --reuid=$(id -u) --regid=$(id -g) --clear-groups bash -c \
       'export PATH=$HOME/.cargo/bin:/usr/local/cuda/bin:\$PATH; cd /work && scripts/bench/run_all.sh --native --inner --$profile --out /out --gpu 0'"
 fi
@@ -153,6 +153,9 @@ mkdir -p "$work/csv" "$work/logs" "$work/inputs"
 rev="${MVMC_RS_REVISION:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}"
 gpudir="$root/gpu/mvmc-gpu-cuda"
 flag="--$profile"
+# CPU baseline is a production-sized host, not the (often 64-core) benchmark machine: the suite
+# reports single-thread and `cpu_cores`-thread columns. Override with MVMC_BENCH_CPU_CORES.
+cpu_cores="${MVMC_BENCH_CPU_CORES:-4}"
 echo "== mvmc-rs function suite: profile=$profile gpu=$gpu mode=$mode out=$work"
 
 run_step() { # run_step <name> <cmd...>: log to logs/<name>.log, record exit status
@@ -244,6 +247,7 @@ meta="$work/metadata.txt"
   echo "cpu_model=$(sed -n 's/^model name[^:]*: *//p' /proc/cpuinfo | head -1)"
   echo "cpu_logical_cores=$(nproc --all)"
   echo "cpu_available_cores=$(nproc)"
+  echo "cpu_baseline_cores=${cpu_cores:-unknown}"
   echo "mem_total_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1e6}' /proc/meminfo)"
   echo "os=${MVMC_BENCH_HOST_OS:-$(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-unknown}") / kernel $(uname -r)}"
   echo "container_os=$(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-unknown}")"
@@ -264,10 +268,12 @@ meta="$work/metadata.txt"
 # ---------------------------------------------------------------- families
 S="$suite"
 common=("$flag")
-echo "== family 1: batched Pfaffian/inverse"
-run_step pfaffian "$S" pfaffian "${common[@]}" --out "$work/csv/pfaffian.csv"
-echo "== family 2: SR stages (all-cores oracle + GPU; then 1-core baseline)"
-run_step sr "$S" sr "${common[@]}" --cpu-label allcores --out "$work/csv/sr.csv"
+echo "== family 1: batched Pfaffian/inverse (CPU baseline: 1 and $cpu_cores threads)"
+RAYON_NUM_THREADS="$cpu_cores" OPENBLAS_NUM_THREADS="$cpu_cores" OMP_NUM_THREADS="$cpu_cores" \
+  run_step pfaffian "$S" pfaffian "${common[@]}" --out "$work/csv/pfaffian.csv"
+echo "== family 2: SR stages ($cpu_cores-core oracle + GPU; then 1-core baseline)"
+RAYON_NUM_THREADS="$cpu_cores" OPENBLAS_NUM_THREADS="$cpu_cores" OMP_NUM_THREADS="$cpu_cores" \
+  run_step sr "$S" sr "${common[@]}" --cpu-label "${cpu_cores}core" --out "$work/csv/sr.csv"
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 RAYON_NUM_THREADS=1 \
   run_step sr_cpu_1core "$S" sr "${common[@]}" --cpu-only --cpu-label 1core --out "$work/csv/sr_cpu_1core.csv"
 echo "== family 2b: device-resident SR (#447 hook)"
@@ -277,8 +283,8 @@ if [ -f "$gpudir/examples/bench_sr_resident.rs" ]; then
 else
   run_step sr_resident "$S" na --name sr_resident --reason "device-resident SR (#447) is not in this checkout (examples/bench_sr_resident.rs absent)" --out "$work/csv/sr_resident.csv"
 fi
-echo "== family 3: sampler (numerical verdicts, then timings)"
-run_step sampler "$S" sampler "${common[@]}" ${MVMC_BENCH_WORK_CAP:+--work-cap "$MVMC_BENCH_WORK_CAP"} --inputs "$work/inputs" --out "$work/csv/sampler.csv"
+echo "== family 3: sampler (numerical verdicts, then timings; CPU baseline: 1 and $cpu_cores threads)"
+MVMC_BENCH_CPU_CORES="$cpu_cores" run_step sampler "$S" sampler "${common[@]}" ${MVMC_BENCH_WORK_CAP:+--work-cap "$MVMC_BENCH_WORK_CAP"} --inputs "$work/inputs" --out "$work/csv/sampler.csv"
 echo "== family 4: transfers"
 run_step transfers "$S" transfers "${common[@]}" --out "$work/csv/transfers.csv"
 

@@ -240,8 +240,8 @@ def timing_sr(rs):
             continue
         key = (r["function"], int(p["NPara"]), int(p["samples"]))
         v = r["variant"]
-        v = {"cpu-corder-allcores": "cpu_all", "cpu-corder-1core": "cpu_1", "tenferro-cuda": "gpu",
-             "tenferro-cpu-faer": "faer"}.get(v, v)
+        v = {"cpu-corder-allcores": "cpu_all", "cpu-corder-4core": "cpu_all", "cpu-corder-1core": "cpu_1",
+             "tenferro-cuda": "gpu", "tenferro-cpu-faer": "faer"}.get(v, v)
         t[key][v] = fnum(r["median_s"])
     return t
 
@@ -263,10 +263,10 @@ def timing_section(machines):
         out.append("\n### %s\n" % name)
         rows, be, _ = timing_pfaffian(rs)
         out.append("\n#### Batched Pfaffian + inverse (time per plane, NQP = 8 planes per batch element)\n")
-        out.append(md_table(["dtype", "n", "B", "1 thread", "all cores (rayon)", "CUDA total", "CUDA kernel",
-                             "x vs 1 thread", "x vs all cores", "kernel x vs all cores"], rows))
+        out.append(md_table(["dtype", "n", "B", "1 thread", "4 cores (rayon)", "CUDA total", "CUDA kernel",
+                             "x vs 1 thread", "x vs 4 cores", "kernel x vs 4 cores"], rows))
         out.append("\nBreak-even (smallest B where CUDA incl. transfers beats the CPU): %s\n" % (
-            "; ".join("%s n=%d: all cores B>=%s, 1 thread B>=%s" % (dt, n, d.get("all", "never"), d.get("one", "never"))
+            "; ".join("%s n=%d: 4 cores B>=%s, 1 thread B>=%s" % (dt, n, d.get("all", "never"), d.get("one", "never"))
                       for (dt, n), d in sorted(be.items())) or "-"))
         t = timing_sr(rs)
         out.append("\n#### SR stages\n")
@@ -275,8 +275,8 @@ def timing_section(machines):
             g, a, o = v.get("gpu"), v.get("cpu_all"), v.get("cpu_1")
             rows.append([fn, n, k, tsec(o), tsec(a), tsec(v.get("faer")), tsec(g),
                          "-" if not (a and g) else "%.1fx" % (a / g), "-" if not (o and g) else "%.1fx" % (o / g)])
-        out.append(md_table(["stage", "NPara", "samples", "C-order 1 core", "C-order all cores", "tenferro CPU",
-                             "tenferro CUDA", "x vs all cores", "x vs 1 core"], rows))
+        out.append(md_table(["stage", "NPara", "samples", "C-order 1 core", "C-order 4 cores", "tenferro CPU",
+                             "tenferro CUDA", "x vs 4 cores", "x vs 1 core"], rows))
         ts = timing_sampler(rs)
         out.append("\n#### Sampler end to end (one `VMCMakeSample` call per walker)\n")
         rows = []
@@ -284,7 +284,7 @@ def timing_section(machines):
             m, one, g = v.get("cpu-multichain"), v.get("cpu-1thread"), v.get("cuda-pinned")
             rows.append([l, w, tsec(one), tsec(m), tsec(g), tsec(v.get("cuda-pageable")),
                          "-" if not (m and g) else "%.2fx" % (m / g)])
-        out.append(md_table(["L", "W", "CPU 1 thread", "CPU multichain", "CUDA pinned", "CUDA pageable", "x vs multichain"], rows))
+        out.append(md_table(["L", "W", "CPU 1 thread", "CPU 4-core multichain", "CUDA pinned", "CUDA pageable", "x vs 4-core multichain"], rows))
         st = []
         for r in rs:
             if r["family"] == "sampler" and r["function"].startswith("sampler_") and r["function"] != "sampler_end_to_end" \
@@ -313,7 +313,7 @@ def has_gpu_fail(rs, family, prefixes):
 def recommend(machines):
     out = ["## 3. GPU-ize? recommendation\n"]
     out.append("Rule: a function is only recommended when its GPU variant passes every numerical check on every machine. "
-               "Speed classes (vs the best CPU baseline, all cores, transfers included): >= 2x at a realistic size = YES; "
+               "Speed classes (vs the best CPU baseline, 4 cores, transfers included): >= 2x at a realistic size = YES; "
                "1x-2x = MARGINAL (depends on host core count and transfer overlap); < 1x = NO. Break-even sizes are "
                "per machine.\n")
     rows = []
@@ -364,8 +364,8 @@ def recommend(machines):
             first = next((w for w, s in lst if s > 1), None)
             rows.append([name, "sampler lock-step L=%d" % l, "FAIL" if bad else "PASS", "%.2fx (W=%d)" % (sp, w_best),
                          first if first else "never", verdict(bad, sp),
-                         "vs CPU multichain on %s cores" % meta.get("cpu_available_cores", "?")])
-    out.append(md_table(["machine", "function", "numerics", "best speedup vs CPU all cores", "break-even (B / NPara / W)",
+                         "vs CPU multichain on %s cores" % meta.get("cpu_baseline_cores", meta.get("cpu_available_cores", "?"))])
+    out.append(md_table(["machine", "function", "numerics", "best speedup vs CPU 4 cores", "break-even (B / NPara / W)",
                          "GPU-ize?", "reasoning"], rows))
     return "\n".join(out) + "\n"
 

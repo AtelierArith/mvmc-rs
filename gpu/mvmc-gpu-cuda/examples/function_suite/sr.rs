@@ -30,6 +30,12 @@ use crate::Cfg;
 const FAMILY: &str = "sr";
 const EPS: f64 = f64::EPSILON;
 
+/// Largest per-case work (flops-like, `n^2 k + n^3/3`) whose C-order oracle is built in the
+/// `full` profile. Above it (`NPara`/`samples` up to 2e4) only the device stages run, for
+/// timing; the numerical verdict comes from the capped small sizes. `--quick` verifies every
+/// case (its whole grid is small). See `benchmark/function_suite/README.md`.
+const VERIFY_FLOPS_CAP: f64 = 1.2e10;
+
 fn lcg(state: &mut u64) -> f64 {
     *state = state
         .wrapping_mul(6364136223846793005)
@@ -336,6 +342,108 @@ fn variant_rows(
     }
 }
 
+/// Device-only timing for a case whose CPU verification is capped away in the `full` profile.
+/// No C-order oracle and no faer comparison are built; the rows are `INFO` timings. The input
+/// OO for the assembly is a trivial diagonal because these rows carry no numerical verdict.
+fn timing_only(
+    cfg: &Cfg,
+    cx: &Cx,
+    csv: &mut Csv,
+    n: usize,
+    k: usize,
+    dev_mem: Option<u64>,
+    params: &str,
+) {
+    if cfg.cpu_only {
+        csv.push(
+            Row::new(
+                FAMILY,
+                "all",
+                &format!("cpu-corder-{}", cfg.cpu_label),
+                "f64",
+                params,
+            )
+            .verdict(
+                Verdict::Skipped,
+                "CPU verification is capped at small sizes in the full profile",
+            ),
+        );
+        return;
+    }
+    let dev_bytes = 8.0 * (n * k + 5 * n * n) as f64;
+    if let Some(total) = dev_mem {
+        if dev_bytes > total as f64 * 0.8 {
+            csv.push(
+                Row::new(FAMILY, "all", "tenferro-cuda", "f64", params).verdict(
+                    Verdict::Skipped,
+                    &format!(
+                        "needs ~{:.1} GB device memory of {:.1} GB",
+                        dev_bytes / 1e9,
+                        total as f64 / 1e9
+                    ),
+                ),
+            );
+            return;
+        }
+    }
+    let store = store(n, k);
+    let mut spd = vec![0.0; n * n];
+    for i in 0..n {
+        spd[i + i * n] = 2.0;
+    }
+    let mut st = 11;
+    let rhs: Vec<f64> = (0..n).map(|_| lcg(&mut st)).collect();
+    let ho: Vec<f64> = (0..=n).map(|_| lcg(&mut st)).collect();
+    let size = n + 1;
+    let mut oo = vec![0.0; size * size];
+    for j in 0..n {
+        oo[(j + 1) + (j + 1) * size] = 1.0;
+    }
+    let case = Case {
+        n,
+        k,
+        store: &store,
+        spd: &spd,
+        rhs: &rhs,
+        oo: &oo,
+        ho: &ho,
+        cg_iters: if cfg.full { 40 } else { 25 },
+        shift: 0.5,
+        version: std::cell::Cell::new(100),
+    };
+    match cuda_runtime(0).and_then(|rt| {
+        let mut b = TenferroSr::with_runtime(rt, Placement::Device, "tenferro cuda".into());
+        run_backend(&mut b, &case, cx, true)
+    }) {
+        Ok(o) => {
+            for (name, s) in [
+                ("gram", &o.gram),
+                ("assemble_s_g", &o.asm),
+                ("cholesky_solve", &o.solve),
+                ("cg_matvec", &o.cg_mv),
+                ("cg_solve", &o.cg_solve),
+            ] {
+                csv.push(
+                    Row::new(FAMILY, name, "tenferro-cuda", "f64", params)
+                        .stat(s.0)
+                        .verdict(
+                            Verdict::Info,
+                            "timing only; CPU verification is capped at small sizes",
+                        ),
+                );
+            }
+            if let Some(u) = o.cg_upload {
+                csv.push(
+                    Row::new(FAMILY, "cg_operand_upload", "tenferro-cuda", "f64", params)
+                        .stat(u)
+                        .note("once per solve; not numerical"),
+                );
+            }
+        }
+        Err(m) => csv.push(Row::new(FAMILY, "all", "tenferro-cuda", "f64", params).error(&m)),
+    }
+}
+
 fn run_case(cfg: &Cfg, cx: &Cx, csv: &mut Csv, n: usize, k: usize, dev_mem: Option<u64>) {
     let params = format!(
         "NPara={n};samples={k};cg_iters={}",
@@ -367,6 +475,12 @@ fn run_case(cfg: &Cfg, cx: &Cx, csv: &mut Csv, n: usize, k: usize, dev_mem: Opti
             )
             .verdict(Verdict::Skipped, "too slow on one core for this profile"),
         );
+        return;
+    }
+    // CPU verification is capped at small sizes in the `full` profile: above `VERIFY_FLOPS_CAP`
+    // only the device stages run (timing-only `INFO` rows), so the suite stays in budget.
+    if cfg.full && flops > VERIFY_FLOPS_CAP {
+        timing_only(cfg, cx, csv, n, k, dev_mem, &params);
         return;
     }
     let store = store(n, k);

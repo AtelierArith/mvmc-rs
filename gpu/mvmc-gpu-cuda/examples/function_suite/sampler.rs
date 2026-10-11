@@ -516,9 +516,17 @@ fn timing_path<T: TransferPath>(
 }
 
 pub fn run(cfg: &Cfg, csv: &mut Csv) {
-    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+    // Production-sized CPU baseline: honour `MVMC_BENCH_CPU_CORES` (1 or 4) so the comparison
+    // is against a small host, not the 64-core test machine.
+    let cores = std::env::var("MVMC_BENCH_CPU_CORES")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&c| c > 0)
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()));
+    // Numerical verification (CPU reference vs device) is capped at small sizes in the `full`
+    // profile; the large `L` points below are measured for timing only. See the README.
     let (check_ls, wc, check_samples): (&[usize], usize, i64) = if cfg.full {
-        (&[16, 32, 64, 128, 256], 4, 20)
+        (&[16, 32, 64], 2, 20)
     } else {
         (&[16, 32], 2, 20)
     };

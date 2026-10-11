@@ -1444,6 +1444,7 @@ dependencies = [
  "pfapack",
  "rayon",
  "sfmt19937",
+ "spindle",
  "tenferro-ad",
  "tenferro-cpu",
  "tenferro-einsum",
