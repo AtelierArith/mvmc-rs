@@ -608,6 +608,8 @@ pub struct LockstepStats {
     pub proposals: usize,
     /// Accepted moves applied.
     pub accepts: usize,
+    /// Initial table constructions (`Begin`) executed.
+    pub begins: usize,
     /// Recomputes executed.
     pub recomputes: usize,
     /// Largest batch (blocking requests in one pass).
@@ -796,6 +798,7 @@ fn run_service_loop<S: DeviceService + ?Sized>(
             loop_stats.passes += 1;
             loop_stats.proposals += fast.proposes.len();
             loop_stats.accepts += fast.accepts.len();
+            loop_stats.begins += slow.begins.len();
             loop_stats.recomputes += slow.recomputes.len();
             loop_stats.max_batch = loop_stats.max_batch.max(fast.proposes.len());
             match outcome {
