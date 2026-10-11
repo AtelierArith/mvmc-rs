@@ -2000,6 +2000,81 @@ real sampled runs on the CUDA backend against C order with the SR observer: step
 solution within bounds derived from `k`, `a_i = sqrt(OO_ii)` and `kappa`, resident counters,
 bitwise repeatability, and bounded multi-step trajectories (observed numbers in manual 12.4).
 
+## 16. A100 FP64 evaluation and the decision to move VMC optimization and PhysCal to the GPU (issues #475, #485)
+
+Status: decided (2026-10-11). This closes the FP64-strong evaluation that #434/#426 deferred to
+("revisit on A100/H100"), and fixes the direction: **run as much of the variational optimization
+(SR/`StochasticOpt`) and PhysCal measurement on the device as possible**, validating every stage
+against the C-order CPU oracle.
+
+### 16.1 The A100 full run
+
+The `#450` function suite ran in `--docker --full --gpu 0` on an NVIDIA A100 80GB PCIe (AMD EPYC
+7713P, 64 cores, driver 580.126.09, CUDA driver API 13.0 / toolkit 12.9.1, tenferro 0.7.1,
+rustc 1.99.0, git `081c7314`). Archive: `bench-out/results-primerose-20261011-051749.tar.gz`
+(kept as `bench-out/a100-full-64core-20261011.tar.gz`).
+
+| verdict | count |
+| --- | ---: |
+| PASS | 270 |
+| FAIL | 0 |
+| ERROR | 0 |
+| NotAvailable | 1 (`sr_resident`, #447 hook absent) |
+| SKIPPED | 15 (memory cap / too slow on one core) |
+
+Overall **PASS**. Notable correctness points: `sampler_resident_inverse` (the settled-download
+defect #465 seen on the RTX 3060) now PASSes at L = 16..64, so the resident inverse and the
+batched `#423` kernel are correct on the A100 with FP64; `sampler_teacher_forced` and
+`sampler_free_run_vs_cpu` are bit-identical to the CPU trajectory (RNG state, draw counts,
+configuration). Every CUDA Pfaffian row and SR row is within its forward-error bound and the
+invariants (`A inv = I`, skew `inv`, `Pf^2 = det`) hold.
+
+### 16.2 Timings at the 64-core baseline (why it is not the right comparison)
+
+Against the **64-core** host the GPU still loses the sampler (`0.21x`–`0.96x`) and most Pfaffian
+points, exactly as the RTX 3060 did, but the cause is now unambiguous:
+
+* The Pfaffian **kernel alone is 3–5x faster than all 64 cores** (f64 n=256 B=8: kernel 267 us vs
+  1.02 ms all cores; c64 n=256 B=8: 530 us vs 2.74 ms), yet the **host-device transfers are 1.1–9.3x
+  the kernel time** at these small matrices, so the total only wins for small `n` with large `B`
+  (f64 n=16 B=64: 3.8x; break-even B>=8–64). The bottleneck is PCIe, not compute.
+* SR `gram` and `cg_matvec` are already YES (3.9x / 3.8x at NPara=2000); the other SR stages are
+  transfer-bound per call.
+* The sampler's host-side RNG-parity work and the 31–70 us lock-step round floor dominate, and the
+  CPU baseline is 64 cores — not a production host.
+
+### 16.3 CPU baseline policy: 1 thread and 4 threads
+
+The suite now reports CPU baselines of **single-thread and 4-thread** only
+(`MVMC_BENCH_CPU_CORES`, default 4), not "all cores". The 64-core benchmark machine is not the
+deployment target and it hides the GPU advantage; production nodes are small. `run_all.sh` sets
+`RAYON_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` to the baseline for the Pfaffian and SR
+passes and exports `MVMC_BENCH_CPU_CORES` for the sampler's multichain row; the archive records
+`cpu_baseline_cores`. The section 13.4 four-core experiment already showed the device-resident
+sampler beating a 4-core host at L=128 for W>=8 (1.14–1.37x) and a single core by 3–5x at
+W>=8, L>=64; the A100 kernel numbers above make that margin larger.
+
+### 16.4 Decision
+
+Proceed with the device-side work. The parked sampler work (#434, #426) is **resumed**, now with
+the explicit end goal of running the whole VMC optimization and PhysCal on the device:
+
+1. **#434 follow-ups** (sampler): projection factors / `log_proj_ratio` on the device (RNG stays on
+   the host), shared-memory LTL^T kernel for n<=64, parallel triangular inverse, tiled rank-two
+   update, CUDA Graphs or a persistent kernel to cut the round floor, and state-machine walkers.
+2. **#426**: batched local-energy ratio tables, a device Slater derivative and the device `O`
+   store, replacing `LocEnergyCal` + `ReturnSlaterElmDiff` (6–10 % of wall time) with GEMM tables
+   plus gathers.
+3. **SR / variational optimization**: extend the already-shipped resident SR routing (#447, #452)
+   so `StochasticOpt` and `calculate S and g` / `DPOSV` stay device-resident for the production
+   sizes (large `NPara`), where section 16.2 shows the GPU already wins.
+4. **PhysCal / measurement**: route `CalculateMAll` (43–45 %), `LocEnergyCal`, `ReturnSlaterElmDiff`
+   and `CalculateGreenFunc` through the stage backend so a measurement sweep runs on the device.
+
+Each item keeps the C-order CPU path as the parity reference and is validated with the #424
+harness (teacher-forced replay, flip detector, exact RNG). Follow-ups: #517 (sampler / #434),
+#518 (batched local energy / #426), #519 (device-resident variational optimization and PhysCal).
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
@@ -2024,3 +2099,12 @@ bitwise repeatability, and bounded multi-step trajectories (observed numbers in 
 * ロードマップ: (1) SR/CG の pathfinder、(2) バッチ Pfaffian/逆行列、(3) walker バッチ、
   (4) 局所エネルギーのテーブル化、(5) マルチデバイス。ベンチマーク規模での Amdahl 上限は、
   Pfaffian 段階で約 2 倍、サンプラ込みで 4-9 倍、測定込みで 8-19 倍 (転送・起動コスト前)。
+* 追記 (2026-10-11, #475/#485): A100 80GB で `#450` suite の `--full` を完走し、**270 PASS /
+  0 FAIL / 0 ERROR** (数値は全ファミリ正しい; `sampler_resident_inverse` の #465 も A100 では PASS)。
+  64 コア基準では sampler は依然負けますが、原因は転送 (カーネルの 1.1-9.3 倍) とホスト側 RNG 仕事・
+  1 ラウンド 31-70 us の固定費で、**カーネル単体は全 64 コアより 3-5 倍速い**。CPU 基準を
+  **1 スレッドと 4 スレッド** (`MVMC_BENCH_CPU_CORES`) に限定した上で、**変分最適化 (SR) と
+  PhysCal を可能な限り GPU 上で実行する**方針へ。#434 (サンプラ: デバイス側 projection、カーネル調整、
+  CUDA Graph/persistent kernel、state-machine walker) と #426 (バッチ局所エネルギー、デバイス
+  Slater 微分、デバイス O store) を再開し、測定 (`CalculateMAll`/`LocEnergyCal`/`CalculateGreenFunc`)
+  と SR (`StochasticOpt`) の常駐化まで拡張します。C 順序 CPU を基準に #424 harness で検証します (16 節)。

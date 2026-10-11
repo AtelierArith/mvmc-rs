@@ -14,10 +14,10 @@ against the C-order CPU oracle, and only then records timings. Run it on any CUD
 Requirements: an NVIDIA driver (`nvidia-smi` works), **Rust >= 1.96** (`rustup update stable`),
 git submodules (`git submodule update --init --recursive`), and either
 
-* **native**: CUDA toolkit >= 12.6 (libnvrtc, libcublas, libcusolver, e.g. `/usr/local/cuda`) and
+* **native**: CUDA toolkit >= 12.6 (libnvrtc, libcublas, libcusolver, libcutensor, e.g. `/usr/local/cuda`) and
   OpenBLAS (`apt install libopenblas-dev liblapack-dev pkg-config`), or
 * **docker**: docker with the NVIDIA container toolkit (uses `nvidia/cuda:12.9.1-devel-ubuntu24.04`,
-  installs OpenBLAS inside, mounts your `~/.rustup` and `~/.cargo`; override the image with
+  installs OpenBLAS, cuTENSOR and Python 3 inside, mounts your `~/.rustup` and `~/.cargo`; override the image with
   `MVMC_RS_CUDA_IMAGE`).
 
 ```bash
@@ -50,7 +50,7 @@ uv run --no-project scripts/bench/analyze.py results-a100.tar.gz results-rtx3060
 
 * native: CUDA Toolkit 12.6 以上 (libnvrtc / libcublas / libcusolver) と OpenBLAS
   (`apt install libopenblas-dev liblapack-dev pkg-config`)
-* docker: NVIDIA Container Toolkit 付き docker (`nvidia/cuda` イメージ。OpenBLAS はコンテナ内で導入)
+* docker: NVIDIA Container Toolkit 付き docker (`nvidia/cuda` イメージ。OpenBLAS / cuTENSOR / Python 3 はコンテナ内で導入)
 
 ```bash
 scripts/bench/run_all.sh --native --quick --out bench-out        # 約10分の動作確認
@@ -67,7 +67,7 @@ scripts/bench/run_all.sh --docker --full --gpu 0 --out bench-out # docker の場
 | family | functions | oracle and numerical bound | timings |
 |---|---|---|---|
 | `pfaffian` | batched Pfaffian + inverse, f64/c64, n = 16..256, NQP = 8, B up to the memory limit; zero-pivot/NaN statuses | pfapack C order; per plane `max(inv rel, pf rel) <= 16 n eps cond(A)`; independent invariants `A inv = I`, skew `inv`, `Pf^2 = det` | pfapack 1 thread / rayon all cores / tenferro CPU / CUDA total, kernel, upload, download |
-| `sr` | Gram, S/g assembly, Cholesky solve, CG matvec, full CG solve (fixed iterations), `dot_general`, `cholesky` (f64, c64) | `COrderSr` (OpenBLAS); bounds `4 k eps`, `8 eps`, `8 n eps kappa`, `4 (k+n) eps`, `2 K kappa 4 (k+n) eps`; NPara and samples up to 2e4 in `--full` | C order 1 core and all cores, tenferro CPU, tenferro CUDA |
+| `sr` | Gram, S/g assembly, Cholesky solve, CG matvec, full CG solve (fixed iterations), `dot_general`, `cholesky` (f64, c64) | `COrderSr` (OpenBLAS); bounds `4 k eps`, `8 eps`, `8 n eps kappa`, `4 (k+n) eps`, `2 K kappa 4 (k+n) eps`; in `--full` the C-order oracle is capped at `n^2 k + n^3/3 <= 1.2e10` and larger cases (NPara and samples up to 2e4) run the device stages for timing only (`INFO`) | C order 1 core and all cores (verified sizes), tenferro CPU, tenferro CUDA |
 | `sr_resident` | device-resident SR (#447) | hook: runs `examples/bench_sr_resident.rs` when present; otherwise one `NotAvailable` row (never invented numbers) | by that program |
 | `sampler` | teacher-forced and free-run lock-step sampler vs CPU, resident inverse; stage timings (propose, accept, recompute); end to end vs CPU multichain, W up to 4096, L up to 256 | exact RNG state/draw count/configuration, decision flips located by the #424 teacher (defects must be 0), weights `<= 2*16*(n+s)*eps*kappa/sqrt(w_min)` per walker, derived from the recompute plus rank-1/2 update error (kappa of the Slater planes, s updates between recomputes; ratios observed/allowed are reported), resident inverse `<= 1e-6` (a stale resident download is reported separately as `sampler_download_synchronization`) | CPU 1 thread, CPU multichain (all cores), CUDA pinned/pageable |
 | `transfers` | pinned, pageable, tenferro, copy/kernel overlap, ping-pong | bitwise exact round trip (a copy has no arithmetic) | per-call time and bandwidth vs size |
@@ -105,8 +105,18 @@ recommended), 4. NotAvailable/skipped rows, then the metadata block. Example:
 ## Caveats
 
 * The `--full` sampler timing grid is capped at `W * L^2 <= 2.1e6` to keep the 2 h budget (larger points are
-  `SKIPPED` rows); the numerical checks run for L = 16..256. Raise the cap with `MVMC_BENCH_WORK_CAP=1e7 scripts/bench/run_all.sh ...`.
+  `SKIPPED` rows); the numerical checks run for L = 16..64. Raise the cap with `MVMC_BENCH_WORK_CAP=1e7 scripts/bench/run_all.sh ...`.
 
+* In `--full` the CPU-side verification is deliberately small so the run fits the 2 h budget:
+  the `sr` C-order oracle is built only while `n^2 k + n^3/3 <= 1.2e10` (roughly `NPara <= 2000`,
+  `samples <= 2000`) and the `sampler` CPU reference only for L = 16..64. The larger `sr`/`sampler`
+  sizes still run on the device and are reported as `INFO` timing rows without a numerical verdict.
+  `--quick` verifies every case because its whole grid is small.
+
+* The CPU baselines are single-thread and **4-thread** (`MVMC_BENCH_CPU_CORES`, default 4), not all
+  cores: production hosts are small, and the 64-core benchmark machine misrepresents the GPU. The
+  Pfaffian/SR passes set `RAYON_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS=$MVMC_BENCH_CPU_CORES`;
+  the sampler reads it for its multichain baseline.
 * Timings of the sampler depend on host cores as much as on the GPU: its host side runs one thread
   per walker; compare against the multichain row of the same machine.
 * The numerical bounds are the standard forward-error bounds recorded in the source headers of
