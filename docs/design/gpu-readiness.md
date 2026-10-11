@@ -2075,6 +2075,24 @@ Each item keeps the C-order CPU path as the parity reference and is validated wi
 harness (teacher-forced replay, flip detector, exact RNG). Follow-ups: #517 (sampler / #434),
 #518 (batched local energy / #426), #519 (device-resident variational optimization and PhysCal).
 
+### 16.5 Milestone 1: measurement stage contract (issue #519)
+
+The first #519 milestone adds a host/device-agnostic measurement stage. `stage_backend.rs` gains
+the `MeasurementStages` trait (`label`, `provider`, `measure_sample` -> `MeasurementOutput
+{ local_energy, slater_diff }`) with a default `StageError::Unsupported`, a `COrderMeasurement`
+oracle that calls the production `calculate_local_energy` / `slater_elm_diff` kernels operation for
+operation, and one more slot on `StageBackend` (`with_measurement`, `measurement()`).
+`run.rs` stage B routes the **real, non-FSZ** local energy and Slater derivative through the
+selected backend (bytes identical to the inline calls); complex and FSZ modes keep the inline
+calls. Selection is `MVMC_RS_MEASURE_BACKEND=c-order|tenferro|cuda[:N]` (default `c-order`),
+validated in the CLI preflight and in the MPI agreement check; a selected backend that reports the
+stage unsupported is a hard error, never a CPU fallback. Tests:
+`crates/mvmc-core/tests/measurement_stage_519.rs` (byte identity and the unsupported hard error).
+
+The milestone-1 contract passes the runner's working state, so the batched device kernel of #518
+(and a flat device-facing layout) is a later milestone; a device backend answers `Unsupported`
+until then. The complex/FSZ measurement and the Green functions remain host-only.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

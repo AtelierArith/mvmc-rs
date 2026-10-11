@@ -2949,6 +2949,26 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             Some(kind)
         }
     };
+    // Stage B consumer (issue #519): the local energy and the Slater derivative of each real,
+    // non-FSZ sample run through the selected backend's measurement stage (default: the
+    // C-order oracle, byte-identical to the inline kernels). Complex and FSZ modes keep the
+    // inline calls (out of scope for this milestone).
+    let measure_stage = match crate::measurement_batch::selected_measurement_consumer() {
+        crate::measurement_batch::MeasurementConsumer::Direct => None,
+        crate::measurement_batch::MeasurementConsumer::Stage(kind) => {
+            (!all_complex && !use_fsz).then_some(kind)
+        }
+    };
+    let slater_offset_stage_b = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
+    let slater_len_stage_b = if measure_stage.is_some()
+        && data.modpara.vmc_calc_mode == 0
+        && n_orb_total > 0
+        && slater_offset_stage_b < state.sr_opt.sr_opt_o.len()
+    {
+        (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset_stage_b)
+    } else {
+        0
+    };
     let mut calculate_samples = || {
         for chunk in samples.chunks(batch_size) {
             if let Some(kind) = stage_kind {
@@ -3069,6 +3089,9 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                 }
             }
             // ---- stage B: per-sample consumers, in sample order -------------------------------
+            // One backend handle per chunk for the routed measurement stage (issue #519);
+            // `None` keeps the inline C-order calls for this chunk.
+            let mut measure_handle = measure_stage.map(crate::stage_backend::acquire_kind);
             for (slot, &sample) in chunk.iter().enumerate() {
                 if batch.status[slot] != SlotStatus::Ready {
                     continue;
@@ -3163,6 +3186,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                 timer.stop_diag(945, diag);
                 timer.stop_diag(940, diag);
                 timer.start(41);
+                let mut slater_diff_buf: Option<Vec<Complex64>> = None;
                 let e = if use_fsz {
                     crate::observables::calculate_local_energy_fsz_timed(
                         ip,
@@ -3175,6 +3199,34 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         &ele_spn,
                         timer,
                     )
+                } else if let Some(handle) = measure_handle.as_mut() {
+                    // Routed through the selected backend's measurement stage (issue #519).
+                    // The Slater derivative is computed here with the local energy and its
+                    // block is stored below, at the same point in the sample order as the
+                    // inline call. Byte-identical for the C-order stage.
+                    let mut input = crate::stage_backend::MeasurementInput {
+                        data,
+                        state,
+                        ip,
+                        ele_idx,
+                        ele_cfg: &ele_cfg,
+                        ele_num: &ele_num,
+                        ele_proj_cnt: &ele_proj_cnt,
+                    };
+                    let out = handle
+                        .backend()
+                        .measurement()
+                        .measure_sample(&mut input, slater_len_stage_b, timer)
+                        .unwrap_or_else(|error| {
+                            panic!(
+                                "{}: measurement stage failed: {error}",
+                                crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
+                            )
+                        });
+                    if !out.slater_diff.is_empty() {
+                        slater_diff_buf = Some(out.slater_diff);
+                    }
+                    out.local_energy
                 } else {
                     crate::observables::calculate_local_energy_timed(
                         ip,
@@ -3346,7 +3398,10 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                             (2 * n_orb_total).min(state.sr_opt.sr_opt_o.len() - slater_offset);
                         let slater_o =
                             &mut state.sr_opt.sr_opt_o[slater_offset..slater_offset + n_copy];
-                        if use_fsz {
+                        if let Some(buffer) = slater_diff_buf.take() {
+                            // Computed by the routed measurement stage with the local energy.
+                            slater_o.copy_from_slice(&buffer);
+                        } else if use_fsz {
                             crate::slater_derivative::slater_elm_diff_fsz_with_scratch(
                                 slater_o,
                                 ip,
