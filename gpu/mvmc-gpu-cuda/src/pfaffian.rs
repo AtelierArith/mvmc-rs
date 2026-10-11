@@ -23,6 +23,8 @@ use tenferro_gpu::cuda::raw::{Function, KernelArg, LaunchConfig, NvrtcOptions, S
 use tenferro_gpu::cuda::{cuda_devices, with_cuda_exec_session, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
+use crate::transfer::{download_pinned_raw, upload_pinned_raw, PinnedBuf, PinnedKind};
+
 /// CUDA source of the batched kernel.
 pub const KERNEL_SRC: &str = include_str!("pfaffian_batched.cu");
 /// Largest supported matrix side (dynamic shared memory holds `O(n)` per block).
@@ -54,6 +56,46 @@ fn cuerr(err: impl std::fmt::Display) -> Error {
     Error::Backend(err.to_string())
 }
 
+/// Reusable page-locked host staging buffers for the batch transfers.
+///
+/// One buffer per direction/role (upload, inverse, Pfaffian, status); each grows to the
+/// largest chunk seen and is reused across chunks and calls, so the hot path never calls
+/// `cudaHostAlloc`. `None` in the four slots means "not allocated yet".
+#[derive(Default)]
+struct TransferScratch {
+    upload: Option<PinnedBuf>,
+    out: Option<PinnedBuf>,
+    pf: Option<PinnedBuf>,
+    status: Option<PinnedBuf>,
+}
+
+impl TransferScratch {
+    fn slot(slot: &mut Option<PinnedBuf>, bytes: usize) -> Result<&mut PinnedBuf, Error> {
+        let need = bytes.max(1);
+        if slot.as_ref().is_none_or(|b| b.len_bytes() < need) {
+            *slot =
+                Some(PinnedBuf::new_context_free(need, PinnedKind::Cached).map_err(cuerr)?);
+        }
+        Ok(slot.as_mut().expect("pinned slot"))
+    }
+
+    fn upload(&mut self, bytes: usize) -> Result<&mut PinnedBuf, Error> {
+        Self::slot(&mut self.upload, bytes)
+    }
+
+    fn out(&mut self, bytes: usize) -> Result<&mut PinnedBuf, Error> {
+        Self::slot(&mut self.out, bytes)
+    }
+
+    fn pf(&mut self, bytes: usize) -> Result<&mut PinnedBuf, Error> {
+        Self::slot(&mut self.pf, bytes)
+    }
+
+    fn status(&mut self, bytes: usize) -> Result<&mut PinnedBuf, Error> {
+        Self::slot(&mut self.status, bytes)
+    }
+}
+
 /// Result of a lane-level run: `(pf lanes, inv lanes, status codes, timings)`.
 pub type LaneOutput<E> = (Vec<E>, Vec<E>, Vec<i32>, Timings);
 
@@ -64,6 +106,9 @@ pub struct PfSession<'a, 's> {
     f64_complex: Function,
     f32_real: Function,
     f32_complex: Function,
+    /// Page-locked staging reused by every batch call (interior mutability keeps the public
+    /// `&self` receiver of the lane runners).
+    scratch: std::cell::RefCell<TransferScratch>,
 }
 
 macro_rules! lane_runner {
@@ -92,25 +137,19 @@ macro_rules! lane_runner {
             let mut inv = vec![<$elem>::default(); count * plane_elems];
             let mut status = vec![0i32; count];
             let mut t = Timings::default();
+            let sess: &Session = &*self.sess;
+            let mut scratch = self.scratch.borrow_mut();
             let mut done = 0usize;
             while done < count {
                 let m = chunk.min(count - done);
                 let host = &planes[done * plane_elems..(done + m) * plane_elems];
-                let sess = &*self.sess;
+                let up_bytes = std::mem::size_of_val(host);
+                let out_bytes = m * plane_elems * esz;
+                let pf_bytes = m * lanes * esz;
+                let st_bytes = m * std::mem::size_of::<i32>();
 
                 let t0 = Instant::now();
-                // SAFETY: f32/f64 have no padding or invalid byte patterns; the byte view lives
-                // only for the upload call.
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(
-                        host.as_ptr().cast::<u8>(),
-                        std::mem::size_of_val(host),
-                    )
-                };
-                let d_a = sess.upload_bytes(bytes, "pfaffian.upload").map_err(cuerr)?;
-                sess.synchronize().map_err(cuerr)?;
-                t.upload_s += t0.elapsed().as_secs_f64();
-                let t0 = Instant::now();
+                let d_a = sess.alloc_bytes(up_bytes, "pfaffian.upload").map_err(cuerr)?;
                 let d_w = sess
                     .alloc_bytes(m * plane_elems * esz, "pfaffian.workspace")
                     .map_err(cuerr)?;
@@ -119,8 +158,32 @@ macro_rules! lane_runner {
                     .map_err(cuerr)?;
                 let mut d_pf = sess.alloc_output::<$elem>(&[m * lanes]).map_err(cuerr)?;
                 let mut d_st = sess.alloc_output::<i32>(&[m]).map_err(cuerr)?;
-                sess.synchronize().map_err(cuerr)?;
                 t.alloc_s += t0.elapsed().as_secs_f64();
+
+                // Every copy runs on the session's own captured stream, so the pinned HtoD, the
+                // kernel and the pinned DtoH are ordered by stream order with no host barrier in
+                // between; `Session::synchronize` below is the barrier.
+                let stream = unsafe { sess.stream().raw_handle() };
+
+                // SAFETY: f32/f64 have no padding or invalid byte patterns; `host` is copied into
+                // the reused pinned staging buffer before the copy is enqueued.
+                let host_bytes = unsafe {
+                    std::slice::from_raw_parts(
+                        host.as_ptr().cast::<u8>(),
+                        std::mem::size_of_val(host),
+                    )
+                };
+                let t0 = Instant::now();
+                let mut dev_a = std::ptr::null_mut();
+                d_a.with_ptr(|p| dev_a = p);
+                {
+                    let up = scratch.upload(up_bytes)?;
+                    up.as_u8_mut()[..up_bytes].copy_from_slice(host_bytes);
+                    // SAFETY: `up` is page-locked and stays borrowed until the synchronize
+                    // below; `dev_a` is the live `d_a` device allocation.
+                    unsafe { upload_pinned_raw(stream, up, dev_a, up_bytes) }.map_err(cuerr)?;
+                }
+                t.upload_s += t0.elapsed().as_secs_f64();
 
                 let t1 = Instant::now();
                 {
@@ -157,20 +220,55 @@ macro_rules! lane_runner {
                 t.kernel_s += t1.elapsed().as_secs_f64();
 
                 let t2 = Instant::now();
-                let h_out = sess
-                    .download_tensor(&d_out, "pfaffian.download")
-                    .map_err(cuerr)?;
-                let h_pf = sess
-                    .download_tensor(&d_pf, "pfaffian.download")
-                    .map_err(cuerr)?;
-                let h_st = sess
-                    .download_tensor(&d_st, "pfaffian.download")
-                    .map_err(cuerr)?;
-                inv[done * plane_elems..(done + m) * plane_elems]
-                    .copy_from_slice(h_out.as_slice().map_err(cuerr)?);
-                pf[done * lanes..(done + m) * lanes]
-                    .copy_from_slice(h_pf.as_slice().map_err(cuerr)?);
-                status[done..done + m].copy_from_slice(h_st.as_slice().map_err(cuerr)?);
+                {
+                    let out = scratch.out(out_bytes)?;
+                    let dev = sess.tensor_mut(&mut d_out).map_err(cuerr)?;
+                    // SAFETY: `out` is page-locked, `dev` is a live output tensor of `out_bytes`
+                    // and both stay put until the synchronize below completes the copy.
+                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), out, out_bytes) }
+                        .map_err(cuerr)?;
+                }
+                {
+                    let pf_buf = scratch.pf(pf_bytes)?;
+                    let dev = sess.tensor_mut(&mut d_pf).map_err(cuerr)?;
+                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), pf_buf, pf_bytes) }
+                        .map_err(cuerr)?;
+                }
+                {
+                    let st_buf = scratch.status(st_bytes)?;
+                    let dev = sess.tensor_mut(&mut d_st).map_err(cuerr)?;
+                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), st_buf, st_bytes) }
+                        .map_err(cuerr)?;
+                }
+                sess.synchronize().map_err(cuerr)?;
+
+                // Pin -> typed output vectors. The staging buffers are page-aligned and the byte
+                // ranges are exact multiples of the element size, so the casts are aligned.
+                {
+                    let out = scratch.out(out_bytes)?;
+                    // SAFETY: `out_bytes == m * plane_elems * esz` and the buffer is page-aligned.
+                    let vals = unsafe {
+                        std::slice::from_raw_parts(
+                            out.as_u8().as_ptr().cast::<$elem>(),
+                            m * plane_elems,
+                        )
+                    };
+                    inv[done * plane_elems..(done + m) * plane_elems].copy_from_slice(vals);
+                }
+                {
+                    let pf_buf = scratch.pf(pf_bytes)?;
+                    let vals = unsafe {
+                        std::slice::from_raw_parts(pf_buf.as_u8().as_ptr().cast::<$elem>(), m * lanes)
+                    };
+                    pf[done * lanes..(done + m) * lanes].copy_from_slice(vals);
+                }
+                {
+                    let st_buf = scratch.status(st_bytes)?;
+                    let vals = unsafe {
+                        std::slice::from_raw_parts(st_buf.as_u8().as_ptr().cast::<i32>(), m)
+                    };
+                    status[done..done + m].copy_from_slice(vals);
+                }
                 t.download_s += t2.elapsed().as_secs_f64();
                 done += m;
             }
@@ -198,10 +296,11 @@ impl PfSession<'_, '_> {
         };
         let (pf, inv, status, t) =
             self.run_lanes_f64(kernel, complex, T::as_f64_lanes(planes), n, count)?;
-        let mut pf_t = vec![T::zero_value(); count];
-        T::as_f64_lanes_mut(&mut pf_t).copy_from_slice(&pf);
-        let mut inv_t = vec![T::zero_value(); planes.len()];
-        T::as_f64_lanes_mut(&mut inv_t).copy_from_slice(&inv);
+        // Reinterpret the f64 lane buffers as `T`: a no-op for `T = f64` (the hot measurement
+        // path) and a zip for `T = Complex64`. The old code always allocated two fresh `Vec<T>`
+        // and copied every lane, doubling the per-call host traffic.
+        let pf_t = T::from_f64_lanes(pf);
+        let inv_t = T::from_f64_lanes(inv);
         let status = status.into_iter().map(PlaneStatus::from_code).collect();
         Ok(((pf_t, inv_t, status), t))
     }
@@ -260,6 +359,7 @@ pub fn with_session<R: Send>(
                     f64_complex: load("pfinv_c64")?,
                     f32_real: load("pfinv_f32")?,
                     f32_complex: load("pfinv_c32")?,
+                    scratch: std::cell::RefCell::new(TransferScratch::default()),
                     sess,
                 };
                 Ok(f(&mut ps))
@@ -399,6 +499,12 @@ impl BatchedEngine for PersistentCudaEngine {
     fn name(&self) -> String {
         format!("cuda:{} (persistent session)", self.device)
     }
+    // `BatchedEngine` borrows the input planes and the worker thread needs an owned buffer, so
+    // this one copy across the channel is unavoidable without moving ownership through
+    // `PfaffianStages::pfaffian_inverse_batch` — which takes `&[f64]` because stage A reuses
+    // its `stage_x` buffer for the next batch, so an owned hand-off would lose that reuse and
+    // trade this copy for a fresh per-batch allocation. The copy is ~6% of a `B=16` call, far
+    // below the removed per-call device barriers, so it stays.
     fn run_f64(&self, planes: &[f64], n: usize, count: usize) -> Result<BatchOutput<f64>, Error> {
         let (reply, rx) = std::sync::mpsc::channel();
         self.submit(Job::F64 {

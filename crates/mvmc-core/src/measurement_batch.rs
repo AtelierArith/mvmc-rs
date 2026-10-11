@@ -83,7 +83,14 @@ use crate::stage_backend::{PfaffianStages, PlaneOutcome, StageBackendKind, Stage
 use crate::state::{InvMColMajor, SlaterElmFlat};
 
 /// Default number of samples per batch (see the module docs on memory).
-pub const DEFAULT_BATCH: usize = 4;
+///
+/// Issue #519 follow-up: with the pinned/async stage-A transfers and no redundant per-call
+/// host copies, the fixed per-call cost (worker round trip, device allocation, two stream
+/// barriers) dominates small batches. On the production PhysCal L=64 Hubbard chain the
+/// `CalculateMAll [40]` section measured 7.22 s at `B=1`, 3.44 s at `B=4`, 2.49 s at `B=8`,
+/// 2.13 s at `B=16` and 2.11 s at `B=32`; the whole-run `All` section (identical bytes for
+/// every `B`) was best at `B=16` (9.14 s vs 10.4 s at `B=4`). `B=16` is therefore the default.
+pub const DEFAULT_BATCH: usize = 16;
 
 static OVERRIDE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
@@ -292,9 +299,16 @@ pub fn stage_a_pfaffian(
         return Ok(());
     }
     let planes = active.len() * n_qp;
+    // Grow only: `clear` + `resize` re-zeroed the whole `nn * planes` buffer on every batch even
+    // though every valid plane is overwritten below. Reuse the retained capacity, zero only the
+    // planes of invalid samples (which the backend still reads, exactly as the old zero fill).
+    let x_len = nn * planes;
     let mut x = std::mem::take(&mut batch.stage_x);
-    x.clear();
-    x.resize(nn * planes, 0.0);
+    if x.len() < x_len {
+        x.resize(x_len, 0.0);
+    } else {
+        x.truncate(x_len);
+    }
     let src = slater.as_slice();
     let mut sample_ok = vec![true; active.len()];
     let mut cols = vec![0usize; n];
@@ -310,6 +324,9 @@ pub fn stage_a_pfaffian(
             *c = rsi as usize;
         }
         if !valid {
+            // The batched backend evaluates every plane of `x`; keep the invalid sample's
+            // planes zero, exactly as the previous whole-buffer zero fill did.
+            x[a * n_qp * nn..(a + 1) * n_qp * nn].fill(0.0);
             sample_ok[a] = false;
             continue;
         }
