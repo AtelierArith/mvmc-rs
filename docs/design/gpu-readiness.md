@@ -1798,8 +1798,41 @@ Pfaffian, all-zero plane, out-of-range site) fails its whole sample like `calc_m
   `measurement_gate.rs` (PhysCal on two Hubbard fixtures, 964 numeric tokens each, worst relative
   difference 1.8e-12 against bound `abs 1e-11 / rel 1e-9`; the sampler and RNG do not depend on
   the measurement backend).
-* Not done: complex/FSZ Pfaffian stages, batched local energy/Green/Slater derivative (stage B
-  stays per-sample), performance tuning of the batched call (correctness first).
+* Not done: complex/FSZ Pfaffian stages, performance tuning of the batched call (correctness
+  first).
+
+### 14.5 Measurement stage B through the stage backend (issue #518)
+
+`measurement_backend::TenferroMeasurement` implements
+[`MeasurementStages`](crate::stage_backend::MeasurementStages) (the #519 seam) with tenferro
+eager ops on one `EagerRuntime`, so the same object runs with the CPU runtime
+(`Placement::Host`, the milestone gate) and the CUDA runtime (`Placement::Device`, wired into
+`gpu/mvmc-gpu-cuda::stages`).
+
+* Formulation: the local energy keeps the C `CalHamiltonian1` fast path — the diagonal terms
+  and the per-term projection ratios stay host scalar code — and evaluates the per-term `new_ip`
+  ratio for every transfer term at once as batched `dot_general` products over the electron-slot
+  axis (the "ratio table"). The Slater derivative (`ReturnSlaterElmDiff`) re-associates the
+  per-QP scatter and QP fold into per-translation-sector reductions
+  `A[block,msi,msj] = sum_qp weight*pf*sp*inv_qp[msi,msj]` (one `dot_general` per sector) plus
+  the unchanged host orbital scatter and `* reciprocal(ip)` normalization.
+* Supported class: real, non-FSZ, no RBM, no two-body Green terms (PairHop/Exchange/InterAll)
+  and the real `CalH1` fast path available. Complex/FSZ/RBM/two-body inputs are a hard
+  `StageError::Unsupported`; the runner refuses a non-C-order stage-B consumer in complex/FSZ
+  mode instead of falling back (never a silent CPU result).
+* Validation: `crates/mvmc-core/tests/measurement_tenferro_518.rs` compares the tenferro CPU
+  stage against `COrderMeasurement` on a real L=16 Hubbard sample: the local energy matches to
+  6.8e-16 relative deviation and the 128-component Slater derivative to 8.9e-16 absolute
+  deviation against the bound `abs 1e-13 / rel 1e-13`, plus an end-to-end two-step optimization
+  against the C-order consumer (bound `abs 1e-11 / rel 1e-8`). The A100 stage-B gate
+  (`gpu/mvmc-gpu-cuda/tests/measurement_gate.rs`, `MVMC_RS_CUDA_GATE=1`) compares the CUDA
+  placement on the L=6 Hubbard fixture: PhysCal 964 numeric tokens with worst deviations
+  1.37e-12 absolute / 7.5e-13 relative, and the optimization run (local energy + Slater
+  derivative) 277 tokens with 1.49e-13 absolute / 2.6e-13 relative, against bound
+  `abs 1e-11 / rel 1e-11`.
+* Not done: RBM/two-body Green terms and complex/FSZ stage B; the device placement uploads the
+  gathered ratio operands and downloads the reduced derivative blocks per sample (resident
+  variants are the follow-up).
 
 ## 15. Device-resident SR pipeline for large NPara (issue #447)
 

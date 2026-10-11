@@ -3,8 +3,10 @@
 //!
 //! (a) The routed C-order measurement stage is byte-identical to the pre-existing inline
 //!     calls for a representative small real non-FSZ Hubbard input.
-//! (b) A backend whose measurement stage is `Unsupported` (here the tenferro CPU backend) is a
-//!     hard error, never a silent CPU fallback.
+//! (b) A backend whose measurement stage cannot run the model (here the tenferro CPU backend
+//!     on a Doublon-Holon model, which is outside its real `CalH1` fast path) is a hard error,
+//!     never a silent CPU fallback. The tenferro stage itself is validated for plain real
+//!     non-FSZ Hubbard inputs in `measurement_tenferro_518.rs`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

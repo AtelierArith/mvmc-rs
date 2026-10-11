@@ -28,6 +28,7 @@ pub mod counter;
 pub mod initial_params;
 pub mod io;
 pub mod lanczos;
+pub mod measurement_backend;
 pub mod measurement_batch;
 #[cfg(feature = "mpi")]
 pub mod mpi;
@@ -60,6 +61,7 @@ pub mod threading;
 pub mod validation;
 
 pub use initial_params::{read_initial_def, read_opt_para_file};
+pub use measurement_backend::TenferroMeasurement;
 pub use mvmc_expert_parsers::ExpertModeData;
 pub use parameters::{
     get_parameter_value, pack_parameters, set_parameter_value, unpack_parameters,
