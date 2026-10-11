@@ -2167,6 +2167,42 @@ PhysCal L=448 sampling 41.1 s -> 30.0 s (1.37x; All 1.17x); at L=64 the device l
 7.4 s -> 41.3 s, PhysCal 3.2 s -> 17.2 s) because the single-walker round floor dominates at
 n=128.
 
+### 16.7 Roofline of the slow-lane recompute and the >=20x verdict (issue #517)
+
+The >=20x direction of #517 was checked against the FP64 roofline before promising a number.
+Instrumentation: `LockstepStats.begins` and the bench detail counters
+(`recomputes/begins/accepts/proposals`) plus `gpu/mvmc-gpu-cuda/examples/bench_recompute_roofline.rs`,
+which times the `pfinv_f64` kernel alone.
+
+Per recompute item (one slow-lane batch, NQP=8 planes; exact op counts of `pfinv_plane`,
+`k_assemble`, `k_commit_recompute`): **312.9 MFLOP at L=256**, **1677.6 MFLOP at L=448**. The
+production chain (NVMCSample=64, seed 1) recomputes every `L+1` accepted moves, i.e. **~27 items
+per call** at both sizes. Ideal floors at the 9.7 TFLOPS FP64 ALU peak: `T_min` = 0.88 ms (L=256)
+and 4.70 ms (L=448) per call - 0.05-0.1% of the CPU baseline, so the **flop roofline does not
+block >=20x**.
+
+What does block it today is the kernel rate: `pfinv_f64` saturates at **0.211-0.215 TFLOP/s =
+2.2% of the FP64 peak** (46x off the ideal flop time; the factorization is latency-bound), i.e.
+1.48 ms per item at L=256 and 7.79 ms at L=448 when saturated. Device vs a 4-core host
+(`bench_device_sampler`, `taskset -c 0-3`): L=256 W=1/8/64 = 1.04x / 1.23x / 2.18x; L=448 =
+1.60x / 2.31x / 5.33x.
+
+Amdahl with the measurement side on the host (`MVMC_C_TIMER=1`, production sampling call):
+collapsing the sampling to the recompute floor caps the end-to-end at **2.2-2.7x** while
+`CalculateMAll` + `LocEnergyCal` stay on the CPU. Verdict:
+
+- the FP64 flop roofline leaves >=20x open, but only if the **measurement and local energy also
+  become device-resident** (otherwise the cap is 2.2-2.7x);
+- with the current kernel the recompute alone caps the end-to-end at ~13x (L=256) and ~10-26x
+  (L=448, range from host load); a **>=1.6-2x faster `pfinv` (shared-memory LTL^T for n<=64,
+  parallel triangular inverse, tiled rank-2) is required** before >=20x is defensible;
+- the remaining host-side work (candidate generation, projection counters, `log_proj_ratio`,
+  acceptance) must shrink by batching/persistence.
+
+A device-side SFMT port was prototyped and validated bitwise against the C/Rust generators (seeds
+1/42/11272, 10^4-10^6 words, state and cursor), but per the user decision it is **not adopted**;
+the RNG stays on the host.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

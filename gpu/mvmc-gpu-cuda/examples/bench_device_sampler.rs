@@ -260,10 +260,11 @@ fn main() {
                     secs: median(times),
                     hops_per_walker,
                     detail: format!(
-                        "passes={} max_batch={} recv_ms={:.1} round_ms={:.1} deliver_ms={:.1} stage_ms={:.1} upload_ms={:.1} launch_ms={:.1} wait_ms={:.1} dev_accept_ms={:.1} slow_wait_ms={:.1} slow_batches={} dev_slow_ms={:.1} dev_propose_ms={:.1}",
+                        "passes={} max_batch={} recv_ms={:.1} round_ms={:.1} deliver_ms={:.1} stage_ms={:.1} upload_ms={:.1} launch_ms={:.1} wait_ms={:.1} dev_accept_ms={:.1} slow_wait_ms={:.1} slow_batches={} dev_slow_ms={:.1} dev_propose_ms={:.1} recomputes={} begins={} accepts={} proposals={}",
                         st.passes, st.max_batch, st.recv_s * 1e3, st.round_s * 1e3, st.deliver_s * 1e3,
                         tm.stage_s * 1e3, tm.upload_s * 1e3, tm.launch_s * 1e3, tm.wait_s * 1e3,
-                        tm.dev_accept_s * 1e3, tm.slow_wait_s * 1e3, tm.slow_batches, tm.dev_slow_s * 1e3, tm.dev_propose_s * 1e3
+                        tm.dev_accept_s * 1e3, tm.slow_wait_s * 1e3, tm.slow_batches, tm.dev_slow_s * 1e3, tm.dev_propose_s * 1e3,
+                        st.recomputes, st.begins, st.accepts, st.proposals
                     ),
                 });
             }
