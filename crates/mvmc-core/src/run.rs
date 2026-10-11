@@ -1187,6 +1187,10 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
     mut options: OptimizationOptions<'_>,
     timer: &mut CTimer<TIMED>,
 ) -> Result<(), String> {
+    // Pin BLAS to one thread for the deterministic serial policy. The C-order path initialises
+    // this on its first Cholesky solve; the resident SR path (#452) never reaches it, so OpenBLAS
+    // would otherwise keep its default pool busy-waiting for the whole run (issue #517).
+    crate::serial_blas::initialize();
     let all_complex = collective_result(
         crate::validation::validate_grouped_runtime(
             data,
