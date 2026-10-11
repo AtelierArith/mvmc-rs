@@ -9,6 +9,7 @@
 pub mod bench;
 pub mod device_sampler;
 pub mod pfaffian;
+pub mod sampler_stages;
 pub mod sr_bench;
 pub mod sr_device;
 pub mod sr_problem;
@@ -43,6 +44,15 @@ impl CudaProvider for Provider {
         // Production SR (`MVMC_RS_SR_BACKEND=cuda[:N]`) runs the device-resident direct and CG
         // steps (issue #452); the per-stage backend stays available as `stages::cuda_stage_backend`.
         stages::cuda_resident_stage_backend(ordinal)
+    }
+
+    fn open_sampler_stages(
+        &self,
+        ordinal: usize,
+    ) -> Result<Box<dyn mvmc_core::sampler_backend::SamplerStages>, String> {
+        // Production sampling (`MVMC_RS_SAMPLER_BACKEND=cuda[:N]`) runs the device-resident
+        // lock-step sampler (issue #517) on the serial production chain.
+        Ok(Box::new(sampler_stages::CudaSamplerStages::new(ordinal)?))
     }
 
     fn report(&self, ordinal: usize) -> Result<DeviceReport, String> {

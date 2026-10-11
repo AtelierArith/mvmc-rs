@@ -2126,6 +2126,47 @@ The milestone-1 contract passes the runner's working state, so the batched devic
 (and a flat device-facing layout) is a later milestone; a device backend answers `Unsupported`
 until then. The complex/FSZ measurement and the Green functions remain host-only.
 
+### 16.6 Milestone 1: production sampler routing (issue #517)
+
+The first #517 milestone routes the **production** `VMCMakeSample` of the optimization and
+PhysCal loops through the device-resident lock-step sampler of #434. `mvmc-core/src/sampler_backend.rs`
+adds the `SamplerStages` trait (`label`, `provider`,
+`sample_real(data, state, rng, timing, reducer) -> SampleStats`), a `COrderSampler` oracle that is
+the unchanged inline driver (run against a fresh internal `CTimer` and merged through the
+`MeasurementTiming` bridge, so the `zvo_CalcTimer.dat` report is preserved), and selection
+`MVMC_RS_SAMPLER_BACKEND=c-order|cuda[:N]` (default `c-order`) with the same override/preflight
+pattern as `stage_backend`. The CUDA slot is provided by `gpu/mvmc-gpu-cuda` through the
+registered `CudaProvider`; the `mvmc-cuda` binary exposes it to production. `run.rs` resolves the
+selector once per run, hard-errors for complex/FSZ (never a silent C-order fallback) and for a
+multi-process reducer (the device chain is the serial chain), and acquires the backend once per
+run.
+
+`run_lockstep_real_one` runs the production chain in lock-step with the **walker on the calling
+thread** and the service loop on a scoped thread (the multi-walker runner keeps its walker
+threads); no state, RNG or `ExpertModeData` is moved or copied, and the reducer needs no `Sync`.
+The CUDA service is reused across sample series: `prepare` drops the previous run's Slater copies
+and reuses the resident buffers when the geometry and walker count match. Complex/FSZ never reach
+the stage.
+
+Validation. `crates/mvmc-core/tests/sampler_backend_517.rs` registers a `HostService`-backed stage
+as the `cuda` kind and requires the production optimization (Hubbard L=4) and PhysCal (Hubbard
+L=64) runs to be byte-identical to C order (SFMT state, draw count, saved chain, counters, output
+files) and the selector/mode/reducer/device-less errors; the L=64 PhysCal case guards the BLAS
+interaction below. `gpu/mvmc-gpu-cuda/tests/sampler_production_gate.rs` repeats the exactness
+check on the A100 with the real `CudaSamplerService`.
+
+The milestone found one numerical host interaction: the device runner pins OpenBLAS to one thread
+(`serial_blas::initialize`, the deterministic-serial policy of #524), while the C-order PhysCal
+entry point left whatever threading was active, so selecting the CUDA sampler changed the host
+`CalculateMAll` last bits. `vmc_phys_cal_in_place_with_options_timed` now pins BLAS at its start,
+exactly like `vmc_para_opt_timed`; both backends then produce byte-identical PhysCal output.
+
+A100 results (3 timed rounds, medians, `MVMC_C_TIMER=1`, byte-identical outputs; details in
+`bench-out/issue517/m1/REPORT.md`): Opt L=448 sampling 25.6 s -> 18.5 s (1.39x; All 1.19x) and
+PhysCal L=448 sampling 41.1 s -> 30.0 s (1.37x; All 1.17x); at L=64 the device loses (Opt sampling
+7.4 s -> 41.3 s, PhysCal 3.2 s -> 17.2 s) because the single-walker round floor dominates at
+n=128.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

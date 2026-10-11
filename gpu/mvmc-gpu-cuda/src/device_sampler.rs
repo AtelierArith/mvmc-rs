@@ -267,6 +267,7 @@ struct Scratch {
 
 struct Resident {
     geom: Geometry,
+    walkers: usize,
     ele: CudaSlice<i32>,
     inv: CudaSlice<f64>,
     pf: CudaSlice<f64>,
@@ -675,10 +676,27 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
     }
 
     fn prepare(&mut self, geom: Geometry, walkers: usize) -> Result<(), String> {
+        // A service is reused across sample series (production calls `prepare` once per series):
+        // drop the previous run's Slater copies and queued replies. Every slow batch of the
+        // previous run was reaped before its walkers finished, so nothing references them. The
+        // resident buffers are reused when the geometry and walker count match: every `Begin`
+        // overwrites the full inverse/Pfaffian/configuration of its walker before anything reads
+        // them, so the previous contents are never observed.
+        self.slater.clear();
+        self.completed.clear();
         let st = self.fast.ts.stream();
+        let reuse = self
+            .res
+            .as_ref()
+            .is_some_and(|r| r.geom == geom && r.walkers == walkers);
+        if reuse {
+            st.synchronize().map_err(cu)?;
+            return Ok(());
+        }
         let nn = geom.n_size() * geom.n_size();
         self.res = Some(Resident {
             geom,
+            walkers,
             ele: st.alloc_zeros(walkers * geom.n_size()).map_err(cu)?,
             inv: st.alloc_zeros(walkers * geom.n_qp * nn).map_err(cu)?,
             pf: st.alloc_zeros(walkers * geom.n_qp).map_err(cu)?,

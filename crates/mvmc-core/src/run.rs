@@ -39,7 +39,8 @@ use crate::initial_params::{read_initial_def, read_opt_para_file};
 use crate::io::{output_data, output_opt_data, store_opt_data};
 use crate::measurement_batch::SlotStatus;
 use crate::observables::clear_phys_quantity;
-use crate::reducer::{Reducer, SingleProcessReducer};
+use crate::reducer::{Reducer, ReducerAsDyn, SingleProcessReducer};
+use crate::sampler_backend::SamplerBackendKind;
 use crate::slater_update::{update_slater_elm, update_slater_elm_fsz};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use crate::sync::sync_modified_parameter as sync_modified;
@@ -742,7 +743,7 @@ pub fn vmc_phys_cal_to_dir_with_callback(
 /// output root writes indexed Green files. This keeps the serial API unchanged
 /// while making MPI PhysCal use the same comm0/group reduction contract as
 /// parameter optimization.
-pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_with_reducer<R: Reducer + ReducerAsDyn + ?Sized>(
     preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
@@ -756,7 +757,7 @@ pub fn vmc_phys_cal_with_reducer<R: Reducer + ?Sized>(
 /// `[21]` WeightAverage and `[22]` outputData are started/stopped inside; the
 /// caller owns `[0]`/`[1]`/`[2]` and report writing. A disabled timer is a
 /// no-op (the const generic erases the clock reads).
-pub fn vmc_phys_cal_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_with_reducer_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>(
     preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
@@ -777,7 +778,7 @@ pub fn vmc_phys_cal_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
 /// the sample. Every rank participates in the callback-failure agreement,
 /// including ranks whose callback succeeded, so a rank-local error is returned
 /// consistently without leaving MPI peers in different loop states.
-pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ReducerAsDyn + ?Sized>(
     preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
@@ -796,7 +797,10 @@ pub fn vmc_phys_cal_with_reducer_and_callback<R: Reducer + ?Sized>(
 ///
 /// Behaves like [`vmc_phys_cal_with_reducer_and_callback`] and additionally
 /// records the `NVMCCalMode=1` sections into `timer`.
-pub fn vmc_phys_cal_with_reducer_and_callback_timed<const TIMED: bool, R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_with_reducer_and_callback_timed<
+    const TIMED: bool,
+    R: Reducer + ReducerAsDyn + ?Sized,
+>(
     mut preparation: PhysCalPreparation,
     output_dir: Option<&Path>,
     reducer: &R,
@@ -881,7 +885,7 @@ pub fn prepare_sampling_walker(mut prep: PhysCalPreparation) -> Result<SamplingW
 /// the caller retains the actual sampled state and RNG at that error boundary.
 /// Callback errors return before any subsequent sampling or RNG draw.
 /// Existing state contents are replaced at initialization, not continued.
-pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_in_place<R: Reducer + ReducerAsDyn + ?Sized>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
@@ -905,7 +909,7 @@ pub fn vmc_phys_cal_in_place<R: Reducer + ?Sized>(
 /// Records `[20]` UpdateSlaterElm, `[3]` VMCMakeSample, `[4]` VMCMainCal,
 /// `[21]` WeightAverage and `[22]` outputData (the caller owns
 /// `[0]`/`[1]`/`[2]`).
-pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_in_place_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
@@ -937,7 +941,10 @@ pub struct PhysCalRunOptions {
 
 /// [`vmc_phys_cal_in_place_timed`] with explicit [`PhysCalRunOptions`].
 #[allow(clippy::too_many_arguments)]
-pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + ?Sized>(
+pub fn vmc_phys_cal_in_place_with_options_timed<
+    const TIMED: bool,
+    R: Reducer + ReducerAsDyn + ?Sized,
+>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
@@ -947,6 +954,12 @@ pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + 
     timer: &mut CTimer<TIMED>,
     options: PhysCalRunOptions,
 ) -> Result<usize, String> {
+    // Pin BLAS to one thread for the deterministic serial policy, as `vmc_para_opt_timed` does
+    // (#524). Without this the host measurement would run with whatever OpenBLAS threading
+    // happens to be active: the C-order path leaves the default pool, while the CUDA sampler
+    // stage initializes the pin itself, so selecting the device backend would change the
+    // measurement's summation order and its last bits (issue #517).
+    crate::serial_blas::initialize();
     let all_complex = collective_result(
         crate::validation::validate_phys_cal(data)
             .and_then(|()| crate::validation::validate_reducer_rank(data, reducer))
@@ -954,6 +967,26 @@ pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + 
         reducer,
         "PhysCal validation",
     )?;
+    // Sampler backend (issue #517): resolved locally, like the other stage selectors (the CLI
+    // agrees on the selector across MPI ranks before any IO). Complex and FSZ modes have no
+    // device sampler, so a non-C-order selection for such a mode is a hard error, never a
+    // silent C-order fallback.
+    let sampler_kind = crate::sampler_backend::selected_sampler_backend();
+    if sampler_kind != SamplerBackendKind::COrder {
+        collective_result(
+            crate::sampler_backend::check_supported_mode(
+                sampler_kind,
+                all_complex,
+                data.i_flg_orbital_general != 0,
+            )
+            .and_then(|()| {
+                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+                    .map_err(|error| error.to_string())
+            }),
+            reducer,
+            "sampler backend mode",
+        )?;
+    }
     // C InitFile (NVMCCalMode==1) creates only the `_time_` file on rank 0; its
     // failure joins the directory-setup agreement so no extra collective is added.
     let mut run_files = None;
@@ -1000,6 +1033,7 @@ pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + 
     }
     timer.stop(20);
     let iterations = data.modpara.n_data_qty_smp.max(0) as usize;
+    let mut sampler_handle = crate::sampler_backend::acquire_sampler_kind(sampler_kind);
     for sample in 0..iterations {
         // C: OutputTime(ismp); FlushFile(0) (always a flush) before sampling.
         if let Some(files) = run_files.as_mut() {
@@ -1031,11 +1065,11 @@ pub fn vmc_phys_cal_in_place_with_options_timed<const TIMED: bool, R: Reducer + 
             .map(|_| ())
             .map_err(|error| error.to_string())
         } else {
-            crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
-                data, state, rng, timer, reducer,
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+            sampler_handle
+                .sampler()
+                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .map(|_| ())
+                .map_err(|error| error.to_string())
         };
         timer.stop(3);
         let sample_error = sample_result.as_ref().err().cloned();
@@ -1157,7 +1191,7 @@ pub struct OptimizationOptions<'a> {
 /// their corresponding drivers. Runtime validation rejects unported
 /// features before sampling; a failed SR step returns an error before
 /// parameter synchronization or any subsequent iteration.
-pub fn vmc_para_opt<R: Reducer + ?Sized>(
+pub fn vmc_para_opt<R: Reducer + ReducerAsDyn + ?Sized>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
@@ -1178,7 +1212,7 @@ pub fn vmc_para_opt<R: Reducer + ?Sized>(
 
 /// Run the same numerical loop with a caller-owned, optionally enabled timer.
 /// Disabled instantiations compile clock reads and slot operations out of kernels.
-pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
+pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>(
     data: &mut ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
@@ -1209,6 +1243,26 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
         reducer,
         "optimization validation",
     )?;
+    // Sampler backend (issue #517): resolved locally, like the other stage selectors (the CLI
+    // agrees on the selector across MPI ranks before any IO). Complex and FSZ modes have no
+    // device sampler, so a non-C-order selection for such a mode is a hard error, never a
+    // silent C-order fallback.
+    let sampler_kind = crate::sampler_backend::selected_sampler_backend();
+    if sampler_kind != SamplerBackendKind::COrder {
+        collective_result(
+            crate::sampler_backend::check_supported_mode(
+                sampler_kind,
+                all_complex,
+                data.i_flg_orbital_general != 0,
+            )
+            .and_then(|()| {
+                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+                    .map_err(|error| error.to_string())
+            }),
+            reducer,
+            "sampler backend mode",
+        )?;
+    }
     let mut run_files: Option<crate::output_files::RunFiles> = None;
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     // Validation excludes C's unwritten leading rows for oversized windows.
@@ -1245,6 +1299,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
             }
         }
     }
+    let mut sampler_handle = crate::sampler_backend::acquire_sampler_kind(sampler_kind);
     timer.start(2);
     for step in 0..n_steps {
         // C OutputTime(step) precedes the sample; Counter still holds the
@@ -1279,10 +1334,10 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
                 .map_err(|error| error.to_string())
             }
         } else if !all_complex {
-            crate::sampling::driver::vmc_make_sample_real_with_reducer_timed(
-                data, state, rng, timer, reducer,
-            )
-            .map_err(|error| error.to_string())
+            sampler_handle
+                .sampler()
+                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .map_err(|error| error.to_string())
         } else {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
                 data, state, rng, timer, reducer,
@@ -1526,7 +1581,7 @@ pub fn run_para_opt_from_namelist(
 /// passes it here.  Keeping initialization outside the library preserves MPI
 /// ownership and allows ordinary Rust callers to continue using the serial
 /// entry point without linking an MPI implementation.
-pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ?Sized>(
+pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ReducerAsDyn + ?Sized>(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
     reducer: &R,
@@ -1563,7 +1618,7 @@ pub fn run_para_opt_from_namelist_with_reducer<R: Reducer + ?Sized>(
 /// Run the production optimization entry point and also return this rank's final
 /// sampler state and RNG, for rank-wise verification (#179). The numerical run
 /// is identical to [`run_para_opt_from_namelist_with_reducer`].
-pub fn run_para_opt_from_namelist_observed<R: Reducer + ?Sized>(
+pub fn run_para_opt_from_namelist_observed<R: Reducer + ReducerAsDyn + ?Sized>(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
     reducer: &R,
@@ -1619,7 +1674,7 @@ fn validate_optimization_window(nsteps: i64, nsmp: i64) -> Result<(), String> {
     Ok(())
 }
 
-fn run_para_opt_timed<const TIMED: bool, R: Reducer + ?Sized>(
+fn run_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>(
     namelist_path: impl AsRef<Path>,
     config: RunConfig,
     reducer: &R,
