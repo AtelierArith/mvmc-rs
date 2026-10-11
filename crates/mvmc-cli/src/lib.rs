@@ -481,7 +481,11 @@ pub fn run_cli() {
         if let Some(context) = mpi_world.as_ref() {
             let backend = std::env::var(mvmc_core::stage_backend::SR_BACKEND_VARIABLE).ok();
             let measure = std::env::var(mvmc_core::measurement_batch::MEASURE_PF_VARIABLE).ok();
-            let value = format!("sr_backend={backend:?};measure_pf={measure:?}");
+            let consumer =
+                std::env::var(mvmc_core::measurement_batch::MEASURE_CONSUMER_VARIABLE).ok();
+            let value = format!(
+                "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?}"
+            );
             agree_controls(&value, context).unwrap_or_else(|error| {
                 eprintln!("error: {error}");
                 process::exit(1);
@@ -489,6 +493,7 @@ pub fn run_cli() {
         }
         let checked = mvmc_core::stage_backend::validate_selected_stage_backend()
             .and_then(|_| mvmc_core::measurement_batch::validate_measurement_pfaffian())
+            .and_then(|_| mvmc_core::measurement_batch::validate_measurement_consumer())
             .map(|_| ());
         #[cfg(feature = "mpi")]
         let checked = match mpi_world.as_ref() {

@@ -177,6 +177,84 @@ pub fn validate_measurement_pfaffian() -> Result<MeasurementPfaffian, String> {
     Ok(source)
 }
 
+/// Where stage B (local energy and Slater derivative) of the real, non-FSZ measurement runs
+/// (issue #519).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeasurementConsumer {
+    /// The inline C-order calls of the measurement loop (the pre-routing behavior).
+    Direct,
+    /// The [`MeasurementStages`](crate::stage_backend::MeasurementStages) of the selected
+    /// backend.
+    Stage(StageBackendKind),
+}
+
+/// Environment variable selecting the stage B measurement consumer (`c-order` (default),
+/// `direct`, `tenferro`, `cuda[:N]`).
+pub const MEASURE_CONSUMER_VARIABLE: &str = "MVMC_RS_MEASURE_BACKEND";
+
+/// Parse a [`MEASURE_CONSUMER_VARIABLE`] value.
+pub fn parse_measurement_consumer(value: &str) -> Result<MeasurementConsumer, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "c" | "c-order" | "corder" | "default" => {
+            Ok(MeasurementConsumer::Stage(StageBackendKind::COrder))
+        }
+        "direct" | "inline" => Ok(MeasurementConsumer::Direct),
+        other => crate::stage_backend::parse_stage_backend(other)
+            .map(MeasurementConsumer::Stage)
+            .map_err(|_| {
+                format!(
+                    "{MEASURE_CONSUMER_VARIABLE}={other:?} is not one of direct, c-order, tenferro, cuda[:N]"
+                )
+            }),
+    }
+}
+
+static CONSUMER_OVERRIDE: std::sync::Mutex<Option<MeasurementConsumer>> =
+    std::sync::Mutex::new(None);
+
+/// Process-wide override for tests (`None` restores the environment/default).
+pub fn set_measurement_consumer_override(consumer: Option<MeasurementConsumer>) {
+    *CONSUMER_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) = consumer;
+}
+
+/// The stage B measurement consumer: override, then environment, then the C-order default.
+/// An invalid environment value is an error.
+pub fn try_selected_measurement_consumer() -> Result<MeasurementConsumer, String> {
+    if let Some(consumer) = *CONSUMER_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
+        return Ok(consumer);
+    }
+    match std::env::var(MEASURE_CONSUMER_VARIABLE) {
+        Ok(v) => parse_measurement_consumer(&v),
+        Err(std::env::VarError::NotPresent) => {
+            Ok(MeasurementConsumer::Stage(StageBackendKind::COrder))
+        }
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(format!("{MEASURE_CONSUMER_VARIABLE} is not valid UTF-8"))
+        }
+    }
+}
+
+/// Like [`try_selected_measurement_consumer`] but a hard error (panic) on an invalid value,
+/// for callers that did not run [`validate_measurement_consumer`] first.
+pub fn selected_measurement_consumer() -> MeasurementConsumer {
+    try_selected_measurement_consumer().unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// Startup preflight (issue #519): resolve [`MEASURE_CONSUMER_VARIABLE`] and, for a backend
+/// other than C order, open it, so that an invalid value or an unavailable backend is an error
+/// before any IO instead of a panic in the first measurement sample.
+///
+/// # Errors
+///
+/// A message that names [`MEASURE_CONSUMER_VARIABLE`].
+pub fn validate_measurement_consumer() -> Result<MeasurementConsumer, String> {
+    let consumer = try_selected_measurement_consumer()?;
+    if let MeasurementConsumer::Stage(kind) = consumer {
+        crate::stage_backend::preflight_stage_backend(kind, MEASURE_CONSUMER_VARIABLE)?;
+    }
+    Ok(consumer)
+}
+
 /// Smallest squared plane entry that `calc_m_all_real` accepts (its `MIN_ABS2`).
 const MIN_ABS2: f64 = 1.0e-28;
 
@@ -768,6 +846,32 @@ mod tests {
             Ok(MeasurementPfaffian::Stage(StageBackendKind::Cuda(1)))
         );
         assert!(parse_measurement_pfaffian("nope").is_err());
+    }
+
+    #[test]
+    fn measurement_consumer_selector_parses() {
+        // Default is the C-order measurement stage (byte-identical to the inline calls).
+        assert_eq!(
+            parse_measurement_consumer(""),
+            Ok(MeasurementConsumer::Stage(StageBackendKind::COrder))
+        );
+        assert_eq!(
+            parse_measurement_consumer("c-order"),
+            Ok(MeasurementConsumer::Stage(StageBackendKind::COrder))
+        );
+        assert_eq!(
+            parse_measurement_consumer("direct"),
+            Ok(MeasurementConsumer::Direct)
+        );
+        assert_eq!(
+            parse_measurement_consumer("tenferro"),
+            Ok(MeasurementConsumer::Stage(StageBackendKind::TenferroCpu))
+        );
+        assert_eq!(
+            parse_measurement_consumer("cuda:1"),
+            Ok(MeasurementConsumer::Stage(StageBackendKind::Cuda(1)))
+        );
+        assert!(parse_measurement_consumer("nope").is_err());
     }
 
     /// Stage A writes whole planes through the revalidating full-overwrite writer, so a slot

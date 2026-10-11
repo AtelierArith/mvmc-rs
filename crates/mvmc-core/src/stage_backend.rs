@@ -8,7 +8,9 @@
 //!
 //! * [`SrStages`](crate::sr_backend::SrStages): Gram product, S/g assembly, Cholesky solve, CG
 //!   matrix-vector product and the composite `sr_s_g` stage (issues #421, #424);
-//! * [`PfaffianStages`]: batched Pfaffian and inverse of skew-symmetric planes (issue #423).
+//! * [`PfaffianStages`]: batched Pfaffian and inverse of skew-symmetric planes (issue #423);
+//! * [`MeasurementStages`]: local energy and Slater-parameter derivative of one real, non-FSZ
+//!   measurement sample (issue #519).
 //!
 //! A [`StageBackend`] is the single object that composes one implementation of every stage
 //! trait. It is what production code acquires ([`acquire`]), what the validation harness of
@@ -35,9 +37,14 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use mvmc_expert_parsers::ExpertModeData;
+use num_complex::Complex64;
 use pfapack::{dsktf2, utu2inv_real, utu2pfa_real, PivotIndex1Based, SqMat};
 
+use crate::c_timer::{CTimer, TimerEnv, CTIMER_N};
+use crate::slater_derivative::SlaterDerivativeScratch;
 use crate::sr_backend::{COrderSr, SrStages, TenferroSr, TenferroStats};
+use crate::state::VmcOptimizationState;
 
 /// Why a stage produced no result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,15 +276,226 @@ impl PfaffianStages for UnsupportedPfaffian {
     }
 }
 
+// ---------------------------------------------------------------------------------------
+// Measurement stage B (issue #519): local energy and Slater derivative
+// ---------------------------------------------------------------------------------------
+
+/// Timing sink of the routed measurement stage. The runner passes its own [`CTimer`] and the
+/// C-order stage records the same section IDs by running the kernels against a fresh internal
+/// timer and merging its elapsed counters here, so routing does not change the timing report.
+pub trait MeasurementTiming {
+    /// Whether the runner's timer records elapsed sections.
+    fn enabled(&self) -> bool;
+    /// The runner's diagnostic switches (they select the numerical path of the kernels).
+    fn diagnostics(&self) -> TimerEnv;
+    /// Add a worker timer's elapsed counters into this timer.
+    fn merge_elapsed(&mut self, elapsed_ns: &[u64; CTIMER_N]);
+}
+
+impl<const ENABLED: bool> MeasurementTiming for CTimer<ENABLED> {
+    fn enabled(&self) -> bool {
+        ENABLED
+    }
+
+    fn diagnostics(&self) -> TimerEnv {
+        self.diagnostics
+    }
+
+    fn merge_elapsed(&mut self, elapsed_ns: &[u64; CTIMER_N]) {
+        if ENABLED {
+            for (slot, worker) in self.elapsed_ns.iter_mut().zip(elapsed_ns) {
+                *slot = slot.wrapping_add(*worker);
+            }
+        }
+    }
+}
+
+/// Inputs of one real, non-FSZ saved-sample measurement. The runner's working Slater tables
+/// (already swapped in) hold the sample.
+///
+/// This is the host contract of milestone 1 (issue #519): the runner passes its
+/// `ExpertModeData`/`VmcOptimizationState`, so a device backend that cannot reconstruct them
+/// answers [`StageError::Unsupported`]. A flat device-facing layout is a later milestone.
+pub struct MeasurementInput<'a> {
+    /// Immutable physics configuration.
+    pub data: &'a ExpertModeData,
+    /// Mutable optimizer state whose working Slater tables hold this sample.
+    pub state: &'a mut VmcOptimizationState,
+    /// Overlap `<phi|Psi>` of the sample.
+    pub ip: Complex64,
+    /// Electron sites `[2 * Ne]` of the sample.
+    pub ele_idx: &'a [i64],
+    /// Electron-configuration descriptors.
+    pub ele_cfg: &'a [i64],
+    /// Site occupation numbers.
+    pub ele_num: &'a [i64],
+    /// Projection counts.
+    pub ele_proj_cnt: &'a [i64],
+}
+
+/// Result of [`MeasurementStages::measure_sample`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasurementOutput {
+    /// Local energy `<phi|H|Psi>/<phi|Psi>`.
+    pub local_energy: Complex64,
+    /// Slater-parameter derivative block (`2 * n_slater` real/imaginary pairs); empty when the
+    /// runner did not request it.
+    pub slater_diff: Vec<Complex64>,
+}
+
+/// Local energy and Slater-parameter derivative of one real, non-FSZ sample (issue #519).
+///
+/// A backend that cannot run the stage returns [`StageError::Unsupported`]; the runner reports
+/// that as a hard error and never falls back to the inline C-order calls.
+pub trait MeasurementStages: Send {
+    /// Short label, for example `c-order-cpu`.
+    fn label(&self) -> String;
+    /// Provider description recorded in the benchmark metadata.
+    fn provider(&self) -> String;
+
+    /// Compute the local energy and (when `slater_diff_len > 0`) the Slater-parameter
+    /// derivative of one sample. `slater_diff_len` is the number of complex slots the runner
+    /// reserves for the derivative (the truncated length of the `SROptO` Slater block).
+    fn measure_sample(
+        &mut self,
+        _input: &mut MeasurementInput<'_>,
+        _slater_diff_len: usize,
+        _timing: &mut dyn MeasurementTiming,
+    ) -> Result<MeasurementOutput, StageError> {
+        Err(StageError::Unsupported(format!(
+            "{} does not provide the measurement stage",
+            self.label()
+        )))
+    }
+}
+
+/// C-order CPU measurement stage: the production `calculate_local_energy` and
+/// `slater_elm_diff` kernels, operation for operation. This is the oracle.
+#[derive(Default)]
+pub struct COrderMeasurement {
+    scratch: SlaterDerivativeScratch,
+}
+
+impl COrderMeasurement {
+    fn run<const TIMED: bool>(
+        &mut self,
+        input: &mut MeasurementInput<'_>,
+        slater_diff_len: usize,
+        timer: &mut CTimer<TIMED>,
+    ) -> MeasurementOutput {
+        let local_energy = crate::observables::calculate_local_energy_timed::<TIMED>(
+            input.ip,
+            input.data,
+            input.state,
+            input.ele_idx,
+            input.ele_cfg,
+            input.ele_num,
+            input.ele_proj_cnt,
+            timer,
+        );
+        let mut slater_diff = Vec::new();
+        if slater_diff_len > 0 {
+            slater_diff.resize(slater_diff_len, Complex64::new(0.0, 0.0));
+            // Section 930 is the runner's Slater-derivative wrapper around the inline call;
+            // record it here too so the routed path keeps the timing report.
+            timer.start_diag(930, timer.diagnostics.slater);
+            crate::slater_derivative::slater_elm_diff_with_scratch_timed::<TIMED>(
+                &mut slater_diff,
+                input.ip,
+                input.ele_idx,
+                input.data,
+                &input.state.slater_matrix,
+                true,
+                &mut self.scratch,
+                timer,
+            );
+            timer.stop_diag(930, timer.diagnostics.slater);
+        }
+        MeasurementOutput {
+            local_energy,
+            slater_diff,
+        }
+    }
+}
+
+impl MeasurementStages for COrderMeasurement {
+    fn label(&self) -> String {
+        "c-order-cpu".to_string()
+    }
+
+    fn provider(&self) -> String {
+        "observables calculate_local_energy + slater_elm_diff (C order)".to_string()
+    }
+
+    fn measure_sample(
+        &mut self,
+        input: &mut MeasurementInput<'_>,
+        slater_diff_len: usize,
+        timing: &mut dyn MeasurementTiming,
+    ) -> Result<MeasurementOutput, StageError> {
+        if timing.enabled() {
+            let mut timer = CTimer::<true>::new();
+            timer.diagnostics = timing.diagnostics();
+            let out = self.run(input, slater_diff_len, &mut timer);
+            timing.merge_elapsed(&timer.elapsed_ns);
+            Ok(out)
+        } else {
+            let mut timer = CTimer::<false>::new();
+            timer.diagnostics = timing.diagnostics();
+            Ok(self.run(input, slater_diff_len, &mut timer))
+        }
+    }
+}
+
+/// A measurement stage that always reports [`StageError::Unsupported`] with the stated reason
+/// (a backend without a device or host measurement implementation).
+#[derive(Debug, Clone)]
+pub struct UnsupportedMeasurement {
+    label: String,
+    reason: String,
+}
+
+impl UnsupportedMeasurement {
+    /// Stage named `label` that is unsupported because of `reason`.
+    pub fn new(label: &str, reason: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+}
+
+impl MeasurementStages for UnsupportedMeasurement {
+    fn label(&self) -> String {
+        self.label.clone()
+    }
+
+    fn provider(&self) -> String {
+        "unsupported".to_string()
+    }
+
+    fn measure_sample(
+        &mut self,
+        _input: &mut MeasurementInput<'_>,
+        _slater_diff_len: usize,
+        _timing: &mut dyn MeasurementTiming,
+    ) -> Result<MeasurementOutput, StageError> {
+        Err(StageError::Unsupported(self.reason.clone()))
+    }
+}
+
 /// The single backend object: one implementation of every stage trait.
 pub struct StageBackend<'a> {
     label: String,
     sr: Box<dyn SrStages + 'a>,
     pfaffian: Box<dyn PfaffianStages + 'a>,
+    measurement: Box<dyn MeasurementStages + 'a>,
 }
 
 impl<'a> StageBackend<'a> {
-    /// Compose a backend labelled `label` from one implementation per stage trait.
+    /// Compose a backend labelled `label` from one implementation per stage trait. The
+    /// measurement slot defaults to [`UnsupportedMeasurement`]; add it with
+    /// [`StageBackend::with_measurement`].
     pub fn new(
         label: &str,
         sr: Box<dyn SrStages + 'a>,
@@ -287,16 +505,22 @@ impl<'a> StageBackend<'a> {
             label: label.to_string(),
             sr,
             pfaffian,
+            measurement: Box::new(UnsupportedMeasurement::new(
+                label,
+                "this backend provides no measurement stage",
+            )),
         }
     }
 
-    /// C-order CPU: BLAS/LAPACK SR stages and the PfaPack Pfaffian (default, parity oracle).
+    /// C-order CPU: BLAS/LAPACK SR stages, the PfaPack Pfaffian and the inline measurement
+    /// kernels (default, parity oracle).
     pub fn c_order() -> StageBackend<'static> {
         StageBackend::new(
             "c-order-cpu",
             Box::new(COrderSr::default()),
             Box::new(COrderPfaffian),
         )
+        .with_measurement(Box::new(COrderMeasurement::default()))
     }
 
     /// tenferro CPU (`cpu-faer`): SR stages through eager ops; the Pfaffian stage is
@@ -316,6 +540,12 @@ impl<'a> StageBackend<'a> {
         self
     }
 
+    /// Replace the measurement stage (for example by a device stage).
+    pub fn with_measurement(mut self, measurement: Box<dyn MeasurementStages + 'a>) -> Self {
+        self.measurement = measurement;
+        self
+    }
+
     /// Backend label.
     pub fn label(&self) -> String {
         self.label.clone()
@@ -324,9 +554,10 @@ impl<'a> StageBackend<'a> {
     /// Provider description: one entry per stage trait.
     pub fn provider(&self) -> String {
         format!(
-            "sr: {}; pfaffian: {}",
+            "sr: {}; pfaffian: {}; measurement: {}",
             self.sr.provider(),
-            self.pfaffian.provider()
+            self.pfaffian.provider(),
+            self.measurement.provider()
         )
     }
 
@@ -338,6 +569,11 @@ impl<'a> StageBackend<'a> {
     /// Batched Pfaffian and inverse stage.
     pub fn pfaffian(&mut self) -> &mut dyn PfaffianStages {
         &mut *self.pfaffian
+    }
+
+    /// Local-energy and Slater-derivative measurement stage.
+    pub fn measurement(&mut self) -> &mut dyn MeasurementStages {
+        &mut *self.measurement
     }
 }
 
