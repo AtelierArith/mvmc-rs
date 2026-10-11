@@ -46,6 +46,7 @@ pub mod pfaffian;
 pub mod qp;
 pub mod reducer;
 pub mod run;
+pub mod sampler_backend;
 pub mod sampling;
 mod serial_blas;
 mod slater_derivative;
@@ -86,6 +87,7 @@ pub use run::{
     OptimizationOptions, PhysCalCallback, PhysCalPreparation, PhysCalResult, PhysCalRunOptions,
     RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
 };
+pub use sampler_backend::{SamplerBackendKind, SamplerStages};
 pub use sampling::driver::{vmc_make_sample, vmc_make_sample_real, SampleStats};
 pub use state::{
     ElectronConfiguration, EnergyData, InvMColMajor, OptDataPoint, PfaPackMode, PfaPackWorkspace,

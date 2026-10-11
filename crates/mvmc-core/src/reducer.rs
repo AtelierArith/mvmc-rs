@@ -143,6 +143,29 @@ pub trait Reducer {
     }
 }
 
+/// Object-safe `&dyn Reducer` view of a possibly unsized reducer.
+///
+/// The stage seams ([`crate::sampler_backend::SamplerStages`]) pass a `&dyn Reducer`, while the
+/// production runners are generic over `R: Reducer + ?Sized`. A generic `&R` cannot be coerced to
+/// `&dyn Reducer` when `R` may be unsized, so the conversion goes through this helper: the blanket
+/// impl covers every sized reducer and the second impl covers `dyn Reducer` itself.
+pub trait ReducerAsDyn {
+    /// Borrow this reducer as a trait object.
+    fn reducer_dyn(&self) -> &dyn Reducer;
+}
+
+impl<R: Reducer> ReducerAsDyn for R {
+    fn reducer_dyn(&self) -> &dyn Reducer {
+        self
+    }
+}
+
+impl ReducerAsDyn for dyn Reducer {
+    fn reducer_dyn(&self) -> &dyn Reducer {
+        self
+    }
+}
+
 /// No-op reducer for the v0.1 single-process build.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SingleProcessReducer;

@@ -59,16 +59,14 @@ pub fn cuda_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, Strin
     let engine: &'static PersistentCudaEngine =
         Box::leak(Box::new(PersistentCudaEngine::new(ordinal)));
     let pfaffian = BatchedStages::new(Backend::Engine(engine), &format!("cuda:{ordinal}"));
-    Ok(StageBackend::new(
-        &format!("cuda:{ordinal}"),
-        Box::new(sr),
-        Box::new(pfaffian),
+    Ok(
+        StageBackend::new(&format!("cuda:{ordinal}"), Box::new(sr), Box::new(pfaffian))
+            .with_measurement(Box::new(TenferroMeasurement::with_runtime(
+                ctx,
+                Placement::Device,
+                format!("tenferro-measurement cuda:{ordinal}"),
+            ))),
     )
-    .with_measurement(Box::new(TenferroMeasurement::with_runtime(
-        ctx,
-        Placement::Device,
-        format!("tenferro-measurement cuda:{ordinal}"),
-    ))))
 }
 
 /// SR stages with a device-resident fused step (issue #447): every per-stage method delegates to

@@ -73,8 +73,7 @@ impl TransferScratch {
     fn slot(slot: &mut Option<PinnedBuf>, bytes: usize) -> Result<&mut PinnedBuf, Error> {
         let need = bytes.max(1);
         if slot.as_ref().is_none_or(|b| b.len_bytes() < need) {
-            *slot =
-                Some(PinnedBuf::new_context_free(need, PinnedKind::Cached).map_err(cuerr)?);
+            *slot = Some(PinnedBuf::new_context_free(need, PinnedKind::Cached).map_err(cuerr)?);
         }
         Ok(slot.as_mut().expect("pinned slot"))
     }
@@ -149,7 +148,9 @@ macro_rules! lane_runner {
                 let st_bytes = m * std::mem::size_of::<i32>();
 
                 let t0 = Instant::now();
-                let d_a = sess.alloc_bytes(up_bytes, "pfaffian.upload").map_err(cuerr)?;
+                let d_a = sess
+                    .alloc_bytes(up_bytes, "pfaffian.upload")
+                    .map_err(cuerr)?;
                 let d_w = sess
                     .alloc_bytes(m * plane_elems * esz, "pfaffian.workspace")
                     .map_err(cuerr)?;
@@ -258,7 +259,10 @@ macro_rules! lane_runner {
                 {
                     let pf_buf = scratch.pf(pf_bytes)?;
                     let vals = unsafe {
-                        std::slice::from_raw_parts(pf_buf.as_u8().as_ptr().cast::<$elem>(), m * lanes)
+                        std::slice::from_raw_parts(
+                            pf_buf.as_u8().as_ptr().cast::<$elem>(),
+                            m * lanes,
+                        )
                     };
                     pf[done * lanes..(done + m) * lanes].copy_from_slice(vals);
                 }

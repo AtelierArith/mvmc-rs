@@ -120,6 +120,11 @@ pub trait CudaProvider: Send + Sync {
         &self,
         ordinal: usize,
     ) -> Result<crate::stage_backend::StageBackend<'static>, String>;
+    /// The device-resident production sampler (issue #517) on one device ordinal.
+    fn open_sampler_stages(
+        &self,
+        ordinal: usize,
+    ) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, String>;
 }
 
 #[cfg(feature = "gpu-cuda")]
@@ -166,6 +171,36 @@ pub fn open_cuda_stage_backend(
     }
     cuda_provider()?
         .open_stage_backend(ordinal)
+        .map_err(BackendError::Device)
+}
+
+/// Open the CUDA device-resident production sampler on `ordinal` (issue #517).
+///
+/// An error without the `gpu-cuda` feature, without a registered provider or without that
+/// device; never a CPU fallback.
+#[cfg(not(feature = "gpu-cuda"))]
+pub fn open_cuda_sampler_stages(
+    _ordinal: usize,
+) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, BackendError> {
+    Err(BackendError::CudaNotCompiled)
+}
+
+/// Open the CUDA device-resident production sampler on `ordinal` (issue #517).
+///
+/// An error without the `gpu-cuda` feature, without a registered provider or without that
+/// device; never a CPU fallback.
+#[cfg(feature = "gpu-cuda")]
+pub fn open_cuda_sampler_stages(
+    ordinal: usize,
+) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, BackendError> {
+    let count = cuda_device_count()?;
+    if ordinal >= count {
+        return Err(BackendError::Device(format!(
+            "CUDA device {ordinal} requested but {count} device(s) found"
+        )));
+    }
+    cuda_provider()?
+        .open_sampler_stages(ordinal)
         .map_err(BackendError::Device)
 }
 

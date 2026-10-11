@@ -43,18 +43,21 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use mvmc_expert_parsers::ExpertModeData;
+
 use crate::c_timer::CTimer;
 use crate::pfaffian::calc_m_all_real;
-use crate::reducer::SingleProcessReducer;
+use crate::reducer::{Reducer, SingleProcessReducer};
 use crate::run::SamplingWalker;
 use crate::sampling::driver::{trace, vmc_make_sample_real_staged, SampleStats};
 use crate::sampling::metropolis::MetropolisDecision;
 use crate::sampling::stage::{RealPfStage, StageGeom, StageResult, StageTables};
-use crate::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
+use crate::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace, VmcOptimizationState};
+use sfmt19937::Sfmt19937Rng;
 
 // ---------------------------------------------------------------------------------------------
 // Requests, batches and the service trait
@@ -638,6 +641,240 @@ fn sync_slater_real(state: &mut crate::state::VmcOptimizationState) {
     }
 }
 
+/// Drive `service` until every walker sent `Done` (or the service failed), delivering the
+/// replies of every lock-step round. Shared by the multi-walker [`run_lockstep_real`] and the
+/// single production chain of [`run_lockstep_real_one`]. Returns the loop statistics and the
+/// service error; the accepts that arrived right before the last `Done` are flushed first
+/// (issue #465).
+fn run_service_loop<S: DeviceService + ?Sized>(
+    rx: Receiver<Msg>,
+    slots: &[Arc<ReplySlot>],
+    count: usize,
+    geom: Geometry,
+    registry: &SlaterRegistry,
+    service: &mut S,
+) -> (LockstepStats, Option<String>) {
+    // Service loop. A round fires when every live walker is parked on the fast path or is
+    // waiting for a slow batch (pending or in flight): a recompute that is in flight does not
+    // hold up the proposals of the other walkers.
+    let mut loop_stats = LockstepStats::default();
+    let mut service_error: Option<String> = None;
+    let mut live = count;
+    let mut fast = FastBatch::default();
+    let mut slow = SlowBatch::default();
+    let mut inflight: Vec<usize> = Vec::new();
+    let mut pending_walkers: Vec<usize> = Vec::new();
+    let mut disconnected = false;
+    let nq = geom.n_qp;
+    let mut known_slater: Vec<u64> = Vec::new();
+    let fail = |e: &str, who: &[usize]| {
+        for &w in who {
+            slots[w].put(Reply::Err(e.to_string()));
+        }
+    };
+    loop {
+        if live == 0 {
+            break;
+        }
+        // 1. receive; block only when nothing else can progress
+        let t_recv = Instant::now();
+        let mut got = false;
+        loop {
+            let msg = if got || !inflight.is_empty() {
+                rx.try_recv().ok()
+            } else {
+                match rx.recv() {
+                    Ok(m) => Some(m),
+                    Err(_) => {
+                        disconnected = true;
+                        None
+                    }
+                }
+            };
+            let Some(msg) = msg else { break };
+            got = true;
+            match msg {
+                Msg::Done => live -= 1,
+                Msg::Accept(w) => fast.accepts.push(w),
+                Msg::Begin(b) => {
+                    if let Some(e) = &service_error {
+                        slots[b.walker].put(Reply::Err(e.clone()));
+                    } else {
+                        pending_walkers.push(b.walker);
+                        slow.begins.push(b);
+                    }
+                }
+                Msg::Recompute(r) => {
+                    if let Some(e) = &service_error {
+                        slots[r.walker].put(Reply::Err(e.clone()));
+                    } else {
+                        pending_walkers.push(r.walker);
+                        slow.recomputes.push(r);
+                    }
+                }
+                Msg::Propose(p) => {
+                    if let Some(e) = &service_error {
+                        slots[p.walker].put(Reply::Err(e.clone()));
+                    } else {
+                        fast.proposes.push(p);
+                    }
+                }
+            }
+        }
+        loop_stats.recv_s += t_recv.elapsed().as_secs_f64();
+        if disconnected {
+            break;
+        }
+        // 2. completed slow batches
+        if !inflight.is_empty() {
+            match service.poll_slow(false) {
+                Ok(done) => {
+                    let mut out = Vec::new();
+                    for reply in done {
+                        for &w in &reply.begins {
+                            out.push((w, Reply::Unit));
+                            inflight.retain(|&x| x != w);
+                        }
+                        for (w, failed, pf) in reply.recomputes {
+                            out.push((w, Reply::Recompute(failed, pf)));
+                            inflight.retain(|&x| x != w);
+                        }
+                    }
+                    deliver(slots, out);
+                }
+                Err(e) => {
+                    service_error = Some(e.clone());
+                    fail(&e, &inflight);
+                    inflight.clear();
+                }
+            }
+        }
+        // 3. fire a round
+        let waiting = fast.proposes.len() + pending_walkers.len() + inflight.len();
+        if service_error.is_some() {
+            // everything still parked was answered with the error; walkers are unwinding
+            let who: Vec<usize> = fast.proposes.iter().map(|p| p.walker).collect();
+            fail(service_error.as_deref().unwrap_or(""), &who);
+            fast = FastBatch::default();
+            fail(service_error.as_deref().unwrap_or(""), &pending_walkers);
+            pending_walkers.clear();
+            slow = SlowBatch::default();
+            continue;
+        }
+        if waiting == live && (!fast.proposes.is_empty() || !pending_walkers.is_empty()) {
+            for b in &slow.begins {
+                if !known_slater.contains(&b.slater) {
+                    let table = registry
+                        .tables
+                        .lock()
+                        .expect("registry")
+                        .get(&b.slater)
+                        .cloned();
+                    let r = table
+                        .ok_or_else(|| "unregistered Slater table".to_string())
+                        .and_then(|t| service.register_slater(b.slater, geom, &t));
+                    match r {
+                        Ok(()) => known_slater.push(b.slater),
+                        Err(e) => {
+                            service_error = Some(e);
+                            break;
+                        }
+                    }
+                }
+            }
+            let t_round = Instant::now();
+            let outcome = if let Some(e) = &service_error {
+                Err(e.clone())
+            } else {
+                // A panicking service must not leave parked walkers waiting forever.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    service.round(&fast, &slow)
+                }))
+                .unwrap_or_else(|_| Err("device service panicked".to_string()))
+            };
+            loop_stats.round_s += t_round.elapsed().as_secs_f64();
+            loop_stats.passes += 1;
+            loop_stats.proposals += fast.proposes.len();
+            loop_stats.accepts += fast.accepts.len();
+            loop_stats.recomputes += slow.recomputes.len();
+            loop_stats.max_batch = loop_stats.max_batch.max(fast.proposes.len());
+            match outcome {
+                Ok(pf_new) => {
+                    let out: Vec<(usize, Reply)> = fast
+                        .proposes
+                        .iter()
+                        .enumerate()
+                        .map(|(i, p)| (p.walker, Reply::Pf(pf_new[i * nq..(i + 1) * nq].to_vec())))
+                        .collect();
+                    let t_deliver = Instant::now();
+                    deliver(slots, out);
+                    loop_stats.deliver_s += t_deliver.elapsed().as_secs_f64();
+                    inflight.append(&mut pending_walkers);
+                }
+                Err(e) => {
+                    service_error = Some(e.clone());
+                    let who: Vec<usize> = fast
+                        .proposes
+                        .iter()
+                        .map(|p| p.walker)
+                        .chain(pending_walkers.iter().copied())
+                        .chain(inflight.iter().copied())
+                        .collect();
+                    fail(&e, &who);
+                    pending_walkers.clear();
+                    inflight.clear();
+                }
+            }
+            fast = FastBatch::default();
+            slow = SlowBatch::default();
+            continue;
+        }
+        // everyone is waiting on slow work: block for it instead of spinning
+        if waiting == live && !inflight.is_empty() {
+            match service.poll_slow(true) {
+                Ok(done) => {
+                    let mut out = Vec::new();
+                    for reply in done {
+                        for &w in &reply.begins {
+                            out.push((w, Reply::Unit));
+                            inflight.retain(|&x| x != w);
+                        }
+                        for (w, failed, pf) in reply.recomputes {
+                            out.push((w, Reply::Recompute(failed, pf)));
+                            inflight.retain(|&x| x != w);
+                        }
+                    }
+                    deliver(slots, out);
+                }
+                Err(e) => {
+                    service_error = Some(e.clone());
+                    fail(&e, &inflight);
+                    inflight.clear();
+                }
+            }
+        } else if !inflight.is_empty() {
+            std::hint::spin_loop();
+        }
+    }
+    // Issue #465: a walker's last accepted move arrives as a message right before its `Done`
+    // and is normally applied by the next round (together with the next proposals). When the
+    // last walkers finish there is no next round, so those accepts would never reach the
+    // device and the resident inverse/Pfaffian of the walker would stay one move behind its
+    // configuration. Flush them with a final proposal-free round.
+    if service_error.is_none() && !fast.accepts.is_empty() {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            service.round(&fast, &SlowBatch::default())
+        }))
+        .unwrap_or_else(|_| Err("device service panicked".to_string()));
+        loop_stats.passes += 1;
+        loop_stats.accepts += fast.accepts.len();
+        if let Err(e) = outcome {
+            service_error = Some(e);
+        }
+    }
+    (loop_stats, service_error)
+}
+
 /// Run `walkers` in lock-step against `service`. Returns the per-walker results and the loop
 /// statistics. Walker threads are scoped; the calling thread owns the service.
 ///
@@ -673,7 +910,6 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
     let teachers = std::mem::take(&mut opts.teachers);
     let mut loop_stats = LockstepStats::default();
     let mut service_error: Option<String> = None;
-    let mut known_slater: Vec<u64> = Vec::new();
 
     let runs: Vec<WalkerRun> = std::thread::scope(|scope| {
         let mut handles = Vec::with_capacity(count);
@@ -735,223 +971,9 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
         }
         drop(tx);
 
-        // Service loop. A round fires when every live walker is parked on the fast path or is
-        // waiting for a slow batch (pending or in flight): a recompute that is in flight does not
-        // hold up the proposals of the other walkers.
-        let mut live = count;
-        let mut fast = FastBatch::default();
-        let mut slow = SlowBatch::default();
-        let mut inflight: Vec<usize> = Vec::new();
-        let mut pending_walkers: Vec<usize> = Vec::new();
-        let mut disconnected = false;
-        let nq = geom.n_qp;
-        let fail = |e: &str, who: &[usize]| {
-            for &w in who {
-                slots[w].put(Reply::Err(e.to_string()));
-            }
-        };
-        'service: loop {
-            if live == 0 {
-                break;
-            }
-            // 1. receive; block only when nothing else can progress
-            let t_recv = Instant::now();
-            let mut got = false;
-            loop {
-                let msg = if got || !inflight.is_empty() {
-                    rx.try_recv().ok()
-                } else {
-                    match rx.recv() {
-                        Ok(m) => Some(m),
-                        Err(_) => {
-                            disconnected = true;
-                            None
-                        }
-                    }
-                };
-                let Some(msg) = msg else { break };
-                got = true;
-                match msg {
-                    Msg::Done => live -= 1,
-                    Msg::Accept(w) => fast.accepts.push(w),
-                    Msg::Begin(b) => {
-                        if let Some(e) = &service_error {
-                            slots[b.walker].put(Reply::Err(e.clone()));
-                        } else {
-                            pending_walkers.push(b.walker);
-                            slow.begins.push(b);
-                        }
-                    }
-                    Msg::Recompute(r) => {
-                        if let Some(e) = &service_error {
-                            slots[r.walker].put(Reply::Err(e.clone()));
-                        } else {
-                            pending_walkers.push(r.walker);
-                            slow.recomputes.push(r);
-                        }
-                    }
-                    Msg::Propose(p) => {
-                        if let Some(e) = &service_error {
-                            slots[p.walker].put(Reply::Err(e.clone()));
-                        } else {
-                            fast.proposes.push(p);
-                        }
-                    }
-                }
-            }
-            loop_stats.recv_s += t_recv.elapsed().as_secs_f64();
-            if disconnected {
-                break;
-            }
-            // 2. completed slow batches
-            if !inflight.is_empty() {
-                match service.poll_slow(false) {
-                    Ok(done) => {
-                        let mut out = Vec::new();
-                        for reply in done {
-                            for &w in &reply.begins {
-                                out.push((w, Reply::Unit));
-                                inflight.retain(|&x| x != w);
-                            }
-                            for (w, failed, pf) in reply.recomputes {
-                                out.push((w, Reply::Recompute(failed, pf)));
-                                inflight.retain(|&x| x != w);
-                            }
-                        }
-                        deliver(&slots, out);
-                    }
-                    Err(e) => {
-                        service_error = Some(e.clone());
-                        fail(&e, &inflight);
-                        inflight.clear();
-                    }
-                }
-            }
-            // 3. fire a round
-            let waiting = fast.proposes.len() + pending_walkers.len() + inflight.len();
-            if service_error.is_some() {
-                // everything still parked was answered with the error; walkers are unwinding
-                let who: Vec<usize> = fast.proposes.iter().map(|p| p.walker).collect();
-                fail(service_error.as_deref().unwrap_or(""), &who);
-                fast = FastBatch::default();
-                fail(service_error.as_deref().unwrap_or(""), &pending_walkers);
-                pending_walkers.clear();
-                slow = SlowBatch::default();
-                continue;
-            }
-            if waiting == live && (!fast.proposes.is_empty() || !pending_walkers.is_empty()) {
-                for b in &slow.begins {
-                    if !known_slater.contains(&b.slater) {
-                        let table = registry
-                            .tables
-                            .lock()
-                            .expect("registry")
-                            .get(&b.slater)
-                            .cloned();
-                        let r = table
-                            .ok_or_else(|| "unregistered Slater table".to_string())
-                            .and_then(|t| service.register_slater(b.slater, geom, &t));
-                        match r {
-                            Ok(()) => known_slater.push(b.slater),
-                            Err(e) => {
-                                service_error = Some(e);
-                                break;
-                            }
-                        }
-                    }
-                }
-                let t_round = Instant::now();
-                let outcome = if let Some(e) = &service_error {
-                    Err(e.clone())
-                } else {
-                    // A panicking service must not leave parked walkers waiting forever.
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        service.round(&fast, &slow)
-                    }))
-                    .unwrap_or_else(|_| Err("device service panicked".to_string()))
-                };
-                loop_stats.round_s += t_round.elapsed().as_secs_f64();
-                loop_stats.passes += 1;
-                loop_stats.proposals += fast.proposes.len();
-                loop_stats.accepts += fast.accepts.len();
-                loop_stats.recomputes += slow.recomputes.len();
-                loop_stats.max_batch = loop_stats.max_batch.max(fast.proposes.len());
-                match outcome {
-                    Ok(pf_new) => {
-                        let out: Vec<(usize, Reply)> = fast
-                            .proposes
-                            .iter()
-                            .enumerate()
-                            .map(|(i, p)| {
-                                (p.walker, Reply::Pf(pf_new[i * nq..(i + 1) * nq].to_vec()))
-                            })
-                            .collect();
-                        let t_deliver = Instant::now();
-                        deliver(&slots, out);
-                        loop_stats.deliver_s += t_deliver.elapsed().as_secs_f64();
-                        inflight.append(&mut pending_walkers);
-                    }
-                    Err(e) => {
-                        service_error = Some(e.clone());
-                        let who: Vec<usize> = fast
-                            .proposes
-                            .iter()
-                            .map(|p| p.walker)
-                            .chain(pending_walkers.iter().copied())
-                            .chain(inflight.iter().copied())
-                            .collect();
-                        fail(&e, &who);
-                        pending_walkers.clear();
-                        inflight.clear();
-                    }
-                }
-                fast = FastBatch::default();
-                slow = SlowBatch::default();
-                continue 'service;
-            }
-            // everyone is waiting on slow work: block for it instead of spinning
-            if waiting == live && !inflight.is_empty() {
-                match service.poll_slow(true) {
-                    Ok(done) => {
-                        let mut out = Vec::new();
-                        for reply in done {
-                            for &w in &reply.begins {
-                                out.push((w, Reply::Unit));
-                                inflight.retain(|&x| x != w);
-                            }
-                            for (w, failed, pf) in reply.recomputes {
-                                out.push((w, Reply::Recompute(failed, pf)));
-                                inflight.retain(|&x| x != w);
-                            }
-                        }
-                        deliver(&slots, out);
-                    }
-                    Err(e) => {
-                        service_error = Some(e.clone());
-                        fail(&e, &inflight);
-                        inflight.clear();
-                    }
-                }
-            } else if !inflight.is_empty() {
-                std::hint::spin_loop();
-            }
-        }
-        // Issue #465: a walker's last accepted move arrives as a message right before its `Done`
-        // and is normally applied by the next round (together with the next proposals). When the
-        // last walkers finish there is no next round, so those accepts would never reach the
-        // device and the resident inverse/Pfaffian of the walker would stay one move behind its
-        // configuration. Flush them with a final proposal-free round.
-        if service_error.is_none() && !fast.accepts.is_empty() {
-            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                service.round(&fast, &SlowBatch::default())
-            }))
-            .unwrap_or_else(|_| Err("device service panicked".to_string()));
-            loop_stats.passes += 1;
-            loop_stats.accepts += fast.accepts.len();
-            if let Err(e) = outcome {
-                service_error = Some(e);
-            }
-        }
+        let (stats_out, error) = run_service_loop(rx, &slots, count, geom, &registry, service);
+        loop_stats = stats_out;
+        service_error = error;
         handles
             .into_iter()
             .map(|h| h.join().expect("walker thread panicked"))
@@ -961,6 +983,123 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
     match service_error {
         Some(e) => Err(e),
         None => Ok((runs, loop_stats)),
+    }
+}
+
+/// Run the single production chain `(data, state, rng)` in lock-step against `service`
+/// (issue #517). Mirrors [`run_lockstep_real`] for a borrowed walker, so production can route
+/// its one C chain through the device without moving its state or RNG out. Unlike the
+/// multi-walker runner, the walker stays on the calling thread and only the service loop runs
+/// on a scoped thread, so the reducer need not be `Sync` (the walker thread owns it).
+///
+/// `reducer` is the chain's reducer; the caller decides what it supports. The walker count and
+/// seed contract of the C path are unchanged: exactly one walker, seeded like the C chain.
+///
+/// # Errors
+///
+/// A service failure aborts the walker (its `stats` carry the error) and is returned.
+pub fn run_lockstep_real_one<S, R>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    reducer: &R,
+    service: &mut S,
+    mut opts: LockstepOptions,
+) -> Result<(WalkerRun, LockstepStats), String>
+where
+    S: DeviceService + Send + ?Sized,
+    R: Reducer + ?Sized,
+{
+    if !opts.teachers.is_empty() && opts.teachers.len() != 1 {
+        return Err("one teacher per walker is required".to_string());
+    }
+    crate::serial_blas::initialize();
+    let geom = Geometry {
+        n_site: data.modpara.nsite as usize,
+        n_elec: data.modpara.nelec as usize,
+        n_qp: state.slater_matrix.slater_elm_real.n_qp_full(),
+    };
+    let registry = Arc::new(SlaterRegistry::default());
+    service.prepare(geom, 1)?;
+
+    let (tx, rx) = channel::<Msg>();
+    let slot = Arc::new(ReplySlot::new());
+    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let spin = Duration::from_micros(opts.spin_us.unwrap_or(if 1 < cores { 50 } else { 0 }));
+    let teacher = std::mem::take(&mut opts.teachers)
+        .into_iter()
+        .next()
+        .map(|t| TeacherState {
+            t,
+            pos: 0,
+            report: TeacherReport {
+                min_margin: f64::INFINITY,
+                ..TeacherReport::default()
+            },
+        });
+    let mut loop_stats = LockstepStats::default();
+    let mut service_error: Option<String> = None;
+
+    let run: WalkerRun = std::thread::scope(|scope| {
+        let service_slots = [slot.clone()];
+        let service_registry = registry.clone();
+        let service_handle = scope.spawn(move || {
+            run_service_loop(rx, &service_slots, 1, geom, &service_registry, service)
+        });
+        // The walker runs on the calling thread, as the C path does. Its `Done` is sent as soon
+        // as the body ends (normally or by unwinding) so the service thread cannot park forever.
+        let done_tx = tx.clone();
+        let stage = WalkerStage {
+            walker: 0,
+            tx,
+            slot: slot.clone(),
+            spin,
+            registry: registry.clone(),
+            teacher,
+            geom,
+            pending: None,
+            exchange_pf: Vec::new(),
+        };
+        let run = {
+            struct DoneGuard(Sender<Msg>);
+            impl Drop for DoneGuard {
+                fn drop(&mut self) {
+                    let _ = self.0.send(Msg::Done);
+                }
+            }
+            let _done = DoneGuard(done_tx);
+            let mut stage = stage;
+            *stage.slot.thread.lock().expect("reply thread") = Some(std::thread::current());
+            trace::start_decisions();
+            sync_slater_real(state);
+            let result = vmc_make_sample_real_staged(
+                data,
+                state,
+                rng,
+                &mut CTimer::<false>::new(),
+                reducer,
+                &mut stage,
+            );
+            let decisions = trace::finish_decisions();
+            // Same issue #454 contract as the multi-walker runner: the device holds the accepted
+            // inverses, so a later host read fails loudly until a recompute makes the table valid.
+            state.slater_matrix.inv_m_real.mark_stale(STALE_REASON);
+            WalkerRun {
+                stats: result.map_err(|e| e.to_string()),
+                decisions,
+                teacher: stage.teacher.map(|t| t.report),
+            }
+        };
+        let (stats_out, error) = service_handle.join().expect("service thread panicked");
+        loop_stats = stats_out;
+        service_error = error;
+        run
+    });
+
+    opts.passes = loop_stats.passes;
+    match service_error {
+        Some(e) => Err(e),
+        None => Ok((run, loop_stats)),
     }
 }
 
@@ -1047,6 +1186,11 @@ impl DeviceService for HostService {
     }
 
     fn prepare(&mut self, geom: Geometry, walkers: usize) -> Result<(), String> {
+        // A service is reused across sample series (production calls `prepare` once per series):
+        // drop the previous run's Slater copies and queued replies. Every slow batch of the
+        // previous run was reaped before its walkers finished, so nothing references them.
+        self.slater.clear();
+        self.done.clear();
         self.geom = Some(geom);
         self.walkers = (0..walkers).map(|_| None).collect();
         self.pool = Some(ThreadedPfaPackWorkspace::new(geom.n_size(), 1));

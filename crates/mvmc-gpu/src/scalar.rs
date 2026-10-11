@@ -212,7 +212,9 @@ impl PfScalar for Complex64 {
         unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<f64>(), data.len() * 2) }
     }
     fn from_f64_lanes(data: Vec<f64>) -> Vec<Complex64> {
-        data.chunks_exact(2)
+        data.as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| Complex64::new(c[0], c[1]))
             .collect()
     }
