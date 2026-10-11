@@ -48,6 +48,12 @@ pub trait PfScalar: Impl {
     fn as_f64_lanes(data: &[Self]) -> &[f64];
     /// Mutable lane view.
     fn as_f64_lanes_mut(data: &mut [Self]) -> &mut [f64];
+    /// Rebuild a typed buffer from raw `f64` lanes.
+    ///
+    /// For `f64` this is the identity and reuses the allocation; for `Complex64` each pair of
+    /// lanes becomes one complex element. Used by the CUDA batch engine to return its native
+    /// `f64` lane results without a redundant second allocation and copy.
+    fn from_f64_lanes(data: Vec<f64>) -> Vec<Self>;
     /// The additive identity.
     fn zero_value() -> Self;
     /// `f64` lanes per element: 1 for `f64`, 2 for `Complex64`.
@@ -122,6 +128,9 @@ impl PfScalar for f64 {
         data
     }
     fn as_f64_lanes_mut(data: &mut [f64]) -> &mut [f64] {
+        data
+    }
+    fn from_f64_lanes(data: Vec<f64>) -> Vec<f64> {
         data
     }
 }
@@ -201,5 +210,10 @@ impl PfScalar for Complex64 {
     fn as_f64_lanes_mut(data: &mut [Complex64]) -> &mut [f64] {
         // SAFETY: same layout argument as `as_f64_lanes`.
         unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<f64>(), data.len() * 2) }
+    }
+    fn from_f64_lanes(data: Vec<f64>) -> Vec<Complex64> {
+        data.chunks_exact(2)
+            .map(|c| Complex64::new(c[0], c[1]))
+            .collect()
     }
 }

@@ -79,7 +79,9 @@ pub struct PinnedBuf {
     ptr: *mut u8,
     bytes: usize,
     kind: PinnedKind,
-    ctx: Arc<CudaContext>,
+    /// Owning context, used only to re-bind the thread before the free. `None` for buffers
+    /// created with [`PinnedBuf::new_context_free`] (the caller already has a current context).
+    ctx: Option<Arc<CudaContext>>,
 }
 
 // SAFETY: the buffer owns its allocation; access is mediated by `&`/`&mut`.
@@ -106,7 +108,29 @@ impl PinnedBuf {
             ptr,
             bytes,
             kind,
-            ctx: ctx.clone(),
+            ctx: Some(ctx.clone()),
+        })
+    }
+
+    /// Allocate `bytes` of pinned memory without retaining a cudarc context.
+    ///
+    /// For callers that only hold a raw CUDA session (for example the measurement Pfaffian
+    /// engine) whose primary context is current on the calling thread. The memory is freed
+    /// with `free_host`, which is context-independent.
+    pub fn new_context_free(bytes: usize, kind: PinnedKind) -> Result<Self, DriverError> {
+        let bytes = bytes.max(1);
+        let flags = match kind {
+            PinnedKind::WriteCombined => sys::CU_MEMHOSTALLOC_WRITECOMBINED,
+            PinnedKind::Cached => 0,
+        };
+        // SAFETY: allocation of `bytes` bytes; freed in `Drop` with `free_host`.
+        let ptr = unsafe { result::malloc_host(bytes, flags) }?.cast::<u8>();
+        assert!(!ptr.is_null());
+        Ok(Self {
+            ptr,
+            bytes,
+            kind,
+            ctx: None,
         })
     }
 
@@ -134,14 +158,34 @@ impl PinnedBuf {
         unsafe { std::slice::from_raw_parts_mut(self.ptr.cast::<f64>(), self.bytes / 8) }
     }
 
-    fn as_ptr(&self) -> *const u8 {
+    /// The buffer as raw bytes.
+    pub fn as_u8(&self) -> &[u8] {
+        // SAFETY: the allocation is live and `bytes` long.
+        unsafe { std::slice::from_raw_parts(self.ptr, self.bytes) }
+    }
+
+    /// The buffer as mutable raw bytes.
+    pub fn as_u8_mut(&mut self) -> &mut [u8] {
+        // SAFETY: the allocation is live, `bytes` long, and `&mut self` is exclusive.
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.bytes) }
+    }
+
+    /// The host base pointer.
+    pub fn as_ptr(&self) -> *const u8 {
+        self.ptr
+    }
+
+    /// The mutable host base pointer.
+    pub fn as_mut_ptr(&mut self) -> *mut u8 {
         self.ptr
     }
 }
 
 impl Drop for PinnedBuf {
     fn drop(&mut self) {
-        let _ = self.ctx.bind_to_thread();
+        if let Some(ctx) = &self.ctx {
+            let _ = ctx.bind_to_thread();
+        }
         // SAFETY: `ptr` came from `malloc_host`; any copy using it is waited by `Pending`.
         let _ = unsafe { result::free_host(self.ptr.cast()) };
     }
@@ -151,6 +195,50 @@ impl std::fmt::Debug for PinnedBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "PinnedBuf({} bytes, {:?})", self.bytes, self.kind)
     }
+}
+
+/// Enqueue a page-locked host-to-device copy on a raw CUDA stream (not a [`TransferStream`]).
+///
+/// The measurement Pfaffian engine talks to tenferro's raw session, which exposes its
+/// execution stream only as an opaque handle (`Session::stream().raw_handle()`); this is the
+/// seam that lets the hot batch upload run through pinned staging on that same stream.
+///
+/// # Safety
+///
+/// `stream` must be a live stream on the current CUDA context, ordered before any kernel that
+/// reads `dev`; `host` must stay alive and unchanged until `stream` completes.
+pub unsafe fn upload_pinned_raw(
+    stream: u64,
+    host: &PinnedBuf,
+    dev: *mut std::ffi::c_void,
+    bytes: usize,
+) -> Result<(), DriverError> {
+    let src = std::slice::from_raw_parts(host.as_ptr(), bytes);
+    result::memcpy_htod_async(
+        dev as sys::CUdeviceptr,
+        src,
+        stream as *mut sys::CUstream_st,
+    )
+}
+
+/// Enqueue a page-locked device-to-host copy on a raw CUDA stream (not a [`TransferStream`]).
+///
+/// # Safety
+///
+/// `stream` must be a live stream on the current CUDA context, ordered after any kernel that
+/// writes `dev`; `host` must stay alive and unread until `stream` completes.
+pub unsafe fn download_pinned_raw(
+    stream: u64,
+    dev: *mut std::ffi::c_void,
+    host: &mut PinnedBuf,
+    bytes: usize,
+) -> Result<(), DriverError> {
+    let dst = std::slice::from_raw_parts_mut(host.as_mut_ptr(), bytes);
+    result::memcpy_dtoh_async(
+        dst,
+        dev as sys::CUdeviceptr,
+        stream as *mut sys::CUstream_st,
+    )
 }
 
 /// Size-class pool of pinned buffers (power-of-two classes, one free list per kind).
