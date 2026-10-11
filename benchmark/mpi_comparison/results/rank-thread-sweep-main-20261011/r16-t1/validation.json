@@ -1,0 +1,81 @@
+{
+  "ranks": 16,
+  "threads": 1,
+  "total_samples": 320,
+  "measurements": 36,
+  "verified_source_hashes": 2302,
+  "outputs": [
+    {
+      "sites": 32,
+      "workload": "Opt",
+      "implementation": "C",
+      "files": 4
+    },
+    {
+      "sites": 32,
+      "workload": "Opt",
+      "implementation": "Julia",
+      "files": 5
+    },
+    {
+      "sites": 32,
+      "workload": "Opt",
+      "implementation": "Rust",
+      "files": 5
+    },
+    {
+      "sites": 32,
+      "workload": "PhysCal",
+      "implementation": "C",
+      "files": 400
+    },
+    {
+      "sites": 32,
+      "workload": "PhysCal",
+      "implementation": "Julia",
+      "files": 500
+    },
+    {
+      "sites": 32,
+      "workload": "PhysCal",
+      "implementation": "Rust",
+      "files": 400
+    },
+    {
+      "sites": 64,
+      "workload": "Opt",
+      "implementation": "C",
+      "files": 4
+    },
+    {
+      "sites": 64,
+      "workload": "Opt",
+      "implementation": "Julia",
+      "files": 5
+    },
+    {
+      "sites": 64,
+      "workload": "Opt",
+      "implementation": "Rust",
+      "files": 5
+    },
+    {
+      "sites": 64,
+      "workload": "PhysCal",
+      "implementation": "C",
+      "files": 400
+    },
+    {
+      "sites": 64,
+      "workload": "PhysCal",
+      "implementation": "Julia",
+      "files": 500
+    },
+    {
+      "sites": 64,
+      "workload": "PhysCal",
+      "implementation": "Rust",
+      "files": 400
+    }
+  ]
+}

@@ -1,0 +1,1946 @@
+[
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 15.45122,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 15.47551,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 15.45074,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 11.563083727,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 11.749176317,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 11.491023939,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 12.00608737,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 12.030720974,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 11.998881168,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 7.42199,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 7.45003,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 7.42429,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 4.460498983,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 4.480918533,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 4.446564166,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 4.611857087,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 4.616907476,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 4.605062821,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 68.13824,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 68.39335,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 68.30575,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 49.777799385,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 49.804850197,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 50.182273865,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 54.990652738,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 55.071552455,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 55.116002463,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 39.26555,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 39.53277,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 39.19708,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 19.454922139,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 19.267542216,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 19.514961182,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 22.562823589,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 22.602171229,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 22.600687418,
+    "ranks": 1,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 11.09982,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 11.37633,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 11.70694,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 11.846653934,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 11.552042907,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 11.686872276,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 6.901719932,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 6.860289564,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 7.000406316,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 3.90912,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 3.96705,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 3.83694,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 4.539372374,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 4.54153897,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 4.519061944,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 2.557655142,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 2.647886273,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 2.58419016,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 33.76178,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 31.04109,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 30.28998,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 36.263297914,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 36.11555815,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 36.379500983,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 27.758736501,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 27.754060114,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 28.086634488,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 11.83806,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 11.83983,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 11.80583,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 16.783169755,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 16.612511673,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 16.776836265,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 10.316534038,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 10.373606782,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 10.372454257,
+    "ranks": 1,
+    "threads": 16
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 5.47484,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 5.70955,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 5.55353,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 5.606965338,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 5.607506136,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 5.571044977,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 4.5450856,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 4.545335868,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 4.575769813,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 2.18199,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 2.16704,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 2.15258,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 2.546372341,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 2.308235505,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 2.325208114,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 2.023406114,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 2.022553735,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 2.023859963,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 17.45819,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 17.44906,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 17.32843,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 19.303702292,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 19.181896531,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 19.297759576,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 17.778808601,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 18.009932814,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 17.968279935,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 8.22021,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 8.00637,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 7.96153,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 8.221158036,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 8.160517796,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 8.313175984,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 7.588416401,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 7.604391365,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 7.611749082,
+    "ranks": 2,
+    "threads": 8
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 3.54634,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 3.63027,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 3.6812,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 3.43257225,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 3.418606691,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 3.409789733,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 3.184002642,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 3.235485081,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 3.18579053,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 1.52126,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 1.56205,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 1.53618,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 1.436485849,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 1.376256499,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 1.386305348,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 1.405597029,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 1.377303043,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 1.414841468,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 14.10693,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 14.28523,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 14.05687,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 13.323938027,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 13.050787074,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 13.217460471,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 13.767527446,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 13.705889795,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 13.749863788,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 6.77082,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 6.87744,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 7.03509,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 5.214596441,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 5.261198171,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 5.238496116,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 5.779162826,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 5.787170536,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 5.806288911,
+    "ranks": 4,
+    "threads": 4
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 3.03452,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 3.10461,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 3.13998,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 2.982048058,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 2.966175951,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 2.912509087,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 2.853098531,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 2.92371076,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 2.919141615,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 1.21594,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 1.28037,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 1.20849,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 1.267047949,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 1.245777334,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 1.34296399,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 1.065087785,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 1.043716445,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 1.078388196,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 13.40972,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 13.2714,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 13.57461,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 12.309266422,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 12.035727811,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 12.083710382,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 12.953517351,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 13.094208554,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 13.269850989,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 6.46947,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 6.43268,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 6.40038,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 5.197727321,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 5.11816285,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 5.134698754,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 4.809738597,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 4.851244098,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 4.849137107,
+    "ranks": 8,
+    "threads": 2
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 3.42251,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 3.39306,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 3.36292,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 3.732334243,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 3.679503017,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 3.679633932,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 3.453158496,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 3.477454118,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 3.455053928,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 1.16838,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 1.17436,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 1.16841,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 1.462966775,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 1.355617591,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 1.464949648,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 1.038801866,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 1.039927316,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 32,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 1.036469196,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 16.82743,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 16.84715,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 16.76709,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 16.929896236,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 16.429374182,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 16.343048592,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 16.401714468,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 16.186472618,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "Opt",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 16.160676591,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 1,
+    "seconds": 6.6385,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 2,
+    "seconds": 6.66099,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "C",
+    "rep": 3,
+    "seconds": 6.62355,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 1,
+    "seconds": 6.086989047,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 2,
+    "seconds": 6.419797113,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Julia",
+    "rep": 3,
+    "seconds": 5.982530859,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 1,
+    "seconds": 4.843093666,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 2,
+    "seconds": 4.868109926,
+    "ranks": 16,
+    "threads": 1
+  },
+  {
+    "workload": "PhysCal",
+    "sites": 64,
+    "implementation": "Rust",
+    "rep": 3,
+    "seconds": 4.86940894,
+    "ranks": 16,
+    "threads": 1
+  }
+]

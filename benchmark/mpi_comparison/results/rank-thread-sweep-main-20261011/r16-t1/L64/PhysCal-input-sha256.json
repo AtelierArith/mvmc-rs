@@ -1,0 +1,15 @@
+{
+  "qptransidx.def": "56c97bbfcfc2c2283f24589eeca72daafd2892a5d60caf46f8a1cf5f3bfc06cc",
+  "StdFace.def": "6ca90fd8fbe698063ca6eb2f27f866fcdbf2930f6d14f6c7502e1f6045e743cd",
+  "modpara.def": "0175017e07a8ac2d3aa79a63412f9d255a9e7fcaf0ca3ce9817db6347a601143",
+  "locspn.def": "0d76abfab368290f8dec96171081a312dc46dda4f4c1f925434f4715fdc549e7",
+  "coulombintra.def": "7b6e84d7bcad43643e6de55fd152156299be400298d15b5e23efaa518cb95608",
+  "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+  "gutzwilleridx.def": "cddb9dfaa24ec0ea341bb94d3f4d18bf1d793a40158d7ca45b2dbc8d4fa344c0",
+  "orbitalidx.def": "2a22e8c956aecede894eb2ef19ceee20a5ddbac360c37702d0ec4ce06cf33beb",
+  "zqp_opt.dat": "db079c57809f1a173b0de5377ffa77703029a6c0db87d7555d63b82fe1ece7dd",
+  "jastrowidx.def": "e29f4a21c6b358285cbfd9567882095c956fcd3cd689d0988ce05fa5a42e7b78",
+  "greentwo.def": "6c2f6eabed79580dc1f20e9d2704c53c65d064fdb21ba5fc1cd4364e971cdeb1",
+  "trans.def": "391e0c5c274b3fb1ce8459d339b8cbcc0946788c18e2624f2cfdd213f070fd03",
+  "greenone.def": "d3559a6f31dcb02604dc0c28bf49bac5e9a11bc190ad739776ec85fee6705de3"
+}
