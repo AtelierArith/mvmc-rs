@@ -158,8 +158,8 @@ fn interval_walker_sweep_l128() {
             .with_backend_session(|s| sampler.run(s))
             .expect("run");
         let best = t.elapsed().as_secs_f64();
-        let total_hops: usize = results.iter().map(|&(d, _)| d.max(0) as usize).sum();
-        let rb_any = results.iter().any(|&(_, r)| r != 0);
+        let total_hops: usize = results.iter().map(|&(d, _, _)| d.max(0) as usize).sum();
+        let rb_any = results.iter().any(|&(_, r, _)| r != 0);
         eprintln!(
             "W={walkers:4}  wall={:.4} s  hops_total={total_hops:7} rebuild_any={rb_any}  {:.1} ns/hop  {:.2} M hops/s",
             best,
@@ -184,7 +184,7 @@ fn drain(backend: &mut CudaBackend, sampler: &IntervalSampler) -> (usize, usize,
             .expect("run");
         rounds += 1;
         let mut need = Vec::new();
-        for (w, &(d, r)) in results.iter().enumerate() {
+        for (w, &(d, r, _a)) in results.iter().enumerate() {
             hops += d.max(0) as usize;
             if r != 0 {
                 need.push(w);

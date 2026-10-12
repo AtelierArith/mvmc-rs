@@ -117,6 +117,7 @@ pub struct IntervalSampler {
     hop_off: DeviceBuffer,
     hops_done: DeviceBuffer,
     rebuild: DeviceBuffer,
+    accepts: DeviceBuffer,
     // Rebuild scratch (sized for all walkers).
     rec_walker: DeviceBuffer,
     planes: DeviceBuffer,
@@ -202,6 +203,7 @@ impl IntervalSampler {
             let hop_off = exec.alloc_bytes(w.max(1) * 4)?;
             let hops_done = exec.alloc_bytes(w.max(1) * 4)?;
             let rebuild = exec.alloc_bytes(w.max(1) * 4)?;
+            let accepts = exec.alloc_bytes(w.max(1) * 4)?;
             let rec_walker = exec.alloc_bytes(w.max(1) * 4)?;
             let planes_nn = nplanes.max(1) * n * n;
             let plane_buf = exec.alloc_bytes(planes_nn * 8)?;
@@ -224,6 +226,7 @@ impl IntervalSampler {
                 exec.upload(exec.ptr(&hop_off)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&hops_done)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&rebuild)?, &zeros_i32)?;
+                exec.upload(exec.ptr(&accepts)?, &zeros_i32)?;
             }
             Ok(Self {
                 geom,
@@ -244,6 +247,7 @@ impl IntervalSampler {
                 hop_off,
                 hops_done,
                 rebuild,
+                accepts,
                 rec_walker,
                 planes: plane_buf,
                 pfinv_w,
@@ -311,7 +315,7 @@ impl IntervalSampler {
     pub fn run<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
-    ) -> Result<Vec<(i32, i32)>, String> {
+    ) -> Result<Vec<(i32, i32, i32)>, String> {
         let g = self.geom;
         with_raw_exec(backend, "mvmc.interval.run", |exec| {
             let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
@@ -342,6 +346,7 @@ impl IntervalSampler {
                 Arg::D(self.exchange_fraction),
                 p(&self.hops_done)?,
                 p(&self.rebuild)?,
+                p(&self.accepts)?,
             ];
             // SAFETY: argument order/dtypes match `k_interval_hop`; buffers stay resident and
             // outlive the scope, which synchronizes before returning.
@@ -350,12 +355,19 @@ impl IntervalSampler {
             }
             let mut hd = vec![0i32; g.walkers];
             let mut rb = vec![0i32; g.walkers];
+            let mut ac = vec![0i32; g.walkers];
             // SAFETY: the buffers hold `walkers` i32 each.
             unsafe {
                 exec.download(&mut hd, exec.ptr(&self.hops_done)?)?;
                 exec.download(&mut rb, exec.ptr(&self.rebuild)?)?;
+                exec.download(&mut ac, exec.ptr(&self.accepts)?)?;
             }
-            Ok(hd.into_iter().zip(rb).collect())
+            Ok(hd
+                .into_iter()
+                .zip(rb)
+                .zip(ac)
+                .map(|((d, r), a)| (d, r, a))
+                .collect())
         })
         .map_err(|e| e.to_string())
     }

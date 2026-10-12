@@ -175,7 +175,7 @@ fn interval_shared_tape_matches_julia_gpu() {
             .expect("run");
         rounds += 1;
         let mut need = Vec::new();
-        for (w, &(_, r)) in results.iter().enumerate() {
+        for (w, &(_, r, _a)) in results.iter().enumerate() {
             if r != 0 {
                 need.push(w);
             }

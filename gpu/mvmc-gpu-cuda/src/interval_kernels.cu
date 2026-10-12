@@ -157,7 +157,7 @@ extern "C" __global__ void k_interval_hop(
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int ngutz, int nproj, double exchange_fraction,
-    int* hops_done, int* rebuild) {
+    int* hops_done, int* rebuild, int* accepts) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -184,6 +184,7 @@ extern "C" __global__ void k_interval_hop(
   double log_old = logip[w];
   int window = aw[w];
   int advanced = 0;
+  int accepted = 0;
   int need_rebuild = 0;
   mvw[6] = 0;
   const int start = hop_off[w];
@@ -268,6 +269,7 @@ extern "C" __global__ void k_interval_hop(
       __syncthreads();
       if (tid == 0) {
         log_old = out[0];
+        ++accepted;
         if (++window > nsite) mvw[6] = 1;
       }
       __syncthreads();
@@ -283,6 +285,7 @@ extern "C" __global__ void k_interval_hop(
     hop_off[w] = start + advanced;
     hops_done[w] = advanced;
     rebuild[w] = need_rebuild;
+    accepts[w] = accepted;
     aw[w] = window;
     logip[w] = log_old;
   }

@@ -105,7 +105,7 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let results = backend
         .with_backend_session(|session| sampler.run(session))
         .expect("run interval");
-    let (done, rebuild) = results[0];
+    let (done, rebuild, _accepts) = results[0];
     assert!(done > 0, "the interval must advance at least one hop");
     assert!(
         rebuild != 0 || done as usize == total_hops,
