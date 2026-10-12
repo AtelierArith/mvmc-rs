@@ -3,6 +3,7 @@
 # Never invoked by Cargo or normal Rust tests; no numerical C oracle.
 set -euo pipefail
 repo=${1:?checkout};prefix=${2:?exclusive job-local MPI prefix};proof=${3:?exclusive receipt}
+build_jobs=$(sh "$repo/.devcontainer/build-jobs.sh")
 [[ ! -e $prefix && ! -e $proof && -d ${prefix%/*} && -d ${proof%/*} ]]
 mkdir "$proof"
 version=4.2.0
@@ -19,16 +20,16 @@ finish(){
 trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-sha256sum "$here/install-pmi1-mpich.sh" "$here/mpi-startup.c" "$repo/.devcontainer/Dockerfile" > "$proof/source.sha256"
+sha256sum "$here/install-pmi1-mpich.sh" "$here/mpi-startup.c" "$repo/.devcontainer/Dockerfile" "$repo/.devcontainer/build-jobs.sh" > "$proof/source.sha256"
 grep -Fx "ARG MPICH_VERSION=$version" "$repo/.devcontainer/Dockerfile"
 grep -Fx "ARG MPICH_SHA256=$digest" "$repo/.devcontainer/Dockerfile"
-for name in gcc g++ gfortran make curl tar sha256sum bash timeout awk ldd readlink grep sort xargs cp find;do
+for name in gcc g++ gfortran make curl tar sha256sum bash sh env nproc timeout awk ldd readlink grep sort xargs cp find;do
  sha256sum "$(readlink -f "$(command -v "$name")")" >> "$proof/tools.sha256"
 done
 for name in gcc g++ gfortran make;do ldd "$(readlink -f "$(command -v "$name")")" >> "$proof/compiler.ldd.txt";done
 ! grep -q 'not found' "$proof/compiler.ldd.txt"
 awk '$2=="=>"&&substr($3,1,1)=="/"{print $3}substr($1,1,1)=="/"{print $1}' "$proof/compiler.ldd.txt" | sort -u | xargs -r sha256sum > "$proof/compiler-providers.sha256"
-printf 'version=%s sha256=%s prefix=%s\n' "$version" "$digest" "$prefix" > "$proof/settings.txt"
+printf 'version=%s sha256=%s prefix=%s jobs=%s\n' "$version" "$digest" "$prefix" "$build_jobs" > "$proof/settings.txt"
 printf 'UCX_TLS=%s\n' "${UCX_TLS-NotSet}" >> "$proof/settings.txt"
 source_root=$(mktemp -d "${RUNNER_TEMP:?}/issue234-mpich-source.XXXXXX")
 printf '%s\n' "$source_root" > "$proof/source-root.txt"
@@ -40,8 +41,8 @@ cd "$source_root/mpich-$version"
 printf '%q ' ./configure "--prefix=$prefix" --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix > "$proof/configure.argv"
 CC=gcc CXX=g++ FC=gfortran timeout -k 30s 600s ./configure "--prefix=$prefix" \
  --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix > "$proof/configure.log" 2>&1
-timeout -k 30s 1800s make -j4 > "$proof/make.log" 2>&1
-timeout -k 30s 300s make install > "$proof/install.log" 2>&1
+timeout -k 30s 1800s make -j"$build_jobs" > "$proof/make.log" 2>&1
+timeout -k 30s 300s make -j"$build_jobs" install > "$proof/install.log" 2>&1
 cp config.log "$proof/config.log"
 "$prefix/bin/mpichversion" > "$proof/mpichversion.txt"
 grep -q -- '--with-pmi=pmi1' "$proof/mpichversion.txt"

@@ -65,6 +65,42 @@ if bash "$script_dir/build.sh" >/dev/null 2>&1; then
     echo 'Accepted a missing build command' >&2
     exit 1
 fi
+# Exercise the actual installer's budget, receipt and make command lines with a
+# recording make stub. No download, configure or native compilation is run.
+repo=$(cd "$script_dir/.." && pwd)
+installer="$repo/scripts/issue234/native/install-pmi1-mpich.sh"
+cat > "$fixture/make" <<'MAKE'
+#!/usr/bin/env sh
+printf '%s\n' "$*" >> "$MAKE_ARGS_LOG"
+MAKE
+chmod +x "$fixture/make"
+build_section=$(awk '
+    /^build_jobs=/ || /^sha256sum.*source[.]sha256/ ||
+    /^printf.*jobs=.*settings[.]txt/ || /^timeout.*make/ {print}
+' "$installer")
+tool_names=$(sed -n 's/^for name in \(.*\);do$/\1/p' "$installer" | head -1)
+for tool in sh env nproc; do
+    [[ " $tool_names " == *" $tool "* ]]
+done
+for selected in default 3; do
+    proof="$fixture/proof-$selected"
+    mkdir "$proof"
+    if [[ $selected == default ]]; then
+        unset MVMC_BUILD_JOBS
+        expected=7
+    else
+        export MVMC_BUILD_JOBS=$selected
+        expected=$selected
+    fi
+    repo="$repo" here="${installer%/*}" proof="$proof" prefix="$fixture/prefix" \
+        version=4.2.0 digest=fixture MAKE_ARGS_LOG="$proof/make.args" \
+        bash -e -c "$build_section"
+    [[ $(cat "$proof/make.args") == "-j$expected"$'\n'"-j$expected install" ]]
+    grep -F "jobs=$expected" "$proof/settings.txt" >/dev/null
+    grep -F "$script_dir/build-jobs.sh" "$proof/source.sha256" >/dev/null
+    sha256sum -c --quiet "$proof/source.sha256"
+done
+unset MVMC_BUILD_JOBS
 if command -v taskset >/dev/null 2>&1; then
     first_cpu=$(taskset -pc $$ | sed 's/.*: //; s/[-,].*//')
     [[ $(PATH="$original_path" taskset -c "$first_cpu" sh "$script_dir/build-jobs.sh") == 1 ]]
