@@ -67,14 +67,14 @@ pub(crate) fn record(kind: i64, fields: &[i64]) {
     });
 }
 
-pub(crate) fn draw_real2(rng: &mut sfmt19937::Sfmt19937Rng) -> f64 {
+pub(crate) fn draw_real2(rng: &mut impl crate::sampling::rng::SamplingRng) -> f64 {
     let value = rng.genrand_real2();
     // SFMT real2 is an exact dyadic mapping of one consumed u32.
     record(9, &[(value * 4294967296.0) as i64]);
     value
 }
 
-pub(crate) fn draw_mod(rng: &mut sfmt19937::Sfmt19937Rng, n: u32) -> u32 {
+pub(crate) fn draw_mod(rng: &mut impl crate::sampling::rng::SamplingRng, n: u32) -> u32 {
     debug_assert!(n > 0);
     let word = rng.gen_rand32();
     record(9, &[i64::from(word)]);
@@ -85,7 +85,7 @@ pub(crate) fn draw_mod(rng: &mut sfmt19937::Sfmt19937Rng, n: u32) -> u32 {
 /// prefixed fields: saved idx/cfg/num/proj/spin, counters, nonconsuming next624.
 pub(crate) fn checkpoint(
     state: &crate::state::VmcOptimizationState,
-    rng: &sfmt19937::Sfmt19937Rng,
+    rng: &impl crate::sampling::rng::SamplingRng,
 ) {
     EVENTS.with(|slot| {
         if slot.borrow().is_none() {
@@ -110,8 +110,10 @@ pub(crate) fn checkpoint(
             fields.extend_from_slice(values);
         }
         record(8, &fields);
-        if RAW_CHECKPOINTS.with(Cell::get) {
-            let (raw, cursor) = rng.state_snapshot();
+        if let Some((raw, cursor)) = rng
+            .sfmt_snapshot()
+            .filter(|_| RAW_CHECKPOINTS.with(Cell::get))
+        {
             let mut observation = Vec::with_capacity(626);
             observation.push(i64::try_from(cursor).expect("SFMT cursor fits i64"));
             observation.push(i64::try_from(rng.words_consumed()).expect("draw count fits i64"));

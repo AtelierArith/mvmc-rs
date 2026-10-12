@@ -20,6 +20,7 @@
 //! Pfaffian updates and accepted/rejected configuration handling.
 
 use num_complex::Complex64;
+#[cfg(test)]
 use sfmt19937::Sfmt19937Rng;
 
 /// Result of a Metropolis decision.
@@ -61,7 +62,7 @@ pub fn metropolis_decision(
     log_rbm_delta: Complex64,
     log_ip_new: Complex64,
     log_ip_old: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> MetropolisDecision {
     let weight = metropolis_weight(log_proj_delta, log_rbm_delta, log_ip_new, log_ip_old);
     let draw = crate::sampling::driver::trace::draw_real2(rng);

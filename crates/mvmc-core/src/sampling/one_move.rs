@@ -20,6 +20,7 @@
 
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
+#[cfg(test)]
 use sfmt19937::Sfmt19937Rng;
 
 use crate::sampling::candidate::{
@@ -209,7 +210,7 @@ pub fn attempt_hopping_move(
     log_ip_old: Complex64,
     log_ip_new: Complex64,
     log_rbm_delta: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> HoppingMoveOutcome {
     if candidate.reject {
         return HoppingMoveOutcome {
@@ -292,7 +293,7 @@ pub fn attempt_exchange_move(
     log_ip_old: Complex64,
     log_ip_new: Complex64,
     log_rbm_delta: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> ExchangeMoveOutcome {
     if candidate.reject {
         return ExchangeMoveOutcome {
@@ -415,7 +416,7 @@ pub fn run_hopping_mini_loop(
     n_site: usize,
     n_elec: usize,
     mut log_ip_old: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> HoppingMiniLoopOutcome {
     let mut outcomes = Vec::with_capacity(steps.len());
     let mut accepted_count = 0usize;
@@ -470,7 +471,7 @@ pub fn run_generated_hopping_mini_loop(
     n_site: usize,
     n_elec: usize,
     mut log_ip_old: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> GeneratedHoppingMiniLoopOutcome {
     let mut outcomes = Vec::with_capacity(steps.len());
     let mut accepted_count = 0usize;
@@ -525,7 +526,7 @@ pub fn run_generated_normal_mini_loop(
     i_flg_orbital_general: i64,
     two_sz: i64,
     mut log_ip_old: Complex64,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> GeneratedNormalMiniLoopOutcome {
     let mut outcomes = Vec::with_capacity(steps.len());
     let mut accepted_count = 0usize;

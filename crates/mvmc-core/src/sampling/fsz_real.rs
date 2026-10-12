@@ -1,6 +1,5 @@
 //! Real FSZ sampling with explicit electron spins, mirroring Julia's driver.
 use mvmc_expert_parsers::ExpertModeData;
-use sfmt19937::Sfmt19937Rng;
 
 use super::candidate::{
     get_update_type, make_candidate_exchange_fsz, make_candidate_hopping_fsz,
@@ -28,7 +27,7 @@ use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 pub fn vmc_make_sample_fsz_real(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<SampleStats, CalcMAllError> {
     vmc_make_sample_fsz_real_with_reducer(data, state, rng, &SingleProcessReducer).map_err(
         |error| match error {
@@ -42,7 +41,7 @@ pub fn vmc_make_sample_fsz_real(
 pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     reducer: &R,
 ) -> Result<SampleStats, SamplingInitializationError> {
     let n_site = data.modpara.nsite as usize;
@@ -448,7 +447,12 @@ pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
     Ok(SampleStats { accepted, saved })
 }
 
-fn accept(delta: f64, log_ip_new: f64, log_ip_old: f64, rng: &mut Sfmt19937Rng) -> bool {
+fn accept(
+    delta: f64,
+    log_ip_new: f64,
+    log_ip_old: f64,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
+) -> bool {
     let w = mvmc_expert_parsers::utils::c_math::exp(2.0 * (delta + (log_ip_new - log_ip_old)));
     let w = if w.is_finite() { w } else { -1.0 };
     let draw = crate::sampling::driver::trace::draw_real2(rng);
