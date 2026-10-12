@@ -45,7 +45,9 @@ pub fn cpu_eager_stage_backend() -> Result<StageBackend<'static>, String> {
 }
 
 /// CUDA stage backend on `ordinal`: tenferro SR stages and the measurement stage on the
-/// device plus the batched CUDA Pfaffian kernel.
+/// device plus the batched CUDA Pfaffian kernel. The measurement slots share one device state
+/// (issue #518 milestone 2): stage A assembles and factorizes on the device and stage B
+/// consumes the resident tables.
 pub fn cuda_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, String> {
     let ctx = crate::bench::cuda_runtime(ordinal)?;
     let sr = TenferroSr::with_runtime(
@@ -59,13 +61,15 @@ pub fn cuda_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, Strin
     let engine: &'static PersistentCudaEngine =
         Box::leak(Box::new(PersistentCudaEngine::new(ordinal)));
     let pfaffian = BatchedStages::new(Backend::Engine(engine), &format!("cuda:{ordinal}"));
+    let measurement = TenferroMeasurement::with_runtime(
+        ctx,
+        Placement::Device,
+        format!("tenferro-measurement cuda:{ordinal}"),
+    );
+    let (stage_a, stage_b) = crate::measurement::resident_stages(ordinal, pfaffian, measurement)?;
     Ok(
-        StageBackend::new(&format!("cuda:{ordinal}"), Box::new(sr), Box::new(pfaffian))
-            .with_measurement(Box::new(TenferroMeasurement::with_runtime(
-                ctx,
-                Placement::Device,
-                format!("tenferro-measurement cuda:{ordinal}"),
-            ))),
+        StageBackend::new(&format!("cuda:{ordinal}"), Box::new(sr), Box::new(stage_a))
+            .with_measurement(Box::new(stage_b)),
     )
 }
 
@@ -268,21 +272,23 @@ impl SrStages for ResidentCudaSr {
 }
 
 /// CUDA stage backend with the resident SR step (opt-in; SR stages through
-/// [`ResidentCudaSr`], Pfaffian as in [`cuda_stage_backend`], and the tenferro measurement
-/// stage on the shared device runtime).
+/// [`ResidentCudaSr`], Pfaffian as in [`cuda_stage_backend`], and the device-resident
+/// measurement stage on the shared device state).
 pub fn cuda_resident_stage_backend(ordinal: usize) -> Result<StageBackend<'static>, String> {
     let ctx = crate::bench::cuda_runtime(ordinal)?;
     let engine: &'static PersistentCudaEngine =
         Box::leak(Box::new(PersistentCudaEngine::new(ordinal)));
     let pfaffian = BatchedStages::new(Backend::Engine(engine), &format!("cuda:{ordinal}"));
-    Ok(StageBackend::new(
-        &format!("cuda-resident:{ordinal}"),
-        Box::new(ResidentCudaSr::with_runtime(ordinal, ctx.clone())),
-        Box::new(pfaffian),
-    )
-    .with_measurement(Box::new(TenferroMeasurement::with_runtime(
-        ctx,
+    let measurement = TenferroMeasurement::with_runtime(
+        ctx.clone(),
         Placement::Device,
         format!("tenferro-measurement cuda:{ordinal}"),
-    ))))
+    );
+    let (stage_a, stage_b) = crate::measurement::resident_stages(ordinal, pfaffian, measurement)?;
+    Ok(StageBackend::new(
+        &format!("cuda-resident:{ordinal}"),
+        Box::new(ResidentCudaSr::with_runtime(ordinal, ctx)),
+        Box::new(stage_a),
+    )
+    .with_measurement(Box::new(stage_b)))
 }

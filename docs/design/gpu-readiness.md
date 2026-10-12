@@ -2251,6 +2251,128 @@ FAIL/ERROR) both stay inside the unchanged `16 n eps cond(A)` bound; the worst o
 `8.5e-4` of the bound at n=16 (generic path), `4.0e-5` at n=64 and `5.0e-5` at n=256 for the fast
 path. Raw logs and the before/after CSVs: `bench-out/issue517-pfinv/`.
 
+## 16.9 Milestone 2: device-resident measurement (issue #518)
+
+Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
+measurement (`CalculateMAll` + `LocEnergyCal`/`ReturnSlaterElmDiff`) now keeps the Slater table,
+the per-sample inverse/Pfaffian tables and the determinant-ratio arithmetic on the device
+across a series; `c-order` remains the default and the oracle.
+
+### 16.9.1 What became resident
+
+`gpu/mvmc-gpu-cuda/src/measurement.rs` (kernels `measurement_kernels.cu`) owns one
+`ResidentDevice` per CUDA device; the stage A adapter (`ResidentStageA`, `PfaffianStages`) and
+the stage B wrapper (`ResidentMeasurementStage`, `MeasurementStages`) share it through an
+`Arc<Mutex<..>>`, so the two slots of one `StageBackend` address the same tables:
+
+| item | where it lives | when it moves |
+| --- | --- | --- |
+| Slater table `S` | device | once per content version (`SlaterElmFlat::version`, a process-global monotone counter; excluded from `Debug`/`PartialEq`) |
+| assembled skew planes + `pfinv_f64` | device | never (assembled from `S` and the electron sites on the device) |
+| inverse planes (`invM = -X^-1`) + Pfaffians | device | Pfaffians (one `NQP` vector + status per plane) download once per batch; inverse planes download only when the host needs them (PhysCal Green/Lanczos, or a host stage B) |
+| sample electron sites | upload | the sample's own changed rows (KiB) |
+| local-energy ratio table | device (`km_ratio_terms`) | outputs only (`terms` doubles per sample) |
+| Slater derivative | device (`km_slater_rows`/`km_slater_fold`) | outputs only (`n_slater` doubles per sample) |
+| O store / SR assembly / IP | host | unchanged (the resident direct SR of #452 uploads the store once per step) |
+
+Seam (issue #519 contract extended, `crates/mvmc-core/src/stage_backend.rs`):
+`PfaffianStages::resident_stage_a`/`stage_a_resident` (assemble+factorize a batch, keep the
+tables) and `MeasurementStages::resident_measurement`/`resident_prepare`/`resident_stats`,
+with `MeasurementInput::sample`/`batch_slot` as the residency key. The host orchestration
+(term classification, projection ratios, the term-ordered energy fold, the final `*1/ip`
+normalization) stays in `mvmc-core` (`measurement_backend::resident_measure_sample`); the CUDA
+crate implements only the device operations (`ResidentMeasurementOps`). Selection is unchanged:
+`MVMC_RS_MEASURE_PF_BACKEND=cuda` + `MVMC_RS_MEASURE_BACKEND=cuda`; either selector alone still
+works (stage A with a host stage B downloads the tables; stage B without the resident stage A
+uses the eager milestone-1 path). Slots whose host inverse table is intentionally not downloaded
+are marked stale (#454), so any host read fails loudly. Complex/FSZ/RBM/two-body inputs are a
+hard `Unsupported`, and a multi-rank reducer is a hard error naming
+`MVMC_RS_MEASURE_BACKEND`, never a silent fallback.
+
+Host/device transfers are pageable cudarc copies on the device's default stream; the tables are
+allocated once per geometry and grow-only. Per device the service holds about
+`(3 * slots * NQP * n^2 * 8)` bytes of stage buffers: at L=448, `B=16` that is ~615 MB plus the
+51 MB Slater table.
+
+### 16.9.2 Numerical deviations
+
+The kernels use the C operation order (assembly, `pfinv_f64` with `--fmad=false`, sequential
+`msj`/`qp` transfer folds, the exact `SlaterElmDiff` block coefficients). The Slater derivative
+re-associates the per-row scatter into a deterministic per-`(trans, msi)` orbital list (no
+atomics), bounded by the reordering error of a few sums. Measured against the C-order run with
+the same sampler (issue #518 selection test, A100):
+
+| case | quantity (worst) | deviation | scale |
+| --- | --- | --- | --- |
+| L=6 gate, PhysCal `hubbard_chain_real` | 964 numeric tokens | 1.45e-13 abs / 7.9e-14 rel (bound `1e-11/1e-11`) | — |
+| L=6 gate, Opt 2 steps | 277 tokens | 9.24e-14 abs / 5.35e-13 rel | — |
+| L=64, Opt 1 step | whole outputs | 9.1e-13 abs on 4205.15 | 2.2e-16 rel |
+| L=448, Opt 3 steps | whole outputs | 3.0e-9 abs on 206171.15 (`zqp_opt`) | 1.45e-14 rel |
+| L=448, PhysCal 5 samples | Green/energy outputs | 2.3e-10 abs on 207867.90 | 1.1e-15 rel |
+
+`zvo_SRinfo.dat` is identical in the same-sampler comparisons, and a second resident run of the
+same input is bitwise identical (deterministic kernels; gate assertion). An earlier defect found
+during development is worth recording: the first CSR implementation inverted the translation map
+by site only, silently dropping one of the two spin slots that share a site (up/down). It showed
+up as a 15 % parameter difference in a mixed-sampler L=64 comparison; the fix keeps one slot per
+spin block and the same-sampler deviation dropped to 2.2e-16 relative. Validation:
+`crates/mvmc-core/tests/measurement_resident_518.rs` (host mock of the seam, byte-identical
+optimization, stale contract, hard error), `gpu/mvmc-gpu-cuda/tests/measurement_gate.rs`
+(`cuda_resident_measurement_matches_c_order`, PhysCal + Opt + counters + repeatability).
+
+### 16.9.3 Measured (A100 80GB, `bench-out/issue518/m2`)
+
+NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, CUDA toolkit 12.9, 64 host
+threads (shared host, `load1` 2-8 during the runs), `MVMC_C_TIMER=1`, medians of 3 timed rounds
+after one warm-up, same `mvmc-cuda` binary for all rows. `cuda_resident` is
+`MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda`.
+Section seconds.
+
+Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order (1 BLAS thread) | 42.53 | 26.29 | 14.14 | 1.237 |
+| cuda sampler | 32.19 | 14.44 | 15.42 | 1.252 |
+| **cuda sampler + resident measurement** | **16.99** | 14.60 | **1.084** | **0.152** |
+| c-order (4 BLAS threads) | 42.26 | 26.41 | 13.54 | 1.284 |
+
+PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order (1 BLAS thread) | 73.32 | 40.78 | 23.05 | 1.258 |
+| cuda sampler | 56.33 | 23.59 | 23.24 | 1.243 |
+| **cuda sampler + resident measurement** | **37.49** | 23.63 | **5.260** | **0.210** |
+| c-order (4 BLAS threads) | 72.47 | 41.03 | 21.84 | 1.250 |
+
+The measurement section moves by **13.0x** (`CalculateMAll` Opt), **4.4x** (PhysCal: the inverse
+planes are downloaded for the host Green functions) and **8.1x/6.0x** (`LocEnergyCal`), and the
+whole device `All` by **2.50x** (Opt) and **1.96x** (PhysCal) against the 1-thread CPU. Energies
+are identical to printed precision; same-sampler output comparisons are the table above.
+
+### 16.9.4 The 4-thread CPU baseline and the remaining >=20x gap
+
+`MVMC_RS_BLAS_THREADS` (default **1**, the deterministic serial parity policy; non-default values
+are a benchmark-only policy and change BLAS summation order) is read by
+`crates/mvmc-core/src/serial_blas.rs`. It does **not** move this benchmark: the L=448
+`CalculateMAll` is dominated by the scalar PfaPack factorization. With 4 threads `DPOSV` halves
+(0.048 -> 0.024 s) and `CalculateMAll` moves 4-5 % (14.14 -> 13.54 s), so the 4-thread CPU `All`
+is 42.26 s (Opt) / 72.47 s (PhysCal) - within 1 % of the 1-thread baseline. The honest gap:
+
+* Opt L=448: 16.99 s vs 42.26 s -> **2.49x** end to end (sampling is 14.60 s = 86 % of the
+  device `All`; the measurement is 1.24 s = 7 %).
+* PhysCal L=448: 37.49 s vs 72.47 s -> **1.93x** (sampling 23.63 s = 63 %; the measurement still
+  spends 5.3 s on the per-batch inverse downloads the host Green functions require).
+
+The measurement no longer caps the end-to-end at 2.2-2.7x (section 16.7); the cap is now the
+sampler: the production chain still pays the host candidate generation / projection counters /
+`log_proj_ratio` and the lock-step round floor, and at L=448 the recompute kernel is the
+sampler's dominant device phase (16.8). The next lever for >=20x is the #517 sampler path
+(projection/`log_proj_ratio` on the device, projections of the recompute phases, CUDA-graph or
+persistent launch), not the measurement. PhysCal additionally needs the Green functions on the
+device before the inverse download disappears.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
