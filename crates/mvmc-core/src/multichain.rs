@@ -346,7 +346,7 @@ mod tests {
 // In-process collectives and multi-walker optimization (issue #435)
 // ---------------------------------------------------------------------------------------------
 
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 
 use num_complex::Complex64;
 
@@ -359,10 +359,23 @@ struct CommState {
     /// Number of participants that arrived at the current barrier generation.
     arrived: usize,
     generation: u64,
-    /// Per-rank contribution slots of the current collective.
-    f64s: Vec<Vec<f64>>,
-    c64s: Vec<Vec<Complex64>>,
-    i64s: Vec<Vec<i64>>,
+}
+
+/// Each walker stages independently; readers may copy the reduced result concurrently.
+/// The communicator's second barrier protects both buffers between generations.
+#[derive(Debug)]
+struct CollectiveBuffers<T> {
+    contributions: Vec<Mutex<Vec<T>>>,
+    result: RwLock<Vec<T>>,
+}
+
+impl<T> CollectiveBuffers<T> {
+    fn new(size: usize) -> Self {
+        Self {
+            contributions: (0..size).map(|_| Mutex::new(Vec::new())).collect(),
+            result: RwLock::new(Vec::new()),
+        }
+    }
 }
 
 /// Shared state of `W` walker threads standing in for one MPI communicator.
@@ -371,6 +384,9 @@ pub struct ThreadComm {
     size: usize,
     state: Mutex<CommState>,
     cv: Condvar,
+    f64s: CollectiveBuffers<f64>,
+    c64s: CollectiveBuffers<Complex64>,
+    i64s: CollectiveBuffers<i64>,
 }
 
 impl ThreadComm {
@@ -381,11 +397,11 @@ impl ThreadComm {
             state: Mutex::new(CommState {
                 arrived: 0,
                 generation: 0,
-                f64s: vec![Vec::new(); size],
-                c64s: vec![Vec::new(); size],
-                i64s: vec![Vec::new(); size],
             }),
             cv: Condvar::new(),
+            f64s: CollectiveBuffers::new(size),
+            c64s: CollectiveBuffers::new(size),
+            i64s: CollectiveBuffers::new(size),
         })
     }
 
@@ -406,23 +422,35 @@ impl ThreadComm {
     }
 
     /// Reduce once, on the last arrival, then copy only the result to each rank.
-    /// The second barrier keeps slot 0 immutable until every rank has read it.
-    /// Contributions and arithmetic stay in rank order regardless of arrival order.
+    /// The second barrier keeps the result immutable until every rank has read it.
+    /// Only the reduction holds the communicator mutex; large input/output copies use
+    /// per-rank locks and concurrent read locks. Arithmetic remains in rank order.
     fn collective<T: Clone>(
         &self,
         rank: usize,
         data: &mut [T],
-        slots: impl Fn(&mut CommState) -> &mut Vec<Vec<T>>,
-        reduce: impl FnOnce(&mut [Vec<T>]),
+        buffers: &CollectiveBuffers<T>,
+        reduce: impl FnOnce(&mut Vec<T>, &[MutexGuard<'_, Vec<T>>]),
     ) {
+        {
+            let mut slot = buffers.contributions[rank]
+                .lock()
+                .expect("contribution lock");
+            slot.clear();
+            slot.extend_from_slice(data);
+        }
         let mut st = self.state.lock().expect("thread comm lock");
-        let slot = &mut slots(&mut st)[rank];
-        slot.clear();
-        slot.extend_from_slice(data);
         let generation = st.generation;
         st.arrived += 1;
         if st.arrived == self.size {
-            reduce(slots(&mut st));
+            let contributions: Vec<_> = buffers
+                .contributions
+                .iter()
+                .map(|slot| slot.lock().expect("contribution lock"))
+                .collect();
+            let mut result = buffers.result.write().expect("collective result lock");
+            result.clone_from(&contributions[0]);
+            reduce(&mut result, &contributions);
             st.arrived = 0;
             st.generation += 1;
             self.cv.notify_all();
@@ -431,8 +459,11 @@ impl ThreadComm {
                 st = self.cv.wait(st).expect("thread comm wait");
             }
         }
-        data.clone_from_slice(&slots(&mut st)[0]);
         drop(st);
+        {
+            let result = buffers.result.read().expect("collective result lock");
+            data.clone_from_slice(&result);
+        }
         self.barrier();
     }
 }
@@ -462,102 +493,75 @@ impl ThreadReducer {
 impl Reducer for ThreadReducer {
     fn allreduce_sum_f64(&self, buf: &mut [f64]) {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.f64s,
-                |all| {
-                    let (sum, rest) = all.split_first_mut().expect("nonempty");
-                    for rank in rest {
-                        for (acc, value) in sum.iter_mut().zip(rank) {
+            self.comm
+                .collective(self.rank, buf, &self.comm.f64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
                             *acc += *value;
                         }
                     }
-                },
-            );
+                });
         }
     }
 
     fn allreduce_sum_c64(&self, buf: &mut [Complex64]) {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.c64s,
-                |all| {
-                    let (sum, rest) = all.split_first_mut().expect("nonempty");
-                    for rank in rest {
-                        for (acc, value) in sum.iter_mut().zip(rank) {
+            self.comm
+                .collective(self.rank, buf, &self.comm.c64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
                             acc.re += value.re;
                             acc.im += value.im;
                         }
                     }
-                },
-            );
+                });
         }
     }
 
     fn allreduce_sum_i64(&self, buf: &mut [i64]) {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.i64s,
-                |all| {
-                    let (sum, rest) = all.split_first_mut().expect("nonempty");
-                    for rank in rest {
-                        for (acc, value) in sum.iter_mut().zip(rank) {
+            self.comm
+                .collective(self.rank, buf, &self.comm.i64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
                             *acc += *value;
                         }
                     }
-                },
-            );
+                });
         }
     }
 
     fn broadcast_f64(&self, root: usize, buf: &mut [f64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.f64s,
-                |all| {
+            self.comm
+                .collective(self.rank, buf, &self.comm.f64s, |result, all| {
                     if root != 0 {
-                        all[0] = all[root].clone();
+                        result.clone_from(&all[root]);
                     }
-                },
-            );
+                });
         }
         Ok(())
     }
 
     fn broadcast_c64(&self, root: usize, buf: &mut [Complex64]) {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.c64s,
-                |all| {
+            self.comm
+                .collective(self.rank, buf, &self.comm.c64s, |result, all| {
                     if root != 0 {
-                        all[0] = all[root].clone();
+                        result.clone_from(&all[root]);
                     }
-                },
-            );
+                });
         }
     }
 
     fn broadcast_i64(&self, root: usize, buf: &mut [i64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            self.comm.collective(
-                self.rank,
-                buf,
-                |s| &mut s.i64s,
-                |all| {
+            self.comm
+                .collective(self.rank, buf, &self.comm.i64s, |result, all| {
                     if root != 0 {
-                        all[0] = all[root].clone();
+                        result.clone_from(&all[root]);
                     }
-                },
-            );
+                });
         }
         Ok(())
     }
@@ -573,14 +577,10 @@ impl Reducer for ThreadReducer {
             return Ok(info);
         }
         let mut result = [i64::from(info)];
-        self.comm.collective(
-            self.rank,
-            &mut result,
-            |s| &mut s.i64s,
-            |all| {
-                all[0][0] = all.iter().map(|v| v[0]).max().expect("nonempty");
-            },
-        );
+        self.comm
+            .collective(self.rank, &mut result, &self.comm.i64s, |result, all| {
+                result[0] = all.iter().map(|v| v[0]).max().expect("nonempty");
+            });
         Ok(result[0] as i32)
     }
 

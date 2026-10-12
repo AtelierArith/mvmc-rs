@@ -995,6 +995,10 @@ through either backend of #421 (`MVMC_RS_SR_BACKEND`).
   copying and arithmetic, instead of `O(W*W*N)`. The same protocol serves sums, broadcasts
   and integer MAX. Regression coverage varies arrival order, message length, root and numeric
   type across repeated generations, including empty messages and non-associative sums.
+  Contribution copies use one lock per rank; result copies share a read lock, so neither
+  large copy serializes on the communicator mutex. Reduction still runs once in the same
+  rank order. The separate reusable result adds `O(N)` storage; the final barrier protects
+  both the contribution slots and the result across generations.
 * **Threads.** The collectives need all walkers running, so one OS thread per walker is used
   (not a pool smaller than `W`); everything inside a walker is single-threaded. The SR tenferro
   backend is a process-wide, mutex-guarded runtime (one runtime built once), so walkers
