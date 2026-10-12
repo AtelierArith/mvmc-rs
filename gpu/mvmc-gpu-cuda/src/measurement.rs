@@ -77,6 +77,7 @@ impl Geom {
 struct Funcs {
     assemble: CudaFunction,
     pfinv: CudaFunction,
+    pfinv_wide: CudaFunction,
     ratio: CudaFunction,
     rows: CudaFunction,
     fold: CudaFunction,
@@ -233,6 +234,7 @@ impl ResidentDevice {
         let funcs = Funcs {
             assemble: f("km_assemble")?,
             pfinv: f("pfinv_f64")?,
+            pfinv_wide: f("pfinv_f64_wide")?,
             ratio: f("km_ratio_terms")?,
             rows: f("km_slater_rows")?,
             fold: f("km_slater_fold")?,
@@ -450,7 +452,15 @@ impl ResidentDevice {
             self.stage = Some(stage);
             return Err(cu(error));
         }
-        let (nt, shared) = launch_geometry(n, 8, 1);
+        // Latency-bound small batches (the sampler's 8-plane recompute shape and a measurement
+        // batch that fills only a few SMs) use the wide-block entry point; see
+        // `pfaffian::launch_geometry_wide`.
+        let wide = crate::pfaffian::use_wide_f64(n, 8, 1);
+        let (nt, shared) = if wide {
+            crate::pfaffian::launch_geometry_wide(n)
+        } else {
+            launch_geometry(n, 8, 1)
+        };
         let (n_i, ne_i, ns_i, nq_i) = (
             n as i32,
             geom.n_elec as i32,
@@ -477,7 +487,11 @@ impl ResidentDevice {
                 })
             }
             .map_err(cu)?;
-            let mut b = self.stream.launch_builder(&self.funcs.pfinv);
+            let mut b = self.stream.launch_builder(if wide {
+                &self.funcs.pfinv_wide
+            } else {
+                &self.funcs.pfinv
+            });
             b.arg(&mut stage.planes)
                 .arg(&mut stage.work)
                 .arg(&mut stage.out)

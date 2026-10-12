@@ -92,6 +92,7 @@ fn random_skew(n: usize, planes: usize, seed: u64) -> Vec<f64> {
 struct Engine {
     ctx: Arc<CudaContext>,
     pfinv: CudaFunction,
+    pfinv_wide: CudaFunction,
 }
 
 impl Engine {
@@ -107,14 +108,34 @@ impl Engine {
         )
         .expect("NVRTC");
         let module = ctx.load_module(ptx).expect("module");
+        // Wide-block variant: the fast path is latency-bound when only a few planes are in
+        // flight, so the block-size cap of the production entry point is relaxed here.
+        let wide_src =
+            SRC_PFAFFIAN.replace("__launch_bounds__(256, 2)", "__launch_bounds__(1024, 1)");
+        let wptx = compile_ptx_with_opts(
+            &wide_src,
+            CompileOptions {
+                fmad: Some(false),
+                arch: Some("compute_80"),
+                ..Default::default()
+            },
+        )
+        .expect("NVRTC wide");
+        let wmodule = ctx.load_module(wptx).expect("wide module");
         Self {
             ctx,
             pfinv: module.load_function("pfinv_f64").expect("pfinv_f64"),
+            pfinv_wide: wmodule.load_function("pfinv_f64").expect("pfinv_f64 wide"),
         }
     }
 
-    /// Kernel-only seconds for `planes` planes of side `n`; median of `reps`.
-    fn time(&self, n: usize, planes: usize, reps: usize) -> (f64, usize) {
+    /// Kernel-only seconds for `planes` planes of side `n`; median of `reps`. `wide` selects the
+    /// relaxed-launch-bounds entry point.
+    fn time_with(&self, n: usize, planes: usize, reps: usize, wide: bool) -> (f64, usize) {
+        let pfinv = if wide { &self.pfinv_wide } else { &self.pfinv };
+        let force_nt: Option<u32> = std::env::var("MVMC_PFINV_NT")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok());
         let s = self.ctx.default_stream();
         let nn = n * n;
         let host_a = random_skew(n, planes, 0x5170_0000 + n as u64);
@@ -125,13 +146,14 @@ impl Engine {
         let mut st = s.alloc_zeros::<i32>(planes).expect("ST");
         let n_i = n as i32;
         let (nt, shared) = mvmc_gpu_cuda::pfaffian::launch_geometry(n, 8, 1);
+        let nt = force_nt.unwrap_or(nt);
         macro_rules! refresh_and_run {
-            () => {{
+            ($f:expr) => {{
                 {
                     let mut view = a.slice_mut(..host_a.len());
                     s.memcpy_htod(&host_a, &mut view).expect("htod");
                 }
-                let mut b = s.launch_builder(&self.pfinv);
+                let mut b = s.launch_builder($f);
                 b.arg(&mut a)
                     .arg(&mut w)
                     .arg(&mut out)
@@ -157,7 +179,7 @@ impl Engine {
             .ctx
             .new_event(Some(CUevent_flags::CU_EVENT_DEFAULT))
             .expect("event");
-        refresh_and_run!();
+        refresh_and_run!(pfinv);
         s.synchronize().expect("sync");
         let status = s.clone_dtoh(&st).expect("status");
         let failed = status.iter().filter(|&&v| v != 0).count();
@@ -168,7 +190,7 @@ impl Engine {
                 s.memcpy_htod(&host_a, &mut view).expect("htod");
             }
             start.record(&s).expect("record");
-            let mut b = s.launch_builder(&self.pfinv);
+            let mut b = s.launch_builder(pfinv);
             b.arg(&mut a)
                 .arg(&mut w)
                 .arg(&mut out)
@@ -197,10 +219,20 @@ fn main() {
     let engine = Engine::new();
     println!("# pfinv_f64 kernel-only roofline (issue #517); A100 FP64 ALU peak 9.7 TFLOP/s");
     println!("n,planes,items,ms,tflops,fraction_of_peak,us_per_item,failed_planes");
-    for n in [256usize, 448] {
+    let sizes: Vec<usize> = match std::env::var("MVMC_PFINV_N") {
+        Ok(v) => v.split(',').filter_map(|x| x.parse().ok()).collect(),
+        Err(_) => vec![256, 448],
+    };
+    let plan_list: Vec<usize> = match std::env::var("MVMC_PFINV_PLANES") {
+        Ok(v) => v.split(',').filter_map(|x| x.parse().ok()).collect(),
+        Err(_) => vec![8, 64, 512, 2048],
+    };
+    let wide = std::env::var("MVMC_PFINV_WIDE").is_ok();
+    for n in sizes {
         let flops = plane_flops(n);
-        for planes in [8usize, 64, 512, 2048] {
-            let (secs, failed) = engine.time(n, planes, 5);
+        for planes in plan_list.iter().copied() {
+            let _ = wide;
+            let (secs, failed) = engine.time_with(n, planes, 5, wide);
             let items = planes / 8;
             let tflops = planes as f64 * flops as f64 / secs / 1e12;
             println!(

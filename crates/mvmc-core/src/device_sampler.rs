@@ -586,6 +586,11 @@ pub struct WalkerRun {
     pub teacher: Option<TeacherReport>,
 }
 
+/// How long the service loop spins for the next request before blocking in the channel receive.
+/// The single production chain's next request follows its reply within a few microseconds, so the
+/// spin avoids one futex wake per hop; several walkers never reach it.
+const RECV_SPIN: Duration = Duration::from_micros(20);
+
 /// Options of [`run_lockstep_real`].
 #[derive(Debug, Clone, Default)]
 pub struct LockstepOptions {
@@ -678,19 +683,40 @@ fn run_service_loop<S: DeviceService + ?Sized>(
         if live == 0 {
             break;
         }
-        // 1. receive; block only when nothing else can progress
+        // 1. receive; block only when nothing else can progress. Before blocking, spin for a
+        // short while: with few walkers the next request follows the previous reply within a few
+        // microseconds (the walker's own host work), and a blocking receive then pays a futex
+        // wake on every hop.
         let t_recv = Instant::now();
         let mut got = false;
         loop {
             let msg = if got || !inflight.is_empty() {
                 rx.try_recv().ok()
             } else {
-                match rx.recv() {
-                    Ok(m) => Some(m),
-                    Err(_) => {
-                        disconnected = true;
-                        None
+                let mut m = rx.try_recv().ok();
+                if m.is_none() {
+                    let spin = Instant::now();
+                    while spin.elapsed() < RECV_SPIN {
+                        std::hint::spin_loop();
+                        match rx.try_recv() {
+                            Ok(msg) => {
+                                m = Some(msg);
+                                break;
+                            }
+                            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                            Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                        }
                     }
+                }
+                match m {
+                    Some(m) => Some(m),
+                    None => match rx.recv() {
+                        Ok(m) => Some(m),
+                        Err(_) => {
+                            disconnected = true;
+                            None
+                        }
+                    },
                 }
             };
             let Some(msg) = msg else { break };
@@ -1007,7 +1033,38 @@ pub fn run_lockstep_real_one<S, R>(
     rng: &mut Sfmt19937Rng,
     reducer: &R,
     service: &mut S,
+    opts: LockstepOptions,
+) -> Result<(WalkerRun, LockstepStats), String>
+where
+    S: DeviceService + Send + ?Sized,
+    R: Reducer + ?Sized,
+{
+    run_lockstep_real_one_timed(
+        data,
+        state,
+        rng,
+        reducer,
+        service,
+        opts,
+        &mut CTimer::<false>::new(),
+    )
+}
+
+/// Timed variant of [`run_lockstep_real_one`]: the walker's sampler sections (candidate,
+/// projection counters, the proposal round, the acceptance) land in `timer`, so a device run
+/// reports the same `zvo_CalcTimer.dat` sections as the C-order path.
+///
+/// # Errors
+///
+/// Like [`run_lockstep_real_one`].
+pub fn run_lockstep_real_one_timed<S, R, const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    reducer: &R,
+    service: &mut S,
     mut opts: LockstepOptions,
+    timer: &mut CTimer<TIMED>,
 ) -> Result<(WalkerRun, LockstepStats), String>
 where
     S: DeviceService + Send + ?Sized,
@@ -1075,14 +1132,7 @@ where
             *stage.slot.thread.lock().expect("reply thread") = Some(std::thread::current());
             trace::start_decisions();
             sync_slater_real(state);
-            let result = vmc_make_sample_real_staged(
-                data,
-                state,
-                rng,
-                &mut CTimer::<false>::new(),
-                reducer,
-                &mut stage,
-            );
+            let result = vmc_make_sample_real_staged(data, state, rng, timer, reducer, &mut stage);
             let decisions = trace::finish_decisions();
             // Same issue #454 contract as the multi-walker runner: the device holds the accepted
             // inverses, so a later host read fails loudly until a recompute makes the table valid.
