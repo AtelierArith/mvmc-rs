@@ -499,9 +499,13 @@ impl SamplerStages for CudaIntervalSamplerStages {
         );
         let mut timer = mvmc_core::c_timer::CTimer::<false>::new();
         timer.diagnostics = timing.diagnostics();
-        mvmc_core::sampling::driver::vmc_make_sample_real_engine(
+        let t0 = std::time::Instant::now();
+        let out = mvmc_core::sampling::driver::vmc_make_sample_real_engine(
             data, state, rng, &mut timer, reducer, &mut engine,
-        )
-        .map_err(|e| StageError::Failed(e.to_string()))
+        );
+        if reducer.rank() == 0 && std::env::var_os("MVMC_INTERVAL_TIMING").is_some() {
+            eprintln!("[interval] sample_real_group {:.4}s", t0.elapsed().as_secs_f64());
+        }
+        out.map_err(|e| StageError::Failed(e.to_string()))
     }
 }
