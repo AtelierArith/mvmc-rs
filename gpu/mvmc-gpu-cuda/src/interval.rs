@@ -17,6 +17,9 @@
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::BackendSession;
 
+mod resident;
+pub use resident::ResidentInterval;
+
 /// The NVRTC module: the batched Pfaffian (`pfinv_f64`), the interval kernel and the rebuild
 /// helpers, compiled once per process/thread.
 pub const INTERVAL_MODULE: &str = concat!(
@@ -25,6 +28,8 @@ pub const INTERVAL_MODULE: &str = concat!(
     include_str!("interval_kernels.cu"),
     "\n",
     include_str!("interval_rebuild.cu"),
+    "\n",
+    include_str!("interval_resident.cu"),
 );
 
 /// Kernels loaded from [`INTERVAL_MODULE`].
@@ -33,6 +38,9 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_assemble",
     "interval_commit",
     "pfinv_f64",
+    "interval_resident_hop",
+    "interval_resident_factor",
+    "interval_resident_commit",
 ];
 
 /// Geometry shared by every interval call of one series.
@@ -636,7 +644,7 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
-    /// Download the complete group's results with four transfers and one stream synchronization.
+    /// Download the complete group's results with four blocking transfers.
     pub fn download_all<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,

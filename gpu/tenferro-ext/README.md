@@ -16,7 +16,7 @@ device-resident interval sampler (issue #547).
 
 ## What is compiled
 
-Only `src/raw_exec.rs` (via `src/lib.rs`). It provides:
+Only `src/raw_exec.rs` and its `rng` module (via `src/lib.rs`). They provide:
 
 * `with_raw_exec(session, label, |exec| ...)` — runs a whole workload inside one
   `CudaExecSession::with_raw` scope on tenferro's captured stream.
@@ -26,6 +26,11 @@ Only `src/raw_exec.rs` (via `src/lib.rs`). It provides:
 * `DeviceBuffer` — plain driver allocations on tenferro's primary context, bypassing
   CubeCL's process-global pool.
 * `ArenaBuilder` — aligned host staging for resident weight uploads.
+* `DeviceRng` — one cuRAND library generator per owner, retaining its CUDA context
+  and generating UInt32 tapes on the captured stream without host staging (#560).
+* `raw_exec_counters()` — thread-local snapshots of explicit upload/download
+  calls/bytes, raw scopes and stream synchronizations. Provider/library-internal
+  transfers and barriers are outside these counters.
 
 ## What is not compiled
 
@@ -41,6 +46,8 @@ origin workspace's `cpu-kernels` / `tenferro-infer` crates and are not built her
   the dependencies `raw_exec` needs.
 * `src/lib.rs` reduced to `pub mod raw_exec;`.
 * Upstream tests/examples removed (they exercise the decision-engine ops).
+* Raw buffer pointers are checked against the captured CUDA context. The RNG is
+  movable between host threads but requires exclusive generation/reseed access.
 * Subsequent adaptations (for example a `f64` element type for mvmc's sampler) are
   recorded in the commit history.
 

@@ -29,6 +29,20 @@ This Rust crate and its workspace are under active development. Backward compati
 
 The historical implementation was written in C and later reimplemented in Julia. Rust should follow the Julia design for public APIs, runner structure, lifecycle, and test organization, while following C for numerical authority: parameter layout and offsets, initialization and draw order, arithmetic and operation order, signs, formatting, and floating-point results. When the two references differ, keep the Julia architecture and adopt the defined C numerical contract. Record the distinction in focused tests and preserve the authoritative algorithm and input contracts when applying the numerical-comparison policy below.
 
+### GPU reference and transfer policy (owner direction, 2026-10-13)
+
+For Rust GPU Opt, the Julia GPU implementation is an accepted numerical and RNG
+reference. Follow its GPU proposal, decision, initialization and update contract,
+record the reference revision, and validate numerical results with explicit bounds.
+CPU/C-order execution retains the C authority described above. C/SFMT draw parity
+is not a prerequisite for a Julia-compatible GPU path.
+
+Prioritize avoiding host/device communication: keep the RNG, walker ensemble,
+sampling caches, saved samples, observables and SR intermediates on the device
+where feasible. Measure transfer calls/bytes and synchronization points alongside
+E2E timing. Avoid one complete host optimizer state per GPU walker and per-hop
+host round trips. Preserve supplied-tape tests and same-implementation repeatability.
+
 The project target is a pure-Rust implementation. When an implementation choice is unclear, port the C algorithm and numerical operation order into Rust rather than adding a C FFI or runtime dependency; use C only as the reference for behavior and validation.
 
 ## Testing Guidelines
