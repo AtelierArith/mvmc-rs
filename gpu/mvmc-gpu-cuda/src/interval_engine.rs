@@ -4,9 +4,10 @@
 //! One [`IntervalGroup`] is shared by every walker of a run (`Arc<IntervalGroup>`, kept in a
 //! per-device registry). Each walker has a [`WalkerState`] slot and the group owns the single
 //! resident [`IntervalSampler`] sized for `walkers` blocks. A block is advanced by every walker
-//! thread calling [`IntervalEngine::run_block`] once: each stages its block tape, rendezvous
-//! through `Reducer::barrier()` outside any lock, rank 0 runs `k_interval_hop` for all walkers
-//! (with device rebuilds), and each walker reads its slot back. Only rank 0 touches the device;
+//! thread calling [`IntervalEngine::run_block`] once: each writes its block tape into its own
+//! slot (a per-walker lock, no cross-walker contention), rendezvous through `Reducer::barrier()`
+//! outside any lock, rank 0 runs `k_interval_hop` for all walkers (with device rebuilds), and
+//! each walker reads its slot back (again a per-walker lock). Only rank 0 touches the device;
 //! its `CudaBackend` is a thread-local (a tenferro context is thread-affine) while the resident
 //! `DeviceBuffer`s, which are `Send`, live in the shared group.
 //!
@@ -61,25 +62,15 @@ pub struct WalkerState {
     pub accepts: i32,
 }
 
-struct Inner {
-    geom: IntervalGeometry,
+struct Tables {
     slater: Vec<f64>,
     weights: Vec<f64>,
     gutz: Vec<i32>,
     jast: Vec<i32>,
     params: Vec<f64>,
-    states: Vec<WalkerState>,
-    tapes: Vec<u32>,
-    n_in_step: usize,
-    sampler: Option<IntervalSampler>,
 }
 
-/// Shared coordinator of one group of walkers; reconfigured once per sample series.
-pub struct IntervalGroup {
-    inner: Mutex<Inner>,
-}
-
-fn empty_state(geom: &IntervalGeometry) -> WalkerState {
+fn new_state(geom: &IntervalGeometry) -> WalkerState {
     WalkerState {
         ele: vec![0; geom.n],
         inv: vec![0.0; geom.nqp * geom.n * geom.n],
@@ -90,8 +81,29 @@ fn empty_state(geom: &IntervalGeometry) -> WalkerState {
     }
 }
 
+type States = Arc<Vec<Mutex<WalkerState>>>;
+type WalkerTapes = Arc<Vec<Mutex<Vec<u32>>>>;
+
+/// Shared coordinator of one group of walkers; reconfigured once per sample series.
+///
+/// The hot per-block path (staging a walker's tape and reading its state) touches only that
+/// walker's own lock; the shared locks are held briefly to clone the per-walker buffers or by
+/// rank 0 during the device pass.
+pub struct IntervalGroup {
+    geom: Mutex<IntervalGeometry>,
+    tables: Mutex<Tables>,
+    states: Mutex<States>,
+    walker_tapes: Mutex<WalkerTapes>,
+    /// Interleaved device tape `[word][walker][step]` (rank 0 only).
+    tapes: Mutex<Vec<u32>>,
+    n_in_step: Mutex<usize>,
+    sampler: Mutex<Option<IntervalSampler>>,
+    /// Serializes `begin_series_walker` so a geometry reallocation never races a walker.
+    series_lock: Mutex<()>,
+}
+
 impl IntervalGroup {
-    /// Build a configured group (used by tests and by `begin_series`).
+    /// Build a configured group (used by tests and by `begin_series_walker`).
     pub fn new(
         geom: IntervalGeometry,
         slater: Vec<f64>,
@@ -100,71 +112,102 @@ impl IntervalGroup {
         jast: Vec<i32>,
         params: Vec<f64>,
     ) -> Arc<Self> {
-        let states = (0..geom.walkers).map(|_| empty_state(&geom)).collect();
         Arc::new(Self {
-            inner: Mutex::new(Inner {
-                geom,
+            geom: Mutex::new(geom),
+            tables: Mutex::new(Tables {
                 slater,
                 weights,
                 gutz,
                 jast,
                 params,
-                states,
-                tapes: Vec::new(),
-                n_in_step: 0,
-                sampler: None,
             }),
+            states: Mutex::new(make_states(&geom)),
+            walker_tapes: Mutex::new(make_tapes(geom.walkers)),
+            tapes: Mutex::new(Vec::new()),
+            n_in_step: Mutex::new(0),
+            sampler: Mutex::new(None),
+            series_lock: Mutex::new(()),
         })
     }
 
-    /// Reconfigure for a new sample series: geometry (reallocating when the walker count or
-    /// shape changed), tables, and a cleared resident sampler (the Slater table changed).
-    pub fn begin_series(
+    fn states(&self) -> States {
+        self.states.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    fn walker_tapes(&self) -> WalkerTapes {
+        self.walker_tapes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Reconfigure for a new sample series and stage walker `w`'s initial state. Both happen
+    /// under `series_lock`, so the walkers of a run cannot race a geometry reallocation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin_series_walker(
         &self,
+        w: usize,
         geom: IntervalGeometry,
         slater: Vec<f64>,
         weights: Vec<f64>,
         gutz: Vec<i32>,
         jast: Vec<i32>,
         params: Vec<f64>,
+        ele: Vec<i32>,
+        inv: Vec<f64>,
+        pf: Vec<f64>,
     ) {
-        let mut inner = self.inner.lock().unwrap();
-        if inner.geom.walkers != geom.walkers
-            || inner.geom.n != geom.n
-            || inner.geom.nqp != geom.nqp
-        {
-            inner.geom = geom;
-            inner.states = (0..geom.walkers).map(|_| empty_state(&geom)).collect();
-            inner.tapes = Vec::new();
-            inner.n_in_step = 0;
-        } else {
-            inner.geom = geom;
+        let _series = self.series_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut current = self.geom.lock().unwrap_or_else(|e| e.into_inner());
+        if current.walkers != geom.walkers || current.n != geom.n || current.nqp != geom.nqp {
+            // Geometry changed (first series of a run): reallocate the per-walker buffers.
+            *self.states.lock().unwrap_or_else(|e| e.into_inner()) = make_states(&geom);
+            *self.walker_tapes.lock().unwrap_or_else(|e| e.into_inner()) =
+                make_tapes(geom.walkers);
+            *self.n_in_step.lock().unwrap_or_else(|e| e.into_inner()) = 0;
+            *self.tapes.lock().unwrap_or_else(|e| e.into_inner()) = Vec::new();
         }
-        inner.slater = slater;
-        inner.weights = weights;
-        inner.gutz = gutz;
-        inner.jast = jast;
-        inner.params = params;
-        inner.sampler = None;
-    }
-
-    /// Store walker `w`'s initial state (called once per series, before any block).
-    pub fn stage_initial(&self, w: usize, ele: Vec<i32>, inv: Vec<f64>, pf: Vec<f64>) {
-        let mut inner = self.inner.lock().unwrap();
-        let st = &mut inner.states[w];
+        *current = geom;
+        drop(current);
+        *self.tables.lock().unwrap_or_else(|e| e.into_inner()) = Tables {
+            slater,
+            weights,
+            gutz,
+            jast,
+            params,
+        };
+        *self.sampler.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let states = self.states();
+        let mut st = states[w].lock().unwrap_or_else(|e| e.into_inner());
         st.ele = ele;
         st.inv = inv;
         st.pf = pf;
+        st.logip = 0.0;
+        st.aw = 0;
+        st.accepts = 0;
+    }
+
+    /// Store walker `w`'s initial state for an already-configured group (test convenience).
+    pub fn stage_initial(&self, w: usize, ele: Vec<i32>, inv: Vec<f64>, pf: Vec<f64>) {
+        let states = self.states();
+        let mut st = states[w].lock().unwrap_or_else(|e| e.into_inner());
+        st.ele = ele;
+        st.inv = inv;
+        st.pf = pf;
+        st.logip = 0.0;
+        st.aw = 0;
         st.accepts = 0;
     }
 
     /// Read walker `w`'s state (results after a block).
     pub fn walker_state(&self, w: usize) -> WalkerState {
-        self.inner.lock().unwrap().states[w].clone()
+        self.states()[w]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
-    /// Advance one block for walker `w` with its tape and rendezvous. Every walker of the run
-    /// must call this once per block; `n_in_step` is the block length.
+    /// Advance one block for walker `w` with its tape and rendezvous.
     pub fn run_block(
         &self,
         w: usize,
@@ -174,23 +217,24 @@ impl IntervalGroup {
     ) -> Result<(), String> {
         debug_assert_eq!(tape.len(), 5 * n_in_step);
         {
-            let mut inner = self.inner.lock().unwrap();
-            if inner.n_in_step == 0 {
-                let world = inner.geom.walkers;
-                inner.n_in_step = n_in_step;
-                inner.tapes = vec![0u32; world * n_in_step * 5];
+            let tapes = self.walker_tapes();
+            let mut wt = tapes[w].lock().unwrap_or_else(|e| e.into_inner());
+            wt.clear();
+            wt.extend_from_slice(tape);
+        }
+        {
+            let mut n = self.n_in_step.lock().unwrap_or_else(|e| e.into_inner());
+            if *n == 0 {
+                let world = self.geom.lock().unwrap_or_else(|e| e.into_inner()).walkers;
+                *n = n_in_step;
+                *self.tapes.lock().unwrap_or_else(|e| e.into_inner()) =
+                    vec![0u32; world * n_in_step * 5];
             }
-            if inner.n_in_step != n_in_step {
+            if *n != n_in_step {
                 return Err(format!(
                     "interval group block size changed from {} to {n_in_step}",
-                    inner.n_in_step
+                    *n
                 ));
-            }
-            let world = inner.geom.walkers;
-            for step in 0..n_in_step {
-                for word in 0..5 {
-                    inner.tapes[5 * (w + world * step) + word] = tape[5 * step + word];
-                }
             }
         }
         barrier();
@@ -211,12 +255,26 @@ impl IntervalGroup {
             }
             let backend = slot.as_mut().unwrap();
             backend.with_backend_session(|s| -> Result<(), String> {
-                let mut inner = self.inner.lock().unwrap();
-                if inner.sampler.is_none() {
-                    let mut ele_all = Vec::new();
+                let geom = *self.geom.lock().unwrap_or_else(|e| e.into_inner());
+                let n_in_step = *self.n_in_step.lock().unwrap_or_else(|e| e.into_inner());
+                let states = self.states();
+                let walker_tapes = self.walker_tapes();
+                let timing = std::env::var_os("MVMC_INTERVAL_TIMING").is_some();
+                let t_block = std::time::Instant::now();
+                let mut t_run = 0.0f64;
+                let mut t_rb = 0.0f64;
+                let t_dl;
+                let mut rounds = 0usize;
+                let mut n_rebuild = 0usize;
+
+                let mut sampler_guard = self.sampler.lock().unwrap_or_else(|e| e.into_inner());
+                if sampler_guard.is_none() {
+                    let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut ele_all = Vec::with_capacity(geom.walkers * geom.n);
                     let mut inv_all = Vec::new();
                     let mut pf_all = Vec::new();
-                    for st in &inner.states {
+                    for mx in states.iter() {
+                        let st = mx.lock().unwrap_or_else(|e| e.into_inner());
                         ele_all.extend_from_slice(&st.ele);
                         inv_all.extend_from_slice(&st.inv);
                         pf_all.extend_from_slice(&st.pf);
@@ -225,54 +283,84 @@ impl IntervalGroup {
                         ele: &ele_all,
                         inv: &inv_all,
                         pf: &pf_all,
-                        slater: &inner.slater,
-                        weights: &inner.weights,
-                        gutz: &inner.gutz,
-                        jast: &inner.jast,
-                        params: &inner.params,
+                        slater: &tables.slater,
+                        weights: &tables.weights,
+                        gutz: &tables.gutz,
+                        jast: &tables.jast,
+                        params: &tables.params,
                     };
-                    inner.sampler =
-                        Some(IntervalSampler::prepare(s, inner.geom, &host, inner.n_in_step, 0.0)?);
+                    *sampler_guard =
+                        Some(IntervalSampler::prepare(s, geom, &host, n_in_step, 0.0)?);
                 }
-                let geom = inner.geom;
-                let mut downloads = Vec::with_capacity(geom.walkers);
+                let sampler = sampler_guard.as_ref().unwrap();
+
                 {
-                    let sampler = inner.sampler.as_ref().unwrap();
-                    sampler.reset_offsets(s)?;
-                    let tapes = inner.tapes.clone();
-                    sampler.upload_tape(s, &tapes)?;
-                    let mut accepts = vec![0i32; geom.walkers];
-                    loop {
-                        let results = sampler.run(s)?;
-                        let mut need = Vec::new();
-                        for (w, &(_, r, a)) in results.iter().enumerate() {
-                            accepts[w] += a;
-                            if r != 0 {
-                                need.push(w);
+                    let mut tapes = self.tapes.lock().unwrap_or_else(|e| e.into_inner());
+                    for (w, mx) in walker_tapes.iter().enumerate() {
+                        let wt = mx.lock().unwrap_or_else(|e| e.into_inner());
+                        for step in 0..n_in_step {
+                            for word in 0..5 {
+                                tapes[5 * (w + geom.walkers * step) + word] = wt[5 * step + word];
                             }
                         }
-                        if need.is_empty() {
-                            break;
-                        }
-                        sampler.rebuild(s, &need)?;
                     }
-                    for (w, &acc) in accepts.iter().enumerate() {
-                        let (ele, pf, aw, logip) = sampler.download_walker(s, w)?;
-                        downloads.push((ele, pf, aw, logip, acc));
-                    }
+                    sampler.reset_offsets(s)?;
+                    sampler.upload_tape(s, &tapes)?;
                 }
-                for (w, (ele, pf, aw, logip, acc)) in downloads.into_iter().enumerate() {
-                    let st = &mut inner.states[w];
+
+                let mut accepts = vec![0i32; geom.walkers];
+                loop {
+                    let t = std::time::Instant::now();
+                    let results = sampler.run(s)?;
+                    t_run += t.elapsed().as_secs_f64();
+                    rounds += 1;
+                    let mut need = Vec::new();
+                    for (w, &(_, r, a)) in results.iter().enumerate() {
+                        accepts[w] += a;
+                        if r != 0 {
+                            need.push(w);
+                        }
+                    }
+                    if need.is_empty() {
+                        break;
+                    }
+                    n_rebuild += need.len();
+                    let t = std::time::Instant::now();
+                    sampler.rebuild(s, &need)?;
+                    t_rb += t.elapsed().as_secs_f64();
+                }
+                let t = std::time::Instant::now();
+                for (w, &acc) in accepts.iter().enumerate() {
+                    let (ele, pf, aw, logip) = sampler.download_walker(s, w)?;
+                    let mut st = states[w].lock().unwrap_or_else(|e| e.into_inner());
                     st.ele = ele;
                     st.pf = pf;
                     st.aw = aw;
                     st.logip = logip;
                     st.accepts = acc;
                 }
+                t_dl = t.elapsed().as_secs_f64();
+                if timing {
+                    eprintln!(
+                        "[dev] block_ms={:.2} run_ms={:.2} rb_ms={:.2} dl_ms={:.2} rounds={rounds} rebuilds={n_rebuild}",
+                        t_block.elapsed().as_secs_f64() * 1e3,
+                        t_run * 1e3,
+                        t_rb * 1e3,
+                        t_dl * 1e3,
+                    );
+                }
                 Ok(())
             })
         })
     }
+}
+
+fn make_states(geom: &IntervalGeometry) -> States {
+    Arc::new((0..geom.walkers).map(|_| Mutex::new(new_state(geom))).collect())
+}
+
+fn make_tapes(walkers: usize) -> WalkerTapes {
+    Arc::new((0..walkers).map(|_| Mutex::new(Vec::new())).collect())
 }
 
 /// Per-walker [`SamplingEngine`] on a shared [`IntervalGroup`].
@@ -317,21 +405,19 @@ impl SamplingEngine for IntervalEngine {
         tables: &mut StageTables<'_>,
         ele_idx: &[i64],
     ) -> StageResult<()> {
-        self.group.begin_series(
+        let g = self.geom;
+        let mut inv = Vec::with_capacity(g.nqp * g.n * g.n);
+        for q in 0..g.nqp {
+            inv.extend_from_slice(tables.inv_m.qp_matrix_slice(q));
+        }
+        self.group.begin_series_walker(
+            self.walker,
             self.geom,
             tables.slater_elm.as_slice().to_vec(),
             self.weights.clone(),
             self.gutz.clone(),
             self.jast.clone(),
             self.params.clone(),
-        );
-        let g = self.geom;
-        let mut inv = Vec::with_capacity(g.nqp * g.n * g.n);
-        for q in 0..g.nqp {
-            inv.extend_from_slice(tables.inv_m.qp_matrix_slice(q));
-        }
-        self.group.stage_initial(
-            self.walker,
             ele_idx.iter().map(|&v| v as i32).collect(),
             inv,
             tables.pf_m.clone(),
@@ -393,7 +479,6 @@ fn group_for(device: usize) -> Arc<IntervalGroup> {
     if let Some((_, group)) = groups.iter().find(|(d, _)| *d == device) {
         return group.clone();
     }
-    // A placeholder geometry; `begin_series` reconfigures it to the run's shape.
     let placeholder = IntervalGeometry {
         walkers: 1,
         n: 0,
@@ -415,8 +500,9 @@ fn group_for(device: usize) -> Arc<IntervalGroup> {
     group
 }
 
-/// [`SamplerStages`] of the device-resident interval sampler (`MVMC_RS_SAMPLER_BACKEND=
-/// cuda-interval[:N]`). Group-capable: every walker of the run batches into one device call.
+/// [`SamplerStages`] of the device-resident interval sampler
+/// (`MVMC_RS_SAMPLER_BACKEND=cuda-interval[:N]`). Group-capable: every walker of the run
+/// batches into one device call.
 pub struct CudaIntervalSamplerStages {
     device: usize,
 }
@@ -504,7 +590,10 @@ impl SamplerStages for CudaIntervalSamplerStages {
             data, state, rng, &mut timer, reducer, &mut engine,
         );
         if reducer.rank() == 0 && std::env::var_os("MVMC_INTERVAL_TIMING").is_some() {
-            eprintln!("[interval] sample_real_group {:.4}s", t0.elapsed().as_secs_f64());
+            eprintln!(
+                "[interval] sample_real_group {:.4}s",
+                t0.elapsed().as_secs_f64()
+            );
         }
         out.map_err(|e| StageError::Failed(e.to_string()))
     }
