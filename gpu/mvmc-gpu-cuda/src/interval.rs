@@ -63,7 +63,7 @@ impl IntervalGeometry {
     /// Dynamic shared-memory bytes of one interval block.
     pub fn shared_bytes(&self) -> u32 {
         let rs = ((self.n + 1) & !1) * 4;
-        let doubles = (self.nqp + 1 + 3 * self.n) * 8;
+        let doubles = (self.nqp + 1 + 3 * self.n + self.nqp * self.n) * 8;
         (rs + doubles + 8 * 4) as u32
     }
 

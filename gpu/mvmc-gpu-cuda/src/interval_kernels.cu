@@ -37,23 +37,6 @@
 // One-electron rank-one ratio for one QP plane: r = -pf_qp * sum_j inv[msa*n+j] * S[rsa][rs[j]].
 // `rs[j]` is the candidate site index (spin offset included). Parallel products, serial sum.
 // ---------------------------------------------------------------------------------------------
-__device__ inline void interval_hop_ratio(const double* tab, const double* invq, double pfq,
-                                          int qp, const int* rs, int n, int n2, int msa,
-                                          double* scratch, int tid, int nt, double* out) {
-  const int rsa = rs[msa];
-  const double* row = tab + (((size_t)qp * n2) + rsa) * n2;
-  const double* inv_row = invq + (size_t)msa * n;
-  for (int j = tid; j < n; j += nt) scratch[j] = inv_row[j] * row[rs[j]];
-  __syncthreads();
-  if (tid == 0) {
-    double ratio = 0.0;
-#pragma unroll 8
-    for (int j = 0; j < n; ++j) ratio += scratch[j];
-    *out = -ratio * pfq;
-  }
-  __syncthreads();
-}
-
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-two inverse update (the k_accept `!two` branch) for one QP plane.
 // ---------------------------------------------------------------------------------------------
@@ -166,7 +149,8 @@ extern "C" __global__ void k_interval_hop(
   double* v1 = out + 1;
   double* v2 = v1 + n;
   double* v3 = v2 + n;
-  int* mvw = reinterpret_cast<int*>(sh + nqp + 1 + 3 * n);  // [8]
+  double* scq = v3 + n;  // [nqp][n] per-QP ratio scratch (parallel over QP)
+  int* mvw = reinterpret_cast<int*>(sh + nqp + 1 + 3 * n + (size_t)nqp * n);  // [8]
 
   const int w = blockIdx.x;
   const int tid = threadIdx.x, nt = blockDim.x;
@@ -234,10 +218,23 @@ extern "C" __global__ void k_interval_hop(
     for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= ne ? nsite : 0);
     __syncthreads();
 
-    for (int q = 0; q < nqp; ++q) {
-      interval_hop_ratio(tab, inv_w + (size_t)q * n * n, pf_w[q], q, rs, n, n2, msa, v3, tid, nt,
-                         out);
-      if (tid == 0) pfnew[q] = out[0];
+    {
+      const int lane = tid & 31, warp = tid >> 5, nwarp = nt >> 5;
+      for (int q = warp; q < nqp; q += nwarp) {
+        const double* invq = inv_w + (size_t)q * n * n;
+        double* sc = scq + (size_t)q * n;
+        const int rsa = rs[msa];
+        const double* row = tab + (((size_t)q * n2) + rsa) * n2;
+        const double* inv_row = invq + (size_t)msa * n;
+        for (int j = lane; j < n; j += 32) sc[j] = inv_row[j] * row[rs[j]];
+        __syncwarp();
+        if (lane == 0) {
+          double ratio = 0.0;
+#pragma unroll 8
+          for (int j = 0; j < n; ++j) ratio += sc[j];
+          pfnew[q] = -ratio * pf_w[q];
+        }
+      }
       __syncthreads();
     }
 
