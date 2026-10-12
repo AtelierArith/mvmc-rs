@@ -23,15 +23,63 @@
 //! thread and runtime; destroying them at thread exit could race context
 //! teardown).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use cudarc::cublas::{result as cublas, sys as cublas_sys};
 use cudarc::driver::{result as driver, sys as driver_sys};
-use tenferro_tensor::BackendSession;
 use tenferro_gpu::cuda::raw::{Function, KernelArg, LaunchConfig, Module, NvrtcOptions, Session};
-use tenferro_gpu::cuda::{CudaRuntimeIdentity, with_cuda_exec_session};
+use tenferro_gpu::cuda::{with_cuda_exec_session, CudaRuntimeIdentity};
+use tenferro_tensor::BackendSession;
+
+mod rng;
+pub use rng::DeviceRng;
+mod f64_linalg;
+
+/// Traffic issued through `RawExec` on the calling host thread. These counters do
+/// not include transfers or implicit barriers inside CUDA libraries or the provider.
+/// Take snapshots around a workload; no process-global reset or contended atomics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RawExecCounters {
+    pub upload_calls: u64,
+    pub upload_bytes: u64,
+    pub download_calls: u64,
+    pub download_bytes: u64,
+    pub synchronizations: u64,
+    pub scopes: u64,
+}
+
+impl std::ops::Sub for RawExecCounters {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            upload_calls: self.upload_calls - rhs.upload_calls,
+            upload_bytes: self.upload_bytes - rhs.upload_bytes,
+            download_calls: self.download_calls - rhs.download_calls,
+            download_bytes: self.download_bytes - rhs.download_bytes,
+            synchronizations: self.synchronizations - rhs.synchronizations,
+            scopes: self.scopes - rhs.scopes,
+        }
+    }
+}
+
+thread_local! {
+    static COUNTERS: Cell<RawExecCounters> = Cell::new(RawExecCounters::default());
+}
+
+/// Snapshot of explicit raw-execution traffic on this thread.
+pub fn raw_exec_counters() -> RawExecCounters {
+    COUNTERS.with(Cell::get)
+}
+
+fn count(f: impl FnOnce(&mut RawExecCounters)) {
+    COUNTERS.with(|cell| {
+        let mut counters = cell.get();
+        f(&mut counters);
+        cell.set(counters);
+    });
+}
 
 /// A device address (bytes).
 pub type DevPtr = u64;
@@ -189,6 +237,7 @@ impl Mat {
 /// The execution context of one raw scope (see the module docs).
 pub struct RawExec<'r, 's> {
     raw: &'r Session<'s>,
+    context: driver_sys::CUcontext,
     stream: u64,
     blas: cublas_sys::cublasHandle_t,
     arch: &'r str,
@@ -241,6 +290,12 @@ impl<'r, 's> RawExec<'r, 's> {
 
     /// The device address of `buffer`.
     pub fn ptr(&self, buffer: &DeviceBuffer) -> tenferro_tensor::Result<DevPtr> {
+        if buffer.ctx != self.context {
+            return Err(backend(
+                "tenferro-ext::raw_exec::ptr",
+                "buffer belongs to a different CUDA context",
+            ));
+        }
         Ok(buffer.ptr as DevPtr)
     }
 
@@ -432,7 +487,12 @@ impl<'r, 's> RawExec<'r, 's> {
         }
         // SAFETY: forwarded caller contract.
         unsafe { driver::memcpy_htod_async(dst, data, self.stream as driver_sys::CUstream) }
-            .map_err(|error| backend("tenferro-ext::raw_exec::upload", error.to_string()))
+            .map_err(|error| backend("tenferro-ext::raw_exec::upload", error.to_string()))?;
+        count(|c| {
+            c.upload_calls += 1;
+            c.upload_bytes += std::mem::size_of_val(data) as u64;
+        });
+        Ok(())
     }
 
     /// Copy `src` into `out` after all enqueued work and wait for it.
@@ -449,6 +509,10 @@ impl<'r, 's> RawExec<'r, 's> {
             // SAFETY: forwarded caller contract.
             unsafe { driver::memcpy_dtoh_async(out, src, self.stream as driver_sys::CUstream) }
                 .map_err(|error| backend("tenferro-ext::raw_exec::download", error.to_string()))?;
+            count(|c| {
+                c.download_calls += 1;
+                c.download_bytes += std::mem::size_of_val(out) as u64;
+            });
         }
         self.synchronize()
     }
@@ -479,6 +543,7 @@ impl<'r, 's> RawExec<'r, 's> {
 
     /// Block until every enqueued operation has completed.
     pub fn synchronize(&self) -> tenferro_tensor::Result<()> {
+        count(|c| c.synchronizations += 1);
         // SAFETY: the stream is the scope's captured tenferro stream.
         unsafe { driver::stream::synchronize(self.stream as driver_sys::CUstream) }
             .map_err(|error| backend("tenferro-ext::raw_exec::synchronize", error.to_string()))
@@ -513,7 +578,10 @@ fn cuda_arch<B: BackendSession + ?Sized>(session: &mut B) -> tenferro_tensor::Re
         return Ok(arch);
     }
     let devices = tenferro_gpu::cuda::cuda_devices().map_err(|error| {
-        backend("tenferro-ext::raw_exec", format!("device discovery: {error}"))
+        backend(
+            "tenferro-ext::raw_exec",
+            format!("device discovery: {error}"),
+        )
     })?;
     let info = devices
         .iter()
@@ -566,12 +634,18 @@ where
             // SAFETY: valid handle and the scope's captured stream.
             unsafe { cublas::set_stream(blas, stream as cublas_sys::cudaStream_t) }
                 .map_err(|error| backend(label, format!("cublasSetStream: {error}")))?;
+            let mut context = std::ptr::null_mut();
+            // SAFETY: the provider has entered the captured stream's context.
+            unsafe { driver_sys::cuCtxGetCurrent(&mut context).result() }
+                .map_err(|error| backend(label, format!("cuCtxGetCurrent: {error}")))?;
             let mut exec = RawExec {
                 raw,
+                context,
                 stream,
                 blas,
                 arch: &arch,
             };
+            count(|c| c.scopes += 1);
             let result = f(&mut exec);
             let synced = exec.synchronize();
             match result {

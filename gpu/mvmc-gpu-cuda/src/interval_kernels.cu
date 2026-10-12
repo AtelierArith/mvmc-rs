@@ -255,14 +255,15 @@ __device__ __forceinline__ void interval_hop_impl(
 
     if (tid == 0) {
       double ip_new = 0.0;
-      for (int q = 0; q < nqp; ++q) ip_new += weights[q] * pfnew[q];
-      const double log_new = log(ip_new < 0.0 ? -ip_new : ip_new);
+      for (int q = 0; q < nqp; ++q) ip_new = __dadd_rn(ip_new, __dmul_rn(weights[q], pfnew[q]));
+      const double log_new = log(fabs(ip_new) + 1e-100);
       const double proj =
           interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
-      double weight = exp(2.0 * (proj + log_new - log_old));
-      if (!isfinite(weight)) weight = -1.0;
+      const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
-      const int accept = weight > u;
+      // Keep log-space decisions for finite overlaps (including u == 0 and
+      // extreme ratios), but never publish an overflowed weighted sum (#564).
+      const int accept = isfinite(ip_new) && ip_new != 0.0 && log(u) < logratio;
       mvw[5] = accept;
       if (accept) {
         out[0] = log_new;

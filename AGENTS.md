@@ -29,6 +29,20 @@ This Rust crate and its workspace are under active development. Backward compati
 
 The historical implementation was written in C and later reimplemented in Julia. Rust should follow the Julia design for public APIs, runner structure, lifecycle, and test organization, while following C for numerical authority: parameter layout and offsets, initialization and draw order, arithmetic and operation order, signs, formatting, and floating-point results. When the two references differ, keep the Julia architecture and adopt the defined C numerical contract. Record the distinction in focused tests and preserve the authoritative algorithm and input contracts when applying the numerical-comparison policy below.
 
+### GPU reference and transfer policy (owner direction, 2026-10-13)
+
+For Rust GPU Opt, the Julia GPU implementation is an accepted numerical and RNG
+reference. Follow its GPU proposal, decision, initialization and update contract,
+record the reference revision, and validate numerical results with explicit bounds.
+CPU/C-order execution retains the C authority described above. C/SFMT draw parity
+is not a prerequisite for a Julia-compatible GPU path.
+
+Prioritize avoiding host/device communication: keep the RNG, walker ensemble,
+sampling caches, saved samples, observables and SR intermediates on the device
+where feasible. Measure transfer calls/bytes and synchronization points alongside
+E2E timing. Avoid one complete host optimizer state per GPU walker and per-hop
+host round trips. Preserve supplied-tape tests and same-implementation repeatability.
+
 The project target is a pure-Rust implementation. When an implementation choice is unclear, port the C algorithm and numerical operation order into Rust rather than adding a C FFI or runtime dependency; use C only as the reference for behavior and validation.
 
 ## Testing Guidelines
@@ -69,7 +83,7 @@ Recent history uses short imperative commit subjects such as `Optimize utu2 inve
 
 For the issue #56 implementation work, commit each validated implementation milestone, create a pull request, and merge it into `main` before starting the next milestone on a new branch. This workflow is authorized by the user; do not ask for confirmation at each commit, pull request, or merge. Keep issues open until their full acceptance criteria have been implemented and verified.
 
-The Julia reference submodule tracks `https://github.com/tmisawa/Julia-mVMC` and pins a reviewed upstream `main` commit. Because upstream `main` does not ship `Manifest-v1.13.toml`, the pinned reference adds that lock on the fork branch `julia-1.13-reference` above upstream `main`; keep the lock byte-identical so recorded fixture hashes stay valid. Julia patch PR `https://github.com/tmisawa/Julia-mVMC/pull/54` was merged on 2026-10-06; do not append new fixes to that closed PR. Fix future Julia reference defects on a dedicated fork branch with focused regression tests and submit a new upstream pull request titled `julia-patch`. Aggregate further related fixes into that PR while it remains open. After it merges, update the reference submodule to an upstream `main` commit containing the fixes. Preserve historical fixture and benchmark source identifiers; changing the submodule pin does not regenerate or reverify those artifacts. This Julia aggregation rule is separate from the Rust milestone commit/PR/merge workflow.
+The Julia reference submodule tracks `https://github.com/tmisawa/Julia-mVMC` and pins a reviewed upstream `main` commit. Upstream PR #83 incorporated `Manifest-v1.13.toml`; keep that lock byte-identical so recorded fixture hashes stay valid. Julia patch PR `https://github.com/tmisawa/Julia-mVMC/pull/54` was merged on 2026-10-06; do not append new fixes to that closed PR. Fix future Julia reference defects on a dedicated fork branch with focused regression tests and submit a new upstream pull request titled `julia-patch`. Aggregate further related fixes into that PR while it remains open. After it merges, update the reference submodule to an upstream `main` commit containing the fixes. Preserve historical fixture and benchmark source identifiers; changing the submodule pin does not regenerate or reverify those artifacts. This Julia aggregation rule is separate from the Rust milestone commit/PR/merge workflow.
 
 ## Agent-Specific Instructions
 

@@ -12,7 +12,7 @@
 
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
-use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
+use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler, ResidentInterval};
 use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
@@ -206,6 +206,29 @@ fn interval_shared_tape_matches_julia_gpu() {
     assert_eq!(final_ele, fx.final_ele, "final configuration");
     assert_eq!(occ, fx.final_occupancy, "final occupancy");
     assert_eq!(accepted, fx.accepted, "accepted moves on the shared tape");
+
+    // Independent Julia expectation also gates the schedule with device-side
+    // rebuild selection. This uses the fixture tape, not Rust-generated output.
+    let mut resident = backend
+        .with_backend_session(|s| ResidentInterval::prepare(s, geom, &host, fx.steps, 79))
+        .unwrap();
+    backend
+        .with_backend_session(|s| resident.advance_with_tape(s, &fx.tape))
+        .unwrap();
+    let result = backend
+        .with_backend_session(|s| resident.snapshot(s))
+        .unwrap();
+    assert_eq!(result.ele, fx.final_ele);
+    assert_eq!(
+        occupancy_of(&result.ele, fx.nsite, fx.ne),
+        fx.final_occupancy
+    );
+    assert_eq!(
+        backend
+            .with_backend_session(|s| resident.accepted(s))
+            .unwrap(),
+        vec![fx.accepted]
+    );
 }
 
 #[test]

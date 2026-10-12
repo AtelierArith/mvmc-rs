@@ -1,0 +1,36 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.36s
+────────────
+ Nextest run ID 2cec52cb-5d69-48ed-a391-aa510ab13c53 with nextest profile: default
+    Starting 15 tests across 7 binaries (1 test skipped)
+        PASS [   5.256s] ( 1/15) mvmc-gpu-cuda interval::resident::tests::failed_rebuild_is_latched_and_cannot_publish_results
+        PASS [   2.898s] ( 2/15) mvmc-gpu-cuda interval::tests::failed_rebuild_preserves_all_resident_tables
+        PASS [   0.009s] ( 3/15) mvmc-gpu-cuda interval_engine::tests::failed_device_pass_releases_every_peer_and_allows_next_pass
+        PASS [   0.617s] ( 4/15) mvmc-gpu-cuda interval_engine::tests::interval_backend_honors_device_selection_and_switches
+        PASS [   5.729s] ( 5/15) mvmc-gpu-cuda::interval_e2e interval_group_opt_hubbard_l16_e2e
+        PASS [   5.790s] ( 6/15) mvmc-gpu-cuda::interval_e2e_l128 interval_group_opt_hubbard_l128_timing
+        PASS [   9.744s] ( 7/15) mvmc-gpu-cuda::interval_engine interval_group_threaded_matches_single_threaded
+        PASS [   2.943s] ( 8/15) mvmc-gpu-cuda::interval_gate interval_kernel_runs_and_keeps_finite_state
+        PASS [   3.290s] ( 9/15) mvmc-gpu-cuda::interval_parity interval_qp_tiles_and_batch_download_match_cpu_rebuild
+        PASS [   5.146s] (10/15) mvmc-gpu-cuda::interval_parity interval_shared_tape_matches_julia_gpu
+        PASS [   0.551s] (11/15) mvmc-gpu-cuda::interval_parity interval_walker_upload_download_roundtrip
+        PASS [   0.579s] (12/15) mvmc-gpu-cuda::resident_interval device_rng_matches_julia_calls_reseed_and_independent_owners
+        PASS [   0.777s] (13/15) mvmc-gpu-cuda::resident_interval device_rng_rejects_a_different_device_context
+        PASS [   2.868s] (14/15) mvmc-gpu-cuda::resident_interval resident_intervals_complete_rebuild_boundaries_without_transfers
+        PASS [   5.492s] (15/15) mvmc-gpu-cuda::resident_interval resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling
+────────────
+     Summary [  51.690s] 15 tests run: 15 passed, 1 skipped

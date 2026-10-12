@@ -1,0 +1,50 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+    Finished `test` profile [optimized] target(s) in 0.17s
+────────────
+ Nextest run ID 5b490348-d803-4b14-a9d2-1d11f03693ea with nextest profile: default
+    Starting 1 test across 1 binary (4 tests skipped)
+        SLOW [> 60.000s] (───) mvmc-gpu-cuda::resident_interval resident_l128_sampling_transfer_benchmark
+        SLOW [>120.000s] (───) mvmc-gpu-cuda::resident_interval resident_l128_sampling_transfer_benchmark
+        SLOW [>180.000s] (───) mvmc-gpu-cuda::resident_interval resident_l128_sampling_transfer_benchmark
+        PASS [ 189.910s] (1/1) mvmc-gpu-cuda::resident_interval resident_l128_sampling_transfer_benchmark
+  stdout ───
+
+    running 1 test
+    test resident_l128_sampling_transfer_benchmark has been running for over 60 seconds
+    test resident_l128_sampling_transfer_benchmark ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 189.75s
+
+  stderr ───
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=0 host_control seconds=7.199044276 RawExecCounters { upload_calls: 58, upload_bytes: 3283660, download_calls: 132, download_bytes: 84864, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=0 resident seconds=7.189364858 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=1 host_control seconds=4.968728423 RawExecCounters { upload_calls: 58, upload_bytes: 3283660, download_calls: 132, download_bytes: 84864, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=1 resident seconds=4.902146400 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=2 host_control seconds=4.951671584 RawExecCounters { upload_calls: 58, upload_bytes: 3283660, download_calls: 132, download_bytes: 84864, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=2 resident seconds=4.908559242 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=3 host_control seconds=4.935588828 RawExecCounters { upload_calls: 58, upload_bytes: 3283660, download_calls: 132, download_bytes: 84864, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=64 QP=32 steps=20 hops=128 rep=3 resident seconds=4.943427373 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=0 host_control seconds=17.563997004 RawExecCounters { upload_calls: 58, upload_bytes: 16418284, download_calls: 132, download_bytes: 423808, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=0 resident seconds=17.703492235 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=1 host_control seconds=17.584550658 RawExecCounters { upload_calls: 58, upload_bytes: 16418284, download_calls: 132, download_bytes: 423808, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=1 resident seconds=17.777725084 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=2 host_control seconds=17.707187842 RawExecCounters { upload_calls: 58, upload_bytes: 16418284, download_calls: 132, download_bytes: 423808, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=2 resident seconds=17.640207136 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=3 host_control seconds=17.603515124 RawExecCounters { upload_calls: 58, upload_bytes: 16418284, download_calls: 132, download_bytes: 423808, synchronizations: 246, scopes: 96 }
+    L128 sampling only W=320 QP=32 steps=20 hops=128 rep=3 resident seconds=17.765515655 RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 20, scopes: 20 }
+
+────────────
+     Summary [ 189.911s] 1 test run: 1 passed (1 slow), 4 skipped

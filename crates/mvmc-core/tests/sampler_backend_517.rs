@@ -15,9 +15,10 @@ use std::sync::Mutex;
 use mvmc_core::device_sampler::{run_lockstep_real_one, HostService, LockstepOptions};
 use mvmc_core::reducer::{Reducer, SingleProcessReducer};
 use mvmc_core::sampler_backend::{
-    check_serial_reducer, check_supported_mode, open_sampler_backend, parse_sampler_backend,
-    register_sampler_backend, set_sampler_backend_override, SamplerBackendKind, SamplerStages,
-    SamplerTiming, SAMPLER_BACKEND_VARIABLE,
+    check_sampler_reducer, check_serial_reducer, check_supported_input, check_supported_mode,
+    open_sampler_backend, parse_sampler_backend, register_sampler_backend,
+    set_sampler_backend_override, SamplerBackendKind, SamplerStages, SamplerTiming,
+    SAMPLER_BACKEND_VARIABLE,
 };
 use mvmc_core::sampling::driver::SampleStats;
 use mvmc_core::stage_backend::StageError;
@@ -249,6 +250,52 @@ fn multi_process_reducers_are_hard_unsupported() {
     assert!(check_serial_reducer(&SingleProcessReducer).is_ok());
     let error = check_serial_reducer(&TwoRankReducer).unwrap_err();
     assert!(matches!(error, StageError::Unsupported(_)), "{error:?}");
+}
+
+#[test]
+fn interval_requires_shared_address_space_not_just_equal_rank_counts() {
+    use mvmc_core::multichain::{ThreadComm, ThreadReducer};
+    let kind = SamplerBackendKind::CudaInterval(0);
+    assert!(check_sampler_reducer(kind, &SingleProcessReducer).is_ok());
+    let error = check_sampler_reducer(kind, &TwoRankReducer).unwrap_err();
+    assert!(matches!(error, StageError::Unsupported(_)), "{error:?}");
+    assert!(error.to_string().contains("shared address space"));
+    let comm = ThreadComm::new(2);
+    for rank in 0..2 {
+        let reducer = ThreadReducer::new(comm.clone(), rank, 0);
+        assert!(check_sampler_reducer(kind, &reducer).is_ok());
+        assert!(check_sampler_reducer(SamplerBackendKind::Cuda(0), &reducer).is_err());
+    }
+}
+
+#[test]
+fn interval_rejects_exchange_and_local_spin_models() {
+    let kind = SamplerBackendKind::CudaInterval(0);
+    let mut data = ExpertModeData::default();
+    assert!(check_supported_input(kind, &data).is_ok());
+    for path in [1, 2] {
+        data.modpara.nex_update_path = path;
+        assert!(check_supported_input(kind, &data)
+            .unwrap_err()
+            .contains("NExUpdatePath=0"));
+        assert!(check_supported_input(SamplerBackendKind::Cuda(0), &data).is_ok());
+        assert!(check_supported_input(SamplerBackendKind::COrder, &data).is_ok());
+    }
+    data.modpara.nex_update_path = 0;
+    data.modpara.nlocspin = 1;
+    assert!(check_supported_input(kind, &data)
+        .unwrap_err()
+        .contains("local-spin"));
+    data.modpara.nlocspin = 0;
+    data.locspin_terms.push(mvmc_expert_parsers::LocSpinTerm {
+        site: 0,
+        spin_value: 1,
+    });
+    assert!(check_supported_input(kind, &data)
+        .unwrap_err()
+        .contains("local-spin"));
+    data.locspin_terms[0].spin_value = 0;
+    assert!(check_supported_input(kind, &data).is_ok());
 }
 
 #[test]

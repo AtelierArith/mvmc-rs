@@ -262,6 +262,32 @@ pub fn check_supported_mode(
     Ok(())
 }
 
+/// Validate the selected sampler's model before initialization or rendezvous.
+pub fn check_supported_input(
+    kind: SamplerBackendKind,
+    data: &ExpertModeData,
+) -> Result<(), String> {
+    if kind == SamplerBackendKind::COrder {
+        return Ok(());
+    }
+    check_supported_mode(
+        kind,
+        crate::get_all_complex_flag(data)?,
+        data.i_flg_orbital_general != 0,
+    )?;
+    if kind.is_group() {
+        if data.modpara.nex_update_path != 0 {
+            return Err(
+                "the interval sampler requires hopping-only sampling (NExUpdatePath=0)".into(),
+            );
+        }
+        if data.modpara.nlocspin != 0 || data.locspin_terms.iter().any(|s| s.spin_value != 0) {
+            return Err("the interval sampler does not support local-spin models".into());
+        }
+    }
+    Ok(())
+}
+
 /// The CUDA sampler contract: one serial chain.
 ///
 /// MPI QP splits and collective sampling sums have no device implementation. A multi-process
@@ -277,14 +303,18 @@ pub fn check_serial_reducer(reducer: &dyn Reducer) -> Result<(), StageError> {
 
 /// Reducer contract of the selected sampler.
 ///
-/// Both CUDA samplers reject a multi-process QP split (`reduction_size != 1`). The lock-step
-/// sampler is one serial chain (`world_size == 1`); the interval sampler is group-capable and
-/// expects every walker of the run (`world_size == W`) to participate.
+/// The lock-step sampler is one serial chain. The interval sampler requires independent
+/// walker chains in one address space; MPI processes and in-chain QP splits are unsupported.
 pub fn check_sampler_reducer(
     kind: SamplerBackendKind,
     reducer: &dyn Reducer,
 ) -> Result<(), StageError> {
     if kind.is_group() {
+        if !reducer.shares_address_space() {
+            return Err(StageError::Unsupported(
+                "the interval sampler requires all walkers in one shared address space".into(),
+            ));
+        }
         // The interval sampler batches every walker of one device into one call; a walker is
         // its own chain (`reduction_size == world_size`, the multi-walker SR count). An
         // in-chain QP split (`reduction_size != world_size`) is not representable.

@@ -17,6 +17,9 @@
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::BackendSession;
 
+mod resident;
+pub use resident::ResidentInterval;
+
 /// The NVRTC module: the batched Pfaffian (`pfinv_f64`), the interval kernel and the rebuild
 /// helpers, compiled once per process/thread.
 pub const INTERVAL_MODULE: &str = concat!(
@@ -25,6 +28,8 @@ pub const INTERVAL_MODULE: &str = concat!(
     include_str!("interval_kernels.cu"),
     "\n",
     include_str!("interval_rebuild.cu"),
+    "\n",
+    include_str!("interval_resident.cu"),
 );
 
 /// Kernels loaded from [`INTERVAL_MODULE`].
@@ -33,6 +38,9 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_assemble",
     "interval_commit",
     "pfinv_f64",
+    "interval_resident_hop",
+    "interval_resident_factor",
+    "interval_resident_commit",
 ];
 
 /// Geometry shared by every interval call of one series.
@@ -129,32 +137,32 @@ pub struct IntervalResults {
 
 /// Resident device state of one interval series.
 pub struct IntervalSampler {
-    geom: IntervalGeometry,
-    total_hops: usize,
-    exchange_fraction: f64,
-    ele: DeviceBuffer,
-    occ: DeviceBuffer,
-    inv: DeviceBuffer,
-    pf: DeviceBuffer,
-    aw: DeviceBuffer,
-    logip: DeviceBuffer,
-    slater: DeviceBuffer,
-    weights: DeviceBuffer,
-    gutz: DeviceBuffer,
-    jast: DeviceBuffer,
-    params: DeviceBuffer,
-    tape: DeviceBuffer,
-    hop_off: DeviceBuffer,
-    hops_done: DeviceBuffer,
-    rebuild: DeviceBuffer,
-    accepts: DeviceBuffer,
+    pub(crate) geom: IntervalGeometry,
+    pub(crate) total_hops: usize,
+    pub(crate) exchange_fraction: f64,
+    pub(crate) ele: DeviceBuffer,
+    pub(crate) occ: DeviceBuffer,
+    pub(crate) inv: DeviceBuffer,
+    pub(crate) pf: DeviceBuffer,
+    pub(crate) aw: DeviceBuffer,
+    pub(crate) logip: DeviceBuffer,
+    pub(crate) slater: DeviceBuffer,
+    pub(crate) weights: DeviceBuffer,
+    pub(crate) gutz: DeviceBuffer,
+    pub(crate) jast: DeviceBuffer,
+    pub(crate) params: DeviceBuffer,
+    pub(crate) tape: DeviceBuffer,
+    pub(crate) hop_off: DeviceBuffer,
+    pub(crate) hops_done: DeviceBuffer,
+    pub(crate) rebuild: DeviceBuffer,
+    pub(crate) accepts: DeviceBuffer,
     // Rebuild scratch (sized for all walkers).
-    rec_walker: DeviceBuffer,
-    planes: DeviceBuffer,
-    pfinv_w: DeviceBuffer,
-    pfinv_out: DeviceBuffer,
-    pfinv_pf: DeviceBuffer,
-    pfinv_st: DeviceBuffer,
+    pub(crate) rec_walker: DeviceBuffer,
+    pub(crate) planes: DeviceBuffer,
+    pub(crate) pfinv_w: DeviceBuffer,
+    pub(crate) pfinv_out: DeviceBuffer,
+    pub(crate) pfinv_pf: DeviceBuffer,
+    pub(crate) pfinv_st: DeviceBuffer,
 }
 
 fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
@@ -162,7 +170,7 @@ fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
     for (w, p) in weights.iter().zip(pf) {
         ip += w * p;
     }
-    ip.abs().ln()
+    (ip.abs() + 1e-100).ln()
 }
 
 fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
@@ -636,7 +644,7 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
-    /// Download the complete group's results with four transfers and one stream synchronization.
+    /// Download the complete group's results with four blocking transfers.
     pub fn download_all<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,

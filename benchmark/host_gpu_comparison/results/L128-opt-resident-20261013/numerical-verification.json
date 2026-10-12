@@ -1,0 +1,8 @@
+{
+  "energies_abs": 4.327347369326162e-10,
+  "parameters_abs": 3.630828970813127e-11,
+  "energies_scaled": 4.3038220653690385e-12,
+  "parameters_scaled": 1.6517706590046273e-11,
+  "rust_repeat_abs": 0.0,
+  "julia_repeat_abs": 0.0
+}
