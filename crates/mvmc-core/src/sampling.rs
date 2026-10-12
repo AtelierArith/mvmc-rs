@@ -27,6 +27,7 @@
 
 pub mod candidate;
 pub mod driver;
+pub mod engine;
 mod fsz_real;
 pub mod initial;
 pub mod metropolis;

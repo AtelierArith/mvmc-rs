@@ -8,6 +8,9 @@ fn issue179_group_width_endpoints() {
     let world = MpiContext::initialize().unwrap();
     let n = world.world_size();
     assert!(matches!(n, 2 | 4));
+    let interval = mvmc_core::sampler_backend::SamplerBackendKind::CudaInterval(0);
+    assert!(!world.shares_address_space());
+    assert!(mvmc_core::sampler_backend::check_sampler_reducer(interval, &world).is_err());
     if let Ok(expected) = std::env::var("MPI179_EXPECT_RANKS") {
         assert_eq!(n, expected.parse::<usize>().unwrap());
     }
@@ -18,6 +21,8 @@ fn issue179_group_width_endpoints() {
         let local_size = width.min(n - world.rank() / width * width);
         assert_eq!(group.world_size(), local_size);
         assert_eq!(group.reduction_size(), n);
+        assert!(!group.shares_address_space());
+        assert!(mvmc_core::sampler_backend::check_sampler_reducer(interval, &group).is_err());
         assert_eq!(group.is_output_root(), world.rank() == 0);
         assert!(group.sampling_any_failure(group.rank() == local_size - 1));
         assert_eq!(

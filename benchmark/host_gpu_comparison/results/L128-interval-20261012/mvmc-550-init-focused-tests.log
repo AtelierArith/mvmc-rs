@@ -1,0 +1,89 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 2.20s
+────────────
+ Nextest run ID e6af581c-b7a5-4ddb-9317-9879f4885e39 with nextest profile: default
+    Starting 7 tests across 4 binaries
+        PASS [   2.131s] (1/7) mvmc-gpu-cuda interval::tests::failed_rebuild_preserves_all_resident_tables
+  stdout ───
+
+    running 1 test
+    test interval::tests::failed_rebuild_preserves_all_resident_tables ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.99s
+
+
+        PASS [   0.006s] (2/7) mvmc-gpu-cuda interval_engine::tests::failed_device_pass_releases_every_peer_and_allows_next_pass
+  stdout ───
+
+    running 1 test
+    test interval_engine::tests::failed_device_pass_releases_every_peer_and_allows_next_pass ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+        PASS [   7.074s] (3/7) mvmc-gpu-cuda::interval_engine interval_group_threaded_matches_single_threaded
+  stdout ───
+
+    running 1 test
+    test interval_group_threaded_matches_single_threaded ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.93s
+
+
+        PASS [   2.065s] (4/7) mvmc-gpu-cuda::interval_gate interval_kernel_runs_and_keeps_finite_state
+  stdout ───
+
+    running 1 test
+    test interval_kernel_runs_and_keeps_finite_state ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
+
+  stderr ───
+    interval: hops_done=16 rebuild=1
+
+        PASS [   2.410s] (5/7) mvmc-gpu-cuda::interval_parity interval_qp_tiles_and_batch_download_match_cpu_rebuild
+  stdout ───
+
+    running 1 test
+    test interval_qp_tiles_and_batch_download_match_cpu_rebuild ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.27s
+
+
+        PASS [   2.042s] (6/7) mvmc-gpu-cuda::interval_parity interval_shared_tape_matches_julia_gpu
+  stdout ───
+
+    running 1 test
+    test interval_shared_tape_matches_julia_gpu ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.90s
+
+  stderr ───
+    julia  ele=[4, 6, 0, 2, 4, 6, 1, 7] occ=[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1] accepted=12
+    rust   ele=[4, 6, 0, 2, 4, 6, 1, 7] occ=[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1] rounds=2 rebuilds=1
+
+        PASS [   0.437s] (7/7) mvmc-gpu-cuda::interval_parity interval_walker_upload_download_roundtrip
+  stdout ───
+
+    running 1 test
+    test interval_walker_upload_download_roundtrip ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.30s
+
+
+────────────
+     Summary [  16.167s] 7 tests run: 7 passed, 0 skipped

@@ -1,0 +1,172 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.07s
+────────────
+ Nextest run ID 87debc27-fe6a-412f-a164-407f3dae98c5 with nextest profile: default
+    Starting 1 test across 1 binary
+        PASS [  41.869s] (1/1) mvmc-gpu-cuda::interval_e2e_l128 interval_group_opt_hubbard_l128_timing
+  stdout ───
+
+    running 1 test
+    test interval_group_opt_hubbard_l128_timing ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.61s
+
+  stderr ───
+    [dev] block_ms=50.33 run_ms=49.97 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+    [dev] block_ms=51.96 run_ms=51.70 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=80.53 run_ms=50.34 rb_ms=29.88 dl_ms=0.14 rounds=2 rebuilds=54
+    [dev] block_ms=58.79 run_ms=52.15 rb_ms=6.31 dl_ms=0.14 rounds=2 rebuilds=10
+    [dev] block_ms=58.77 run_ms=52.15 rb_ms=6.29 dl_ms=0.15 rounds=2 rebuilds=10
+    [dev] block_ms=83.37 run_ms=57.01 rb_ms=26.00 dl_ms=0.16 rounds=2 rebuilds=46
+    [interval] sample_real_group 2.9736s
+    [dev] block_ms=47.96 run_ms=47.66 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=46.73 run_ms=46.39 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=88.33 run_ms=57.34 rb_ms=30.71 dl_ms=0.11 rounds=2 rebuilds=51
+    [dev] block_ms=66.39 run_ms=58.05 rb_ms=8.02 dl_ms=0.14 rounds=2 rebuilds=13
+    [dev] block_ms=50.22 run_ms=47.89 rb_ms=1.99 dl_ms=0.14 rounds=2 rebuilds=1
+    [dev] block_ms=81.94 run_ms=52.74 rb_ms=28.84 dl_ms=0.14 rounds=2 rebuilds=52
+    [interval] sample_real_group 1.2090s
+    [dev] block_ms=47.91 run_ms=47.56 rb_ms=0.00 dl_ms=0.18 rounds=1 rebuilds=0
+    [dev] block_ms=50.14 run_ms=49.86 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=87.08 run_ms=56.82 rb_ms=29.96 dl_ms=0.14 rounds=2 rebuilds=54
+    [dev] block_ms=61.03 run_ms=54.39 rb_ms=6.31 dl_ms=0.14 rounds=2 rebuilds=10
+    [dev] block_ms=55.89 run_ms=50.87 rb_ms=4.70 dl_ms=0.14 rounds=2 rebuilds=7
+    [dev] block_ms=79.70 run_ms=50.43 rb_ms=28.92 dl_ms=0.14 rounds=2 rebuilds=52
+    [interval] sample_real_group 1.1927s
+    [dev] block_ms=50.19 run_ms=49.90 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=45.36 run_ms=45.06 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=79.42 run_ms=50.06 rb_ms=29.10 dl_ms=0.10 rounds=2 rebuilds=52
+    [dev] block_ms=68.74 run_ms=60.96 rb_ms=7.46 dl_ms=0.13 rounds=2 rebuilds=12
+    [dev] block_ms=53.40 run_ms=49.77 rb_ms=3.32 dl_ms=0.13 rounds=2 rebuilds=5
+    [dev] block_ms=92.40 run_ms=59.51 rb_ms=32.59 dl_ms=0.12 rounds=2 rebuilds=58
+    [interval] sample_real_group 1.1961s
+    [dev] block_ms=47.27 run_ms=46.97 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=43.69 run_ms=43.39 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=84.34 run_ms=58.06 rb_ms=25.96 dl_ms=0.13 rounds=2 rebuilds=46
+    [dev] block_ms=68.69 run_ms=57.16 rb_ms=11.15 dl_ms=0.14 rounds=2 rebuilds=18
+    [dev] block_ms=59.58 run_ms=55.24 rb_ms=4.03 dl_ms=0.14 rounds=2 rebuilds=6
+    [dev] block_ms=85.65 run_ms=58.72 rb_ms=26.58 dl_ms=0.13 rounds=2 rebuilds=48
+    [interval] sample_real_group 1.1678s
+    [dev] block_ms=48.80 run_ms=48.51 rb_ms=0.00 dl_ms=0.09 rounds=1 rebuilds=0
+    [dev] block_ms=45.16 run_ms=44.89 rb_ms=0.00 dl_ms=0.09 rounds=1 rebuilds=0
+    [dev] block_ms=84.16 run_ms=54.46 rb_ms=29.44 dl_ms=0.09 rounds=2 rebuilds=53
+    [dev] block_ms=63.67 run_ms=56.23 rb_ms=7.18 dl_ms=0.09 rounds=2 rebuilds=11
+    [dev] block_ms=57.55 run_ms=51.09 rb_ms=6.20 dl_ms=0.09 rounds=2 rebuilds=9
+    [dev] block_ms=82.15 run_ms=55.27 rb_ms=26.57 dl_ms=0.12 rounds=2 rebuilds=48
+    [interval] sample_real_group 1.1622s
+    [dev] block_ms=44.04 run_ms=43.74 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=45.60 run_ms=45.29 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=82.11 run_ms=52.43 rb_ms=29.37 dl_ms=0.15 rounds=2 rebuilds=53
+    [dev] block_ms=65.64 run_ms=58.12 rb_ms=7.19 dl_ms=0.14 rounds=2 rebuilds=11
+    [dev] block_ms=58.28 run_ms=53.22 rb_ms=4.72 dl_ms=0.14 rounds=2 rebuilds=7
+    [dev] block_ms=87.21 run_ms=58.23 rb_ms=28.66 dl_ms=0.14 rounds=2 rebuilds=50
+    [interval] sample_real_group 1.1889s
+    [dev] block_ms=46.19 run_ms=45.85 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=45.27 run_ms=44.93 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+    [dev] block_ms=79.60 run_ms=50.61 rb_ms=28.64 dl_ms=0.16 rounds=2 rebuilds=50
+    [dev] block_ms=70.59 run_ms=61.70 rb_ms=8.58 dl_ms=0.16 rounds=2 rebuilds=14
+    [dev] block_ms=53.28 run_ms=49.55 rb_ms=3.33 dl_ms=0.16 rounds=2 rebuilds=5
+    [dev] block_ms=87.34 run_ms=58.15 rb_ms=28.86 dl_ms=0.14 rounds=2 rebuilds=52
+    [interval] sample_real_group 1.1949s
+    [dev] block_ms=49.48 run_ms=49.20 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=52.20 run_ms=51.89 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+    [dev] block_ms=79.60 run_ms=49.12 rb_ms=30.17 dl_ms=0.10 rounds=2 rebuilds=55
+    [dev] block_ms=56.86 run_ms=50.29 rb_ms=6.25 dl_ms=0.14 rounds=2 rebuilds=9
+    [dev] block_ms=53.47 run_ms=51.01 rb_ms=2.13 dl_ms=0.14 rounds=2 rebuilds=2
+    [dev] block_ms=79.29 run_ms=48.87 rb_ms=30.05 dl_ms=0.15 rounds=2 rebuilds=54
+    [interval] sample_real_group 1.1854s
+    [dev] block_ms=45.53 run_ms=45.13 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=45.08 run_ms=44.77 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=81.19 run_ms=51.35 rb_ms=29.54 dl_ms=0.14 rounds=2 rebuilds=52
+    [dev] block_ms=63.89 run_ms=56.15 rb_ms=7.48 dl_ms=0.10 rounds=2 rebuilds=12
+    [dev] block_ms=52.51 run_ms=50.10 rb_ms=2.10 dl_ms=0.15 rounds=2 rebuilds=2
+    [dev] block_ms=85.81 run_ms=55.10 rb_ms=30.38 dl_ms=0.16 rounds=2 rebuilds=55
+    [interval] sample_real_group 1.1644s
+    [dev] block_ms=45.18 run_ms=44.80 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+    [dev] block_ms=46.98 run_ms=46.64 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=80.97 run_ms=50.70 rb_ms=29.93 dl_ms=0.14 rounds=2 rebuilds=54
+    [dev] block_ms=64.02 run_ms=57.32 rb_ms=6.34 dl_ms=0.14 rounds=2 rebuilds=10
+    [dev] block_ms=54.04 run_ms=47.48 rb_ms=6.22 dl_ms=0.14 rounds=2 rebuilds=8
+    [dev] block_ms=83.78 run_ms=55.96 rb_ms=27.45 dl_ms=0.17 rounds=2 rebuilds=49
+    [interval] sample_real_group 1.1639s
+    [dev] block_ms=47.24 run_ms=46.90 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=47.69 run_ms=47.39 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=82.32 run_ms=53.56 rb_ms=28.47 dl_ms=0.11 rounds=2 rebuilds=50
+    [dev] block_ms=60.72 run_ms=51.83 rb_ms=8.63 dl_ms=0.10 rounds=2 rebuilds=14
+    [dev] block_ms=53.75 run_ms=50.27 rb_ms=3.15 dl_ms=0.15 rounds=2 rebuilds=4
+    [dev] block_ms=79.67 run_ms=49.90 rb_ms=29.46 dl_ms=0.10 rounds=2 rebuilds=51
+    [interval] sample_real_group 1.1685s
+    [dev] block_ms=46.62 run_ms=46.29 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=45.84 run_ms=45.56 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=87.39 run_ms=56.26 rb_ms=30.80 dl_ms=0.16 rounds=2 rebuilds=56
+    [dev] block_ms=59.99 run_ms=53.49 rb_ms=6.21 dl_ms=0.11 rounds=2 rebuilds=8
+    [dev] block_ms=52.74 run_ms=50.27 rb_ms=2.15 dl_ms=0.15 rounds=2 rebuilds=3
+    [dev] block_ms=92.32 run_ms=61.50 rb_ms=30.46 dl_ms=0.14 rounds=2 rebuilds=55
+    [interval] sample_real_group 1.1806s
+    [dev] block_ms=47.33 run_ms=47.01 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+    [dev] block_ms=48.13 run_ms=47.83 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=77.54 run_ms=49.83 rb_ms=27.40 dl_ms=0.14 rounds=2 rebuilds=49
+    [dev] block_ms=69.39 run_ms=58.94 rb_ms=10.14 dl_ms=0.13 rounds=2 rebuilds=15
+    [dev] block_ms=54.73 run_ms=51.03 rb_ms=3.37 dl_ms=0.14 rounds=2 rebuilds=5
+    [dev] block_ms=84.81 run_ms=57.55 rb_ms=26.87 dl_ms=0.16 rounds=2 rebuilds=48
+    [interval] sample_real_group 1.1724s
+    [dev] block_ms=45.15 run_ms=44.84 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+    [dev] block_ms=46.20 run_ms=45.94 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+    [dev] block_ms=84.72 run_ms=55.28 rb_ms=29.14 dl_ms=0.14 rounds=2 rebuilds=51
+    [dev] block_ms=68.69 run_ms=60.35 rb_ms=8.03 dl_ms=0.14 rounds=2 rebuilds=13
+    [dev] block_ms=52.16 run_ms=48.70 rb_ms=3.14 dl_ms=0.14 rounds=2 rebuilds=4
+    [dev] block_ms=82.58 run_ms=53.39 rb_ms=28.87 dl_ms=0.14 rounds=2 rebuilds=51
+    [interval] sample_real_group 1.1795s
+    [dev] block_ms=45.58 run_ms=45.30 rb_ms=0.00 dl_ms=0.09 rounds=1 rebuilds=0
+    [dev] block_ms=46.10 run_ms=45.84 rb_ms=0.00 dl_ms=0.08 rounds=1 rebuilds=0
+    [dev] block_ms=78.43 run_ms=52.31 rb_ms=25.87 dl_ms=0.08 rounds=2 rebuilds=45
+    [dev] block_ms=72.65 run_ms=61.02 rb_ms=11.35 dl_ms=0.08 rounds=2 rebuilds=19
+    [dev] block_ms=56.07 run_ms=52.69 rb_ms=3.09 dl_ms=0.11 rounds=2 rebuilds=4
+    [dev] block_ms=87.68 run_ms=60.62 rb_ms=26.79 dl_ms=0.08 rounds=2 rebuilds=48
+    [interval] sample_real_group 1.1621s
+    [dev] block_ms=47.37 run_ms=47.04 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=51.68 run_ms=49.43 rb_ms=2.00 dl_ms=0.08 rounds=2 rebuilds=1
+    [dev] block_ms=85.76 run_ms=55.63 rb_ms=29.83 dl_ms=0.14 rounds=2 rebuilds=54
+    [dev] block_ms=62.57 run_ms=55.97 rb_ms=6.29 dl_ms=0.13 rounds=2 rebuilds=9
+    [dev] block_ms=63.95 run_ms=57.41 rb_ms=6.22 dl_ms=0.14 rounds=2 rebuilds=8
+    [dev] block_ms=81.50 run_ms=54.20 rb_ms=26.81 dl_ms=0.14 rounds=2 rebuilds=48
+    [interval] sample_real_group 1.2055s
+    [dev] block_ms=45.50 run_ms=45.10 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+    [dev] block_ms=46.65 run_ms=46.35 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+    [dev] block_ms=84.62 run_ms=55.49 rb_ms=28.87 dl_ms=0.10 rounds=2 rebuilds=51
+    [dev] block_ms=69.89 run_ms=61.55 rb_ms=8.01 dl_ms=0.14 rounds=2 rebuilds=13
+    [dev] block_ms=60.26 run_ms=57.77 rb_ms=2.15 dl_ms=0.14 rounds=2 rebuilds=3
+    [dev] block_ms=81.17 run_ms=51.93 rb_ms=28.92 dl_ms=0.15 rounds=2 rebuilds=52
+    [interval] sample_real_group 1.1703s
+    [dev] block_ms=44.51 run_ms=44.17 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+    [dev] block_ms=45.67 run_ms=45.26 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+    [dev] block_ms=76.37 run_ms=49.38 rb_ms=26.68 dl_ms=0.14 rounds=2 rebuilds=48
+    [dev] block_ms=66.19 run_ms=55.65 rb_ms=10.22 dl_ms=0.13 rounds=2 rebuilds=16
+    [dev] block_ms=52.58 run_ms=49.08 rb_ms=3.16 dl_ms=0.15 rounds=2 rebuilds=4
+    [dev] block_ms=86.26 run_ms=56.86 rb_ms=29.06 dl_ms=0.14 rounds=2 rebuilds=51
+    [interval] sample_real_group 1.1881s
+    [dev] block_ms=45.73 run_ms=45.43 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+    [dev] block_ms=47.12 run_ms=46.77 rb_ms=0.00 dl_ms=0.17 rounds=1 rebuilds=0
+    [dev] block_ms=71.96 run_ms=46.36 rb_ms=25.29 dl_ms=0.14 rounds=2 rebuilds=45
+    [dev] block_ms=73.29 run_ms=61.63 rb_ms=11.36 dl_ms=0.13 rounds=2 rebuilds=19
+    [dev] block_ms=50.58 run_ms=48.15 rb_ms=2.13 dl_ms=0.13 rounds=2 rebuilds=3
+    [dev] block_ms=85.56 run_ms=56.38 rb_ms=28.85 dl_ms=0.13 rounds=2 rebuilds=50
+    [interval] sample_real_group 1.1828s
+    interval E2E L128: walkers=64 steps=20 smp=1 wall=41.047 s etot=114.48406535528976
+
+────────────
+     Summary [  41.871s] 1 test run: 1 passed, 0 skipped

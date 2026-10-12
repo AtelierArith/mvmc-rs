@@ -1,0 +1,31 @@
+CUDA toolchain: 
+- runtime 13.4.0, artifact installation
+- driver 580.178.4 for CUDA 13.3, forward-compatible
+- compiler 13.4.92, artifact installation
+
+CUDA libraries: 
+- cuBLAS: 13.8.0
+- cuSPARSE: 12.8.6
+- cuSOLVER: 12.3.4
+- cuFFT: 12.4.0
+- cuRAND: 10.4.4
+- CUPTI: 2026.3.1 (API 13.4.1)
+- NVML: 13.0.0+580.178.4
+
+Julia packages: 
+- CUDACore: 6.4.2
+- GPUArrays: 11.5.16
+- GPUCompiler: 2.13.4
+- KernelAbstractions: 0.9.45
+- CUDA_Driver_jll: 13.3.5+0
+- CUDA_Compiler_jll: 0.6.3+1
+- CUDA_Runtime_jll: 0.25.0+2
+- NVPTX_LLVM_Backend_jll: 23.1.2+1
+
+Toolchain:
+- Julia: 1.13.1
+- LLVM: 20.1.8
+
+1 device:
+  0: NVIDIA GeForce RTX 3060 (sm_86, 11.146 GiB / 12.000 GiB available)
+     compiles to sm_86 / PTX 9.4 (LLVM: sm_86 / PTX 9.2)

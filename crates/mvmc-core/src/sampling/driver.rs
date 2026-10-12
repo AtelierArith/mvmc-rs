@@ -27,6 +27,7 @@ use crate::sampling::candidate::{
     make_candidate_hopping_fsz, make_candidate_local_spin_flip_conduction,
     make_candidate_local_spin_flip_localspin, FszHoppingCandidate, UpdateType,
 };
+use crate::sampling::engine::{BlockCtx, HostEngine, SamplingEngine};
 use crate::sampling::metropolis::metropolis_decision;
 use crate::sampling::normal_initial::{
     coordinate_normal_setup, make_initial_sample_normal_with_info, preflight_normal_sampler,
@@ -37,6 +38,36 @@ use crate::sampling::projection::{
 };
 use crate::sampling::stage::{CpuStage, RealPfStage, StageGeom, StageTables};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
+
+fn initialize_real_engine_tables<R: Reducer + ?Sized, E: SamplingEngine>(
+    engine: &mut E,
+    geom: &StageGeom,
+    tables: &mut StageTables<'_>,
+    ele_idx: &[i64],
+    n_in_step: usize,
+    reducer: &R,
+) -> Result<i32, NormalInitializationError> {
+    if engine
+        .initialize_real(geom, tables, ele_idx, n_in_step, reducer)
+        .map_err(NormalInitializationError::Precondition)?
+    {
+        return Ok(0);
+    }
+    coordinate_normal_setup(
+        calc_m_all_real_native_info(
+            ele_idx,
+            tables.slater_elm,
+            tables.inv_m,
+            tables.pf_m,
+            geom.qp_start,
+            geom.qp_end,
+            geom.n_site,
+            geom.n_elec,
+            tables.pool,
+        ),
+        |info| reducer.sampling_max_info(info),
+    )
+}
 
 /// Output of [`vmc_make_sample_real`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,6 +164,27 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
     reducer: &R,
     stage: &mut S,
 ) -> Result<SampleStats, NormalInitializationError> {
+    let mut engine = HostEngine { stage };
+    vmc_make_sample_real_engine(data, state, rng, timer, reducer, &mut engine)
+}
+
+/// [`vmc_make_sample_real_staged`] with a pluggable [`SamplingEngine`]: the driver keeps the
+/// loop structure (initialization, burn/restore, block counts, saves, counters) and delegates
+/// the per-block proposal iteration to `engine`. `HostEngine` is the production per-proposal
+/// path; a device engine can select and accept candidates on the accelerator (issue #547).
+pub fn vmc_make_sample_real_engine<
+    const TIMED: bool,
+    Rng: crate::sampling::rng::SamplingRng,
+    R: Reducer + ?Sized,
+    E: SamplingEngine,
+>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &R,
+    engine: &mut E,
+) -> Result<SampleStats, NormalInitializationError> {
     // Regions inside the sampler loop follow each other every few us: hot dispatch gate.
     let _hot = crate::threading::hot_scope();
     timer.start(30);
@@ -165,6 +217,15 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
     let n_ex_path = data.modpara.nex_update_path;
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
+
+    let inv_stride = n_size * n_size + 1;
+    let geom = StageGeom {
+        n_site,
+        n_elec,
+        qp_start,
+        qp_end,
+        inv_stride,
+    };
 
     let loc_spn = state.workspace.loc_spn.clone();
     // Working buffers.
@@ -213,19 +274,18 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
         }
         // C performs this separate real setup once and ignores numeric INFO.
         // Invalid Rust/input preconditions are not fabricated native INFO.
-        let _real_info = coordinate_normal_setup(
-            calc_m_all_real_native_info(
-                &tmp_ele_idx,
-                &state.slater_matrix.slater_elm_real,
-                &mut state.slater_matrix.inv_m_real,
-                &mut state.slater_matrix.pf_m_real,
-                qp_start,
-                qp_end,
-                n_site,
-                n_elec,
-                &pool,
-            ),
-            |info| reducer.sampling_max_info(info),
+        let _real_info = initialize_real_engine_tables(
+            engine,
+            &geom,
+            &mut StageTables {
+                slater_elm: &state.slater_matrix.slater_elm_real,
+                inv_m: &mut state.slater_matrix.inv_m_real,
+                pf_m: &mut state.slater_matrix.pf_m_real,
+                pool: &pool,
+            },
+            &tmp_ele_idx,
+            shape.n_in_step,
+            reducer,
         )?;
         let mut log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
         if !log_ip.is_finite() {
@@ -242,19 +302,18 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
                 &pool,
                 |info| reducer.sampling_max_info(info),
             )?;
-            let _real_info = coordinate_normal_setup(
-                calc_m_all_real_native_info(
-                    &tmp_ele_idx,
-                    &state.slater_matrix.slater_elm_real,
-                    &mut state.slater_matrix.inv_m_real,
-                    &mut state.slater_matrix.pf_m_real,
-                    qp_start,
-                    qp_end,
-                    n_site,
-                    n_elec,
-                    &pool,
-                ),
-                |info| reducer.sampling_max_info(info),
+            let _real_info = initialize_real_engine_tables(
+                engine,
+                &geom,
+                &mut StageTables {
+                    slater_elm: &state.slater_matrix.slater_elm_real,
+                    inv_m: &mut state.slater_matrix.inv_m_real,
+                    pf_m: &mut state.slater_matrix.pf_m_real,
+                    pool: &pool,
+                },
+                &tmp_ele_idx,
+                shape.n_in_step,
+                reducer,
             )?;
             log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
             burn_flag = false;
@@ -274,14 +333,6 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
         }
     };
 
-    let inv_stride = n_size * n_size + 1;
-    let geom = StageGeom {
-        n_site,
-        n_elec,
-        qp_start,
-        qp_end,
-        inv_stride,
-    };
     {
         let mut tables = StageTables {
             slater_elm: &state.slater_matrix.slater_elm_real,
@@ -289,7 +340,7 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
             pf_m: &mut state.slater_matrix.pf_m_real,
             pool: &pool,
         };
-        if let Err(error) = stage.begin(&geom, &mut tables, &tmp_ele_idx) {
+        if let Err(error) = engine.begin(&geom, &mut tables, &tmp_ele_idx) {
             state.electron_config.tmp_ele_idx = tmp_ele_idx;
             state.electron_config.tmp_ele_cfg = tmp_ele_cfg;
             state.electron_config.tmp_ele_num = tmp_ele_num;
@@ -312,281 +363,36 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
     state.electron_config.counter.fill(0);
     timer.stop(30);
     for out_step in 0..n_out_step {
-        for _in_step in 0..n_in_step {
-            let update_type = get_update_type(n_ex_path, i_flg_general, two_sz, rng);
-            match update_type {
-                UpdateType::Hopping => {
-                    state.electron_config.counter[0] += 1;
-                    timer.start(31);
-                    let candidate = make_candidate_hopping(
-                        &tmp_ele_idx,
-                        &tmp_ele_cfg,
-                        n_site,
-                        n_elec,
-                        &loc_spn,
-                        rng,
-                    );
-                    timer.stop(31);
-                    if candidate.reject {
-                        continue;
-                    }
-                    timer.start(32);
-                    timer.start(60);
-                    update_ele_config(
-                        candidate.mi,
-                        candidate.ri,
-                        candidate.rj,
-                        candidate.spin,
-                        &mut tmp_ele_idx,
-                        &mut tmp_ele_cfg,
-                        &mut tmp_ele_num,
-                        n_site,
-                        n_elec,
-                    );
-                    update_proj_cnt(
-                        candidate.ri as i64,
-                        candidate.rj as i64,
-                        candidate.spin,
-                        &mut proj_cnt_new,
-                        &tmp_ele_proj_cnt,
-                        &tmp_ele_num,
-                        data,
-                    );
-                    timer.stop(60);
-                    timer.start(61);
-                    stage
-                        .propose_hop(
-                            &geom,
-                            &mut StageTables {
-                                slater_elm: &state.slater_matrix.slater_elm_real,
-                                inv_m: &mut state.slater_matrix.inv_m_real,
-                                pf_m: &mut state.slater_matrix.pf_m_real,
-                                pool: &pool,
-                            },
-                            &tmp_ele_idx,
-                            candidate.mi,
-                            candidate.spin,
-                            &mut pf_m_new,
-                        )
-                        .map_err(NormalInitializationError::Precondition)?;
-                    timer.stop(61);
-                    timer.start(62);
-                    let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
-                    timer.stop(62);
-                    let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        Complex64::new(log_ip_new, 0.0),
-                        Complex64::new(log_ip_old, 0.0),
-                        rng,
-                    );
-                    if stage.decide(&decision) {
-                        timer.start(63);
-                        stage
-                            .accept_hop(
-                                &geom,
-                                &mut StageTables {
-                                    slater_elm: &state.slater_matrix.slater_elm_real,
-                                    inv_m: &mut state.slater_matrix.inv_m_real,
-                                    pf_m: &mut state.slater_matrix.pf_m_real,
-                                    pool: &pool,
-                                },
-                                &tmp_ele_idx,
-                                candidate.mi,
-                                candidate.spin,
-                                &pf_m_new,
-                            )
-                            .map_err(NormalInitializationError::Precondition)?;
-                        timer.stop(63);
-                        tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
-                        log_ip_old = log_ip_new;
-                        accepted_total += 1;
-                        n_accept_window += 1;
-                        state.electron_config.counter[1] += 1;
-                    } else {
-                        revert_ele_config(
-                            candidate.mi,
-                            candidate.ri,
-                            candidate.rj,
-                            candidate.spin,
-                            &mut tmp_ele_idx,
-                            &mut tmp_ele_cfg,
-                            &mut tmp_ele_num,
-                            n_site,
-                            n_elec,
-                        );
-                    }
-                    timer.stop(32);
-                }
-                UpdateType::Exchange => {
-                    state.electron_config.counter[2] += 1;
-                    timer.start(31);
-                    let candidate = make_candidate_exchange(
-                        &tmp_ele_idx,
-                        &tmp_ele_cfg,
-                        n_site,
-                        n_elec,
-                        &tmp_ele_num,
-                        rng,
-                    );
-                    timer.stop(31);
-                    if candidate.reject {
-                        continue;
-                    }
-                    timer.start(33);
-                    let ri_old = candidate.ri;
-                    let rj_old = candidate.rj;
-                    timer.start(65);
-                    update_ele_config(
-                        candidate.mi,
-                        ri_old,
-                        rj_old,
-                        candidate.spin,
-                        &mut tmp_ele_idx,
-                        &mut tmp_ele_cfg,
-                        &mut tmp_ele_num,
-                        n_site,
-                        n_elec,
-                    );
-                    update_proj_cnt(
-                        ri_old as i64,
-                        rj_old as i64,
-                        candidate.spin,
-                        &mut proj_cnt_new,
-                        &tmp_ele_proj_cnt,
-                        &tmp_ele_num,
-                        data,
-                    );
-                    update_ele_config(
-                        candidate.mj,
-                        rj_old,
-                        ri_old,
-                        candidate.spin_other,
-                        &mut tmp_ele_idx,
-                        &mut tmp_ele_cfg,
-                        &mut tmp_ele_num,
-                        n_site,
-                        n_elec,
-                    );
-                    let mid = proj_cnt_new.clone();
-                    update_proj_cnt(
-                        rj_old as i64,
-                        ri_old as i64,
-                        candidate.spin_other,
-                        &mut proj_cnt_new,
-                        &mid,
-                        &tmp_ele_num,
-                        data,
-                    );
-                    timer.stop(65);
-                    timer.start(66);
-                    stage
-                        .propose_exchange(
-                            &geom,
-                            &mut StageTables {
-                                slater_elm: &state.slater_matrix.slater_elm_real,
-                                inv_m: &mut state.slater_matrix.inv_m_real,
-                                pf_m: &mut state.slater_matrix.pf_m_real,
-                                pool: &pool,
-                            },
-                            &tmp_ele_idx,
-                            [
-                                (candidate.mi, candidate.spin),
-                                (candidate.mj, candidate.spin_other),
-                            ],
-                            &mut pf_m_new,
-                        )
-                        .map_err(NormalInitializationError::Precondition)?;
-                    timer.stop(66);
-                    timer.start(67);
-                    let log_ip_new = sampling_log_ip_real(&pf_m_new, data, reducer);
-                    timer.stop(67);
-                    let log_proj_delta = log_proj_ratio(&proj_cnt_new, &tmp_ele_proj_cnt, data);
-                    let decision = metropolis_decision(
-                        log_proj_delta,
-                        Complex64::new(0.0, 0.0),
-                        Complex64::new(log_ip_new, 0.0),
-                        Complex64::new(log_ip_old, 0.0),
-                        rng,
-                    );
-                    if stage.decide(&decision) {
-                        timer.start(68);
-                        stage
-                            .accept_exchange(
-                                &geom,
-                                &mut StageTables {
-                                    slater_elm: &state.slater_matrix.slater_elm_real,
-                                    inv_m: &mut state.slater_matrix.inv_m_real,
-                                    pf_m: &mut state.slater_matrix.pf_m_real,
-                                    pool: &pool,
-                                },
-                                &tmp_ele_idx,
-                                [
-                                    (candidate.mi, candidate.spin),
-                                    (candidate.mj, candidate.spin_other),
-                                ],
-                                [ri_old, rj_old],
-                            )
-                            .map_err(NormalInitializationError::Precondition)?;
-                        timer.stop(68);
-                        tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
-                        log_ip_old = log_ip_new;
-                        accepted_total += 1;
-                        n_accept_window += 1;
-                        state.electron_config.counter[3] += 1;
-                    } else {
-                        revert_ele_config(
-                            candidate.mj,
-                            rj_old,
-                            ri_old,
-                            candidate.spin_other,
-                            &mut tmp_ele_idx,
-                            &mut tmp_ele_cfg,
-                            &mut tmp_ele_num,
-                            n_site,
-                            n_elec,
-                        );
-                        revert_ele_config(
-                            candidate.mi,
-                            ri_old,
-                            rj_old,
-                            candidate.spin,
-                            &mut tmp_ele_idx,
-                            &mut tmp_ele_cfg,
-                            &mut tmp_ele_num,
-                            n_site,
-                            n_elec,
-                        );
-                    }
-                    timer.stop(33);
-                }
-                _ => {}
-            }
-
-            // Periodic Pfaffian recomputation to keep numerical drift in
-            // check (mirrors the upstream `n_accept > n_site` guard).
-            if n_accept_window > n_site {
-                timer.start(34);
-                let recompute_failed = stage
-                    .recompute(
-                        &geom,
-                        &mut StageTables {
-                            slater_elm: &state.slater_matrix.slater_elm_real,
-                            inv_m: &mut state.slater_matrix.inv_m_real,
-                            pf_m: &mut state.slater_matrix.pf_m_real,
-                            pool: &pool,
-                        },
-                        &tmp_ele_idx,
-                    )
-                    .map_err(NormalInitializationError::Precondition)?;
-                if !reducer.sampling_any_failure(recompute_failed) {
-                    log_ip_old =
-                        sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
-                }
-                n_accept_window = 0;
-                timer.stop(34);
-            }
+        {
+            let mut ctx = BlockCtx {
+                data,
+                reducer,
+                rng,
+                geom,
+                slater_elm: &state.slater_matrix.slater_elm_real,
+                inv_m: &mut state.slater_matrix.inv_m_real,
+                pf_m: &mut state.slater_matrix.pf_m_real,
+                pool: &pool,
+                counter: &mut state.electron_config.counter,
+                ele_idx: &mut tmp_ele_idx,
+                ele_cfg: &mut tmp_ele_cfg,
+                ele_num: &mut tmp_ele_num,
+                ele_proj_cnt: &mut tmp_ele_proj_cnt,
+                proj_cnt_new: &mut proj_cnt_new,
+                pf_m_new: &mut pf_m_new,
+                loc_spn: &loc_spn,
+                n_site,
+                n_elec,
+                n_ex_path,
+                i_flg_general,
+                two_sz,
+                log_ip_old: &mut log_ip_old,
+                n_accept_window: &mut n_accept_window,
+                accepted_total: &mut accepted_total,
+            };
+            engine
+                .run_block::<TIMED, Rng, R>(&mut ctx, timer, n_in_step)
+                .map_err(NormalInitializationError::Precondition)?;
         }
 
         // Save samples after warm-up.

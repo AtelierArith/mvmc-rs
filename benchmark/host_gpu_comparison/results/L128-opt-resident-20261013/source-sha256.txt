@@ -1,0 +1,6 @@
+01509e6ce1cb817487756c8bd566e3c61759d5dd159eff8f322c981f81e32962  gpu/mvmc-gpu-cuda/target/release/examples/resident_opt_worker
+06fbc982cce351b9914b759667201c3238dae6640b42c64ea0e87ff4532f6996  gpu/mvmc-gpu-cuda/Cargo.lock
+d95d72ad8e1448d62ce3f2e6d721387c0e28bc3a8a2e65803e0ce664d27edd64  Cargo.lock
+343326a0d5fae6f9ad19fd91d1f4abd12149d37a200e8bf5606f99eeceb335a4  gpu/mvmc-gpu-cuda/src/opt/kernels.cu
+49d74dcd4b9d7deba52697f6a4214faf0b3871598dacef10b3fb0b7be6764482  gpu/mvmc-gpu-cuda/src/interval_kernels.cu
+c87b346851d330710d90723ac80cbadc0e9410e764b22cbecfa3324cd6e43125  gpu/mvmc-gpu-cuda/src/interval_resident.cu

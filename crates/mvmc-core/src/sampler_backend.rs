@@ -69,6 +69,28 @@ pub trait SamplerStages: Send {
         timing: &mut dyn SamplerTiming,
         reducer: &dyn Reducer,
     ) -> Result<SampleStats, StageError>;
+
+    /// Whether this stage batches every walker of one run into a single device call through
+    /// [`Self::sample_real_group`] and the reducer rendezvous (`rank`/`world_size`/`barrier`).
+    /// The single-chain lock-step and C-order stages are not group-capable.
+    fn group_capable(&self) -> bool {
+        false
+    }
+
+    /// Batched sampling entry point: every walker of the run calls this exactly once per sample
+    /// series and rendezvous through `reducer`. The walker index is `reducer.rank()` and the
+    /// walker count is `reducer.world_size()`. The default runs the single-walker
+    /// [`Self::sample_real`], so a stage that does not override it is unchanged.
+    fn sample_real_group(
+        &mut self,
+        data: &ExpertModeData,
+        state: &mut VmcOptimizationState,
+        rng: &mut Sfmt19937Rng,
+        timing: &mut dyn SamplerTiming,
+        reducer: &dyn Reducer,
+    ) -> Result<SampleStats, StageError> {
+        self.sample_real(data, state, rng, timing, reducer)
+    }
 }
 
 /// C-order CPU sampler: the unchanged inline driver of the production path (the parity oracle).
@@ -157,6 +179,16 @@ pub enum SamplerBackendKind {
     COrder,
     /// Device-resident lock-step sampler on the given CUDA device ordinal.
     Cuda(usize),
+    /// Device-resident interval (group) sampler on the given CUDA device ordinal.
+    CudaInterval(usize),
+}
+
+impl SamplerBackendKind {
+    /// Group-capable backends batch every walker into one device call and rendezvous through
+    /// the reducer, so they are acquired per walker, never as one run-long shared instance.
+    pub fn is_group(&self) -> bool {
+        matches!(self, Self::CudaInterval(_))
+    }
 }
 
 /// Environment variable selecting the production sampler backend (`c-order`, `cuda[:N]`).
@@ -168,11 +200,15 @@ pub fn parse_sampler_backend(value: &str) -> Result<SamplerBackendKind, String> 
     match v.as_str() {
         "" | "c" | "c-order" | "corder" | "default" => Ok(SamplerBackendKind::COrder),
         "cuda" => Ok(SamplerBackendKind::Cuda(0)),
-        other => match other.strip_prefix("cuda:").map(str::parse::<usize>) {
-            Some(Ok(ordinal)) => Ok(SamplerBackendKind::Cuda(ordinal)),
-            _ => Err(format!(
-                "{SAMPLER_BACKEND_VARIABLE}={other:?} is not one of c-order, cuda[:N]"
-            )),
+        "cuda-interval" => Ok(SamplerBackendKind::CudaInterval(0)),
+        other => match other.strip_prefix("cuda-interval:").map(str::parse::<usize>) {
+            Some(Ok(ordinal)) => Ok(SamplerBackendKind::CudaInterval(ordinal)),
+            _ => match other.strip_prefix("cuda:").map(str::parse::<usize>) {
+                Some(Ok(ordinal)) => Ok(SamplerBackendKind::Cuda(ordinal)),
+                _ => Err(format!(
+                    "{SAMPLER_BACKEND_VARIABLE}={other:?} is not one of c-order, cuda[:N], cuda-interval[:N]"
+                )),
+            },
         },
     }
 }
@@ -219,9 +255,35 @@ pub fn check_supported_mode(
             "{SAMPLER_BACKEND_VARIABLE}: the {} sampler supports only the real, non-FSZ normal mode",
             match kind {
                 SamplerBackendKind::COrder => "C-order",
-                SamplerBackendKind::Cuda(_) => "CUDA",
+                SamplerBackendKind::Cuda(_) | SamplerBackendKind::CudaInterval(_) => "CUDA",
             }
         ));
+    }
+    Ok(())
+}
+
+/// Validate the selected sampler's model before initialization or rendezvous.
+pub fn check_supported_input(
+    kind: SamplerBackendKind,
+    data: &ExpertModeData,
+) -> Result<(), String> {
+    if kind == SamplerBackendKind::COrder {
+        return Ok(());
+    }
+    check_supported_mode(
+        kind,
+        crate::get_all_complex_flag(data)?,
+        data.i_flg_orbital_general != 0,
+    )?;
+    if kind.is_group() {
+        if data.modpara.nex_update_path != 0 {
+            return Err(
+                "the interval sampler requires hopping-only sampling (NExUpdatePath=0)".into(),
+            );
+        }
+        if data.modpara.nlocspin != 0 || data.locspin_terms.iter().any(|s| s.spin_value != 0) {
+            return Err("the interval sampler does not support local-spin models".into());
+        }
     }
     Ok(())
 }
@@ -234,6 +296,38 @@ pub fn check_serial_reducer(reducer: &dyn Reducer) -> Result<(), StageError> {
     if reducer.world_size() != 1 || reducer.reduction_size() != 1 {
         return Err(StageError::Unsupported(
             "the CUDA sampler supports a single-process chain (world/reduction size 1)".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Reducer contract of the selected sampler.
+///
+/// The lock-step sampler is one serial chain. The interval sampler requires independent
+/// walker chains in one address space; MPI processes and in-chain QP splits are unsupported.
+pub fn check_sampler_reducer(
+    kind: SamplerBackendKind,
+    reducer: &dyn Reducer,
+) -> Result<(), StageError> {
+    if kind.is_group() {
+        if !reducer.shares_address_space() {
+            return Err(StageError::Unsupported(
+                "the interval sampler requires all walkers in one shared address space".into(),
+            ));
+        }
+        // The interval sampler batches every walker of one device into one call; a walker is
+        // its own chain (`reduction_size == world_size`, the multi-walker SR count). An
+        // in-chain QP split (`reduction_size != world_size`) is not representable.
+        if reducer.world_size() != reducer.reduction_size() {
+            return Err(StageError::Unsupported(
+                "the interval sampler supports ungrouped walker chains (world size == reduction size)"
+                    .to_string(),
+            ));
+        }
+    } else if reducer.world_size() != 1 || reducer.reduction_size() != 1 {
+        return Err(StageError::Unsupported(
+            "the CUDA lock-step sampler supports a single-process chain (world/reduction size 1)"
+                .to_string(),
         ));
     }
     Ok(())
@@ -265,7 +359,13 @@ pub fn preflight_sampler_backend(kind: SamplerBackendKind, variable: &str) -> Re
         // default hook's output.
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
-        let opened = std::panic::catch_unwind(|| shared(kind).map(|_| ()));
+        let opened = std::panic::catch_unwind(|| {
+            if kind.is_group() {
+                open_sampler_backend(kind).map(|_| ())
+            } else {
+                shared(kind).map(|_| ())
+            }
+        });
         std::panic::set_hook(previous);
         match opened {
             Ok(result) => result.map_err(|e| format!("{variable}: {e}"))?,
@@ -293,6 +393,10 @@ pub fn open_sampler_backend(
         SamplerBackendKind::COrder => Ok(Box::new(COrderSampler)),
         SamplerBackendKind::Cuda(ordinal) => crate::backend::open_cuda_sampler_stages(ordinal)
             .map_err(|e| StageError::Unsupported(e.to_string())),
+        SamplerBackendKind::CudaInterval(ordinal) => {
+            crate::backend::open_cuda_interval_sampler_stages(ordinal)
+                .map_err(|e| StageError::Unsupported(e.to_string()))
+        }
     }
 }
 
@@ -356,6 +460,10 @@ pub fn acquire_sampler_kind(kind: SamplerBackendKind) -> SamplerHandle {
         SamplerBackendKind::COrder => {
             SamplerHandle::Owned(open_sampler_backend(kind).expect("c-order"))
         }
+        kind if kind.is_group() => SamplerHandle::Owned(
+            open_sampler_backend(kind)
+                .unwrap_or_else(|e| panic!("{SAMPLER_BACKEND_VARIABLE}: {e}")),
+        ),
         kind => match shared(kind) {
             Ok(m) => SamplerHandle::Shared(m.lock().unwrap_or_else(|e| e.into_inner())),
             Err(e) => panic!("{SAMPLER_BACKEND_VARIABLE}: {e}"),

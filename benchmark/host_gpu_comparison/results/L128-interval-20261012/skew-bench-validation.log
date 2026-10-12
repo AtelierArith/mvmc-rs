@@ -1,0 +1,50 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 2.69s
+────────────
+ Nextest run ID 7d5dfe5d-17d4-4ef0-a01d-a52eb48408a0 with nextest profile: default
+    Starting 2 tests across 1 binary
+        PASS [  14.020s] (1/2) mvmc-gpu-cuda::interval_bench interval_full_run_l128
+  stdout ───
+
+    running 1 test
+    test interval_full_run_l128 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 13.88s
+
+  stderr ───
+    warmup: hops=860160 rebuilds=2256 rounds=9
+    == interval full-run L=128, W=320, hops/walker=2688 ==
+    wall=4.688 s  hops=860160  rebuilds=2256  rounds=9  5450.4 ns/hop  0.18 M hops/s
+
+        PASS [   7.561s] (2/2) mvmc-gpu-cuda::interval_bench interval_walker_sweep_l128
+  stdout ───
+
+    running 1 test
+    test interval_walker_sweep_l128 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 7.42s
+
+  stderr ───
+    == interval sampler walker sweep, nsite=128 nqp=8 hops/walker=256 ==
+    W=   1  wall=0.0303 s  hops_total=    256 rebuild_any=false  118253.9 ns/hop  0.01 M hops/s
+    W=  16  wall=0.0456 s  hops_total=   4096 rebuild_any=false  11138.3 ns/hop  0.09 M hops/s
+    W=  64  wall=0.0907 s  hops_total=  16384 rebuild_any=false  5537.6 ns/hop  0.18 M hops/s
+    W= 128  wall=0.1525 s  hops_total=  32768 rebuild_any=false  4655.2 ns/hop  0.21 M hops/s
+    W= 320  wall=0.3441 s  hops_total=  81920 rebuild_any=false  4200.6 ns/hop  0.24 M hops/s
+
+────────────
+     Summary [  21.581s] 2 tests run: 2 passed, 0 skipped

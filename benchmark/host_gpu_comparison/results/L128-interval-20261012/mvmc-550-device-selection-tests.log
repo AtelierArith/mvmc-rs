@@ -1,0 +1,32 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.26s
+────────────
+ Nextest run ID 13dba347-2077-42de-8f4c-a59da844340b with nextest profile: default
+    Starting 1 test across 1 binary (2 tests skipped)
+        PASS [   0.686s] (1/1) mvmc-gpu-cuda interval_engine::tests::interval_backend_honors_device_selection_and_switches
+  stdout ───
+
+    running 1 test
+    test interval_engine::tests::interval_backend_honors_device_selection_and_switches ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.53s
+
+  stderr ───
+    verified selection across 2 visible CUDA devices
+
+────────────
+     Summary [   0.687s] 1 test run: 1 passed, 2 skipped

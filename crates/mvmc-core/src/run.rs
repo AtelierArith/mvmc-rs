@@ -974,13 +974,8 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
     let sampler_kind = crate::sampler_backend::selected_sampler_backend();
     if sampler_kind != SamplerBackendKind::COrder {
         collective_result(
-            crate::sampler_backend::check_supported_mode(
-                sampler_kind,
-                all_complex,
-                data.i_flg_orbital_general != 0,
-            )
-            .and_then(|()| {
-                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+            crate::sampler_backend::check_supported_input(sampler_kind, data).and_then(|()| {
+                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
                     .map_err(|error| error.to_string())
             }),
             reducer,
@@ -1067,7 +1062,7 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
         } else {
             sampler_handle
                 .sampler()
-                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
                 .map(|_| ())
                 .map_err(|error| error.to_string())
         };
@@ -1250,13 +1245,8 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
     let sampler_kind = crate::sampler_backend::selected_sampler_backend();
     if sampler_kind != SamplerBackendKind::COrder {
         collective_result(
-            crate::sampler_backend::check_supported_mode(
-                sampler_kind,
-                all_complex,
-                data.i_flg_orbital_general != 0,
-            )
-            .and_then(|()| {
-                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+            crate::sampler_backend::check_supported_input(sampler_kind, data).and_then(|()| {
+                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
                     .map_err(|error| error.to_string())
             }),
             reducer,
@@ -1336,7 +1326,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
         } else if !all_complex {
             sampler_handle
                 .sampler()
-                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
                 .map_err(|error| error.to_string())
         } else {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
