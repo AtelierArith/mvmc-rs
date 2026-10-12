@@ -2758,6 +2758,185 @@ bench-out/issue517/m1/harness/run_physcal.sh <phys_L448> <out> 3 "corder1|<bin>|
 MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
 ```
 
+## 16.12 Milestone 5: PhysCal Green functions on the device and the recompute ceiling (issue #517)
+
+Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The PhysCal
+Green consumer now runs on the device from the resident inverse planes (`km_green_two`, the
+rank-2 `calculate_new_pf_m_two2` bilinear) and the sweep no longer downloads the inverse planes
+when the sampler is also device-resident. The whole PhysCal run moves from 27.77 s to **15.60 s**
+(median of 3 rounds), **byte-identical** to the C-order sampler on the same measurement backend.
+The recompute's intra-plane parallelism (lever 2) is analysed and **not taken**; the exact-order
+ceiling is recorded below.
+
+### 16.12.1 Profile first: the PhysCal wall is the host Green consumer
+
+`MVMC_MAINCAL_DIAG=1` on PhysCal L=448 splits `VMCMainCal [4]` (13.6 s) into
+`CalculateMAll [40]` 5.21 s, `LocEnergyCal [41]` 0.22 s and the diagnostic section `946` 8.02 s
+(the Rust runner folds the Green consumer and the energy accumulation into 946; C's
+`CalculateGreenFunc [42]` is not separately instrumented there). Zeroing the term sets of a
+scratch input isolates the contributors:
+
+| variant (PhysCal L=448) | All [0] | CalculateMAll [40] | section 946 |
+| --- | ---: | ---: | ---: |
+| full input | 27.09 | 5.21 | 8.02 |
+| `greentwo.def` emptied (2688 terms removed) | 18.83 | 5.19 | 0.44 |
+| `greenone.def` emptied (896 terms removed) | 25.75 | 5.19 | 7.30 |
+
+The two-body direct Green (`greentwo.def`, `two_hop_bilinear_real` = `b^T M a`, O(n^2) per term
+per QP) is ~7.6 s of the 8.02 s; `CalculateMAll` is independent of the term sets (either the
+batched Pfaffian/inverse or the per-batch inverse download). `MVMC_RS_MEASURE_BATCH` is 16, so
+PhysCal downloads `slots * n_qp * n^2 * 8` bytes per batch.
+
+### 16.12.2 What was changed
+
+1. **Device Green stage** (`crates/mvmc-core/src/{stage_backend.rs,measurement_backend.rs}`,
+   `gpu/mvmc-gpu-cuda/src/{measurement.rs,measurement_kernels.cu}`). A new
+   [`GreenOutput`](crates/mvmc-core/src/stage_backend.rs) contract
+   (`MeasurementStages::resident_green`/`measure_green`,
+   `ResidentMeasurementOps::green_two`) is the device seam, mirroring the existing resident local
+   energy. The host classifies every `green_one_terms`/`green_two_terms` entry with the exact
+   branch structure of `green_func1_impl`/`green_func2_impl` (density/zero shortcuts, the
+   coincident-index cases and the two sequential projection updates), computes each projection
+   ratio on the host, and defers only the Pfaffian reduction (`ratio = sum_msj invM[msa,msj]
+   Slater[...]`, or the rank-2 `invM[ma,mb](b[ma] + b^T M a) + p_a q_b - p_b q_a`) to the device.
+   `km_ratio_terms` already implements the one-body reduction; `km_green_two` is the new
+   one-block-per-job kernel (shared-memory gather of the two destination Slater rows, one
+   deterministic block reduction of `p_a,p_b,q_a,q_b,bma`, thread 0 folds the QPs in order). The
+   host then folds `proj_ratio * new_ip / ip` in term order, exactly as `ordinary_green_values`.
+   The default C-order stage returns `None` and keeps the host consumer byte-identical.
+2. **No inverse download in a fully device-resident PhysCal sweep** (`run.rs`). With the device
+   Green functions the host no longer needs the inverse planes. `download_tables` now skips the
+   PhysCal download when the measurement provides the device Green stage, `NLanczosMode == 0`
+   (Lanczos still reads the host tables) and the sampler is not C order (`SamplerBackendKind::
+   COrder` keeps its own host inverse); the C-order sampler row of the byte-identity comparison
+   therefore still downloads, and both rows produce identical output.
+3. **Tests**: a host mock of the new seam (`crates/mvmc-core/tests/measurement_resident_518.rs`,
+   `resident_green_measurement_matches_c_order_physcal`) evaluates the deferred reductions with
+   the exact host routines and reproduces the C-order PhysCal output **bitwise** (worst
+   0.0e0 over 964 tokens); the CUDA `measurement_gate::cuda_resident_measurement_matches_c_order`
+   exercises the kernel.
+
+Levers that were **not** taken, with the reason:
+
+* **Recompute intra-plane parallelism (`pfinv_f64_wide`).** Phase 1 is `n-1` serial LTL^T steps;
+  every step's pivot search and rank-2 update read the matrix produced by the previous step, so
+  splitting one plane over several blocks needs a grid-wide sync per step (447 syncs at n=448)
+  or a panel factorization with the same dependency. The per-element formula
+  `(A_ij + x_i t1_j) - y_i t2_j`, `alpha = 1/A[kk,k0]`, the swap sequence and the first-index
+  argmax comparator *are* order-preserving under a grid-synced split, so an exact-order variant
+  is conceivable in principle — it is **not** an inexact tradeoff we declined. It was not taken
+  because (a) cudarc 0.19 exposes no cooperative-launch API (the prototype would need raw driver
+  calls with NVRTC relocatable device code), and (b) the measured ceiling is small: the
+  recompute is ~20 us/hop amortized, ~0.6 s of the 7.62 s Opt sampling series (the eight-plane
+  recompute is latency-bound at 8 SMs, but the production measurement batches of 128 planes
+  already saturate the device, so any cooperative variant must be sampler-only). No inexact
+  factorization was substituted for the sampler. See 16.12.4.
+* **Fusing the two device Green launches per sample.** The Green kernels are now 0.67 s of the
+  PhysCal wall; a per-sample job batch would only shave the two launches.
+
+### 16.12.3 Measured (A100 80GB, `bench-out/issue517/round3/bench`)
+
+NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads,
+shared host (`load1` 1.4-3.4 during the timed PhysCal rounds, 1.6-3.4 during the timed Opt
+rounds), `MVMC_C_TIMER=1`, medians of 3 timed rounds after one warm-up, one `mvmc-cuda` binary
+for every row. `cpu1` = all C-order with `MVMC_RS_BLAS_THREADS=1`, `cpu4` = `=4`; `corder` =
+C-order sampler + device measurement with the device Green functions (downloads the inverse
+planes); `cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda
+MVMC_RS_MEASURE_PF_BACKEND=cuda` (no inverse download). Section seconds.
+
+Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| cpu1 (1 BLAS thread) | 41.49 | 25.37 | 13.82 | 1.25 |
+| cpu4 (4 BLAS threads) | 42.04 | 26.03 | 13.57 | 1.26 |
+| corder (device measurement, device Green) | 26.33 | 24.13 | 1.008 | 0.145 |
+| **cuda (all device)** | **9.806** | **7.617** | 1.008 | 0.143 |
+
+PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| cpu1 (1 BLAS thread) | 73.44 | 40.76 | 23.21 | 1.22 |
+| cpu4 (4 BLAS threads) | 74.24 | 42.10 | 22.19 | 1.25 |
+| corder (downloads inverse planes) | 46.71 | 39.96 | 5.12 | 0.202 |
+| **cuda (no inverse download)** | **15.60** | **12.27** | **1.68** | 0.199 |
+
+Readings:
+
+* the device Green path moves the PhysCal Green section from 8.02 s to **0.67 s** (12x) and, with
+  the download skipped, `CalculateMAll` from 5.42 s (main) to **1.68 s** (3.2x); the whole device
+  PhysCal run is **1.78x** faster than the #537/#540 device run (27.77 s -> 15.60 s);
+* against the **pure CPU baseline**: Opt 42.04/9.806 = **4.29x** (4 threads) and 41.49/9.806 =
+  **4.23x** (1 thread); PhysCal 74.24/15.60 = **4.76x** (4 threads) and 73.44/15.60 = **4.71x**
+  (1 thread), up from 2.93x/2.98x in 16.10;
+* the Opt path is unchanged (no inverse download, no Green terms), 9.81 s as in 16.11;
+* `corder` isolates the download: with a C-order sampler the inverse planes still download and
+  `CalculateMAll` is 5.12 s; the `cuda` row (same binary, same measurement, device sampler)
+  skips it and measures 1.68 s.
+
+### 16.12.4 Exactness
+
+* **Sampling** (Opt and PhysCal, L=448): `c-order` sampler + device measurement vs all-device,
+  same measurement backend, whole output directories **byte-identical** for all 3 timed rounds —
+  Opt 7/7 files, PhysCal 20/20 files (`cmp`, timers and `zvo_time*` excluded). The no-download
+  `cuda` row is byte-identical to the downloading `corder` row, so keeping the inverse planes
+  resident does not change a single output byte.
+* **Measurement deviation against C order** (the device Green functions, all-device vs all
+  C-order, same C-order sampler): worst absolute **2.33e-10** (`zvo_out_001.dat`, the energy) and
+  worst relative **6.20e-10** on a near-zero direct two-body value
+  (`zvo_cisajscktalt_002.dat`, 1.44e-5 absolute error ~9.0e-14); no token with `|v| > 1e-6` has a
+  relative deviation above 1e-6. The absolute bound is the same 2.3e-10 as the #518 measurement
+  alone (`docs/NUMERICAL_COMPARISONS.md` policy): the first divergence is the block-tree
+  summation order of `b^T M a` (the device block reduction vs the host's `k`-ordered row sums),
+  bounded by `n * eps * sum |M_ij a_j|` per row; the largest relative deviations sit on
+  cancellation-dominated Green entries and match the absolute scale.
+* **In-process gates** (`MVMC_RS_CUDA_GATE=1`, `--test-threads=1`): `measurement_gate` 3/3,
+  `sampler_production_gate` 2/2, `sampler_gate` 4/4, `pfaffian_gate` 6/6, `cuda_gate` 4/4,
+  `transfer_gate` 2/2, `sr_device_gate` 7/7, `sr_routing_gate` 3/3 — 31/31 pass. The host mock
+  reproduces the C-order PhysCal output bitwise; the CUDA resident PhysCal gate measures worst
+  1.45e-13 absolute / 7.9e-14 relative on the L=6 fixture.
+
+### 16.12.5 Distance to >=20x and the next lever
+
+Against the **pure 4-thread CPU baseline**: Opt **4.29x**, PhysCal **4.76x** (1 thread: 4.23x /
+4.71x). The PhysCal gap is now small (the device run is sampling-bound): `VMCMakeSample` 12.27 s
+of the 15.60 s, and within it the Opt per-hop budget of 16.10 still applies (~31 us accept,
+11 us propose, 20 us recompute, ~11 us service+protocol, ~8 us copies). 20x would need the whole
+per-hop cost near 8 us, i.e. the device-side decision loop the RNG-on-host contract excludes.
+
+The remaining measured levers, in the order the profile supports them:
+
+1. **The recompute's intra-plane parallelism** (16.12.2): a cooperative-grid, exact-order panel
+   factorization is conceivable but needs raw cooperative-launch support and is sampler-only;
+   its ceiling is ~6 % of `VMCMakeSample` (0.6 s of 7.62 s), so it is recorded as a future
+   lever rather than taken.
+2. **Green kernel batching**: the device Green launches are 0.67 s per PhysCal sweep; batching
+   the one-body and two-body jobs of all samples of a chunk into one launch is worth a few
+   tenths of a second.
+3. **`CalculateMAll` at 1.68 s** is now the device batched Pfaffian (`pfinv_f64_wide`) plus the
+   Pfaffian download; the same intra-plane ceiling applies.
+
+Honest summary: the PhysCal Green consumer is fully on the device and the two largest measured
+levers are taken; the >=20x single-chain target still requires the device-side decision loop
+(16.10.5) and is not reachable on this design.
+
+Reproduce:
+
+```sh
+# profile attribution (section 946 is the folded Green + energy accumulation)
+env MVMC_C_TIMER=1 MVMC_MAINCAL_DIAG=1 MVMC_RS_SAMPLER_BACKEND=cuda \
+  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
+  mvmc-cuda <phys_L448>/namelist.def --out-dir /tmp/phys
+# production comparison (one binary; corder downloads the inverse, cuda keeps it resident)
+bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 \
+  "cpu1|<bin>|MVMC_RS_BLAS_THREADS=1" "cpu4|<bin>|MVMC_RS_BLAS_THREADS=4" \
+  "corder|<bin>|MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda" \
+  "cuda|<bin>|MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda"
+bench-out/issue517/m1/harness/run_physcal.sh <phys_L448> <out> 3 "..." "..." "..." "..."
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
@@ -2812,3 +2991,15 @@ MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
   化で単体 81.9 → 37.9 us になりますが、融合カーネルは逆に悪化 (81-117 us) し、2 カーネル分割
   (63.5 us、ビット一致) は追加 launch・分岐対応のため未統合です。プロンプトの共有メモリ・タイル化は
   1 プレーン 1.6 MB が SM あたり 164 KB に入らず、順序を保ったまま交通量を削減できないため不採用です。
+* 追記 (2026-10-12, #517 milestone 5, 16.12 節): PhysCal の Green 関数を**デバイスで**計算する
+  (`GreenOutput`/`measure_green`/`resident_green` の seam、ホストで項分類と射影比、`km_green_two` が
+  ランク 2 の `b^T M a`)。サンプラもデバイス常駐のときは逆行列プレーンのダウンロードも省略します。
+  PhysCal L=448 の `All` は 27.77 → **15.60 s** (1.78 倍)、ホスト Green 8.02 → **0.67 s**、
+  `CalculateMAll` 5.42 → **1.68 s**。4 スレッド CPU 比は Opt **4.29 倍**、PhysCal **4.76 倍** (1 スレッド
+  4.23/4.71 倍)。出力は c-order サンプラと **バイト一致** (Opt 7/7、PhysCal 20/20 を 3 ラウンド;
+  ダウンロード有無もバイト一致)。C 順序との測定偏差は最大絶対 2.33e-10 (エネルギー)、相対 6.20e-10
+  (桁落ちする微小な直接 2 体 Green) で、`|v|>1e-6` で相対 1e-6 を超えるトークンはありません。
+  再計算 (`pfinv_f64_wide`) の面内並列化は、順序を保つ cooperative-grid 分割が原理的には可能
+  (ピボット規則・要素ごとの式は順序保存) ですが、cudarc 0.19 に cooperative launch が無く、
+  上限も `VMCMakeSample` の約 6 % (0.6 s/7.62 s) と小さいため**未採用** (不正確な版は入れていません)。
+  20 倍には依然デバイス側の判定ループが必要で、単一 chain では到達しません (16.10.5)。

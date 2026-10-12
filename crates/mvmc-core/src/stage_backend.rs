@@ -413,6 +413,21 @@ pub struct MeasurementOutput {
     pub slater_diff: Vec<Complex64>,
 }
 
+/// PhysCal Green-function values of one sample (issue #517 milestone 5), in the term order of
+/// `data.green_one_terms` / `data.green_two_terms`.
+///
+/// The one-body values are `<c^dag_{ri,s1} c_{rj,s2}>` and the direct two-body values are
+/// `<c^dag_{ri,s1} c_{rj,s1} c^dag_{rk,s3} c_{rl,s3}>`; the runner accumulates them exactly as
+/// it accumulates the host [`crate::observables`] consumer. A device backend returns this so
+/// the host never needs the inverse planes of a PhysCal sample.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GreenOutput {
+    /// One-body values, one per `data.green_one_terms` entry.
+    pub one: Vec<Complex64>,
+    /// Direct two-body values, one per `data.green_two_terms` entry.
+    pub direct: Vec<Complex64>,
+}
+
 /// Host-visible counters of the device-resident measurement path (issue #518 milestone 2),
 /// for tests and benchmark metadata.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -507,6 +522,26 @@ pub trait MeasurementStages: Send {
     /// Counters of the resident path, `None` when the backend is not resident.
     fn resident_stats(&self) -> Option<ResidentStats> {
         None
+    }
+
+    /// Whether this backend computes the PhysCal Green functions on the device (issue #517
+    /// milestone 5). When true the runner uses [`Self::measure_green`] for the host Green
+    /// consumer and may keep the inverse planes resident.
+    fn resident_green(&self) -> bool {
+        false
+    }
+
+    /// Device PhysCal Green functions of one sample (issue #517 milestone 5). The default
+    /// `None` keeps the host C-order consumer; a backend that reports [`Self::resident_green`]
+    /// must return `Some`. `one_len`/`direct_len` size the outputs at the caller's term counts.
+    fn measure_green(
+        &mut self,
+        _input: &mut MeasurementInput<'_>,
+        _one_len: usize,
+        _direct_len: usize,
+        _timing: &mut dyn MeasurementTiming,
+    ) -> Result<Option<GreenOutput>, StageError> {
+        Ok(None)
     }
 
     /// Compute the local energy and (when `slater_diff_len > 0`) the Slater-parameter

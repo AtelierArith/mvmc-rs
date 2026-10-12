@@ -31,7 +31,8 @@ use cudarc::driver::{
 use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
 use mvmc_core::c_timer::CTimer;
 use mvmc_core::measurement_backend::{
-    ResidentMeasurementOps, ResidentRatioTerms, ResidentSlaterDiff, TenferroMeasurement,
+    ResidentGreenTwo, ResidentMeasurementOps, ResidentRatioTerms, ResidentSlaterDiff,
+    TenferroMeasurement,
 };
 use mvmc_core::stage_backend::{
     MeasurementInput, MeasurementOutput, MeasurementStages, MeasurementTiming, PfInvBatch,
@@ -79,6 +80,7 @@ struct Funcs {
     pfinv: CudaFunction,
     pfinv_wide: CudaFunction,
     ratio: CudaFunction,
+    green_two: CudaFunction,
     rows: CudaFunction,
     fold: CudaFunction,
 }
@@ -207,6 +209,12 @@ pub struct ResidentDevice {
     diff_inv_sgn: Option<CudaSlice<i32>>,
     diff_rows: Option<CudaSlice<f64>>,
     diff_acc: Option<CudaSlice<f64>>,
+    /// Per-job arrays of the two-body Green reduction (issue #517 milestone 5).
+    green_msa: Option<CudaSlice<i32>>,
+    green_msb: Option<CudaSlice<i32>>,
+    green_rsa: Option<CudaSlice<i32>>,
+    green_rsb: Option<CudaSlice<i32>>,
+    green_out: Option<CudaSlice<f64>>,
     stats: ResidentStats,
 }
 
@@ -236,6 +244,7 @@ impl ResidentDevice {
             pfinv: f("pfinv_f64")?,
             pfinv_wide: f("pfinv_f64_wide")?,
             ratio: f("km_ratio_terms")?,
+            green_two: f("km_green_two")?,
             rows: f("km_slater_rows")?,
             fold: f("km_slater_fold")?,
         };
@@ -265,6 +274,11 @@ impl ResidentDevice {
             diff_inv_sgn: None,
             diff_rows: None,
             diff_acc: None,
+            green_msa: None,
+            green_msb: None,
+            green_rsa: None,
+            green_rsb: None,
+            green_out: None,
             stats: ResidentStats::default(),
         })
     }
@@ -582,6 +596,11 @@ impl ResidentMeasurementOps for ResidentDevice {
             self.diff_inv_sgn = None;
             self.diff_rows = None;
             self.diff_acc = None;
+            self.green_msa = None;
+            self.green_msb = None;
+            self.green_rsa = None;
+            self.green_rsb = None;
+            self.green_out = None;
         }
         self.geom = Some(geom);
         let (offsets, trj, sgn) = Self::build_orbital_csr(request)?;
@@ -847,8 +866,125 @@ impl ResidentMeasurementOps for ResidentDevice {
         Ok(values)
     }
 
+    fn green_two(
+        &mut self,
+        slot: usize,
+        input: &ResidentGreenTwo<'_>,
+    ) -> Result<Vec<f64>, StageError> {
+        self.green_two_run(slot, input)
+    }
+
     fn stats(&self) -> Option<ResidentStats> {
         Some(self.stats)
+    }
+}
+
+impl ResidentDevice {
+    /// Two-body Green reductions (issue #517 milestone 5): one block per active job, each block
+    /// looping the QP planes over the resident inverse table and Slater table.
+    fn green_two_run(
+        &mut self,
+        slot: usize,
+        input: &ResidentGreenTwo<'_>,
+    ) -> Result<Vec<f64>, StageError> {
+        self.bind()?;
+        let geom = self.geom()?;
+        if !self.has_slot(slot) {
+            return unsupported(format!(
+                "resident measurement: slot {slot} has no resident tables from stage A"
+            ));
+        }
+        let jobs = input.msa.len();
+        if jobs == 0 {
+            return Ok(Vec::new());
+        }
+        let n = geom.n();
+        if input.msb.len() != jobs
+            || input.rsa_site.len() != jobs
+            || input.rsb_site.len() != jobs
+            || input.ele_idx.len() != n
+        {
+            return Err(StageError::Failed(
+                "resident measurement: inconsistent Green job arrays".into(),
+            ));
+        }
+        let block = 256usize;
+        let shared = (2 * n + 5 * block) * std::mem::size_of::<f64>();
+        let to_i32 = |values: &[i64]| -> Vec<i32> { values.iter().map(|&v| v as i32).collect() };
+        let msa = to_i32(input.msa);
+        let msb = to_i32(input.msb);
+        let rsa = to_i32(input.rsa_site);
+        let rsb = to_i32(input.rsb_site);
+        upload_i32(&mut self.green_msa, &self.stream, &msa)?;
+        upload_i32(&mut self.green_msb, &self.stream, &msb)?;
+        upload_i32(&mut self.green_rsa, &self.stream, &rsa)?;
+        upload_i32(&mut self.green_rsb, &self.stream, &rsb)?;
+        ensure_f64(&mut self.green_out, &self.stream, jobs)?;
+        let mut stage = self.stage.take().expect("stage buffers");
+        let ele_i32 = to_i32(input.ele_idx);
+        if let Err(error) = self
+            .stream
+            .memcpy_htod(&ele_i32, &mut stage.ele.slice_mut(slot * n..(slot + 1) * n))
+        {
+            self.stage = Some(stage);
+            return Err(cu(error));
+        }
+        let (jobs_i, n_i, ne_i, ns_i, nq_i) = (
+            jobs as i32,
+            n as i32,
+            geom.n_elec as i32,
+            geom.n_site as i32,
+            geom.n_qp as i32,
+        );
+        let ele0 = (slot * n) as i32;
+        let plane0 = (slot * geom.n_qp) as i32;
+        let weights = self.qp_weight.as_ref().expect("qp weights");
+        let slater = self.slater.as_ref().expect("slater uploaded");
+        let msa_dev = self.green_msa.as_ref().expect("green msa");
+        let msb_dev = self.green_msb.as_ref().expect("green msb");
+        let rsa_dev = self.green_rsa.as_ref().expect("green rsa");
+        let rsb_dev = self.green_rsb.as_ref().expect("green rsb");
+        let mut out = self.green_out.take().expect("green out");
+        let result = (|| -> Result<(), StageError> {
+            let mut b = self.stream.launch_builder(&self.funcs.green_two);
+            b.arg(slater)
+                .arg(&stage.out)
+                .arg(&stage.pf)
+                .arg(&stage.ele)
+                .arg(msa_dev)
+                .arg(msb_dev)
+                .arg(rsa_dev)
+                .arg(rsb_dev)
+                .arg(weights)
+                .arg(&mut out)
+                .arg(&ele0)
+                .arg(&plane0)
+                .arg(&jobs_i)
+                .arg(&n_i)
+                .arg(&ne_i)
+                .arg(&ns_i)
+                .arg(&nq_i);
+            // SAFETY: kernel ABI (const double* x2, const int*, const double*, int, double*,
+            // int x7); one block per job, dynamic shared = (2n + 5*256) doubles.
+            unsafe {
+                b.launch(LaunchConfig {
+                    grid_dim: (jobs as u32, 1, 1),
+                    block_dim: (block as u32, 1, 1),
+                    shared_mem_bytes: shared as u32,
+                })
+            }
+            .map_err(cu)?;
+            self.stream.synchronize().map_err(cu)
+        })();
+        self.stage = Some(stage);
+        if let Err(error) = result {
+            self.green_out = Some(out);
+            return Err(error);
+        }
+        let mut values = Vec::new();
+        self.download_f64(&out, jobs, &mut values)?;
+        self.green_out = Some(out);
+        Ok(values)
     }
 }
 
@@ -933,6 +1069,10 @@ impl MeasurementStages for ResidentMeasurementStage {
         true
     }
 
+    fn resident_green(&self) -> bool {
+        true
+    }
+
     fn resident_prepare(
         &mut self,
         data: &ExpertModeData,
@@ -985,6 +1125,23 @@ impl MeasurementStages for ResidentMeasurementStage {
             drop(device);
             self.inner.measure_sample(input, slater_diff_len, timing)
         }
+    }
+
+    fn measure_green(
+        &mut self,
+        input: &mut MeasurementInput<'_>,
+        one_len: usize,
+        direct_len: usize,
+        timing: &mut dyn MeasurementTiming,
+    ) -> Result<Option<mvmc_core::stage_backend::GreenOutput>, StageError> {
+        let mut device = self.device.lock().unwrap_or_else(|e| e.into_inner());
+        if !device.has_slot(input.batch_slot) {
+            return Ok(None);
+        }
+        debug_assert_eq!(one_len, input.data.green_one_terms.len());
+        debug_assert_eq!(direct_len, input.data.green_two_terms.len());
+        let _ = timing;
+        mvmc_core::measurement_backend::resident_green_values(&mut *device, input).map(Some)
     }
 }
 

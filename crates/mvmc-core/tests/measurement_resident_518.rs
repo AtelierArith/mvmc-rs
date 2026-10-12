@@ -15,19 +15,20 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use mvmc_core::measurement_backend::{
-    resident_measure_sample, ResidentMeasurementOps, ResidentRatioTerms, ResidentSlaterDiff,
+    resident_green_values, resident_measure_sample, ResidentGreenTwo, ResidentMeasurementOps,
+    ResidentRatioTerms, ResidentSlaterDiff,
 };
 use mvmc_core::measurement_batch::{
     set_measurement_backend_override, set_measurement_consumer_override, MeasurementConsumer,
     MeasurementPfaffian,
 };
 use mvmc_core::stage_backend::{
-    register_stage_backend, COrderMeasurement, COrderPfaffian, MeasurementInput, MeasurementOutput,
-    MeasurementStages, MeasurementTiming, PfInvBatch, PfaffianStages, PlaneOutcome,
-    ResidentInputRequest, ResidentStageAInput, ResidentStageAOutput, ResidentStats, StageBackend,
-    StageBackendKind, StageError,
+    register_stage_backend, COrderMeasurement, COrderPfaffian, GreenOutput, MeasurementInput,
+    MeasurementOutput, MeasurementStages, MeasurementTiming, PfInvBatch, PfaffianStages,
+    PlaneOutcome, ResidentInputRequest, ResidentStageAInput, ResidentStageAOutput, ResidentStats,
+    StageBackend, StageBackendKind, StageError,
 };
-use mvmc_core::state::VmcOptimizationState;
+use mvmc_core::state::{SlaterElmFlat, VmcOptimizationState};
 use mvmc_core::ExpertModeData;
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -318,6 +319,83 @@ impl ResidentMeasurementOps for MockDevice {
         Ok(acc)
     }
 
+    fn green_two(
+        &mut self,
+        slot: usize,
+        input: &ResidentGreenTwo<'_>,
+    ) -> Result<Vec<f64>, StageError> {
+        let (n_site, n_elec, n_qp, _) = self
+            .geom
+            .ok_or_else(|| StageError::Failed("mock: prepare_input was not called".into()))?;
+        if slot >= self.slots.len() {
+            return Err(StageError::Failed(format!(
+                "mock: slot {slot} is not resident"
+            )));
+        }
+        let n = 2 * n_elec;
+        let nn = n * n;
+        if input.msa.len() != input.msb.len()
+            || input.msa.len() != input.rsa_site.len()
+            || input.msa.len() != input.rsb_site.len()
+        {
+            return Err(StageError::Failed(
+                "mock: inconsistent Green job arrays".into(),
+            ));
+        }
+        // The host working layout: one pad slot per QP plane, mVMC invM = -X^-1.
+        let stride = nn + 1;
+        let mut inv_flat = vec![0.0_f64; stride * n_qp];
+        for qp in 0..n_qp {
+            inv_flat[qp * stride..qp * stride + nn]
+                .copy_from_slice(&self.slots[slot].inv[qp * nn..(qp + 1) * nn]);
+        }
+        let n2 = 2 * n_site;
+        let mut slater = SlaterElmFlat::<f64>::zeros(n_qp, n_site);
+        for qp in 0..n_qp {
+            for r in 0..n2 {
+                for c in 0..n2 {
+                    slater.set(qp, r, c, self.slater[(qp * n2 + r) * n2 + c]);
+                }
+            }
+        }
+        let pf = self.slots[slot].pf.clone();
+        let mut values = Vec::with_capacity(input.msa.len());
+        for t in 0..input.msa.len() {
+            let msi = input.msa[t] as usize;
+            let msj = input.msb[t] as usize;
+            let spin_other = u8::from(msi >= n_elec);
+            let spin = u8::from(msj >= n_elec);
+            let mi = msi - spin_other as usize * n_elec;
+            let mj = msj - spin as usize * n_elec;
+            let mut my_idx = input.ele_idx.to_vec();
+            my_idx[msi] = input.rsa_site[t];
+            my_idx[msj] = input.rsb_site[t];
+            let mut pf_new = vec![0.0_f64; n_qp];
+            mvmc_core::sampling::calculate_new_pf_m_two2_real_flat::<false>(
+                mi,
+                spin_other,
+                mj,
+                spin,
+                &mut pf_new,
+                &my_idx,
+                &slater,
+                &inv_flat,
+                stride,
+                &pf,
+                0,
+                n_qp,
+                n_site,
+                n_elec,
+            );
+            let mut ip = 0.0;
+            for (weight, value) in self.qp_weight.iter().zip(&pf_new) {
+                ip += weight * value;
+            }
+            values.push(ip);
+        }
+        Ok(values)
+    }
+
     fn stats(&self) -> Option<ResidentStats> {
         Some(self.stats)
     }
@@ -373,6 +451,9 @@ impl MeasurementStages for MockStageB {
     fn resident_measurement(&self) -> bool {
         true
     }
+    fn resident_green(&self) -> bool {
+        true
+    }
     fn resident_prepare(
         &mut self,
         data: &ExpertModeData,
@@ -401,6 +482,23 @@ impl MeasurementStages for MockStageB {
             drop(device);
             self.inner.measure_sample(input, slater_diff_len, timing)
         }
+    }
+
+    fn measure_green(
+        &mut self,
+        input: &mut MeasurementInput<'_>,
+        one_len: usize,
+        direct_len: usize,
+        timing: &mut dyn MeasurementTiming,
+    ) -> Result<Option<GreenOutput>, StageError> {
+        let mut device = self.device.lock().unwrap_or_else(|e| e.into_inner());
+        if !device.has_slot(input.batch_slot) {
+            return Ok(None);
+        }
+        debug_assert_eq!(one_len, input.data.green_one_terms.len());
+        debug_assert_eq!(direct_len, input.data.green_two_terms.len());
+        let _ = timing;
+        resident_green_values(&mut *device, input).map(Some)
     }
 }
 
@@ -596,6 +694,113 @@ fn resident_measurement_selection_matches_c_order_optimization() {
     );
     // The Slater table is uploaded once per content version, far below one per sample.
     assert!(stats.slater_uploads <= 4, "{stats:?}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// PhysCal Green functions through the device seam (issue #517 milestone 5)
+// ---------------------------------------------------------------------------------------------
+
+fn physcal(cuda: bool, tag: &str) -> BTreeMap<String, String> {
+    if cuda {
+        set_measurement_backend_override(Some(MeasurementPfaffian::Stage(StageBackendKind::Cuda(
+            0,
+        ))));
+        set_measurement_consumer_override(Some(MeasurementConsumer::Stage(
+            StageBackendKind::Cuda(0),
+        )));
+    } else {
+        set_measurement_backend_override(None);
+        set_measurement_consumer_override(None);
+    }
+    let source = repo_root().join("tests/fixtures/physcal_181/hubbard_chain_real");
+    let root =
+        std::env::temp_dir().join(format!("mvmc-issue517-green-{}-{tag}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let inputs = root.join("inputs");
+    std::fs::create_dir_all(&inputs).unwrap();
+    for entry in std::fs::read_dir(source.join("inputs")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), inputs.join(entry.file_name())).unwrap();
+    }
+    std::fs::copy(source.join("zqp_opt.dat"), root.join("zqp_opt.dat")).unwrap();
+    let preparation = mvmc_core::prepare_phys_cal_from_namelist(
+        inputs.join("namelist.def"),
+        root.join("zqp_opt.dat"),
+        "real",
+        Some(1),
+    )
+    .unwrap();
+    let output = root.join("output");
+    mvmc_core::vmc_phys_cal_to_dir(preparation, &output).unwrap();
+    let mut files = BTreeMap::new();
+    for entry in std::fs::read_dir(&output).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        if name.contains("Timer") || name.starts_with("zvo_time") {
+            continue;
+        }
+        files.insert(
+            name.clone(),
+            std::fs::read_to_string(output.join(&name)).unwrap(),
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+    files
+}
+
+/// The device Green path (`measure_green` through `resident_green_values`) must reproduce the
+/// C-order host consumer. Because the mock evaluates the deferred reductions with the exact
+/// host routines (`calculate_new_pf_m2`/`calculate_new_pf_m_two2`), the only difference is the
+/// classification/folding, so the PhysCal output must agree token for token within a tight
+/// bound (and in practice bitwise).
+#[test]
+fn resident_green_measurement_matches_c_order_physcal() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    register_mock();
+    let reference = physcal(false, "ref");
+    let resident = physcal(true, "resident");
+    set_measurement_backend_override(None);
+    set_measurement_consumer_override(None);
+
+    assert_eq!(
+        reference.keys().collect::<Vec<_>>(),
+        resident.keys().collect::<Vec<_>>(),
+        "file set"
+    );
+    let mut worst_abs = 0.0_f64;
+    let mut worst_rel = 0.0_f64;
+    let mut compared = 0usize;
+    for (name, expected) in &reference {
+        for (row, (a, e)) in resident[name].lines().zip(expected.lines()).enumerate() {
+            if e.trim_start().starts_with('#') {
+                continue;
+            }
+            let a: Vec<&str> = a.split_whitespace().collect();
+            let e: Vec<&str> = e.split_whitespace().collect();
+            assert_eq!(a.len(), e.len(), "{name}: row {row} column count");
+            for (column, (x, y)) in a.iter().zip(&e).enumerate() {
+                match (x.parse::<f64>(), y.parse::<f64>()) {
+                    (Ok(x), Ok(y)) => {
+                        let scale = x.abs().max(y.abs()).max(1e-300);
+                        worst_abs = worst_abs.max((x - y).abs());
+                        if scale > 1e-6 {
+                            worst_rel = worst_rel.max((x - y).abs() / scale);
+                        }
+                        compared += 1;
+                        assert!(
+                            (x - y).abs() <= 1e-12 + 1e-11 * scale,
+                            "{name}: row {row} column {column}: {x} vs {y}"
+                        );
+                    }
+                    _ => assert_eq!(x, y, "{name}: row {row} column {column}"),
+                }
+            }
+        }
+    }
+    assert!(compared > 0);
+    println!(
+        "resident green worst absolute {worst_abs:.2e}, worst relative (|value| > 1e-6) \
+         {worst_rel:.2e} over {compared} numeric tokens"
+    );
 }
 
 /// A selected resident backend in a complex/FSZ run is a hard error, never a silent fallback

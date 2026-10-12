@@ -85,6 +85,97 @@ extern "C" __global__ void km_ratio_terms(const double* __restrict__ S,
 }
 
 // ---------------------------------------------------------------------------------------------
+// PhysCal Green functions (issue #517 milestone 5), two-body rank-2 reduction. One block per
+// active two-body job; the block loops the QP planes and accumulates
+//   new_ip = sum_qp w[qp] * (ratio_qp * pf[qp])
+// with the C/Julia `calculate_new_pf_m_two2` ratio
+//   ratio_qp = invM[ma,mb]*b[ma] + invM[ma,mb]*(b^T M a) + p_a*q_b - p_b*q_a,
+//   p_v = sum_i invM[v,i]*a[i],  q_v = sum_i invM[v,i]*b[i],
+//   invM = -X^-1 (the stored `inv` is X^-1), indices ma = msa, mb = msb.
+// The p/q sums iterate the *rows* i (to share the bma row sweep): the kernel accumulates
+// p'_v = sum_i invM[i,v]*a[i] = -p_v (invM is skew), so each p/q is negated, but only the
+// invariant combination p_a*q_b - p_b*q_a is consumed and the negation of a product is exact.
+// The vectors a/b gather the destination Slater rows `ra`/`rb` at the moved electron slots
+// (slot `ma` -> `rsa_site`, `mb` -> `rsb_site`). Dynamic shared memory: 2*n + 5*blockDim doubles.
+// ---------------------------------------------------------------------------------------------
+extern "C" __global__ void km_green_two(const double* __restrict__ S,
+                                        const double* __restrict__ inv,
+                                        const double* __restrict__ pf,
+                                        const int* __restrict__ ele,
+                                        const int* __restrict__ msa,
+                                        const int* __restrict__ msb,
+                                        const int* __restrict__ rsa_site,
+                                        const int* __restrict__ rsb_site,
+                                        const double* __restrict__ w, double* __restrict__ out,
+                                        int ele0, int plane0, int jobs, int n, int ne, int nsite,
+                                        int nqp) {
+  extern __shared__ double smem[];
+  double* a = smem;
+  double* b = smem + n;
+  double* red = smem + 2 * n;
+  const int t = blockIdx.x;
+  if (t >= jobs) return;
+  const int tid = threadIdx.x, nt = blockDim.x;
+  const int n2 = 2 * nsite;
+  const int ma = msa[t], mb = msb[t];
+  const int sa = rsa_site[t], sb = rsb_site[t];
+  const int ra = sa + (ma >= ne ? nsite : 0);
+  const int rb = sb + (mb >= ne ? nsite : 0);
+  const int* e = ele + ele0;
+  double acc = 0.0;
+  for (int qp = 0; qp < nqp; ++qp) {
+    const double* tab = S + (size_t)qp * n2 * n2;
+    const double* rowa = tab + (size_t)ra * n2;
+    const double* rowb = tab + (size_t)rb * n2;
+    for (int i = tid; i < n; i += nt) {
+      const int moved = (i == ma) ? sa : ((i == mb) ? sb : e[i]);
+      const int rsi = moved + (i >= ne ? nsite : 0);
+      a[i] = rowa[rsi];
+      b[i] = rowb[rsi];
+    }
+    __syncthreads();
+    const double* M = inv + (size_t)(plane0 + qp) * n * n;  // X^-1
+    double pa = 0.0, pb = 0.0, qa = 0.0, qb = 0.0, bma = 0.0;
+    for (int i = tid; i < n; i += nt) {
+      const double* row = M + (size_t)i * n;
+      double tmp = 0.0;
+      for (int j = 0; j < n; ++j) tmp += (-row[j]) * a[j];
+      bma += b[i] * tmp;
+      const double ma_i = -row[ma], mb_i = -row[mb];
+      pa += ma_i * a[i];
+      pb += mb_i * a[i];
+      qa += ma_i * b[i];
+      qb += mb_i * b[i];
+    }
+    red[tid] = pa;
+    red[nt + tid] = pb;
+    red[2 * nt + tid] = qa;
+    red[3 * nt + tid] = qb;
+    red[4 * nt + tid] = bma;
+    __syncthreads();
+    for (int s = nt / 2; s > 0; s >>= 1) {
+      if (tid < s) {
+        red[tid] += red[tid + s];
+        red[nt + tid] += red[nt + tid + s];
+        red[2 * nt + tid] += red[2 * nt + tid + s];
+        red[3 * nt + tid] += red[3 * nt + tid + s];
+        red[4 * nt + tid] += red[4 * nt + tid + s];
+      }
+      __syncthreads();
+    }
+    if (tid == 0) {
+      const double inv_ab = -M[(size_t)ma * n + mb];
+      const double vec_ba = b[ma];
+      const double ratio =
+          inv_ab * vec_ba + inv_ab * red[4 * nt] + red[0] * red[3 * nt] - red[nt] * red[2 * nt];
+      acc += w[qp] * ratio * pf[plane0 + qp];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) out[t] = acc;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Slater derivative, kernel 1: one block per (trans, msi). The block writes the row's orbital
 // sums rows[(trans*n+msi)*nslater + o] = sum over the sites of orbital o of sign * value:
 //   value = sum_s coeff(block(msi,msj), s) * invM[qp0+s][msi*n + msj]
