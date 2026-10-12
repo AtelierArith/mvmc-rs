@@ -26,6 +26,64 @@ use mvmc_core::multichain::{
 use mvmc_core::{InitialDef, Reducer, RunConfig, VmcOptimizationState};
 use num_complex::Complex64;
 
+#[test]
+fn collectives_keep_rank_order_across_types_roots_and_generations() {
+    for size in [1, 3, 7] {
+        let comm = ThreadComm::new(size);
+        std::thread::scope(|scope| {
+            for rank in 0..size {
+                let reducer = ThreadReducer::new(comm.clone(), rank, 0);
+                scope.spawn(move || {
+                    for iteration in 0..24 {
+                        // Deliberately vary arrival order and message length, including empty
+                        // collectives and reused buffers that grow and shrink.
+                        for _ in 0..(iteration + rank) % size {
+                            std::thread::yield_now();
+                        }
+                        let len = [0, 17, 4096, 1][iteration % 4];
+                        let inputs = [1e16, -1e16, 1.0, 2.0, 4.0, 8.0, 16.0];
+                        let expected: f64 = match size {
+                            1 => 1e16,
+                            3 => 1.0,
+                            _ => 31.0,
+                        };
+                        let mut real = vec![inputs[rank]; len];
+                        reducer.allreduce_sum_f64(&mut real);
+                        assert!(real.iter().all(|x| (*x - expected).abs() <= 1e-12));
+                        let mut complex = vec![Complex64::new(inputs[rank], -inputs[rank]); len];
+                        reducer.allreduce_sum_c64(&mut complex);
+                        assert!(complex.iter().all(|x| (x.re - expected).abs() <= 1e-12
+                            && (x.im + expected).abs() <= 1e-12));
+                        let mut integers = vec![rank as i64; len];
+                        reducer.allreduce_sum_i64(&mut integers);
+                        assert_eq!(integers, vec![(size * (size - 1) / 2) as i64; len]);
+
+                        let root = iteration % size;
+                        real.fill(rank as f64);
+                        complex.fill(Complex64::new(rank as f64, -(rank as f64)));
+                        integers.fill(rank as i64);
+                        reducer.broadcast_f64(root, &mut real).unwrap();
+                        reducer.broadcast_c64(root, &mut complex);
+                        reducer.broadcast_i64(root, &mut integers).unwrap();
+                        // Broadcasts copy existing values: exact identity is required.
+                        assert_eq!(real, vec![root as f64; len]);
+                        assert_eq!(
+                            complex,
+                            vec![Complex64::new(root as f64, -(root as f64)); len]
+                        );
+                        assert_eq!(integers, vec![root as i64; len]);
+                        assert_eq!(
+                            reducer.sampling_max_info(rank as i32 - 4).unwrap(),
+                            size as i32 - 5
+                        );
+                        reducer.barrier();
+                    }
+                });
+            }
+        });
+    }
+}
+
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Cell {

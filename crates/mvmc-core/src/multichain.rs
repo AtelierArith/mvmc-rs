@@ -405,25 +405,35 @@ impl ThreadComm {
         }
     }
 
-    /// Deposit this rank's data, wait for all, read everything, wait again (so the slots can be
-    /// reused by the next collective).
-    fn gather<T: Clone>(
+    /// Reduce once, on the last arrival, then copy only the result to each rank.
+    /// The second barrier keeps slot 0 immutable until every rank has read it.
+    /// Contributions and arithmetic stay in rank order regardless of arrival order.
+    fn collective<T: Clone>(
         &self,
         rank: usize,
-        data: &[T],
+        data: &mut [T],
         slots: impl Fn(&mut CommState) -> &mut Vec<Vec<T>>,
-    ) -> Vec<Vec<T>> {
-        {
-            let mut st = self.state.lock().expect("thread comm lock");
-            slots(&mut st)[rank] = data.to_vec();
+        reduce: impl FnOnce(&mut [Vec<T>]),
+    ) {
+        let mut st = self.state.lock().expect("thread comm lock");
+        let slot = &mut slots(&mut st)[rank];
+        slot.clear();
+        slot.extend_from_slice(data);
+        let generation = st.generation;
+        st.arrived += 1;
+        if st.arrived == self.size {
+            reduce(slots(&mut st));
+            st.arrived = 0;
+            st.generation += 1;
+            self.cv.notify_all();
+        } else {
+            while st.generation == generation {
+                st = self.cv.wait(st).expect("thread comm wait");
+            }
         }
+        data.clone_from_slice(&slots(&mut st)[0]);
+        drop(st);
         self.barrier();
-        let all = {
-            let mut st = self.state.lock().expect("thread comm lock");
-            slots(&mut st).clone()
-        };
-        self.barrier();
-        all
     }
 }
 
@@ -451,64 +461,103 @@ impl ThreadReducer {
 
 impl Reducer for ThreadReducer {
     fn allreduce_sum_f64(&self, buf: &mut [f64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            let mut acc = all[0][i];
-            for v in &all[1..] {
-                acc += v[i];
-            }
-            *slot = acc;
+        if self.comm.size > 1 {
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.f64s,
+                |all| {
+                    let (sum, rest) = all.split_first_mut().expect("nonempty");
+                    for rank in rest {
+                        for (acc, value) in sum.iter_mut().zip(rank) {
+                            *acc += *value;
+                        }
+                    }
+                },
+            );
         }
     }
 
     fn allreduce_sum_c64(&self, buf: &mut [Complex64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            // real and imaginary parts are reduced separately, as the MPI path does
-            let (mut re, mut im) = (all[0][i].re, all[0][i].im);
-            for v in &all[1..] {
-                re += v[i].re;
-                im += v[i].im;
-            }
-            *slot = Complex64::new(re, im);
+        if self.comm.size > 1 {
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.c64s,
+                |all| {
+                    let (sum, rest) = all.split_first_mut().expect("nonempty");
+                    for rank in rest {
+                        for (acc, value) in sum.iter_mut().zip(rank) {
+                            acc.re += value.re;
+                            acc.im += value.im;
+                        }
+                    }
+                },
+            );
         }
     }
 
     fn allreduce_sum_i64(&self, buf: &mut [i64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            *slot = all.iter().map(|v| v[i]).sum();
+        if self.comm.size > 1 {
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.i64s,
+                |all| {
+                    let (sum, rest) = all.split_first_mut().expect("nonempty");
+                    for rank in rest {
+                        for (acc, value) in sum.iter_mut().zip(rank) {
+                            *acc += *value;
+                        }
+                    }
+                },
+            );
         }
     }
 
     fn broadcast_f64(&self, root: usize, buf: &mut [f64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.f64s,
+                |all| {
+                    if root != 0 {
+                        all[0] = all[root].clone();
+                    }
+                },
+            );
         }
         Ok(())
     }
 
     fn broadcast_c64(&self, root: usize, buf: &mut [Complex64]) {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.c64s,
+                |all| {
+                    if root != 0 {
+                        all[0] = all[root].clone();
+                    }
+                },
+            );
         }
     }
 
     fn broadcast_i64(&self, root: usize, buf: &mut [i64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm.collective(
+                self.rank,
+                buf,
+                |s| &mut s.i64s,
+                |all| {
+                    if root != 0 {
+                        all[0] = all[root].clone();
+                    }
+                },
+            );
         }
         Ok(())
     }
@@ -523,10 +572,16 @@ impl Reducer for ThreadReducer {
         if self.comm.size == 1 {
             return Ok(info);
         }
-        let all = self
-            .comm
-            .gather(self.rank, &[i64::from(info)], |s| &mut s.i64s);
-        Ok(all.iter().map(|v| v[0]).max().expect("nonempty") as i32)
+        let mut result = [i64::from(info)];
+        self.comm.collective(
+            self.rank,
+            &mut result,
+            |s| &mut s.i64s,
+            |all| {
+                all[0][0] = all.iter().map(|v| v[0]).max().expect("nonempty");
+            },
+        );
+        Ok(result[0] as i32)
     }
 
     fn world_size(&self) -> usize {
