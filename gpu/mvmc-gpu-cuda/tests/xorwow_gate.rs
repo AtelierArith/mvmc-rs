@@ -185,3 +185,133 @@ fn production_rng_selection_retains_state_across_sample_series() {
         "timed inline sampling merges C timer sections"
     );
 }
+
+#[test]
+#[ignore = "requires CUDA GPU; set MVMC_RS_XORWOW_DEVICE (default 1)"]
+fn public_twenty_step_runs_restart_xorwow_but_keep_each_run_continuous() {
+    use mvmc_core::reducer::{Reducer, SingleProcessReducer};
+    use mvmc_core::sampler_backend::{
+        register_sampler_backend, set_sampler_backend_override, SamplerBackendKind, SamplerStages,
+        SamplerTiming,
+    };
+    use mvmc_core::sampling::driver::SampleStats;
+    use mvmc_core::stage_backend::StageError;
+    use mvmc_core::state::VmcOptimizationState;
+    use mvmc_core::{ExpertModeData, RunConfig};
+    use mvmc_gpu_cuda::sampler_stages::CudaSamplerStages;
+    use sfmt19937::Sfmt19937Rng;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug)]
+    struct Point {
+        consumed: u128,
+        future: [u32; 64],
+        cfg: Vec<i64>,
+        counter: Vec<i64>,
+    }
+    struct Recording {
+        inner: CudaSamplerStages,
+        runs: Arc<Mutex<Vec<Vec<Point>>>>,
+    }
+    impl SamplerStages for Recording {
+        fn label(&self) -> String {
+            self.inner.label()
+        }
+        fn provider(&self) -> String {
+            self.inner.provider()
+        }
+        fn begin_run(&mut self) {
+            self.inner.begin_run();
+            self.runs.lock().unwrap().push(Vec::new());
+        }
+        fn sample_real(
+            &mut self,
+            data: &ExpertModeData,
+            state: &mut VmcOptimizationState,
+            rng: &mut Sfmt19937Rng,
+            timing: &mut dyn SamplerTiming,
+            reducer: &dyn Reducer,
+        ) -> Result<SampleStats, StageError> {
+            let result = self.inner.sample_real(data, state, rng, timing, reducer)?;
+            let mut future = [0; 64];
+            assert!(self.inner.gpu_words_preview(&mut future));
+            self.runs.lock().unwrap().last_mut().unwrap().push(Point {
+                consumed: self.inner.gpu_words_consumed().unwrap(),
+                future,
+                cfg: state.electron_config.ele_idx.clone(),
+                counter: state.electron_config.counter.to_vec(),
+            });
+            Ok(result)
+        }
+    }
+    let device = std::env::var("MVMC_RS_XORWOW_DEVICE")
+        .unwrap_or_else(|_| "1".into())
+        .parse()
+        .unwrap();
+    let runs = Arc::new(Mutex::new(Vec::new()));
+    let kind = SamplerBackendKind::Cuda(device);
+    mvmc_gpu_cuda::install();
+    assert!(register_sampler_backend(
+        kind,
+        Box::new(Recording {
+            inner: CudaSamplerStages::with_rng(device, true, Some(11272)).unwrap(),
+            runs: runs.clone(),
+        })
+    ));
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L16/namelist.def");
+    let mut outcomes = Vec::new();
+    for _ in 0..2 {
+        set_sampler_backend_override(Some(kind));
+        let mut config = RunConfig::new(20, "real");
+        config.nsmp = Some(20);
+        config.seed = Some(7);
+        let result =
+            mvmc_core::run_para_opt_from_namelist_observed(&path, config, &SingleProcessReducer);
+        set_sampler_backend_override(None);
+        let (_, state, rng) = result.unwrap();
+        outcomes.push((state.opt_data, rng.state_snapshot(), rng.words_consumed()));
+    }
+    let recorded = runs.lock().unwrap();
+    assert_eq!(
+        recorded.len(),
+        2,
+        "one lifecycle reset per complete public run"
+    );
+    for points in recorded.iter() {
+        assert_eq!(points.len(), 20, "no reset between public SR iterations");
+        // Replay is a separate CPU implementation, validated by NVIDIA-header
+        // fixtures above; it is not an external full-trajectory oracle.
+        let mut replay = XorwowRng::new(11272);
+        for point in points {
+            assert!(point.consumed > replay.words_consumed());
+            while replay.words_consumed() < point.consumed {
+                replay.gen_rand32();
+            }
+            let mut expected = [0; 64];
+            replay.dump_rand32(&mut expected);
+            assert_eq!(
+                point.future, expected,
+                "future words continue across SR boundaries"
+            );
+        }
+    }
+    for (first, second) in recorded[0].iter().zip(&recorded[1]) {
+        assert_eq!(first.consumed, second.consumed);
+        assert_eq!(first.future, second.future);
+        assert_eq!(first.cfg, second.cfg);
+        assert_eq!(first.counter, second.counter);
+    }
+    assert_eq!(outcomes[0].1, outcomes[1].1, "caller SFMT state");
+    assert_eq!(outcomes[0].2, outcomes[1].2, "caller SFMT draw count");
+    assert_eq!(outcomes[0].0.len(), 20);
+    assert_eq!(outcomes[1].0.len(), 20);
+    for (first, second) in outcomes[0].0.iter().zip(&outcomes[1].0) {
+        assert!((first.energy - second.energy).norm() < 1e-9);
+        assert!((first.energy_squared - second.energy_squared).norm() < 1e-9);
+        assert_eq!(first.parameters.len(), second.parameters.len());
+        for (a, b) in first.parameters.iter().zip(&second.parameters) {
+            assert!((*a - *b).norm() < 1e-9);
+        }
+    }
+}

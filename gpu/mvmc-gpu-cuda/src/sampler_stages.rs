@@ -96,6 +96,18 @@ impl CudaSamplerStages {
         self.rng.as_ref().map(|r| r.words_consumed())
     }
 
+    /// Nonconsuming diagnostic preview of the next GPU stream words. Returns `false`
+    /// before XORWOW initialization or when SFMT is selected. Crossing a prefetched
+    /// batch boundary downloads the six-word device state for a CPU-only preview.
+    pub fn gpu_words_preview(&self, out: &mut [u32]) -> bool {
+        if let Some(rng) = &self.rng {
+            rng.dump_rand32(out);
+            true
+        } else {
+            false
+        }
+    }
+
     /// The underlying service (transfer path label, resident-table downloads for the gates).
     pub fn service(&self) -> &CudaSamplerService<PinnedTransfer> {
         &self.service
@@ -134,6 +146,10 @@ fn run_series(
 }
 
 impl SamplerStages for CudaSamplerStages {
+    fn begin_run(&mut self) {
+        self.rng = None;
+    }
+
     fn label(&self) -> String {
         format!(
             "cuda-sampler:{}:rng={}",

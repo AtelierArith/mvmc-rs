@@ -16,6 +16,14 @@ later sampling series. Parameter initialization continues to use SFMT. An XORWOW
 trajectory is a separate RNG contract and is not expected to reproduce the SFMT
 trajectory. The backend label records the selected generator.
 
+The production stage is cached per CUDA device. Its RNG mode and optional seed
+are captured when that device's stage is first opened, so set the environment
+before opening the backend; changing it later does not reconfigure that stage.
+Acquiring a sampler handle starts one complete Opt or PhysCal run and resets its
+XORWOW stream. The same handle survives all SR steps and sample series, preserving
+within-run continuity. A second public run with the same seed starts a fresh
+stream even when it reuses the compiled CUDA service.
+
 Both sources use the production inline single-chain service, including the existing
 C timer, optional sampler profiling and optional CUDA-graph service path. RNG
 selection changes the word source; it does not replace those execution paths.
@@ -44,6 +52,10 @@ batch sizes, nonconsuming previews across refill boundaries, and a Hubbard L16
 20-sample run. That sampler gate compares exact proposal/draw/configuration events
 and future words with CPU XORWOW; its existing teacher mechanism diagnoses any
 numerical acceptance divergence using the existing absolute/relative weight bounds.
+An additional two-run, 20-step public optimization gate checks stream continuity,
+future words, saved configurations, counters and seeded same-process repeatability.
+Its CPU XORWOW word replay checks continuity; independent algorithm expectations
+come from the NVIDIA-header fixtures, not from a Rust-generated trajectory.
 Normal CPU tests read independent NVIDIA-header fixtures and require no NVIDIA
 headers, C compiler, Julia, or GPU. See `c_toolbox/xorwow/README.md` for optional
 fixture regeneration and provenance.

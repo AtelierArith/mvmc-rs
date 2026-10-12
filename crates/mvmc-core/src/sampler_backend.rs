@@ -51,6 +51,11 @@ pub trait SamplerStages: Send {
     /// Provider description recorded in the benchmark metadata.
     fn provider(&self) -> String;
 
+    /// Begin a complete public optimization or PhysCal run. Shared stages keep their
+    /// compiled service, but run-owned random streams must restart from the new run's seed.
+    /// Stateless stages and caller-owned SFMT sources need no reset.
+    fn begin_run(&mut self) {}
+
     /// Run one sample series on `(data, state, rng)`, exactly like the inline
     /// [`vmc_make_sample_real_with_reducer_timed`](crate::sampling::driver::vmc_make_sample_real_with_reducer_timed).
     ///
@@ -341,12 +346,13 @@ impl SamplerHandle {
     }
 }
 
-/// Acquire a sampler of an explicit kind (shared instance for non-C-order kinds).
+/// Acquire a sampler for one complete run (shared instance for non-C-order kinds).
+/// Calls [`SamplerStages::begin_run`] once; retain the handle across all sample series.
 ///
 /// Panics when a non-C-order sampler cannot be opened, like the stage backend's `acquire`; the
 /// CLI preflight ([`validate_selected_sampler_backend`]) reports that as a usage error instead.
 pub fn acquire_sampler_kind(kind: SamplerBackendKind) -> SamplerHandle {
-    match kind {
+    let mut handle = match kind {
         SamplerBackendKind::COrder => {
             SamplerHandle::Owned(open_sampler_backend(kind).expect("c-order"))
         }
@@ -354,5 +360,7 @@ pub fn acquire_sampler_kind(kind: SamplerBackendKind) -> SamplerHandle {
             Ok(m) => SamplerHandle::Shared(m.lock().unwrap_or_else(|e| e.into_inner())),
             Err(e) => panic!("{SAMPLER_BACKEND_VARIABLE}: {e}"),
         },
-    }
+    };
+    handle.sampler().begin_run();
+    handle
 }

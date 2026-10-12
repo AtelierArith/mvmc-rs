@@ -29,6 +29,7 @@ use sfmt19937::Sfmt19937Rng;
 
 static SERIAL: Mutex<()> = Mutex::new(());
 static ROUTED_SAMPLES: AtomicUsize = AtomicUsize::new(0);
+static RUN_STARTS: AtomicUsize = AtomicUsize::new(0);
 
 /// Host model of the CUDA sampler stage: the validated lock-step protocol on [`HostService`].
 struct HostSampler {
@@ -36,6 +37,10 @@ struct HostSampler {
 }
 
 impl SamplerStages for HostSampler {
+    fn begin_run(&mut self) {
+        RUN_STARTS.fetch_add(1, Ordering::SeqCst);
+    }
+
     fn label(&self) -> String {
         "host-model".to_string()
     }
@@ -277,7 +282,9 @@ fn production_optimization_host_model_equals_c_order() {
     );
     let reference = run_opt(SamplerBackendKind::COrder, &root);
     let before = ROUTED_SAMPLES.load(Ordering::SeqCst);
+    let starts_before = RUN_STARTS.load(Ordering::SeqCst);
     let routed = run_opt(SamplerBackendKind::Cuda(0), &root);
+    assert_eq!(RUN_STARTS.load(Ordering::SeqCst), starts_before + 1);
     assert!(
         ROUTED_SAMPLES.load(Ordering::SeqCst) > before,
         "the host-model sampler was not used"
