@@ -69,6 +69,28 @@ pub trait SamplerStages: Send {
         timing: &mut dyn SamplerTiming,
         reducer: &dyn Reducer,
     ) -> Result<SampleStats, StageError>;
+
+    /// Whether this stage batches every walker of one run into a single device call through
+    /// [`Self::sample_real_group`] and the reducer rendezvous (`rank`/`world_size`/`barrier`).
+    /// The single-chain lock-step and C-order stages are not group-capable.
+    fn group_capable(&self) -> bool {
+        false
+    }
+
+    /// Batched sampling entry point: every walker of the run calls this exactly once per sample
+    /// series and rendezvous through `reducer`. The walker index is `reducer.rank()` and the
+    /// walker count is `reducer.world_size()`. The default runs the single-walker
+    /// [`Self::sample_real`], so a stage that does not override it is unchanged.
+    fn sample_real_group(
+        &mut self,
+        data: &ExpertModeData,
+        state: &mut VmcOptimizationState,
+        rng: &mut Sfmt19937Rng,
+        timing: &mut dyn SamplerTiming,
+        reducer: &dyn Reducer,
+    ) -> Result<SampleStats, StageError> {
+        self.sample_real(data, state, rng, timing, reducer)
+    }
 }
 
 /// C-order CPU sampler: the unchanged inline driver of the production path (the parity oracle).

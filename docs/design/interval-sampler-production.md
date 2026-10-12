@@ -114,24 +114,29 @@ Add a group entry point to `SamplerStages` (default: call `sample_real`, so
 C-order and the existing `W=1` CUDA path are unchanged):
 
 ```rust
-fn group_capable(&self) -> bool { false }
+// Landed in `sampler_backend.rs` (commit on the #547 branch).
+fn group_capable(&self) -> bool { false }   // lock-step and C-order: false
 
-/// One walker of a batched sampling round. `walker` is the device slot
-/// (`0..world_size`); every walker of the run must call this exactly once per
-/// round and rendezvous through `reducer` (the `ThreadReducer` barrier).
-fn group_sample_real(
+/// One walker of a batched sampling round: every walker of the run calls this
+/// exactly once per sample series and rendezvous through `reducer`. The walker
+/// index is `reducer.rank()`, the walker count `reducer.world_size()`.
+fn sample_real_group(
     &mut self,
-    walker: usize,
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
     rng: &mut Sfmt19937Rng,
     timing: &mut dyn SamplerTiming,
     reducer: &dyn Reducer,
 ) -> Result<SampleStats, StageError> {
-    let _ = walker;
     self.sample_real(data, state, rng, timing, reducer)
 }
 ```
+
+The two call sites (`run.rs`) use `sample_real_group`; the default keeps every
+existing backend byte-identical. `Reducer` already exposes `rank()`,
+`world_size()` and `barrier()` (`reducer.rs:119`, `:104`, `:33`), and
+`ThreadReducer` implements all three, so no walker index has to be threaded
+through the optimizer signatures.
 
 The group backend does not hold the walker `state`/`rng` across the barrier;
 the coordinator owns **host staging slots** (plain `Vec`s). Each walker copies
@@ -139,18 +144,27 @@ its own state into its slot, rendezvous, one elected walker (rank 0) does the
 upload/launch/download for all slots, rendezvous, each walker copies its slot
 back into its state. `state` and `rng` stay thread-local (no aliasing).
 
-### 3.2 Acquisition
+### 3.2 Acquisition and two implementation constraints
 
 For a group-capable backend, `acquire_sampler_kind` must return a **per-walker
 handle** backed by an `Arc<GroupCoordinator>` instead of one `MutexGuard` for
-the whole run. The coordinator guards only the device critical section (rank 0's
-transfer + launch); the rendezvous uses `Reducer::barrier()` (`reducer.rs:33`),
-which `ThreadReducer` already implements. `check_serial_reducer` is relaxed to
-accept a group-capable backend with `reduction_size == 1`.
+the whole run, and `check_serial_reducer` is relaxed to accept a group-capable
+backend with `reduction_size == 1`.
 
-Run routing: `run_para_opt_multichain` passes the walker index `w` to the
-optimizer; the call sites switch to `group_sample_real(w, ...)` when the backend
-is group-capable, else stay on `sample_real`.
+**Constraint 1 - no mutex around the rendezvous.** The per-walker handle must
+not be a `MutexGuard` held for the whole call: if walker 0 held a lock across
+`reducer.barrier()` while walker 1 blocked on the lock, the barrier would never
+complete. The coordinator therefore guards only the device critical section
+(rank 0's transfer + launch), uses one lock per staging slot (each walker writes
+only its own slot), and does the rendezvous outside every lock.
+
+**Constraint 2 - the device backend is thread-affine.** `CudaBackend` /
+`with_backend_session` require `&mut` on a single owner, and the tenferro
+context is captured per thread. Only rank 0 touches the device, and rank 0 is
+always the same walker thread across every SR step, so the group keeps a
+**thread-local device backend** on the rank-0 thread while the resident
+`DeviceBuffer`s (which are `Send`) live in the `Arc`ed coordinator. The other
+walkers only touch host slots.
 
 ### 3.3 Step flow (one SR step, `W` walkers)
 

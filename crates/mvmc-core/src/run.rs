@@ -1067,7 +1067,7 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
         } else {
             sampler_handle
                 .sampler()
-                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
                 .map(|_| ())
                 .map_err(|error| error.to_string())
         };
@@ -1336,7 +1336,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
         } else if !all_complex {
             sampler_handle
                 .sampler()
-                .sample_real(data, state, rng, timer, reducer.reducer_dyn())
+                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
                 .map_err(|error| error.to_string())
         } else {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
