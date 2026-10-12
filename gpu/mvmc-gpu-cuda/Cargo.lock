@@ -1491,6 +1491,7 @@ dependencies = [
  "sfmt19937",
  "tenferro-ad",
  "tenferro-cpu",
+ "tenferro-ext",
  "tenferro-gpu",
  "tenferro-linalg",
  "tenferro-tensor",
@@ -2943,6 +2944,16 @@ dependencies = [
  "tenferro-runtime",
  "tenferro-tensor",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tenferro-ext"
+version = "0.1.0"
+dependencies = [
+ "cudarc",
+ "rayon",
+ "tenferro-gpu",
+ "tenferro-tensor",
 ]
 
 [[package]]

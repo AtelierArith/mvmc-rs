@@ -1,0 +1,19 @@
+[package]
+name = "tenferro-ext"
+version = "0.1.0"
+edition = "2021"
+description = "Adapted vendored copy of AtelierArith/tenferro-decision-rs `tenferro-ext` raw CUDA execution helpers"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# This is a heavily modified vendored copy (see README.md for provenance). Only the
+# `raw_exec` single-stream NVRTC execution helper is compiled; the decision-engine extension
+# ops are kept under `upstream/` for reference and are not built. The package keeps the
+# upstream name and license so a future update can be diffed against the source.
+
+[dependencies]
+tenferro-tensor = { version = "0.7.1", default-features = false }
+tenferro-gpu = { version = "0.7.1", features = ["cuda"] }
+# Same version and feature set as the sibling `mvmc-gpu-cuda` crate (one cudarc in the lock).
+cudarc = { version = "0.19", default-features = false, features = ["driver", "nvrtc", "cublas", "cusolver", "dynamic-loading", "cuda-12080"] }
+rayon = "1"
