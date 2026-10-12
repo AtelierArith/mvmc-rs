@@ -30,8 +30,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cudarc::driver::{
-    CudaContext, CudaEvent, CudaFunction, CudaSlice, DevicePtr, DevicePtrMut, LaunchConfig,
-    PushKernelArg,
+    sys, CudaContext, CudaEvent, CudaFunction, CudaGraph, CudaSlice, DevicePtr, DevicePtrMut,
+    LaunchConfig, PushKernelArg,
 };
 use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
 use mvmc_core::device_sampler::{DeviceService, FastBatch, Geometry, SlowBatch, SlowReply};
@@ -41,6 +41,15 @@ use crate::transfer::{PinnedBuf, PinnedKind, PinnedPool, TransferEvent, Transfer
 
 const SRC_PFAFFIAN: &str = include_str!("pfaffian_batched.cu");
 const SRC_SAMPLER: &str = include_str!("sampler_kernels.cu");
+
+/// Environment variable that opts the single-walker fast lane into CUDA graph replay. Measured on
+/// the A100 with the production Opt series it does **not** help (the per-launch host cost is
+/// already hidden behind the accepted-move kernel), so it is off by default.
+pub const SAMPLER_GRAPH_VARIABLE: &str = "MVMC_RS_SAMPLER_GRAPH";
+
+fn graph_enabled() -> bool {
+    std::env::var_os(SAMPLER_GRAPH_VARIABLE).is_some()
+}
 
 fn cu(e: impl std::fmt::Debug) -> String {
     format!("{e:?}")
@@ -295,6 +304,23 @@ struct Lane<T: TransferPath> {
     scratch: Option<Scratch>,
 }
 
+/// Captured single-walker fast-lane rounds (issue #517 milestone 4). The three bodies a
+/// single production chain ever runs are fixed once the resident buffers exist: `(na, np)` is
+/// `(0, 1)`, `(1, 1)` or `(1, 0)` for the trailing accept. Replaying them removes cudarc's
+/// per-launch argument packing from every hop. Only used when one walker is prepared and no slow
+/// batch shares the round, so the accept event the slow lane waits on is never needed.
+struct FastGraphs {
+    prop: CudaGraph,
+    acc_prop: CudaGraph,
+    acc: CudaGraph,
+}
+
+// SAFETY: cudarc's `CudaGraph` is `!Send` because its raw handles must not be accessed
+// concurrently. The service owns its graphs and the lock-step protocol serializes every use (a
+// walker issues at most one request at a time), so moving the handles between the service threads
+// is sound; `CudaGraph::launch` binds the context before each replay.
+unsafe impl Send for FastGraphs {}
+
 struct SlowInflight {
     seq: u64,
     begins: Vec<usize>,
@@ -346,6 +372,8 @@ pub struct CudaSamplerService<T: TransferPath> {
     mid_ev: CudaEvent,
     /// Earliest time of the next non-blocking slow-lane device query (`poll_slow(false)`).
     next_slow_query: Instant,
+    /// Captured single-walker fast-lane rounds (invalidated by `prepare`).
+    graphs: Option<FastGraphs>,
     /// Phase timings of all rounds so far.
     pub timings: ServiceTimings,
     /// Record CUDA events around the phases for the device-time fields of [`ServiceTimings`]
@@ -460,6 +488,7 @@ impl<T: TransferPath> CudaSamplerService<T> {
             next_slow_query: Instant::now(),
             timings: ServiceTimings::default(),
             profile: false,
+            graphs: None,
         })
     }
 
@@ -553,6 +582,154 @@ impl<T: TransferPath> CudaSamplerService<T> {
             .expect("at least one slow lane");
         self.finish_slow(oldest, true)?;
         Ok(oldest)
+    }
+
+    /// The single-walker fast lane launches (accept+commit when `na > 0`, propose when `np > 0`).
+    /// The staging offsets follow the `round` layout: accepts first, then proposes at the next
+    /// even int index.
+    fn launch_fast(&mut self, na: usize, np: usize) -> Result<(), String> {
+        let g = self.res.as_ref().ok_or("service not prepared")?.geom;
+        let (n, nq) = (g.n_size(), g.n_qp);
+        let (ne_i, ns_i, nq_i, n_i) = (g.n_elec as i32, g.n_site as i32, nq as i32, n as i32);
+        let stream = self.fast.ts.stream().clone();
+        if na > 0 {
+            let res = self.res.as_mut().expect("res");
+            let stage_dev = self.fast.dstage.as_ref().expect("stage");
+            let (base, _g) = stage_dev.device_ptr(&stream);
+            let acc_ptr = base;
+            let count = na as i32;
+            let shared = (((n + 1) & !1) * 4 + (4 * n + 16) * 8) as u32;
+            let nt = (2 * n).next_power_of_two().clamp(64, 512) as u32;
+            let mut b = stream.launch_builder(&self.funcs.accept);
+            b.arg(&acc_ptr)
+                .arg(&res.slater_ptrs)
+                .arg(&res.ele)
+                .arg(&mut res.inv)
+                .arg(&mut res.pf)
+                .arg(&res.pfnew)
+                .arg(&res.pend)
+                .arg(&n_i)
+                .arg(&ne_i)
+                .arg(&ns_i)
+                .arg(&nq_i);
+            // SAFETY: kernel ABI of k_accept; one block per (accepted walker, qp).
+            unsafe {
+                b.launch(LaunchConfig {
+                    grid_dim: ((na * nq) as u32, 1, 1),
+                    block_dim: (nt, 1, 1),
+                    shared_mem_bytes: shared,
+                })
+            }
+            .map_err(cu)?;
+            let mut b = stream.launch_builder(&self.funcs.commit_moves);
+            b.arg(&acc_ptr)
+                .arg(&count)
+                .arg(&mut res.ele)
+                .arg(&res.pend)
+                .arg(&n_i);
+            // SAFETY: kernel ABI of k_commit_moves; one thread per accepted walker.
+            unsafe {
+                b.launch(LaunchConfig {
+                    grid_dim: ((na as u32).div_ceil(64), 1, 1),
+                    block_dim: (64, 1, 1),
+                    shared_mem_bytes: 0,
+                })
+            }
+            .map_err(cu)?;
+        }
+        if np > 0 {
+            let res = self.res.as_mut().expect("res");
+            let stage_dev = self.fast.dstage.as_ref().expect("stage");
+            let dout = self.fast.dout.as_mut().expect("out");
+            let (base, _g) = stage_dev.device_ptr(&stream);
+            let off_prop = (na + 1) & !1;
+            let prop_ptr = base + (off_prop * 4) as u64;
+            let count = np as i32;
+            let out_off = 0i32;
+            let nt = n.next_power_of_two().clamp(32, 256) as u32;
+            let shared = (((n + 1) & !1) * 4 + (8 * n + 8) * 8) as u32;
+            let mut b = stream.launch_builder(&self.funcs.propose);
+            b.arg(&prop_ptr)
+                .arg(&count)
+                .arg(&res.slater_ptrs)
+                .arg(&res.ele)
+                .arg(&res.inv)
+                .arg(&res.pf)
+                .arg(&mut res.pfnew)
+                .arg(&mut res.pend)
+                .arg(dout)
+                .arg(&out_off)
+                .arg(&n_i)
+                .arg(&ne_i)
+                .arg(&ns_i)
+                .arg(&nq_i);
+            // SAFETY: kernel ABI of k_propose; one block per (proposal, qp).
+            unsafe {
+                b.launch(LaunchConfig {
+                    grid_dim: ((np * nq) as u32, 1, 1),
+                    block_dim: (nt, 1, 1),
+                    shared_mem_bytes: shared,
+                })
+            }
+            .map_err(cu)?;
+        }
+        Ok(())
+    }
+
+    /// Whether this round may replay a captured graph: one walker, at most one accept and one
+    /// proposal, no slow batch (so no accept event is needed), and no device-event profiling.
+    fn fast_path_eligible(&self, na: usize, np: usize, slow_walkers: usize) -> bool {
+        graph_enabled()
+            && !self.profile
+            && slow_walkers == 0
+            && na <= 1
+            && np <= 1
+            && na + np >= 1
+            && self.res.as_ref().is_some_and(|r| r.walkers == 1)
+            && self.fast.dstage.is_some()
+    }
+
+    /// Capture the three single-walker fast-lane bodies once (only when none exist yet).
+    fn ensure_graphs(&mut self) -> Result<(), String> {
+        if self.graphs.is_some() {
+            return Ok(());
+        }
+        let stream = self.fast.ts.stream().clone();
+        let mode = sys::CUstreamCaptureMode::CU_STREAM_CAPTURE_MODE_RELAXED;
+        let flags = sys::CUgraphInstantiate_flags(0);
+        let capture = |s: &mut Self, na: usize, np: usize| -> Result<CudaGraph, String> {
+            stream.begin_capture(mode).map_err(cu)?;
+            s.launch_fast(na, np)?;
+            stream
+                .end_capture(flags)
+                .map_err(cu)?
+                .ok_or_else(|| "CUDA graph capture produced no graph".to_string())
+        };
+        let prop = capture(self, 0, 1)?;
+        let acc_prop = capture(self, 1, 1)?;
+        let acc = capture(self, 1, 0)?;
+        // First replay uploads the graph resources so the next replay does not pay setup.
+        let _ = prop.upload();
+        let _ = acc_prop.upload();
+        let _ = acc.upload();
+        self.graphs = Some(FastGraphs {
+            prop,
+            acc_prop,
+            acc,
+        });
+        Ok(())
+    }
+
+    /// Replay the captured graph of `(na, np)`.
+    fn replay_graph(&self, na: usize, np: usize) -> Result<(), String> {
+        let g = self.graphs.as_ref().ok_or("graphs not captured")?;
+        let graph = match (na, np) {
+            (0, 1) => &g.prop,
+            (1, 1) => &g.acc_prop,
+            (1, 0) => &g.acc,
+            _ => return Err(format!("no captured graph for (na={na}, np={np})")),
+        };
+        graph.launch().map_err(cu)
     }
 }
 
@@ -718,6 +895,9 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             .is_some_and(|r| r.geom == geom && r.walkers == walkers);
         if reuse {
             st.synchronize().map_err(cu)?;
+            // The captured graphs bake in the staging and resident pointers; drop them so a
+            // changed geometry or transfer layout cannot replay a stale launch.
+            self.graphs = None;
             return Ok(());
         }
         let nn = geom.n_size() * geom.n_size();
@@ -733,6 +913,7 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             slater_host: vec![0; walkers],
         });
         st.synchronize().map_err(cu)?;
+        self.graphs = None;
         Ok(())
     }
 
@@ -749,7 +930,6 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
         let mut ints = std::mem::take(&mut self.fast_ints);
         ints.clear();
         ints.extend(fast.accepts.iter().map(|&w| w as i32));
-        let off_acc = 0usize;
         let off_prop = (ints.len() + 1) & !1;
         ints.resize(off_prop, 0);
         for p in &fast.proposes {
@@ -794,52 +974,12 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
         if self.profile {
             self.start_ev.record(&stream).map_err(cu)?;
         }
-        if na > 0 {
-            let res = self.res.as_mut().expect("res");
-            let stage_dev = self.fast.dstage.as_ref().expect("stage");
-            let (base, _g) = stage_dev.device_ptr(&stream);
-            let acc_ptr = base + (off_acc * 4) as u64;
-            let count = na as i32;
-            let shared = (((n + 1) & !1) * 4 + (4 * n + 16) * 8) as u32;
-            // The row-loop update wants several warps per row (coalesced j chunks); the gather
-            // and the per-row sums are independent of the block size, so this stays exact.
-            let nt = (2 * n).next_power_of_two().clamp(64, 512) as u32;
-            let mut b = stream.launch_builder(&self.funcs.accept);
-            b.arg(&acc_ptr)
-                .arg(&res.slater_ptrs)
-                .arg(&res.ele)
-                .arg(&mut res.inv)
-                .arg(&mut res.pf)
-                .arg(&res.pfnew)
-                .arg(&res.pend)
-                .arg(&n_i)
-                .arg(&ne_i)
-                .arg(&ns_i)
-                .arg(&nq_i);
-            // SAFETY: kernel ABI of k_accept; one block per (accepted walker, qp).
-            unsafe {
-                b.launch(LaunchConfig {
-                    grid_dim: ((na * nq) as u32, 1, 1),
-                    block_dim: (nt, 1, 1),
-                    shared_mem_bytes: shared,
-                })
-            }
-            .map_err(cu)?;
-            let mut b = stream.launch_builder(&self.funcs.commit_moves);
-            b.arg(&acc_ptr)
-                .arg(&count)
-                .arg(&mut res.ele)
-                .arg(&res.pend)
-                .arg(&n_i);
-            // SAFETY: kernel ABI of k_commit_moves; one thread per accepted walker.
-            unsafe {
-                b.launch(LaunchConfig {
-                    grid_dim: ((na as u32).div_ceil(64), 1, 1),
-                    block_dim: (64, 1, 1),
-                    shared_mem_bytes: 0,
-                })
-            }
-            .map_err(cu)?;
+        let use_graph = self.fast_path_eligible(na, np, slow.walkers());
+        if use_graph {
+            self.ensure_graphs()?;
+            self.replay_graph(na, np)?;
+        } else {
+            self.launch_fast(na, 0)?;
         }
         // Re-record the fast lane's reusable event after the accepted moves when a slow lane must
         // wait (on the device) for them, or when the device timings are enabled (it is also the
@@ -995,39 +1135,41 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
         let mut pf_out = Vec::new();
         if np > 0 {
             let t_launch = Instant::now();
-            let res = self.res.as_mut().expect("res");
-            let stage_dev = self.fast.dstage.as_ref().expect("stage");
-            let dout = self.fast.dout.as_mut().expect("out");
-            let (base, _g) = stage_dev.device_ptr(&stream);
-            let prop_ptr = base + (off_prop * 4) as u64;
-            let count = np as i32;
-            let out_off = 0i32;
-            let nt = n.next_power_of_two().clamp(32, 256) as u32;
-            let shared = (((n + 1) & !1) * 4 + (8 * n + 8) * 8) as u32;
-            let mut b = stream.launch_builder(&self.funcs.propose);
-            b.arg(&prop_ptr)
-                .arg(&count)
-                .arg(&res.slater_ptrs)
-                .arg(&res.ele)
-                .arg(&res.inv)
-                .arg(&res.pf)
-                .arg(&mut res.pfnew)
-                .arg(&mut res.pend)
-                .arg(dout)
-                .arg(&out_off)
-                .arg(&n_i)
-                .arg(&ne_i)
-                .arg(&ns_i)
-                .arg(&nq_i);
-            // SAFETY: kernel ABI of k_propose; one block per (proposal, qp).
-            unsafe {
-                b.launch(LaunchConfig {
-                    grid_dim: ((np * nq) as u32, 1, 1),
-                    block_dim: (nt, 1, 1),
-                    shared_mem_bytes: shared,
-                })
+            if !use_graph {
+                let res = self.res.as_mut().expect("res");
+                let stage_dev = self.fast.dstage.as_ref().expect("stage");
+                let dout = self.fast.dout.as_mut().expect("out");
+                let (base, _g) = stage_dev.device_ptr(&stream);
+                let prop_ptr = base + (off_prop * 4) as u64;
+                let count = np as i32;
+                let out_off = 0i32;
+                let nt = n.next_power_of_two().clamp(32, 256) as u32;
+                let shared = (((n + 1) & !1) * 4 + (8 * n + 8) * 8) as u32;
+                let mut b = stream.launch_builder(&self.funcs.propose);
+                b.arg(&prop_ptr)
+                    .arg(&count)
+                    .arg(&res.slater_ptrs)
+                    .arg(&res.ele)
+                    .arg(&res.inv)
+                    .arg(&res.pf)
+                    .arg(&mut res.pfnew)
+                    .arg(&mut res.pend)
+                    .arg(dout)
+                    .arg(&out_off)
+                    .arg(&n_i)
+                    .arg(&ne_i)
+                    .arg(&ns_i)
+                    .arg(&nq_i);
+                // SAFETY: kernel ABI of k_propose; one block per (proposal, qp).
+                unsafe {
+                    b.launch(LaunchConfig {
+                        grid_dim: ((np * nq) as u32, 1, 1),
+                        block_dim: (nt, 1, 1),
+                        shared_mem_bytes: shared,
+                    })
+                }
+                .map_err(cu)?;
             }
-            .map_err(cu)?;
             if self.profile {
                 self.mid_ev.record(&stream).map_err(cu)?;
             }

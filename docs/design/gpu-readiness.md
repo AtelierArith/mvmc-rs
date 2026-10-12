@@ -2589,6 +2589,175 @@ bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 "cuda|<bin>|<cud
 MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
 ```
 
+## 16.11 Milestone 4: the single-walker round protocol and the accept-kernel roofline (issue #517)
+
+Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
+single chain now drives the device service **on the walker's own thread** (no channel, reply slot
+or wake per hop), which moves the whole Opt run from 10.08 s to 9.81 s and `VMCMakeSample` from
+7.89 s to 7.63 s at L=448, **byte-identical** to the C-order sampler on the same measurement
+backend. The accepted-move kernel was profiled and a faster ILP formulation measured; the result
+and why it is not integrated are recorded below.
+
+### 16.11.1 Changes
+
+1. **Inline single-walker stage** (`crates/mvmc-core/src/device_sampler.rs`). The channel runner
+   of #537 pays a channel send, a reply-slot lock/unlock pair and a wake for every hop, plus a
+   second `Vec` copy of the proposal reply. With one walker there is nothing to batch across
+   walkers, so `InlineStage` (`run_lockstep_real_one_inline`) calls `DeviceService::round`
+   directly on the walker's thread and reuses its request/response buffers. The request order is
+   the channel stage's: an accepted move is deferred and applied in the round of the next
+   blocking operation (or in a trailing flush, issue #465), so the device sees the same batches.
+   Production routes `CudaSamplerStages::sample_real` through it, and `run_lockstep_real_one`
+   (used by the host-model CI test `sampler_backend_517`) now exercises the same code.
+2. **CUDA-graph fast lane** (opt-in, `MVMC_RS_SAMPLER_GRAPH=1`,
+   `gpu/mvmc-gpu-cuda/src/device_sampler.rs`). The three fixed single-walker bodies
+   `(na, np) = (0,1), (1,1), (1,0)` are captured once per `prepare` and replayed with one
+   `cuGraphLaunch` instead of cudarc's per-launch argument packing. Measured on the A100 it is
+   **1.5 %** of `VMCMakeSample` (7.62 -> 7.61 s median) because the host launch cost is already
+   hidden behind the accepted-move kernel, so it is left **off by default**.
+3. **Accepted-move kernel roofline** (`gpu/mvmc-gpu-cuda/examples/bench_sampler_kernels.rs`).
+   See 16.11.4.
+
+### 16.11.2 Accepted-move kernel roofline (16.11.4 detail)
+
+The #537 note assumed the accepted-move kernel was at the 8-SM L2-bandwidth limit (38 MB per
+accepted move). The kernel bench shows otherwise: with one accepted move (8 planes, one block per
+SM) the kernel is **latency-bound**, not bandwidth-bound. At n = 448, `k_accept` (512 threads) is
+77.8 us; 32 planes (`items = 4`) run at 160.8 us, i.e. 4x the work in 2x the time and roughly
+half of the ~1 TB/s aggregate L2 rate the wider launch reaches. The plane is 1.6 MB and one
+block per SM means 25 % occupancy.
+
+| 8 planes, n = 448, nt = 512 | device us |
+| --- | ---: |
+| `k_accept` (current production, vector + update fused) | 77.8 |
+| vector phase alone (column sweep, `k_accept_vec` split 1) | 81.9 |
+| update phase alone (row split 8 / 16) | 21.5 / 17.4 |
+| vector phase with 2 adjacent columns per thread, `double2` (`k_accept_vec_ilp`) | **37.9** |
+| fused vector-ILP + update (`k_accept_ilp`, `k_accept_ilps`, `k_accept_ilpn`) | 81-117 (regress) |
+| two-kernel split: ILP vector + row-split update | **63.5-68.6** |
+
+Readings:
+
+* The vector phase dominates and is a 448-thread serial-accumulation chain per column: two
+  independent accumulators per thread (`double2` on adjacent columns, exact ascending-j order per
+  column) cut it from 81.9 us to **37.9 us**, and the bit check against the production kernel is
+  0.0 (inverse and Pfaffians identical).
+* **The shared-memory tiling of the plan cannot reduce the traffic.** The rank-two update must
+  read each plane element once and write it once (2/3 of the traffic), and the vector phase reads
+  the whole plane once (1/3). Reusing the plane between the two phases needs all n^2 doubles
+  resident — 1.6 MB per plane, ten times the 164 KB per-SM shared memory. Column panels with a
+  grid-sync chained accumulator would preserve the exact rounding but need sequential grid syncs
+  and still read the plane twice. The premise of the plan ("stage the plane once and reuse it")
+  is not implementable bit-exactly at this size.
+* A **fused** kernel with the ILP vector phase regresses (81-117 us vs 77.8 us) even with
+  `__launch_bounds__`, an 8x unroll and an `__noinline__` update: ptxas schedules the combined
+  body worse than the two phases compiled apart. The **two-kernel split** does work
+  (63.5 us at row-split 16, 1.22x, bit-exact), but it needs a second launch, a `[planes][n]`
+  scratch and a host-side hop/exchange branch (the update kernel is branch-specific), for ~5 us
+  per hop. It is recorded as a measured ceiling, not integrated.
+* The recompute (`pfinv_f64_wide`, one block per plane, 448 serial LTL^T steps) is unchanged;
+  intra-plane parallelism there still needs a cooperative-grid panel factorization and was not
+  attempted.
+
+### 16.11.3 Measured (A100 80GB, `bench-out/issue517/round2`)
+
+NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads,
+shared host (`load1` 1.7-5.0 during the timed Opt rounds; the PhysCal rerun hit an external load
+spike and only the device rows are representative), `MVMC_C_TIMER=1`, medians of 3 timed rounds
+after one warm-up, the same `mvmc-cuda` binary per row (`mvmc-cuda-base` = `main` at 75f1af97,
+`mvmc-cuda-opt` = this milestone). `cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda
+MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda`. Section seconds.
+
+This campaign isolates the sampler by keeping the #518 resident device measurement on **both**
+sides of each pair (the `CalculateMAll` row is ~1 s / ~5.4 s, i.e. the device value), so the
+`c-order` rows below are a *sampler-only* comparison, not the pure CPU baseline.
+
+Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`), sampler c-order vs cuda, resident measurement on
+both sides:
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order sampler (1 BLAS thread) | 26.74 | 24.54 | 1.008 | 0.143 |
+| c-order sampler (4 BLAS threads) | 26.96 | 24.81 | 1.008 | 0.144 |
+| device sampler (before, `main`) | 10.08 | 7.89 | 1.008 | 0.143 |
+| **device sampler (after)** | **9.81** | **7.63** | 1.008 | 0.142 |
+
+PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`), same pairing:
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order sampler (1 BLAS thread) | 60.24 | 44.97 | 5.489 | 0.236 |
+| c-order sampler (4 BLAS threads) | 62.51 | 47.45 | 5.503 | 0.239 |
+| device sampler (before, `main`) | 27.75 | 12.93 | 5.406 | 0.228 |
+| **device sampler (after)** | **27.25** | **12.46** | 5.367 | 0.227 |
+
+Readings: the sampling section moves by **1.03x** (Opt `VMCMakeSample` 7.89 -> 7.63 s,
+PhysCal 12.93 -> 12.46 s) and the whole device run by **1.03x** (Opt 10.08 -> 9.81 s, PhysCal
+27.75 -> 27.25 s); per hop the device chain drops by ~2.5 us. The sampler-only speedup against
+the same-measurement c-order row is 26.96/9.81 = **2.75x** (Opt) and 62.51/27.25 = **2.29x**
+(PhysCal); the `c-order` rows are not the pipeline baseline because their measurement is already
+the device one.
+
+**Pure CPU baseline** (`bench-out/issue517/round2/{opt,phys}_pure_cpu`, c-order sampler **and**
+c-order measurement, same host immediately after the campaign):
+
+| case | CPU 1 thread | CPU 4 threads | device (all cuda) | vs 1 thread | vs 4 threads |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Opt L=448 `All` | 45.28 | 45.66 | 10.02 | **4.52x** | **4.56x** |
+| Opt `VMCMakeSample` | 27.30 | 28.85 | 7.75 | 3.52x | 3.72x |
+| PhysCal L=448 `All` | 82.69 | 81.37 | 27.77 | **2.98x** | **2.93x** |
+| PhysCal `VMCMakeSample` | 46.46 | 46.50 | 12.61 | 3.68x | 3.69x |
+
+The 4-thread BLAS policy barely moves the CPU time (the workload is scalar-PfaPack-bound inside
+the measurement and the sampler is single-walker), which is why the 1- and 4-thread columns are
+close on this host.
+
+### 16.11.4 Exactness
+
+Two checks, both with the *same measurement backend* on both sides (the #518 measurement is
+tolerance-based, not byte-exact):
+
+* In-process (A100 gates, `MVMC_RS_CUDA_GATE=1`): `sampler_production_gate` 2/2,
+  `sampler_gate` 4/4, `measurement_gate` 3/3, `pfaffian_gate` 6/6, `cuda_gate` 4/4,
+  `transfer_gate` 2/2, `sr_device_gate` 7/7, `sr_routing_gate` 3/3 — 31/31 pass.
+* Host-model CI (`cargo nextest run -p mvmc-core --cargo-profile test-fast`): the inline stage
+  reproduces the C-order run exactly for Opt and PhysCal (`production_optimization_host_model_equals_c_order`,
+  `production_physcal_host_model_equals_c_order`); the full `mvmc-core` suite is **947/947**.
+* Whole output directories at L=448 with all sampler/measurement backends on the device except
+  the sampler under test (`c-order` vs `cuda`): Opt 3 steps **7/7 files** byte-identical for all
+  three timed rounds, and PhysCal 5 samples **20/20 files** byte-identical for all three timed
+  rounds; the opt-in CUDA-graph path reproduces the same 7/7 Opt files.
+* Kernel-level (`bench_sampler_kernels`): the ILP vector phase and the ILP+split variants give
+  0.0 inverse difference and identical Pfaffians after one accepted move; the two-electron branch
+  checksum is unchanged.
+
+### 16.11.5 Distance to >=20x and the next lever
+
+Against the **pure 4-thread CPU baseline** (c-order sampler and measurement): Opt 45.66/10.02 =
+**4.56x**, PhysCal 81.37/27.77 = **2.93x** (1 thread: 4.52x / 2.98x). The sampler-only comparison
+with the measurement equalized is 2.75x / 2.29x. The remaining device budget per hop (Opt) is
+~31 us accept (1/3 of hops), 11 us proposal, 20 us recompute (amortized), and ~11 us of service
+host + protocol. The two measured levers — the two-kernel ILP accept (~5 us/hop) and the CUDA
+graph (hidden) — are each well under 10 %, and none of them approaches the 20x target: 20x would
+need the whole per-hop cost near ~8 us on this host, i.e. a device-side decision loop, which the
+RNG-on-host contract excludes (16.10.5). The honest next levers remain the recompute's
+intra-plane parallelism and the PhysCal Green functions on the device.
+
+Reproduce:
+
+```sh
+# profile attribution
+env MVMC_C_TIMER=1 MVMC_RS_SAMPLER_PROFILE=1 MVMC_RS_SAMPLER_BACKEND=cuda \
+  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
+  mvmc-cuda <opt_L448>/namelist.def --nsteps 3 --nsmp 3 --out-dir /tmp/out
+# kernel latencies and the ILP/split bit checks
+cd gpu/mvmc-gpu-cuda && cargo run --release --example bench_sampler_kernels
+# production comparison (one binary, sampler backend is the only difference)
+bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 "corder1|<bin>|..." ...
+bench-out/issue517/m1/harness/run_physcal.sh <phys_L448> <out> 3 "corder1|<bin>|..." ...
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
@@ -2631,3 +2800,15 @@ MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
   37.57 → 26.37 s。4 スレッド CPU 比 **3.94 倍 / 2.71 倍**。出力は同一測定 backend 上で
   c-order と **バイト一致**。20 倍には 1 ホップあたり ~5 us が必要で、RNG をホストに置く契約では
   デバイス側で判定ループを回せないため到達不可能です (16.10.5)。
+* 追記 (2026-10-12, #517 milestone 4, 16.11 節): 本番単一 chain を **walker のスレッド上で直接**
+  device service に接続する inline stage (`run_lockstep_real_one_inline`) を追加し、ホップごとの
+  channel send・reply slot のロック・wake・返信 Vec コピーを除去しました。Opt L=448 は
+  `VMCMakeSample` 7.89 → **7.63 s**、`All` 10.08 → 9.81 s。PhysCal は 12.93 → 12.46 s、27.75 →
+  27.25 s。4 スレッド CPU 比 **2.75 倍 / 2.29 倍** (本ホストの CPU 基準は #537 ホストより速い)。
+  出力は c-order と **バイト一致** (Opt 7/7、PhysCal 20/20 を 3 ラウンド、CUDA graph 経路も同様)。
+  CUDA graph の single-walker fast lane も実装・計測しましたが、ホスト側 launch 費は採択カーネルの
+  背後に隠れており **1.5 %** にとどまるため既定 off (`MVMC_RS_SAMPLER_GRAPH=1`) です。採択カーネルは
+  8 プレーンでは **レイテンシ律速** (SM あたり占有率 25 %) で、ベクトル位相の 2 列/スレッド + `double2`
+  化で単体 81.9 → 37.9 us になりますが、融合カーネルは逆に悪化 (81-117 us) し、2 カーネル分割
+  (63.5 us、ビット一致) は追加 launch・分岐対応のため未統合です。プロンプトの共有メモリ・タイル化は
+  1 プレーン 1.6 MB が SM あたり 164 KB に入らず、順序を保ったまま交通量を削減できないため不採用です。
