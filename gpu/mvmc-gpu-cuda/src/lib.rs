@@ -18,6 +18,7 @@ pub mod stages;
 pub mod transfer;
 pub mod transfer_bench;
 pub mod versions;
+pub mod xorwow;
 
 use mvmc_core::backend::{register_cuda_provider, CudaProvider, DeviceReport};
 use tenferro_gpu::cuda::cuda_devices;

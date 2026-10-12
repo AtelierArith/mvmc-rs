@@ -18,7 +18,6 @@ pub mod trace;
 use crate::c_timer::CTimer;
 use mvmc_expert_parsers::ExpertModeData;
 use num_complex::Complex64;
-use sfmt19937::Sfmt19937Rng;
 
 use crate::observables::{calculate_ip_complex, calculate_ip_real};
 use crate::pfaffian::{calc_m_all_complex_native_info, calc_m_all_real_native_info};
@@ -52,7 +51,7 @@ pub struct SampleStats {
 pub fn vmc_make_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     reducer: &R,
 ) -> Result<SampleStats, super::initial::SamplingInitializationError> {
     let _hot = crate::threading::hot_scope();
@@ -98,7 +97,7 @@ pub fn sampling_log_ip_complex<R: Reducer + ?Sized>(
 pub fn vmc_make_sample_real(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_real_timed(data, state, rng, &mut CTimer::<false>::new())
 }
@@ -107,7 +106,7 @@ pub fn vmc_make_sample_real(
 pub fn vmc_make_sample_real_timed<const TIMED: bool>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
 ) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
@@ -117,7 +116,7 @@ pub fn vmc_make_sample_real_timed<const TIMED: bool>(
 pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) -> Result<SampleStats, NormalInitializationError> {
@@ -129,7 +128,7 @@ pub fn vmc_make_sample_real_with_reducer_timed<const TIMED: bool, R: Reducer + ?
 pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: RealPfStage>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
     stage: &mut S,
@@ -638,7 +637,7 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
 pub fn vmc_make_sample(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_timed(data, state, rng, &mut CTimer::<false>::new())
 }
@@ -647,7 +646,7 @@ pub fn vmc_make_sample(
 pub fn vmc_make_sample_timed<const TIMED: bool>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
 ) -> Result<SampleStats, NormalInitializationError> {
     vmc_make_sample_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
@@ -657,7 +656,7 @@ pub fn vmc_make_sample_timed<const TIMED: bool>(
 pub fn vmc_make_sample_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) -> Result<SampleStats, NormalInitializationError> {
@@ -1198,7 +1197,7 @@ pub(super) fn revert_ele_config_fsz(
 pub fn vmc_make_sample_fsz(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> SampleStats {
     vmc_make_sample_fsz_timed(data, state, rng, &mut CTimer::<false>::new())
 }
@@ -1207,7 +1206,7 @@ pub fn vmc_make_sample_fsz(
 pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
 ) -> SampleStats {
     vmc_make_sample_fsz_with_reducer_timed(data, state, rng, timer, &SingleProcessReducer)
@@ -1217,7 +1216,7 @@ pub fn vmc_make_sample_fsz_timed<const TIMED: bool>(
 pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
 ) -> SampleStats {

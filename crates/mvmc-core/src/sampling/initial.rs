@@ -15,6 +15,7 @@
 
 use crate::reducer::{Reducer, SingleProcessReducer};
 use mvmc_expert_parsers::ExpertModeData;
+#[cfg(test)]
 use sfmt19937::Sfmt19937Rng;
 
 use crate::pfaffian::{calc_m_all_fsz_complex, calc_m_all_fsz_real, CalcMAllError};
@@ -80,7 +81,7 @@ pub fn make_initial_sample(
     ele_proj_cnt: &mut [i64],
     data: &ExpertModeData,
     loc_spn: &[i64],
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<(), ()> {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
@@ -146,7 +147,7 @@ pub fn make_initial_sample_init_loc_spn(
     ele_proj_cnt: &mut [i64],
     loc_spn: &mut [i64],
     data: &ExpertModeData,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<(), ()> {
     init_loc_spn(loc_spn, data);
     make_initial_sample(ele_idx, ele_cfg, ele_num, ele_proj_cnt, data, loc_spn, rng)
@@ -203,7 +204,7 @@ pub fn generate_initial_fsz_configuration(
     ele_spn: &mut [i64],
     data: &ExpertModeData,
     loc_spn: &[i64],
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
 ) -> Result<(), ()> {
     let n_site = data.modpara.nsite.max(0) as usize;
     let n_elec = data.modpara.nelec.max(0) as usize;
@@ -273,7 +274,7 @@ pub fn generate_initial_fsz_configuration(
 pub fn make_initial_sample_fsz(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     qp_start: usize,
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,
@@ -294,7 +295,7 @@ pub fn make_initial_sample_fsz(
 pub fn make_initial_sample_fsz_with_reducer<R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     qp_start: usize,
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,
@@ -350,7 +351,7 @@ pub fn make_initial_sample_fsz_with_reducer<R: Reducer + ?Sized>(
 pub fn make_initial_sample_fsz_real(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     qp_start: usize,
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,
@@ -371,7 +372,7 @@ pub fn make_initial_sample_fsz_real(
 pub fn make_initial_sample_fsz_real_with_reducer<R: Reducer + ?Sized>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     qp_start: usize,
     qp_end: usize,
     pool: &ThreadedPfaPackWorkspace,

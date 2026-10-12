@@ -57,7 +57,6 @@ use crate::sampling::driver::{trace, vmc_make_sample_real_staged, SampleStats};
 use crate::sampling::metropolis::MetropolisDecision;
 use crate::sampling::stage::{RealPfStage, StageGeom, StageResult, StageTables};
 use crate::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace, VmcOptimizationState};
-use sfmt19937::Sfmt19937Rng;
 
 // ---------------------------------------------------------------------------------------------
 // Requests, batches and the service trait
@@ -1036,7 +1035,7 @@ pub fn run_lockstep_real<S: DeviceService + ?Sized>(
 pub fn run_lockstep_real_one<S, R>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     reducer: &R,
     service: &mut S,
     opts: LockstepOptions,
@@ -1066,7 +1065,7 @@ where
 pub fn run_lockstep_real_one_timed<S, R, const TIMED: bool>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     reducer: &R,
     service: &mut S,
     mut opts: LockstepOptions,
@@ -1447,7 +1446,7 @@ impl<S: DeviceService + ?Sized> RealPfStage for InlineStage<'_, S> {
 pub fn run_lockstep_real_one_inline<S, R, const TIMED: bool>(
     data: &ExpertModeData,
     state: &mut VmcOptimizationState,
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     reducer: &R,
     service: &mut S,
     mut opts: LockstepOptions,

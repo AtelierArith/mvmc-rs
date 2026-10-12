@@ -7,6 +7,7 @@
 use std::ops::Range;
 
 use mvmc_expert_parsers::ExpertModeData;
+#[cfg(test)]
 use sfmt19937::Sfmt19937Rng;
 
 use crate::pfaffian::{calc_m_all_complex_native_info, CalcMAllError};
@@ -255,7 +256,7 @@ pub fn make_initial_sample_normal_with_info(
     ele_proj_cnt: &mut [i64],
     data: &ExpertModeData,
     loc_spn: &[i64],
-    rng: &mut Sfmt19937Rng,
+    rng: &mut impl crate::sampling::rng::SamplingRng,
     matrix: &mut SlaterMatrixData,
     qp_range: Range<usize>,
     pool: &ThreadedPfaPackWorkspace,

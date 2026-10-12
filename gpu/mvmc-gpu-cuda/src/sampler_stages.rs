@@ -9,6 +9,8 @@
 //! the run's C timer, so the device run reports the same `zvo_CalcTimer.dat` breakdown as the
 //! C-order path; `MVMC_RS_SAMPLER_PROFILE=1` additionally prints the per-call lock-step and
 //! service attribution on stderr.
+//! `MVMC_RS_CUDA_RNG=xorwow` opts into device-generated word batches; proposal control
+//! still runs on the host and downloads a batch every 4096 consumed words.
 //!
 //! The device chain is the serial production chain. A multi-process reducer (MPI QP split or a
 //! collective sampling sum) has no device implementation and is a hard [`StageError::Unsupported`],
@@ -16,10 +18,13 @@
 //! stage is reached (`sampler_backend::check_supported_mode`).
 
 use mvmc_core::c_timer::CTimer;
-use mvmc_core::device_sampler::{run_lockstep_real_one_inline, LockstepOptions, LockstepStats};
+use mvmc_core::device_sampler::{
+    run_lockstep_real_one_inline, LockstepOptions, LockstepStats, WalkerRun,
+};
 use mvmc_core::reducer::Reducer;
 use mvmc_core::sampler_backend::{SamplerStages, SamplerTiming};
 use mvmc_core::sampling::driver::SampleStats;
+use mvmc_core::sampling::rng::SamplingRng;
 use mvmc_core::stage_backend::StageError;
 use mvmc_core::state::VmcOptimizationState;
 use mvmc_core::ExpertModeData;
@@ -45,15 +50,50 @@ pub struct CudaSamplerStages {
     /// Snapshot of the service's cumulative timings after the previous call (the profile print
     /// reports per-call deltas).
     last_timings: crate::device_sampler::ServiceTimings,
+    rng: Option<crate::xorwow::GpuSamplingRng>,
+    xorwow: bool,
+    seed: Option<u64>,
+    device: usize,
 }
 
 impl CudaSamplerStages {
     /// Compile the kernels and open the service on `device`.
     pub fn new(device: usize) -> Result<Self, String> {
+        let xorwow = match std::env::var("MVMC_RS_CUDA_RNG").as_deref() {
+            Ok("xorwow") => true,
+            Ok("sfmt") | Err(_) => false,
+            Ok(value) => {
+                return Err(format!(
+                    "unsupported MVMC_RS_CUDA_RNG={value}; use sfmt or xorwow"
+                ))
+            }
+        };
+        let seed = std::env::var("MVMC_RS_CUDA_RNG_SEED")
+            .ok()
+            .map(|s| {
+                s.parse::<u64>()
+                    .map_err(|e| format!("invalid CUDA RNG seed: {e}"))
+            })
+            .transpose()?;
+        Self::with_rng(device, xorwow, seed)
+    }
+
+    /// Select GPU XORWOW (`true`) or CPU SFMT (`false`) explicitly. With no GPU seed,
+    /// the first series seeds XORWOW from two words of the caller's initialized SFMT.
+    pub fn with_rng(device: usize, xorwow: bool, seed: Option<u64>) -> Result<Self, String> {
         Ok(Self {
             service: CudaSamplerService::new_pinned(device)?,
             last_timings: crate::device_sampler::ServiceTimings::default(),
+            rng: None,
+            xorwow,
+            seed,
+            device,
         })
+    }
+
+    /// Words consumed from GPU-generated batches so far (prefetch does not count).
+    pub fn gpu_words_consumed(&self) -> Option<u128> {
+        self.rng.as_ref().map(|r| r.words_consumed())
     }
 
     /// The underlying service (transfer path label, resident-table downloads for the gates).
@@ -67,9 +107,39 @@ impl CudaSamplerStages {
     }
 }
 
+fn run_series(
+    service: &mut CudaSamplerService<PinnedTransfer>,
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut impl SamplingRng,
+    timing: &mut dyn SamplerTiming,
+    reducer: &dyn Reducer,
+) -> Result<(WalkerRun, LockstepStats), String> {
+    let opts = LockstepOptions {
+        spin_us: Some(SPIN_US),
+        ..LockstepOptions::default()
+    };
+    if timing.enabled() {
+        let mut timer = CTimer::<true>::new();
+        timer.diagnostics = timing.diagnostics();
+        let result =
+            run_lockstep_real_one_inline(data, state, rng, reducer, service, opts, &mut timer);
+        timing.merge_elapsed(&timer.elapsed_ns);
+        result
+    } else {
+        let mut timer = CTimer::<false>::new();
+        timer.diagnostics = timing.diagnostics();
+        run_lockstep_real_one_inline(data, state, rng, reducer, service, opts, &mut timer)
+    }
+}
+
 impl SamplerStages for CudaSamplerStages {
     fn label(&self) -> String {
-        format!("cuda-sampler:{}", self.service.transfer_name())
+        format!(
+            "cuda-sampler:{}:rng={}",
+            self.service.transfer_name(),
+            if self.xorwow { "xorwow" } else { "sfmt" }
+        )
     }
 
     fn provider(&self) -> String {
@@ -92,43 +162,24 @@ impl SamplerStages for CudaSamplerStages {
             self.service.profile = true;
         }
         let t0 = std::time::Instant::now();
+        if self.xorwow && self.rng.is_none() {
+            // Honor the initialized SFMT seed when no explicit GPU seed was supplied.
+            // Consume two u32 words, avoiding SFMT's alignment-sensitive gen_rand64.
+            let seed = self.seed.unwrap_or_else(|| {
+                u64::from(rng.gen_rand32()) | (u64::from(rng.gen_rand32()) << 32)
+            });
+            self.rng = Some(
+                crate::xorwow::GpuSamplingRng::new(self.device, seed, 4096)
+                    .map_err(StageError::Failed)?,
+            );
+        }
         // The walker's sampler sections (candidate, projection counters, the proposal round, the
         // acceptance, the recompute) are recorded like the C-order path's; the service thread's
         // attribution is printed when the profile variable is set.
-        let result = if timing.enabled() {
-            let mut timer = CTimer::<true>::new();
-            timer.diagnostics = timing.diagnostics();
-            let result = run_lockstep_real_one_inline(
-                data,
-                state,
-                rng,
-                reducer,
-                &mut self.service,
-                LockstepOptions {
-                    // One walker on a host with cores to spare: spin through the round-trip
-                    // (a parked/woken walker pays two scheduler round trips per hop).
-                    spin_us: Some(SPIN_US),
-                    ..LockstepOptions::default()
-                },
-                &mut timer,
-            );
-            timing.merge_elapsed(&timer.elapsed_ns);
-            result
+        let result = if let Some(device_rng) = &mut self.rng {
+            run_series(&mut self.service, data, state, device_rng, timing, reducer)
         } else {
-            let mut timer = CTimer::<false>::new();
-            timer.diagnostics = timing.diagnostics();
-            run_lockstep_real_one_inline(
-                data,
-                state,
-                rng,
-                reducer,
-                &mut self.service,
-                LockstepOptions {
-                    spin_us: Some(SPIN_US),
-                    ..LockstepOptions::default()
-                },
-                &mut timer,
-            )
+            run_series(&mut self.service, data, state, rng, timing, reducer)
         };
         if profile {
             let wall = t0.elapsed().as_secs_f64();
