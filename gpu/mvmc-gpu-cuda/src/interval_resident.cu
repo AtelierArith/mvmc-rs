@@ -59,10 +59,10 @@ extern "C" __global__ void interval_resident_commit(
     double ip = 0.0;
     for (int q = 0; q < nqp; ++q) {
       if (ST[w*nqp+q] != 0) good = 0;
-      ip += weights[q] * PF[w*nqp+q];
+      ip = __dadd_rn(ip, __dmul_rn(weights[q], PF[w*nqp+q]));
     }
     if (!isfinite(ip) || ip == 0.0) good = 0;
-    log_overlap = log(fabs(ip));
+    log_overlap = log(fabs(ip) + 1e-100);
     if (!good) atomicCAS(error, 0, 1);
   }
   __syncthreads();

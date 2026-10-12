@@ -41,8 +41,8 @@ extern "C" __global__ void interval_commit(const int* rec_walker, const double* 
   __syncthreads();
   if (threadIdx.x == 0) {
     double ip = 0.0;
-    for (int q = 0; q < nqp; ++q) ip += weights[q] * pf[(size_t)w * nqp + q];
-    logip[w] = log(ip < 0.0 ? -ip : ip);
+    for (int q = 0; q < nqp; ++q) ip = __dadd_rn(ip, __dmul_rn(weights[q], pf[(size_t)w * nqp + q]));
+    logip[w] = log(fabs(ip) + 1e-100);
     aw[w] = 0;
   }
 }

@@ -14,6 +14,41 @@ fn backend() -> CudaBackend {
 
 #[test]
 #[ignore = "requires CUDA"]
+fn julia_log_decision_handles_overflow_and_zero_uniform() {
+    let mut backend = backend();
+    // Constant Pfaffians, one Gutzwiller parameter. Forming a doublon gives
+    // logratio=2000; breaking one gives -2000. Julia compares in log space,
+    // avoiding exp overflow/underflow and preserving its log(0)=-Inf branch.
+    for (down, uniform, accepted) in [
+        (1, u32::MAX / 2, true),
+        (0, 0, true),
+        (0, u32::MAX / 2, false),
+    ] {
+        let mut state = State::new(1, 2, 1, 1, true);
+        state.ele[1] = down;
+        state.geom.ngutz = 1;
+        state.geom.nproj = 1;
+        state.gutz.fill(0);
+        state.params = vec![1000.];
+        let mut run = backend
+            .with_backend_session(|s| {
+                ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
+            })
+            .unwrap();
+        backend
+            .with_backend_session(|s| run.advance_with_tape(s, &[0, 0, 0, 0, uniform]))
+            .unwrap();
+        let result = backend.with_backend_session(|s| run.snapshot(s)).unwrap();
+        assert_eq!(result.ele, vec![i32::from(accepted), down]);
+        assert_eq!(
+            backend.with_backend_session(|s| run.accepted(s)).unwrap(),
+            vec![i32::from(accepted)]
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA"]
 fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
     let mut backend = backend();
     let (mut rng, mut buffer) = backend
