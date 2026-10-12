@@ -1,0 +1,17 @@
+MVMC_RS_SAMPLER_BACKEND=cuda
+MVMC_RS_SR_BACKEND=cuda
+MVMC_RS_MEASURE_BACKEND=cuda
+MVMC_RS_MEASURE_PF_BACKEND=cuda
+READY
+rep=0 seconds=55.461385919 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-0
+DONE 0
+rep=1 seconds=47.952186203 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-1
+DONE 1
+rep=2 seconds=48.063632809 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-2
+DONE 2
+rep=3 seconds=47.858827265 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-3
+DONE 3
+rep=4 seconds=47.738788764 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-4
+DONE 4
+rep=5 seconds=47.847555228 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-5
+DONE 5

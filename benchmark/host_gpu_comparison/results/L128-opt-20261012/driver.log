@@ -1,0 +1,38 @@
+rust: MVMC_RS_SAMPLER_BACKEND=cuda
+rust: MVMC_RS_SR_BACKEND=cuda
+rust: MVMC_RS_MEASURE_BACKEND=cuda
+rust: MVMC_RS_MEASURE_PF_BACKEND=cuda
+rust: READY
+rust: rep=0 seconds=55.461385919 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-0
+rust: DONE 0
+julia: Julia=1.13.1 GPU=NVIDIA GeForce RTX 3060 BLAS=LBTConfig([ILP64] libopenblas64_.so) Julia_threads=1 BLAS_threads=1
+julia: optimizer_source=/home/terasaki/work/atelierarith/julia-mvmc-double-main/MVMCOptimizers.jl/src/MVMCOptimizers.jl
+julia: READY
+julia: [ Info: Parsing completed successfully
+julia: rep=0 seconds=55.313755989 energy_per_site=0.7795418080426915
+julia: DONE 0
+rust: rep=1 seconds=47.952186203 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-1
+rust: DONE 1
+julia: [ Info: Parsing completed successfully
+julia: rep=1 seconds=5.139374207 energy_per_site=0.7795418080426915
+julia: DONE 1
+julia: [ Info: Parsing completed successfully
+julia: rep=2 seconds=5.122108566 energy_per_site=0.7795418080426915
+julia: DONE 2
+rust: rep=2 seconds=48.063632809 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-2
+rust: DONE 2
+rust: rep=3 seconds=47.858827265 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-3
+rust: DONE 3
+julia: [ Info: Parsing completed successfully
+julia: rep=3 seconds=5.120736923 energy_per_site=0.7795418080426915
+julia: DONE 3
+julia: [ Info: Parsing completed successfully
+julia: rep=4 seconds=5.124929273 energy_per_site=0.7795418080426915
+julia: DONE 4
+rust: rep=4 seconds=47.738788764 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-4
+rust: DONE 4
+rust: rep=5 seconds=47.847555228 energy_per_site=0.7671166509232439 output=/tmp/mvmc-opt-gpu-comparison/rust-output/rep-5
+rust: DONE 5
+julia: [ Info: Parsing completed successfully
+julia: rep=5 seconds=5.126625978 energy_per_site=0.7795418080426915
+julia: DONE 5

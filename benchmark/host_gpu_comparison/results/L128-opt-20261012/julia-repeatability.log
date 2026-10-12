@@ -1,0 +1,5 @@
+rep=1 max_energy_abs=0.0 max_parameter_abs=0.0 configurations_exact=true accepted_exact=true
+rep=2 max_energy_abs=0.0 max_parameter_abs=0.0 configurations_exact=true accepted_exact=true
+rep=3 max_energy_abs=0.0 max_parameter_abs=0.0 configurations_exact=true accepted_exact=true
+rep=4 max_energy_abs=0.0 max_parameter_abs=0.0 configurations_exact=true accepted_exact=true
+rep=5 max_energy_abs=0.0 max_parameter_abs=0.0 configurations_exact=true accepted_exact=true
