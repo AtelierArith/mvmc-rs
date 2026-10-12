@@ -261,8 +261,9 @@ __device__ __forceinline__ void interval_hop_impl(
           interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
       const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
-      // Julia GPU uses a log-space decision, including u == 0 and extreme ratios.
-      const int accept = ip_new != 0.0 && log(u) < logratio;
+      // Keep log-space decisions for finite overlaps (including u == 0 and
+      // extreme ratios), but never publish an overflowed weighted sum (#564).
+      const int accept = isfinite(ip_new) && ip_new != 0.0 && log(u) < logratio;
       mvw[5] = accept;
       if (accept) {
         out[0] = log_new;

@@ -72,8 +72,10 @@ complex/general orbitals and grouped execution return errors. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
 spin-conserving InterAll. Individual QP matrices must remain nonsingular;
 singular-sector cofactor fallback and delayed/paired inverse optimizations are
-remaining work under #560/#550. Numerical failure is reported, not silently
-routed to host sampling or measurement.
+remaining work under #560/#550. Failed state reconstruction or SR is reported.
+Nonfinite proposal overlaps are rejected before updating the configuration,
+inverse, Pfaffian or cached overlap (#564); finite overlaps retain log-space
+acceptance for extreme ratios and zero uniform draws.
 
 Independent Julia fixtures cover L128 initialization, energy, derivatives and
 one SR update, plus nonzero correlations and all 324 two-pair overlays on three

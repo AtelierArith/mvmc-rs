@@ -49,6 +49,81 @@ fn julia_log_decision_handles_overflow_and_zero_uniform() {
 
 #[test]
 #[ignore = "requires CUDA"]
+fn nonfinite_proposal_overlap_preserves_walker_state() {
+    let mut backend = backend();
+    // The initial weighted overlap is finite and nonzero. Moving up-spin 0->1
+    // gives finite candidate Pfaffians, but their weighted sum is +/-Inf or NaN.
+    for (weights, candidate) in [
+        ([f64::MAX / 4., f64::MAX / 4.], 4.),
+        ([-f64::MAX / 4., -f64::MAX / 4.], 4.),
+        ([f64::MAX / 4., -f64::MAX / 8.], 16.),
+    ] {
+        let mut state = State::new(1, 2, 1, 2, true);
+        state.weights = weights.to_vec();
+        for q in 0..2 {
+            state.slater.set(q, 1, 2, -candidate);
+            state.slater.set(q, 2, 1, candidate);
+        }
+        let initial_ip = weights
+            .iter()
+            .zip(&state.pf)
+            .map(|(w, p)| w * p)
+            .sum::<f64>();
+        assert!(initial_ip.is_finite() && initial_ip != 0.);
+        let candidate_ip = weights
+            .iter()
+            .zip(&state.pf)
+            .map(|(w, p)| w * (candidate * p))
+            .sum::<f64>();
+        assert!(!candidate_ip.is_finite());
+        let check = |result: mvmc_gpu_cuda::interval::IntervalResults| {
+            assert_eq!(result.ele, state.ele);
+            assert_eq!(result.aw, vec![0]);
+            for (actual, expected) in result.pf.iter().zip(&state.pf) {
+                assert!((actual - expected).abs() <= 1e-14);
+            }
+            assert!((result.logip[0] - initial_ip.abs().ln()).abs() <= 1e-12);
+        };
+        let tape = [0, 0, 0, 0, 0]; // Even u=0 must not accept a nonfinite overlap.
+        let mut resident = backend
+            .with_backend_session(|s| {
+                ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
+            })
+            .unwrap();
+        backend
+            .with_backend_session(|s| resident.advance_with_tape(s, &tape))
+            .unwrap();
+        check(
+            backend
+                .with_backend_session(|s| resident.snapshot(s))
+                .unwrap(),
+        );
+        assert_eq!(
+            backend
+                .with_backend_session(|s| resident.accepted(s))
+                .unwrap(),
+            vec![0]
+        );
+        let legacy = backend
+            .with_backend_session(|s| IntervalSampler::prepare(s, state.geom, &state.host(), 1, 0.))
+            .unwrap();
+        backend
+            .with_backend_session(|s| legacy.upload_tape(s, &tape))
+            .unwrap();
+        assert_eq!(
+            backend.with_backend_session(|s| legacy.run(s)).unwrap(),
+            vec![(1, 0, 0)]
+        );
+        check(
+            backend
+                .with_backend_session(|s| legacy.download_all(s))
+                .unwrap(),
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA"]
 fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
     let mut backend = backend();
     let (mut rng, mut buffer) = backend
