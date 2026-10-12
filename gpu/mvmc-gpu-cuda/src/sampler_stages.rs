@@ -2,11 +2,13 @@
 //!
 //! The service is the standalone [`CudaSamplerService`] of issue #434 with the pinned
 //! asynchronous transfer path. `sample_real` runs the single production chain `(data, state,
-//! rng)` through [`run_lockstep_real_one_timed`]: the host driver, the SFMT draws and the
-//! sampled configurations are the C path's, only the Pfaffian stages live on the device. With
-//! `MVMC_C_TIMER=1` the walker's sampler sections land in the run's C timer, so the device run
-//! reports the same `zvo_CalcTimer.dat` breakdown as the C-order path; `MVMC_RS_SAMPLER_PROFILE=1`
-//! additionally prints the per-call lock-step and service attribution on stderr.
+//! rng)` through [`run_lockstep_real_one_inline`]: the host driver, the SFMT draws and the
+//! sampled configurations are the C path's, only the Pfaffian stages live on the device. The
+//! inline runner drives the service on the walker's own thread (no channel, reply slot or wake
+//! per hop; issue #517 milestone 4). With `MVMC_C_TIMER=1` the walker's sampler sections land in
+//! the run's C timer, so the device run reports the same `zvo_CalcTimer.dat` breakdown as the
+//! C-order path; `MVMC_RS_SAMPLER_PROFILE=1` additionally prints the per-call lock-step and
+//! service attribution on stderr.
 //!
 //! The device chain is the serial production chain. A multi-process reducer (MPI QP split or a
 //! collective sampling sum) has no device implementation and is a hard [`StageError::Unsupported`],
@@ -14,7 +16,7 @@
 //! stage is reached (`sampler_backend::check_supported_mode`).
 
 use mvmc_core::c_timer::CTimer;
-use mvmc_core::device_sampler::{run_lockstep_real_one_timed, LockstepOptions, LockstepStats};
+use mvmc_core::device_sampler::{run_lockstep_real_one_inline, LockstepOptions, LockstepStats};
 use mvmc_core::reducer::Reducer;
 use mvmc_core::sampler_backend::{SamplerStages, SamplerTiming};
 use mvmc_core::sampling::driver::SampleStats;
@@ -32,9 +34,9 @@ fn profile_enabled() -> bool {
     std::env::var_os(SAMPLER_PROFILE_VARIABLE).is_some()
 }
 
-/// How long the parked production walker spins for a reply before parking. The single production
-/// chain has cores to spare, and a park plus wake costs two scheduler round trips per hop
-/// (measured as part of the lock-step round overhead).
+/// How long the parked production walker spins for a reply before parking. Kept for the channel
+/// runner (`run_lockstep_real`); the inline single-walker runner of issue #517 milestone 4 never
+/// parks, so it ignores `spin_us`.
 const SPIN_US: u64 = 200;
 
 /// [`SamplerStages`] implementation on one CUDA device.
@@ -96,7 +98,7 @@ impl SamplerStages for CudaSamplerStages {
         let result = if timing.enabled() {
             let mut timer = CTimer::<true>::new();
             timer.diagnostics = timing.diagnostics();
-            let result = run_lockstep_real_one_timed(
+            let result = run_lockstep_real_one_inline(
                 data,
                 state,
                 rng,
@@ -115,7 +117,7 @@ impl SamplerStages for CudaSamplerStages {
         } else {
             let mut timer = CTimer::<false>::new();
             timer.diagnostics = timing.diagnostics();
-            run_lockstep_real_one_timed(
+            run_lockstep_real_one_inline(
                 data,
                 state,
                 rng,

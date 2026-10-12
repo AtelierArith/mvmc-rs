@@ -95,6 +95,252 @@ extern "C" __global__ void k_accept_v2(const int* acc_w, const double* const* sl
   if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
 }
 
+// phase A ILP: gather + v1 rows with CPT adjacent columns per thread (double2/double4 loads),
+// exact ascending-j accumulation per column; v1 written to global
+extern "C" __global__ void k_accept_vec_ilp(const int* acc_w, const double* const* slater_tab,
+                                            const int* ele, const double* inv, const int* pend,
+                                            double* vec_out, int n, int ne, int nsite, int nqp,
+                                            int cpt) {
+  extern __shared__ char smem_raw[];
+  int* rs = reinterpret_cast<int*>(smem_raw);
+  double* v3 = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
+  const int plane = blockIdx.x;
+  const int item = plane / nqp, qp = plane % nqp;
+  const int w = acc_w[item];
+  const int* pd = pend + (size_t)w * 8;
+  const int mv[6] = {pd[0], pd[1], pd[2], pd[3], pd[4], pd[5]};
+  const int* ele_w = ele + (size_t)w * n;
+  const double* tab = slater_tab[w];
+  const int n2 = 2 * nsite;
+  const double* invq = inv + ((size_t)w * nqp + qp) * (size_t)n * n;
+  const int tid = threadIdx.x, nt = blockDim.x;
+  for (int j = tid; j < n; j += nt) rs[j] = cand_site2(ele_w, mv, j) + (j >= ne ? nsite : 0);
+  __syncthreads();
+  const int msa = (mv[3] >= 0) ? mv[3] : mv[0];
+  const int site = (mv[3] >= 0) ? mv[4] : mv[1];
+  const int rsa = site + (msa >= ne ? nsite : 0);
+  for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
+  __syncthreads();
+  double* v1 = vec_out + (size_t)plane * (size_t)n;
+  for (int base = tid * cpt; base < n; base += nt * cpt) {
+    double acc[4] = {0.0, 0.0, 0.0, 0.0};
+    if (cpt == 2) {
+      for (int j = 0; j < n; ++j) {
+        const double2 x = *reinterpret_cast<const double2*>(invq + (size_t)j * n + base);
+        const double vj = v3[j];
+        acc[0] += -x.x * vj;
+        acc[1] += -x.y * vj;
+      }
+      v1[base] = acc[0];
+      if (base + 1 < n) v1[base + 1] = acc[1];
+    } else {
+      for (int j = 0; j < n; ++j) {
+        const double2 x = *reinterpret_cast<const double2*>(invq + (size_t)j * n + base);
+        const double2 y = *reinterpret_cast<const double2*>(invq + (size_t)j * n + base + 2);
+        const double vj = v3[j];
+        acc[0] += -x.x * vj;
+        acc[1] += -x.y * vj;
+        acc[2] += -y.x * vj;
+        acc[3] += -y.y * vj;
+      }
+      v1[base] = acc[0];
+      if (base + 1 < n) v1[base + 1] = acc[1];
+      if (base + 2 < n) v1[base + 2] = acc[2];
+      if (base + 3 < n) v1[base + 3] = acc[3];
+    }
+  }
+}
+
+// fused accept with the ILP (double2, CPT=2) vector phase, hop branch only
+extern "C" __global__ void __launch_bounds__(512, 1)
+k_accept_ilp(const int* acc_w, const double* const* slater_tab,
+                                        const int* ele, double* inv, double* pf,
+                                        const double* pfnew, const int* pend,
+                                        int n, int ne, int nsite, int nqp) {
+  extern __shared__ char smem_raw[];
+  int* rs = reinterpret_cast<int*>(smem_raw);
+  double* vec = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
+  double* v3 = vec;
+  double* v1 = vec + n;
+  double* v2 = vec + 2 * n;
+  const int item = blockIdx.x / nqp, qp = blockIdx.x % nqp;
+  const int w = acc_w[item];
+  const int* pd = pend + (size_t)w * 8;
+  const int mv[6] = {pd[0], pd[1], pd[2], pd[3], pd[4], pd[5]};
+  const int* ele_w = ele + (size_t)w * n;
+  const double* tab = slater_tab[w];
+  const int n2 = 2 * nsite;
+  double* invq = inv + ((size_t)w * nqp + qp) * (size_t)n * n;
+  const int tid = threadIdx.x, nt = blockDim.x;
+  for (int j = tid; j < n; j += nt) rs[j] = cand_site2(ele_w, mv, j) + (j >= ne ? nsite : 0);
+  __syncthreads();
+  const int msa = (mv[3] >= 0) ? mv[3] : mv[0];
+  const int site = (mv[3] >= 0) ? mv[4] : mv[1];
+  const int rsa = site + (msa >= ne ? nsite : 0);
+  for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
+  __syncthreads();
+  for (int base = tid * 2; base < n; base += nt * 2) {
+    double a0 = 0.0, a1 = 0.0;
+#pragma unroll 4
+    for (int j = 0; j < n; ++j) {
+      const double2 x = *reinterpret_cast<const double2*>(invq + (size_t)j * n + base);
+      const double vj = v3[j];
+      a0 += -x.x * vj;
+      a1 += -x.y * vj;
+    }
+    v1[base] = a0;
+    if (base + 1 < n) v1[base + 1] = a1;
+  }
+  __syncthreads();
+  const double tmp = v1[msa];
+  const double inv_vec1_a = -1.0 / tmp;
+  for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
+  __syncthreads();
+  const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
+  for (int i = warp; i < n; i += nwarp) {
+    const double vi1 = v1[i], vi2 = v2[i];
+    const int rowoff = i * n;
+    for (int j = lane; j < n; j += 32) {
+      const int e = rowoff + j;
+      double x = invq[e];
+      x += vi1 * v2[j] - v1[j] * vi2;
+      if (j == msa) x -= vi2;
+      if (i == msa) x += v2[j];
+      invq[e] = x;
+    }
+  }
+  if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
+}
+
+__device__ __noinline__ void upd_hop_noinline(double* invq, int n, int msa, const double* v1,
+                                              const double* v2, int tid, int nt) {
+  const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
+  for (int i = warp; i < n; i += nwarp) {
+    const double vi1 = v1[i], vi2 = v2[i];
+    const int rowoff = i * n;
+    for (int j = lane; j < n; j += 32) {
+      const int e = rowoff + j;
+      double x = invq[e];
+      x += vi1 * v2[j] - v1[j] * vi2;
+      if (j == msa) x -= vi2;
+      if (i == msa) x += v2[j];
+      invq[e] = x;
+    }
+  }
+}
+
+// fused accept with the scalar two-chain ILP vector phase and the update in a separate device
+// function (to keep the vector loop's register allocation away from the update)
+extern "C" __global__ void __launch_bounds__(512, 1)
+k_accept_ilpn(const int* acc_w, const double* const* slater_tab, const int* ele, double* inv,
+              double* pf, const double* pfnew, const int* pend, int n, int ne, int nsite,
+              int nqp) {
+  extern __shared__ char smem_raw[];
+  int* rs = reinterpret_cast<int*>(smem_raw);
+  double* vec = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
+  double* v3 = vec;
+  double* v1 = vec + n;
+  double* v2 = vec + 2 * n;
+  const int item = blockIdx.x / nqp, qp = blockIdx.x % nqp;
+  const int w = acc_w[item];
+  const int* pd = pend + (size_t)w * 8;
+  const int mv[6] = {pd[0], pd[1], pd[2], pd[3], pd[4], pd[5]};
+  const int* ele_w = ele + (size_t)w * n;
+  const double* tab = slater_tab[w];
+  const int n2 = 2 * nsite;
+  double* invq = inv + ((size_t)w * nqp + qp) * (size_t)n * n;
+  const int tid = threadIdx.x, nt = blockDim.x;
+  for (int j = tid; j < n; j += nt) rs[j] = cand_site2(ele_w, mv, j) + (j >= ne ? nsite : 0);
+  __syncthreads();
+  const int msa = (mv[3] >= 0) ? mv[3] : mv[0];
+  const int site = (mv[3] >= 0) ? mv[4] : mv[1];
+  const int rsa = site + (msa >= ne ? nsite : 0);
+  for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
+  __syncthreads();
+  const int half = n >> 1;
+  for (int i = tid; i < half; i += nt) {
+    double a0 = 0.0, a1 = 0.0;
+#pragma unroll 8
+    for (int j = 0; j < n; ++j) {
+      const double vj = v3[j];
+      const double* r = invq + (size_t)j * n;
+      a0 += -r[i] * vj;
+      a1 += -r[i + half] * vj;
+    }
+    v1[i] = a0;
+    v1[i + half] = a1;
+  }
+  __syncthreads();
+  const double tmp = v1[msa];
+  const double inv_vec1_a = -1.0 / tmp;
+  for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
+  __syncthreads();
+  upd_hop_noinline(invq, n, msa, v1, v2, tid, nt);
+  if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
+}
+
+// fused accept with a scalar two-chain ILP vector phase (columns i and i+n/2), hop branch only
+extern "C" __global__ void __launch_bounds__(512, 1)
+k_accept_ilps(const int* acc_w, const double* const* slater_tab,
+                                         const int* ele, double* inv, double* pf,
+                                         const double* pfnew, const int* pend,
+                                         int n, int ne, int nsite, int nqp) {
+  extern __shared__ char smem_raw[];
+  int* rs = reinterpret_cast<int*>(smem_raw);
+  double* vec = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
+  double* v3 = vec;
+  double* v1 = vec + n;
+  double* v2 = vec + 2 * n;
+  const int item = blockIdx.x / nqp, qp = blockIdx.x % nqp;
+  const int w = acc_w[item];
+  const int* pd = pend + (size_t)w * 8;
+  const int mv[6] = {pd[0], pd[1], pd[2], pd[3], pd[4], pd[5]};
+  const int* ele_w = ele + (size_t)w * n;
+  const double* tab = slater_tab[w];
+  const int n2 = 2 * nsite;
+  double* invq = inv + ((size_t)w * nqp + qp) * (size_t)n * n;
+  const int tid = threadIdx.x, nt = blockDim.x;
+  for (int j = tid; j < n; j += nt) rs[j] = cand_site2(ele_w, mv, j) + (j >= ne ? nsite : 0);
+  __syncthreads();
+  const int msa = (mv[3] >= 0) ? mv[3] : mv[0];
+  const int site = (mv[3] >= 0) ? mv[4] : mv[1];
+  const int rsa = site + (msa >= ne ? nsite : 0);
+  for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
+  __syncthreads();
+  const int half = n >> 1;
+  for (int i = tid; i < half; i += nt) {
+    double a0 = 0.0, a1 = 0.0;
+#pragma unroll 4
+    for (int j = 0; j < n; ++j) {
+      const double vj = v3[j];
+      const double* r = invq + (size_t)j * n;
+      a0 += -r[i] * vj;
+      a1 += -r[i + half] * vj;
+    }
+    v1[i] = a0;
+    v1[i + half] = a1;
+  }
+  __syncthreads();
+  const double tmp = v1[msa];
+  const double inv_vec1_a = -1.0 / tmp;
+  for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
+  __syncthreads();
+  const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
+  for (int i = warp; i < n; i += nwarp) {
+    const double vi1 = v1[i], vi2 = v2[i];
+    const int rowoff = i * n;
+    for (int j = lane; j < n; j += 32) {
+      const int e = rowoff + j;
+      double x = invq[e];
+      x += vi1 * v2[j] - v1[j] * vi2;
+      if (j == msa) x -= vi2;
+      if (i == msa) x += v2[j];
+      invq[e] = x;
+    }
+  }
+  if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
+}
+
 // phase A: gather + v1 rows (split over rows), v1 written to global
 extern "C" __global__ void k_accept_vec(const int* acc_w, const double* const* slater_tab,
                                         const int* ele, const double* inv, const int* pend,
@@ -192,7 +438,11 @@ struct Engine {
     accept: CudaFunction,
     commit: CudaFunction,
     accept_v2: CudaFunction,
+    accept_ilp: CudaFunction,
+    accept_ilps: CudaFunction,
+    accept_ilpn: CudaFunction,
     accept_vec: CudaFunction,
+    accept_vec_ilp: CudaFunction,
     accept_upd: CudaFunction,
 }
 
@@ -227,7 +477,17 @@ impl Engine {
                 .load_function("k_commit_moves")
                 .expect("k_commit_moves"),
             accept_v2: vmodule.load_function("k_accept_v2").expect("k_accept_v2"),
+            accept_ilp: vmodule.load_function("k_accept_ilp").expect("k_accept_ilp"),
+            accept_ilps: vmodule
+                .load_function("k_accept_ilps")
+                .expect("k_accept_ilps"),
+            accept_ilpn: vmodule
+                .load_function("k_accept_ilpn")
+                .expect("k_accept_ilpn"),
             accept_vec: vmodule.load_function("k_accept_vec").expect("k_accept_vec"),
+            accept_vec_ilp: vmodule
+                .load_function("k_accept_vec_ilp")
+                .expect("k_accept_vec_ilp"),
             accept_upd: vmodule.load_function("k_accept_upd").expect("k_accept_upd"),
         }
     }
@@ -298,6 +558,43 @@ impl Case {
         self.ctx
             .new_event(Some(CUevent_flags::CU_EVENT_DEFAULT))
             .expect("event")
+    }
+
+    fn reset_inv(&mut self) {
+        let s = self.ctx.default_stream();
+        let len = self.inv_host.len();
+        let mut view = self.inv.slice_mut(..len);
+        s.memcpy_htod(&self.inv_host, &mut view).expect("reset inv");
+    }
+
+    /// Like `time_launch` but resets the resident inverse from the host copy before every launch,
+    /// so repeated rank-2 updates do not blow the values up (production starts from a valid
+    /// Pfaffian inverse).
+    fn time_launch_reset(
+        &mut self,
+        engine: &Engine,
+        reps: usize,
+        mut launch: impl FnMut(&mut Self, &Engine),
+    ) -> (f64, f64) {
+        let s = self.ctx.default_stream();
+        self.reset_inv();
+        launch(self, engine);
+        s.synchronize().expect("sync");
+        let mut dev = Vec::new();
+        let mut host = Vec::new();
+        for _ in 0..reps {
+            self.reset_inv();
+            let e0 = self.event();
+            e0.record(&s).expect("record");
+            let t0 = Instant::now();
+            launch(self, engine);
+            host.push(t0.elapsed().as_secs_f64());
+            let e1 = self.event();
+            e1.record(&s).expect("record");
+            s.synchronize().expect("sync");
+            dev.push(f64::from(e0.elapsed_ms(&e1).unwrap_or(0.0)) * 1e-3);
+        }
+        (median(dev), median(host))
     }
 
     fn time_launch(
@@ -419,6 +716,93 @@ impl Case {
         .expect("commit");
     }
 
+    /// Fused accept with the ILP (double2) vector phase (hop branch).
+    fn launch_accept_ilp(&mut self, engine: &Engine, na: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let shared = (((self.n + 1) & !1) * 4 + 3 * self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_ilp);
+        b.arg(&self.acc)
+            .arg(&self.slater_ptrs)
+            .arg(&self.ele)
+            .arg(&mut self.inv)
+            .arg(&mut self.pf)
+            .arg(&self.pfnew)
+            .arg(&self.pend)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i);
+        // SAFETY: kernel ABI of k_accept_ilp.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: ((na * self.nqp) as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_ilp");
+    }
+
+    /// Fused accept with the scalar two-chain ILP vector phase (hop branch).
+    fn launch_accept_ilps(&mut self, engine: &Engine, na: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let shared = (((self.n + 1) & !1) * 4 + 3 * self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_ilps);
+        b.arg(&self.acc)
+            .arg(&self.slater_ptrs)
+            .arg(&self.ele)
+            .arg(&mut self.inv)
+            .arg(&mut self.pf)
+            .arg(&self.pfnew)
+            .arg(&self.pend)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i);
+        // SAFETY: kernel ABI of k_accept_ilps.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: ((na * self.nqp) as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_ilps");
+    }
+
+    /// Fused accept with the scalar two-chain ILP vector phase and a separate update function.
+    fn launch_accept_ilpn(&mut self, engine: &Engine, na: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let shared = (((self.n + 1) & !1) * 4 + 3 * self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_ilpn);
+        b.arg(&self.acc)
+            .arg(&self.slater_ptrs)
+            .arg(&self.ele)
+            .arg(&mut self.inv)
+            .arg(&mut self.pf)
+            .arg(&self.pfnew)
+            .arg(&self.pend)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i);
+        // SAFETY: kernel ABI of k_accept_ilpn.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: ((na * self.nqp) as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_ilpn");
+    }
+
     /// Division-free row-loop variant of the accept kernel (same arithmetic).
     fn launch_accept_v2(&mut self, engine: &Engine, na: usize, nt: u32) {
         let s = self.ctx.default_stream();
@@ -446,6 +830,127 @@ impl Case {
             })
         }
         .expect("accept_v2");
+    }
+
+    /// Vector phase only (split rows of the GEMV), for the phase timing.
+    fn launch_accept_vec_only(&mut self, engine: &Engine, na: usize, split: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let split_i = split as i32;
+        let planes = na * self.nqp;
+        let shared = (((self.n + 1) & !1) * 4 + self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_vec);
+        b.arg(&self.acc)
+            .arg(&self.slater_ptrs)
+            .arg(&self.ele)
+            .arg(&self.inv)
+            .arg(&self.pend)
+            .arg(&mut self.vecs)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i)
+            .arg(&split_i);
+        // SAFETY: kernel ABI of k_accept_vec.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: ((planes * split) as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_vec");
+    }
+
+    /// Vector phase with CPT adjacent columns per thread (ILP), for the phase timing.
+    fn launch_accept_vec_ilp(&mut self, engine: &Engine, na: usize, cpt: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let cpt_i = cpt as i32;
+        let planes = na * self.nqp;
+        let shared = (((self.n + 1) & !1) * 4 + self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_vec_ilp);
+        b.arg(&self.acc)
+            .arg(&self.slater_ptrs)
+            .arg(&self.ele)
+            .arg(&self.inv)
+            .arg(&self.pend)
+            .arg(&mut self.vecs)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i)
+            .arg(&cpt_i);
+        // SAFETY: kernel ABI of k_accept_vec_ilp.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: (planes as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_vec_ilp");
+    }
+
+    /// Update phase only (split rows), for the phase timing.
+    fn launch_accept_upd_only(&mut self, engine: &Engine, na: usize, split: usize, nt: u32) {
+        let s = self.ctx.default_stream();
+        let n_i = self.n as i32;
+        let (ne_i, ns_i, nq_i) = (self.ne as i32, self.nsite as i32, self.nqp as i32);
+        let split_i = split as i32;
+        let planes = na * self.nqp;
+        let shared = (2 * self.n * 8) as u32;
+        let mut b = s.launch_builder(&engine.accept_upd);
+        b.arg(&self.acc)
+            .arg(&mut self.inv)
+            .arg(&self.pend)
+            .arg(&self.vecs)
+            .arg(&mut self.pf)
+            .arg(&self.pfnew)
+            .arg(&n_i)
+            .arg(&ne_i)
+            .arg(&ns_i)
+            .arg(&nq_i)
+            .arg(&split_i);
+        // SAFETY: kernel ABI of k_accept_upd.
+        unsafe {
+            b.launch(LaunchConfig {
+                grid_dim: ((planes * split) as u32, 1, 1),
+                block_dim: (nt, 1, 1),
+                shared_mem_bytes: shared,
+            })
+        }
+        .expect("accept_upd");
+    }
+
+    /// Two-phase accept with independent vector/update splits: the vector phase should stay at
+    /// split = 1 (it reads whole columns of the plane), the update splits by rows (each block
+    /// reads only its own rows, so its global traffic stays one plane read + one write).
+    fn launch_accept_split2(
+        &mut self,
+        engine: &Engine,
+        na: usize,
+        split_vec: usize,
+        split_upd: usize,
+        nt: u32,
+    ) {
+        self.launch_accept_vec_only(engine, na, split_vec, nt);
+        self.launch_accept_upd_only(engine, na, split_upd, nt);
+    }
+
+    /// Two-phase accept: ILP vector phase (cpt2, double2) + row-split update.
+    fn launch_accept_split_ilp(
+        &mut self,
+        engine: &Engine,
+        na: usize,
+        split_upd: usize,
+        nt_vec: u32,
+        nt_upd: u32,
+    ) {
+        self.launch_accept_vec_ilp(engine, na, 2, nt_vec);
+        self.launch_accept_upd_only(engine, na, split_upd, nt_upd);
     }
 
     /// Two-phase accept: vector phase (split rows of the GEMV) + update phase.
@@ -613,6 +1118,18 @@ fn main() {
             let (d, h) = case.time_launch(&engine, 50, |c, e| c.launch_accept_v2(e, 1, nt));
             println!("{n},k_accept_v2_nt{nt},1,{:.2},{:.2}", d * 1e6, h * 1e6);
         }
+        for nt in [256u32, 512] {
+            let (d, h) = case.time_launch(&engine, 50, |c, e| c.launch_accept_ilp(e, 1, nt));
+            println!("{n},k_accept_ilp_nt{nt},1,{:.2},{:.2}", d * 1e6, h * 1e6);
+        }
+        for nt in [256u32, 512] {
+            let (d, h) = case.time_launch(&engine, 50, |c, e| c.launch_accept_ilps(e, 1, nt));
+            println!("{n},k_accept_ilps_nt{nt},1,{:.2},{:.2}", d * 1e6, h * 1e6);
+        }
+        for nt in [256u32, 512] {
+            let (d, h) = case.time_launch(&engine, 50, |c, e| c.launch_accept_ilpn(e, 1, nt));
+            println!("{n},k_accept_ilpn_nt{nt},1,{:.2},{:.2}", d * 1e6, h * 1e6);
+        }
         for (split, nt) in [
             (1usize, 256u32),
             (4, 256),
@@ -628,6 +1145,94 @@ fn main() {
                 d * 1e6,
                 h * 1e6
             );
+        }
+        // phase timings: vector phase alone (split 1 and 4) and update alone (split 4/8/16)
+        for (label, split, nt) in [
+            ("vec_only", 1usize, 512u32),
+            ("vec_only", 4, 512),
+            ("upd_only", 4, 256),
+            ("upd_only", 8, 256),
+            ("upd_only", 16, 256),
+        ] {
+            let (d, h) = if label == "vec_only" {
+                case.time_launch(&engine, 50, |c, e| {
+                    c.launch_accept_vec_only(e, 1, split, nt)
+                })
+            } else {
+                case.time_launch(&engine, 50, |c, e| {
+                    c.launch_accept_upd_only(e, 1, split, nt)
+                })
+            };
+            println!(
+                "{n},k_accept_{label}_s{split}_nt{nt},1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+        }
+        // split2: vector split 1 + update split S (the candidate production layout)
+        for (sv, su, nt) in [
+            (1usize, 2usize, 256u32),
+            (1, 4, 256),
+            (1, 4, 512),
+            (1, 8, 256),
+            (1, 16, 256),
+        ] {
+            let (d, h) =
+                case.time_launch(&engine, 50, |c, e| c.launch_accept_split2(e, 1, sv, su, nt));
+            println!(
+                "{n},k_accept_split2_v{sv}u{su}_nt{nt},1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+        }
+        // ILP vector phase: CPT adjacent columns per thread
+        for (cpt, nt) in [(2usize, 256u32), (2, 512), (4, 256), (4, 512)] {
+            let (d, h) =
+                case.time_launch(&engine, 50, |c, e| c.launch_accept_vec_ilp(e, 1, cpt, nt));
+            println!(
+                "{n},k_accept_vec_ilp_cpt{cpt}_nt{nt},1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+        }
+        for (su, ntv, ntu) in [
+            (4usize, 512u32, 256u32),
+            (8, 512, 256),
+            (8, 512, 512),
+            (16, 512, 256),
+        ] {
+            let (d, h) = case.time_launch(&engine, 50, |c, e| {
+                c.launch_accept_split_ilp(e, 1, su, ntv, ntu)
+            });
+            println!(
+                "{n},k_accept_split_ilp_u{su}_v{ntv}_u{ntu},1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+        }
+        // reset-per-rep variants (valid starting inverse, like production)
+        {
+            let (d, h) = case.time_launch_reset(&engine, 50, |c, e| c.launch_accept_nt(e, 1, 512));
+            println!("{n},reset_k_accept_nt512,1,{:.2},{:.2}", d * 1e6, h * 1e6);
+            let (d, h) = case.time_launch_reset(&engine, 50, |c, e| c.launch_accept_ilp(e, 1, 512));
+            println!(
+                "{n},reset_k_accept_ilp_nt512,1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+            let (d, h) =
+                case.time_launch_reset(&engine, 50, |c, e| c.launch_accept_ilps(e, 1, 512));
+            println!(
+                "{n},reset_k_accept_ilps_nt512,1,{:.2},{:.2}",
+                d * 1e6,
+                h * 1e6
+            );
+            for (su, ntu) in [(8usize, 256u32), (16, 256)] {
+                let (d, h) = case.time_launch_reset(&engine, 50, |c, e| {
+                    c.launch_accept_split_ilp(e, 1, su, 512, ntu)
+                });
+                println!("{n},reset_split_ilp_u{su},1,{:.2},{:.2}", d * 1e6, h * 1e6);
+            }
         }
         let items = 1usize;
         let (d, h) = case.time_launch(&engine, 50, |c, e| c.launch_commit(e, items));
@@ -656,10 +1261,26 @@ fn main() {
         }
         check!("accept_v2", |c: &mut Case, e: &Engine| c
             .launch_accept_v2(e, 1, 256));
+        check!("accept_ilp", |c: &mut Case, e: &Engine| c
+            .launch_accept_ilp(e, 1, 512));
+        check!("accept_ilps", |c: &mut Case, e: &Engine| c
+            .launch_accept_ilps(e, 1, 512));
+        check!("accept_ilpn", |c: &mut Case, e: &Engine| c
+            .launch_accept_ilpn(e, 1, 512));
         check!("split1", |c: &mut Case, e: &Engine| c
             .launch_accept_split(e, 1, 1, 256));
         check!("split8", |c: &mut Case, e: &Engine| c
             .launch_accept_split(e, 1, 8, 256));
+        check!("ilp2_upd4", |c: &mut Case, e: &Engine| {
+            c.launch_accept_vec_ilp(e, 1, 2, 256);
+            c.launch_accept_upd_only(e, 1, 4, 256);
+        });
+        check!("ilp4_upd8", |c: &mut Case, e: &Engine| {
+            c.launch_accept_vec_ilp(e, 1, 4, 256);
+            c.launch_accept_upd_only(e, 1, 8, 256);
+        });
+        check!("split_ilp", |c: &mut Case, e: &Engine| c
+            .launch_accept_split_ilp(e, 1, 8, 512, 256));
         // exchange branch (two-electron pending move): bit checksum of the resident inverse
         {
             let s = case.ctx.default_stream();

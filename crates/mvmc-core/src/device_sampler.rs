@@ -369,6 +369,40 @@ struct TeacherState {
     report: TeacherReport,
 }
 
+/// Final accept/reject with optional teacher forcing (shared by the channel stage and the inline
+/// single-walker stage).
+fn apply_teacher(teacher: &mut Option<TeacherState>, d: &MetropolisDecision) -> bool {
+    let Some(ts) = teacher.as_mut() else {
+        return d.accepted;
+    };
+    let Some(&(w_ref, u_ref)) = ts.t.reference.get(ts.pos) else {
+        ts.report.overrun += 1;
+        return d.accepted;
+    };
+    ts.pos += 1;
+    let r = &mut ts.report;
+    r.compared += 1;
+    if d.draw.to_bits() != u_ref.to_bits() {
+        r.draw_mismatches += 1;
+    }
+    let accept_ref = w_ref > u_ref;
+    let err = (d.weight - w_ref).abs();
+    r.max_weight_abs = r.max_weight_abs.max(err);
+    r.max_weight_rel = r
+        .max_weight_rel
+        .max(err / w_ref.abs().max(f64::MIN_POSITIVE));
+    let margin = (w_ref - u_ref).abs();
+    r.min_margin = r.min_margin.min(margin);
+    if d.accepted != accept_ref {
+        r.flips += 1;
+        let allowed = ts.t.weight_abs + ts.t.weight_rel * w_ref.abs();
+        if margin > err || margin > allowed {
+            r.defects += 1;
+        }
+    }
+    accept_ref
+}
+
 /// Reason carried by the stale-table panic after a device-resident run.
 pub const STALE_REASON: &str = "device-resident sampling run: inverses live on the device";
 
@@ -539,35 +573,7 @@ impl RealPfStage for WalkerStage {
     }
 
     fn decide(&mut self, d: &MetropolisDecision) -> bool {
-        let Some(ts) = self.teacher.as_mut() else {
-            return d.accepted;
-        };
-        let Some(&(w_ref, u_ref)) = ts.t.reference.get(ts.pos) else {
-            ts.report.overrun += 1;
-            return d.accepted;
-        };
-        ts.pos += 1;
-        let r = &mut ts.report;
-        r.compared += 1;
-        if d.draw.to_bits() != u_ref.to_bits() {
-            r.draw_mismatches += 1;
-        }
-        let accept_ref = w_ref > u_ref;
-        let err = (d.weight - w_ref).abs();
-        r.max_weight_abs = r.max_weight_abs.max(err);
-        r.max_weight_rel = r
-            .max_weight_rel
-            .max(err / w_ref.abs().max(f64::MIN_POSITIVE));
-        let margin = (w_ref - u_ref).abs();
-        r.min_margin = r.min_margin.min(margin);
-        if d.accepted != accept_ref {
-            r.flips += 1;
-            let allowed = ts.t.weight_abs + ts.t.weight_rel * w_ref.abs();
-            if margin > err || margin > allowed {
-                r.defects += 1;
-            }
-        }
-        accept_ref
+        apply_teacher(&mut self.teacher, d)
     }
 }
 
@@ -1039,7 +1045,7 @@ where
     S: DeviceService + Send + ?Sized,
     R: Reducer + ?Sized,
 {
-    run_lockstep_real_one_timed(
+    run_lockstep_real_one_inline(
         data,
         state,
         rng,
@@ -1154,6 +1160,341 @@ where
         Some(e) => Err(e),
         None => Ok((run, loop_stats)),
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Inline single-walker stage (issue #517 milestone 4): the service runs on the walker's thread
+// ---------------------------------------------------------------------------------------------
+
+/// [`RealPfStage`] that drives a [`DeviceService`] **directly on the calling thread** for the
+/// production single chain. The channel runner ([`run_service_loop`]) pays a per-hop channel send,
+/// a reply-slot lock/unlock pair and a wake per round; with one walker there is nothing to batch
+/// across walkers, so the protocol can be a plain function call. The requests and their order are
+/// exactly the channel stage's: an accepted move is deferred and applied in the round of the next
+/// blocking operation (or at the end of the run), so the device sees the same batches.
+pub struct InlineStage<'a, S: DeviceService + ?Sized> {
+    service: &'a mut S,
+    walker: usize,
+    geom: Geometry,
+    teacher: Option<TeacherState>,
+    /// Pending proposal (the accepted-move bookkeeping of the channel stage).
+    pending: Option<ProposeReq>,
+    /// Pfaffians of the proposed exchange, copied to the host buffer when it is accepted.
+    exchange_pf: Vec<f64>,
+    /// An accepted move that has not reached the device yet.
+    accept_pending: bool,
+    /// The Slater table was registered with the service (once per prepared run).
+    registered: bool,
+    fast: FastBatch,
+    slow: SlowBatch,
+    /// A slow batch is in flight and must be reaped before the next request.
+    slow_inflight: bool,
+    /// Reused proposal output buffer (`round` returns an owned `Vec`).
+    out: Vec<f64>,
+    stats: LockstepStats,
+}
+
+impl<'a, S: DeviceService + ?Sized> InlineStage<'a, S> {
+    /// New stage for walker 0 with an optional teacher.
+    pub fn new(service: &'a mut S, geom: Geometry, teacher: Option<Teacher>) -> Self {
+        Self {
+            service,
+            walker: 0,
+            geom,
+            teacher: teacher.map(|t| TeacherState {
+                t,
+                pos: 0,
+                report: TeacherReport {
+                    min_margin: f64::INFINITY,
+                    ..TeacherReport::default()
+                },
+            }),
+            pending: None,
+            exchange_pf: Vec::new(),
+            accept_pending: false,
+            registered: false,
+            fast: FastBatch::default(),
+            slow: SlowBatch::default(),
+            slow_inflight: false,
+            out: Vec::new(),
+            stats: LockstepStats::default(),
+        }
+    }
+
+    /// Queue the deferred accepted move (if any) so the next round applies it first.
+    fn queue_accept(&mut self) {
+        if self.accept_pending {
+            self.fast.accepts.push(self.walker);
+            self.accept_pending = false;
+        }
+    }
+
+    /// Run one service round with the queued requests; the proposal reply stays in `self.out`.
+    fn round(&mut self) -> StageResult<()> {
+        self.stats.passes += 1;
+        self.stats.proposals += self.fast.proposes.len();
+        self.stats.accepts += self.fast.accepts.len();
+        self.stats.begins += self.slow.begins.len();
+        self.stats.recomputes += self.slow.recomputes.len();
+        self.stats.max_batch = self.stats.max_batch.max(self.fast.proposes.len());
+        let has_slow = self.slow.walkers() > 0;
+        let t = Instant::now();
+        let mut fast = std::mem::take(&mut self.fast);
+        let mut slow = std::mem::take(&mut self.slow);
+        let out = self.service.round(&fast, &slow);
+        self.stats.round_s += t.elapsed().as_secs_f64();
+        fast.proposes.clear();
+        fast.accepts.clear();
+        slow.begins.clear();
+        slow.recomputes.clear();
+        self.fast = fast;
+        self.slow = slow;
+        match out {
+            Ok(pf) => {
+                self.out = pf;
+                self.slow_inflight = has_slow;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Block until the in-flight slow batch completes and return its reply.
+    fn wait_slow(&mut self) -> StageResult<SlowReply> {
+        debug_assert!(self.slow_inflight);
+        let done = self.service.poll_slow(true)?;
+        self.slow_inflight = false;
+        if let Some(reply) = done.into_iter().find(|r| r.walkers() > 0) {
+            return Ok(reply);
+        }
+        // `poll_slow(true)` may have completed a different batch first; one more non-blocking
+        // query returns the queued reply of this walker.
+        if let Some(reply) = self
+            .service
+            .poll_slow(false)?
+            .into_iter()
+            .find(|r| r.walkers() > 0)
+        {
+            return Ok(reply);
+        }
+        Err("device service did not answer the slow batch".to_string())
+    }
+
+    /// Flush a trailing accepted move (issue #465) so the resident tables match the final
+    /// configuration.
+    pub fn flush_accept(&mut self) -> StageResult<()> {
+        if self.accept_pending {
+            self.queue_accept();
+            self.round()?;
+        }
+        Ok(())
+    }
+
+    fn slot_move(ele_idx: &[i64], slot: usize, spin: u8) -> SlotMove {
+        SlotMove {
+            slot: slot as u32,
+            spin,
+            site: ele_idx[slot] as u32,
+        }
+    }
+}
+
+impl<S: DeviceService + ?Sized> RealPfStage for InlineStage<'_, S> {
+    fn begin(
+        &mut self,
+        g: &StageGeom,
+        t: &mut StageTables<'_>,
+        ele_idx: &[i64],
+    ) -> StageResult<()> {
+        if g.qp_start != 0 || g.qp_end != self.geom.n_qp {
+            return Err("device sampler needs the full QP range (no MPI QP split)".to_string());
+        }
+        if !self.registered {
+            // The Slater table changes on every SR step, so `prepare` (called per series) clears
+            // the service's copy and the table is (re-)uploaded here.
+            self.service.register_slater(0, self.geom, t.slater_elm)?;
+            self.registered = true;
+        }
+        self.slow.begins.push(BeginReq {
+            walker: self.walker,
+            slater: 0,
+            ele_idx: ele_idx.to_vec(),
+            pf: t.pf_m.to_vec(),
+        });
+        self.round()?;
+        let reply = self.wait_slow()?;
+        if !reply.begins.contains(&self.walker) {
+            return Err("device service ignored the initial table request".to_string());
+        }
+        Ok(())
+    }
+
+    fn propose_hop(
+        &mut self,
+        _g: &StageGeom,
+        _t: &mut StageTables<'_>,
+        ele_idx: &[i64],
+        ma: usize,
+        spin: u8,
+        pf_new: &mut [f64],
+    ) -> StageResult<()> {
+        let slot = ma + spin as usize * self.geom.n_elec;
+        let req = ProposeReq {
+            walker: self.walker,
+            a: Self::slot_move(ele_idx, slot, spin),
+            b: None,
+        };
+        self.pending = Some(req);
+        self.queue_accept();
+        self.fast.proposes.push(req);
+        self.round()?;
+        pf_new.copy_from_slice(&self.out);
+        Ok(())
+    }
+
+    fn accept_hop(
+        &mut self,
+        _g: &StageGeom,
+        t: &mut StageTables<'_>,
+        _ele_idx: &[i64],
+        _ma: usize,
+        _spin: u8,
+        pf_new: &[f64],
+    ) -> StageResult<()> {
+        self.pending = None;
+        self.accept_pending = true;
+        t.pf_m.copy_from_slice(pf_new);
+        Ok(())
+    }
+
+    fn propose_exchange(
+        &mut self,
+        _g: &StageGeom,
+        _t: &mut StageTables<'_>,
+        ele_idx: &[i64],
+        slots: [(usize, u8); 2],
+        pf_new: &mut [f64],
+    ) -> StageResult<()> {
+        let ne = self.geom.n_elec;
+        let req = ProposeReq {
+            walker: self.walker,
+            a: Self::slot_move(ele_idx, slots[0].0 + slots[0].1 as usize * ne, slots[0].1),
+            b: Some(Self::slot_move(
+                ele_idx,
+                slots[1].0 + slots[1].1 as usize * ne,
+                slots[1].1,
+            )),
+        };
+        self.pending = Some(req);
+        self.queue_accept();
+        self.fast.proposes.push(req);
+        self.round()?;
+        pf_new.copy_from_slice(&self.out);
+        self.exchange_pf = self.out.clone();
+        Ok(())
+    }
+
+    fn accept_exchange(
+        &mut self,
+        _g: &StageGeom,
+        t: &mut StageTables<'_>,
+        _ele_idx: &[i64],
+        _slots: [(usize, u8); 2],
+        _old_sites: [usize; 2],
+    ) -> StageResult<()> {
+        self.pending = None;
+        self.accept_pending = true;
+        t.pf_m.copy_from_slice(&self.exchange_pf);
+        Ok(())
+    }
+
+    fn recompute(
+        &mut self,
+        _g: &StageGeom,
+        t: &mut StageTables<'_>,
+        ele_idx: &[i64],
+    ) -> StageResult<bool> {
+        self.queue_accept();
+        self.slow.recomputes.push(RecomputeReq {
+            walker: self.walker,
+            ele_idx: ele_idx.to_vec(),
+        });
+        self.round()?;
+        let reply = self.wait_slow()?;
+        for (w, failed, pf) in reply.recomputes {
+            if w == self.walker {
+                if !failed {
+                    t.pf_m.copy_from_slice(&pf);
+                }
+                return Ok(failed);
+            }
+        }
+        Err("device service ignored the Pfaffian recomputation".to_string())
+    }
+
+    fn decide(&mut self, d: &MetropolisDecision) -> bool {
+        apply_teacher(&mut self.teacher, d)
+    }
+}
+
+/// Run the single production chain `(data, state, rng)` against `service` with the service on the
+/// calling thread (issue #517 milestone 4). Same request order as [`run_lockstep_real_one`], no
+/// channel, no reply slot and no wake: the per-hop protocol is a function call.
+///
+/// # Errors
+///
+/// Like [`run_lockstep_real_one`].
+pub fn run_lockstep_real_one_inline<S, R, const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    reducer: &R,
+    service: &mut S,
+    mut opts: LockstepOptions,
+    timer: &mut CTimer<TIMED>,
+) -> Result<(WalkerRun, LockstepStats), String>
+where
+    S: DeviceService + ?Sized,
+    R: Reducer + ?Sized,
+{
+    if !opts.teachers.is_empty() && opts.teachers.len() != 1 {
+        return Err("one teacher per walker is required".to_string());
+    }
+    crate::serial_blas::initialize();
+    let geom = Geometry {
+        n_site: data.modpara.nsite as usize,
+        n_elec: data.modpara.nelec as usize,
+        n_qp: state.slater_matrix.slater_elm_real.n_qp_full(),
+    };
+    service.prepare(geom, 1)?;
+    let teacher = std::mem::take(&mut opts.teachers).into_iter().next();
+    let mut stage = InlineStage::new(service, geom, teacher);
+    trace::start_decisions();
+    sync_slater_real(state);
+    let result = vmc_make_sample_real_staged(data, state, rng, timer, reducer, &mut stage);
+    let decisions = trace::finish_decisions();
+    // Same issue #454 contract as the channel runner: the device holds the accepted inverses.
+    state.slater_matrix.inv_m_real.mark_stale(STALE_REASON);
+    // Issue #465: the last accepted move may still be queued.
+    let flush = stage.flush_accept();
+    let result: Result<SampleStats, String> = result.map_err(|e| e.to_string());
+    let result = match (result, flush) {
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(e)) => Err(e),
+        (Ok(stats), Ok(())) => Ok(stats),
+    };
+    opts.passes = stage.stats.passes;
+    let stats = stage.stats;
+    let teacher = stage.teacher.take().map(|t| t.report);
+    drop(stage);
+    Ok((
+        WalkerRun {
+            stats: result,
+            decisions,
+            teacher,
+        },
+        stats,
+    ))
 }
 
 // ---------------------------------------------------------------------------------------------
