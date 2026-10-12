@@ -124,8 +124,7 @@ impl Engine {
         let mut pf = s.alloc_zeros::<f64>(planes).expect("PF");
         let mut st = s.alloc_zeros::<i32>(planes).expect("ST");
         let n_i = n as i32;
-        let nt = n.next_power_of_two().clamp(32, 256) as u32;
-        let shared = (n * 8 + nt as usize * 8 + nt as usize * 4 + n * 8) as u32;
+        let (nt, shared) = mvmc_gpu_cuda::pfaffian::launch_geometry(n, 8, 1);
         macro_rules! refresh_and_run {
             () => {{
                 {
