@@ -3,8 +3,8 @@
 //!
 //! One CUDA block per walker. A single block is latency-bound, so the throughput only grows
 //! once enough walkers fill the device (the GPU-readiness design's claim). Each launch runs
-//! `HOPS` hops per walker; kept below the `nsite`-accept rebuild window so no host rebuild is
-//! interleaved, isolating device sampling throughput.
+//! at most `HOPS` hops per walker, stopping at the accepted-move rebuild window when
+//! necessary. Report the actual completed hops, with no host rebuild interleaved.
 
 use std::time::Instant;
 
@@ -34,11 +34,6 @@ impl Lcg {
     fn below(&mut self, n: usize) -> usize {
         (self.next_u32() as usize) % n
     }
-}
-
-fn log_ip(pf: &[f64], weights: &[f64]) -> f64 {
-    let ip: f64 = weights.iter().zip(pf).map(|(w, p)| w * p).sum();
-    ip.abs().ln()
 }
 
 fn random_config(rng: &mut Lcg) -> Vec<i32> {
@@ -72,8 +67,10 @@ fn interval_walker_sweep_l128() {
     let mut slater = SlaterElmFlat::<f64>::zeros(NQP, NSITE);
     for q in 0..NQP {
         for row in 0..n2 {
-            for col in 0..n2 {
-                slater.set(q, row, col, rng.next_f64() - 0.5);
+            for col in row + 1..n2 {
+                let value = rng.next_f64() - 0.5;
+                slater.set(q, row, col, value);
+                slater.set(q, col, row, -value);
             }
         }
     }
@@ -123,9 +120,7 @@ fn interval_walker_sweep_l128() {
             jast: &jast,
             params: &params,
         };
-        let tape: Vec<u32> = (0..walkers * HOPS * 5)
-            .map(|_| rng.next_u32())
-            .collect();
+        let tape: Vec<u32> = (0..walkers * HOPS * 5).map(|_| rng.next_u32()).collect();
         let sampler = backend
             .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
             .expect("prepare");
@@ -141,18 +136,16 @@ fn interval_walker_sweep_l128() {
         let _ = backend
             .with_backend_session(|s| sampler.download_pf(s, 0))
             .expect("warmup pf");
-        let logip_all: Vec<f64> = (0..walkers)
-            .map(|k| log_ip(&pf_all[k * NQP..(k + 1) * NQP], &weights))
-            .collect();
-        let aw0 = vec![0i32; walkers];
+        // Issue #552: resetting only inverse/Pfaffians after warm-up leaves the mutated
+        // configuration/occupancy paired with the original inverse. Recreate the entire
+        // state; the compiled module stays cached on the backend.
+        drop(sampler);
+        let sampler = backend
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
+            .expect("prepare fresh timed state");
         backend
-            .with_backend_session(|s| sampler.reset_offsets(s))
-            .expect("reset offsets");
-        backend
-            .with_backend_session(|s| {
-                sampler.upload_tables(s, &inv_all, &pf_all, &aw0, &logip_all)
-            })
-            .expect("reset tables");
+            .with_backend_session(|s| sampler.upload_tape(s, &tape))
+            .expect("upload fresh tape");
         let t = Instant::now();
         let results = backend
             .with_backend_session(|s| sampler.run(s))
@@ -219,8 +212,10 @@ fn interval_full_run_l128() {
     let mut slater = SlaterElmFlat::<f64>::zeros(NQP, NSITE);
     for q in 0..NQP {
         for row in 0..n2 {
-            for col in 0..n2 {
-                slater.set(q, row, col, rng.next_f64() - 0.5);
+            for col in row + 1..n2 {
+                let value = rng.next_f64() - 0.5;
+                slater.set(q, row, col, value);
+                slater.set(q, col, row, -value);
             }
         }
     }
@@ -237,8 +232,10 @@ fn interval_full_run_l128() {
         let ele_i64: Vec<i64> = ele_i32.iter().map(|&v| v as i64).collect();
         let mut inv = InvMColMajor::<f64>::zeros(NQP, NE);
         let mut pf = vec![0.0f64; NQP];
-        calc_m_all_real(&ele_i64, &slater, &mut inv, &mut pf, 0, NQP, NSITE, NE, &pool)
-            .expect("host Pfaffian");
+        calc_m_all_real(
+            &ele_i64, &slater, &mut inv, &mut pf, 0, NQP, NSITE, NE, &pool,
+        )
+        .expect("host Pfaffian");
         ele_all.extend_from_slice(&ele_i32);
         for q in 0..NQP {
             inv_all.extend_from_slice(inv.qp_matrix_slice(q));
