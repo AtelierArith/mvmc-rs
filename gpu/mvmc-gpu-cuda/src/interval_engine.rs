@@ -353,6 +353,24 @@ impl SamplingEngine for IntervalEngine {
         for (dst, src) in ctx.ele_idx.iter_mut().zip(&st.ele) {
             *dst = *src as i64;
         }
+        // Rebuild the host occupancy/counters consistent with the device configuration: the
+        // driver does not run its own host move loop for this engine, so these working arrays
+        // would otherwise stay at their pre-block values.
+        let (ne, nsite) = (ctx.n_elec, ctx.n_site);
+        for x in ctx.ele_cfg.iter_mut() {
+            *x = -1;
+        }
+        for x in ctx.ele_num.iter_mut() {
+            *x = 0;
+        }
+        for spin in 0..2usize {
+            for m in 0..ne {
+                let site = st.ele[m + spin * ne] as usize;
+                ctx.ele_cfg[site + spin * nsite] = m as i64;
+                ctx.ele_num[site + spin * nsite] = 1;
+            }
+        }
+        mvmc_core::sampling::projection::make_proj_cnt(ctx.ele_proj_cnt, ctx.ele_num, ctx.data);
         ctx.pf_m.copy_from_slice(&st.pf);
         *ctx.log_ip_old = st.logip;
         ctx.counter[0] += n_in_step as i64;
@@ -445,9 +463,9 @@ impl SamplerStages for CudaIntervalSamplerStages {
         timing: &mut dyn SamplerTiming,
         reducer: &dyn Reducer,
     ) -> Result<SampleStats, StageError> {
-        if reducer.reduction_size() != 1 {
+        if reducer.world_size() != reducer.reduction_size() {
             return Err(StageError::Unsupported(
-                "the interval sampler supports a single-process chain (reduction size 1)"
+                "the interval sampler supports ungrouped walker chains (world size == reduction size)"
                     .to_string(),
             ));
         }

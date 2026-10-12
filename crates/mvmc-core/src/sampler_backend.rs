@@ -284,14 +284,20 @@ pub fn check_sampler_reducer(
     kind: SamplerBackendKind,
     reducer: &dyn Reducer,
 ) -> Result<(), StageError> {
-    if reducer.reduction_size() != 1 {
+    if kind.is_group() {
+        // The interval sampler batches every walker of one device into one call; a walker is
+        // its own chain (`reduction_size == world_size`, the multi-walker SR count). An
+        // in-chain QP split (`reduction_size != world_size`) is not representable.
+        if reducer.world_size() != reducer.reduction_size() {
+            return Err(StageError::Unsupported(
+                "the interval sampler supports ungrouped walker chains (world size == reduction size)"
+                    .to_string(),
+            ));
+        }
+    } else if reducer.world_size() != 1 || reducer.reduction_size() != 1 {
         return Err(StageError::Unsupported(
-            "the CUDA sampler supports a single-process chain (reduction size 1)".to_string(),
-        ));
-    }
-    if !kind.is_group() && reducer.world_size() != 1 {
-        return Err(StageError::Unsupported(
-            "the CUDA lock-step sampler supports a single-process chain (world size 1)".to_string(),
+            "the CUDA lock-step sampler supports a single-process chain (world/reduction size 1)"
+                .to_string(),
         ));
     }
     Ok(())
