@@ -49,6 +49,8 @@ Builds use the CPUs available to their process, including CPU affinity limits.
 The image's MPICH build resolves `nproc` instead of fixing four make jobs; its
 install phase uses the same budget. Cargo's container configuration has no
 fixed job count, so ordinary Cargo builds also use available CPUs.
+The CI job-local MPI installer uses the same resolver and records the chosen
+jobs, resolver source hash and CPU-counting tool hashes in its provider receipt.
 
 For a common budget across Cargo, make, CMake and Julia package precompilation,
 run build commands through the build-only wrapper:

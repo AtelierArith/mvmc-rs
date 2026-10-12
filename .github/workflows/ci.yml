@@ -32,6 +32,7 @@ jobs:
         run: |
           for script in .devcontainer/*.sh; do bash -n "$script"; done
           sh -n .devcontainer/build-jobs.sh
+          bash -n scripts/issue234/native/install-pmi1-mpich.sh
           bash .devcontainer/test-build-parallelism.sh
 
   tests:
