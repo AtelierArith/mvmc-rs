@@ -147,6 +147,18 @@ fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
     occ
 }
 
+/// Occupancy (`ele_num`, `[site] up then [site] down`) of one walker's configuration.
+fn walker_occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
+    let mut occ = vec![0i32; 2 * geom.nsite];
+    for spin in 0..2usize {
+        for j in 0..geom.ne {
+            let site = ele[j + spin * geom.ne] as usize;
+            occ[site + spin * geom.nsite] = 1;
+        }
+    }
+    occ
+}
+
 impl IntervalSampler {
     /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in hops
     /// per walker (uploaded with [`Self::upload_tape`]); `exchange_fraction` is the Julia GPU
@@ -470,5 +482,66 @@ impl IntervalSampler {
         })
         .map_err(|e| e.to_string())?;
         Ok(out)
+    }
+
+    /// Upload walker `w`'s resident sampling state into its own slot: configuration, the
+    /// occupancy derived from it, inverse, Pfaffians, accepted-move window and cached
+    /// `log|IP|`. Used by a group coordinator to stage each walker before a batched interval
+    /// run; `inv` is the walker's `nqp*n*n` inverse and `pf` its `nqp` Pfaffians.
+    pub fn upload_walker<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+        w: usize,
+        ele: &[i32],
+        inv: &[f64],
+        pf: &[f64],
+        aw: i32,
+        logip: f64,
+    ) -> Result<(), String> {
+        let g = self.geom;
+        let occ = walker_occupancy(ele, &g);
+        with_raw_exec(backend, "mvmc.interval.upload_walker", |exec| {
+            // SAFETY: every pointer is offset into a buffer sized for `walkers` slots and the
+            // slice lengths match one slot; the scope synchronizes before returning.
+            unsafe {
+                exec.upload(exec.ptr(&self.ele)? + (w * g.n * 4) as u64, ele)?;
+                exec.upload(exec.ptr(&self.occ)? + (w * 2 * g.nsite * 4) as u64, &occ)?;
+                exec.upload(
+                    exec.ptr(&self.inv)? + (w * g.nqp * g.n * g.n * 8) as u64,
+                    inv,
+                )?;
+                exec.upload(exec.ptr(&self.pf)? + (w * g.nqp * 8) as u64, pf)?;
+                exec.upload(exec.ptr(&self.aw)? + (w * 4) as u64, &[aw])?;
+                exec.upload(exec.ptr(&self.logip)? + (w * 8) as u64, &[logip])?;
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())
+    }
+
+    /// Download walker `w`'s resident sampling state after an interval run: configuration,
+    /// Pfaffians, accepted-move window and cached `log|IP|`.
+    pub fn download_walker<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+        w: usize,
+    ) -> Result<(Vec<i32>, Vec<f64>, i32, f64), String> {
+        let g = self.geom;
+        let mut ele = vec![0i32; g.n];
+        let mut pf = vec![0f64; g.nqp];
+        let mut aw = vec![0i32; 1];
+        let mut logip = vec![0f64; 1];
+        with_raw_exec(backend, "mvmc.interval.download_walker", |exec| {
+            // SAFETY: offsets index one walker slot of each resident buffer.
+            unsafe {
+                exec.download(&mut ele, exec.ptr(&self.ele)? + (w * g.n * 4) as u64)?;
+                exec.download(&mut pf, exec.ptr(&self.pf)? + (w * g.nqp * 8) as u64)?;
+                exec.download(&mut aw, exec.ptr(&self.aw)? + (w * 4) as u64)?;
+                exec.download(&mut logip, exec.ptr(&self.logip)? + (w * 8) as u64)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        Ok((ele, pf, aw[0], logip[0]))
     }
 }

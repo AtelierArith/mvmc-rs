@@ -201,3 +201,67 @@ fn interval_shared_tape_matches_julia_gpu() {
     assert_eq!(final_ele, fx.final_ele, "final configuration");
     assert_eq!(occ, fx.final_occupancy, "final occupancy");
 }
+
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_walker_upload_download_roundtrip() {
+    if !gpu_available() {
+        eprintln!("skipped: no CUDA device");
+        return;
+    }
+    let devices = cuda_devices().expect("device discovery");
+    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+
+    let (nsite, ne, nqp) = (8usize, 4usize, 2usize);
+    let n = 2 * ne;
+    let n2 = 2 * nsite;
+    let geom = IntervalGeometry {
+        walkers: 1,
+        n,
+        ne,
+        nsite,
+        nqp,
+        ngutz: 0,
+        nproj: 0,
+    };
+    let ele0 = vec![0i32, 1, 2, 3, 4, 5, 6, 7];
+    let inv0 = vec![0.25f64; nqp * n * n];
+    let pf0 = vec![1.0f64, 0.5];
+    let slater = vec![0.0f64; nqp * n2 * n2];
+    let weights = vec![1.0f64, 1.0];
+    let gutz = vec![-1i32; nsite];
+    let jast = vec![-1i32; nsite * nsite];
+    let params = vec![0.0f64];
+    let host = IntervalHost {
+        ele: &ele0,
+        inv: &inv0,
+        pf: &pf0,
+        slater: &slater,
+        weights: &weights,
+        gutz: &gutz,
+        jast: &jast,
+        params: &params,
+    };
+    let sampler = backend
+        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 4, 0.0))
+        .expect("prepare");
+
+    // Upload a distinct walker-0 state and read it back.
+    let ele1 = vec![4i32, 6, 0, 2, 5, 7, 1, 3];
+    let inv1 = vec![-0.125f64; nqp * n * n];
+    let pf1 = vec![0.75f64, -0.25];
+    backend
+        .with_backend_session(|s| sampler.upload_walker(s, 0, &ele1, &inv1, &pf1, 3, -1.5))
+        .expect("upload_walker");
+    let (ele_back, pf_back, aw_back, logip_back) = backend
+        .with_backend_session(|s| sampler.download_walker(s, 0))
+        .expect("download_walker");
+    assert_eq!(ele_back, ele1, "configuration round trip");
+    assert_eq!(pf_back, pf1, "Pfaffian round trip");
+    assert_eq!(aw_back, 3, "accepted-window round trip");
+    assert_eq!(logip_back, -1.5, "log|IP| round trip");
+    let ele_only = backend
+        .with_backend_session(|s| sampler.download_ele(s, 0))
+        .expect("download ele");
+    assert_eq!(ele_only, ele1);
+}

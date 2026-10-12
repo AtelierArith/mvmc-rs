@@ -203,6 +203,39 @@ A single-block launch is latency-bound and slower than the CPU (84 us/hop).
 The group backend must document and reject `W=1` (or route it to C order), like
 `check_serial_reducer` does today.
 
+### 3.6 The real work is the sampler loop, not the launch
+
+`sample_real` is not a thin wrapper: the production path is
+`vmc_make_sample_real_staged` (`crates/mvmc-core/src/sampling/driver.rs:128`),
+which runs `init_loc_spn`, a typed preflight, the real Slater sync, then either
+restores the burn snapshot or runs `make_initial_sample_normal_with_info` (which
+**draws RNG**), `calc_m_all_real`, `sampling_log_ip_real`, and the
+`nOutStep`/`nInStep` warm-up + measure loops that save configurations, advance
+the counters, update the burn flag and return `SampleStats`. A device sampler
+must reproduce all of that for the rest of the optimizer and the host
+measurement to stay unchanged.
+
+There is precedent: the CUDA lock-step path already reimplements this loop in
+`run_lockstep_real_one_inline`
+(`crates/mvmc-core/src/device_sampler.rs:1446`) behind the `SamplerService`
+trait, drawing the candidate on the host each hop and calling the device only
+for the Pfaffian stage. The interval group backend is the same kind of
+reimplementation, with two changes:
+
+* draw each walker's proposals into a **device tape** for a whole interval
+  instead of per hop (the Julia GPU contract of 2.1), and
+* run `k_interval_hop` once per interval for all `W` walkers (plus the batched
+  device rebuild), reading the saved configurations back at the measure points.
+
+So the remaining work is: (a) `IntervalSampler` per-walker upload/download of
+`ele`/`occ`/`inv`/`pf`/`aw`/`logip` and the tape; (b) a group backend that
+mirrors `run_lockstep_real_one_inline`'s loop but drives `IntervalSampler`
+through the 3.3 staging/rendezvous protocol; (c) the acquisition change of 3.2
+(per-walker handles + relaxed `check_serial_reducer`); (d) the state extraction
+from `VmcOptimizationState` (`electron_config`, `slater_matrix.inv_m_real`,
+`slater_matrix.pf_m_real`, the projection tables). This is the bulk of #547 and
+is where the group seam of 3.1 hooks in.
+
 ## 4. Measurement plan (E2E, L=128)
 
 After 2.1, 2.2 and 3:
