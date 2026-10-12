@@ -6,6 +6,9 @@ if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
     exit 1
 fi
 
+build_jobs=$(bash .devcontainer/build-jobs.sh)
+printf 'Available build jobs: %s (override with MVMC_BUILD_JOBS)\n' "$build_jobs"
+
 # Docker initializes empty named volumes as root. Make them usable by remoteUser.
 sudo mkdir -p "$CARGO_HOME" /home/vscode/.cache/mvmc
 sudo chown "$(id -u):$(id -g)" "$CARGO_HOME" /home/vscode/.cache/mvmc

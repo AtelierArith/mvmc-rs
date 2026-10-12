@@ -184,7 +184,7 @@ mod mpi_run {
     }
 
     /// Run the public entry point of `case` with `reducer`; returns the output dir.
-    fn run<R: Reducer + ?Sized>(case: &Case, dest: &Path, split: usize, reducer: &R) -> PathBuf {
+    fn run<R: Reducer>(case: &Case, dest: &Path, split: usize, reducer: &R) -> PathBuf {
         let (namelist, fixed) = prepare_inputs(case, dest, split);
         let data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
             &namelist,

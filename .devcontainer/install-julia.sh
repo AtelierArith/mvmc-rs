@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+precompile_project=
+if [[ $# -gt 0 ]]; then
+    if [[ $1 != --precompile || $# -gt 2 ]]; then
+        echo 'Usage: bash .devcontainer/install-julia.sh [--precompile [PROJECT]]' >&2
+        exit 2
+    fi
+    precompile_project=${2:-extern/Julia-mVMC}
+fi
+
 # Optional reference tooling. Ordinary Rust tests do not execute Julia.
 version=1.13.1
 archive="julia-${version}-linux-x86_64.tar.gz"
@@ -22,5 +31,12 @@ if [[ ! -x "$tools_dir/julia-${version}/bin/julia" ]]; then
     tar xzf "$download_dir/$archive" -C "$tools_dir"
 fi
 "$tools_dir/julia-${version}/bin/julia" --version
+if [[ -n $precompile_project ]]; then
+    script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+    JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-/home/vscode/.cache/mvmc/julia-depot} \
+    JULIA_PKG_PRECOMPILE_AUTO=0 bash "$script_dir/build.sh" \
+        "$tools_dir/julia-${version}/bin/julia" --project="$precompile_project" \
+        -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+fi
 printf 'Reference command: JULIA_DEPOT_PATH=%s/julia-depot %s/julia-%s/bin/julia --project=extern/Julia-mVMC\n' \
     /home/vscode/.cache/mvmc "$tools_dir" "$version"

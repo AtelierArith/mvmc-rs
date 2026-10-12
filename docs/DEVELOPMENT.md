@@ -45,6 +45,11 @@ liblapack-dev`) or build `libsfmt.so`/`libltl2inv.so` directly as
 links `-lopenblas`, so the same OpenBLAS/LAPACK packages satisfy both sides on
 Linux; macOS uses Homebrew OpenBLAS (see the top-level README). Keep BLAS threads
 pinned (`--threads 1` or the `*_NUM_THREADS=1` variables) for comparable runs.
+Build parallelism is separate: the Dev Container uses available CPUs for builds,
+and `.devcontainer/build.sh` shares an optional `MVMC_BUILD_JOBS` limit across
+Cargo, make, CMake and Julia precompilation. It preserves inherited jobservers
+and leaves benchmark runtime thread settings unchanged. See
+[the build policy](DEV_CONTAINER.md#build-parallelism) for commands and checks.
 
 To reproduce the 2026-10-08 single-thread comparison, run
 `scripts/run_julia_comparison.sh`. It runs small-model and Hubbard-chain

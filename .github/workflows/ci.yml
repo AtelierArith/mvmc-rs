@@ -23,6 +23,17 @@ env:
   BLIS_NUM_THREADS: '1'
 
 jobs:
+  build-policy:
+    name: Dev Container build parallelism
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate build-only parallelism and shell syntax
+        run: |
+          for script in .devcontainer/*.sh; do bash -n "$script"; done
+          sh -n .devcontainer/build-jobs.sh
+          bash .devcontainer/test-build-parallelism.sh
+
   tests:
     name: Tests (${{ matrix.platform.name }}, ${{ matrix.configuration.name }})
     runs-on: ${{ matrix.platform.os }}

@@ -43,6 +43,50 @@ The container uses its own Rust wrapper and target directory. `KACHE_CONFIG` poi
 `/opt/devcontainer/kache.toml`, and `RUSTC_WRAPPER` selects the installed kache.
 BLAS/OpenMP thread counts default to one for deterministic comparisons.
 
+## Build parallelism
+
+Builds use the CPUs available to their process, including CPU affinity limits.
+The image's MPICH build resolves `nproc` instead of fixing four make jobs; its
+install phase uses the same budget. Cargo's container configuration has no
+fixed job count, so ordinary Cargo builds also use available CPUs.
+
+For a common budget across Cargo, make, CMake and Julia package precompilation,
+run build commands through the build-only wrapper:
+
+```sh
+bash .devcontainer/build.sh cargo build --workspace --locked
+bash .devcontainer/build.sh make -C path/to/native/project
+# Optional limit for a memory-constrained build:
+MVMC_BUILD_JOBS=4 bash .devcontainer/build.sh cargo build --workspace --locked
+```
+
+`MVMC_BUILD_JOBS` accepts a positive decimal integer without leading zeros;
+unset or empty selects available CPUs. For an image build, pass the same name
+as a Docker build argument, for example
+`docker build --build-arg MVMC_BUILD_JOBS=4 -t mvmc-dev .devcontainer`.
+The resolver ignores `OMP_NUM_THREADS` and `OMP_THREAD_LIMIT` when counting
+build CPUs, because those variables control numerical execution, not compilers.
+The wrapper leaves Julia runtime and BLAS/OpenMP thread settings unchanged;
+single-thread benchmarks remain single-thread benchmarks.
+
+Nested native builds retain an inherited Cargo/make jobserver rather than
+starting another full-size worker pool. In that case the wrapper does not force
+Cargo/CMake parallel levels, and limits Julia precompilation to one task because
+Julia package workers do not consume make jobserver tokens. A top-level `cargo`
+command (including an absolute executable path) receives only its Cargo job
+budget, without independent make/CMake pools; Cargo supplies the jobserver to
+its native build scripts. Other standalone build commands receive
+`JULIA_NUM_PRECOMPILE_TASKS`, `CARGO_BUILD_JOBS`,
+`CMAKE_BUILD_PARALLEL_LEVEL` and make's job count share the resolved budget.
+Direct sequential compiler calls in a dependency's build script remain
+sequential; the wrapper does not rewrite upstream build scripts or their flags.
+
+Check this policy without compiling the workspace or rebuilding the image:
+
+```sh
+bash .devcontainer/test-build-parallelism.sh
+```
+
 ## Commands inside the container
 
 ```sh
@@ -89,6 +133,21 @@ export JULIA_DEPOT_PATH=/home/vscode/.cache/mvmc/julia-depot
 /home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia \
   --project=extern/Julia-mVMC path/to/reference-script.jl
 ```
+
+To install, instantiate and precompile the pinned reference with the build
+budget, use `bash .devcontainer/install-julia.sh --precompile`. An optional
+project argument selects another Julia environment, for example
+`--precompile extern/Julia-mVMC/test/gpu`. To rebuild optional reference native
+libraries, run Julia's `Pkg.build` through `.devcontainer/build.sh` as well:
+
+```sh
+bash .devcontainer/build.sh /home/vscode/.cache/mvmc/tools/julia-1.13.1/bin/julia \
+  --project=extern/Julia-mVMC -e 'using Pkg; Pkg.build("PfaPack"); Pkg.build("SFMT")'
+```
+
+This enables parallel make recipes and Julia package precompile workers where
+those tools support them. PfaPack's three direct compiler invocations are still
+ordered by its upstream build script.
 
 This invokes Julia 1.13.1 directly, equivalent to selecting `julia +1.13.1`
 through juliaup, and uses the checked-in `Manifest-v1.13.toml`. The persistent

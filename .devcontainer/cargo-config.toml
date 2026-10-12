@@ -1,5 +1,7 @@
 # Mounted read-only over workspace-local host Cargo settings inside the container.
 [build]
+# No fixed jobs count: Cargo uses available CPUs. build.sh supports a shared
+# MVMC_BUILD_JOBS override for Cargo and the other developer build tools.
 rustc-wrapper = "/opt/devtools/bin/kache"
 target-dir = "/home/vscode/.cache/mvmc/target/linux-x86_64"
 
