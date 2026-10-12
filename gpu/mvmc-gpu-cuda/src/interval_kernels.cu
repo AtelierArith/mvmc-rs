@@ -40,34 +40,43 @@
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-two inverse update (the k_accept `!two` branch) for one QP plane.
 // ---------------------------------------------------------------------------------------------
+// All groups reach every block barrier, including an inactive final QP tile. Within
+// each QP, every scalar sum keeps exactly the original ascending-j arithmetic order.
 __device__ inline void interval_hop_update(double* invq, const double* tab, int qp, const int* rs,
                                            int n, int n2, int msa, double* v1, double* v2,
-                                           double* v3, int tid, int nt) {
+                                           double* v3, int tid, int nt, bool active) {
   const int rsa = rs[msa];
-  for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
-  __syncthreads();
-  // vec1[msi] = sum_msj (-inv[msj*n+msi]) * slt[msj]  (column-major sweep, msj ascending)
-  for (int i = tid; i < n; i += nt) {
-    double acc = 0.0;
-#pragma unroll 8
-    for (int j = 0; j < n; ++j) acc += -invq[(size_t)j * n + i] * v3[j];
-    v1[i] = acc;
+  if (active) {
+    for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
   }
   __syncthreads();
-  const double inv_vec1_a = -1.0 / v1[msa];
-  for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
+  if (active) {
+    for (int i = tid; i < n; i += nt) {
+      double acc = 0.0;
+#pragma unroll 8
+      for (int j = 0; j < n; ++j) acc += -invq[(size_t)j * n + i] * v3[j];
+      v1[i] = acc;
+    }
+  }
   __syncthreads();
-  const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
-  for (int i = warp; i < n; i += nwarp) {
-    const double vi1 = v1[i], vi2 = v2[i];
-    const int rowoff = i * n;
-    for (int j = lane; j < n; j += 32) {
-      const int e = rowoff + j;
-      double x = invq[e];
-      x += vi1 * v2[j] - v1[j] * vi2;
-      if (j == msa) x -= vi2;
-      if (i == msa) x += v2[j];
-      invq[e] = x;
+  if (active) {
+    const double inv_vec1_a = -1.0 / v1[msa];
+    for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
+  }
+  __syncthreads();
+  if (active) {
+    const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
+    for (int i = warp; i < n; i += nwarp) {
+      const double vi1 = v1[i], vi2 = v2[i];
+      const int rowoff = i * n;
+      for (int j = lane; j < n; j += 32) {
+        const int e = rowoff + j;
+        double x = invq[e];
+        x += vi1 * v2[j] - v1[j] * vi2;
+        if (j == msa) x -= vi2;
+        if (i == msa) x += v2[j];
+        invq[e] = x;
+      }
     }
   }
   __syncthreads();
@@ -133,27 +142,32 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
 //   hops_done[W]   hops actually advanced (< max_hops when a rebuild was requested)
 //   rebuild[W]     1 when `aw` passed `nsite` (host must recompute before continuing)
 //
-// Shared memory: n ints (rs), then (nqp + 1 + 3n) doubles, then 8 ints (mv).
+// Shared memory: aligned n ints, nqp+1 doubles, reusable ratio/update scratch, 8 ints.
 // ---------------------------------------------------------------------------------------------
-extern "C" __global__ void k_interval_hop(
+__device__ __forceinline__ void interval_hop_impl(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
-    int n, int ne, int nsite, int nqp, int ngutz, int nproj, double exchange_fraction,
+    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
     int* hops_done, int* rebuild, int* accepts) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
   double* pfnew = sh;        // [nqp]
   double* out = sh + nqp;    // [1]
-  double* v1 = out + 1;
-  double* v2 = v1 + n;
-  double* v3 = v2 + n;
-  double* scq = v3 + n;  // [nqp][n] per-QP ratio scratch (parallel over QP)
-  int* mvw = reinterpret_cast<int*>(sh + nqp + 1 + 3 * n + (size_t)nqp * n);  // [8]
-
+  double* scratch = out + 1;
   const int w = blockIdx.x;
   const int tid = threadIdx.x, nt = blockDim.x;
+  const int nwarp = nt >> 5;
+  const int ratio_vectors = nwarp < nqp ? nwarp : nqp;
+  const int scratch_vectors = ratio_vectors > 3 * qp_groups ? ratio_vectors : 3 * qp_groups;
+  int* mvw = reinterpret_cast<int*>(scratch + (size_t)scratch_vectors * n);  // [8]
+  const int group_threads = nt / qp_groups;
+  const int group = tid / group_threads, group_tid = tid % group_threads;
+  double* v1 = scratch + (size_t)group * 3 * n;
+  double* v2 = v1 + n;
+  double* v3 = v2 + n;
+
   const int n2 = 2 * nsite;
   (void)exchange_fraction;  // hopping-only: the caller passes 0.0 (Julia NExUpdatePath == 0)
   const double* tab = slater;
@@ -222,7 +236,7 @@ extern "C" __global__ void k_interval_hop(
       const int lane = tid & 31, warp = tid >> 5, nwarp = nt >> 5;
       for (int q = warp; q < nqp; q += nwarp) {
         const double* invq = inv_w + (size_t)q * n * n;
-        double* sc = scq + (size_t)q * n;
+        double* sc = scratch + (size_t)warp * n;
         const int rsa = rs[msa];
         const double* row = tab + (((size_t)q * n2) + rsa) * n2;
         const double* inv_row = invq + (size_t)msa * n;
@@ -234,6 +248,7 @@ extern "C" __global__ void k_interval_hop(
           for (int j = 0; j < n; ++j) ratio += sc[j];
           pfnew[q] = -ratio * pf_w[q];
         }
+        __syncwarp();  // lane 0 must finish reading before the next QP reuses scratch
       }
       __syncthreads();
     }
@@ -259,9 +274,13 @@ extern "C" __global__ void k_interval_hop(
     }
     __syncthreads();
     if (mvw[5]) {
-      for (int q = 0; q < nqp; ++q) {
-        interval_hop_update(inv_w + (size_t)q * n * n, tab, q, rs, n, n2, msa, v1, v2, v3, tid, nt);
-        if (tid == 0) pf_w[q] = pfnew[q];
+      for (int base = 0; base < nqp; base += qp_groups) {
+        const int q = base + group;
+        const bool active = q < nqp;
+        double* invq = active ? inv_w + (size_t)q * n * n : inv_w;
+        interval_hop_update(invq, tab, q, rs, n, n2, msa, v1, v2, v3,
+                            group_tid, group_threads, active);
+        if (active && group_tid == 0) pf_w[q] = pfnew[q];
       }
       __syncthreads();
       if (tid == 0) {
@@ -285,5 +304,26 @@ extern "C" __global__ void k_interval_hop(
     accepts[w] = accepted;
     aw[w] = window;
     logip[w] = log_old;
+  }
+}
+
+// Compile the common matrix side into the ordered loops and address arithmetic.
+// Other geometries retain the same general kernel. No arithmetic is reassociated.
+extern "C" __global__ void k_interval_hop(
+    int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
+    const double* slater, const double* weights, const int* gutz, const int* jast,
+    const double* params, const unsigned int* tape, int total_hops, int* hop_off,
+    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
+    int* hops_done, int* rebuild, int* accepts) {
+  if (n == 128) {
+    interval_hop_impl(
+      ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast, params, tape,
+      total_hops, hop_off, 128, ne, nsite, nqp, qp_groups, ngutz, nproj,
+      exchange_fraction, hops_done, rebuild, accepts);
+  } else {
+    interval_hop_impl(
+      ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast, params, tape,
+      total_hops, hop_off, n, ne, nsite, nqp, qp_groups, ngutz, nproj,
+      exchange_fraction, hops_done, rebuild, accepts);
   }
 }

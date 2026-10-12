@@ -63,17 +63,35 @@ impl IntervalGeometry {
     /// Dynamic shared-memory bytes of one interval block.
     pub fn shared_bytes(&self) -> u32 {
         let rs = ((self.n + 1) & !1) * 4;
-        let doubles = (self.nqp + 1 + 3 * self.n + self.nqp * self.n) * 8;
+        // Ratio scratch is reused by the update after the acceptance barrier.
+        let scratch = (self.block() as usize / 32)
+            .min(self.nqp)
+            .max(3 * self.qp_groups())
+            * self.n;
+        let doubles = (self.nqp + 1 + scratch) * 8;
         (rs + doubles + 8 * 4) as u32
     }
 
-    /// Threads per interval block: the smallest power of two covering `n`, `[32, 256]`.
-    pub fn block(&self) -> u32 {
-        let mut b = 32usize;
-        while b < self.n {
-            b *= 2;
+    /// Independent QP updates per block, each using a whole number of warps.
+    /// Tile the scratch to stay within CUDA's default 48 KiB shared-memory limit.
+    pub fn qp_groups(&self) -> usize {
+        let fixed = ((self.n + 1) & !1) * 4 + (self.nqp + 1) * 8 + 8 * 4;
+        let mut groups = 1;
+        while groups * 2 <= self.nqp
+            && groups * 2 <= self.block() as usize / 32
+            && fixed + 3 * groups * 2 * self.n * 8 <= 48 * 1024
+        {
+            groups *= 2;
         }
-        b.clamp(32, 256) as u32
+        groups
+    }
+
+    /// Threads per block, covering rows and allowing a warp per QP, `[32, 256]`.
+    pub fn block(&self) -> u32 {
+        self.n
+            .max(self.nqp.saturating_mul(32))
+            .clamp(32, 256)
+            .next_power_of_two() as u32
     }
 }
 
@@ -95,6 +113,18 @@ pub struct IntervalHost<'a> {
     pub jast: &'a [i32],
     /// Projection parameter values `[nproj]`.
     pub params: &'a [f64],
+}
+
+/// Host-visible results of all walkers, in walker-major order. The inverse remains resident.
+pub struct IntervalResults {
+    /// Electron sites `[walkers][n]`.
+    pub ele: Vec<i32>,
+    /// Pfaffians `[walkers][nqp]`.
+    pub pf: Vec<f64>,
+    /// Accepted moves since each walker's last rebuild.
+    pub aw: Vec<i32>,
+    /// Cached logarithm of the absolute overlap, per walker.
+    pub logip: Vec<f64>,
 }
 
 /// Resident device state of one interval series.
@@ -172,6 +202,27 @@ impl IntervalSampler {
         total_hops: usize,
         exchange_fraction: f64,
     ) -> Result<Self, String> {
+        Self::prepare_buffers(backend, geom, host, total_hops, exchange_fraction, true)
+    }
+
+    /// Allocate an initial configuration whose tables will be factored on the device.
+    pub(crate) fn prepare_for_rebuild<B: BackendSession + ?Sized>(
+        backend: &mut B,
+        geom: IntervalGeometry,
+        host: &IntervalHost<'_>,
+        total_hops: usize,
+    ) -> Result<Self, String> {
+        Self::prepare_buffers(backend, geom, host, total_hops, 0.0, false)
+    }
+
+    fn prepare_buffers<B: BackendSession + ?Sized>(
+        backend: &mut B,
+        geom: IntervalGeometry,
+        host: &IntervalHost<'_>,
+        total_hops: usize,
+        exchange_fraction: f64,
+        upload_tables: bool,
+    ) -> Result<Self, String> {
         if exchange_fraction != 0.0 {
             return Err(
                 "interval sampler supports only exchange_fraction == 0 (NExUpdatePath == 0)"
@@ -182,9 +233,13 @@ impl IntervalSampler {
         let n2 = geom.n2();
         let nplanes = w * nqp;
         let occ_host = occupancy(host.ele, &geom);
-        let logip_host: Vec<f64> = (0..w)
-            .map(|k| f64_log_ip(&host.pf[k * nqp..(k + 1) * nqp], host.weights))
-            .collect();
+        let logip_host: Vec<f64> = if upload_tables {
+            (0..w)
+                .map(|k| f64_log_ip(&host.pf[k * nqp..(k + 1) * nqp], host.weights))
+                .collect()
+        } else {
+            vec![0.0; w]
+        };
         let zeros_i32 = vec![0i32; w];
 
         with_raw_exec(backend, "mvmc.interval.prepare", |exec| {
@@ -214,8 +269,13 @@ impl IntervalSampler {
             unsafe {
                 exec.upload(exec.ptr(&ele)?, host.ele)?;
                 exec.upload(exec.ptr(&occ)?, &occ_host)?;
-                exec.upload(exec.ptr(&inv)?, host.inv)?;
-                exec.upload(exec.ptr(&pf)?, host.pf)?;
+                if upload_tables {
+                    exec.upload(exec.ptr(&inv)?, host.inv)?;
+                    exec.upload(exec.ptr(&pf)?, host.pf)?;
+                } else {
+                    exec.zero_bytes(exec.ptr(&inv)?, w * nqp * n * n * 8)?;
+                    exec.zero_bytes(exec.ptr(&pf)?, w * nqp * 8)?;
+                }
                 exec.upload(exec.ptr(&aw)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&logip)?, &logip_host)?;
                 exec.upload(exec.ptr(&slater)?, host.slater)?;
@@ -273,8 +333,8 @@ impl IntervalSampler {
         backend: &mut B,
         tape: &[u32],
     ) -> Result<(), String> {
-        with_raw_exec(backend, "mvmc.interval.tape", |exec| {
-            unsafe { exec.upload(exec.ptr(&self.tape)?, tape) }
+        with_raw_exec(backend, "mvmc.interval.tape", |exec| unsafe {
+            exec.upload(exec.ptr(&self.tape)?, tape)
         })
         .map_err(|e| e.to_string())
     }
@@ -282,8 +342,8 @@ impl IntervalSampler {
     /// Reset every walker to `hop_off = 0` (call before a fresh sweep over the same tape).
     pub fn reset_offsets<B: BackendSession + ?Sized>(&self, backend: &mut B) -> Result<(), String> {
         let zeros = vec![0i32; self.geom.walkers];
-        with_raw_exec(backend, "mvmc.interval.reset", |exec| {
-            unsafe { exec.upload(exec.ptr(&self.hop_off)?, &zeros) }
+        with_raw_exec(backend, "mvmc.interval.reset", |exec| unsafe {
+            exec.upload(exec.ptr(&self.hop_off)?, &zeros)
         })
         .map_err(|e| e.to_string())
     }
@@ -341,6 +401,7 @@ impl IntervalSampler {
                 i(g.ne),
                 i(g.nsite),
                 i(g.nqp),
+                i(g.qp_groups()),
                 i(g.ngutz),
                 i(g.nproj),
                 Arg::D(self.exchange_fraction),
@@ -351,7 +412,13 @@ impl IntervalSampler {
             // SAFETY: argument order/dtypes match `k_interval_hop`; buffers stay resident and
             // outlive the scope, which synchronizes before returning.
             unsafe {
-                exec.launch(f, (g.walkers as u32, 1, 1), g.block(), g.shared_bytes(), &args)?;
+                exec.launch(
+                    f,
+                    (g.walkers as u32, 1, 1),
+                    g.block(),
+                    g.shared_bytes(),
+                    &args,
+                )?;
             }
             let mut hd = vec![0i32; g.walkers];
             let mut rb = vec![0i32; g.walkers];
@@ -379,8 +446,23 @@ impl IntervalSampler {
         backend: &mut B,
         walkers: &[usize],
     ) -> Result<(), String> {
+        if self.try_rebuild(backend, walkers)? {
+            Ok(())
+        } else {
+            Err("interval rebuild has a singular or nonfinite Pfaffian plane".into())
+        }
+    }
+
+    /// Factor into scratch, committing only when every requested plane succeeded.
+    /// Initialization may retain the C setup on a numeric failure; runtime CUDA errors
+    /// remain errors, and an unsuccessful factor never overwrites resident tables.
+    pub(crate) fn try_rebuild<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+        walkers: &[usize],
+    ) -> Result<bool, String> {
         if walkers.is_empty() {
-            return Ok(());
+            return Ok(true);
         }
         let g = self.geom;
         let items = walkers.len();
@@ -433,6 +515,28 @@ impl IntervalSampler {
                     ],
                 )?;
             }
+            let mut statuses = vec![0i32; planes];
+            // SAFETY: pfinv_st holds at least the requested plane count.
+            unsafe {
+                exec.download(&mut statuses, exec.ptr(&self.pfinv_st)?)?;
+            }
+            exec.synchronize()?;
+            if statuses.iter().any(|&info| info != 0) {
+                if std::env::var_os("MVMC_INTERVAL_TIMING").is_some() {
+                    eprintln!(
+                        "[interval] rebuild failed: {} / {} planes, first {:?}",
+                        statuses.iter().filter(|&&info| info != 0).count(),
+                        planes,
+                        statuses
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, info)| **info != 0)
+                            .take(8)
+                            .collect::<Vec<_>>()
+                    );
+                }
+                return Ok(false);
+            }
             let commit = module.function("interval_commit")?;
             // SAFETY: `interval_commit` writes the resident tables of `items` walkers.
             unsafe {
@@ -455,7 +559,7 @@ impl IntervalSampler {
                     ],
                 )?;
             }
-            Ok(())
+            Ok(true)
         })
         .map_err(|e| e.to_string())
     }
@@ -532,6 +636,32 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
+    /// Download the complete group's results with four transfers and one stream synchronization.
+    pub fn download_all<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+    ) -> Result<IntervalResults, String> {
+        let g = self.geom;
+        let mut out = IntervalResults {
+            ele: vec![0; g.walkers * g.n],
+            pf: vec![0.0; g.walkers * g.nqp],
+            aw: vec![0; g.walkers],
+            logip: vec![0.0; g.walkers],
+        };
+        with_raw_exec(backend, "mvmc.interval.download_all", |exec| {
+            // SAFETY: each destination has exactly the resident buffer's element count.
+            unsafe {
+                exec.download(&mut out.ele, exec.ptr(&self.ele)?)?;
+                exec.download(&mut out.pf, exec.ptr(&self.pf)?)?;
+                exec.download(&mut out.aw, exec.ptr(&self.aw)?)?;
+                exec.download(&mut out.logip, exec.ptr(&self.logip)?)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        Ok(out)
+    }
+
     /// Download walker `w`'s resident sampling state after an interval run: configuration,
     /// Pfaffians, accepted-move window and cached `log|IP|`.
     pub fn download_walker<B: BackendSession + ?Sized>(
@@ -556,5 +686,77 @@ impl IntervalSampler {
         })
         .map_err(|e| e.to_string())?;
         Ok((ele, pf, aw[0], logip[0]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
+    use tenferro_tensor::BackendSessionHost;
+
+    #[test]
+    #[ignore = "requires CUDA"]
+    fn failed_rebuild_preserves_all_resident_tables() {
+        let devices = cuda_devices().unwrap();
+        let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+        let geom = IntervalGeometry {
+            walkers: 2,
+            n: 2,
+            ne: 1,
+            nsite: 2,
+            nqp: 1,
+            ngutz: 0,
+            nproj: 0,
+        };
+        // Walker 0 selects a nonsingular plane; walker 1 selects a zero plane.
+        // Resident sentinels deliberately distinguish the old and attempted new state.
+        let mut slater = vec![0.0; 16];
+        slater[2] = 2.0;
+        slater[8] = -2.0;
+        let inv = vec![11.0; 8];
+        let host = IntervalHost {
+            ele: &[0, 0, 1, 1],
+            inv: &inv,
+            pf: &[3.0, 5.0],
+            slater: &slater,
+            weights: &[1.0],
+            gutz: &[-1; 2],
+            jast: &[-1; 4],
+            params: &[0.0],
+        };
+        let sampler = backend
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 1, 0.0))
+            .unwrap();
+        backend
+            .with_backend_session(|s| {
+                with_raw_exec(s, "test.set_windows", |exec| unsafe {
+                    exec.upload(exec.ptr(&sampler.aw)?, &[7i32, 9])
+                })
+            })
+            .unwrap();
+        let before = backend
+            .with_backend_session(|s| sampler.download_all(s))
+            .unwrap();
+        let error = backend
+            .with_backend_session(|s| sampler.rebuild(s, &[0, 1]))
+            .unwrap_err();
+        assert!(error.contains("singular or nonfinite"), "{error}");
+        let after = backend
+            .with_backend_session(|s| sampler.download_all(s))
+            .unwrap();
+        assert_eq!(after.ele, before.ele);
+        assert_eq!(after.pf, before.pf); // exact unchanged-buffer identity
+        assert_eq!(after.aw, before.aw);
+        assert_eq!(after.logip, before.logip);
+        let mut inverse_after = vec![0.0f64; 8];
+        backend
+            .with_backend_session(|s| {
+                with_raw_exec(s, "test.inverse", |exec| unsafe {
+                    exec.download(&mut inverse_after, exec.ptr(&sampler.inv)?)
+                })
+            })
+            .unwrap();
+        assert_eq!(inverse_after, inv);
     }
 }

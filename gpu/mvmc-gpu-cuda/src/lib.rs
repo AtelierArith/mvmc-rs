@@ -65,7 +65,9 @@ impl CudaProvider for Provider {
     ) -> Result<Box<dyn mvmc_core::sampler_backend::SamplerStages>, String> {
         // `MVMC_RS_SAMPLER_BACKEND=cuda-interval[:N]` batches every walker into one device
         // call through the interval group coordinator (issue #547).
-        Ok(Box::new(interval_engine::CudaIntervalSamplerStages::new(ordinal)))
+        Ok(Box::new(interval_engine::CudaIntervalSamplerStages::new(
+            ordinal,
+        )))
     }
 
     fn report(&self, ordinal: usize) -> Result<DeviceReport, String> {

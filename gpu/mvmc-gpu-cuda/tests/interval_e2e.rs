@@ -27,7 +27,10 @@ fn interval_group_opt_hubbard_l16_e2e() {
     }
     let namelist = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L16/namelist.def");
-    assert!(namelist.is_file(), "Hubbard L16 input is required: {namelist:?}");
+    assert!(
+        namelist.is_file(),
+        "Hubbard L16 input is required: {namelist:?}"
+    );
 
     let mut run = RunConfig::new(4, "real");
     run.nsmp = Some(2);
