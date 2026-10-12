@@ -95,6 +95,58 @@ impl IntervalGeometry {
     }
 }
 
+/// Proposal/word-consumption contract. Production uses CStream; JuliaTape is an
+/// explicitly separate five-word reference fixture contract.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProposalContract {
+    /// C raw modulo destination retries and conditional acceptance draws.
+    CStream,
+    /// Julia GPU's five-word tape with empty-destination rank selection.
+    JuliaTape,
+}
+
+impl ProposalContract {
+    /// Fixed preview capacity. A C preview holds at least one worst-case proposal:
+    /// two source/spin words, Nsite^2+2 destination attempts (the last rejects),
+    /// or Nsite^2+1 destinations plus one acceptance word. This guarantees progress
+    /// when an incomplete proposal is rolled back and retried after refill.
+    pub fn words_per_walker(self, geom: IntervalGeometry, hops: usize) -> Result<usize, String> {
+        let words = match self {
+            Self::JuliaTape => hops.checked_mul(5),
+            Self::CStream => geom
+                .nsite
+                .checked_mul(geom.nsite)
+                .and_then(|n| n.checked_add(4))
+                .zip(hops.checked_mul(8))
+                .map(|(minimum, typical)| minimum.max(typical)),
+        }
+        .ok_or("interval tape size overflow")?;
+        if words > i32::MAX as usize {
+            return Err("interval tape exceeds CUDA index range".into());
+        }
+        Ok(words)
+    }
+}
+
+/// Why a device pass stopped advancing a walker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntervalStop {
+    /// The requested block is complete.
+    Complete,
+    /// Recompute this walker's resident tables, then continue on the same preview.
+    Rebuild,
+    /// Replace the preview starting at the reported consumed word count.
+    TapeExhausted,
+}
+
+/// Progress of one walker in a single device launch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IntervalProgress {
+    pub hops_done: i32,
+    pub stop: IntervalStop,
+    pub accepts: i32,
+}
+
 /// Host state uploaded by [`IntervalSampler::prepare`].
 pub struct IntervalHost<'a> {
     /// Configuration `[walkers][n]` (site index per electron slot).
@@ -125,13 +177,17 @@ pub struct IntervalResults {
     pub aw: Vec<i32>,
     /// Cached logarithm of the absolute overlap, per walker.
     pub logip: Vec<f64>,
+    /// Words consumed from the current preview, per walker (not lifetime totals).
+    pub words: Vec<i32>,
 }
 
 /// Resident device state of one interval series.
 pub struct IntervalSampler {
     geom: IntervalGeometry,
     total_hops: usize,
-    exchange_fraction: f64,
+    proposal: ProposalContract,
+    tape_words: usize,
+    word_off: DeviceBuffer,
     ele: DeviceBuffer,
     occ: DeviceBuffer,
     inv: DeviceBuffer,
@@ -191,18 +247,16 @@ fn walker_occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
 }
 
 impl IntervalSampler {
-    /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in hops
-    /// per walker (uploaded with [`Self::upload_tape`]); `exchange_fraction` is the Julia GPU
-    /// exchange threshold (0 for the hopping-only `NExUpdatePath == 0` inputs; a nonzero value is
-    /// rejected by the caller until the exchange branch exists).
+    /// Allocate resident buffers and upload `host` with an explicit proposal contract.
+    /// Julia tapes are interleaved by hop; C previews are contiguous per walker.
     pub fn prepare<B: BackendSession + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
         total_hops: usize,
-        exchange_fraction: f64,
+        proposal: ProposalContract,
     ) -> Result<Self, String> {
-        Self::prepare_buffers(backend, geom, host, total_hops, exchange_fraction, true)
+        Self::prepare_buffers(backend, geom, host, total_hops, proposal, true)
     }
 
     /// Allocate an initial configuration whose tables will be factored on the device.
@@ -211,8 +265,9 @@ impl IntervalSampler {
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
         total_hops: usize,
+        proposal: ProposalContract,
     ) -> Result<Self, String> {
-        Self::prepare_buffers(backend, geom, host, total_hops, 0.0, false)
+        Self::prepare_buffers(backend, geom, host, total_hops, proposal, false)
     }
 
     fn prepare_buffers<B: BackendSession + ?Sized>(
@@ -220,15 +275,13 @@ impl IntervalSampler {
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
         total_hops: usize,
-        exchange_fraction: f64,
+        proposal: ProposalContract,
         upload_tables: bool,
     ) -> Result<Self, String> {
-        if exchange_fraction != 0.0 {
-            return Err(
-                "interval sampler supports only exchange_fraction == 0 (NExUpdatePath == 0)"
-                    .to_string(),
-            );
+        if geom.ne == 0 || geom.ne > geom.nsite || geom.n != 2 * geom.ne || geom.nqp == 0 {
+            return Err("unsupported interval geometry".into());
         }
+        let tape_words = proposal.words_per_walker(geom, total_hops)?;
         let (w, n, nsite, nqp) = (geom.walkers, geom.n, geom.nsite, geom.nqp);
         let n2 = geom.n2();
         let nplanes = w * nqp;
@@ -254,7 +307,8 @@ impl IntervalSampler {
             let gutz = exec.alloc_bytes(nsite.max(1) * 4)?;
             let jast = exec.alloc_bytes((nsite * nsite).max(1) * 4)?;
             let params = exec.alloc_bytes(geom.nproj.max(1) * 8)?;
-            let tape = exec.alloc_bytes((w * total_hops * 5 * 4).max(1))?;
+            let tape = exec.alloc_bytes((w * tape_words * 4).max(1))?;
+            let word_off = exec.alloc_bytes(w.max(1) * 4)?;
             let hop_off = exec.alloc_bytes(w.max(1) * 4)?;
             let hops_done = exec.alloc_bytes(w.max(1) * 4)?;
             let rebuild = exec.alloc_bytes(w.max(1) * 4)?;
@@ -284,6 +338,7 @@ impl IntervalSampler {
                 exec.upload(exec.ptr(&jast)?, host.jast)?;
                 exec.upload(exec.ptr(&params)?, host.params)?;
                 exec.upload(exec.ptr(&hop_off)?, &zeros_i32)?;
+                exec.upload(exec.ptr(&word_off)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&hops_done)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&rebuild)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&accepts)?, &zeros_i32)?;
@@ -291,7 +346,9 @@ impl IntervalSampler {
             Ok(Self {
                 geom,
                 total_hops,
-                exchange_fraction,
+                proposal,
+                tape_words,
+                word_off,
                 ele,
                 occ,
                 inv,
@@ -324,17 +381,20 @@ impl IntervalSampler {
         self.geom
     }
 
-    /// Upload a `u32` tape of `walkers * total_hops * 5` words in the Julia GPU layout
-    /// `[word][walker][step]` (word-fastest, then walker, then step; linear index
-    /// `5*(walker + walkers*step) + word`). The same tape can be handed to Julia's
-    /// `gpu_sample!(s; tape=...)` for a shared-tape parity check.
+    /// Upload a fresh preview and reset its word cursor, keeping proposal offsets.
+    /// Layout is `[walker][word]` for CStream, or `[hop][walker][5]` for JuliaTape.
     pub fn upload_tape<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
         tape: &[u32],
     ) -> Result<(), String> {
+        if tape.len() != self.geom.walkers * self.tape_words {
+            return Err("interval tape length does not match the proposal contract".into());
+        }
+        let zeros = vec![0i32; self.geom.walkers];
         with_raw_exec(backend, "mvmc.interval.tape", |exec| unsafe {
-            exec.upload(exec.ptr(&self.tape)?, tape)
+            exec.upload(exec.ptr(&self.tape)?, tape)?;
+            exec.upload(exec.ptr(&self.word_off)?, &zeros)
         })
         .map_err(|e| e.to_string())
     }
@@ -370,13 +430,16 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
-    /// Advance every walker until it reaches `total_hops` or requests a rebuild. Returns the
-    /// per-walker `(hops_done, rebuild)`.
+    /// Advance until block completion, a rebuild, or C-preview exhaustion. A refill
+    /// retries the incomplete proposal without having changed its configuration or RNG cursor.
     pub fn run<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
-    ) -> Result<Vec<(i32, i32, i32)>, String> {
+    ) -> Result<Vec<IntervalProgress>, String> {
         let g = self.geom;
+        let mut hd = vec![0i32; g.walkers];
+        let mut rb = vec![0i32; g.walkers];
+        let mut ac = vec![0i32; g.walkers];
         with_raw_exec(backend, "mvmc.interval.run", |exec| {
             let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
             let f = module.function("k_interval_hop")?;
@@ -404,7 +467,12 @@ impl IntervalSampler {
                 i(g.qp_groups()),
                 i(g.ngutz),
                 i(g.nproj),
-                Arg::D(self.exchange_fraction),
+                i(if self.proposal == ProposalContract::CStream {
+                    self.tape_words
+                } else {
+                    0
+                }),
+                p(&self.word_off)?,
                 p(&self.hops_done)?,
                 p(&self.rebuild)?,
                 p(&self.accepts)?,
@@ -420,23 +488,32 @@ impl IntervalSampler {
                     &args,
                 )?;
             }
-            let mut hd = vec![0i32; g.walkers];
-            let mut rb = vec![0i32; g.walkers];
-            let mut ac = vec![0i32; g.walkers];
             // SAFETY: the buffers hold `walkers` i32 each.
             unsafe {
                 exec.download(&mut hd, exec.ptr(&self.hops_done)?)?;
                 exec.download(&mut rb, exec.ptr(&self.rebuild)?)?;
                 exec.download(&mut ac, exec.ptr(&self.accepts)?)?;
             }
-            Ok(hd
-                .into_iter()
-                .zip(rb)
-                .zip(ac)
-                .map(|((d, r), a)| (d, r, a))
-                .collect())
+            Ok(())
         })
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        hd.into_iter()
+            .zip(rb)
+            .zip(ac)
+            .map(|((hops_done, reason), accepts)| {
+                let stop = match reason {
+                    0 => IntervalStop::Complete,
+                    1 => IntervalStop::Rebuild,
+                    2 => IntervalStop::TapeExhausted,
+                    _ => return Err(format!("unknown interval stop reason {reason}")),
+                };
+                Ok(IntervalProgress {
+                    hops_done,
+                    stop,
+                    accepts,
+                })
+            })
+            .collect()
     }
 
     /// Rebuild the inverse/Pfaffian of the listed walkers on the device (assemble + batched
@@ -647,6 +724,7 @@ impl IntervalSampler {
             pf: vec![0.0; g.walkers * g.nqp],
             aw: vec![0; g.walkers],
             logip: vec![0.0; g.walkers],
+            words: vec![0; g.walkers],
         };
         with_raw_exec(backend, "mvmc.interval.download_all", |exec| {
             // SAFETY: each destination has exactly the resident buffer's element count.
@@ -655,6 +733,7 @@ impl IntervalSampler {
                 exec.download(&mut out.pf, exec.ptr(&self.pf)?)?;
                 exec.download(&mut out.aw, exec.ptr(&self.aw)?)?;
                 exec.download(&mut out.logip, exec.ptr(&self.logip)?)?;
+                exec.download(&mut out.words, exec.ptr(&self.word_off)?)?;
             }
             Ok(())
         })
@@ -726,7 +805,9 @@ mod tests {
             params: &[0.0],
         };
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 1, 0.0))
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, 1, ProposalContract::JuliaTape)
+            })
             .unwrap();
         backend
             .with_backend_session(|s| {

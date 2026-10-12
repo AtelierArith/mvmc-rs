@@ -7,7 +7,8 @@ pub trait SamplingRng {
     fn gen_rand32(&mut self) -> u32;
     /// Words consumed by callers (prefetched words are excluded).
     fn words_consumed(&self) -> u128;
-    /// Nonconsuming preview, used only by optional diagnostic traces.
+    /// Nonconsuming preview for diagnostic traces and device-resident sampling.
+    /// The following `gen_rand32` calls must return this same prefix.
     fn dump_rand32(&self, out: &mut [u32]);
     /// SFMT raw-checkpoint schema is unavailable for other algorithms.
     fn sfmt_snapshot(&self) -> Option<([u32; 624], usize)> {

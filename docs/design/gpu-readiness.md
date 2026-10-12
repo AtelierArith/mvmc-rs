@@ -3014,3 +3014,30 @@ MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
   (ピボット規則・要素ごとの式は順序保存) ですが、cudarc 0.19 に cooperative launch が無く、
   上限も `VMCMakeSample` の約 6 % (0.6 s/7.62 s) と小さいため**未採用** (不正確な版は入れていません)。
   20 倍には依然デバイス側の判定ループが必要で、単一 chain では到達しません (16.10.5)。
+
+
+## Device-resident C proposal stream (#557, 2026-10-13)
+
+`cuda-interval` previews each host RNG stream without consuming it, then lets the
+GPU choose and decide multiple hopping proposals. Only the device-reported
+completed prefix advances the real host generator. Source/spin draws, raw modulo
+destination retries, the C retry-cap check and conditional acceptance draws all
+follow C. An incomplete proposal rolls back its preview cursor before refill;
+rebuilds preserve both the proposal and word offsets. This allows device decisions
+while retaining the host SFMT state and the C draw contract, superseding the older
+assumption above that a device decision loop necessarily changes the RNG contract.
+
+The fixed preview capacity is at least `Nsite^2 + 4` words per walker, enough for
+one worst-case capped or accepted proposal, so refill always permits progress.
+The historical Julia five-word tape remains an explicitly selected fixture mode.
+It is not used by the production stage. Exchange and local-spin inputs are rejected
+before device setup. Cross-process MPI and independent concurrent team isolation
+remain separate PR #549 review items; this change does not establish that support.
+
+The standalone [C probe](../../c_toolbox/interval_c_rng_557/README.md) supplies
+independent boundary expectations. Actual-CUDA tests check exact configuration,
+word counts, accepted windows, rebuild/refill boundaries and mixed-walker
+completion. A 20-step L16 Opt regression compares C-order CPU sampling against two
+GPU runs, including final SFMT state, occupancy, projection counts, counters and
+all 20 steps' output fields. The numerical bound remains `abs=rel=1e-12`; observed
+output differences on the reference Linux/RTX 3060 run are zero.

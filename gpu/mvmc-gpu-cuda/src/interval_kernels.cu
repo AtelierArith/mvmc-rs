@@ -15,7 +15,12 @@
 // summed in index order by one thread, so each serial sum keeps the host's C-order
 // rounding while the gather latency is spread over the block.
 //
-// Proposal contract: the tape is the Julia GPU sampler's device tape
+// Production (stream_words > 0): contiguous raw words per walker, consumed in C
+// makeCandidate_hopping order. Occupied destinations retry raw modulo draws; a
+// capped candidate has no acceptance draw. An incomplete proposal rolls back its
+// word cursor, so a fresh preview resumes the same stream without consuming it.
+//
+// Historical Julia fixture contract (stream_words == 0): the device tape is the Julia GPU sampler's tape
 // (MVMCOptimizers.jl/ext/cuda_sampling_update.jl:cached_sampling_kernel!), so a tape can be
 // shared with `gpu_sample!(s; tape=...)` for parity. A device u32 tape of 5 words per step,
 // laid out [word][walker][step] (word-fastest, then walker, then step), linear index
@@ -24,14 +29,49 @@
 //   w1 -> spin sector (top bit): spin = w1 >> 31
 //   w2 -> destination rank among the empty sites of that spin: rj = rank-th empty site
 //         (the Julia `empty_destinations` proposal, the default for nsite >= 64)
-//   w3 -> exchange threshold: exchange = w3/2^32 < exchange_fraction (unused here; the
-//         caller passes exchange_fraction == 0, i.e. Julia's NExUpdatePath == 0)
-//   w4 -> acceptance uniform: u = w4 / 2^32, accept when log(u) < logratio
+//   w3 -> unused exchange threshold (hopping-only fixture)
+//   w4 -> acceptance uniform: u = w4 / 2^32, accept when weight > u
 //   Every step consumes exactly 5 words and is a valid hop (the destination is chosen from
 //   the empty set), so the tape length is fixed and decision independent.
 //
 // Only the real, non-FSZ, ordinary-hopping normal mode without local spins is handled;
-// the caller rejects anything else (including exchange_fraction > 0) before launching.
+// the caller rejects anything else (including NExUpdatePath != 0) before launching.
+
+// C's raw destination retry loop. Return false without publishing a proposal when
+// the preview ends; the caller rolls its cursor back to the proposal boundary.
+__device__ bool interval_read_word(const unsigned int* tape, int words, int& cursor,
+                                    unsigned int& value) {
+  if (cursor >= words) return false;
+  value = tape[cursor++];
+  return true;
+}
+
+__device__ bool interval_c_candidate(const unsigned int* tape, int words, int& cursor,
+                                      const int* ele, const int* occ, int ne, int nsite, int* move) {
+  unsigned int source, coin, destination, accept_word = 0;
+  if (!interval_read_word(tape, words, cursor, source) ||
+      !interval_read_word(tape, words, cursor, coin)) return false;
+  const int mi = source % (unsigned int)ne;
+  const int spin = coin >> 31;
+  const int ri = ele[mi + spin * ne];
+  int count = 0, rj = 0, valid = 1;
+  while (true) {
+    if (!interval_read_word(tape, words, cursor, destination)) return false;
+    rj = destination % (unsigned int)nsite;
+    // C vmcmake.c draws first, then checks the cap, even if this destination is empty.
+    if (count > nsite * nsite) { valid = 0; break; }
+    ++count;
+    if (occ[rj + spin * nsite] == 0) break;
+  }
+  if (valid && !interval_read_word(tape, words, cursor, accept_word)) return false;
+  move[0] = valid;
+  move[1] = mi;
+  move[2] = spin;
+  move[3] = ri;
+  move[4] = rj;
+  reinterpret_cast<unsigned int*>(move)[7] = accept_word;
+  return true;
+}
 
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-one ratio for one QP plane: r = -pf_qp * sum_j inv[msa*n+j] * S[rsa][rs[j]].
@@ -148,7 +188,7 @@ __device__ __forceinline__ void interval_hop_impl(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
-    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
+    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, int stream_words, int* word_off,
     int* hops_done, int* rebuild, int* accepts) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
@@ -169,7 +209,6 @@ __device__ __forceinline__ void interval_hop_impl(
   double* v3 = v2 + n;
 
   const int n2 = 2 * nsite;
-  (void)exchange_fraction;  // hopping-only: the caller passes 0.0 (Julia NExUpdatePath == 0)
   const double* tab = slater;
   int* ele_w = ele + (size_t)w * n;
   int* occ_w = occ + (size_t)w * 2 * nsite;
@@ -184,11 +223,20 @@ __device__ __forceinline__ void interval_hop_impl(
   int advanced = 0;
   int accepted = 0;
   int need_rebuild = 0;
-  mvw[6] = 0;
+  if (tid == 0) mvw[6] = 0;
+  __syncthreads();
+  int cursor = word_off[w];
   const int start = hop_off[w];
   for (int hop = start; hop < total_hops; ++hop) {
-    const unsigned int* t = tape_w + (size_t)hop * tape_stride;
-    if (tid == 0) {
+    const unsigned int* t = stream_words > 0 ? tape + (size_t)w * stream_words
+                                            : tape_w + (size_t)hop * tape_stride;
+    if (tid == 0 && stream_words > 0) {
+      const int before = cursor;
+      if (!interval_c_candidate(t, stream_words, cursor, ele_w, occ_w, ne, nsite, mvw)) {
+        cursor = before;
+        mvw[0] = 2;
+      }
+    } else if (tid == 0) {
       const int mi = (int)(t[0] % (unsigned)ne);
       const int spin = (int)(t[1] >> 31);
       const int ri = ele_w[mi + spin * ne];
@@ -215,8 +263,13 @@ __device__ __forceinline__ void interval_hop_impl(
       mvw[2] = spin;
       mvw[3] = ri;
       mvw[4] = rj;
+      reinterpret_cast<unsigned int*>(mvw)[7] = t[4];
     }
     __syncthreads();
+    if (mvw[0] == 2) {
+      need_rebuild = 2;
+      break;
+    }
     if (!mvw[0]) {
       ++advanced;
       continue;
@@ -259,9 +312,13 @@ __device__ __forceinline__ void interval_hop_impl(
       const double log_new = log(ip_new < 0.0 ? -ip_new : ip_new);
       const double proj =
           interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
-      double weight = exp(2.0 * (proj + log_new - log_old));
+      // Match C's subtraction-before-projection-addition in production. The
+      // historical Julia tape fixture retains its separately documented arithmetic.
+      double weight = stream_words > 0
+          ? exp(2.0 * (proj + (log_new - log_old)))
+          : exp(2.0 * (proj + log_new - log_old));
       if (!isfinite(weight)) weight = -1.0;
-      const double u = (double)t[4] / 4294967296.0;
+      const double u = (double)reinterpret_cast<unsigned int*>(mvw)[7] / 4294967296.0;
       const int accept = weight > u;
       mvw[5] = accept;
       if (accept) {
@@ -299,6 +356,7 @@ __device__ __forceinline__ void interval_hop_impl(
 
   if (tid == 0) {
     hop_off[w] = start + advanced;
+    word_off[w] = stream_words > 0 ? cursor : 5 * (start + advanced);
     hops_done[w] = advanced;
     rebuild[w] = need_rebuild;
     accepts[w] = accepted;
@@ -313,17 +371,17 @@ extern "C" __global__ void k_interval_hop(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
-    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
+    int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, int stream_words, int* word_off,
     int* hops_done, int* rebuild, int* accepts) {
   if (n == 128) {
     interval_hop_impl(
       ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast, params, tape,
       total_hops, hop_off, 128, ne, nsite, nqp, qp_groups, ngutz, nproj,
-      exchange_fraction, hops_done, rebuild, accepts);
+      stream_words, word_off, hops_done, rebuild, accepts);
   } else {
     interval_hop_impl(
       ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast, params, tape,
       total_hops, hop_off, n, ne, nsite, nqp, qp_groups, ngutz, nproj,
-      exchange_fraction, hops_done, rebuild, accepts);
+      stream_words, word_off, hops_done, rebuild, accepts);
   }
 }

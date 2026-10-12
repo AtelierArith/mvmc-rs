@@ -7,6 +7,7 @@
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
+use mvmc_gpu_cuda::interval::{IntervalStop, ProposalContract};
 use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
@@ -97,7 +98,13 @@ fn interval_kernel_runs_and_keeps_finite_state() {
 
     let sampler = backend
         .with_backend_session(|session| {
-            IntervalSampler::prepare(session, geom, &host, total_hops, 0.0)
+            IntervalSampler::prepare(
+                session,
+                geom,
+                &host,
+                total_hops,
+                ProposalContract::JuliaTape,
+            )
         })
         .expect("prepare");
 
@@ -109,10 +116,11 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let results = backend
         .with_backend_session(|session| sampler.run(session))
         .expect("run interval");
-    let (done, rebuild, _accepts) = results[0];
+    let done = results[0].hops_done;
+    let rebuild = results[0].stop == IntervalStop::Rebuild;
     assert!(done > 0, "the interval must advance at least one hop");
     assert!(
-        rebuild != 0 || done as usize == total_hops,
+        rebuild || done as usize == total_hops,
         "either the interval completed or a rebuild was requested (done={done}, rebuild={rebuild})"
     );
     eprintln!("interval: hops_done={done} rebuild={rebuild}");

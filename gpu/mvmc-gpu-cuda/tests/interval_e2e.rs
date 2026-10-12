@@ -79,3 +79,128 @@ fn interval_group_opt_hubbard_l16_e2e() {
         );
     }
 }
+
+/// The C-order CPU sampler and the resident C stream must use the same draws on
+/// this well-separated acceptance trajectory. Two device runs also test repeatability.
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_c_opt_twenty_steps_matches_host_and_repeats() {
+    mvmc_gpu_cuda::install();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L16");
+    let base = std::env::temp_dir().join(format!("mvmc-c-interval-parity-{}", std::process::id()));
+    let input = base.join("input");
+    std::fs::create_dir_all(&input).unwrap();
+    for entry in std::fs::read_dir(&source).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_file() {
+            std::fs::copy(&path, input.join(path.file_name().unwrap())).unwrap();
+        }
+    }
+    let modpara = std::fs::read_to_string(input.join("modpara.def")).unwrap();
+    std::fs::write(
+        input.join("modpara.def"),
+        modpara
+            .lines()
+            .map(|line| match line.split_whitespace().next().unwrap_or("") {
+                "NVMCSample" => "NVMCSample 5",
+                "NVMCWarmUp" => "NVMCWarmUp 1",
+                _ => line,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n",
+    )
+    .unwrap();
+    let run = |kind, label: &str| {
+        set_sampler_backend_override(Some(kind));
+        let mut run = RunConfig::new(20, "real");
+        run.nsmp = Some(1);
+        run.seed = Some(1);
+        run.output_dir = Some(base.join(label));
+        let out = run_para_opt_multichain(&ParaOptMultiChainConfig {
+            namelist: input.join("namelist.def"),
+            run,
+            group_base: 0,
+            walkers: 4,
+        })
+        .unwrap();
+        set_sampler_backend_override(None);
+        out
+    };
+    let host = run(SamplerBackendKind::COrder, "host");
+    let first = run(SamplerBackendKind::CudaInterval(0), "device1");
+    let second = run(SamplerBackendKind::CudaInterval(0), "device2");
+    for (label, candidate) in [("host", &host), ("repeat", &second)] {
+        for (reference, actual) in first.iter().zip(candidate) {
+            let (a, b) = (
+                &reference.state.electron_config,
+                &actual.state.electron_config,
+            );
+            assert_eq!(
+                reference.rng.state_snapshot(),
+                actual.rng.state_snapshot(),
+                "{label} RNG"
+            );
+            assert_eq!(
+                reference.rng.words_consumed(),
+                actual.rng.words_consumed(),
+                "{label} words"
+            );
+            assert_eq!(a.ele_idx, b.ele_idx, "{label} configuration");
+            assert_eq!(a.ele_num, b.ele_num, "{label} occupancy");
+            assert_eq!(a.ele_proj_cnt, b.ele_proj_cnt, "{label} projection");
+            assert_eq!(a.counter, b.counter, "{label} counters");
+            assert_eq!(reference.state.opt_data.len(), 1); // final SR averaging window
+            for (step, (r, a)) in reference
+                .state
+                .opt_data
+                .iter()
+                .zip(&actual.state.opt_data)
+                .enumerate()
+            {
+                let pairs = std::iter::once((r.energy, a.energy)).chain(
+                    r.parameters
+                        .iter()
+                        .copied()
+                        .zip(a.parameters.iter().copied()),
+                );
+                for (r, a) in pairs {
+                    // Same sampling path and C operation order; establish the observed
+                    // first difference before relaxing this existing interval bound.
+                    assert!(
+                        (r - a).norm() <= 1e-12 + 1e-12 * r.norm(),
+                        "{label} step {step}: {r} vs {a}"
+                    );
+                }
+            }
+        }
+    }
+    for name in ["zvo_out.dat", "zvo_var.dat", "zqp_opt.dat"] {
+        let read = |label: &str| -> Vec<f64> {
+            std::fs::read_to_string(base.join(label).join(name))
+                .unwrap()
+                .split_whitespace()
+                .map(|x| x.parse().unwrap())
+                .collect()
+        };
+        let reference = read("host");
+        for label in ["device1", "device2"] {
+            let actual = read(label);
+            assert_eq!(actual.len(), reference.len());
+            for (i, (&r, &a)) in reference.iter().zip(&actual).enumerate() {
+                assert!(
+                    (r - a).abs() <= 1e-12 + 1e-12 * r.abs(),
+                    "{label} {name}[{i}]: {r} vs {a}"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        std::fs::read_to_string(base.join("host/zvo_out.dat"))
+            .unwrap()
+            .lines()
+            .count(),
+        20
+    );
+}

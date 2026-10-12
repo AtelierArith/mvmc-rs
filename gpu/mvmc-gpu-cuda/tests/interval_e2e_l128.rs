@@ -5,7 +5,8 @@
 //! walker count and the SR steps / final SR averaging window. Each walker retains
 //! `NVMCSample` configurations from the input. `_NAMELIST` can select another workload,
 //! and `_RECEIPT` writes all walkers' final configurations, RNGs and optimization history
-//! after timing, for independent baseline/candidate validation. Prints the wall time and final
+//! after timing, for independent baseline/candidate validation. `_BACKEND=c-order`
+//! selects the CPU reference with exactly the same input and walker topology. Prints the wall time and final
 //! reduced energy. This is the production multiwalker path with the device interval sampler;
 //! the host measurement and SR reduction still run on the CPU.
 
@@ -53,7 +54,12 @@ fn interval_group_opt_hubbard_l128_timing() {
     run.seed = Some(1);
     run.output_dir = std::env::var_os("MVMC_INTERVAL_E2E_OUTPUT").map(PathBuf::from);
 
-    set_sampler_backend_override(Some(SamplerBackendKind::CudaInterval(0)));
+    let backend = match std::env::var("MVMC_INTERVAL_E2E_BACKEND").as_deref() {
+        Ok("c-order") => SamplerBackendKind::COrder,
+        Ok("cuda-interval") | Err(_) => SamplerBackendKind::CudaInterval(0),
+        Ok(value) => panic!("unsupported interval comparison backend: {value}"),
+    };
+    set_sampler_backend_override(Some(backend));
     let t = Instant::now();
     let result = run_para_opt_multichain(&ParaOptMultiChainConfig {
         namelist,
@@ -67,7 +73,7 @@ fn interval_group_opt_hubbard_l128_timing() {
 
     let etot = result[0].state.energy.etot.re;
     eprintln!(
-        "interval E2E L128: walkers={walkers} steps={steps} smp={smp} wall={secs:.3} s \
+        "interval E2E L128: backend={backend:?} walkers={walkers} steps={steps} smp={smp} wall={secs:.3} s \
          etot={etot}"
     );
     assert!(etot.is_finite(), "final energy: {etot}");

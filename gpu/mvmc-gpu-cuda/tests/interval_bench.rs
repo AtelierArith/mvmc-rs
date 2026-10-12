@@ -6,6 +6,7 @@
 //! at most `HOPS` hops per walker, stopping at the accepted-move rebuild window when
 //! necessary. Report the actual completed hops, with no host rebuild interleaved.
 
+use mvmc_gpu_cuda::interval::{IntervalStop, ProposalContract};
 use std::time::Instant;
 
 use mvmc_core::pfaffian::calc_m_all_real;
@@ -122,7 +123,9 @@ fn interval_walker_sweep_l128() {
         };
         let tape: Vec<u32> = (0..walkers * HOPS * 5).map(|_| rng.next_u32()).collect();
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, HOPS, ProposalContract::JuliaTape)
+            })
             .expect("prepare");
         backend
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
@@ -141,7 +144,9 @@ fn interval_walker_sweep_l128() {
         // state; the compiled module stays cached on the backend.
         drop(sampler);
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, HOPS, ProposalContract::JuliaTape)
+            })
             .expect("prepare fresh timed state");
         backend
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
@@ -151,8 +156,8 @@ fn interval_walker_sweep_l128() {
             .with_backend_session(|s| sampler.run(s))
             .expect("run");
         let best = t.elapsed().as_secs_f64();
-        let total_hops: usize = results.iter().map(|&(d, _, _)| d.max(0) as usize).sum();
-        let rb_any = results.iter().any(|&(_, r, _)| r != 0);
+        let total_hops: usize = results.iter().map(|p| p.hops_done.max(0) as usize).sum();
+        let rb_any = results.iter().any(|p| p.stop == IntervalStop::Rebuild);
         eprintln!(
             "W={walkers:4}  wall={:.4} s  hops_total={total_hops:7} rebuild_any={rb_any}  {:.1} ns/hop  {:.2} M hops/s",
             best,
@@ -177,9 +182,10 @@ fn drain(backend: &mut CudaBackend, sampler: &IntervalSampler) -> (usize, usize,
             .expect("run");
         rounds += 1;
         let mut need = Vec::new();
-        for (w, &(d, r, _a)) in results.iter().enumerate() {
+        for (w, progress) in results.iter().enumerate() {
+            let d = progress.hops_done;
             hops += d.max(0) as usize;
-            if r != 0 {
+            if progress.stop == IntervalStop::Rebuild {
                 need.push(w);
             }
         }
@@ -268,7 +274,9 @@ fn interval_full_run_l128() {
     // Warm-up sampler: compiles the NVRTC module and runs the loop once (untimed).
     {
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, FULL_HOPS, ProposalContract::JuliaTape)
+            })
             .expect("prepare warmup");
         backend
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
@@ -279,7 +287,9 @@ fn interval_full_run_l128() {
 
     // Timed sampler: fresh state, module already cached.
     let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
+        .with_backend_session(|s| {
+            IntervalSampler::prepare(s, geom, &host, FULL_HOPS, ProposalContract::JuliaTape)
+        })
         .expect("prepare");
     backend
         .with_backend_session(|s| sampler.upload_tape(s, &tape))

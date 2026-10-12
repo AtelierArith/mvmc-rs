@@ -2,6 +2,7 @@
 //! single-threaded W-walker `IntervalSampler` run with the same tapes (issue #547).
 //! Ignored by default; requires CUDA.
 
+use mvmc_gpu_cuda::interval::{IntervalStop, ProposalContract};
 use std::sync::{Arc, Barrier};
 
 use mvmc_core::multichain::{ThreadComm, ThreadReducer};
@@ -126,7 +127,9 @@ fn interval_group_threaded_matches_single_threaded() {
         params: &params,
     };
     let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom(), &host, BLOCK, 0.0))
+        .with_backend_session(|s| {
+            IntervalSampler::prepare(s, geom(), &host, BLOCK, ProposalContract::JuliaTape)
+        })
         .expect("prepare reference");
     let mut reference = Vec::new();
     for block in 0..BLOCKS {
@@ -151,8 +154,8 @@ fn interval_group_threaded_matches_single_threaded() {
                 .with_backend_session(|s| sampler.run(s))
                 .expect("run");
             let mut need = Vec::new();
-            for (w, &(_, r, _)) in results.iter().enumerate() {
-                if r != 0 {
+            for (w, progress) in results.iter().enumerate() {
+                if progress.stop == IntervalStop::Rebuild {
                     need.push(w);
                 }
             }
@@ -178,6 +181,7 @@ fn interval_group_threaded_matches_single_threaded() {
     // Exercise both arrival orders; a non-root rank may stage before or after the root.
     for (root_last, device_initialization) in [(false, false), (true, false), (false, true)] {
         let group = IntervalGroup::new(
+            ProposalContract::JuliaTape,
             geom(),
             Vec::new(),
             Vec::new(),
@@ -270,7 +274,7 @@ fn interval_group_threaded_matches_single_threaded() {
                     }
                     for tape in &tapes {
                         group
-                            .run_block(w, BLOCK, tape, &|| {
+                            .run_block(w, BLOCK, tape, true, &|| {
                                 barrier.wait();
                             })
                             .expect("group run_block");
@@ -295,4 +299,171 @@ fn interval_group_threaded_matches_single_threaded() {
             }
         }
     }
+}
+
+#[path = "support/c_interval.rs"]
+mod c_interval;
+
+#[test]
+#[ignore = "requires CUDA"]
+fn c_engine_consumes_only_completed_proposals_when_peers_refill() {
+    use mvmc_core::c_timer::CTimer;
+    use mvmc_core::sampling::engine::BlockCtx;
+    use mvmc_core::sampling::rng::SamplingRng;
+    use mvmc_core::ExpertModeData;
+
+    struct Words {
+        tape: Vec<u32>,
+        cursor: usize,
+    }
+    impl SamplingRng for Words {
+        fn gen_rand32(&mut self) -> u32 {
+            let value = self.tape[self.cursor];
+            self.cursor += 1;
+            value
+        }
+        fn words_consumed(&self) -> u128 {
+            self.cursor as u128
+        }
+        fn dump_rand32(&self, out: &mut [u32]) {
+            for (i, x) in out.iter_mut().enumerate() {
+                *x = self.tape.get(self.cursor + i).copied().unwrap_or(0);
+            }
+        }
+    }
+    let cases: Vec<_> = c_interval::cases()
+        .into_iter()
+        .filter(|c| c.hops == 2)
+        .collect();
+    let geom = IntervalGeometry {
+        walkers: cases.len(),
+        n: 2,
+        ne: 1,
+        nsite: 4,
+        nqp: 1,
+        ngutz: 0,
+        nproj: 0,
+    };
+    let group = IntervalGroup::new(
+        ProposalContract::CStream,
+        geom,
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    );
+    let comm = ThreadComm::new(geom.walkers);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = cases
+            .into_iter()
+            .enumerate()
+            .map(|(w, case)| {
+                let group = group.clone();
+                let reducer = ThreadReducer::new(comm.clone(), w, 0);
+                scope.spawn(move || {
+                    let mut data = ExpertModeData::default();
+                    data.modpara.nsite = 4;
+                    data.modpara.nelec = 1;
+                    let slater = c_interval::slater();
+                    let pool = ThreadedPfaPackWorkspace::new(2, 1);
+                    let mut inv = InvMColMajor::<f64>::zeros(1, 1);
+                    let mut pf = vec![0.0];
+                    let mut ele = vec![0i64, 0];
+                    calc_m_all_real(&ele, &slater, &mut inv, &mut pf, 0, 1, 4, 1, &pool).unwrap();
+                    let stage_geom = StageGeom {
+                        n_site: 4,
+                        n_elec: 1,
+                        qp_start: 0,
+                        qp_end: 1,
+                        inv_stride: 5,
+                    };
+                    let mut engine = IntervalEngine::new(
+                        group.clone(),
+                        w,
+                        geom,
+                        vec![1.0],
+                        vec![-1; 4],
+                        vec![-1; 16],
+                        vec![],
+                    );
+                    engine
+                        .begin(
+                            &stage_geom,
+                            &mut StageTables {
+                                slater_elm: &slater,
+                                inv_m: &mut inv,
+                                pf_m: &mut pf,
+                                pool: &pool,
+                            },
+                            &ele,
+                        )
+                        .unwrap();
+                    let mut rng = Words {
+                        tape: case.words.clone(),
+                        cursor: 0,
+                    };
+                    let mut counter = [0i64; 6];
+                    let mut cfg = [0, -1, -1, -1, 0, -1, -1, -1];
+                    let mut num = [1, 0, 0, 0, 1, 0, 0, 0];
+                    let mut logip = 0.0;
+                    let mut window = 0;
+                    let mut accepted = 0;
+                    let mut pf_new = [0.0];
+                    let mut ctx = BlockCtx {
+                        data: &data,
+                        reducer: &reducer,
+                        rng: &mut rng,
+                        geom: stage_geom,
+                        slater_elm: &slater,
+                        inv_m: &mut inv,
+                        pf_m: &mut pf,
+                        pool: &pool,
+                        counter: &mut counter,
+                        ele_idx: &mut ele,
+                        ele_cfg: &mut cfg,
+                        ele_num: &mut num,
+                        ele_proj_cnt: &mut [],
+                        proj_cnt_new: &mut [],
+                        pf_m_new: &mut pf_new,
+                        loc_spn: &[0; 4],
+                        n_site: 4,
+                        n_elec: 1,
+                        n_ex_path: 0,
+                        i_flg_general: 0,
+                        two_sz: 0,
+                        log_ip_old: &mut logip,
+                        n_accept_window: &mut window,
+                        accepted_total: &mut accepted,
+                    };
+                    engine
+                        .run_block(&mut ctx, &mut CTimer::<false>::new(), case.hops)
+                        .unwrap();
+                    let expected = case.steps.last().unwrap();
+                    assert_eq!(
+                        rng.words_consumed(),
+                        expected[0] as u128,
+                        "{} RNG",
+                        case.name
+                    );
+                    assert_eq!(
+                        ele,
+                        expected[7..9]
+                            .iter()
+                            .map(|&v| i64::from(v))
+                            .collect::<Vec<_>>()
+                    );
+                    assert_eq!(counter[..2], [case.hops as i64, i64::from(expected[9])]);
+                    assert_eq!(accepted, expected[9] as usize);
+                    assert_eq!(window, expected[10] as usize);
+                    assert_eq!(num, [0, 1, 0, 0, 0, 1, 0, 0]);
+                    assert_eq!(cfg, [-1, 0, -1, -1, -1, 0, -1, -1]);
+                    assert!(inv.is_stale());
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+    });
 }

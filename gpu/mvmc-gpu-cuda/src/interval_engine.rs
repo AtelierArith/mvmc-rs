@@ -11,8 +11,10 @@
 //! its `CudaBackend` is a thread-local (a tenferro context is thread-affine) while the resident
 //! `DeviceBuffer`s, which are `Send`, live in the shared group.
 //!
-//! The RNG contract: each walker generates its own block tape from its own stream (5 words per
-//! hop, the Julia GPU layout of `interval_kernels.cu`), so batching never merges streams.
+//! Production previews each walker's raw RNG stream without consuming it. The device follows
+//! C's conditional proposal draws and reports the consumed prefix; only that prefix advances
+//! the host RNG. An exhausted preview rolls back the incomplete proposal before refilling.
+//! Historical Julia five-word tapes use a separately selected fixture contract.
 
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
@@ -31,7 +33,9 @@ use sfmt19937::Sfmt19937Rng;
 use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
-use crate::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
+use crate::interval::{
+    IntervalGeometry, IntervalHost, IntervalSampler, IntervalStop, ProposalContract,
+};
 
 thread_local! {
     /// The device backend of the rank-0 thread. A tenferro context is thread-affine, and only
@@ -60,6 +64,8 @@ pub struct WalkerState {
     pub aw: i32,
     /// Accepted moves in the last block.
     pub accepts: i32,
+    /// Raw words consumed from the most recent preview.
+    pub words: usize,
 }
 
 struct Tables {
@@ -78,6 +84,7 @@ fn new_state(geom: &IntervalGeometry) -> WalkerState {
         logip: 0.0,
         aw: 0,
         accepts: 0,
+        words: 0,
     }
 }
 
@@ -91,11 +98,12 @@ type WalkerTapes = Arc<Vec<Mutex<Vec<u32>>>>;
 /// rank 0 during the device pass.
 pub struct IntervalGroup {
     device: usize,
+    proposal: ProposalContract,
     geom: Mutex<IntervalGeometry>,
     tables: Mutex<Tables>,
     states: Mutex<States>,
     walker_tapes: Mutex<WalkerTapes>,
-    /// Interleaved device tape `[word][walker][step]` (rank 0 only).
+    /// Packed C previews or interleaved Julia fixture tapes (rank 0 only).
     tapes: Mutex<Vec<u32>>,
     n_in_step: Mutex<usize>,
     sampler: Mutex<Option<IntervalSampler>>,
@@ -105,8 +113,9 @@ pub struct IntervalGroup {
 }
 
 impl IntervalGroup {
-    /// Build a configured group (used by tests and by `begin_series_walker`).
+    /// Build a configured group with an explicit proposal contract.
     pub fn new(
+        proposal: ProposalContract,
         geom: IntervalGeometry,
         slater: Vec<f64>,
         weights: Vec<f64>,
@@ -114,11 +123,13 @@ impl IntervalGroup {
         jast: Vec<i32>,
         params: Vec<f64>,
     ) -> Arc<Self> {
-        Self::new_on_device(0, geom, slater, weights, gutz, jast, params)
+        Self::new_on_device(0, proposal, geom, slater, weights, gutz, jast, params)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_on_device(
         device: usize,
+        proposal: ProposalContract,
         geom: IntervalGeometry,
         slater: Vec<f64>,
         weights: Vec<f64>,
@@ -128,6 +139,7 @@ impl IntervalGroup {
     ) -> Arc<Self> {
         Arc::new(Self {
             device,
+            proposal,
             geom: Mutex::new(geom),
             tables: Mutex::new(Tables {
                 slater,
@@ -207,6 +219,7 @@ impl IntervalGroup {
         st.logip = 0.0;
         st.aw = 0;
         st.accepts = 0;
+        st.words = 0;
     }
 
     /// Store walker `w`'s initial state for an already-configured group (test convenience).
@@ -219,6 +232,7 @@ impl IntervalGroup {
         st.logip = 0.0;
         st.aw = 0;
         st.accepts = 0;
+        st.words = 0;
     }
 
     /// Read walker `w`'s state (results after a block).
@@ -242,9 +256,14 @@ impl IntervalGroup {
         w: usize,
         n_in_step: usize,
         tape: &[u32],
+        new_block: bool,
         barrier: &dyn Fn(),
-    ) -> Result<(), String> {
-        debug_assert_eq!(tape.len(), 5 * n_in_step);
+    ) -> Result<bool, String> {
+        let geom = *self.geom.lock().unwrap_or_else(|e| e.into_inner());
+        let capacity = self.proposal.words_per_walker(geom, n_in_step)?;
+        if tape.len() != capacity {
+            return Err("incorrect interval preview length".into());
+        }
         {
             let tapes = self.walker_tapes();
             let mut wt = tapes[w].lock().unwrap_or_else(|e| e.into_inner());
@@ -257,7 +276,7 @@ impl IntervalGroup {
                 let world = self.geom.lock().unwrap_or_else(|e| e.into_inner()).walkers;
                 *n = n_in_step;
                 *self.tapes.lock().unwrap_or_else(|e| e.into_inner()) =
-                    vec![0u32; world * n_in_step * 5];
+                    vec![0u32; world * capacity];
             }
             if *n != n_in_step {
                 return Err(format!(
@@ -266,8 +285,7 @@ impl IntervalGroup {
                 ));
             }
         }
-        self.device_pass(w, barrier, || self.run_device().map(|()| true))
-            .map(|_| ())
+        self.device_pass(w, barrier, || self.run_device(new_block))
     }
 
     /// Every peer observes rank 0's result after the rendezvous, including CUDA errors.
@@ -335,7 +353,8 @@ impl IntervalGroup {
                     jast: &tables.jast,
                     params: &tables.params,
                 };
-                let sampler = IntervalSampler::prepare_for_rebuild(s, geom, &host, n_in_step)?;
+                let sampler =
+                    IntervalSampler::prepare_for_rebuild(s, geom, &host, n_in_step, self.proposal)?;
                 if !sampler.try_rebuild(s, &(0..geom.walkers).collect::<Vec<_>>())? {
                     return Ok(false);
                 }
@@ -354,6 +373,7 @@ impl IntervalGroup {
                     st.logip = results.logip[w];
                     st.aw = 0;
                     st.accepts = 0;
+                    st.words = 0;
                 }
                 *self.sampler.lock().unwrap_or_else(|e| e.into_inner()) = Some(sampler);
                 if std::env::var_os("MVMC_INTERVAL_TIMING").is_some() {
@@ -368,9 +388,9 @@ impl IntervalGroup {
     }
 
     /// Rank-0 device pass.
-    fn run_device(&self) -> Result<(), String> {
+    fn run_device(&self, new_block: bool) -> Result<bool, String> {
         self.with_backend(|backend| {
-            backend.with_backend_session(|s| -> Result<(), String> {
+            backend.with_backend_session(|s| -> Result<bool, String> {
                 let geom = *self.geom.lock().unwrap_or_else(|e| e.into_inner());
                 let n_in_step = *self.n_in_step.lock().unwrap_or_else(|e| e.into_inner());
                 let states = self.states();
@@ -405,7 +425,7 @@ impl IntervalGroup {
                         params: &tables.params,
                     };
                     *sampler_guard =
-                        Some(IntervalSampler::prepare(s, geom, &host, n_in_step, 0.0)?);
+                        Some(IntervalSampler::prepare(s, geom, &host, n_in_step, self.proposal)?);
                 }
                 let sampler = sampler_guard.as_ref().unwrap();
 
@@ -413,37 +433,45 @@ impl IntervalGroup {
                     let mut tapes = self.tapes.lock().unwrap_or_else(|e| e.into_inner());
                     for (w, mx) in walker_tapes.iter().enumerate() {
                         let wt = mx.lock().unwrap_or_else(|e| e.into_inner());
-                        for step in 0..n_in_step {
-                            for word in 0..5 {
-                                tapes[5 * (w + geom.walkers * step) + word] = wt[5 * step + word];
+                        match self.proposal {
+                            ProposalContract::CStream => {
+                                let len = wt.len();
+                                tapes[w * len..(w + 1) * len].copy_from_slice(&wt);
+                            }
+                            ProposalContract::JuliaTape => {
+                                for step in 0..n_in_step {
+                                    for word in 0..5 {
+                                        tapes[5 * (w + geom.walkers * step) + word] = wt[5 * step + word];
+                                    }
+                                }
                             }
                         }
                     }
-                    sampler.reset_offsets(s)?;
+                    if new_block { sampler.reset_offsets(s)?; }
                     sampler.upload_tape(s, &tapes)?;
                 }
 
                 let mut accepts = vec![0i32; geom.walkers];
-                loop {
+                let complete = loop {
                     let t = std::time::Instant::now();
                     let results = sampler.run(s)?;
                     t_run += t.elapsed().as_secs_f64();
                     rounds += 1;
                     let mut need = Vec::new();
-                    for (w, &(_, r, a)) in results.iter().enumerate() {
-                        accepts[w] += a;
-                        if r != 0 {
+                    for (w, progress) in results.iter().enumerate() {
+                        accepts[w] += progress.accepts;
+                        if progress.stop == IntervalStop::Rebuild {
                             need.push(w);
                         }
                     }
-                    if need.is_empty() {
-                        break;
-                    }
+                    let refill = results.iter().any(|p| p.stop == IntervalStop::TapeExhausted);
+                    if need.is_empty() { break !refill; }
                     n_rebuild += need.len();
                     let t = std::time::Instant::now();
                     sampler.rebuild(s, &need)?;
                     t_rb += t.elapsed().as_secs_f64();
-                }
+                    if refill { break false; }
+                };
                 let t = std::time::Instant::now();
                 let results = sampler.download_all(s)?;
                 for (w, &acc) in accepts.iter().enumerate() {
@@ -453,6 +481,7 @@ impl IntervalGroup {
                     st.aw = results.aw[w];
                     st.logip = results.logip[w];
                     st.accepts = acc;
+                    st.words = results.words[w] as usize;
                 }
                 let t_dl = t.elapsed().as_secs_f64();
                 if timing {
@@ -464,7 +493,7 @@ impl IntervalGroup {
                         t_dl * 1e3,
                     );
                 }
-                Ok(())
+                Ok(complete)
             })
         })
     }
@@ -570,7 +599,11 @@ impl SamplingEngine for IntervalEngine {
                 .tapes
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .resize(self.geom.walkers * n_in_step * 5, 0);
+                .resize(
+                    self.geom.walkers
+                        * self.group.proposal.words_per_walker(self.geom, n_in_step)?,
+                    0,
+                );
         }
         self.initialized = self
             .group
@@ -640,10 +673,47 @@ impl SamplingEngine for IntervalEngine {
         _timer: &mut mvmc_core::c_timer::CTimer<TIMED>,
         n_in_step: usize,
     ) -> StageResult<()> {
-        let tape = tape_words(ctx.rng, n_in_step);
-        let reducer = ctx.reducer;
-        self.group
-            .run_block(self.walker, n_in_step, &tape, &|| reducer.barrier())?;
+        if ctx.n_ex_path != 0 || ctx.loc_spn.contains(&1) {
+            return Err(
+                "the interval sampler requires NExUpdatePath == 0 and no local spins".into(),
+            );
+        }
+        let capacity = self.group.proposal.words_per_walker(self.geom, n_in_step)?;
+        let mut preview = vec![0u32; capacity];
+        let mut new_block = true;
+        let mut accepts = 0i64;
+        loop {
+            match self.group.proposal {
+                ProposalContract::CStream => ctx.rng.dump_rand32(&mut preview),
+                ProposalContract::JuliaTape => {
+                    for word in &mut preview {
+                        *word = ctx.rng.gen_rand32();
+                    }
+                }
+            }
+            let complete =
+                self.group
+                    .run_block(self.walker, n_in_step, &preview, new_block, &|| {
+                        ctx.reducer.barrier()
+                    })?;
+            let (words, accepted) = self
+                .group
+                .with_walker_state(self.walker, |st| (st.words, st.accepts));
+            if self.group.proposal == ProposalContract::CStream {
+                if words > preview.len() {
+                    return Err("invalid device RNG consumption".into());
+                }
+                for &expected in &preview[..words] {
+                    let actual = ctx.rng.gen_rand32();
+                    debug_assert_eq!(actual, expected, "SamplingRng preview changed the stream");
+                }
+            }
+            accepts += accepted as i64;
+            if complete {
+                break;
+            }
+            new_block = false;
+        }
         self.group.with_walker_state(self.walker, |st| {
             for (dst, src) in ctx.ele_idx.iter_mut().zip(&st.ele) {
                 *dst = *src as i64;
@@ -669,9 +739,9 @@ impl SamplingEngine for IntervalEngine {
             ctx.pf_m.copy_from_slice(&st.pf);
             *ctx.log_ip_old = st.logip;
             ctx.counter[0] += n_in_step as i64;
-            ctx.counter[1] += st.accepts as i64;
+            ctx.counter[1] += accepts;
             *ctx.n_accept_window = st.aw.max(0) as usize;
-            *ctx.accepted_total += st.accepts.max(0) as usize;
+            *ctx.accepted_total += accepts.max(0) as usize;
         });
         ctx.inv_m.mark_stale("interval device sampling");
         Ok(())
@@ -700,6 +770,7 @@ fn group_for(device: usize) -> Arc<IntervalGroup> {
     };
     let group = IntervalGroup::new_on_device(
         device,
+        ProposalContract::CStream,
         placeholder,
         Vec::new(),
         Vec::new(),
@@ -723,6 +794,17 @@ impl CudaIntervalSamplerStages {
     pub fn new(device: usize) -> Self {
         Self { device }
     }
+}
+
+fn validate_proposal_input(data: &ExpertModeData) -> Result<(), String> {
+    let local = data
+        .locspin_terms
+        .iter()
+        .any(|t| t.spin_value == 1 && t.site >= 0 && t.site < data.modpara.nsite);
+    if data.modpara.nex_update_path != 0 || local {
+        return Err("the interval sampler requires NExUpdatePath == 0 and no local spins".into());
+    }
+    Ok(())
 }
 
 impl SamplerStages for CudaIntervalSamplerStages {
@@ -760,6 +842,7 @@ impl SamplerStages for CudaIntervalSamplerStages {
         timing: &mut dyn SamplerTiming,
         reducer: &dyn Reducer,
     ) -> Result<SampleStats, StageError> {
+        validate_proposal_input(data).map_err(StageError::Unsupported)?;
         if reducer.world_size() != reducer.reduction_size() {
             return Err(StageError::Unsupported(
                 "the interval sampler supports ungrouped walker chains (world size == reduction size)"
@@ -835,6 +918,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn interval_rejects_unsupported_proposals_before_device_setup() {
+        let mut data = ExpertModeData::default();
+        data.modpara.nsite = 4;
+        data.modpara.nex_update_path = 0;
+        assert!(validate_proposal_input(&data).is_ok());
+        for path in [1, 2, 3] {
+            data.modpara.nex_update_path = path;
+            assert!(validate_proposal_input(&data)
+                .unwrap_err()
+                .contains("NExUpdatePath"));
+        }
+    }
+
+    #[test]
     #[ignore = "requires CUDA"]
     fn interval_backend_honors_device_selection_and_switches() {
         let devices = cuda_devices().unwrap();
@@ -849,8 +946,16 @@ mod tests {
             nproj: 0,
         };
         for ordinal in (0..devices.len()).chain(std::iter::once(0)) {
-            let group =
-                IntervalGroup::new_on_device(ordinal, geom, vec![], vec![], vec![], vec![], vec![]);
+            let group = IntervalGroup::new_on_device(
+                ordinal,
+                ProposalContract::CStream,
+                geom,
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+            );
             let actual = group
                 .with_backend(|backend| Ok(backend.device_id()))
                 .unwrap();
@@ -858,6 +963,7 @@ mod tests {
         }
         let group = IntervalGroup::new_on_device(
             devices.len(),
+            ProposalContract::CStream,
             geom,
             vec![],
             vec![],
@@ -886,7 +992,15 @@ mod tests {
             ngutz: 0,
             nproj: 0,
         };
-        let group = IntervalGroup::new(geom, vec![], vec![], vec![], vec![], vec![]);
+        let group = IntervalGroup::new(
+            ProposalContract::CStream,
+            geom,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        );
         let barrier = Arc::new(std::sync::Barrier::new(geom.walkers));
         let (tx, rx) = std::sync::mpsc::channel();
         let handles: Vec<_> = (0..geom.walkers)

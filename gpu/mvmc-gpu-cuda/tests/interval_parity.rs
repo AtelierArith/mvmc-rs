@@ -13,6 +13,7 @@
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
+use mvmc_gpu_cuda::interval::{IntervalStop, ProposalContract};
 use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
@@ -163,7 +164,9 @@ fn interval_shared_tape_matches_julia_gpu() {
     };
 
     let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, fx.steps, 0.0))
+        .with_backend_session(|s| {
+            IntervalSampler::prepare(s, geom, &host, fx.steps, ProposalContract::JuliaTape)
+        })
         .expect("prepare");
     backend
         .with_backend_session(|s| sampler.upload_tape(s, &fx.tape))
@@ -179,9 +182,10 @@ fn interval_shared_tape_matches_julia_gpu() {
             .expect("run");
         rounds += 1;
         let mut need = Vec::new();
-        for (w, &(_, r, a)) in results.iter().enumerate() {
+        for (w, progress) in results.iter().enumerate() {
+            let a = progress.accepts;
             accepted += a;
-            if r != 0 {
+            if progress.stop == IntervalStop::Rebuild {
                 need.push(w);
             }
         }
@@ -273,7 +277,9 @@ fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
             params: &[0.0],
         };
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, hops, 0.0))
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, hops, ProposalContract::JuliaTape)
+            })
             .unwrap();
         let mut tape = vec![0; walkers * hops * 5];
         for h in 0..hops {
@@ -289,7 +295,17 @@ fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
             .unwrap();
         let counts = backend.with_backend_session(|s| sampler.run(s)).unwrap();
-        assert_eq!(counts, vec![(hops as i32, 0, hops as i32); walkers]);
+        assert_eq!(
+            counts,
+            vec![
+                mvmc_gpu_cuda::interval::IntervalProgress {
+                    hops_done: hops as i32,
+                    stop: IntervalStop::Complete,
+                    accepts: hops as i32
+                };
+                walkers
+            ]
+        );
         let all = backend
             .with_backend_session(|s| sampler.download_all(s))
             .unwrap();
@@ -372,7 +388,9 @@ fn interval_walker_upload_download_roundtrip() {
         params: &params,
     };
     let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 4, 0.0))
+        .with_backend_session(|s| {
+            IntervalSampler::prepare(s, geom, &host, 4, ProposalContract::JuliaTape)
+        })
         .expect("prepare");
 
     // Upload a distinct walker-0 state and read it back.
@@ -393,4 +411,177 @@ fn interval_walker_upload_download_roundtrip() {
         .with_backend_session(|s| sampler.download_ele(s, 0))
         .expect("download ele");
     assert_eq!(ele_only, ele1);
+}
+
+#[path = "support/c_interval.rs"]
+mod c_interval;
+
+/// Independent C candidate extraction, analytic two-electron overlap. Acceptance
+/// thresholds are separated from the nearest weight by at least 0.25, so FP log/exp
+/// roundoff cannot change these decisions. Counts/configurations/RNG words are exact.
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_c_stream_matches_c_at_refill_and_rebuild_boundaries() {
+    let devices = cuda_devices().unwrap();
+    let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+    let slater = c_interval::slater();
+    let geom = IntervalGeometry {
+        walkers: 1,
+        n: 2,
+        ne: 1,
+        nsite: 4,
+        nqp: 1,
+        ngutz: 0,
+        nproj: 0,
+    };
+    let pool = ThreadedPfaPackWorkspace::new(2, 1);
+    let mut inv = InvMColMajor::<f64>::zeros(1, 1);
+    let mut pf = vec![0.0];
+    calc_m_all_real(&[0, 0], &slater, &mut inv, &mut pf, 0, 1, 4, 1, &pool).unwrap();
+    let host = IntervalHost {
+        ele: &[0, 0],
+        inv: inv.qp_matrix_slice(0),
+        pf: &pf,
+        slater: slater.as_slice(),
+        weights: &[1.0],
+        gutz: &[-1; 4],
+        jast: &[-1; 16],
+        params: &[],
+    };
+    for case in c_interval::cases() {
+        let sampler = backend
+            .with_backend_session(|s| {
+                IntervalSampler::prepare(s, geom, &host, case.hops, ProposalContract::CStream)
+            })
+            .unwrap();
+        let capacity = ProposalContract::CStream
+            .words_per_walker(geom, case.hops)
+            .unwrap();
+        let (mut start, mut hops, mut accepts, mut refills, mut rebuilds) = (0, 0, 0, 0, 0);
+        let mut preview = vec![0u32; capacity];
+        let load = |start: usize, out: &mut [u32]| {
+            for (i, x) in out.iter_mut().enumerate() {
+                *x = case.words.get(start + i).copied().unwrap_or(0);
+            }
+        };
+        load(start, &mut preview);
+        backend
+            .with_backend_session(|s| sampler.upload_tape(s, &preview))
+            .unwrap();
+        loop {
+            let progress = backend.with_backend_session(|s| sampler.run(s)).unwrap()[0];
+            hops += progress.hops_done as usize;
+            accepts += progress.accepts;
+            assert!(hops > 0 && hops <= case.hops, "{}: {progress:?}", case.name);
+            if progress.stop == IntervalStop::Rebuild {
+                rebuilds += 1;
+                backend
+                    .with_backend_session(|s| sampler.rebuild(s, &[0]))
+                    .unwrap();
+            }
+            let state = backend
+                .with_backend_session(|s| sampler.download_all(s))
+                .unwrap();
+            let expected = &case.steps[hops - 1];
+            assert_eq!(
+                start + state.words[0] as usize,
+                expected[0] as usize,
+                "{} raw words",
+                case.name
+            );
+            assert_eq!(state.ele, expected[7..9], "{} configuration", case.name);
+            assert_eq!(accepts, expected[9], "{} accepted", case.name);
+            assert_eq!(state.aw[0], expected[10], "{} window", case.name);
+            let expected_pf = 2f64.powi(expected[7] + expected[8]);
+            // Analytic n=2, well-conditioned scalar inverse. 1e-12 bounds log/exp
+            // and rank-update roundoff over at most 12 moves; no tolerance on RNG.
+            assert!((state.pf[0].abs() - expected_pf).abs() <= 1e-12 + 1e-12 * expected_pf);
+            match progress.stop {
+                IntervalStop::Complete => {
+                    assert_eq!(hops, case.hops);
+                    break;
+                }
+                IntervalStop::Rebuild => (),
+                IntervalStop::TapeExhausted => {
+                    refills += 1;
+                    assert!(refills <= case.hops, "preview made no progress");
+                    start += state.words[0] as usize;
+                    load(start, &mut preview);
+                    backend
+                        .with_backend_session(|s| sampler.upload_tape(s, &preview))
+                        .unwrap();
+                }
+            }
+        }
+        if case.name.starts_with("boundary") {
+            assert_eq!(refills, 1);
+        }
+        if case.name == "mixed_rebuild" {
+            assert!(refills > 0 && rebuilds > 0);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_c_full_occupancy_rejects_without_acceptance_draws() {
+    let devices = cuda_devices().unwrap();
+    let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+    let geom = IntervalGeometry {
+        walkers: 1,
+        n: 4,
+        ne: 2,
+        nsite: 2,
+        nqp: 1,
+        ngutz: 0,
+        nproj: 0,
+    };
+    let mut slater = SlaterElmFlat::<f64>::zeros(1, 2);
+    // Nonsingular skew input with nonzero consecutive pivots for the C setup.
+    for (row, col, value) in [
+        (0, 1, 0.5),
+        (0, 2, 0.7),
+        (0, 3, 0.2),
+        (1, 2, 0.9),
+        (1, 3, 0.4),
+        (2, 3, 0.6),
+    ] {
+        slater.set(0, row, col, value);
+        slater.set(0, col, row, -value);
+    }
+    let ele = [0, 1, 0, 1];
+    let pool = ThreadedPfaPackWorkspace::new(4, 1);
+    let mut inv = InvMColMajor::<f64>::zeros(1, 2);
+    let mut pf = vec![0.0];
+    calc_m_all_real(&[0, 1, 0, 1], &slater, &mut inv, &mut pf, 0, 1, 2, 2, &pool).unwrap();
+    let host = IntervalHost {
+        ele: &ele,
+        inv: inv.qp_matrix_slice(0),
+        pf: &pf,
+        slater: slater.as_slice(),
+        weights: &[1.0],
+        gutz: &[-1; 2],
+        jast: &[-1; 4],
+        params: &[],
+    };
+    let sampler = backend
+        .with_backend_session(|s| {
+            IntervalSampler::prepare(s, geom, &host, 3, ProposalContract::CStream)
+        })
+        .unwrap();
+    let capacity = ProposalContract::CStream.words_per_walker(geom, 3).unwrap();
+    backend
+        .with_backend_session(|s| sampler.upload_tape(s, &vec![u32::MAX; capacity]))
+        .unwrap();
+    let progress = backend.with_backend_session(|s| sampler.run(s)).unwrap()[0];
+    assert_eq!(progress.hops_done, 3);
+    assert_eq!(progress.stop, IntervalStop::Complete);
+    assert_eq!(progress.accepts, 0);
+    let result = backend
+        .with_backend_session(|s| sampler.download_all(s))
+        .unwrap();
+    assert_eq!(result.ele, ele);
+    // C draws source + spin + (Nsite^2 + 2) destinations, no acceptance word.
+    assert_eq!(result.words, [3 * (2 + 2 * 2 + 2)]);
+    assert_eq!(result.aw, [0]);
 }
