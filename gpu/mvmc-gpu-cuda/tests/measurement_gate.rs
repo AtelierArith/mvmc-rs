@@ -28,6 +28,7 @@ impl Drop for OverrideScope {
         set_measurement_consumer_override(None);
         set_measurement_backend_override(None);
         set_measurement_batch_size_override(None);
+        set_sampler_backend_override(None);
     }
 }
 
@@ -38,6 +39,7 @@ use mvmc_core::measurement_batch::{
     set_measurement_backend_override, set_measurement_batch_size_override,
     set_measurement_consumer_override, MeasurementConsumer, MeasurementPfaffian,
 };
+use mvmc_core::sampler_backend::set_sampler_backend_override;
 use mvmc_core::stage_backend::StageBackendKind;
 fn gate() -> bool {
     mvmc_gpu_cuda::install();

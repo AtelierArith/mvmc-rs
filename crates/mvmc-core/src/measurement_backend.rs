@@ -51,12 +51,15 @@ use tenferro_tensor::DotGeneralConfig;
 
 use crate::c_timer::CTimer;
 use crate::observables;
+use crate::sampling::projection::{log_proj_ratio, update_proj_cnt};
 use crate::slater_derivative;
 use crate::sr_backend::{EagerTransfer, Placement};
 use crate::stage_backend::{
-    MeasurementInput, MeasurementOutput, MeasurementStages, MeasurementTiming, StageError,
+    GreenOutput, MeasurementInput, MeasurementOutput, MeasurementStages, MeasurementTiming,
+    StageError,
 };
 use crate::state::VmcOptimizationState;
+use mvmc_expert_parsers::utils::c_math::exp as c_exp;
 use mvmc_expert_parsers::ExpertModeData;
 
 fn err(e: impl std::fmt::Display) -> StageError {
@@ -611,6 +614,19 @@ pub trait ResidentMeasurementOps: Send {
         input: &ResidentSlaterDiff<'_>,
     ) -> Result<Vec<f64>, StageError>;
 
+    /// `new_ip[t]` of the active two-body (rank-2) Green jobs `t` for `slot` (issue #517
+    /// milestone 5): the device computes the `b^T M a` bilinear of `calculate_new_pf_m_two2`
+    /// from the resident inverse planes and Slater table. `msa`/`msb` address the two moved
+    /// electron slots and `rsa_site`/`rsb_site` their destination sites.
+    fn green_two(
+        &mut self,
+        slot: usize,
+        input: &ResidentGreenTwo<'_>,
+    ) -> Result<Vec<f64>, StageError> {
+        let _ = (slot, input);
+        unsupported("this backend does not provide the device two-body Green reduction")
+    }
+
     /// Counters, `None` when the implementation does not report them.
     fn stats(&self) -> Option<crate::stage_backend::ResidentStats> {
         None
@@ -627,6 +643,20 @@ pub struct ResidentRatioTerms<'a> {
     pub rsa: &'a [i64],
     /// Destination site `ri` per active term.
     pub ri: &'a [i64],
+}
+
+/// Per-sample input of [`ResidentMeasurementOps::green_two`] (issue #517 milestone 5).
+pub struct ResidentGreenTwo<'a> {
+    /// Electron sites `[n]` of the sample (the sample's own changed rows).
+    pub ele_idx: &'a [i64],
+    /// Moved electron slot of each active two-body job (moves to `rsa_site`).
+    pub msa: &'a [i64],
+    /// Second moved electron slot of each active two-body job (moves to `rsb_site`).
+    pub msb: &'a [i64],
+    /// Destination site of `msa` (with its own spin block).
+    pub rsa_site: &'a [i64],
+    /// Destination site of `msb` (with its own spin block).
+    pub rsb_site: &'a [i64],
 }
 
 /// Per-sample input of [`ResidentMeasurementOps::slater_diff`].
@@ -860,6 +890,427 @@ fn resident_slater_diff<const TIMED: bool>(
     }
     timer.stop_diag(930, timer.diagnostics.slater);
     Ok(out)
+}
+
+// ---------------------------------------------------------------------------------------
+// PhysCal Green functions on the device (issue #517 milestone 5)
+// ---------------------------------------------------------------------------------------
+
+/// One deferred one-body Pfaffian reduction (the `calculate_new_pf_m2` path).
+#[derive(Debug, Clone, Copy)]
+struct GreenOneJob {
+    /// Electron slot being moved (moves to `ri`).
+    msa: usize,
+    /// Destination Slater row `ri + spin * Nsite`.
+    rsa: usize,
+    /// Destination site `ri`.
+    ri: usize,
+    /// Projection ratio of the hop.
+    proj_ratio: f64,
+}
+
+/// One deferred two-body (rank-2) reduction (the `calculate_new_pf_m_two2` path).
+#[derive(Debug, Clone, Copy)]
+struct GreenTwoJob {
+    /// First moved electron slot (moves to `rsa_site`, its own spin block).
+    msa: usize,
+    /// Second moved electron slot (moves to `rsb_site`, its own spin block).
+    msb: usize,
+    /// Destination site of `msa`.
+    rsa_site: usize,
+    /// Destination site of `msb`.
+    rsb_site: usize,
+    /// Projection ratio of the two sequential hops.
+    proj_ratio: f64,
+}
+
+/// How one `green_func1`/`green_func2` term resolves.
+#[derive(Debug, Clone, Copy)]
+enum GreenOutcome {
+    /// Already-final value (density or zero, no projection ratio or `1/ip`).
+    Value(f64),
+    /// `sign * proj_ratio * new_ip / ip` with `new_ip` from `one_jobs[index]`.
+    One { index: usize, sign: f64 },
+    /// `proj_ratio * new_ip / ip` with `new_ip` from `two_jobs[index]`.
+    Two { index: usize },
+}
+
+/// Term classification of one sample's Green functions: the outcomes in term order plus the
+/// deferred jobs gathered for the batched device reductions.
+struct GreenContext {
+    one_jobs: Vec<GreenOneJob>,
+    two_jobs: Vec<GreenTwoJob>,
+    one_outcomes: Vec<GreenOutcome>,
+    two_outcomes: Vec<GreenOutcome>,
+}
+
+/// Host classification of the Green terms. It reproduces the branch structure of
+/// `green_func1_impl`/`green_func2_impl` (real, non-FSZ, no RBM) and defers only the
+/// per-term Pfaffian reduction to the device.
+struct GreenClassifier<'a> {
+    n_site: usize,
+    n_elec: usize,
+    n_proj: usize,
+    ip: Complex64,
+    data: &'a ExpertModeData,
+    ele_cfg: &'a [i64],
+    ele_num: &'a [i64],
+    ele_proj_cnt: &'a [i64],
+    ctx: GreenContext,
+    moved_num: Vec<i64>,
+    proj_new: Vec<i64>,
+    proj_mid: Vec<i64>,
+    proj_final: Vec<i64>,
+}
+
+impl<'a> GreenClassifier<'a> {
+    fn new(
+        data: &'a ExpertModeData,
+        ip: Complex64,
+        ele_cfg: &'a [i64],
+        ele_num: &'a [i64],
+        ele_proj_cnt: &'a [i64],
+    ) -> Self {
+        let n_site = data.modpara.nsite.max(0) as usize;
+        let n_elec = data.modpara.nelec.max(0) as usize;
+        let n_proj = data.projection_layout().n_proj;
+        Self {
+            n_site,
+            n_elec,
+            n_proj,
+            ip,
+            data,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ctx: GreenContext {
+                one_jobs: Vec::new(),
+                two_jobs: Vec::new(),
+                one_outcomes: Vec::new(),
+                two_outcomes: Vec::new(),
+            },
+            moved_num: vec![0; 2 * n_site],
+            proj_new: vec![0; n_proj],
+            proj_mid: vec![0; n_proj],
+            proj_final: vec![0; n_proj],
+        }
+    }
+
+    /// `proj_ratio` of one hop `rj -> ri` with the moved occupations in `self.moved_num`:
+    /// `update_proj_cnt(rj, ri, ...)` and `exp(log_proj_ratio(new, old))`, matching
+    /// `green_func1_impl`.
+    fn hop_proj_ratio(&mut self, ri: usize, rj: usize, spin: u8, out: &mut Vec<i64>) {
+        if self.n_proj == 0 {
+            return;
+        }
+        out.clear();
+        out.resize(self.n_proj, 0);
+        update_proj_cnt(
+            rj as i64,
+            ri as i64,
+            spin,
+            out,
+            self.ele_proj_cnt,
+            &self.moved_num,
+            self.data,
+        );
+    }
+
+    /// `green_func1_impl::<false, false, false>` classification.
+    fn classify_one(
+        &mut self,
+        ri: usize,
+        rj: usize,
+        spin_create: u8,
+        spin_annihilate: u8,
+    ) -> GreenOutcome {
+        if self.ip.norm() == 0.0 {
+            return GreenOutcome::Value(0.0);
+        }
+        let dst = ri + spin_create as usize * self.n_site;
+        let src = rj + spin_annihilate as usize * self.n_site;
+        if spin_create == spin_annihilate && ri == rj {
+            return GreenOutcome::Value(self.ele_num[src] as f64);
+        }
+        if spin_create != spin_annihilate {
+            return GreenOutcome::Value(0.0);
+        }
+        if self.ele_num[dst] == 1 || self.ele_num[src] == 0 {
+            return GreenOutcome::Value(0.0);
+        }
+        let mj_raw = self.ele_cfg[src];
+        if mj_raw < 0 {
+            return GreenOutcome::Value(0.0);
+        }
+        let mj = mj_raw as usize;
+        let msj = mj + spin_annihilate as usize * self.n_elec;
+        self.moved_num.copy_from_slice(self.ele_num);
+        self.moved_num[dst] = 1;
+        self.moved_num[src] = 0;
+        let proj_ratio = if self.n_proj > 0 {
+            let mut proj = std::mem::take(&mut self.proj_new);
+            self.hop_proj_ratio(ri, rj, spin_create, &mut proj);
+            let ratio = c_exp(log_proj_ratio(&proj, self.ele_proj_cnt, self.data));
+            self.proj_new = proj;
+            ratio
+        } else {
+            1.0
+        };
+        // No RBM terms in the supported class, so `with_rbm_ratio` is the identity.
+        let index = self.ctx.one_jobs.len();
+        self.ctx.one_jobs.push(GreenOneJob {
+            msa: msj,
+            rsa: ri + spin_annihilate as usize * self.n_site,
+            ri,
+            proj_ratio,
+        });
+        GreenOutcome::One { index, sign: 1.0 }
+    }
+
+    /// `green_func2_impl::<false>` classification.
+    fn classify_two(
+        &mut self,
+        ri: usize,
+        rj: usize,
+        rk: usize,
+        rl: usize,
+        spin: u8,
+        spin_other: u8,
+    ) -> GreenOutcome {
+        if self.n_elec == 0 || self.n_site == 0 {
+            return GreenOutcome::Value(0.0);
+        }
+        let rsi = ri + spin as usize * self.n_site;
+        let rsj = rj + spin as usize * self.n_site;
+        let rtk = rk + spin_other as usize * self.n_site;
+        if spin == spin_other {
+            if rk == rl {
+                return if self.ele_num[rtk] == 0 {
+                    GreenOutcome::Value(0.0)
+                } else {
+                    self.classify_one(ri, rj, spin, spin)
+                };
+            } else if rj == rl {
+                return GreenOutcome::Value(0.0);
+            } else if ri == rl {
+                return if self.ele_num[rsi] == 0 {
+                    GreenOutcome::Value(0.0)
+                } else if rj == rk {
+                    GreenOutcome::Value((1 - self.ele_num[rsj]) as f64)
+                } else {
+                    match self.classify_one(rk, rj, spin, spin) {
+                        GreenOutcome::Value(v) => GreenOutcome::Value(-v),
+                        GreenOutcome::One { index, sign } => {
+                            GreenOutcome::One { index, sign: -sign }
+                        }
+                        other => other,
+                    }
+                };
+            } else if rj == rk {
+                return if self.ele_num[rsj] == 1 {
+                    GreenOutcome::Value(0.0)
+                } else {
+                    self.classify_one(ri, rl, spin, spin)
+                };
+            } else if ri == rk {
+                return GreenOutcome::Value(0.0);
+            } else if ri == rj {
+                return if self.ele_num[rsi] == 0 {
+                    GreenOutcome::Value(0.0)
+                } else {
+                    self.classify_one(rk, rl, spin, spin)
+                };
+            }
+        } else if rk == rl {
+            return if self.ele_num[rtk] == 0 {
+                GreenOutcome::Value(0.0)
+            } else if ri == rj {
+                GreenOutcome::Value(self.ele_num[rsi] as f64)
+            } else {
+                self.classify_one(ri, rj, spin, spin)
+            };
+        } else if ri == rj {
+            return if self.ele_num[rsi] == 0 {
+                GreenOutcome::Value(0.0)
+            } else {
+                self.classify_one(rk, rl, spin_other, spin_other)
+            };
+        }
+        // General case: rightmost hop rl -> rk (spin_other) then rj -> ri (spin).
+        if self.ele_num[ri + spin as usize * self.n_site] != 0
+            || self.ele_num[rj + spin as usize * self.n_site] != 1
+            || self.ele_num[rk + spin_other as usize * self.n_site] != 0
+            || self.ele_num[rl + spin_other as usize * self.n_site] != 1
+        {
+            return GreenOutcome::Value(0.0);
+        }
+        let mj_raw = self.ele_cfg[rj + spin as usize * self.n_site];
+        let mi_raw = self.ele_cfg[rl + spin_other as usize * self.n_site];
+        if mj_raw < 0 || mi_raw < 0 {
+            return GreenOutcome::Value(0.0);
+        }
+        let mj = mj_raw as usize;
+        let mi = mi_raw as usize;
+        let msj = mj + spin as usize * self.n_elec;
+        let msi = mi + spin_other as usize * self.n_elec;
+        self.moved_num.copy_from_slice(self.ele_num);
+        self.moved_num[rl + spin_other as usize * self.n_site] = 0;
+        self.moved_num[rk + spin_other as usize * self.n_site] = 1;
+        let mut proj_mid = std::mem::take(&mut self.proj_mid);
+        self.hop_proj_ratio(rk, rl, spin_other, &mut proj_mid);
+        self.moved_num[rj + spin as usize * self.n_site] = 0;
+        self.moved_num[ri + spin as usize * self.n_site] = 1;
+        let mut proj_final = std::mem::take(&mut self.proj_final);
+        if self.n_proj > 0 {
+            proj_final.clear();
+            proj_final.resize(self.n_proj, 0);
+            update_proj_cnt(
+                rj as i64,
+                ri as i64,
+                spin,
+                &mut proj_final,
+                &proj_mid,
+                &self.moved_num,
+                self.data,
+            );
+        }
+        let proj_ratio = if self.n_proj > 0 {
+            c_exp(log_proj_ratio(&proj_final, self.ele_proj_cnt, self.data))
+        } else {
+            1.0
+        };
+        self.proj_mid = proj_mid;
+        self.proj_final = proj_final;
+        let index = self.ctx.two_jobs.len();
+        self.ctx.two_jobs.push(GreenTwoJob {
+            msa: msi,
+            msb: msj,
+            rsa_site: rk,
+            rsb_site: ri,
+            proj_ratio,
+        });
+        GreenOutcome::Two { index }
+    }
+}
+
+/// Classify the PhysCal Green functions of one sample; only the real, non-FSZ, no-RBM class is
+/// supported (the same class as the resident measurement).
+fn green_context(
+    data: &ExpertModeData,
+    ip: Complex64,
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+    ele_proj_cnt: &[i64],
+) -> Result<GreenContext, StageError> {
+    if data.has_rbm_terms() {
+        return unsupported("the resident Green stage does not provide RBM terms");
+    }
+    let mut classifier = GreenClassifier::new(data, ip, ele_cfg, ele_num, ele_proj_cnt);
+    for term in &data.green_one_terms {
+        let outcome = classifier.classify_one(
+            term.site1 as usize,
+            term.site2 as usize,
+            observables::spin_code(term.spin1),
+            observables::spin_code(term.spin2),
+        );
+        classifier.ctx.one_outcomes.push(outcome);
+    }
+    for term in &data.green_two_terms {
+        let outcome = classifier.classify_two(
+            term.site1 as usize,
+            term.site2 as usize,
+            term.site3 as usize,
+            term.site4 as usize,
+            observables::spin_code(term.spin1),
+            observables::spin_code(term.spin3),
+        );
+        classifier.ctx.two_outcomes.push(outcome);
+    }
+    Ok(classifier.ctx)
+}
+
+/// Device PhysCal Green functions of one sample: the host classifies the terms and computes the
+/// projection ratios, the device evaluates the deferred Pfaffian reductions, and the host folds
+/// them in term order exactly as [`observables::ordinary_green_values`].
+pub fn resident_green_values(
+    ops: &mut dyn ResidentMeasurementOps,
+    input: &mut MeasurementInput<'_>,
+) -> Result<GreenOutput, StageError> {
+    let one_len = input.data.green_one_terms.len();
+    let direct_len = input.data.green_two_terms.len();
+    let ctx = green_context(
+        input.data,
+        input.ip,
+        input.ele_cfg,
+        input.ele_num,
+        input.ele_proj_cnt,
+    )?;
+    let new_ip_one = if ctx.one_jobs.is_empty() {
+        Vec::new()
+    } else {
+        let msa: Vec<i64> = ctx.one_jobs.iter().map(|j| j.msa as i64).collect();
+        let rsa: Vec<i64> = ctx.one_jobs.iter().map(|j| j.rsa as i64).collect();
+        let ri: Vec<i64> = ctx.one_jobs.iter().map(|j| j.ri as i64).collect();
+        ops.ratio_terms(
+            input.batch_slot,
+            &ResidentRatioTerms {
+                ele_idx: input.ele_idx,
+                msa: &msa,
+                rsa: &rsa,
+                ri: &ri,
+            },
+        )?
+    };
+    let new_ip_two = if ctx.two_jobs.is_empty() {
+        Vec::new()
+    } else {
+        let msa: Vec<i64> = ctx.two_jobs.iter().map(|j| j.msa as i64).collect();
+        let msb: Vec<i64> = ctx.two_jobs.iter().map(|j| j.msb as i64).collect();
+        let rsa: Vec<i64> = ctx.two_jobs.iter().map(|j| j.rsa_site as i64).collect();
+        let rsb: Vec<i64> = ctx.two_jobs.iter().map(|j| j.rsb_site as i64).collect();
+        ops.green_two(
+            input.batch_slot,
+            &ResidentGreenTwo {
+                ele_idx: input.ele_idx,
+                msa: &msa,
+                msb: &msb,
+                rsa_site: &rsa,
+                rsb_site: &rsb,
+            },
+        )?
+    };
+    let ip = input.ip;
+    let resolve = |outcome: GreenOutcome| -> Complex64 {
+        match outcome {
+            GreenOutcome::Value(v) => Complex64::new(v, 0.0),
+            GreenOutcome::One { index, sign } => {
+                let job = ctx.one_jobs[index];
+                let value = crate::julia_complex::divide(
+                    Complex64::new(job.proj_ratio * new_ip_one[index], 0.0),
+                    ip,
+                )
+                .conj();
+                if sign < 0.0 {
+                    -value
+                } else {
+                    value
+                }
+            }
+            GreenOutcome::Two { index } => {
+                let job = ctx.two_jobs[index];
+                crate::julia_complex::divide(
+                    Complex64::new(job.proj_ratio * new_ip_two[index], 0.0),
+                    ip,
+                )
+                .conj()
+            }
+        }
+    };
+    let one: Vec<Complex64> = ctx.one_outcomes.iter().map(|o| resolve(*o)).collect();
+    let direct: Vec<Complex64> = ctx.two_outcomes.iter().map(|o| resolve(*o)).collect();
+    debug_assert_eq!(one.len(), one_len);
+    debug_assert_eq!(direct.len(), direct_len);
+    Ok(GreenOutput { one, direct })
 }
 
 #[cfg(test)]

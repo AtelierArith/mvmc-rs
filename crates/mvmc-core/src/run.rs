@@ -3057,6 +3057,15 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
         }
         None => false,
     };
+    // Issue #517 milestone 5: a device measurement backend can evaluate the PhysCal Green
+    // functions from the resident inverse planes, so the host Green consumer is skipped.
+    let green_resident = match measure_stage {
+        Some(kind) => {
+            let mut handle = crate::stage_backend::acquire_kind(kind);
+            handle.backend().measurement().resident_green()
+        }
+        None => false,
+    };
     if pf_resident || measure_resident {
         // A device chain is one process: the MPI QP split and the grouped sample partition have
         // no device implementation. Hard error, never a silent host execution (issue #518).
@@ -3067,8 +3076,16 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
         );
     }
+    // Issue #517 milestone 5: with the device Green functions the PhysCal sweep no longer needs
+    // the host inverse planes. A device sampler keeps its own inverse resident, so a fully
+    // device-resident PhysCal sweep can keep the inverse planes resident too; a C-order sampler
+    // (and the byte-identity comparison run) still downloads them.
+    let sampler_host_inverse = crate::sampler_backend::selected_sampler_backend()
+        == crate::sampler_backend::SamplerBackendKind::COrder;
+    let device_green_host_free =
+        green_resident && data.modpara.lanczos_mode == 0 && !sampler_host_inverse;
     let download_tables = !(pf_resident && measure_resident)
-        || data.modpara.vmc_calc_mode != 0
+        || (data.modpara.vmc_calc_mode != 0 && !device_green_host_free)
         || data.modpara.lanczos_mode > 0;
     if measure_resident {
         if let Some(kind) = measure_stage {
@@ -3414,15 +3431,54 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         timer,
                     );
                 } else if state.phys_quantities.is_some() {
-                    let (one_body, direct) = crate::observables::ordinary_green_values(
-                        data,
-                        state,
-                        ip,
-                        ele_idx,
-                        &ele_cfg,
-                        &ele_num,
-                        &ele_proj_cnt,
-                    );
+                    // Issue #517 milestone 5: a device measurement backend evaluates the Green
+                    // functions from the resident inverse planes; the default C-order stage
+                    // returns `None` and keeps the host consumer byte-identical.
+                    let green = if green_resident {
+                        let handle = measure_handle
+                            .as_mut()
+                            .expect("green_resident requires a measurement stage handle");
+                        let mut green_input = crate::stage_backend::MeasurementInput {
+                            data,
+                            state,
+                            ip,
+                            ele_idx,
+                            ele_cfg: &ele_cfg,
+                            ele_num: &ele_num,
+                            ele_proj_cnt: &ele_proj_cnt,
+                            sample,
+                            batch_slot: slot,
+                        };
+                        handle
+                            .backend()
+                            .measurement()
+                            .measure_green(
+                                &mut green_input,
+                                data.green_one_terms.len(),
+                                data.green_two_terms.len(),
+                                timer,
+                            )
+                            .unwrap_or_else(|error| {
+                                panic!(
+                                    "{}: device Green measurement failed: {error}",
+                                    crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
+                                )
+                            })
+                    } else {
+                        None
+                    };
+                    let (one_body, direct) = match green {
+                        Some(green) => (green.one, green.direct),
+                        None => crate::observables::ordinary_green_values(
+                            data,
+                            state,
+                            ip,
+                            ele_idx,
+                            &ele_cfg,
+                            &ele_num,
+                            &ele_proj_cnt,
+                        ),
+                    };
                     let lanczos_green = if data.modpara.lanczos_mode > 1 {
                         Some(crate::observables::calculate_lanczos_green(
                             e,
