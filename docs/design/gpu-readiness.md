@@ -2203,6 +2203,54 @@ A device-side SFMT port was prototyped and validated bitwise against the C/Rust 
 1/42/11272, 10^4-10^6 words, state and cursor), but per the user decision it is **not adopted**;
 the RNG stays on the host.
 
+### 16.8 Kernel roofline after the `pfinv_f64` rewrite (issue #517)
+
+`gpu/mvmc-gpu-cuda/src/pfaffian_batched.cu` (`pfinv_f64`) was rewritten on the branch
+`perf/issue517-pfinv-kernel`. The generic `pfinv_plane<T>` template still serves the f32/c64
+variants and the small real batches unchanged; the real-double path (`n >= 64`, even) is now
+specialized per phase, and the launch geometry is shared by the measurement launcher, the
+device-sampler service and the roofline bench (`pfaffian::launch_geometry`).
+
+What changed:
+
+- **phase 1** stages `x = A[:,k0]`, `y = A[:,kk]`, `t1 = alpha*y`, `t2 = alpha*x` in shared
+  memory once per step (4n doubles), scales column `k0` in the same pass, and applies the
+  strict-upper rank-2 update with one `double2` load/store per two elements with warp-cyclic
+  columns. The pivot search reduces with `__shfl_down_sync` plus one shared-memory round. Every
+  per-element formula is unchanged, so this phase is bit-identical to the generic path.
+- **phase 3(b)** (unit-upper-triangular inverse) keeps its exact C operation order: splitting
+  each dot product into four partial sums was measured and gave no gain (the phase is
+  memory-bound), so it was not kept.
+- **phase 3(d)** computes `M^T C` as a register-tiled GEMM restricted to the upper triangle of
+  the pre-permutation index space and writes the transposed entry as its exact negative:
+  `n^3/6` multiplies instead of `n^3`, 64x64 macro tiles, two `double2` loads per 4-wide k block
+  and the original `k = 0,1,2,...` accumulation order. For `n` a multiple of 64 this is
+  bit-identical on the computed half and exactly skew-symmetric on the mirrored half.
+- The `pfinv_f64` entry point carries `__launch_bounds__(256, 2)` and uses 256 threads for
+  `n >= 128` (measured fastest); the `n < 64` and odd-`n` cases stay on the generic path.
+
+Measured on the A100 (kernel-only, median of 5, `bench_recompute_roofline`; the roofline FP64
+peak is 9.7 TFLOP/s):
+
+| n | planes | before ms | after ms | speedup | before TFLOP/s | after TFLOP/s | after % peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 | 512 | 105.9 | 53.5 | 1.98x | 0.188 | 0.373 | 3.8% |
+| 256 | 2048 | 378.8 | 192.5 | 1.97x | 0.211 | 0.415 | 4.3% |
+| 448 | 512 | 527.9 | 306.3 | 1.72x | 0.203 | 0.350 | 3.6% |
+| 448 | 2048 | 1996.4 | 1161.7 | 1.72x | 0.215 | 0.369 | 3.8% |
+
+The saturated rate moves from 2.2% to ~4% of the FP64 peak (0.21 -> 0.42 TFLOP/s at n=256). The
+remaining gap to the flop floor is phase 1's `O(n^3/6)` element-wise rank-2 sweep and phase 3(b)'s
+triangular inverse, which are now memory/latency-bound; blocking (panels) both is the next step
+if the end-to-end >=20x target needs more. The restructured phases 1 and 3(b) keep the exact C
+operation order; phase 3(d) is bit-identical on the computed (upper) half and mirrors the other
+half exactly.
+
+Numerics: `tests/pfaffian_gate.rs` (6/6 pass) and the `pfaffian` function suite (99 rows, 0
+FAIL/ERROR) both stay inside the unchanged `16 n eps cond(A)` bound; the worst observed ratio is
+`8.5e-4` of the bound at n=16 (generic path), `4.0e-5` at n=64 and `5.0e-5` at n=256 for the fast
+path. Raw logs and the before/after CSVs: `bench-out/issue517-pfinv/`.
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための

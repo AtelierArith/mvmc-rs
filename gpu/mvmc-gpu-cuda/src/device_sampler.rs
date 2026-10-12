@@ -616,8 +616,7 @@ fn launch_recompute<T: TransferPath>(
         })
     }
     .map_err(cu)?;
-    let nt = n.next_power_of_two().clamp(32, 256);
-    let shared = (n * 8 + nt * 8 + nt * 4 + n * 8) as u32;
+    let (nt, shared) = crate::pfaffian::launch_geometry(n, 8, 1);
     let mut b = stream.launch_builder(&funcs.pfinv);
     b.arg(&mut sc.a)
         .arg(&mut sc.w)
@@ -629,7 +628,7 @@ fn launch_recompute<T: TransferPath>(
     unsafe {
         b.launch(LaunchConfig {
             grid_dim: (planes as u32, 1, 1),
-            block_dim: (nt as u32, 1, 1),
+            block_dim: (nt, 1, 1),
             shared_mem_bytes: shared,
         })
     }
