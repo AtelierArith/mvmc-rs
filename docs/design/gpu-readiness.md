@@ -2373,6 +2373,222 @@ sampler's dominant device phase (16.8). The next lever for >=20x is the #517 sam
 persistent launch), not the measurement. PhysCal additionally needs the Green functions on the
 device before the inverse download disappears.
 
+## 16.10 Milestone 3: the per-hop cost of the production sampler (issue #517)
+
+Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
+lock-step sampler is **1.85x faster** in its sampling section (`VMCMakeSample`: Opt L=448
+14.61 s -> 7.88 s) and the whole device run goes from 16.88 s to 10.06 s (Opt) and 37.57 s to
+26.37 s (PhysCal), **byte-identical** to the C-order sampler on the same measurement backend.
+
+### 16.10.1 Profile first: where the 4.9 s/step went
+
+Instrumentation (this issue):
+
+* `MVMC_C_TIMER=1` now reports the walker's sampler sections for the device path too
+  (`run_lockstep_real_one_timed`; the C-order sections 30/31/32/60-63/34/35), so a device run
+  has the same `zvo_CalcTimer.dat` breakdown as the CPU run.
+* `MVMC_RS_SAMPLER_PROFILE=1` prints the per-call lock-step statistics (`passes`, `proposals`,
+  `accepts`, `recomputes`, `recv_s`, `round_s`, `deliver_s`) and the service's per-call phase
+  deltas (`stage_s`, `upload_s`, `launch_s`, `wait_s`, `slow_wait_s`, and the CUDA-event device
+  times `dev_accept_s`, `dev_propose_s`, `dev_slow_s`).
+* `gpu/mvmc-gpu-cuda/examples/bench_sampler_kernels.rs` times the three fast-lane kernels
+  (`k_accept`, `k_commit_moves`, `k_propose`) and a full round (pinned upload + accept + commit +
+  propose + pinned download) on an idle device, and checks variant kernels for bit-identical
+  inverses.
+
+Opt L=448, 3 SR steps, `NVMCSample=64`, warm-up 10, one sample series = ~33 000 proposals /
+12 100 accepts / 26 recomputes. Host sections of the first series (seconds, share of
+`VMCMakeSample` = 5.94 s):
+
+| item | where | seconds | share |
+| --- | --- | ---: | ---: |
+| `CalculateNewPfM2 [61]` (the lock-step round trip, blocking) | host+device | 4.294 | 72 % |
+| `recal PfM and InvM [34]` (26 recomputes) | device | 0.798 | 13 % |
+| `makeInitialSample [30]` (initial sample + CPU tables + device `Begin`) | host | 0.490 | 8 % |
+| `UpdateProjCnt [60]` | host | 0.144 | 2 % |
+| candidate generation `[31]` + `log_ip [62]` + accept send `[63]` | host | 0.047 | 1 % |
+| everything else (protocol, copies, loop) | host | 0.17 | 3 % |
+
+The blocked time of section 61 decomposes with the service counters and the kernel bench:
+
+| device phase | per call | per series | share of the series |
+| --- | ---: | ---: | ---: |
+| `k_accept` (rank-two inverse update, 8 planes) | **219 us per accepted move** | 2.73 s | 46 % |
+| `k_propose` (ratio, 8 planes) | 11.2 us per proposal | 0.37 s | 6 % |
+| `k_commit_moves` | 5.1 us per accept | 0.06 s | 1 % |
+| pfinv recompute (8 planes) | **27.4 ms per item** | 0.82 s | 14 % |
+| service host (stage + upload + launch + download) | 23 us per round | ~0.78 s | 13 % |
+| walker protocol (send, park/wake, reply copies) | ~10 us per round | ~0.33 s | 6 % |
+| walker host work (candidate, counters, log ip) | ~5 us per hop | 0.19 s | 3 % |
+
+`k_accept` was the dominant single cost: 226 us of device time per accepted move (36.5 % of the
+proposals), because the flat `e = base + u * nt` loop computes `i = e / n`, `j = e % n` with a
+runtime divisor and touches the plane with a poor access pattern; with one module per (walker,
+QP) it runs on 8 of 108 SMs.
+
+### 16.10.2 What was changed
+
+1. **`k_accept` row loop** (`sampler_kernels.cu`): both branches (one-electron rank-two update and
+   two-electron block update) walk the plane row by row, one warp per row group, consecutive lanes
+   along the row. No integer division, fully coalesced loads and stores; every element's
+   expression is unchanged, so the update is bit-identical (the vectors it consumes are produced
+   by the same per-index ascending sums). The launch uses 512 threads instead of 256. Measured
+   (8 planes, n=448): 219.1 us -> 116.7 us (row loop, 256 threads) -> **77.8 us** (row loop, 512
+   threads) = **2.8x**; n=256: 74.8 us -> 31.7 us (2.4x).
+2. **`pfinv_f64_wide`** (`pfaffian_batched.cu`, `pfaffian::launch_geometry_wide`): a second entry
+   point of the #531 recompute kernel with relaxed launch bounds (`__launch_bounds__(1024, 1)`,
+   1024 threads per block) for the real-double fast path at `n >= 256`. Phase 1 of the
+   factorization is latency-bound when only a few planes are in flight, so the sampler's
+   single-walker recompute (8 planes = 8 SMs) and small measurement batches run faster; the same
+   math and the same per-element order, one block per plane. Measured per item (8 planes):
+   n=256 5.96 -> 5.11 ms (1.17x), n=448 27.4 -> 21.8 ms (1.26x), n=448/64 planes 55.0 -> 40.1 ms
+   (1.37x); n=128 and below keep the 256-thread geometry (1.09x faster there).
+3. **Production walker spin** (`sampler_stages.rs`): the single production chain spins 200 us for
+   its reply (was 50 us), which removes a park/unpark pair per hop: `deliver_s` 0.033 -> 0.008 s
+   per series.
+4. **Service receive spin** (`device_sampler.rs`, `RECV_SPIN` = 20 us): the service loop spins for
+   the next request before blocking in the channel receive. With one walker the next request
+   follows its reply within a few microseconds, so the blocking receive paid a futex wake on
+   every hop; several walkers never reach the spin.
+5. **Reused staging buffers** (`device_sampler.rs`): the request ints and their f64 bit image are
+   held in the service and refilled per round instead of allocated (one round per hop).
+6. **Timing passthrough and profile print** (items above): the device path reports the sampler
+   sections; the profile events are pooled (one `cuEventCreate` per round was ~9 % of the run
+   while profiling).
+
+Together, items 3-5 move section 61 (`CalculateNewPfM2`) from 59.1 us to 53.3 us per hop and
+`VMCMakeSample` for the first series from 3.44 s to 3.05 s (a further 1.13x).
+
+Levers that were **not** taken, with the reason:
+
+* **Speculative multi-hop batches** (prepare several hops per device exchange): impossible for the
+  production single chain without breaking the RNG contract. A hop's candidate is drawn from the
+  *empty-site* lists of the configuration that results from the previous decision, and the number
+  of SFMT draws per hop depends on whether the candidate is valid (the driver `continue`s on a
+  rejected candidate), so neither the candidate values nor the stream positions of hop `N+1` are
+  known before hop `N` is decided. Batching proposals stays valid for the independent-walker
+  runner (#434), not for one C chain.
+* **Device-side decision loop** (the only way to remove the per-hop round trip): the SFMT stream
+  stays on the host by the user decision of 16.7, and the projection ratio (`log_proj_ratio` over
+  the Gutzwiller/Jastrow counters) and the Metropolis draw are host-side by contract.
+* **Persistent/command-ring kernel**: one host kick per hop cannot serve many hops for the same
+  reason; CUDA graphs could only remove the per-kernel launch cost (~5 us of ~100 us per hop),
+  and the round trip per hop stays.
+
+### 16.10.3 Measured (A100 80GB, `bench-out/issue517/hops`)
+
+NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads
+(shared host: `load1` 1.8-5.1 during the timed Opt rounds, 1.4-3.1 during the PhysCal timed
+rounds), `MVMC_C_TIMER=1`, medians of 3 timed rounds after one warm-up, the same `mvmc-cuda`
+binary per row (`mvmc-cuda-base` = `main` at `a8ec667e`, `mvmc-cuda-opt` = this milestone).
+`cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda
+MVMC_RS_MEASURE_PF_BACKEND=cuda`. Section seconds.
+
+Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order (1 BLAS thread) | 39.99 | 23.82 | 13.94 | 1.226 |
+| c-order (4 BLAS threads) | 39.61 | 24.10 | 13.21 | 1.289 |
+| device sampler (before, `main`) | 16.88 | 14.61 | 1.084 | 0.143 |
+| **device sampler (after)** | **10.06** | **7.88** | 1.008 | 0.142 |
+
+PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
+
+| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
+| --- | ---: | ---: | ---: | ---: |
+| c-order (1 BLAS thread) | 72.69 | 39.82 | 23.20 | 1.237 |
+| c-order (4 BLAS threads) | 71.33 | 39.92 | 21.75 | 1.240 |
+| device sampler (before, `main`) | 37.57 | 23.52 | 5.27 | 0.209 |
+| **device sampler (after)** | **26.37** | **12.70** | 5.04 | 0.208 |
+
+Readings:
+
+* the sampling section moves by **1.85x** (Opt 14.61 -> 7.88 s; PhysCal 23.52 -> 12.70 s) and the
+  whole device run by **1.68x** (Opt) / **1.42x** (PhysCal);
+* per hop the device chain drops from 179 us to 92 us (Opt step 1, 33 152 proposals); the C-order
+  single thread needs 266 us per hop for the same series;
+* the per-series device budget after the change (Opt step 2, 29 120 proposals): `k_accept` 31.2 us
+  per hop (0.909 s, 29 %), `k_propose` 11.1 (0.32 s, 10 %), recompute 20.5 (0.60 s, 19 %),
+  service host + protocol ~16 (0.47 s, 15 %), copies ~5, walker host work ~5;
+* `CalculateMAll` and `LocEnergyCal` are the (already resident) #518 measurement and move only
+  through `pfinv_f64_wide` in small batches (5.27 -> 5.04 s PhysCal, 1.084 -> 1.008 s Opt);
+  PhysCal still downloads the inverse planes for the host Green functions.
+
+### 16.10.4 Exactness
+
+The sampling contract is RNG state, draw order and count, saved configurations, counters and
+energy. Two checks, both with the *same measurement backend* on both sides (the #518
+measurement is tolerance-based, not byte-exact):
+
+* In-process (A100 gates, `MVMC_RS_CUDA_GATE=1`): `sampler_production_gate` (Opt L=16, PhysCal
+  L=64, production entries) passes; `sampler_gate` (teacher-forced replay, free run, resident
+  inverse) 4/4; `measurement_gate` 7/7; `pfaffian_gate` 6/6; `cuda_gate` 4/4; `transfer_gate`
+  3/3; `sr_device_gate` 3/3; `sr_routing_gate` 2/2.
+* Whole output directories at L=448 with all sampler/measurement backends on the device except
+  the sampler under test (`c-order` vs `cuda`): Opt 3 steps 7/7 files and PhysCal 5 samples 20/20
+  files **byte-identical** (`cmp`, timers and `zvo_time*` excluded).
+* Kernel-level: `bench_sampler_kernels` compares the resident inverse and Pfaffians after one
+  accepted move for the row-loop variant against the previous kernel: 0.0 difference for the
+  hop branch, identical bit checksums for the two-electron branch (both `n = 256` and `448`);
+  the one- and two-electron update expressions are unchanged, only the element-to-thread mapping
+  moves.
+* The all-resident vs all-c-order comparison (different measurement backends) is unchanged from
+  #518: worst 6.8e-9 absolute / 3.2e-14 relative (Opt), 2.3e-10 / 1.1e-15 (PhysCal).
+
+### 16.10.5 Distance to >=20x and the next lever
+
+Against the 4-thread CPU baseline: Opt 39.61/10.06 = **3.94x**, PhysCal 71.33/26.37 = **2.71x**
+(against 1 thread: 3.97x / 2.76x). The remaining device budget per hop is 31 us for the accept
+kernel, 21 us for the recompute, 11 us for the proposal and ~21 us of service host + protocol +
+copies. 20x would need the whole per-hop cost near 5 us, i.e. a device-side decision loop, which
+the RNG-on-host decision excludes, and the accept kernel at the 8-SM L2 bandwidth limit (a plane
+is 1.6 MB; 8 planes read+write 38 MB per accepted move, at most ~65 GB/s per SM).
+
+The next levers, in the order the profile supports them:
+
+1. **`k_accept` parallelism.** The 2.8x came from the access pattern; the kernel is now at the
+   per-SM memory throughput of the 8 SMs it occupies. Splitting the plane over more blocks needs
+   the `v1 = -invM^T v3` vector and the full inverse row set in every update block, and a first
+   two-phase attempt (vector phase + split update phase, `bench_sampler_kernels` variants
+   `k_accept_vec`/`k_accept_upd`) was *slower* at these sizes (121 us vs 78 us) because the
+   per-block setup dominates; a shared-memory/tiled formulation with the vectors staged once per
+   plane is the way to beat it without changing the order.
+2. **The recompute's intra-plane parallelism.** `pfinv_f64` is one block per plane with 448 serial
+   LTL^T steps; at 8 planes the A100 runs it at 0.6 % of the FP64 peak (0.2 % of the saturated
+   per-plane rate of a 512-plane batch). A cooperative-grid or panel-blocked factorization with
+   grid sync per step is the only way to use more than 8 SMs for one walker's recompute; it must
+   keep pfapack's pivot rule and per-element order (the #531 constraint).
+3. **Round-trip protocol.** ~16 us per hop of service host work + walker protocol remain (two Vec
+   allocations and a reply copy per hop, the mpsc/mutex reply path, cudarc's per-launch argument
+   packing). A single-walker fast path (shared reply cell, preallocated staging, one kernel
+   argument block) is worth ~10 us per hop; a CUDA graph for the fixed part of the round could
+   remove a few more.
+
+Honest summary: the sampler is now ~2.9x faster than one C-order CPU thread per hop (92 us vs
+266 us at L=448) and the whole resident run 4.0x/2.7x faster than the 4-thread CPU. The >=20x
+end-to-end target is not reachable for a single chain on this design; it needs either the
+device-side RNG/decision loop (excluded) or an order-of-magnitude change in the per-hop device
+work (items 1-2) plus the PhysCal Green functions on the device.
+
+Reproduce:
+
+```sh
+# profile attribution
+env MVMC_C_TIMER=1 MVMC_RS_SAMPLER_PROFILE=1 MVMC_RS_SAMPLER_BACKEND=cuda \
+  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
+  mvmc-cuda <opt_L448>/namelist.def --nsteps 3 --nsmp 3 --out-dir /tmp/out
+# kernel latencies and variant bit checks
+cd gpu/mvmc-gpu-cuda && cargo run --release --example bench_sampler_kernels
+# recompute roofline (narrow vs wide)
+MVMC_PFINV_N=448 MVMC_PFINV_PLANES=8,64 cargo run --release --example bench_recompute_roofline
+MVMC_PFINV_WIDE=1 MVMC_PFINV_NT=1024 MVMC_PFINV_N=448 MVMC_PFINV_PLANES=8,64 \
+  cargo run --release --example bench_recompute_roofline
+# production comparison (one binary, sampler backend is the only difference)
+bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 "cuda|<bin>|<cuda env>" ...
+MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
+```
+
 ## 9. Japanese summary / 日本語要約
 
 目的: mvmc-rs のテンソル形状の演算を、将来 GPU へ移せるように tenferro-rs 経由で表現するための
@@ -2406,3 +2622,12 @@ device before the inverse download disappears.
   CUDA Graph/persistent kernel、state-machine walker) と #426 (バッチ局所エネルギー、デバイス
   Slater 微分、デバイス O store) を再開し、測定 (`CalculateMAll`/`LocEnergyCal`/`CalculateGreenFunc`)
   と SR (`StochasticOpt`) の常駐化まで拡張します。C 順序 CPU を基準に #424 harness で検証します (16 節)。
+* 追記 (2026-10-12, #517 milestone 3, 16.10 節): 本番デバイスサンプラのホップ単価を計測し、
+  (1) `k_accept` (rank-2 逆行列更新) を分割不要の行ループ (除算なし・完全合体アクセス、512 スレッド)
+  に書き換えて **2.8 倍** (n=448: 219 us → 78 us/採択)、(2) 再計算カーネル `pfinv_f64` に
+  1024 スレッドの wide 版を追加 (**1.26 倍**、8 プレーンのみのため 8 SM しか使えない場合)、
+  (3) 本番 walker のスピンを 200 us に延長して park/unpark を削減。Opt L=448 の `VMCMakeSample`
+  は 14.61 s → **7.88 s** (1.85 倍)、`All` 16.88 → 10.06 s。PhysCal L=448 は 23.52 → 12.70 s、
+  37.57 → 26.37 s。4 スレッド CPU 比 **3.94 倍 / 2.71 倍**。出力は同一測定 backend 上で
+  c-order と **バイト一致**。20 倍には 1 ホップあたり ~5 us が必要で、RNG をホストに置く契約では
+  デバイス側で判定ループを回せないため到達不可能です (16.10.5)。

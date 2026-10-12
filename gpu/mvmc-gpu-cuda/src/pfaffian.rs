@@ -78,6 +78,24 @@ pub fn launch_geometry(n: usize, elem_bytes: usize, lanes: usize) -> (u32, u32) 
     (nt as u32, generic.max(fast_shared))
 }
 
+/// Wide-block variant of the real-double fast path (`pfinv_f64_wide` in `pfaffian_batched.cu`):
+/// the same math with one 1024-thread block per plane. The per-step rank-2 sweep of phase 1 is
+/// latency-bound, so a batch that under-uses the device (8 planes = 8 of 108 SMs, the sampler's
+/// recompute) runs 1.2-1.6x faster; small `n` (128 and below) and the saturated large batches
+/// keep [`launch_geometry`] (measured with `bench_recompute_roofline`).
+pub fn launch_geometry_wide(n: usize) -> (u32, u32) {
+    let nt = 1024usize;
+    let generic = (n * 8 + nt * 8 + nt * 4 + n * 8) as u32;
+    let fast_shared = (40 * n + 384) as u32;
+    (nt as u32, generic.max(fast_shared))
+}
+
+/// Whether the wide-block entry point serves this real-double batch: even `n >= 256` (below
+/// that the 256-thread geometry measured faster) with the fast path available.
+pub fn use_wide_f64(n: usize, elem_bytes: usize, lanes: usize) -> bool {
+    elem_bytes == 8 && lanes == 1 && n >= 256 && n.is_multiple_of(2)
+}
+
 /// Reusable page-locked host staging buffers for the batch transfers.
 ///
 /// One buffer per direction/role (upload, inverse, Pfaffian, status); each grows to the

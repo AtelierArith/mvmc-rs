@@ -513,15 +513,29 @@ __device__ inline void entry(T* A, T* W, T* OUT, T* PF, int* ST, int n) {
   pfinv_plane<T>(A + p * (size_t)n * n, W + p * (size_t)n * n, OUT + p * (size_t)n * n, PF + p, ST + p, n);
 }
 
-extern "C" __global__ void __launch_bounds__(256, 2) pfinv_f64(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
-  // n >= 64 keeps the small-n batch rows on the generic path (bit-identical to the pre-#517
-  // kernel there); odd n has no 16-byte-aligned double2 staging and stays generic as well.
+// Real-double body of the batched entry points: n >= 64 keeps the small-n batches on the generic
+// path (bit-identical to the pre-#517 kernel there); odd n has no 16-byte-aligned double2 staging
+// and stays generic as well.
+__device__ inline void body_f64(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
   if (n >= 64 && (n & 1) == 0) {
     pfinv_plane_f64(A + blockIdx.x * (size_t)n * n, W + blockIdx.x * (size_t)n * n,
                     OUT + blockIdx.x * (size_t)n * n, PF + blockIdx.x, ST + blockIdx.x, n);
   } else {
     entry<double>(A, W, OUT, PF, ST, n);
   }
+}
+
+extern "C" __global__ void __launch_bounds__(256, 2) pfinv_f64(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
+  body_f64(A, W, OUT, PF, ST, n);
+}
+
+// Wide-block variant of `pfinv_f64` (issue #517 sampler hops): identical math, one 1024-thread
+// block per plane instead of 256 threads with two blocks per SM. Phase 1's per-step rank-2 sweep
+// is latency-bound, so a batch that under-uses the device (the sampler's recompute is 8 planes =
+// 8 SMs out of 108) runs 1.2-1.6x faster; the saturated large batches prefer `pfinv_f64`
+// (measured in `bench_recompute_roofline`; see docs/design/gpu-readiness.md 16.10).
+extern "C" __global__ void __launch_bounds__(1024, 1) pfinv_f64_wide(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
+  body_f64(A, W, OUT, PF, ST, n);
 }
 extern "C" __global__ void pfinv_c64(Cx<double>* A, Cx<double>* W, Cx<double>* OUT, Cx<double>* PF, int* ST, int n) {
   entry<Cx<double>>(A, W, OUT, PF, ST, n);

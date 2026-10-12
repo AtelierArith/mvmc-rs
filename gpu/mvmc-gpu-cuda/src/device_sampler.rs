@@ -284,6 +284,7 @@ struct Funcs {
     assemble: CudaFunction,
     commit_recompute: CudaFunction,
     pfinv: CudaFunction,
+    pfinv_wide: CudaFunction,
 }
 
 struct Lane<T: TransferPath> {
@@ -333,9 +334,16 @@ pub struct CudaSamplerService<T: TransferPath> {
     slater: HashMap<u64, CudaSlice<f64>>,
     completed: VecDeque<SlowReply>,
     fast_out: Vec<f64>,
+    /// Reused fast-lane staging: the request ints and their f64 bit image.
+    fast_ints: Vec<i32>,
+    fast_stage: Vec<f64>,
     /// Reusable fast-lane event: re-recorded after each round's accepted moves so a slow lane can
     /// wait (on the device) for them, and used as the proposal-phase start for the device timings.
     accept_ev: CudaEvent,
+    /// Reusable start/mid events of the device-phase timings (`profile`); created once so that
+    /// profiling does not pay a `cuEventCreate` per round.
+    start_ev: CudaEvent,
+    mid_ev: CudaEvent,
     /// Earliest time of the next non-blocking slow-lane device query (`poll_slow(false)`).
     next_slow_query: Instant,
     /// Phase timings of all rounds so far.
@@ -359,12 +367,12 @@ impl CudaSamplerService<PageableTransfer> {
     }
 }
 
-fn ints_to_f64_bits(ints: &[i32]) -> Vec<f64> {
-    let mut v = vec![0.0f64; ints.len().div_ceil(2)];
+fn ints_to_f64_bits_into(ints: &[i32], v: &mut Vec<f64>) {
+    v.clear();
+    v.resize(ints.len().div_ceil(2), 0.0);
     // SAFETY: f64 storage reinterpreted as i32 pairs; both are plain data.
     let dst = unsafe { std::slice::from_raw_parts_mut(v.as_mut_ptr().cast::<i32>(), v.len() * 2) };
     dst[..ints.len()].copy_from_slice(ints);
-    v
 }
 
 fn record(ctx: &Arc<CudaContext>, ts: &TransferStream) -> Result<CudaEvent, String> {
@@ -403,6 +411,7 @@ impl<T: TransferPath> CudaSamplerService<T> {
             assemble: f("k_assemble")?,
             commit_recompute: f("k_commit_recompute")?,
             pfinv: f("pfinv_f64")?,
+            pfinv_wide: f("pfinv_f64_wide")?,
         };
         let mut lane = |ctx: &Arc<CudaContext>| -> Result<Lane<T>, String> {
             let ts = Arc::new(TransferStream::new(ctx).map_err(cu)?);
@@ -427,6 +436,12 @@ impl<T: TransferPath> CudaSamplerService<T> {
         let accept_ev = ctx
             .new_event(Some(cudarc::driver::sys::CUevent_flags::CU_EVENT_DEFAULT))
             .map_err(cu)?;
+        let start_ev = ctx
+            .new_event(Some(cudarc::driver::sys::CUevent_flags::CU_EVENT_DEFAULT))
+            .map_err(cu)?;
+        let mid_ev = ctx
+            .new_event(Some(cudarc::driver::sys::CUevent_flags::CU_EVENT_DEFAULT))
+            .map_err(cu)?;
         Ok(Self {
             ctx,
             funcs,
@@ -437,7 +452,11 @@ impl<T: TransferPath> CudaSamplerService<T> {
             slater: HashMap::new(),
             completed: VecDeque::new(),
             fast_out: Vec::new(),
+            fast_ints: Vec::new(),
+            fast_stage: Vec::new(),
             accept_ev,
+            start_ev,
+            mid_ev,
             next_slow_query: Instant::now(),
             timings: ServiceTimings::default(),
             profile: false,
@@ -616,8 +635,17 @@ fn launch_recompute<T: TransferPath>(
         })
     }
     .map_err(cu)?;
-    let (nt, shared) = crate::pfaffian::launch_geometry(n, 8, 1);
-    let mut b = stream.launch_builder(&funcs.pfinv);
+    let wide = crate::pfaffian::use_wide_f64(n, 8, 1);
+    let (nt, shared) = if wide {
+        crate::pfaffian::launch_geometry_wide(n)
+    } else {
+        crate::pfaffian::launch_geometry(n, 8, 1)
+    };
+    let mut b = stream.launch_builder(if wide {
+        &funcs.pfinv_wide
+    } else {
+        &funcs.pfinv
+    });
     b.arg(&mut sc.a)
         .arg(&mut sc.w)
         .arg(&mut sc.out)
@@ -716,7 +744,11 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
         let (ne_i, ns_i, nq_i, n_i) = (g.n_elec as i32, g.n_site as i32, nq as i32, n as i32);
 
         // ---- fast lane staging: ints [accepts | proposes] --------------------------------------
-        let mut ints: Vec<i32> = fast.accepts.iter().map(|&w| w as i32).collect();
+        // The staging vectors are reused across rounds: they are a few hundred bytes and the
+        // per-round allocation is measurable at one round per hop.
+        let mut ints = std::mem::take(&mut self.fast_ints);
+        ints.clear();
+        ints.extend(fast.accepts.iter().map(|&w| w as i32));
         let off_acc = 0usize;
         let off_prop = (ints.len() + 1) & !1;
         ints.resize(off_prop, 0);
@@ -736,27 +768,32 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
         if ints.len() % 2 == 1 {
             ints.push(0);
         }
-        let stage = ints_to_f64_bits(&ints);
+        ints_to_f64_bits_into(&ints, &mut self.fast_stage);
+        self.fast_ints = ints;
         let out_len = (np * nq).max(1);
-        ensure_f64(&mut self.fast.dstage, &self.fast.ts, stage.len().max(1))?;
+        ensure_f64(
+            &mut self.fast.dstage,
+            &self.fast.ts,
+            self.fast_stage.len().max(1),
+        )?;
         ensure_f64(&mut self.fast.dout, &self.fast.ts, out_len)?;
         self.timings.stage_s += t_stage.elapsed().as_secs_f64();
 
         let t_up = Instant::now();
-        if !stage.is_empty() {
+        if !self.fast_stage.is_empty() {
+            let stage = std::mem::take(&mut self.fast_stage);
             let dst = self.fast.dstage.as_mut().expect("stage");
             self.fast.xfer.upload(dst, &stage)?;
+            self.fast_stage = stage;
         }
         self.timings.upload_s += t_up.elapsed().as_secs_f64();
 
         // ---- fast lane: accepted moves --------------------------------------------------------
         let t_launch = Instant::now();
         let stream = self.fast.ts.stream().clone();
-        let e_start = if self.profile {
-            Some(record(&self.ctx, &self.fast.ts)?)
-        } else {
-            None
-        };
+        if self.profile {
+            self.start_ev.record(&stream).map_err(cu)?;
+        }
         if na > 0 {
             let res = self.res.as_mut().expect("res");
             let stage_dev = self.fast.dstage.as_ref().expect("stage");
@@ -764,7 +801,9 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             let acc_ptr = base + (off_acc * 4) as u64;
             let count = na as i32;
             let shared = (((n + 1) & !1) * 4 + (4 * n + 16) * 8) as u32;
-            let nt = n.next_power_of_two().clamp(32, 256) as u32;
+            // The row-loop update wants several warps per row (coalesced j chunks); the gather
+            // and the per-row sums are independent of the block size, so this stays exact.
+            let nt = (2 * n).next_power_of_two().clamp(64, 512) as u32;
             let mut b = stream.launch_builder(&self.funcs.accept);
             b.arg(&acc_ptr)
                 .arg(&res.slater_ptrs)
@@ -834,7 +873,8 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             if ints.len() % 2 == 1 {
                 ints.push(0);
             }
-            let mut sstage = ints_to_f64_bits(&ints);
+            let mut sstage = Vec::new();
+            ints_to_f64_bits_into(&ints, &mut sstage);
             let off_pfset = sstage.len();
             for b in &slow.begins {
                 sstage.extend_from_slice(&b.pf);
@@ -953,7 +993,6 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
 
         // ---- fast lane: proposals -------------------------------------------------------------
         let mut pf_out = Vec::new();
-        let ms = |a: &CudaEvent, b: &CudaEvent| f64::from(a.elapsed_ms(b).unwrap_or(0.0)) * 1e-3;
         if np > 0 {
             let t_launch = Instant::now();
             let res = self.res.as_mut().expect("res");
@@ -989,11 +1028,9 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
                 })
             }
             .map_err(cu)?;
-            let e_end = if self.profile {
-                Some(record(&self.ctx, &self.fast.ts)?)
-            } else {
-                None
-            };
+            if self.profile {
+                self.mid_ev.record(&stream).map_err(cu)?;
+            }
             let dout = self.fast.dout.as_ref().expect("out");
             self.fast.xfer.download_start(dout, out_len)?;
             self.timings.launch_s += t_launch.elapsed().as_secs_f64();
@@ -1003,9 +1040,11 @@ impl<T: TransferPath> DeviceService for CudaSamplerService<T> {
             self.timings.wait_s += t_wait.elapsed().as_secs_f64();
             pf_out = out[..np * nq].to_vec();
             self.fast_out = out;
-            if let (Some(a), Some(c)) = (&e_start, &e_end) {
-                self.timings.dev_accept_s += ms(a, &self.accept_ev);
-                self.timings.dev_propose_s += ms(&self.accept_ev, c);
+            if self.profile {
+                self.timings.dev_accept_s +=
+                    f64::from(self.start_ev.elapsed_ms(&self.accept_ev).unwrap_or(0.0)) * 1e-3;
+                self.timings.dev_propose_s +=
+                    f64::from(self.accept_ev.elapsed_ms(&self.mid_ev).unwrap_or(0.0)) * 1e-3;
             }
         }
         self.timings.passes += 1;

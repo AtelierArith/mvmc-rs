@@ -132,6 +132,12 @@ extern "C" __global__ void k_propose(const int* items, int count, const double* 
 // ---------------------------------------------------------------------------------------------
 // accepted moves: one block per (accepted walker, qp). Dynamic shared memory:
 //   n ints (candidate sites) + 6*n doubles (a, b, c, d, e, f vectors) + 16 doubles (scalars).
+//
+// The rank-two update of both branches walks the plane row by row with one warp per row group
+// and consecutive lanes along the row: no integer division, fully coalesced loads and stores.
+// Every element's arithmetic expression is the flat loop's; only the assignment of elements to
+// threads changes, so the result is bit-identical (the vectors feeding the update are written by
+// the same per-index serial sums as before).
 // ---------------------------------------------------------------------------------------------
 extern "C" __global__ void k_accept(const int* acc_w, const double* const* slater_tab,
                                     const int* ele, double* inv, double* pf, const double* pfnew,
@@ -176,27 +182,18 @@ extern "C" __global__ void k_accept(const int* acc_w, const double* const* slate
     const double inv_vec1_a = -1.0 / tmp;
     for (int i = tid; i < n; i += nt) v2[i] = invq[(size_t)msa * n + i] * inv_vec1_a;
     __syncthreads();
-    // rank-two update, 8 elements per thread in flight: the loads of the group are issued before
-    // any store (the loop is latency bound, not bandwidth bound)
-    const int nn = n * n;
-    for (int base = tid; base < nn; base += 8 * nt) {
-      double xv[8];
-#pragma unroll
-      for (int u = 0; u < 8; ++u) {
-        const int e = base + u * nt;
-        xv[u] = (e < nn) ? invq[e] : 0.0;
-      }
-#pragma unroll
-      for (int u = 0; u < 8; ++u) {
-        const int e = base + u * nt;
-        if (e < nn) {
-          const int i = e / n, j = e % n;
-          double x = xv[u];
-          x += v1[i] * v2[j] - v1[j] * v2[i];
-          if (j == msa) x -= v2[i];
-          if (i == msa) x += v2[j];
-          invq[e] = x;
-        }
+    // rank-two update, one warp per row group, consecutive lanes along the row
+    const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
+    for (int i = warp; i < n; i += nwarp) {
+      const double vi1 = v1[i], vi2 = v2[i];
+      const int rowoff = i * n;
+      for (int j = lane; j < n; j += 32) {
+        const int e = rowoff + j;
+        double x = invq[e];
+        x += vi1 * v2[j] - v1[j] * vi2;
+        if (j == msa) x -= vi2;
+        if (i == msa) x += v2[j];
+        invq[e] = x;
       }
     }
     if (tid == 0) pf[(size_t)w * nqp + qp] = pfnew[(size_t)w * nqp + qp];
@@ -249,22 +246,15 @@ extern "C" __global__ void k_accept(const int* acc_w, const double* const* slate
     vt[i] = inv_det * invq[(size_t)msb * n + i];
   }
   __syncthreads();
-  const int nn2 = n * n;
-  for (int base = tid; base < nn2; base += 4 * nt) {
-    double xv[4];
-#pragma unroll
-    for (int u = 0; u < 4; ++u) {
-      const int idx = base + u * nt;
-      xv[u] = (idx < nn2) ? invq[idx] : 0.0;
-    }
-#pragma unroll
-    for (int u = 0; u < 4; ++u) {
-      const int idx = base + u * nt;
-      if (idx >= nn2) continue;
-      const int i = idx / n, j = idx % n;
-      const double p_i = vp[i], q_i = vq[i], s_i = vs[i], t_i = vt[i];
+  // rank-two (block) update, one warp per row group, consecutive lanes along the row
+  const int e_warp = tid >> 5, e_lane = tid & 31, e_nwarp = nt >> 5;
+  for (int i = e_warp; i < n; i += e_nwarp) {
+    const double p_i = vp[i], q_i = vq[i], s_i = vs[i], t_i = vt[i];
+    const int rowoff = i * n;
+    for (int j = e_lane; j < n; j += 32) {
+      const int idx = rowoff + j;
       const double p_j = vp[j], q_j = vq[j], s_j = vs[j], t_j = vt[j];
-      double x = xv[u];
+      double x = invq[idx];
       x += a * (q_i * t_j - q_j * t_i) + b * (q_i * s_j - q_j * s_i) +
            c * (p_i * t_j - p_j * t_i) + d * (p_i * s_j - p_j * s_i) +
            e * det * (s_i * t_j - s_j * t_i) + f * inv_det * (p_i * q_j - q_i * p_j);
