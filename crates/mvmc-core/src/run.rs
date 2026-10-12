@@ -980,7 +980,7 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
                 data.i_flg_orbital_general != 0,
             )
             .and_then(|()| {
-                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
                     .map_err(|error| error.to_string())
             }),
             reducer,
@@ -1256,7 +1256,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
                 data.i_flg_orbital_general != 0,
             )
             .and_then(|()| {
-                crate::sampler_backend::check_serial_reducer(reducer.reducer_dyn())
+                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
                     .map_err(|error| error.to_string())
             }),
             reducer,

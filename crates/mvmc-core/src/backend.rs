@@ -125,6 +125,14 @@ pub trait CudaProvider: Send + Sync {
         &self,
         ordinal: usize,
     ) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, String>;
+    /// The device-resident interval (group) sampler (issue #547) on one device ordinal.
+    fn open_interval_sampler_stages(
+        &self,
+        ordinal: usize,
+    ) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, String> {
+        let _ = ordinal;
+        Err("this CUDA provider has no interval sampler".to_string())
+    }
 }
 
 #[cfg(feature = "gpu-cuda")]
@@ -185,6 +193,14 @@ pub fn open_cuda_sampler_stages(
     Err(BackendError::CudaNotCompiled)
 }
 
+/// Open the CUDA device-resident interval (group) sampler on `ordinal` (issue #547).
+#[cfg(not(feature = "gpu-cuda"))]
+pub fn open_cuda_interval_sampler_stages(
+    _ordinal: usize,
+) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, BackendError> {
+    Err(BackendError::CudaNotCompiled)
+}
+
 /// Open the CUDA device-resident production sampler on `ordinal` (issue #517).
 ///
 /// An error without the `gpu-cuda` feature, without a registered provider or without that
@@ -201,6 +217,22 @@ pub fn open_cuda_sampler_stages(
     }
     cuda_provider()?
         .open_sampler_stages(ordinal)
+        .map_err(BackendError::Device)
+}
+
+/// Open the CUDA device-resident interval (group) sampler on `ordinal` (issue #547).
+#[cfg(feature = "gpu-cuda")]
+pub fn open_cuda_interval_sampler_stages(
+    ordinal: usize,
+) -> Result<Box<dyn crate::sampler_backend::SamplerStages>, BackendError> {
+    let count = cuda_device_count()?;
+    if ordinal >= count {
+        return Err(BackendError::Device(format!(
+            "CUDA device {ordinal} requested but {count} device(s) found"
+        )));
+    }
+    cuda_provider()?
+        .open_interval_sampler_stages(ordinal)
         .map_err(BackendError::Device)
 }
 
