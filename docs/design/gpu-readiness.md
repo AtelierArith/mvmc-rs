@@ -1,5 +1,12 @@
 # GPU readiness: routing tensor-shaped operations through tenferro-rs
 
+2026-10-13 update: [GPU-resident Opt](gpu-resident-opt.md) implements the
+Julia-compatible GPU ensemble lifecycle authorized in `AGENTS.md` (#560).
+Its [L128 E2E report](../../benchmark/host_gpu_comparison/results/L128-opt-resident-20261013/README.md)
+records 7.688 s Rust versus 5.144 s Julia, with zero explicit intermediate
+host/device copies in the optimization loop. The inventory below records the
+earlier C-order migration plan and its measurements.
+
 Status: design and inventory (issue #417, related to #185, #360, #361). No production
 code changes in #417. The `gpu-cuda` build path and optional gate landed with issue #420
 (section 10); the validation harness of #424 is described in `docs/NUMERICAL_COMPARISONS.md`
