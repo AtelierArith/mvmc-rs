@@ -19,6 +19,13 @@ if [[ -n ${CARGO_MAKEFLAGS:-} ]]; then
 elif [[ ${MAKEFLAGS:-} == *--jobserver-* ]]; then
     unset CARGO_BUILD_JOBS CMAKE_BUILD_PARALLEL_LEVEL
     export JULIA_NUM_PRECOMPILE_TASKS=1
+elif [[ ${1##*/} == cargo ]]; then
+    # Cargo creates the top-level jobserver. Its build scripts receive tokens
+    # via CARGO_MAKEFLAGS; an inherited -jN/parallel level would create another
+    # native worker pool independently of those tokens.
+    export CARGO_BUILD_JOBS="$jobs"
+    unset MAKEFLAGS CMAKE_BUILD_PARALLEL_LEVEL
+    export JULIA_NUM_PRECOMPILE_TASKS=1
 else
     export CARGO_BUILD_JOBS="$jobs"
     export CMAKE_BUILD_PARALLEL_LEVEL="$jobs"

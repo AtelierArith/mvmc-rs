@@ -31,6 +31,20 @@ MVMC_BUILD_JOBS=3 bash "$script_dir/build.sh" bash -c '
     set -e
     [[ $CARGO_BUILD_JOBS == 3 && $CMAKE_BUILD_PARALLEL_LEVEL == 3 && $JULIA_NUM_PRECOMPILE_TASKS == 3 ]]
 '
+cat > "$fixture/cargo" <<'CARGO'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $CARGO_BUILD_JOBS == $EXPECTED_JOBS ]]
+[[ ! -v MAKEFLAGS && ! -v CMAKE_BUILD_PARALLEL_LEVEL ]]
+[[ $JULIA_NUM_PRECOMPILE_TASKS == 1 ]]
+[[ $JULIA_NUM_THREADS == 1 && $OMP_NUM_THREADS == 1 && $OPENBLAS_NUM_THREADS == 1 ]]
+[[ $1 == build && $2 == --locked ]]
+CARGO
+chmod +x "$fixture/cargo"
+EXPECTED_JOBS=7 MAKEFLAGS=-j99 CMAKE_BUILD_PARALLEL_LEVEL=99 \
+    bash "$script_dir/build.sh" cargo build --locked
+EXPECTED_JOBS=3 MVMC_BUILD_JOBS=3 MAKEFLAGS=-j99 CMAKE_BUILD_PARALLEL_LEVEL=99 \
+    bash "$script_dir/build.sh" "$fixture/cargo" build --locked
 for origin in cargo make; do
     export CARGO_BUILD_JOBS=99 CMAKE_BUILD_PARALLEL_LEVEL=99
     if [[ $origin == cargo ]]; then

@@ -72,7 +72,10 @@ single-thread benchmarks remain single-thread benchmarks.
 Nested native builds retain an inherited Cargo/make jobserver rather than
 starting another full-size worker pool. In that case the wrapper does not force
 Cargo/CMake parallel levels, and limits Julia precompilation to one task because
-Julia package workers do not consume make jobserver tokens. Outside a jobserver,
+Julia package workers do not consume make jobserver tokens. A top-level `cargo`
+command (including an absolute executable path) receives only its Cargo job
+budget, without independent make/CMake pools; Cargo supplies the jobserver to
+its native build scripts. Other standalone build commands receive
 `JULIA_NUM_PRECOMPILE_TASKS`, `CARGO_BUILD_JOBS`,
 `CMAKE_BUILD_PARALLEL_LEVEL` and make's job count share the resolved budget.
 Direct sequential compiler calls in a dependency's build script remain
