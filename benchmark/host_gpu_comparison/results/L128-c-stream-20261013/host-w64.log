@@ -1,0 +1,32 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.15s
+────────────
+ Nextest run ID e4e8d5e6-c931-46bf-be57-9863bfedce81 with nextest profile: default
+    Starting 1 test across 1 binary
+        PASS [  24.956s] (1/1) mvmc-gpu-cuda::interval_e2e_l128 interval_group_opt_hubbard_l128_timing
+  stdout ───
+
+    running 1 test
+    test interval_group_opt_hubbard_l128_timing ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.76s
+
+  stderr ───
+    interval E2E L128: backend=COrder walkers=64 steps=20 smp=1 wall=24.114 s etot=115.13058962921794
+
+────────────
+     Summary [  24.957s] 1 test run: 1 passed, 0 skipped

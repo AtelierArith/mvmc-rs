@@ -1,0 +1,654 @@
+MVMC_RS_SAMPLER_BACKEND=cuda-interval
+MVMC_RS_SR_BACKEND=c-order
+MVMC_RS_MEASURE_BACKEND=c-order
+MVMC_RS_MEASURE_PF_BACKEND=c-order
+walkers=64 seed=1
+READY
+[interval] GPU initialization 1.9420s
+[dev] block_ms=56.89 run_ms=55.64 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=56.45 run_ms=55.34 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=95.72 run_ms=62.09 rb_ms=32.52 dl_ms=0.15 rounds=2 rebuilds=58
+[dev] block_ms=64.86 run_ms=59.69 rb_ms=3.98 dl_ms=0.18 rounds=2 rebuilds=6
+[dev] block_ms=59.68 run_ms=53.87 rb_ms=4.67 dl_ms=0.15 rounds=2 rebuilds=7
+[dev] block_ms=93.63 run_ms=62.85 rb_ms=29.61 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 2.5143s
+[interval] GPU initialization 0.0389s
+[dev] block_ms=54.06 run_ms=52.84 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=51.82 run_ms=50.75 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=84.50 run_ms=53.99 rb_ms=29.42 dl_ms=0.12 rounds=2 rebuilds=52
+[dev] block_ms=64.42 run_ms=55.85 rb_ms=7.46 dl_ms=0.13 rounds=2 rebuilds=12
+[dev] block_ms=58.78 run_ms=54.43 rb_ms=3.16 dl_ms=0.16 rounds=2 rebuilds=4
+[dev] block_ms=87.36 run_ms=56.80 rb_ms=29.05 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4881s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=53.06 run_ms=51.80 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=52.18 run_ms=51.13 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=91.95 run_ms=60.01 rb_ms=30.83 dl_ms=0.14 rounds=2 rebuilds=56
+[dev] block_ms=71.39 run_ms=64.10 rb_ms=6.15 dl_ms=0.11 rounds=2 rebuilds=8
+[dev] block_ms=60.67 run_ms=55.55 rb_ms=3.97 dl_ms=0.17 rounds=2 rebuilds=6
+[dev] block_ms=92.43 run_ms=61.70 rb_ms=29.56 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5288s
+[interval] GPU initialization 0.0380s
+[dev] block_ms=53.01 run_ms=51.74 rb_ms=0.00 dl_ms=0.17 rounds=1 rebuilds=0
+[dev] block_ms=51.53 run_ms=50.41 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=87.62 run_ms=56.54 rb_ms=29.96 dl_ms=0.15 rounds=2 rebuilds=53
+[dev] block_ms=69.68 run_ms=61.28 rb_ms=7.22 dl_ms=0.14 rounds=2 rebuilds=11
+[dev] block_ms=66.40 run_ms=58.87 rb_ms=6.17 dl_ms=0.14 rounds=2 rebuilds=8
+[dev] block_ms=84.34 run_ms=56.05 rb_ms=27.25 dl_ms=0.11 rounds=2 rebuilds=49
+[interval] sample_real_group 0.5111s
+[interval] GPU initialization 0.0377s
+[dev] block_ms=48.92 run_ms=47.58 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=52.34 run_ms=51.09 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=81.69 run_ms=53.02 rb_ms=27.38 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=66.75 run_ms=55.46 rb_ms=10.12 dl_ms=0.11 rounds=2 rebuilds=15
+[dev] block_ms=61.78 run_ms=56.05 rb_ms=4.66 dl_ms=0.14 rounds=2 rebuilds=7
+[dev] block_ms=84.48 run_ms=54.53 rb_ms=28.82 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4717s
+[interval] GPU initialization 0.0389s
+[dev] block_ms=50.47 run_ms=49.24 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=51.32 run_ms=50.20 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=80.75 run_ms=50.56 rb_ms=29.02 dl_ms=0.12 rounds=2 rebuilds=51
+[dev] block_ms=67.61 run_ms=58.38 rb_ms=8.08 dl_ms=0.14 rounds=2 rebuilds=13
+[dev] block_ms=55.74 run_ms=52.52 rb_ms=2.10 dl_ms=0.12 rounds=2 rebuilds=3
+[dev] block_ms=89.66 run_ms=57.74 rb_ms=30.71 dl_ms=0.15 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4837s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=51.69 run_ms=50.43 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=53.38 run_ms=52.27 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=86.91 run_ms=55.15 rb_ms=30.67 dl_ms=0.14 rounds=2 rebuilds=55
+[dev] block_ms=71.15 run_ms=63.82 rb_ms=6.22 dl_ms=0.15 rounds=2 rebuilds=9
+[dev] block_ms=55.37 run_ms=51.10 rb_ms=3.17 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.52 run_ms=57.23 rb_ms=28.74 dl_ms=0.14 rounds=2 rebuilds=50
+[interval] sample_real_group 0.5081s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=50.90 run_ms=49.64 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=49.15 run_ms=48.08 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=86.14 run_ms=56.18 rb_ms=28.89 dl_ms=0.16 rounds=2 rebuilds=51
+[dev] block_ms=64.56 run_ms=55.32 rb_ms=8.04 dl_ms=0.16 rounds=2 rebuilds=13
+[dev] block_ms=55.62 run_ms=51.34 rb_ms=3.14 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=86.99 run_ms=56.89 rb_ms=28.82 dl_ms=0.15 rounds=2 rebuilds=50
+[interval] sample_real_group 0.5014s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=52.55 run_ms=51.36 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.00 run_ms=48.94 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.90 run_ms=54.58 rb_ms=29.22 dl_ms=0.14 rounds=2 rebuilds=52
+[dev] block_ms=67.63 run_ms=59.04 rb_ms=7.51 dl_ms=0.14 rounds=2 rebuilds=12
+[dev] block_ms=56.63 run_ms=52.32 rb_ms=3.16 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=88.25 run_ms=56.77 rb_ms=30.25 dl_ms=0.14 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4815s
+[interval] GPU initialization 0.0389s
+[dev] block_ms=51.21 run_ms=49.93 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=48.85 run_ms=47.78 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=80.39 run_ms=52.00 rb_ms=27.29 dl_ms=0.11 rounds=2 rebuilds=49
+[dev] block_ms=68.88 run_ms=57.60 rb_ms=10.21 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=65.45 run_ms=61.11 rb_ms=3.16 dl_ms=0.17 rounds=2 rebuilds=4
+[dev] block_ms=84.92 run_ms=54.72 rb_ms=29.02 dl_ms=0.13 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5087s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=50.22 run_ms=49.01 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=50.24 run_ms=49.17 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=81.11 run_ms=53.80 rb_ms=26.19 dl_ms=0.17 rounds=2 rebuilds=46
+[dev] block_ms=68.06 run_ms=55.66 rb_ms=11.20 dl_ms=0.17 rounds=2 rebuilds=18
+[dev] block_ms=62.60 run_ms=59.30 rb_ms=2.15 dl_ms=0.15 rounds=2 rebuilds=3
+[dev] block_ms=88.14 run_ms=57.73 rb_ms=29.22 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5114s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=51.08 run_ms=49.88 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=53.55 run_ms=52.44 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=84.37 run_ms=53.14 rb_ms=30.12 dl_ms=0.14 rounds=2 rebuilds=54
+[dev] block_ms=64.55 run_ms=56.82 rb_ms=6.27 dl_ms=0.16 rounds=2 rebuilds=10
+[dev] block_ms=59.32 run_ms=56.08 rb_ms=2.11 dl_ms=0.15 rounds=2 rebuilds=2
+[dev] block_ms=89.16 run_ms=58.61 rb_ms=29.45 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5006s
+[interval] GPU initialization 0.0376s
+[dev] block_ms=52.44 run_ms=51.21 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=49.85 run_ms=48.84 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=84.33 run_ms=53.09 rb_ms=30.13 dl_ms=0.15 rounds=2 rebuilds=54
+[dev] block_ms=65.84 run_ms=58.24 rb_ms=6.28 dl_ms=0.15 rounds=2 rebuilds=10
+[dev] block_ms=62.76 run_ms=58.49 rb_ms=3.12 dl_ms=0.17 rounds=2 rebuilds=4
+[dev] block_ms=87.44 run_ms=57.09 rb_ms=29.20 dl_ms=0.15 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5028s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=52.34 run_ms=51.05 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=54.12 run_ms=52.94 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=82.10 run_ms=52.02 rb_ms=28.93 dl_ms=0.15 rounds=2 rebuilds=50
+[dev] block_ms=65.65 run_ms=55.85 rb_ms=8.68 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=58.25 run_ms=53.95 rb_ms=3.14 dl_ms=0.17 rounds=2 rebuilds=4
+[dev] block_ms=87.39 run_ms=57.15 rb_ms=29.10 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5088s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=53.10 run_ms=51.91 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.53 run_ms=50.50 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=78.04 run_ms=48.00 rb_ms=28.97 dl_ms=0.11 rounds=2 rebuilds=50
+[dev] block_ms=66.93 run_ms=57.16 rb_ms=8.70 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=58.45 run_ms=53.36 rb_ms=3.98 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=88.92 run_ms=59.12 rb_ms=28.62 dl_ms=0.16 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5103s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=51.41 run_ms=50.13 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=50.07 run_ms=48.96 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=88.81 run_ms=54.91 rb_ms=32.78 dl_ms=0.14 rounds=2 rebuilds=58
+[dev] block_ms=68.45 run_ms=63.28 rb_ms=3.95 dl_ms=0.11 rounds=2 rebuilds=6
+[dev] block_ms=59.95 run_ms=56.67 rb_ms=2.12 dl_ms=0.15 rounds=2 rebuilds=3
+[dev] block_ms=84.58 run_ms=53.53 rb_ms=29.92 dl_ms=0.15 rounds=2 rebuilds=54
+[interval] sample_real_group 0.4918s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=51.23 run_ms=50.01 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.85 run_ms=50.72 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.50 run_ms=54.92 rb_ms=28.49 dl_ms=0.10 rounds=2 rebuilds=50
+[dev] block_ms=64.45 run_ms=54.62 rb_ms=8.72 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=56.76 run_ms=52.46 rb_ms=3.14 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=87.72 run_ms=57.59 rb_ms=28.98 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4727s
+[interval] GPU initialization 0.0376s
+[dev] block_ms=52.44 run_ms=51.26 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=51.32 run_ms=50.22 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=81.74 run_ms=51.77 rb_ms=28.87 dl_ms=0.12 rounds=2 rebuilds=50
+[dev] block_ms=65.73 run_ms=56.00 rb_ms=8.66 dl_ms=0.13 rounds=2 rebuilds=14
+[dev] block_ms=61.21 run_ms=58.00 rb_ms=2.13 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=84.87 run_ms=52.76 rb_ms=30.94 dl_ms=0.15 rounds=2 rebuilds=56
+[interval] sample_real_group 0.5040s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=52.09 run_ms=50.87 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=51.42 run_ms=50.32 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=83.03 run_ms=52.77 rb_ms=29.22 dl_ms=0.14 rounds=2 rebuilds=51
+[dev] block_ms=68.05 run_ms=58.87 rb_ms=8.11 dl_ms=0.14 rounds=2 rebuilds=13
+[dev] block_ms=57.68 run_ms=53.45 rb_ms=3.12 dl_ms=0.12 rounds=2 rebuilds=4
+[dev] block_ms=83.41 run_ms=52.67 rb_ms=29.59 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4705s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=52.59 run_ms=51.30 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=53.59 run_ms=52.43 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=86.38 run_ms=57.95 rb_ms=27.36 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=66.12 run_ms=54.71 rb_ms=10.25 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=62.14 run_ms=57.79 rb_ms=3.16 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=81.12 run_ms=52.34 rb_ms=27.51 dl_ms=0.14 rounds=2 rebuilds=49
+[interval] sample_real_group 0.4855s
+rep=0 seconds=26.389007746 energy_per_site=0.8994577314782651 output=/tmp/mvmc-557-release-w64/rep-0
+DONE 0
+[interval] GPU initialization 1.7017s
+[dev] block_ms=56.90 run_ms=55.61 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=56.57 run_ms=55.47 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=98.79 run_ms=63.97 rb_ms=33.67 dl_ms=0.15 rounds=2 rebuilds=58
+[dev] block_ms=65.16 run_ms=60.02 rb_ms=3.98 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=59.89 run_ms=54.09 rb_ms=4.65 dl_ms=0.17 rounds=2 rebuilds=7
+[dev] block_ms=93.36 run_ms=63.15 rb_ms=29.03 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 2.2725s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=54.23 run_ms=53.01 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=52.11 run_ms=51.01 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=84.20 run_ms=54.33 rb_ms=28.74 dl_ms=0.11 rounds=2 rebuilds=52
+[dev] block_ms=64.71 run_ms=56.15 rb_ms=7.46 dl_ms=0.13 rounds=2 rebuilds=12
+[dev] block_ms=58.97 run_ms=54.67 rb_ms=3.16 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=87.16 run_ms=56.98 rb_ms=29.02 dl_ms=0.13 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4876s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=53.29 run_ms=52.01 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=52.53 run_ms=51.41 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=91.81 run_ms=60.07 rb_ms=30.71 dl_ms=0.12 rounds=2 rebuilds=56
+[dev] block_ms=71.66 run_ms=64.37 rb_ms=6.18 dl_ms=0.13 rounds=2 rebuilds=8
+[dev] block_ms=61.10 run_ms=55.92 rb_ms=4.01 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=92.21 run_ms=62.02 rb_ms=28.96 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5097s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=53.40 run_ms=52.21 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=51.66 run_ms=50.60 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=87.39 run_ms=56.73 rb_ms=29.59 dl_ms=0.14 rounds=2 rebuilds=53
+[dev] block_ms=70.24 run_ms=61.84 rb_ms=7.21 dl_ms=0.16 rounds=2 rebuilds=11
+[dev] block_ms=66.43 run_ms=59.10 rb_ms=6.17 dl_ms=0.14 rounds=2 rebuilds=8
+[dev] block_ms=85.02 run_ms=56.30 rb_ms=27.28 dl_ms=0.15 rounds=2 rebuilds=49
+[interval] sample_real_group 0.4902s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=49.03 run_ms=47.88 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=52.38 run_ms=51.30 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=81.83 run_ms=53.29 rb_ms=27.35 dl_ms=0.11 rounds=2 rebuilds=49
+[dev] block_ms=67.17 run_ms=55.77 rb_ms=10.21 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=62.25 run_ms=56.39 rb_ms=4.68 dl_ms=0.16 rounds=2 rebuilds=7
+[dev] block_ms=84.80 run_ms=54.83 rb_ms=28.82 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4796s
+[interval] GPU initialization 0.0377s
+[dev] block_ms=50.64 run_ms=49.41 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.60 run_ms=50.52 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=80.76 run_ms=50.73 rb_ms=28.93 dl_ms=0.14 rounds=2 rebuilds=51
+[dev] block_ms=67.70 run_ms=58.53 rb_ms=8.07 dl_ms=0.12 rounds=2 rebuilds=13
+[dev] block_ms=55.93 run_ms=52.72 rb_ms=2.11 dl_ms=0.12 rounds=2 rebuilds=3
+[dev] block_ms=89.18 run_ms=57.94 rb_ms=30.06 dl_ms=0.16 rounds=2 rebuilds=55
+[interval] sample_real_group 0.5013s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=51.93 run_ms=50.71 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=53.40 run_ms=52.35 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=86.69 run_ms=55.33 rb_ms=30.25 dl_ms=0.16 rounds=2 rebuilds=55
+[dev] block_ms=71.43 run_ms=64.16 rb_ms=6.21 dl_ms=0.13 rounds=2 rebuilds=9
+[dev] block_ms=55.56 run_ms=51.34 rb_ms=3.13 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=87.31 run_ms=57.51 rb_ms=28.65 dl_ms=0.14 rounds=2 rebuilds=50
+[interval] sample_real_group 0.4863s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=50.86 run_ms=49.65 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=49.49 run_ms=48.37 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=86.32 run_ms=56.42 rb_ms=28.80 dl_ms=0.14 rounds=2 rebuilds=51
+[dev] block_ms=64.72 run_ms=55.57 rb_ms=8.03 dl_ms=0.14 rounds=2 rebuilds=13
+[dev] block_ms=56.04 run_ms=51.68 rb_ms=3.17 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=86.91 run_ms=57.09 rb_ms=28.69 dl_ms=0.15 rounds=2 rebuilds=50
+[interval] sample_real_group 0.4832s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=53.07 run_ms=51.86 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=50.23 run_ms=49.19 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=85.18 run_ms=54.71 rb_ms=29.41 dl_ms=0.12 rounds=2 rebuilds=52
+[dev] block_ms=67.81 run_ms=59.18 rb_ms=7.49 dl_ms=0.15 rounds=2 rebuilds=12
+[dev] block_ms=56.70 run_ms=52.35 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=88.27 run_ms=56.95 rb_ms=29.97 dl_ms=0.15 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4845s
+[interval] GPU initialization 0.0384s
+[dev] block_ms=51.43 run_ms=50.23 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=49.21 run_ms=47.98 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=80.58 run_ms=52.35 rb_ms=27.03 dl_ms=0.12 rounds=2 rebuilds=49
+[dev] block_ms=69.22 run_ms=57.94 rb_ms=10.16 dl_ms=0.13 rounds=2 rebuilds=15
+[dev] block_ms=65.84 run_ms=61.54 rb_ms=3.17 dl_ms=0.16 rounds=2 rebuilds=4
+[dev] block_ms=85.57 run_ms=54.94 rb_ms=29.46 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5119s
+[interval] GPU initialization 0.0377s
+[dev] block_ms=50.55 run_ms=49.32 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.68 run_ms=49.57 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=81.38 run_ms=54.11 rb_ms=26.19 dl_ms=0.14 rounds=2 rebuilds=46
+[dev] block_ms=68.32 run_ms=55.97 rb_ms=11.23 dl_ms=0.15 rounds=2 rebuilds=18
+[dev] block_ms=62.85 run_ms=59.56 rb_ms=2.15 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=88.52 run_ms=58.08 rb_ms=29.23 dl_ms=0.18 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4846s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=51.31 run_ms=50.12 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=54.19 run_ms=52.88 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=84.69 run_ms=53.38 rb_ms=30.00 dl_ms=0.17 rounds=2 rebuilds=54
+[dev] block_ms=64.58 run_ms=56.97 rb_ms=6.29 dl_ms=0.16 rounds=2 rebuilds=10
+[dev] block_ms=59.68 run_ms=56.29 rb_ms=2.12 dl_ms=0.14 rounds=2 rebuilds=2
+[dev] block_ms=89.05 run_ms=58.96 rb_ms=28.86 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4856s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=52.52 run_ms=51.36 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.21 run_ms=49.08 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=84.59 run_ms=53.36 rb_ms=30.17 dl_ms=0.14 rounds=2 rebuilds=54
+[dev] block_ms=65.86 run_ms=58.41 rb_ms=6.30 dl_ms=0.14 rounds=2 rebuilds=10
+[dev] block_ms=63.22 run_ms=58.89 rb_ms=3.18 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.68 run_ms=57.31 rb_ms=29.24 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4890s
+[interval] GPU initialization 0.0386s
+[dev] block_ms=52.43 run_ms=51.22 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=54.22 run_ms=53.15 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=82.01 run_ms=52.25 rb_ms=28.69 dl_ms=0.13 rounds=2 rebuilds=50
+[dev] block_ms=65.80 run_ms=56.02 rb_ms=8.70 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=58.53 run_ms=54.32 rb_ms=3.13 dl_ms=0.11 rounds=2 rebuilds=4
+[dev] block_ms=87.84 run_ms=57.39 rb_ms=29.28 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4859s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=53.45 run_ms=52.25 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=51.82 run_ms=50.74 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=77.90 run_ms=48.18 rb_ms=28.61 dl_ms=0.15 rounds=2 rebuilds=50
+[dev] block_ms=67.45 run_ms=57.63 rb_ms=8.71 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=58.70 run_ms=53.58 rb_ms=3.97 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=89.39 run_ms=59.45 rb_ms=28.77 dl_ms=0.20 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5086s
+[interval] GPU initialization 0.0374s
+[dev] block_ms=51.51 run_ms=50.34 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=50.39 run_ms=49.17 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=89.23 run_ms=55.14 rb_ms=32.98 dl_ms=0.14 rounds=2 rebuilds=58
+[dev] block_ms=68.78 run_ms=63.64 rb_ms=3.98 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=60.16 run_ms=56.84 rb_ms=2.14 dl_ms=0.16 rounds=2 rebuilds=3
+[dev] block_ms=84.71 run_ms=53.59 rb_ms=29.94 dl_ms=0.16 rounds=2 rebuilds=54
+[interval] sample_real_group 0.4837s
+[interval] GPU initialization 0.0371s
+[dev] block_ms=51.42 run_ms=50.19 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=52.00 run_ms=50.85 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=85.09 run_ms=55.21 rb_ms=28.85 dl_ms=0.11 rounds=2 rebuilds=50
+[dev] block_ms=64.65 run_ms=54.87 rb_ms=8.71 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=57.12 run_ms=52.86 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=88.69 run_ms=57.96 rb_ms=29.13 dl_ms=0.15 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4788s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=52.71 run_ms=51.54 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.76 run_ms=50.70 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=81.72 run_ms=51.93 rb_ms=28.74 dl_ms=0.12 rounds=2 rebuilds=50
+[dev] block_ms=65.77 run_ms=56.01 rb_ms=8.67 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=61.15 run_ms=57.96 rb_ms=2.14 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=84.46 run_ms=52.70 rb_ms=30.60 dl_ms=0.15 rounds=2 rebuilds=56
+[interval] sample_real_group 0.4747s
+[interval] GPU initialization 0.0374s
+[dev] block_ms=52.00 run_ms=50.78 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=51.22 run_ms=50.20 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=82.79 run_ms=52.84 rb_ms=28.92 dl_ms=0.11 rounds=2 rebuilds=51
+[dev] block_ms=67.98 run_ms=58.86 rb_ms=8.06 dl_ms=0.12 rounds=2 rebuilds=13
+[dev] block_ms=57.87 run_ms=53.56 rb_ms=3.17 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=82.66 run_ms=52.68 rb_ms=28.81 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4701s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=52.32 run_ms=51.15 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=53.60 run_ms=52.53 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=86.08 run_ms=58.02 rb_ms=27.02 dl_ms=0.12 rounds=2 rebuilds=49
+[dev] block_ms=65.86 run_ms=54.58 rb_ms=10.19 dl_ms=0.14 rounds=2 rebuilds=15
+[dev] block_ms=62.15 run_ms=57.81 rb_ms=3.16 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=80.97 run_ms=52.36 rb_ms=27.49 dl_ms=0.15 rounds=2 rebuilds=49
+[interval] sample_real_group 0.5122s
+rep=1 seconds=26.045286469 energy_per_site=0.8994577314782651 output=/tmp/mvmc-557-release-w64/rep-1
+DONE 1
+[interval] GPU initialization 1.7182s
+[dev] block_ms=56.91 run_ms=55.64 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=55.26 run_ms=54.23 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=95.17 run_ms=61.59 rb_ms=32.52 dl_ms=0.12 rounds=2 rebuilds=58
+[dev] block_ms=65.19 run_ms=60.03 rb_ms=3.98 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=59.99 run_ms=54.14 rb_ms=4.69 dl_ms=0.15 rounds=2 rebuilds=7
+[dev] block_ms=93.46 run_ms=63.20 rb_ms=29.04 dl_ms=0.18 rounds=2 rebuilds=52
+[interval] sample_real_group 2.2801s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=54.27 run_ms=53.10 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=52.00 run_ms=50.95 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.12 run_ms=54.12 rb_ms=28.82 dl_ms=0.15 rounds=2 rebuilds=52
+[dev] block_ms=65.04 run_ms=56.14 rb_ms=7.52 dl_ms=0.15 rounds=2 rebuilds=12
+[dev] block_ms=58.95 run_ms=54.68 rb_ms=3.15 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.41 run_ms=56.97 rb_ms=29.23 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4902s
+[interval] GPU initialization 0.0369s
+[dev] block_ms=53.13 run_ms=51.96 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=52.55 run_ms=51.46 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=92.48 run_ms=60.14 rb_ms=31.13 dl_ms=0.13 rounds=2 rebuilds=56
+[dev] block_ms=71.71 run_ms=64.37 rb_ms=6.20 dl_ms=0.15 rounds=2 rebuilds=8
+[dev] block_ms=60.94 run_ms=55.85 rb_ms=3.99 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=91.91 run_ms=61.98 rb_ms=28.76 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5021s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=53.34 run_ms=52.09 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=52.09 run_ms=50.98 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=87.44 run_ms=56.81 rb_ms=29.51 dl_ms=0.14 rounds=2 rebuilds=53
+[dev] block_ms=69.98 run_ms=61.64 rb_ms=7.24 dl_ms=0.14 rounds=2 rebuilds=11
+[dev] block_ms=66.50 run_ms=59.02 rb_ms=6.21 dl_ms=0.14 rounds=2 rebuilds=8
+[dev] block_ms=84.63 run_ms=56.27 rb_ms=27.21 dl_ms=0.16 rounds=2 rebuilds=49
+[interval] sample_real_group 0.4920s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=49.06 run_ms=47.83 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=52.41 run_ms=51.28 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=81.76 run_ms=53.22 rb_ms=27.40 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=67.23 run_ms=55.79 rb_ms=10.23 dl_ms=0.11 rounds=2 rebuilds=15
+[dev] block_ms=62.20 run_ms=56.35 rb_ms=4.72 dl_ms=0.17 rounds=2 rebuilds=7
+[dev] block_ms=85.14 run_ms=54.98 rb_ms=29.05 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4895s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=50.68 run_ms=49.42 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=51.51 run_ms=50.48 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=80.84 run_ms=50.85 rb_ms=28.95 dl_ms=0.10 rounds=2 rebuilds=51
+[dev] block_ms=67.60 run_ms=58.47 rb_ms=8.05 dl_ms=0.14 rounds=2 rebuilds=13
+[dev] block_ms=55.99 run_ms=52.73 rb_ms=2.13 dl_ms=0.19 rounds=2 rebuilds=3
+[dev] block_ms=89.30 run_ms=58.00 rb_ms=30.15 dl_ms=0.14 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4855s
+[interval] GPU initialization 0.0380s
+[dev] block_ms=51.79 run_ms=50.65 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=53.55 run_ms=52.47 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=86.65 run_ms=55.30 rb_ms=30.25 dl_ms=0.15 rounds=2 rebuilds=55
+[dev] block_ms=71.66 run_ms=64.28 rb_ms=6.24 dl_ms=0.15 rounds=2 rebuilds=9
+[dev] block_ms=55.53 run_ms=51.22 rb_ms=3.16 dl_ms=0.17 rounds=2 rebuilds=4
+[dev] block_ms=87.86 run_ms=57.45 rb_ms=29.25 dl_ms=0.16 rounds=2 rebuilds=50
+[interval] sample_real_group 0.4840s
+[interval] GPU initialization 0.0387s
+[dev] block_ms=51.04 run_ms=49.77 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=49.35 run_ms=48.29 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=86.58 run_ms=56.48 rb_ms=28.99 dl_ms=0.11 rounds=2 rebuilds=51
+[dev] block_ms=64.81 run_ms=55.58 rb_ms=8.08 dl_ms=0.17 rounds=2 rebuilds=13
+[dev] block_ms=56.05 run_ms=51.61 rb_ms=3.18 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.30 run_ms=57.07 rb_ms=29.10 dl_ms=0.15 rounds=2 rebuilds=50
+[interval] sample_real_group 0.5075s
+[interval] GPU initialization 0.0384s
+[dev] block_ms=53.01 run_ms=51.77 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=50.33 run_ms=49.25 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.95 run_ms=54.93 rb_ms=28.92 dl_ms=0.13 rounds=2 rebuilds=52
+[dev] block_ms=67.76 run_ms=59.17 rb_ms=7.46 dl_ms=0.15 rounds=2 rebuilds=12
+[dev] block_ms=56.78 run_ms=52.55 rb_ms=3.12 dl_ms=0.13 rounds=2 rebuilds=4
+[dev] block_ms=88.99 run_ms=56.93 rb_ms=30.41 dl_ms=0.14 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4863s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=51.44 run_ms=50.24 rb_ms=0.00 dl_ms=0.14 rounds=1 rebuilds=0
+[dev] block_ms=48.98 run_ms=47.94 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=80.96 run_ms=52.39 rb_ms=27.37 dl_ms=0.16 rounds=2 rebuilds=49
+[dev] block_ms=69.45 run_ms=58.09 rb_ms=10.26 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=65.79 run_ms=61.49 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=85.73 run_ms=54.96 rb_ms=29.56 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4829s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=50.46 run_ms=49.23 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=50.39 run_ms=49.40 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=81.29 run_ms=53.99 rb_ms=26.28 dl_ms=0.11 rounds=2 rebuilds=46
+[dev] block_ms=68.19 run_ms=55.89 rb_ms=11.26 dl_ms=0.11 rounds=2 rebuilds=18
+[dev] block_ms=62.70 run_ms=59.46 rb_ms=2.12 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=88.73 run_ms=58.41 rb_ms=29.25 dl_ms=0.11 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5127s
+[interval] GPU initialization 0.0389s
+[dev] block_ms=51.57 run_ms=50.37 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=54.17 run_ms=53.10 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.88 run_ms=53.62 rb_ms=30.19 dl_ms=0.12 rounds=2 rebuilds=54
+[dev] block_ms=64.67 run_ms=57.25 rb_ms=6.32 dl_ms=0.14 rounds=2 rebuilds=10
+[dev] block_ms=59.66 run_ms=56.46 rb_ms=2.11 dl_ms=0.13 rounds=2 rebuilds=2
+[dev] block_ms=89.40 run_ms=59.24 rb_ms=29.01 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5172s
+[interval] GPU initialization 0.0386s
+[dev] block_ms=53.00 run_ms=51.76 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=50.42 run_ms=49.40 rb_ms=0.00 dl_ms=0.10 rounds=1 rebuilds=0
+[dev] block_ms=84.89 run_ms=53.57 rb_ms=30.23 dl_ms=0.14 rounds=2 rebuilds=54
+[dev] block_ms=66.19 run_ms=58.72 rb_ms=6.32 dl_ms=0.15 rounds=2 rebuilds=10
+[dev] block_ms=63.42 run_ms=59.14 rb_ms=3.16 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=88.13 run_ms=57.60 rb_ms=29.41 dl_ms=0.15 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4992s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=52.72 run_ms=51.50 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=54.67 run_ms=53.56 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=82.66 run_ms=52.52 rb_ms=28.97 dl_ms=0.19 rounds=2 rebuilds=50
+[dev] block_ms=66.26 run_ms=56.41 rb_ms=8.76 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=58.72 run_ms=54.39 rb_ms=3.12 dl_ms=0.09 rounds=2 rebuilds=4
+[dev] block_ms=88.20 run_ms=57.62 rb_ms=29.51 dl_ms=0.10 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4826s
+[interval] GPU initialization 0.0384s
+[dev] block_ms=53.73 run_ms=52.56 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=52.19 run_ms=51.14 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=78.51 run_ms=48.47 rb_ms=28.97 dl_ms=0.11 rounds=2 rebuilds=50
+[dev] block_ms=67.65 run_ms=57.81 rb_ms=8.77 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=59.01 run_ms=53.84 rb_ms=4.01 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=89.87 run_ms=59.66 rb_ms=29.10 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5132s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=51.92 run_ms=50.67 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.45 run_ms=49.37 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=90.09 run_ms=55.47 rb_ms=33.29 dl_ms=0.11 rounds=2 rebuilds=58
+[dev] block_ms=69.23 run_ms=64.04 rb_ms=4.02 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=60.38 run_ms=57.21 rb_ms=2.10 dl_ms=0.11 rounds=2 rebuilds=3
+[dev] block_ms=85.02 run_ms=53.95 rb_ms=30.01 dl_ms=0.11 rounds=2 rebuilds=54
+[interval] sample_real_group 0.5079s
+[interval] GPU initialization 0.0390s
+[dev] block_ms=51.69 run_ms=50.47 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=52.30 run_ms=51.22 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=85.41 run_ms=55.43 rb_ms=28.93 dl_ms=0.12 rounds=2 rebuilds=50
+[dev] block_ms=65.09 run_ms=55.16 rb_ms=8.78 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=57.49 run_ms=53.13 rb_ms=3.17 dl_ms=0.16 rounds=2 rebuilds=4
+[dev] block_ms=88.18 run_ms=58.21 rb_ms=28.79 dl_ms=0.15 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5111s
+[interval] GPU initialization 0.0377s
+[dev] block_ms=53.14 run_ms=51.78 rb_ms=0.00 dl_ms=0.22 rounds=1 rebuilds=0
+[dev] block_ms=51.95 run_ms=50.84 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=82.21 run_ms=52.29 rb_ms=28.79 dl_ms=0.16 rounds=2 rebuilds=50
+[dev] block_ms=66.36 run_ms=56.39 rb_ms=8.75 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=61.44 run_ms=58.15 rb_ms=2.16 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=84.87 run_ms=52.92 rb_ms=30.79 dl_ms=0.14 rounds=2 rebuilds=56
+[interval] sample_real_group 0.4871s
+[interval] GPU initialization 0.0377s
+[dev] block_ms=52.07 run_ms=50.90 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.43 run_ms=50.28 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=82.70 run_ms=52.83 rb_ms=28.78 dl_ms=0.10 rounds=2 rebuilds=51
+[dev] block_ms=68.02 run_ms=58.92 rb_ms=8.03 dl_ms=0.11 rounds=2 rebuilds=13
+[dev] block_ms=57.67 run_ms=53.43 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=83.15 run_ms=52.58 rb_ms=29.36 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4836s
+[interval] GPU initialization 0.0375s
+[dev] block_ms=52.46 run_ms=51.25 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=53.44 run_ms=52.36 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=86.49 run_ms=58.13 rb_ms=27.23 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=65.89 run_ms=54.63 rb_ms=10.16 dl_ms=0.10 rounds=2 rebuilds=15
+[dev] block_ms=62.06 run_ms=57.83 rb_ms=3.14 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=80.65 run_ms=52.36 rb_ms=27.13 dl_ms=0.14 rounds=2 rebuilds=49
+[interval] sample_real_group 0.4807s
+rep=2 seconds=26.211788000 energy_per_site=0.8994577314782651 output=/tmp/mvmc-557-release-w64/rep-2
+DONE 2
+[interval] GPU initialization 1.7188s
+[dev] block_ms=56.95 run_ms=55.61 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=54.31 run_ms=53.20 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=95.02 run_ms=61.49 rb_ms=32.43 dl_ms=0.15 rounds=2 rebuilds=58
+[dev] block_ms=65.06 run_ms=59.89 rb_ms=3.98 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=59.82 run_ms=53.96 rb_ms=4.70 dl_ms=0.15 rounds=2 rebuilds=7
+[dev] block_ms=93.28 run_ms=63.13 rb_ms=28.95 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 2.2738s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=54.32 run_ms=53.11 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=52.38 run_ms=51.08 rb_ms=0.00 dl_ms=0.20 rounds=1 rebuilds=0
+[dev] block_ms=84.22 run_ms=54.03 rb_ms=28.93 dl_ms=0.16 rounds=2 rebuilds=52
+[dev] block_ms=64.80 run_ms=56.06 rb_ms=7.51 dl_ms=0.15 rounds=2 rebuilds=12
+[dev] block_ms=58.96 run_ms=54.63 rb_ms=3.16 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.25 run_ms=56.93 rb_ms=29.18 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4769s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=53.13 run_ms=51.93 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=52.52 run_ms=51.42 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=92.25 run_ms=60.03 rb_ms=31.06 dl_ms=0.15 rounds=2 rebuilds=56
+[dev] block_ms=71.57 run_ms=64.30 rb_ms=6.13 dl_ms=0.15 rounds=2 rebuilds=8
+[dev] block_ms=61.01 run_ms=55.86 rb_ms=3.97 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=92.35 run_ms=62.07 rb_ms=29.12 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5215s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=53.29 run_ms=52.05 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=51.83 run_ms=50.64 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=87.13 run_ms=56.68 rb_ms=29.39 dl_ms=0.12 rounds=2 rebuilds=53
+[dev] block_ms=69.86 run_ms=61.56 rb_ms=7.22 dl_ms=0.15 rounds=2 rebuilds=11
+[dev] block_ms=66.37 run_ms=59.07 rb_ms=6.18 dl_ms=0.15 rounds=2 rebuilds=8
+[dev] block_ms=84.90 run_ms=56.23 rb_ms=27.36 dl_ms=0.16 rounds=2 rebuilds=49
+[interval] sample_real_group 0.5297s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=48.99 run_ms=47.74 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=52.26 run_ms=51.18 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=81.80 run_ms=53.26 rb_ms=27.40 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=67.20 run_ms=55.82 rb_ms=10.21 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=62.30 run_ms=56.42 rb_ms=4.70 dl_ms=0.16 rounds=2 rebuilds=7
+[dev] block_ms=85.18 run_ms=54.76 rb_ms=29.26 dl_ms=0.15 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4956s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=50.66 run_ms=49.44 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=51.57 run_ms=50.53 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=80.49 run_ms=50.70 rb_ms=28.75 dl_ms=0.14 rounds=2 rebuilds=51
+[dev] block_ms=67.82 run_ms=58.59 rb_ms=8.09 dl_ms=0.15 rounds=2 rebuilds=13
+[dev] block_ms=55.93 run_ms=52.66 rb_ms=2.14 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=89.48 run_ms=57.84 rb_ms=30.48 dl_ms=0.15 rounds=2 rebuilds=55
+[interval] sample_real_group 0.4708s
+[interval] GPU initialization 0.0380s
+[dev] block_ms=52.11 run_ms=50.77 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=53.55 run_ms=52.41 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=86.71 run_ms=55.26 rb_ms=30.36 dl_ms=0.15 rounds=2 rebuilds=55
+[dev] block_ms=71.58 run_ms=64.24 rb_ms=6.23 dl_ms=0.14 rounds=2 rebuilds=9
+[dev] block_ms=55.67 run_ms=51.38 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=87.87 run_ms=57.41 rb_ms=29.06 dl_ms=0.16 rounds=2 rebuilds=50
+[interval] sample_real_group 0.4835s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=50.85 run_ms=49.65 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=49.16 run_ms=48.09 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=86.21 run_ms=56.35 rb_ms=28.82 dl_ms=0.11 rounds=2 rebuilds=51
+[dev] block_ms=64.73 run_ms=55.54 rb_ms=8.13 dl_ms=0.15 rounds=2 rebuilds=13
+[dev] block_ms=55.79 run_ms=51.56 rb_ms=3.13 dl_ms=0.13 rounds=2 rebuilds=4
+[dev] block_ms=87.20 run_ms=57.02 rb_ms=29.03 dl_ms=0.16 rounds=2 rebuilds=50
+[interval] sample_real_group 0.4872s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=52.72 run_ms=51.56 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=50.32 run_ms=49.16 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=85.27 run_ms=54.78 rb_ms=29.41 dl_ms=0.11 rounds=2 rebuilds=52
+[dev] block_ms=67.64 run_ms=59.11 rb_ms=7.46 dl_ms=0.15 rounds=2 rebuilds=12
+[dev] block_ms=57.05 run_ms=52.41 rb_ms=3.14 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=88.17 run_ms=56.95 rb_ms=30.12 dl_ms=0.15 rounds=2 rebuilds=55
+[interval] sample_real_group 0.5040s
+[interval] GPU initialization 0.0381s
+[dev] block_ms=51.26 run_ms=50.09 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=49.02 run_ms=47.94 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=80.56 run_ms=52.21 rb_ms=27.31 dl_ms=0.14 rounds=2 rebuilds=49
+[dev] block_ms=68.90 run_ms=57.71 rb_ms=10.17 dl_ms=0.10 rounds=2 rebuilds=15
+[dev] block_ms=65.50 run_ms=61.31 rb_ms=3.15 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=85.62 run_ms=54.93 rb_ms=29.59 dl_ms=0.14 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4760s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=50.35 run_ms=49.12 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.58 run_ms=49.44 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=81.20 run_ms=54.13 rb_ms=25.96 dl_ms=0.15 rounds=2 rebuilds=46
+[dev] block_ms=68.21 run_ms=55.86 rb_ms=11.17 dl_ms=0.15 rounds=2 rebuilds=18
+[dev] block_ms=62.75 run_ms=59.45 rb_ms=2.16 dl_ms=0.15 rounds=2 rebuilds=3
+[dev] block_ms=88.29 run_ms=58.12 rb_ms=28.96 dl_ms=0.16 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4854s
+[interval] GPU initialization 0.0385s
+[dev] block_ms=51.18 run_ms=50.03 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=53.87 run_ms=52.81 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=84.12 run_ms=53.24 rb_ms=29.85 dl_ms=0.11 rounds=2 rebuilds=54
+[dev] block_ms=64.40 run_ms=56.95 rb_ms=6.30 dl_ms=0.16 rounds=2 rebuilds=10
+[dev] block_ms=59.40 run_ms=56.19 rb_ms=2.10 dl_ms=0.13 rounds=2 rebuilds=2
+[dev] block_ms=89.01 run_ms=58.97 rb_ms=28.89 dl_ms=0.13 rounds=2 rebuilds=52
+[interval] sample_real_group 0.5170s
+[interval] GPU initialization 0.0372s
+[dev] block_ms=52.54 run_ms=51.36 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=50.22 run_ms=49.11 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=84.56 run_ms=53.29 rb_ms=30.19 dl_ms=0.17 rounds=2 rebuilds=54
+[dev] block_ms=65.89 run_ms=58.51 rb_ms=6.28 dl_ms=0.14 rounds=2 rebuilds=10
+[dev] block_ms=63.16 run_ms=58.73 rb_ms=3.15 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.48 run_ms=57.18 rb_ms=29.02 dl_ms=0.15 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5150s
+[interval] GPU initialization 0.0373s
+[dev] block_ms=52.21 run_ms=51.02 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=54.22 run_ms=53.18 rb_ms=0.00 dl_ms=0.15 rounds=1 rebuilds=0
+[dev] block_ms=82.16 run_ms=52.22 rb_ms=28.66 dl_ms=0.11 rounds=2 rebuilds=50
+[dev] block_ms=65.84 run_ms=56.09 rb_ms=8.65 dl_ms=0.14 rounds=2 rebuilds=14
+[dev] block_ms=58.36 run_ms=54.12 rb_ms=3.15 dl_ms=0.15 rounds=2 rebuilds=4
+[dev] block_ms=87.30 run_ms=57.34 rb_ms=28.90 dl_ms=0.13 rounds=2 rebuilds=51
+[interval] sample_real_group 0.4893s
+[interval] GPU initialization 0.0378s
+[dev] block_ms=53.45 run_ms=52.27 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=51.81 run_ms=50.78 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=78.21 run_ms=48.12 rb_ms=29.04 dl_ms=0.11 rounds=2 rebuilds=50
+[dev] block_ms=67.13 run_ms=57.40 rb_ms=8.65 dl_ms=0.15 rounds=2 rebuilds=14
+[dev] block_ms=58.51 run_ms=53.46 rb_ms=3.98 dl_ms=0.14 rounds=2 rebuilds=6
+[dev] block_ms=89.37 run_ms=59.40 rb_ms=28.81 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5009s
+[interval] GPU initialization 0.0373s
+[dev] block_ms=51.55 run_ms=50.33 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=50.23 run_ms=49.15 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=88.53 run_ms=55.08 rb_ms=32.37 dl_ms=0.15 rounds=2 rebuilds=58
+[dev] block_ms=68.68 run_ms=63.53 rb_ms=3.98 dl_ms=0.15 rounds=2 rebuilds=6
+[dev] block_ms=60.08 run_ms=56.79 rb_ms=2.16 dl_ms=0.15 rounds=2 rebuilds=3
+[dev] block_ms=84.63 run_ms=53.66 rb_ms=29.80 dl_ms=0.15 rounds=2 rebuilds=54
+[interval] sample_real_group 0.5177s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=51.38 run_ms=50.13 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=51.98 run_ms=50.89 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=84.78 run_ms=55.14 rb_ms=28.53 dl_ms=0.13 rounds=2 rebuilds=50
+[dev] block_ms=64.54 run_ms=54.86 rb_ms=8.65 dl_ms=0.12 rounds=2 rebuilds=14
+[dev] block_ms=57.12 run_ms=52.79 rb_ms=3.16 dl_ms=0.11 rounds=2 rebuilds=4
+[dev] block_ms=87.93 run_ms=57.86 rb_ms=28.92 dl_ms=0.14 rounds=2 rebuilds=51
+[interval] sample_real_group 0.5113s
+[interval] GPU initialization 0.0383s
+[dev] block_ms=52.70 run_ms=51.49 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=51.55 run_ms=50.48 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=81.40 run_ms=51.92 rb_ms=28.42 dl_ms=0.15 rounds=2 rebuilds=50
+[dev] block_ms=65.79 run_ms=55.96 rb_ms=8.67 dl_ms=0.16 rounds=2 rebuilds=14
+[dev] block_ms=61.10 run_ms=57.83 rb_ms=2.14 dl_ms=0.14 rounds=2 rebuilds=3
+[dev] block_ms=84.21 run_ms=52.58 rb_ms=30.44 dl_ms=0.15 rounds=2 rebuilds=56
+[interval] sample_real_group 0.4843s
+[interval] GPU initialization 0.0382s
+[dev] block_ms=51.90 run_ms=50.71 rb_ms=0.00 dl_ms=0.12 rounds=1 rebuilds=0
+[dev] block_ms=51.24 run_ms=50.23 rb_ms=0.00 dl_ms=0.11 rounds=1 rebuilds=0
+[dev] block_ms=82.72 run_ms=52.78 rb_ms=28.90 dl_ms=0.12 rounds=2 rebuilds=51
+[dev] block_ms=68.12 run_ms=58.83 rb_ms=8.07 dl_ms=0.15 rounds=2 rebuilds=13
+[dev] block_ms=57.76 run_ms=53.51 rb_ms=3.13 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=83.36 run_ms=52.71 rb_ms=29.49 dl_ms=0.13 rounds=2 rebuilds=52
+[interval] sample_real_group 0.4762s
+[interval] GPU initialization 0.0379s
+[dev] block_ms=52.42 run_ms=51.18 rb_ms=0.00 dl_ms=0.13 rounds=1 rebuilds=0
+[dev] block_ms=53.51 run_ms=52.36 rb_ms=0.00 dl_ms=0.16 rounds=1 rebuilds=0
+[dev] block_ms=86.33 run_ms=58.02 rb_ms=27.15 dl_ms=0.15 rounds=2 rebuilds=49
+[dev] block_ms=66.06 run_ms=54.68 rb_ms=10.24 dl_ms=0.15 rounds=2 rebuilds=15
+[dev] block_ms=62.13 run_ms=57.75 rb_ms=3.15 dl_ms=0.14 rounds=2 rebuilds=4
+[dev] block_ms=80.62 run_ms=52.17 rb_ms=27.26 dl_ms=0.15 rounds=2 rebuilds=49
+[interval] sample_real_group 0.5168s
+rep=3 seconds=26.205515101 energy_per_site=0.8994577314782651 output=/tmp/mvmc-557-release-w64/rep-3
+DONE 3

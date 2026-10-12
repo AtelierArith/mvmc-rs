@@ -1,0 +1,23 @@
+{
+  "source_commit": "8219d290845a3cc6df87f3700ae223353fdb743a",
+  "seconds": [
+    26.389007746,
+    26.045286469,
+    26.211788,
+    26.205515101
+  ],
+  "warm_median_seconds": 26.205515101,
+  "stage_independent_warm_medians": {
+    "sampling": 11.75264,
+    "initialization_within_sampling": 3.50475,
+    "observables": 4.56314,
+    "reduction_and_weight_average": 5.84263,
+    "sr": 1.33251,
+    "slater_update": 0.83116
+  },
+  "final_energy_per_site": 0.8994577314782651,
+  "walkers": 64,
+  "steps": 20,
+  "retained_samples_per_step": 320,
+  "proposals": 983040
+}
