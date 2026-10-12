@@ -3038,6 +3038,53 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     } else {
         0
     };
+    // Issue #518 milestone 2: device residency of the measurement. The stage A backend and the
+    // stage B backend share one device state (the CUDA provider), so when both are device
+    // backends the inverse planes stay on the device and only the Pfaffians, the sample's own
+    // electron rows and the small outputs cross the link. Host consumers of the inverse table
+    // (PhysCal Green functions, Lanczos) still need the per-batch download.
+    let measure_resident = match measure_stage {
+        Some(kind) => {
+            let mut handle = crate::stage_backend::acquire_kind(kind);
+            handle.backend().measurement().resident_measurement()
+        }
+        None => false,
+    };
+    let pf_resident = match stage_kind {
+        Some(kind) => {
+            let mut handle = crate::stage_backend::acquire_kind(kind);
+            handle.backend().pfaffian().resident_stage_a()
+        }
+        None => false,
+    };
+    if pf_resident || measure_resident {
+        // A device chain is one process: the MPI QP split and the grouped sample partition have
+        // no device implementation. Hard error, never a silent host execution (issue #518).
+        assert!(
+            reducer.world_size() == 1 && reducer.reduction_size() == 1,
+            "{}: the device-resident measurement supports a single-process chain \
+             (world/reduction size 1)",
+            crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
+        );
+    }
+    let download_tables = !(pf_resident && measure_resident)
+        || data.modpara.vmc_calc_mode != 0
+        || data.modpara.lanczos_mode > 0;
+    if measure_resident {
+        if let Some(kind) = measure_stage {
+            let mut handle = crate::stage_backend::acquire_kind(kind);
+            handle
+                .backend()
+                .measurement()
+                .resident_prepare(data, state)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{}: resident measurement preparation failed: {error}",
+                        crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
+                    )
+                });
+        }
+    }
     let mut calculate_samples = || {
         for chunk in samples.chunks(batch_size) {
             if let Some(kind) = stage_kind {
@@ -3067,6 +3114,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                     n_site,
                     n_elec,
                     n_qp_full,
+                    download_tables,
                 )
                 .unwrap_or_else(|e| {
                     panic!(
@@ -3281,6 +3329,8 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         ele_cfg: &ele_cfg,
                         ele_num: &ele_num,
                         ele_proj_cnt: &ele_proj_cnt,
+                        sample,
+                        batch_slot: slot,
                     };
                     let out = handle
                         .backend()

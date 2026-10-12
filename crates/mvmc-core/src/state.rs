@@ -39,11 +39,33 @@ use tenferro_tensor::{TensorScalar, TypedTensor};
 /// Slater-element table, **row-major** in `(ri + si * Nsite, rj + sj * Nsite)`
 /// inside one QP plane. Upstream sizes it as `Vector{T}` of length
 /// `n_qp_full * (2*n_site)^2`; we keep the same layout.
-#[derive(Debug)]
 pub struct SlaterElmFlat<T> {
     data: TypedTensor<T>,
     n_qp_full: usize,
     n_site2: usize, // 2 * n_site
+    /// Change counter of the table content (issue #518): a mutated table gets a fresh value
+    /// from a process-global monotone source, so a cache that keys on it (the device-resident
+    /// measurement stage) never confuses two tables across runs. `0` means "never mutated".
+    version: u64,
+}
+
+/// Debug output of the table content; the cache `version` is deliberately omitted so that
+/// state-byte comparisons of independent runs stay meaningful (`multichain`).
+impl<T: TensorScalar + std::fmt::Debug> std::fmt::Debug for SlaterElmFlat<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlaterElmFlat")
+            .field("data", &self.data)
+            .field("n_qp_full", &self.n_qp_full)
+            .field("n_site2", &self.n_site2)
+            .finish()
+    }
+}
+
+/// Fresh unique version for a mutated Slater table.
+fn next_slater_version() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 impl<T: TensorScalar + Default> SlaterElmFlat<T> {
@@ -58,6 +80,7 @@ impl<T: TensorScalar + Default> SlaterElmFlat<T> {
             .expect("SlaterElmFlat shape and data length must match"),
             n_qp_full,
             n_site2,
+            version: 0,
         }
     }
 }
@@ -121,9 +144,19 @@ impl<T: TensorScalar> SlaterElmFlat<T> {
 
     /// Mutably borrow the whole backing storage.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
+        // Any mutable access may change the table content, so the version advances (issue
+        // #518); the device-resident measurement stage uploads the table exactly when this
+        // number changes.
+        self.version = next_slater_version();
         self.data
             .host_data_mut()
             .expect("SlaterElmFlat::as_mut_slice requires host-backed storage")
+    }
+
+    /// Content version of the table (issue #518): `0` for a never-mutated table, otherwise a
+    /// value from a process-global monotone source, fresh on every mutable access.
+    pub fn version(&self) -> u64 {
+        self.version
     }
 
     /// Borrow a single QP plane (length `n_site2 * n_site2`, row-major).
@@ -152,6 +185,10 @@ impl<T: TensorScalar> Clone for SlaterElmFlat<T> {
                 .expect("SlaterElmFlat requires host-backed tenferro storage"),
             n_qp_full: self.n_qp_full,
             n_site2: self.n_site2,
+            // The copy carries the same content version; the device cache is keyed by the
+            // object that owns it (the runner passes the live state table), so a stale copy
+            // cannot masquerade as a fresh upload.
+            version: self.version,
         }
     }
 }

@@ -214,34 +214,27 @@ pub(crate) fn build_trans_orb_tables(data: &ExpertModeData, ele_idx: &[i64]) -> 
     let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
     let mut trans_orb_idx = vec![-1_i64; n_trans * n_size * n_size];
     let mut trans_orb_sgn = vec![1_i64; n_trans * n_size * n_size];
-    // Translation of every electron site, once per sector (not per matrix entry).
-    let mut translated: Vec<Option<(usize, i64)>> = vec![None; n_size];
+    let (sector_tri, sector_sgn) = build_sector_translation(data, ele_idx);
     for trans_idx in 0..n_trans {
-        let mpidx = trans_idx % n_mp_trans.max(1);
-        let optidx = trans_idx / n_mp_trans.max(1);
-        for (msi, slot) in translated.iter_mut().enumerate() {
-            let ri = ele_idx.get(msi).copied().unwrap_or(-1);
-            *slot = if ri < 0 || ri as usize >= n_site {
-                None
-            } else {
-                let (tri, sgni) =
-                    crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
-                (tri < n_site).then_some((tri, sgni))
-            };
-        }
         let base = trans_idx * n_size * n_size;
+        let sbase = trans_idx * n_size;
         for msi in 0..n_size {
-            let Some((tri, sgni)) = translated[msi] else {
+            let tri = sector_tri[sbase + msi];
+            if tri < 0 {
                 continue;
-            };
+            }
+            let sgni = sector_sgn[sbase + msi];
+            let (tri, sgni) = (tri as usize, sgni);
             let (row_idx, row_sgn) = (&orbital_idx[tri], &orbital_sgn[tri]);
-            for (msj, entry) in translated.iter().enumerate() {
-                let Some((trj, sgnj)) = *entry else {
+            for msj in 0..n_size {
+                let trj = sector_tri[sbase + msj];
+                if trj < 0 {
                     continue;
-                };
+                }
+                let trj = trj as usize;
                 let idx = base + msi * n_size + msj;
                 trans_orb_idx[idx] = row_idx[trj];
-                trans_orb_sgn[idx] = sgni * sgnj * row_sgn[trj];
+                trans_orb_sgn[idx] = sgni * sector_sgn[sbase + msj] * row_sgn[trj];
             }
         }
     }
@@ -254,6 +247,42 @@ pub(crate) fn build_trans_orb_tables(data: &ExpertModeData, ele_idx: &[i64]) -> 
         n_slater,
         n_size,
     }
+}
+
+/// Per-sector translation of the electron sites, the exact `translated_site` walk of
+/// [`build_trans_orb_tables`]: `tri[trans * n_size + msi]` (flattened, `-1` = invalid or a
+/// sector the incomplete-map fast path skips) and `sgn[..]` is the translation sign. This is
+/// the per-sample input of the device-resident Slater derivative (issue #518 milestone 2).
+pub(crate) fn build_sector_translation(
+    data: &ExpertModeData,
+    ele_idx: &[i64],
+) -> (Vec<i64>, Vec<i64>) {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_size = ele_idx.len().min(2 * data.modpara.nelec.max(0) as usize);
+    let n_mp_trans = data.modpara.nmp_trans.unsigned_abs() as usize;
+    let n_trans = n_mp_trans * data.n_qp_opt_trans.max(1) as usize;
+    let skip_incomplete = !complete_translation_maps(data);
+    let mut tri = vec![-1_i64; n_trans * n_size];
+    let mut sgn = vec![1_i64; n_trans * n_size];
+    for trans_idx in 0..n_trans {
+        if skip_incomplete && trans_idx >= n_mp_trans {
+            continue;
+        }
+        let mpidx = trans_idx % n_mp_trans.max(1);
+        let optidx = trans_idx / n_mp_trans.max(1);
+        for msi in 0..n_size {
+            let ri = ele_idx.get(msi).copied().unwrap_or(-1);
+            if ri < 0 || ri as usize >= n_site {
+                continue;
+            }
+            let (t, s) = crate::qp::translated_site(data, ri as usize, optidx, mpidx, false);
+            if t < n_site {
+                tri[trans_idx * n_size + msi] = t as i64;
+                sgn[trans_idx * n_size + msi] = s;
+            }
+        }
+    }
+    (tri, sgn)
 }
 
 #[allow(clippy::too_many_arguments)]

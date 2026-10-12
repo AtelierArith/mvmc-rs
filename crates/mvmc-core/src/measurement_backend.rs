@@ -56,6 +56,8 @@ use crate::sr_backend::{EagerTransfer, Placement};
 use crate::stage_backend::{
     MeasurementInput, MeasurementOutput, MeasurementStages, MeasurementTiming, StageError,
 };
+use crate::state::VmcOptimizationState;
+use mvmc_expert_parsers::ExpertModeData;
 
 fn err(e: impl std::fmt::Display) -> StageError {
     StageError::Failed(e.to_string())
@@ -83,25 +85,6 @@ fn contract_into(contract_l: usize, contract_r: usize) -> DotGeneralConfig {
         lhs_batch_dims: vec![],
         rhs_batch_dims: vec![],
     }
-}
-
-/// One transfer term whose Pfaffian ratio must be evaluated by the tensor contraction.
-struct ActiveTerm {
-    /// Electron slot `mj + spin * Ne` being moved.
-    msa: usize,
-    /// Destination Slater row `ri + spin * Nsite`.
-    rsa: usize,
-    /// Destination site `ri` (the special column of the moved slot).
-    ri: usize,
-    /// Direct projection ratio of the hop.
-    proj_ratio: f64,
-}
-
-/// How a transfer term contributes to the energy: an immediate real `g1` (density or zero)
-/// or a deferred tensor-table lookup.
-enum TermOutcome {
-    Immediate(f64),
-    Deferred(usize),
 }
 
 /// Measurement stage (local energy + Slater derivative) through tenferro eager ops on one
@@ -142,25 +125,7 @@ impl TenferroMeasurement {
 
     /// A stage-level reason why this input is outside the tensor formulation.
     fn check_supported(input: &MeasurementInput<'_>) -> Result<(), StageError> {
-        if input.data.i_flg_orbital_general != 0 {
-            return unsupported("the tenferro measurement stage does not provide FSZ mode");
-        }
-        if input.state.all_complex || input.state.slater_matrix.pf_m_real.is_empty() {
-            return unsupported("the tenferro measurement stage does not provide complex mode");
-        }
-        if input.data.has_rbm_terms() {
-            return unsupported("the tenferro measurement stage does not provide RBM terms");
-        }
-        if !input.data.pair_hop_terms.is_empty()
-            || !input.data.exchange_terms.is_empty()
-            || !input.data.inter_all_terms.is_empty()
-        {
-            return unsupported(
-                "the tenferro measurement stage does not provide two-body Green terms \
-                 (PairHop/Exchange/InterAll)",
-            );
-        }
-        Ok(())
+        check_measurement_supported(input)
     }
 
     fn run<const TIMED: bool>(
@@ -206,83 +171,21 @@ impl TenferroMeasurement {
                  (real transfer coefficients, no RBM, direct projection tables)",
             );
         }
-        let n_site = data.modpara.nsite.max(0) as usize;
-        let n_elec = data.modpara.nelec.max(0) as usize;
-        let n_size = 2 * n_elec;
-        let pf_m_real = &input.state.slater_matrix.pf_m_real;
-        let n_qp = data
-            .qp_weights
-            .as_ref()
-            .map_or(0, |w| w.qp_full_weight.len().min(pf_m_real.len()));
-        if input.ele_idx.len() < n_size
-            || input
-                .ele_idx
-                .iter()
-                .any(|&site| site < 0 || site as usize >= n_site)
-        {
-            timer.stop(71);
-            return unsupported("the tenferro measurement stage requires a valid ele_idx");
-        }
-        let tables = input
-            .state
-            .transfer_cache
-            .direct_tables
-            .as_ref()
-            .expect("checked by calh1_fast_path_available");
-        // Term classification in the exact order of `calh1_real_fast`: a term either has an
-        // immediate real g1 (density or zero) or defers to the batched new_ip table.
-        let mut outcomes = Vec::with_capacity(input.state.transfer_cache.terms.len());
-        let mut active: Vec<ActiveTerm> = Vec::new();
-        for term in &input.state.transfer_cache.terms {
-            let (ri, rj) = (term.site1, term.site2);
-            let (spin_create, spin_annihilate) = (term.spin1, term.spin2);
-            let dst = ri + spin_create as usize * n_site;
-            let src = rj + spin_annihilate as usize * n_site;
-            if spin_create == spin_annihilate && ri == rj {
-                outcomes.push(TermOutcome::Immediate(input.ele_num[src] as f64));
-            } else if spin_create != spin_annihilate
-                || input.ele_num[dst] == 1
-                || input.ele_num[src] == 0
-                || input.ele_cfg[src] < 0
-            {
-                outcomes.push(TermOutcome::Immediate(0.0));
-            } else {
-                let mj = input.ele_cfg[src] as usize;
-                let msa = mj + spin_annihilate as usize * n_elec;
-                if msa >= n_size {
-                    timer.stop(71);
-                    return unsupported(
-                        "the tenferro measurement stage requires a valid electron configuration",
-                    );
-                }
-                let proj_ratio = observables::calh1_direct_projection_ratio_moved(
-                    rj,
-                    ri,
-                    spin_annihilate as usize,
-                    input.ele_num,
-                    tables,
-                );
-                outcomes.push(TermOutcome::Deferred(active.len()));
-                active.push(ActiveTerm {
-                    msa,
-                    rsa: ri + spin_annihilate as usize * n_site,
-                    ri,
-                    proj_ratio,
-                });
+        let ctx = match transfer_context(
+            data,
+            input.state,
+            input.ele_idx,
+            input.ele_cfg,
+            input.ele_num,
+        ) {
+            Ok(ctx) => ctx,
+            Err(error) => {
+                timer.stop(71);
+                return Err(error);
             }
-        }
-        let new_ip = self.transfer_new_ip(input, &active, n_qp, n_size, n_elec, n_site)?;
-        let mut transfer_energy = 0.0;
-        for (term, outcome) in input.state.transfer_cache.terms.iter().zip(&outcomes) {
-            let g1 = match *outcome {
-                TermOutcome::Immediate(value) => value,
-                TermOutcome::Deferred(index) => {
-                    let act = &active[index];
-                    act.proj_ratio * new_ip[index] / ip.re
-                }
-            };
-            transfer_energy -= term.value.re * g1;
-        }
+        };
+        let new_ip = self.transfer_new_ip(input, &ctx)?;
+        let transfer_energy = fold_transfer_energy(input, &ctx, &new_ip);
         timer.stop(71);
         e += Complex64::new(transfer_energy, 0.0);
         Ok(e)
@@ -295,16 +198,14 @@ impl TenferroMeasurement {
     fn transfer_new_ip(
         &mut self,
         input: &MeasurementInput<'_>,
-        active: &[ActiveTerm],
-        n_qp: usize,
-        n_size: usize,
-        n_elec: usize,
-        n_site: usize,
+        ctx: &TransferContext,
     ) -> Result<Vec<f64>, StageError> {
-        if active.is_empty() || n_qp == 0 {
+        let active = &ctx.active;
+        if active.is_empty() || ctx.n_qp == 0 {
             return Ok(vec![0.0; active.len()]);
         }
-        let terms = active.len();
+        let (terms, n_qp, n_size, n_elec, n_site) =
+            (active.len(), ctx.n_qp, ctx.n_size, ctx.n_elec, ctx.n_site);
         // Column-major [terms, n_qp, n_size]: index = t + terms * (qp + n_qp * msj).
         let mut a = vec![0.0; terms * n_qp * n_size];
         let mut b = vec![0.0; terms * n_qp * n_size];
@@ -506,6 +407,461 @@ impl MeasurementStages for TenferroMeasurement {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Shared host-side classification (tenferro and resident paths)
+// ---------------------------------------------------------------------------------------
+
+/// One transfer term whose Pfaffian ratio must be evaluated by the tensor contraction.
+struct ActiveTerm {
+    /// Electron slot `mj + spin * Ne` being moved.
+    msa: usize,
+    /// Destination Slater row `ri + spin * Nsite`.
+    rsa: usize,
+    /// Destination site `ri` (the special column of the moved slot).
+    ri: usize,
+    /// Direct projection ratio of the hop.
+    proj_ratio: f64,
+}
+
+/// How a transfer term contributes to the energy: an immediate real `g1` (density or zero)
+/// or a deferred tensor-table lookup.
+enum TermOutcome {
+    Immediate(f64),
+    Deferred(usize),
+}
+
+/// Term classification and dimensions of one sample's transfer energy.
+struct TransferContext {
+    n_site: usize,
+    n_elec: usize,
+    n_size: usize,
+    n_qp: usize,
+    outcomes: Vec<TermOutcome>,
+    active: Vec<ActiveTerm>,
+}
+
+/// A stage-level reason why this input is outside the measurement stage's supported class
+/// (real, non-FSZ, no RBM, no two-body Green terms).
+pub fn check_measurement_supported(input: &MeasurementInput<'_>) -> Result<(), StageError> {
+    if input.data.i_flg_orbital_general != 0 {
+        return unsupported("the measurement stage does not provide FSZ mode");
+    }
+    if input.state.all_complex || input.state.slater_matrix.pf_m_real.is_empty() {
+        return unsupported("the measurement stage does not provide complex mode");
+    }
+    if input.data.has_rbm_terms() {
+        return unsupported("the measurement stage does not provide RBM terms");
+    }
+    if !input.data.pair_hop_terms.is_empty()
+        || !input.data.exchange_terms.is_empty()
+        || !input.data.inter_all_terms.is_empty()
+    {
+        return unsupported(
+            "the measurement stage does not provide two-body Green terms \
+             (PairHop/Exchange/InterAll)",
+        );
+    }
+    Ok(())
+}
+
+/// Classify the transfer terms of one sample in the exact order of `calh1_real_fast`: a term
+/// either has an immediate real `g1` (density or zero) or defers to the `new_ip` ratio table.
+fn transfer_context(
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+    ele_idx: &[i64],
+    ele_cfg: &[i64],
+    ele_num: &[i64],
+) -> Result<TransferContext, StageError> {
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_size = 2 * n_elec;
+    let pf_m_real = &state.slater_matrix.pf_m_real;
+    let n_qp = data
+        .qp_weights
+        .as_ref()
+        .map_or(0, |w| w.qp_full_weight.len().min(pf_m_real.len()));
+    if ele_idx.len() < n_size
+        || ele_idx
+            .iter()
+            .any(|&site| site < 0 || site as usize >= n_site)
+    {
+        return unsupported("the measurement stage requires a valid ele_idx");
+    }
+    let tables = state.transfer_cache.direct_tables.as_ref().ok_or_else(|| {
+        StageError::Unsupported(
+            "the measurement stage requires the real CalH1 fast path \
+                 (real transfer coefficients, no RBM, direct projection tables)"
+                .to_string(),
+        )
+    })?;
+    let mut outcomes = Vec::with_capacity(state.transfer_cache.terms.len());
+    let mut active: Vec<ActiveTerm> = Vec::new();
+    for term in &state.transfer_cache.terms {
+        let (ri, rj) = (term.site1, term.site2);
+        let (spin_create, spin_annihilate) = (term.spin1, term.spin2);
+        let dst = ri + spin_create as usize * n_site;
+        let src = rj + spin_annihilate as usize * n_site;
+        if spin_create == spin_annihilate && ri == rj {
+            outcomes.push(TermOutcome::Immediate(ele_num[src] as f64));
+        } else if spin_create != spin_annihilate
+            || ele_num[dst] == 1
+            || ele_num[src] == 0
+            || ele_cfg[src] < 0
+        {
+            outcomes.push(TermOutcome::Immediate(0.0));
+        } else {
+            let mj = ele_cfg[src] as usize;
+            let msa = mj + spin_annihilate as usize * n_elec;
+            if msa >= n_size {
+                return unsupported(
+                    "the measurement stage requires a valid electron configuration",
+                );
+            }
+            let proj_ratio = observables::calh1_direct_projection_ratio_moved(
+                rj,
+                ri,
+                spin_annihilate as usize,
+                ele_num,
+                tables,
+            );
+            outcomes.push(TermOutcome::Deferred(active.len()));
+            active.push(ActiveTerm {
+                msa,
+                rsa: ri + spin_annihilate as usize * n_site,
+                ri,
+                proj_ratio,
+            });
+        }
+    }
+    Ok(TransferContext {
+        n_site,
+        n_elec,
+        n_size,
+        n_qp,
+        outcomes,
+        active,
+    })
+}
+
+/// The term-ordered transfer energy from a `new_ip` ratio table (the C fold):
+/// `-sum_terms value * (immediate | proj_ratio * new_ip / ip)`.
+fn fold_transfer_energy(
+    input: &MeasurementInput<'_>,
+    ctx: &TransferContext,
+    new_ip: &[f64],
+) -> f64 {
+    let mut transfer_energy = 0.0;
+    for (term, outcome) in input.state.transfer_cache.terms.iter().zip(&ctx.outcomes) {
+        let g1 = match *outcome {
+            TermOutcome::Immediate(value) => value,
+            TermOutcome::Deferred(index) => {
+                ctx.active[index].proj_ratio * new_ip[index] / input.ip.re
+            }
+        };
+        transfer_energy -= term.value.re * g1;
+    }
+    transfer_energy
+}
+
+// ---------------------------------------------------------------------------------------
+// Device-resident measurement (issue #518 milestone 2)
+// ---------------------------------------------------------------------------------------
+
+/// Device operations of the resident measurement path.
+///
+/// Implemented by the CUDA provider (`gpu/mvmc-gpu-cuda`), and by a host mock in the tests of
+/// this crate. The host orchestration (term classification, projection ratios, the term-ordered
+/// energy fold and the final Slater-derivative normalization) stays in [`resident_measure_sample`]
+/// so that the resident and the eager paths share it operation for operation.
+pub trait ResidentMeasurementOps: Send {
+    /// Upload the input-fixed tables (Slater-table geometry is checked by `stage_a`).
+    fn prepare_input(
+        &mut self,
+        _request: &crate::stage_backend::ResidentInputRequest<'_>,
+    ) -> Result<(), StageError> {
+        Ok(())
+    }
+
+    /// Device-resident stage A ([`PfaffianStages::stage_a_resident`]).
+    fn stage_a(
+        &mut self,
+        input: &crate::stage_backend::ResidentStageAInput<'_>,
+    ) -> Result<crate::stage_backend::ResidentStageAOutput, StageError>;
+
+    /// Whether the tables of `slot` are resident (produced by [`Self::stage_a`]).
+    fn has_slot(&self, slot: usize) -> bool;
+
+    /// `new_ip[t]` of the active transfer terms `t` for `slot`: the device computes
+    /// `sum_qp w_qp * (-(ratio_qp * pf_qp))` from the resident inverse planes, Slater table
+    /// and Pfaffians.
+    fn ratio_terms(
+        &mut self,
+        slot: usize,
+        input: &ResidentRatioTerms<'_>,
+    ) -> Result<Vec<f64>, StageError>;
+
+    /// Raw Slater-derivative accumulation `acc[n_slater]` for `slot` (before the `inv(ip)`
+    /// normalization): the device folds the QP weights, per-sector coefficients and the
+    /// orbital scatter of the C-order kernel.
+    fn slater_diff(
+        &mut self,
+        slot: usize,
+        input: &ResidentSlaterDiff<'_>,
+    ) -> Result<Vec<f64>, StageError>;
+
+    /// Counters, `None` when the implementation does not report them.
+    fn stats(&self) -> Option<crate::stage_backend::ResidentStats> {
+        None
+    }
+}
+
+/// Per-sample input of [`ResidentMeasurementOps::ratio_terms`].
+pub struct ResidentRatioTerms<'a> {
+    /// Electron sites `[n]` of the sample (the sample's own changed rows).
+    pub ele_idx: &'a [i64],
+    /// Moved electron slot `msa` per active term.
+    pub msa: &'a [i64],
+    /// Destination Slater row `rsa` per active term.
+    pub rsa: &'a [i64],
+    /// Destination site `ri` per active term.
+    pub ri: &'a [i64],
+}
+
+/// Per-sample input of [`ResidentMeasurementOps::slater_diff`].
+pub struct ResidentSlaterDiff<'a> {
+    /// QP points per translation sector (`NSPGaussLeg`).
+    pub n_sp_gauss_leg: usize,
+    /// Translation sectors of the tables.
+    pub n_trans: usize,
+    /// `tri[trans * n + msi]` translated site (`-1` invalid), [`build_sector_translation`].
+    pub tri: &'a [i64],
+    /// Translation signs, same layout.
+    pub sgn: &'a [i64],
+}
+
+/// Upload the input-fixed tables of the resident measurement path (no-op for a backend that
+/// does not need them). The orbital matrices are taken from the data cache when present.
+pub fn resident_prepare(
+    ops: &mut dyn ResidentMeasurementOps,
+    data: &ExpertModeData,
+    state: &VmcOptimizationState,
+) -> Result<(), StageError> {
+    let weights = match data.qp_weights.as_ref() {
+        Some(weights) => weights,
+        None => return Ok(()),
+    };
+    let n_qp = weights
+        .qp_full_weight
+        .len()
+        .min(state.slater_matrix.pf_m_real.len());
+    let n_sp = data.modpara.nsp_gauss_leg.max(1) as usize;
+    if n_qp == 0 {
+        return Ok(());
+    }
+    let built;
+    let (orbital_idx, orbital_sgn): (&[Vec<i64>], &[Vec<i64>]) =
+        match (&data.orbital_idx_matrix, &data.orbital_sgn_matrix) {
+            (Some(idx), Some(sgn)) => (idx, sgn),
+            _ => {
+                built = data.build_orbital_matrices();
+                (&built.0, &built.1)
+            }
+        };
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    let qp_weight: Vec<f64> = weights.qp_full_weight[..n_qp]
+        .iter()
+        .map(|v| v.re)
+        .collect();
+    let real_take =
+        |values: &[Complex64]| -> Vec<f64> { values.iter().take(n_sp).map(|v| v.re).collect() };
+    ops.prepare_input(&crate::stage_backend::ResidentInputRequest {
+        n_site,
+        n_elec,
+        n_qp,
+        n_slater,
+        n_sp_gauss_leg: n_sp,
+        orbital_idx,
+        orbital_sgn,
+        qp_weight: &qp_weight,
+        spgl_cos_sin: &real_take(&weights.spgl_cos_sin),
+        spgl_cos_cos: &real_take(&weights.spgl_cos_cos),
+        spgl_sin_sin: &real_take(&weights.spgl_sin_sin),
+    })
+}
+
+/// Resident measurement of one sample: local energy and Slater derivative from the device
+/// tables produced by [`ResidentMeasurementOps::stage_a`]. The host performs the same term
+/// classification, projection ratios and folds as the C-order kernel; only the table arithmetic
+/// runs on the device.
+pub fn resident_measure_sample<const TIMED: bool>(
+    ops: &mut dyn ResidentMeasurementOps,
+    input: &mut MeasurementInput<'_>,
+    slater_diff_len: usize,
+    timer: &mut CTimer<TIMED>,
+) -> Result<MeasurementOutput, StageError> {
+    check_measurement_supported(input)?;
+    let local_energy = resident_local_energy::<TIMED>(ops, input, timer)?;
+    let slater_diff = if slater_diff_len > 0 {
+        resident_slater_diff::<TIMED>(ops, input, slater_diff_len, timer)?
+    } else {
+        Vec::new()
+    };
+    Ok(MeasurementOutput {
+        local_energy,
+        slater_diff,
+    })
+}
+
+/// Resident local energy: host diagonal terms and the unchanged host-side term fold around the
+/// device `new_ip` table (sections 70/71 of `calculate_local_energy`).
+fn resident_local_energy<const TIMED: bool>(
+    ops: &mut dyn ResidentMeasurementOps,
+    input: &mut MeasurementInput<'_>,
+    timer: &mut CTimer<TIMED>,
+) -> Result<Complex64, StageError> {
+    let data = input.data;
+    timer.start(70);
+    let mut e = observables::calculate_hamiltonian_diagonal(input.ele_num, data);
+    timer.stop(70);
+    timer.start(71);
+    if data.transfer_terms.is_empty() || input.ip.norm() == 0.0 {
+        timer.stop(71);
+        return Ok(e);
+    }
+    observables::refresh_transfer_cache(data, input.state);
+    if !observables::calh1_fast_path_available(input.state) {
+        timer.stop(71);
+        return unsupported(
+            "the resident measurement stage requires the real CalH1 fast path \
+             (real transfer coefficients, no RBM, direct projection tables)",
+        );
+    }
+    let ctx = match transfer_context(
+        data,
+        input.state,
+        input.ele_idx,
+        input.ele_cfg,
+        input.ele_num,
+    ) {
+        Ok(ctx) => ctx,
+        Err(error) => {
+            timer.stop(71);
+            return Err(error);
+        }
+    };
+    let new_ip = if ctx.active.is_empty() || ctx.n_qp == 0 {
+        vec![0.0; ctx.active.len()]
+    } else {
+        let msa: Vec<i64> = ctx.active.iter().map(|a| a.msa as i64).collect();
+        let rsa: Vec<i64> = ctx.active.iter().map(|a| a.rsa as i64).collect();
+        let ri: Vec<i64> = ctx.active.iter().map(|a| a.ri as i64).collect();
+        match ops.ratio_terms(
+            input.batch_slot,
+            &ResidentRatioTerms {
+                ele_idx: input.ele_idx,
+                msa: &msa,
+                rsa: &rsa,
+                ri: &ri,
+            },
+        ) {
+            Ok(values) => values,
+            Err(error) => {
+                timer.stop(71);
+                return Err(error);
+            }
+        }
+    };
+    let transfer_energy = fold_transfer_energy(input, &ctx, &new_ip);
+    timer.stop(71);
+    e += Complex64::new(transfer_energy, 0.0);
+    Ok(e)
+}
+
+/// Resident Slater derivative: the device folds the QP weights, the per-sector block
+/// coefficients and the orbital scatter of the C `SlaterElmDiff` fast path; the host performs
+/// the final `* reciprocal(ip)` normalization (section 930, the call site of
+/// `reduce_qp_weighted_real_into`).
+fn resident_slater_diff<const TIMED: bool>(
+    ops: &mut dyn ResidentMeasurementOps,
+    input: &mut MeasurementInput<'_>,
+    slater_diff_len: usize,
+    timer: &mut CTimer<TIMED>,
+) -> Result<Vec<Complex64>, StageError> {
+    let mut out = vec![Complex64::new(0.0, 0.0); slater_diff_len];
+    let data = input.data;
+    let ip = input.ip;
+    let n_site = data.modpara.nsite.max(0) as usize;
+    let n_elec = data.modpara.nelec.max(0) as usize;
+    if n_site == 0 || n_elec == 0 || ip.norm() == 0.0 {
+        return Ok(out);
+    }
+    let weights = match data.qp_weights.as_ref() {
+        Some(weights) => weights,
+        None => return Ok(out),
+    };
+    let n_qp_full = weights
+        .qp_full_weight
+        .len()
+        .min(input.state.slater_matrix.pf_m.len());
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    if n_qp_full == 0 || n_slater == 0 || out.len() < 2 * n_slater {
+        return Ok(out);
+    }
+    let n_sp_gauss_leg = data.modpara.nsp_gauss_leg.max(1) as usize;
+    if !slater_derivative::real_slater_weights(weights, n_qp_full, n_sp_gauss_leg) {
+        return unsupported(
+            "the resident measurement stage requires real Slater-derivative weights",
+        );
+    }
+    timer.start_diag(930, timer.diagnostics.slater);
+    // The device tables hold one sector per `n_sp_gauss_leg` QP points; a partial last sector
+    // is not representable in the resident kernel (n_qp_full is a multiple of it in every
+    // supported input).
+    if n_sp_gauss_leg == 0 || !n_qp_full.is_multiple_of(n_sp_gauss_leg) {
+        timer.stop_diag(930, timer.diagnostics.slater);
+        return unsupported(
+            "the resident measurement stage requires NQP to be a multiple of NSPGaussLeg",
+        );
+    }
+    let n_trans = n_qp_full / n_sp_gauss_leg;
+    let (tri, sgn) = slater_derivative::build_sector_translation(data, input.ele_idx);
+    let acc = match ops.slater_diff(
+        input.batch_slot,
+        &ResidentSlaterDiff {
+            n_sp_gauss_leg,
+            n_trans,
+            tri: &tri,
+            sgn: &sgn,
+        },
+    ) {
+        Ok(acc) => acc,
+        Err(error) => {
+            timer.stop_diag(930, timer.diagnostics.slater);
+            return Err(error);
+        }
+    };
+    if acc.len() != n_slater {
+        timer.stop_diag(930, timer.diagnostics.slater);
+        return Err(StageError::Failed(format!(
+            "resident Slater derivative returned {} values for {n_slater} orbitals",
+            acc.len()
+        )));
+    }
+    // The final normalization of `reduce_qp_weighted_real_into`, unchanged.
+    let inv_ip = crate::julia_complex::reciprocal(ip);
+    for (orbidx, &value) in acc.iter().enumerate() {
+        let value = Complex64::new(value, 0.0) * inv_ip;
+        out[2 * orbidx] = value;
+        out[2 * orbidx + 1] = value * Complex64::new(0.0, 1.0);
+    }
+    timer.stop_diag(930, timer.diagnostics.slater);
+    Ok(out)
+}
+
 #[cfg(test)]
 mod layout_tests {
     use super::*;
