@@ -177,17 +177,17 @@ pub fn vmc_make_sample_real_staged<const TIMED: bool, R: Reducer + ?Sized, S: Re
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     let initialization = (|| {
         // Sync the real-mode Slater table from the complex master.
-        for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
-            for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                    state.slater_matrix.slater_elm_real.set(
-                        qp,
-                        row,
-                        col,
-                        state.slater_matrix.slater_elm.get(qp, row, col).re,
-                    );
-                }
-            }
+        // Both tables use the same flat layout. Borrow once so the content version
+        // advances once per table update, rather than contending on its global atomic
+        // for every element of every walker (issue #550).
+        for (dst, src) in state
+            .slater_matrix
+            .slater_elm_real
+            .as_mut_slice()
+            .iter_mut()
+            .zip(state.slater_matrix.slater_elm.as_slice())
+        {
+            *dst = src.re;
         }
 
         if burn_flag {
