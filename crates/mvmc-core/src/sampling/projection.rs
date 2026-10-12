@@ -460,6 +460,77 @@ pub fn revert_ele_config(
     ele_num[rsa_new] = 0;
 }
 
+/// Projection tables for the device-resident interval sampler (issue #547).
+///
+/// The interval kernel computes the per-hop projection delta directly from the post-hop
+/// occupancy as `sum_i param_i * (new_count_i - old_count_i)`, collapsed to the sites touched
+/// by the hop (mirroring [`update_proj_cnt`] + [`log_proj_ratio`]). This packs its inputs:
+/// `gutz[site]` and `jast[a*n_site+b]` are parameter slots (`-1` for none), and `params` is the
+/// real projection vector with the Gutzwiller block first, then the Jastrow block.
+///
+/// Only Gutzwiller and Jastrow projections are representable; a DH2/DH4/RBM/OptTrans parameter
+/// is rejected, never silently dropped.
+pub struct ProjectionTables {
+    /// Per-site Gutzwiller parameter slot (`-1` for none).
+    pub gutz: Vec<i32>,
+    /// Upper-triangle Jastrow parameter slot (`a*n_site+b`, `a<=b`; `-1` for none).
+    pub jast: Vec<i32>,
+    /// Real projection parameters (Gutzwiller block then Jastrow block).
+    pub params: Vec<f64>,
+    /// Gutzwiller slot count (the Jastrow offset in `params`).
+    pub ngutz: usize,
+    /// Total parameter count.
+    pub nproj: usize,
+}
+
+/// Build the device projection tables of `data` (see [`ProjectionTables`]).
+pub fn projection_tables(data: &ExpertModeData) -> Result<ProjectionTables, String> {
+    let n_site = data.modpara.nsite as usize;
+    let layout = data.projection_layout();
+    let ngutz = layout.n_gutzwiller;
+    let njast = layout.n_jastrow;
+    let parameters = data.projection_parameters();
+    if parameters.len() != ngutz + njast {
+        return Err(format!(
+            "interval sampler supports only Gutzwiller and Jastrow projections: {} projection \
+             parameters for {} Gutzwiller + {} Jastrow slots",
+            parameters.len(),
+            ngutz,
+            njast
+        ));
+    }
+    let params: Vec<f64> = parameters.iter().map(|v| v.re).collect();
+    let nproj = params.len();
+    let gutz: Vec<i32> = if ngutz == 0 {
+        vec![-1; n_site]
+    } else if data.gutzwiller_idx.is_empty() {
+        vec![0; n_site]
+    } else {
+        (0..n_site)
+            .map(|r| data.gutzwiller_idx.get(r).copied().unwrap_or(-1) as i32)
+            .collect()
+    };
+    let mut jast = vec![-1i32; n_site * n_site];
+    if njast > 0 {
+        for a in 0..n_site {
+            for b in a..n_site {
+                if let Some(row) = data.jastrow_idx.get(a) {
+                    if let Some(&idx) = row.get(b) {
+                        jast[a * n_site + b] = idx as i32;
+                    }
+                }
+            }
+        }
+    }
+    Ok(ProjectionTables {
+        gutz,
+        jast,
+        params,
+        ngutz,
+        nproj,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,5 +720,92 @@ mod tests {
             n_elec,
         );
         assert_eq!((ele_idx, ele_cfg, ele_num), snapshot);
+    }
+    /// Rust replica of the interval kernel's `interval_proj_delta` for one hop.
+    fn kernel_projection_delta(
+        t: &ProjectionTables,
+        occ: &[i32],
+        n_site: usize,
+        ri: usize,
+        rj: usize,
+    ) -> f64 {
+        let (n0ri, n1ri) = (occ[ri] as f64, occ[n_site + ri] as f64);
+        let (n0rj, n1rj) = (occ[rj] as f64, occ[n_site + rj] as f64);
+        let mut delta = 0.0;
+        if t.ngutz > 0 {
+            let ii = t.gutz[ri];
+            if ii >= 0 && (ii as usize) < t.nproj {
+                delta -= t.params[ii as usize] * (n0ri + n1ri);
+            }
+            let ij = t.gutz[rj];
+            if ij >= 0 && (ij as usize) < t.nproj {
+                delta += t.params[ij as usize] * (n0rj * n1rj);
+            }
+        }
+        let offset = t.ngutz;
+        let (xi_ri, xi_rj) = (n0ri + n1ri, n0rj + n1rj);
+        let (a, b) = (ri.min(rj), ri.max(rj));
+        let idx = t.jast[a * n_site + b];
+        if idx >= 0 && offset + (idx as usize) < t.nproj {
+            delta += t.params[offset + idx as usize] * (xi_ri - xi_rj + 1.0);
+        }
+        for rk in 0..n_site {
+            if rk == ri || rk == rj {
+                continue;
+            }
+            let x = (occ[rk] + occ[n_site + rk] - 1) as f64;
+            if x == 0.0 {
+                continue;
+            }
+            let (a1, b1) = (ri.min(rk), ri.max(rk));
+            let ia = t.jast[a1 * n_site + b1];
+            if ia >= 0 && offset + (ia as usize) < t.nproj {
+                delta -= t.params[offset + ia as usize] * x;
+            }
+            let (a2, b2) = (rj.min(rk), rj.max(rk));
+            let ib = t.jast[a2 * n_site + b2];
+            if ib >= 0 && offset + (ib as usize) < t.nproj {
+                delta += t.params[offset + ib as usize] * x;
+            }
+        }
+        delta
+    }
+
+    #[test]
+    fn interval_projection_delta_matches_update_proj_cnt() {
+        let data = small_data();
+        let tables = projection_tables(&data).expect("tables");
+        let n_site = 4usize;
+        let n_elec = 2usize;
+        // Up electrons at 0,2; down at 1,3 (half filling).
+        let ele_idx = vec![0_i64, 2, 1, 3];
+        let mut ele_cfg = vec![-1_i64; 2 * n_site];
+        let mut ele_num = vec![0_i64; 2 * n_site];
+        for s in 0..2usize {
+            for m in 0..n_elec {
+                let r = ele_idx[m + s * n_elec] as usize;
+                ele_cfg[r + s * n_site] = m as i64;
+                ele_num[r + s * n_site] = 1;
+            }
+        }
+        let mut old = vec![0_i64; tables.nproj];
+        make_proj_cnt(&mut old, &ele_num, &data);
+        for (mi, ri, rj, spin) in [(0usize, 0usize, 1usize, 0u8), (0, 0, 3, 0), (1, 2, 1, 0)] {
+            let mut idx = ele_idx.clone();
+            let mut cfg = ele_cfg.clone();
+            let mut num = ele_num.clone();
+            update_ele_config(
+                mi, ri, rj, spin, &mut idx, &mut cfg, &mut num, n_site, n_elec,
+            );
+            let mut new = old.clone();
+            update_proj_cnt(ri as i64, rj as i64, spin, &mut new, &old, &num, &data);
+            let host = log_proj_ratio(&new, &old, &data);
+            let occ: Vec<i32> = num.iter().map(|&v| v as i32).collect();
+            let kernel = kernel_projection_delta(&tables, &occ, n_site, ri, rj);
+            assert!(
+                (host - kernel).abs() < 1e-12,
+                "hop {ri}->{rj} spin {spin}: host {host} vs kernel {kernel}"
+            );
+        }
     }
 }

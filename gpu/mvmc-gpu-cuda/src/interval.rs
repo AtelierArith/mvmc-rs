@@ -500,6 +500,7 @@ impl IntervalSampler {
     /// occupancy derived from it, inverse, Pfaffians, accepted-move window and cached
     /// `log|IP|`. Used by a group coordinator to stage each walker before a batched interval
     /// run; `inv` is the walker's `nqp*n*n` inverse and `pf` its `nqp` Pfaffians.
+    #[allow(clippy::too_many_arguments)]
     pub fn upload_walker<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,

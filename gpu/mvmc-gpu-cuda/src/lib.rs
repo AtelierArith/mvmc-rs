@@ -9,6 +9,7 @@
 pub mod bench;
 pub mod device_sampler;
 pub mod interval;
+pub mod interval_engine;
 pub mod measurement;
 pub mod pfaffian;
 pub mod sampler_stages;
