@@ -101,6 +101,7 @@ pub struct IntervalHost<'a> {
 pub struct IntervalSampler {
     geom: IntervalGeometry,
     total_hops: usize,
+    exchange_fraction: f64,
     ele: DeviceBuffer,
     occ: DeviceBuffer,
     inv: DeviceBuffer,
@@ -148,13 +149,22 @@ fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
 
 impl IntervalSampler {
     /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in hops
-    /// per walker (uploaded with [`Self::upload_tape`]).
+    /// per walker (uploaded with [`Self::upload_tape`]); `exchange_fraction` is the Julia GPU
+    /// exchange threshold (0 for the hopping-only `NExUpdatePath == 0` inputs; a nonzero value is
+    /// rejected by the caller until the exchange branch exists).
     pub fn prepare<B: BackendSession + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
         total_hops: usize,
+        exchange_fraction: f64,
     ) -> Result<Self, String> {
+        if exchange_fraction != 0.0 {
+            return Err(
+                "interval sampler supports only exchange_fraction == 0 (NExUpdatePath == 0)"
+                    .to_string(),
+            );
+        }
         let (w, n, nsite, nqp) = (geom.walkers, geom.n, geom.nsite, geom.nqp);
         let n2 = geom.n2();
         let nplanes = w * nqp;
@@ -176,7 +186,7 @@ impl IntervalSampler {
             let gutz = exec.alloc_bytes(nsite.max(1) * 4)?;
             let jast = exec.alloc_bytes((nsite * nsite).max(1) * 4)?;
             let params = exec.alloc_bytes(geom.nproj.max(1) * 8)?;
-            let tape = exec.alloc_bytes((w * total_hops * 4 * 4).max(1))?;
+            let tape = exec.alloc_bytes((w * total_hops * 5 * 4).max(1))?;
             let hop_off = exec.alloc_bytes(w.max(1) * 4)?;
             let hops_done = exec.alloc_bytes(w.max(1) * 4)?;
             let rebuild = exec.alloc_bytes(w.max(1) * 4)?;
@@ -206,6 +216,7 @@ impl IntervalSampler {
             Ok(Self {
                 geom,
                 total_hops,
+                exchange_fraction,
                 ele,
                 occ,
                 inv,
@@ -237,7 +248,10 @@ impl IntervalSampler {
         self.geom
     }
 
-    /// Upload a `u32` tape of `walkers * total_hops * 4` words (walker-major, 4 words per hop).
+    /// Upload a `u32` tape of `walkers * total_hops * 5` words in the Julia GPU layout
+    /// `[word][walker][step]` (word-fastest, then walker, then step; linear index
+    /// `5*(walker + walkers*step) + word`). The same tape can be handed to Julia's
+    /// `gpu_sample!(s; tape=...)` for a shared-tape parity check.
     pub fn upload_tape<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
@@ -313,6 +327,7 @@ impl IntervalSampler {
                 i(g.nqp),
                 i(g.ngutz),
                 i(g.nproj),
+                Arg::D(self.exchange_fraction),
                 p(&self.hops_done)?,
                 p(&self.rebuild)?,
             ];

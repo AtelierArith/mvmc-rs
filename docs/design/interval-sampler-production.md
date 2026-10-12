@@ -34,54 +34,57 @@ gain requires walker batching.
 
 ## 2. Two problems to solve before production
 
-### 2.1 RNG contract: the tape must be a raw SFMT word stream
+### 2.1 Parity reference: the Julia GPU tape, not the C draw order
 
-The current tape is **structured**, four `u32` words per hop:
-`w0 = mi` (`w0 % ne`), `w1` (spin `= w1 >> 31`), `w2` = destination rank over
-empty sites, `w3` = accept uniform (`w3 / 2^32`). The gate and bench generate it
-randomly, so they validate the *mechanism*, not C parity.
+The GPU path's parity target is the **Julia GPU implementation**
+(`extern/Julia-mVMC/MVMCOptimizers.jl/ext`), not C/SFMT. `gpu_sample!`
+(`cuda_state.jl:269`) runs `cached_sampling_kernel!` / `cooperative_sampling_kernel!`
+(`cuda_sampling_update.jl`), one block per walker (`b = blockIdx().x`), on a
+device `UInt32` tape `[5, batch, steps]` (`[word, walker, step]`, word-fastest):
 
-C's draw order does not match this. For the normal (non-FSZ) real mode, one
-hopping proposal (`extern/mVMC-1.3.0/src/mVMC/vmcmake.c`,
-`vmcmake_real.c:138-202`, `makeCandidate_hopping` at `vmcmake.c:515`):
+```julia
+draws = tape === nothing ? CUDA.rand(UInt32, 5, batch, steps) : tape   # cuda_state.jl:282
+```
 
-1. `updateType = getUpdateType(NExUpdatePath)` - for `path==0` (hopping only) no
-   draw; for `path>=1` one `genrand_real2()` (`vmcmake.c:606-627`).
-2. `mi = gen_rand32() % Ne` - one word (`SFMT.c:410`).
-3. `s = (genrand_real2() < 0.5)` - one word (`SFMT.h:107`, `to_real2`).
-4. destination: `do { rj = gen_rand32() % Nsite; ... } while (eleCfg[rj+s*Nsite]
-   != -1 || LocSpn[rj]==1)` - **rejection sampling**, a variable number of
-   words (at least one), not a one-word rank over empty sites.
-5. `if (!rejectFlag) { ... if (w > genrand_real2()) accept }` - one word,
-   skipped only when the destination loop exhausted `icnt_max` (all sites
-   occupied; impossible while `Ne < Nsite`).
+Per step (`cuda_sampling_update.jl:278-389`):
 
-Both `gen_rand32()` and `genrand_real2()` consume exactly one 32-bit word
-(`to_real2(x) = x * 2^-32`), so the whole hop is a raw SFMT word stream. The
-interval tape must therefore be the **raw `u32` stream**, and the kernel must
-reproduce steps 1-5 with a per-walker variable cursor. The structured tape is
-wrong and must be replaced (or the kernel must be handed the raw words and
-decode them itself). This is a parity blocker, not a performance detail: the
-current structured tape changes both the draw count and, through the destination
-distribution, the trajectory.
+* `tape[1]`: source electron, `a = tape[1] % nelec + 1 + spin*nelec`;
+* `tape[2]`: spin, `tape[2] < 0x80000000 ? 0 : 1`;
+* `tape[3]`: destination. With `empty_destinations` (the default for
+  `nsite >= 64`, `JULIA_MVMC_GPU_PROPOSALS=empty`) it is the rank over empty
+  sites (`empty_hopping_destination`, `:196`); otherwise a raw `% nsite` with
+  rejection, which is the non-default `self-loop` proposal;
+* `tape[4]`: exchange threshold, `tape[4]/2^32 < exchange_fraction`
+  (`exchange_probability`: `NExUpdatePath==0 -> 0.0`, `==1 -> 0.5`, `==2 -> 1.0`);
+* `tape[5]`: acceptance uniform, `u = tape[5]/2^32`, accept when
+  `log(u) < logratio` with `logratio = 2*(d_corr + log|ip_new| - log|ip_old|)`.
 
-Consequences for the kernel:
+The rebuild trigger is `accepted_since_refactor[b] > nsite` (or a non-rank-one
+candidate) - the same rule the interval kernel uses (`window > nsite`).
 
-* Add per-walker `word_off[w]`; each hop consumes words of whatever type the C
-  algorithm asks for at that point.
-* Reproduce `getUpdateType(NExUpdatePath)` (read `NExUpdatePath` from the
-  input; the benchmark Hubbard inputs use a fixed value).
-* Reproduce the `while (LocSpn[ri]==1)` redraw of `mi`/`s` (no-op in normal
-  mode, but keep it for generality or reject unsupported inputs).
-* Bound the raw buffer generously and handle exhaustion by host refill (the
-  destination loop is geometric; expected attempts at half filling are
-  `Nsite/(Nsite-Ne)`).
+So the interval kernel's structured tape is the `NExUpdatePath == 0` case of this
+contract (`empty` destination, no exchange). What is missing is only the unused
+`tape[4]` exchange word and the exact `[5, walker, step]` layout. For a
+**shared-tape parity test** that feeds the same device tape to Julia and Rust,
+the interval tape adopts the Julia layout (5 words, `[word, walker, step]`) and
+takes `exchange_fraction` (0 for the benchmark; reject `> 0` until the exchange
+branch is implemented).
 
-Validation: against the lock-step host-draw CUDA sampler
-(`device_sampler.rs`) on a frozen fixture - same seed, same number of hops,
-compare the final SFMT state, word count, accepted configuration and Pfaffian
-for every walker, not just the energy. This is the deterministic reference
-parity of `AGENTS.md`, not a statistical energy check.
+The earlier draft of this section claimed the tape had to reproduce C's
+`makeCandidate_hopping` draw order. That is **wrong for the GPU path**: the
+rejection-sampled destination and the raw SFMT word stream describe the CPU/C
+and lock-step parity contract (`vmcmake.c:515`, `SFMT.h:107`). The Julia GPU
+sampler deliberately uses a device-RNG structured tape and is the reference
+here. C stays authoritative for the CPU path and for the physics (ratios,
+projections, signs, operation order).
+
+The RNG stream itself: Julia draws with the device RNG (`CUDA.rand`, seeded by
+`CUDA.seed!(seed)`); exact equality with CUDA.jl's stream is not claimed
+(`docs/design/gpu-xorwow.md`). Parity is therefore established by feeding an
+**identical tape** to both implementations - `gpu_sample!(s; tape=...)` accepts
+one - which isolates the sampler semantics from the RNG stream. The XORWOW
+device generator remains the production word source, with a separate,
+already-documented contract.
 
 ### 2.2 Acquisition model: walker batching needs a coordinator
 
@@ -190,8 +193,12 @@ The group backend must document and reject `W=1` (or route it to C order), like
 
 After 2.1, 2.2 and 3:
 
-* Deterministic parity: interval vs. lock-step on a frozen fixture at fixed `W`
-  and hops (final SFMT state, word count, configuration, Pfaffian per walker).
+* Deterministic parity: feed the **same device tape** to Julia's
+  `gpu_sample!(s; tape=...)` and the interval sampler on identical initial
+  states and compare the configuration, Pfaffian, counts and acceptance per
+  step and per walker (not just the energy). This isolates the sampler from the
+  RNG stream. Supplement with a Rust-only repeatability test (same tape, same
+  result).
 * `benchmark/host_gpu_comparison/run_all.sh` at L=128 vs. the Julia GPU path
   (`extern/Julia-mVMC/MVMCOptimizers.jl/ext/cuda_*`).
 * Expected: sampling ~0.8 s (measured) + host measurement ~1.7 s + SR ~0.2 s
@@ -199,11 +206,13 @@ After 2.1, 2.2 and 3:
 
 ## 5. Open questions
 
-1. `NExUpdatePath` of the benchmark inputs (drives the `getUpdateType` draw and
-   whether exchange/exchange-hopping must be modelled). The normal-mode sampler
-   here supports hopping only; other paths must be rejected, not silently
-   approximated.
+1. `NExUpdatePath` of the benchmark inputs (drives `exchange_fraction`:
+   `0 -> 0.0`, `1 -> 0.5`, `2 -> 1.0`). The benchmark Hubbard inputs are all
+   `NExUpdatePath=0`, so the interval sampler implements `exchange_fraction == 0`
+   only and rejects `> 0`, matching the Julia `empty`/`hopping` default.
 2. Whether `pf` alone (plus device-side inverse) is enough for the host
    measurement of the sampled configurations, or whether the inverse must also
    come back for the measured samples (section 3.4).
-3. Buffer sizing / host refill for the geometric destination loop.
+3. Whether the interval kernel should also implement the non-default
+   `self-loop` (raw `% nsite`) proposal and the exchange branch, or keep the
+   `empty`/hopping contract and reject the rest.

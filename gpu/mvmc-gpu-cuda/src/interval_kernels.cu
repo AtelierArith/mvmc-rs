@@ -15,17 +15,23 @@
 // summed in index order by one thread, so each serial sum keeps the host's C-order
 // rounding while the gather latency is spread over the block.
 //
-// Proposal contract (a separate GPU RNG contract, like the Julia GPU path):
-//   A fixed tape of u32 words, 4 per hop, laid out [word][walker][hop]:
-//     w0 -> source electron slot index: mi = w0 % ne
-//     w1 -> spin sector (top bit): spin = w1 >> 31
-//     w2 -> destination rank among the empty sites of that spin: rj = rank-th empty site
-//     w3 -> acceptance uniform: u = w3 / 2^32
-//   Every hop consumes exactly 4 words and is always a valid hop (the destination is
-//   chosen from the empty set), so the tape length is fixed and decision independent.
+// Proposal contract: the tape is the Julia GPU sampler's device tape
+// (MVMCOptimizers.jl/ext/cuda_sampling_update.jl:cached_sampling_kernel!), so a tape can be
+// shared with `gpu_sample!(s; tape=...)` for parity. A device u32 tape of 5 words per step,
+// laid out [word][walker][step] (word-fastest, then walker, then step), linear index
+// 5*(w + W*step) + word:
+//   w0 -> source electron slot index: mi = w0 % ne
+//   w1 -> spin sector (top bit): spin = w1 >> 31
+//   w2 -> destination rank among the empty sites of that spin: rj = rank-th empty site
+//         (the Julia `empty_destinations` proposal, the default for nsite >= 64)
+//   w3 -> exchange threshold: exchange = w3/2^32 < exchange_fraction (unused here; the
+//         caller passes exchange_fraction == 0, i.e. Julia's NExUpdatePath == 0)
+//   w4 -> acceptance uniform: u = w4 / 2^32, accept when log(u) < logratio
+//   Every step consumes exactly 5 words and is a valid hop (the destination is chosen from
+//   the empty set), so the tape length is fixed and decision independent.
 //
 // Only the real, non-FSZ, ordinary-hopping normal mode without local spins is handled;
-// the caller rejects anything else before launching.
+// the caller rejects anything else (including exchange_fraction > 0) before launching.
 
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-one ratio for one QP plane: r = -pf_qp * sum_j inv[msa*n+j] * S[rsa][rs[j]].
@@ -150,7 +156,8 @@ extern "C" __global__ void k_interval_hop(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
-    int n, int ne, int nsite, int nqp, int ngutz, int nproj, int* hops_done, int* rebuild) {
+    int n, int ne, int nsite, int nqp, int ngutz, int nproj, double exchange_fraction,
+    int* hops_done, int* rebuild) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -164,12 +171,15 @@ extern "C" __global__ void k_interval_hop(
   const int w = blockIdx.x;
   const int tid = threadIdx.x, nt = blockDim.x;
   const int n2 = 2 * nsite;
+  (void)exchange_fraction;  // hopping-only: the caller passes 0.0 (Julia NExUpdatePath == 0)
   const double* tab = slater;
   int* ele_w = ele + (size_t)w * n;
   int* occ_w = occ + (size_t)w * 2 * nsite;
   double* inv_w = inv + (size_t)w * nqp * n * n;
   double* pf_w = pf + (size_t)w * nqp;
-  const unsigned int* tape_w = tape + (size_t)w * total_hops * 4;
+  // Julia tape layout [word][walker][step]: 5*(walker + walkers*step) + word.
+  const unsigned int* tape_w = tape + (size_t)w * 5;
+  const size_t tape_stride = 5 * (size_t)gridDim.x;
 
   double log_old = logip[w];
   int window = aw[w];
@@ -178,7 +188,7 @@ extern "C" __global__ void k_interval_hop(
   mvw[6] = 0;
   const int start = hop_off[w];
   for (int hop = start; hop < total_hops; ++hop) {
-    const unsigned int* t = tape_w + (size_t)hop * 4;
+    const unsigned int* t = tape_w + (size_t)hop * tape_stride;
     if (tid == 0) {
       const int mi = (int)(t[0] % (unsigned)ne);
       const int spin = (int)(t[1] >> 31);
@@ -238,7 +248,7 @@ extern "C" __global__ void k_interval_hop(
           interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
       double weight = exp(2.0 * (proj + log_new - log_old));
       if (!isfinite(weight)) weight = -1.0;
-      const double u = (double)t[3] / 4294967296.0;
+      const double u = (double)t[4] / 4294967296.0;
       const int accept = weight > u;
       mvw[5] = accept;
       if (accept) {

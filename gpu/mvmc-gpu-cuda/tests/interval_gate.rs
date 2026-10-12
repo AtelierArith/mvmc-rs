@@ -91,10 +91,10 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     };
 
     let total_hops = 64usize;
-    let tape: Vec<u32> = (0..total_hops * 4).map(|_| rng.next_u32()).collect();
+    let tape: Vec<u32> = (0..total_hops * 5).map(|_| rng.next_u32()).collect();
 
     let sampler = backend
-        .with_backend_session(|session| IntervalSampler::prepare(session, geom, &host, total_hops))
+        .with_backend_session(|session| IntervalSampler::prepare(session, geom, &host, total_hops, 0.0))
         .expect("prepare");
 
     backend

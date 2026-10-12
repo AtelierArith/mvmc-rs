@@ -123,11 +123,11 @@ fn interval_walker_sweep_l128() {
             jast: &jast,
             params: &params,
         };
-        let tape: Vec<u32> = (0..walkers * HOPS * 4)
+        let tape: Vec<u32> = (0..walkers * HOPS * 5)
             .map(|_| rng.next_u32())
             .collect();
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS))
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
             .expect("prepare");
         backend
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
@@ -264,14 +264,14 @@ fn interval_full_run_l128() {
         jast: &jast,
         params: &params,
     };
-    let tape: Vec<u32> = (0..FULL_WALKERS * FULL_HOPS * 4)
+    let tape: Vec<u32> = (0..FULL_WALKERS * FULL_HOPS * 5)
         .map(|_| rng.next_u32())
         .collect();
 
     // Warm-up sampler: compiles the NVRTC module and runs the loop once (untimed).
     {
         let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS))
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
             .expect("prepare warmup");
         backend
             .with_backend_session(|s| sampler.upload_tape(s, &tape))
@@ -282,7 +282,7 @@ fn interval_full_run_l128() {
 
     // Timed sampler: fresh state, module already cached.
     let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS))
+        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
         .expect("prepare");
     backend
         .with_backend_session(|s| sampler.upload_tape(s, &tape))
