@@ -214,6 +214,28 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
+    /// Re-upload the inverse/Pfaffian state after a host rebuild: the tables, the accepted-move
+    /// window (`aw`, reset to zero) and the cached `log|inner product|`.
+    pub fn upload_tables<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+        inv: &[f64],
+        pf: &[f64],
+        aw: &[i32],
+        logip: &[f64],
+    ) -> Result<(), String> {
+        with_raw_exec(backend, "mvmc.interval.tables", |exec| {
+            unsafe {
+                exec.upload(exec.ptr(&self.inv)?, inv)?;
+                exec.upload(exec.ptr(&self.pf)?, pf)?;
+                exec.upload(exec.ptr(&self.aw)?, aw)?;
+                exec.upload(exec.ptr(&self.logip)?, logip)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())
+    }
+
     /// Run `[hop_offset, hop_offset + max_hops)` hops. Returns `(hops_done, rebuild)` of walker
     /// 0; `rebuild != 0` means the accepted-move window passed `nsite` and the caller must
     /// recompute the tables before continuing.
