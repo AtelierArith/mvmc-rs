@@ -288,7 +288,7 @@ mod mpi_matrix {
 
     type Observed = (VmcOptimizationState, Sfmt19937Rng);
 
-    fn run<R: Reducer + ?Sized>(
+    fn run<R: Reducer>(
         cell: &Cell,
         dest: &Path,
         solver: &str,
