@@ -41,10 +41,11 @@ commits and dirty state without changing either checkout. To reproduce the
 original source versions, run this script against those checkouts; later code
 is a new comparison under the same workload and settings.
 
-Upstream Julia `main` does not contain the prescribed `Manifest-v1.13.toml`,
-so the pinned reference adds it on branch `julia-1.13-reference` above the
-reviewed upstream `main` commit. The lock alongside this README is
-byte-identical to that file and was first introduced at reference commit
+Upstream Julia PR #83 incorporated the prescribed `Manifest-v1.13.toml`,
+and the pinned reference now uses upstream `main` containing merged GPU
+optimization PR #84 (`1642d30e824ba0f270654042438987e6f2c7342e`). The lock
+alongside this README remains byte-identical to that file and was first
+introduced at reference commit
 `c0788c34a6a5753c611633a97cd1ea233203320c`, exactly as used in the original
 measurement. Its local package paths resolve against the pinned Julia checkout.
 SHA-256:
