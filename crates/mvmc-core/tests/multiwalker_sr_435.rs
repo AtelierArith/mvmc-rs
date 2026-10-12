@@ -40,7 +40,7 @@ fn collectives_keep_rank_order_across_types_roots_and_generations() {
                         for _ in 0..(iteration + rank) % size {
                             std::thread::yield_now();
                         }
-                        let len = [0, 17, 4096, 1][iteration % 4];
+                        let len = [0, 17, 131_072, 1][iteration % 4];
                         let inputs = [1e16, -1e16, 1.0, 2.0, 4.0, 8.0, 16.0];
                         let expected: f64 = match size {
                             1 => 1e16,
