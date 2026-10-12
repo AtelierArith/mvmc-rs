@@ -102,9 +102,10 @@ fn interval_kernel_runs_and_keeps_finite_state() {
         .expect("upload tape");
 
     // Advance until the window forces a rebuild; a rebuild is expected at nsite=8 accepts.
-    let (done, rebuild) = backend
-        .with_backend_session(|session| sampler.run(session, 0, total_hops))
+    let results = backend
+        .with_backend_session(|session| sampler.run(session))
         .expect("run interval");
+    let (done, rebuild) = results[0];
     assert!(done > 0, "the interval must advance at least one hop");
     assert!(
         rebuild != 0 || done as usize == total_hops,

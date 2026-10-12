@@ -149,7 +149,7 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
 extern "C" __global__ void k_interval_hop(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
-    const double* params, const unsigned int* tape, int total_hops, int hop_offset, int max_hops,
+    const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int ngutz, int nproj, int* hops_done, int* rebuild) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
@@ -176,8 +176,9 @@ extern "C" __global__ void k_interval_hop(
   int advanced = 0;
   int need_rebuild = 0;
   mvw[6] = 0;
-  for (int hop = 0; hop < max_hops; ++hop) {
-    const unsigned int* t = tape_w + (size_t)(hop_offset + hop) * 4;
+  const int start = hop_off[w];
+  for (int hop = start; hop < total_hops; ++hop) {
+    const unsigned int* t = tape_w + (size_t)hop * 4;
     if (tid == 0) {
       const int mi = (int)(t[0] % (unsigned)ne);
       const int spin = (int)(t[1] >> 31);
@@ -269,6 +270,7 @@ extern "C" __global__ void k_interval_hop(
   }
 
   if (tid == 0) {
+    hop_off[w] = start + advanced;
     hops_done[w] = advanced;
     rebuild[w] = need_rebuild;
     aw[w] = window;

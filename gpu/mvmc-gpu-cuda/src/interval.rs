@@ -3,21 +3,37 @@
 //! Drives the raw CUDA `k_interval_hop` kernel through the vendored
 //! [`tenferro_ext::raw_exec`] helper: one `with_raw_exec` scope compiles (once) and launches
 //! the kernel on tenferro's captured stream against resident [`DeviceBuffer`]s, so a whole
-//! interval segment runs on the device with a single host synchronization. It replaces the
-//! cudarc lock-step sampler's per-hop host round trip.
+//! interval round runs on the device with a single host synchronization.
 //!
-//! The kernel's proposal/acceptance contract is in `interval_kernels.cu`: a fixed tape of
-//! `u32` words (4 per hop), empty-destination selection, the Gutzwiller/Jastrow projection
-//! delta and the Metropolis decision all on the device.
+//! One CUDA block per walker. Each walker advances from its own `hop_off[w]` until it reaches
+//! `total_hops` or its accepted-move window passes `nsite`; the host then batches every walker
+//! that requested a rebuild into one device `interval_assemble` + `pfinv_f64` + `interval_commit`
+//! launch ([`IntervalSampler::rebuild`]) and relaunches. The recomputation stays on the device,
+//! which is what makes walker batching pay: a single block is latency-bound.
 //!
-//! Only the real, non-FSZ, ordinary-hopping mode without local spins is represented; the
-//! caller must reject anything else before building an [`IntervalSampler`].
+//! The kernel's proposal/acceptance contract is in `interval_kernels.cu`. Only the real,
+//! non-FSZ, ordinary-hopping mode without local spins is represented.
 
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::BackendSession;
 
-/// The NVRTC source of the interval kernel (self-contained; see the `SLT` guard).
-pub const INTERVAL_SOURCE: &str = include_str!("interval_kernels.cu");
+/// The NVRTC module: the batched Pfaffian (`pfinv_f64`), the interval kernel and the rebuild
+/// helpers, compiled once per process/thread.
+pub const INTERVAL_MODULE: &str = concat!(
+    include_str!("pfaffian_batched.cu"),
+    "\n",
+    include_str!("interval_kernels.cu"),
+    "\n",
+    include_str!("interval_rebuild.cu"),
+);
+
+/// Kernels loaded from [`INTERVAL_MODULE`].
+pub const INTERVAL_KERNELS: &[&str] = &[
+    "k_interval_hop",
+    "interval_assemble",
+    "interval_commit",
+    "pfinv_f64",
+];
 
 /// Geometry shared by every interval call of one series.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,14 +60,14 @@ impl IntervalGeometry {
         2 * self.nsite
     }
 
-    /// Dynamic shared-memory bytes of one CUDA block (`n` ints + the double scratch + 8 ints).
+    /// Dynamic shared-memory bytes of one interval block.
     pub fn shared_bytes(&self) -> u32 {
         let rs = ((self.n + 1) & !1) * 4;
         let doubles = (self.nqp + 1 + 3 * self.n) * 8;
         (rs + doubles + 8 * 4) as u32
     }
 
-    /// Threads per block: the smallest power of two covering `n`, clamped to `[32, 256]`.
+    /// Threads per interval block: the smallest power of two covering `n`, `[32, 256]`.
     pub fn block(&self) -> u32 {
         let mut b = 32usize;
         while b < self.n {
@@ -97,8 +113,16 @@ pub struct IntervalSampler {
     jast: DeviceBuffer,
     params: DeviceBuffer,
     tape: DeviceBuffer,
+    hop_off: DeviceBuffer,
     hops_done: DeviceBuffer,
     rebuild: DeviceBuffer,
+    // Rebuild scratch (sized for all walkers).
+    rec_walker: DeviceBuffer,
+    planes: DeviceBuffer,
+    pfinv_w: DeviceBuffer,
+    pfinv_out: DeviceBuffer,
+    pfinv_pf: DeviceBuffer,
+    pfinv_st: DeviceBuffer,
 }
 
 fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
@@ -106,12 +130,7 @@ fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
     for (w, p) in weights.iter().zip(pf) {
         ip += w * p;
     }
-    if ip < 0.0 {
-        -ip
-    } else {
-        ip
-    }
-    .ln()
+    ip.abs().ln()
 }
 
 fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
@@ -128,8 +147,8 @@ fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {
 }
 
 impl IntervalSampler {
-    /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in
-    /// hops (the tape itself is uploaded with [`Self::upload_tape`]).
+    /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in hops
+    /// per walker (uploaded with [`Self::upload_tape`]).
     pub fn prepare<B: BackendSession + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
@@ -138,12 +157,12 @@ impl IntervalSampler {
     ) -> Result<Self, String> {
         let (w, n, nsite, nqp) = (geom.walkers, geom.n, geom.nsite, geom.nqp);
         let n2 = geom.n2();
+        let nplanes = w * nqp;
         let occ_host = occupancy(host.ele, &geom);
         let logip_host: Vec<f64> = (0..w)
             .map(|k| f64_log_ip(&host.pf[k * nqp..(k + 1) * nqp], host.weights))
             .collect();
-        let aw_host = vec![0i32; w];
-        let zero_i32 = vec![0i32; w];
+        let zeros_i32 = vec![0i32; w];
 
         with_raw_exec(backend, "mvmc.interval.prepare", |exec| {
             let ele = exec.alloc_bytes(w * n * 4)?;
@@ -158,22 +177,31 @@ impl IntervalSampler {
             let jast = exec.alloc_bytes((nsite * nsite).max(1) * 4)?;
             let params = exec.alloc_bytes(geom.nproj.max(1) * 8)?;
             let tape = exec.alloc_bytes((w * total_hops * 4 * 4).max(1))?;
+            let hop_off = exec.alloc_bytes(w.max(1) * 4)?;
             let hops_done = exec.alloc_bytes(w.max(1) * 4)?;
             let rebuild = exec.alloc_bytes(w.max(1) * 4)?;
+            let rec_walker = exec.alloc_bytes(w.max(1) * 4)?;
+            let planes_nn = nplanes.max(1) * n * n;
+            let plane_buf = exec.alloc_bytes(planes_nn * 8)?;
+            let pfinv_w = exec.alloc_bytes(planes_nn * 8)?;
+            let pfinv_out = exec.alloc_bytes(planes_nn * 8)?;
+            let pfinv_pf = exec.alloc_bytes(nplanes.max(1) * 8)?;
+            let pfinv_st = exec.alloc_bytes(nplanes.max(1) * 4)?;
             unsafe {
                 exec.upload(exec.ptr(&ele)?, host.ele)?;
                 exec.upload(exec.ptr(&occ)?, &occ_host)?;
                 exec.upload(exec.ptr(&inv)?, host.inv)?;
                 exec.upload(exec.ptr(&pf)?, host.pf)?;
-                exec.upload(exec.ptr(&aw)?, &aw_host)?;
+                exec.upload(exec.ptr(&aw)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&logip)?, &logip_host)?;
                 exec.upload(exec.ptr(&slater)?, host.slater)?;
                 exec.upload(exec.ptr(&weights)?, host.weights)?;
                 exec.upload(exec.ptr(&gutz)?, host.gutz)?;
                 exec.upload(exec.ptr(&jast)?, host.jast)?;
                 exec.upload(exec.ptr(&params)?, host.params)?;
-                exec.upload(exec.ptr(&hops_done)?, &zero_i32)?;
-                exec.upload(exec.ptr(&rebuild)?, &zero_i32)?;
+                exec.upload(exec.ptr(&hop_off)?, &zeros_i32)?;
+                exec.upload(exec.ptr(&hops_done)?, &zeros_i32)?;
+                exec.upload(exec.ptr(&rebuild)?, &zeros_i32)?;
             }
             Ok(Self {
                 geom,
@@ -190,8 +218,15 @@ impl IntervalSampler {
                 jast,
                 params,
                 tape,
+                hop_off,
                 hops_done,
                 rebuild,
+                rec_walker,
+                planes: plane_buf,
+                pfinv_w,
+                pfinv_out,
+                pfinv_pf,
+                pfinv_st,
             })
         })
         .map_err(|e| e.to_string())
@@ -202,7 +237,7 @@ impl IntervalSampler {
         self.geom
     }
 
-    /// Upload a `u32` tape of `total_hops * 4 * walkers` words.
+    /// Upload a `u32` tape of `walkers * total_hops * 4` words (walker-major, 4 words per hop).
     pub fn upload_tape<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
@@ -214,8 +249,17 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
-    /// Re-upload the inverse/Pfaffian state after a host rebuild: the tables, the accepted-move
-    /// window (`aw`, reset to zero) and the cached `log|inner product|`.
+    /// Reset every walker to `hop_off = 0` (call before a fresh sweep over the same tape).
+    pub fn reset_offsets<B: BackendSession + ?Sized>(&self, backend: &mut B) -> Result<(), String> {
+        let zeros = vec![0i32; self.geom.walkers];
+        with_raw_exec(backend, "mvmc.interval.reset", |exec| {
+            unsafe { exec.upload(exec.ptr(&self.hop_off)?, &zeros) }
+        })
+        .map_err(|e| e.to_string())
+    }
+
+    /// Re-upload the inverse/Pfaffian state (a host-rebuild fallback or a benchmark reset):
+    /// the tables, the accepted-move window (`aw`) and the cached `log|inner product|`.
     pub fn upload_tables<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
@@ -236,26 +280,15 @@ impl IntervalSampler {
         .map_err(|e| e.to_string())
     }
 
-    /// Run `[hop_offset, hop_offset + max_hops)` hops. Returns `(hops_done, rebuild)` of walker
-    /// 0; `rebuild != 0` means the accepted-move window passed `nsite` and the caller must
-    /// recompute the tables before continuing.
+    /// Advance every walker until it reaches `total_hops` or requests a rebuild. Returns the
+    /// per-walker `(hops_done, rebuild)`.
     pub fn run<B: BackendSession + ?Sized>(
         &self,
         backend: &mut B,
-        hop_offset: usize,
-        max_hops: usize,
-    ) -> Result<(i32, i32), String> {
+    ) -> Result<Vec<(i32, i32)>, String> {
         let g = self.geom;
-        if hop_offset + max_hops > self.total_hops {
-            return Err(format!(
-                "interval range {}..{} exceeds tape length {}",
-                hop_offset,
-                hop_offset + max_hops,
-                self.total_hops
-            ));
-        }
         with_raw_exec(backend, "mvmc.interval.run", |exec| {
-            let module = exec.module(INTERVAL_SOURCE, &["k_interval_hop"])?;
+            let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
             let f = module.function("k_interval_hop")?;
             let i = |v: usize| Arg::I(v as i32);
             let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
@@ -273,8 +306,7 @@ impl IntervalSampler {
                 p(&self.params)?,
                 p(&self.tape)?,
                 i(self.total_hops),
-                i(hop_offset),
-                i(max_hops),
+                p(&self.hop_off)?,
                 i(g.n),
                 i(g.ne),
                 i(g.nsite),
@@ -284,8 +316,8 @@ impl IntervalSampler {
                 p(&self.hops_done)?,
                 p(&self.rebuild)?,
             ];
-            // SAFETY: argument order and dtypes match `k_interval_hop`; every buffer stays
-            // resident for `'self` and outlives the scope, which synchronizes before returning.
+            // SAFETY: argument order/dtypes match `k_interval_hop`; buffers stay resident and
+            // outlive the scope, which synchronizes before returning.
             unsafe {
                 exec.launch(f, (g.walkers as u32, 1, 1), g.block(), g.shared_bytes(), &args)?;
             }
@@ -296,7 +328,95 @@ impl IntervalSampler {
                 exec.download(&mut hd, exec.ptr(&self.hops_done)?)?;
                 exec.download(&mut rb, exec.ptr(&self.rebuild)?)?;
             }
-            Ok((hd[0], rb[0]))
+            Ok(hd.into_iter().zip(rb).collect())
+        })
+        .map_err(|e| e.to_string())
+    }
+
+    /// Rebuild the inverse/Pfaffian of the listed walkers on the device (assemble + batched
+    /// Pfaffian + commit) and reset their accepted-move windows.
+    pub fn rebuild<B: BackendSession + ?Sized>(
+        &self,
+        backend: &mut B,
+        walkers: &[usize],
+    ) -> Result<(), String> {
+        if walkers.is_empty() {
+            return Ok(());
+        }
+        let g = self.geom;
+        let items = walkers.len();
+        let planes = items * g.nqp;
+        let rec: Vec<i32> = walkers.iter().map(|&w| w as i32).collect();
+        let (nt, shared) = crate::pfaffian::launch_geometry(g.n, 8, 1);
+        with_raw_exec(backend, "mvmc.interval.rebuild", |exec| {
+            let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
+            let i = |v: usize| Arg::I(v as i32);
+            let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+            // SAFETY: `rec_walker` holds `items` i32.
+            unsafe { exec.upload(exec.ptr(&self.rec_walker)?, &rec)? };
+            let assemble = module.function("interval_assemble")?;
+            // SAFETY: all planes reference resident `ele`/`slater`, `planes` scratch is sized
+            // for `items*nqp` planes, and the scope synchronizes before returning.
+            unsafe {
+                exec.launch(
+                    assemble,
+                    (planes as u32, 1, 1),
+                    128,
+                    0,
+                    &[
+                        p(&self.rec_walker)?,
+                        p(&self.ele)?,
+                        p(&self.slater)?,
+                        p(&self.planes)?,
+                        i(g.n),
+                        i(g.ne),
+                        i(g.nsite),
+                        i(g.nqp),
+                    ],
+                )?;
+            }
+            let pfinv = module.function("pfinv_f64")?;
+            // SAFETY: `pfinv_f64` reads/writes `items*nqp` planes; geometry from
+            // `launch_geometry`.
+            unsafe {
+                exec.launch(
+                    pfinv,
+                    (planes as u32, 1, 1),
+                    nt,
+                    shared,
+                    &[
+                        p(&self.planes)?,
+                        p(&self.pfinv_w)?,
+                        p(&self.pfinv_out)?,
+                        p(&self.pfinv_pf)?,
+                        p(&self.pfinv_st)?,
+                        i(g.n),
+                    ],
+                )?;
+            }
+            let commit = module.function("interval_commit")?;
+            // SAFETY: `interval_commit` writes the resident tables of `items` walkers.
+            unsafe {
+                exec.launch(
+                    commit,
+                    (items as u32, 1, 1),
+                    128,
+                    0,
+                    &[
+                        p(&self.rec_walker)?,
+                        p(&self.pfinv_out)?,
+                        p(&self.pfinv_pf)?,
+                        p(&self.weights)?,
+                        p(&self.inv)?,
+                        p(&self.pf)?,
+                        p(&self.logip)?,
+                        p(&self.aw)?,
+                        i(g.n),
+                        i(g.nqp),
+                    ],
+                )?;
+            }
+            Ok(())
         })
         .map_err(|e| e.to_string())
     }

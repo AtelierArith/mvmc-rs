@@ -135,7 +135,9 @@ fn interval_walker_sweep_l128() {
         // Warm up (NVRTC compile) with a short run, then measure a single fresh run: the
         // accepted-move window (`aw`) persists on the device, so a stale window would break
         // the next run immediately.
-        let _ = backend.with_backend_session(|s| sampler.run(s, 0, 1)).expect("warmup");
+        let _ = backend
+            .with_backend_session(|s| sampler.run(s))
+            .expect("warmup");
         let _ = backend
             .with_backend_session(|s| sampler.download_pf(s, 0))
             .expect("warmup pf");
@@ -144,21 +146,158 @@ fn interval_walker_sweep_l128() {
             .collect();
         let aw0 = vec![0i32; walkers];
         backend
+            .with_backend_session(|s| sampler.reset_offsets(s))
+            .expect("reset offsets");
+        backend
             .with_backend_session(|s| {
                 sampler.upload_tables(s, &inv_all, &pf_all, &aw0, &logip_all)
             })
             .expect("reset tables");
         let t = Instant::now();
-        let (done_seen, rb_seen) = backend
-            .with_backend_session(|s| sampler.run(s, 0, HOPS))
+        let results = backend
+            .with_backend_session(|s| sampler.run(s))
             .expect("run");
         let best = t.elapsed().as_secs_f64();
-        let total_hops = (done_seen.max(0) as usize) * walkers;
+        let total_hops: usize = results.iter().map(|&(d, _)| d.max(0) as usize).sum();
+        let rb_any = results.iter().any(|&(_, r)| r != 0);
         eprintln!(
-            "W={walkers:4}  wall={:.4} s  hops/walker={done_seen:4} rebuild={rb_seen}  {:.1} ns/hop  {:.1} M hops/s",
+            "W={walkers:4}  wall={:.4} s  hops_total={total_hops:7} rebuild_any={rb_any}  {:.1} ns/hop  {:.2} M hops/s",
             best,
             best / total_hops.max(1) as f64 * 1e9,
             total_hops as f64 / best / 1e6
         );
     }
+}
+
+const FULL_WALKERS: usize = 320;
+const FULL_HOPS: usize = 2688;
+
+/// Drain the sampler: run rounds, rebuilding every walker that asks, until all reach
+/// `FULL_HOPS`. Returns `(hops advanced, rebuilds, rounds)`.
+fn drain(backend: &mut CudaBackend, sampler: &IntervalSampler) -> (usize, usize, usize) {
+    let mut hops = 0usize;
+    let mut rebuilds = 0usize;
+    let mut rounds = 0usize;
+    loop {
+        let results = backend
+            .with_backend_session(|s| sampler.run(s))
+            .expect("run");
+        rounds += 1;
+        let mut need = Vec::new();
+        for (w, &(d, r)) in results.iter().enumerate() {
+            hops += d.max(0) as usize;
+            if r != 0 {
+                need.push(w);
+            }
+        }
+        if need.is_empty() {
+            break;
+        }
+        rebuilds += need.len();
+        backend
+            .with_backend_session(|s| sampler.rebuild(s, &need))
+            .expect("rebuild");
+    }
+    (hops, rebuilds, rounds)
+}
+
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_full_run_l128() {
+    if !gpu_available() {
+        eprintln!("skipped: no CUDA device");
+        return;
+    }
+    let devices = cuda_devices().expect("device discovery");
+    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+
+    let n = 2 * NE;
+    let n2 = 2 * NSITE;
+    let pool = ThreadedPfaPackWorkspace::new(n, 1);
+    let mut rng = Lcg(0xfeed_face_cafe_0001);
+
+    let mut slater = SlaterElmFlat::<f64>::zeros(NQP, NSITE);
+    for q in 0..NQP {
+        for row in 0..n2 {
+            for col in 0..n2 {
+                slater.set(q, row, col, rng.next_f64() - 0.5);
+            }
+        }
+    }
+    let weights = vec![1.0f64; NQP];
+    let gutz = vec![-1i32; NSITE];
+    let jast = vec![-1i32; NSITE * NSITE];
+    let params = vec![0.0f64; 1];
+
+    let mut ele_all = Vec::with_capacity(FULL_WALKERS * n);
+    let mut inv_all = Vec::with_capacity(FULL_WALKERS * NQP * n * n);
+    let mut pf_all = Vec::with_capacity(FULL_WALKERS * NQP);
+    for _ in 0..FULL_WALKERS {
+        let ele_i32 = random_config(&mut rng);
+        let ele_i64: Vec<i64> = ele_i32.iter().map(|&v| v as i64).collect();
+        let mut inv = InvMColMajor::<f64>::zeros(NQP, NE);
+        let mut pf = vec![0.0f64; NQP];
+        calc_m_all_real(&ele_i64, &slater, &mut inv, &mut pf, 0, NQP, NSITE, NE, &pool)
+            .expect("host Pfaffian");
+        ele_all.extend_from_slice(&ele_i32);
+        for q in 0..NQP {
+            inv_all.extend_from_slice(inv.qp_matrix_slice(q));
+        }
+        pf_all.extend_from_slice(&pf);
+    }
+    let geom = IntervalGeometry {
+        walkers: FULL_WALKERS,
+        n,
+        ne: NE,
+        nsite: NSITE,
+        nqp: NQP,
+        ngutz: 0,
+        nproj: 1,
+    };
+    let host = IntervalHost {
+        ele: &ele_all,
+        inv: &inv_all,
+        pf: &pf_all,
+        slater: slater.as_slice(),
+        weights: &weights,
+        gutz: &gutz,
+        jast: &jast,
+        params: &params,
+    };
+    let tape: Vec<u32> = (0..FULL_WALKERS * FULL_HOPS * 4)
+        .map(|_| rng.next_u32())
+        .collect();
+
+    // Warm-up sampler: compiles the NVRTC module and runs the loop once (untimed).
+    {
+        let sampler = backend
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS))
+            .expect("prepare warmup");
+        backend
+            .with_backend_session(|s| sampler.upload_tape(s, &tape))
+            .expect("upload warmup tape");
+        let (h, rb, rounds) = drain(&mut backend, &sampler);
+        eprintln!("warmup: hops={h} rebuilds={rb} rounds={rounds}");
+    }
+
+    // Timed sampler: fresh state, module already cached.
+    let sampler = backend
+        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS))
+        .expect("prepare");
+    backend
+        .with_backend_session(|s| sampler.upload_tape(s, &tape))
+        .expect("upload tape");
+    let t = Instant::now();
+    let (hops, rebuilds, rounds) = drain(&mut backend, &sampler);
+    let secs = t.elapsed().as_secs_f64();
+    eprintln!("== interval full-run L=128, W={FULL_WALKERS}, hops/walker={FULL_HOPS} ==");
+    eprintln!(
+        "wall={secs:.3} s  hops={hops}  rebuilds={rebuilds}  rounds={rounds}  {:.1} ns/hop  {:.2} M hops/s",
+        secs / hops.max(1) as f64 * 1e9,
+        hops as f64 / secs / 1e6
+    );
+    let pf0 = backend
+        .with_backend_session(|s| sampler.download_pf(s, 0))
+        .expect("download pf");
+    assert!(pf0.iter().all(|v| v.is_finite()), "pf finite: {pf0:?}");
 }
