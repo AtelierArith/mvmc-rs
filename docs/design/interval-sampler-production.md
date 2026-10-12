@@ -203,38 +203,81 @@ A single-block launch is latency-bound and slower than the CPU (84 us/hop).
 The group backend must document and reject `W=1` (or route it to C order), like
 `check_serial_reducer` does today.
 
-### 3.6 The real work is the sampler loop, not the launch
+### 3.6 The ideal seam: a block-level sampling engine
 
 `sample_real` is not a thin wrapper: the production path is
-`vmc_make_sample_real_staged` (`crates/mvmc-core/src/sampling/driver.rs:128`),
-which runs `init_loc_spn`, a typed preflight, the real Slater sync, then either
-restores the burn snapshot or runs `make_initial_sample_normal_with_info` (which
-**draws RNG**), `calc_m_all_real`, `sampling_log_ip_real`, and the
-`nOutStep`/`nInStep` warm-up + measure loops that save configurations, advance
-the counters, update the burn flag and return `SampleStats`. A device sampler
-must reproduce all of that for the rest of the optimizer and the host
-measurement to stay unchanged.
+`vmc_make_sample_real_staged` (`crates/mvmc-core/src/sampling/driver.rs:128`).
+It owns two things at once:
 
-There is precedent: the CUDA lock-step path already reimplements this loop in
-`run_lockstep_real_one_inline`
-(`crates/mvmc-core/src/device_sampler.rs:1446`) behind the `SamplerService`
-trait, drawing the candidate on the host each hop and calling the device only
-for the Pfaffian stage. The interval group backend is the same kind of
-reimplementation, with two changes:
+* the **loop structure** - initialization, the burn/restore snapshot, the
+  warm-up + measurement `out_step` counts, the `n_in_step` per-block count, the
+  saved configurations, the per-step counters and the burn bookkeeping; and
+* the **per-proposal iteration** - `get_update_type`, `make_candidate_*`,
+  `update_proj_cnt`, `stage.propose_*`, `metropolis_decision` (which draws the
+  acceptance uniform), `stage.accept_*`, the revert path and the
+  `n_accept_window > n_site` rebuild.
 
-* draw each walker's proposals into a **device tape** for a whole interval
-  instead of per hop (the Julia GPU contract of 2.1), and
-* run `k_interval_hop` once per interval for all `W` walkers (plus the batched
-  device rebuild), reading the saved configurations back at the measure points.
+The CUDA lock-step path keeps the loop and swaps only the `RealPfStage`
+(host proposal control, device Pfaffian; `run_lockstep_real_one_inline`,
+`device_sampler.rs:1446`). The interval kernel moves **candidate selection and
+acceptance** onto the device, so the per-proposal iteration must move too - and
+the device's natural unit is the whole inner block (`n_in_step` proposals for all
+walkers in one launch, plus the batched rebuild). A per-proposal seam therefore
+cannot express it; duplicating the loop would be both a maintenance hazard and a
+second source of truth for the saved configurations, counters and burn.
 
-So the remaining work is: (a) `IntervalSampler` per-walker upload/download of
-`ele`/`occ`/`inv`/`pf`/`aw`/`logip` and the tape; (b) a group backend that
-mirrors `run_lockstep_real_one_inline`'s loop but drives `IntervalSampler`
-through the 3.3 staging/rendezvous protocol; (c) the acquisition change of 3.2
-(per-walker handles + relaxed `check_serial_reducer`); (d) the state extraction
-from `VmcOptimizationState` (`electron_config`, `slater_matrix.inv_m_real`,
-`slater_matrix.pf_m_real`, the projection tables). This is the bulk of #547 and
-is where the group seam of 3.1 hooks in.
+The ideal seam is at the **block level, per walker**:
+
+```rust
+/// One inner block of proposals. The driver owns the outer structure (warm-up /
+/// measurement counts, save points, burn bookkeeping, the per-step counters) and calls
+/// this once per `out_step`.
+pub trait SamplingEngine {
+    /// Advance the walker by `n_in_step` proposals. On return the working configuration,
+    /// its projection counters, the Pfaffians and `log_ip` reflect the block, the counters
+    /// are updated, and every accept/reject consumed exactly the host engine's draws.
+    fn run_block(&mut self, ctx: &mut BlockCtx<'_>, n_in_step: usize) -> StageResult<()>;
+}
+```
+
+* **`HostEngine`** runs the current per-proposal body verbatim (`make_candidate_*`,
+  `update_proj_cnt`, `stage.propose_*`, `metropolis_decision`,
+  `stage.accept_*` / revert, the rebuild window). The C-order path is
+  byte-for-byte unchanged; the `RealPfStage` stays its Pfaffian backend
+  (`CpuStage`).
+* **`IntervalEngine`** owns the per-walker device slot and the tape policy;
+  `run_block` stages the walker (3.3), rendezvous through the shared coordinator
+  (3.2), runs `k_interval_hop` for the whole block for every walker at once
+  (with device rebuilds), and unstages. Candidate selection and acceptance are
+  entirely on the device; the engine subsumes the `RealPfStage`.
+
+`BlockCtx` exposes exactly the working state an engine mutates: the working
+configuration (`ele_idx` / `ele_cfg` / `ele_num`), the projection counters,
+`log_ip`, the per-step counters, the reducer (IP reductions and rendezvous) and,
+for the host engine, the `RealPfStage` and the SFMT `rng`.
+
+**RNG ownership.** The host engine draws from the walker's SFMT stream as today.
+The device engine generates its tape from the same per-walker stream
+(`RndSeed + group_base + w`, `gpu-readiness.md` 5.5), so batching never merges
+streams. This is the "separate device trajectory" contract of
+`docs/design/gpu-xorwow.md`, now per walker; parity against the Julia GPU path is
+the shared-tape test of section 4.
+
+**Why this is the ideal shape.** There is one implementation of the loop, one of
+the saves, counters and burn, and the two trajectories differ only behind a
+single trait. Adding the device path does not touch the C-order arithmetic, and
+the lock-step lock-step `RealPfStage` remains available under `HostEngine`.
+
+The remaining work is therefore:
+
+1. extract the host per-proposal body into `HostEngine::run_block` with no
+   change to its arithmetic, draws or order (protected by the existing
+   `mvmc-core` sampler tests);
+2. implement `IntervalEngine` on `IntervalSampler` (stage + rendezvous + tape +
+   `run_block`);
+3. select the engine where the backend is chosen (the acquisition change of 3.2);
+4. implement the non-default `self-loop`/exchange tape words only if a target
+   input needs them (section 5).
 
 ## 4. Measurement plan (E2E, L=128)
 
