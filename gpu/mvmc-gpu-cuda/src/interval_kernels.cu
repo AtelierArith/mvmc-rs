@@ -1,3 +1,7 @@
+#ifndef SLT
+#define SLT(tab, qp, row, col, n2) ((tab)[(((size_t)(qp) * (n2)) + (row)) * (n2) + (col)])
+#endif
+
 // Device-resident interval sampler (issue #547).
 //
 // One block advances one walker's configuration for a whole interval of ordinary
@@ -143,8 +147,8 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
 // Shared memory: n ints (rs), then (nqp + 1 + 3n) doubles, then 8 ints (mv).
 // ---------------------------------------------------------------------------------------------
 extern "C" __global__ void k_interval_hop(
-    int* ele, int* occ, double* inv, double* pf, int* aw, double* logip, int* mv,
-    const double* const* slater_tab, const double* weights, const int* gutz, const int* jast,
+    int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
+    const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int hop_offset, int max_hops,
     int n, int ne, int nsite, int nqp, int ngutz, int nproj, int* hops_done, int* rebuild) {
   extern __shared__ char smem_raw[];
@@ -160,7 +164,7 @@ extern "C" __global__ void k_interval_hop(
   const int w = blockIdx.x;
   const int tid = threadIdx.x, nt = blockDim.x;
   const int n2 = 2 * nsite;
-  const double* tab = slater_tab[w];
+  const double* tab = slater;
   int* ele_w = ele + (size_t)w * n;
   int* occ_w = occ + (size_t)w * 2 * nsite;
   double* inv_w = inv + (size_t)w * nqp * n * n;

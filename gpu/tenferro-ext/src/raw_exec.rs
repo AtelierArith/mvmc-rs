@@ -42,6 +42,12 @@ pub fn at(base: DevPtr, index: usize) -> DevPtr {
     base + 4 * index as u64
 }
 
+/// Byte address of `f64` element `index` after `base`.
+#[inline]
+pub fn at8(base: DevPtr, index: usize) -> DevPtr {
+    base + 8 * index as u64
+}
+
 fn backend(op: &'static str, message: impl Into<String>) -> tenferro_tensor::Error {
     tenferro_tensor::Error::unsupported(op, message.into())
 }
@@ -55,6 +61,7 @@ pub struct DeviceBuffer {
     ctx: driver_sys::CUcontext,
     device: driver_sys::CUdevice,
     floats: usize,
+    bytes: usize,
 }
 
 // SAFETY: the buffer is a device address plus a retained primary context;
@@ -84,9 +91,14 @@ impl DeviceBuffer {
         self.floats
     }
 
+    /// Number of bytes allocated.
+    pub fn byte_len(&self) -> usize {
+        self.bytes
+    }
+
     /// Whether the buffer is empty.
     pub fn is_empty(&self) -> bool {
-        self.floats == 0
+        self.bytes == 0
     }
 }
 
@@ -151,6 +163,8 @@ pub enum Arg {
     L(i64),
     /// A 32-bit float.
     F(f32),
+    /// A 64-bit float.
+    D(f64),
 }
 
 /// One strided-batched GEMM operand: base address, leading dimension and
@@ -189,6 +203,16 @@ impl<'r, 's> RawExec<'r, 's> {
     /// Allocate a dense f32 buffer of `floats` elements (uninitialized) on
     /// the scope's primary context.
     pub fn alloc(&self, floats: usize) -> tenferro_tensor::Result<DeviceBuffer> {
+        self.alloc_bytes(4 * floats)
+    }
+
+    /// Allocate a dense `f64` buffer of `n` elements (uninitialized).
+    pub fn alloc_f64(&self, n: usize) -> tenferro_tensor::Result<DeviceBuffer> {
+        self.alloc_bytes(8 * n)
+    }
+
+    /// Allocate `nbytes` bytes (uninitialized) on the scope's primary context.
+    pub fn alloc_bytes(&self, nbytes: usize) -> tenferro_tensor::Result<DeviceBuffer> {
         let fail = |what: &str, error: driver::DriverError| {
             backend("tenferro-ext::raw_exec::alloc", format!("{what}: {error}"))
         };
@@ -199,16 +223,17 @@ impl<'r, 's> RawExec<'r, 's> {
                 .result()
                 .map_err(|e| fail("cuCtxGetDevice", e))?;
             let ctx = driver::primary_ctx::retain(device).map_err(|e| fail("retain", e))?;
-            match driver::malloc_sync(4 * floats.max(1)) {
+            match driver::malloc_sync(nbytes.max(1)) {
                 Ok(ptr) => Ok(DeviceBuffer {
                     ptr,
                     ctx,
                     device,
-                    floats,
+                    floats: nbytes / 4,
+                    bytes: nbytes,
                 }),
                 Err(error) => {
                     let _ = driver::primary_ctx::release(device);
-                    Err(fail(&format!("cuMemAlloc of {} bytes", 4 * floats), error))
+                    Err(fail(&format!("cuMemAlloc of {nbytes} bytes"), error))
                 }
             }
         }
@@ -285,6 +310,7 @@ impl<'r, 's> RawExec<'r, 's> {
                 Arg::I(value) => KernelArg::i32(value),
                 Arg::L(value) => KernelArg::i64(value),
                 Arg::F(value) => KernelArg::f32(value),
+                Arg::D(value) => KernelArg::f64(value),
             })
             .collect();
         let config = LaunchConfig {
@@ -433,11 +459,21 @@ impl<'r, 's> RawExec<'r, 's> {
     ///
     /// `dst` must have room for `floats` floats.
     pub unsafe fn zero(&self, dst: DevPtr, floats: usize) -> tenferro_tensor::Result<()> {
-        if floats == 0 {
+        // SAFETY: forwarded caller contract.
+        unsafe { self.zero_bytes(dst, 4 * floats) }
+    }
+
+    /// Fill `nbytes` bytes at `dst` with zero, in stream order.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must have room for `nbytes` bytes.
+    pub unsafe fn zero_bytes(&self, dst: DevPtr, nbytes: usize) -> tenferro_tensor::Result<()> {
+        if nbytes == 0 {
             return Ok(());
         }
         // SAFETY: forwarded caller contract.
-        unsafe { driver::memset_d8_async(dst, 0, 4 * floats, self.stream as driver_sys::CUstream) }
+        unsafe { driver::memset_d8_async(dst, 0, nbytes, self.stream as driver_sys::CUstream) }
             .map_err(|error| backend("tenferro-ext::raw_exec::zero", error.to_string()))
     }
 
