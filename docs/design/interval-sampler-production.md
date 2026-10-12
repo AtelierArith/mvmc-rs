@@ -34,6 +34,18 @@ gain requires walker batching.
 
 ## 2. Two problems to solve before production
 
+### Supported production inputs and reducers
+
+The `cuda-interval` adapter rejects exchange updates (`NExUpdatePath != 0`),
+local-spin models, complex/FSZ modes, MPI processes and grouped QP splits before
+device initialization or a group rendezvous. Reducers explicitly advertise
+`shares_address_space`; matching world/reduction counts alone do not prove that
+walkers can use the process-local coordinator. Serial and `ThreadReducer`
+execution are supported. The public adapter and Opt/PhysCal preflight share the
+same validation. Regression coverage includes actual two-/four-rank MPI
+communicators and a direct adapter call with an invalid CUDA ordinal to verify
+that unsupported inputs return without opening a device (issue #563).
+
 ### 2.1 Parity reference: the Julia GPU tape, not the C draw order
 
 The GPU path's parity target is the **Julia GPU implementation**

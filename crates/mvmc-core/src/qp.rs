@@ -30,7 +30,7 @@ pub fn qp_weights(data: &ExpertModeData) -> Option<&QuantumProjectionWeights> {
 /// Compose optimized and fixed translations in Julia's site/sign order.
 /// Slater-table builders require both complete sector arrays; derivative
 /// fallbacks use each available row independently, as in the reference.
-pub(crate) fn translated_site(
+pub fn translated_site(
     data: &ExpertModeData,
     site: usize,
     optidx: usize,

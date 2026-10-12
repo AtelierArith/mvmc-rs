@@ -35,6 +35,7 @@ use tenferro_tensor::BackendSession;
 
 mod rng;
 pub use rng::DeviceRng;
+mod f64_linalg;
 
 /// Traffic issued through `RawExec` on the calling host thread. These counters do
 /// not include transfers or implicit barriers inside CUDA libraries or the provider.

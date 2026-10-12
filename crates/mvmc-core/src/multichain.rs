@@ -491,6 +491,10 @@ impl ThreadReducer {
 }
 
 impl Reducer for ThreadReducer {
+    fn shares_address_space(&self) -> bool {
+        true
+    }
+
     fn allreduce_sum_f64(&self, buf: &mut [f64]) {
         if self.comm.size > 1 {
             self.comm

@@ -137,32 +137,32 @@ pub struct IntervalResults {
 
 /// Resident device state of one interval series.
 pub struct IntervalSampler {
-    geom: IntervalGeometry,
-    total_hops: usize,
-    exchange_fraction: f64,
-    ele: DeviceBuffer,
-    occ: DeviceBuffer,
-    inv: DeviceBuffer,
-    pf: DeviceBuffer,
-    aw: DeviceBuffer,
-    logip: DeviceBuffer,
-    slater: DeviceBuffer,
-    weights: DeviceBuffer,
-    gutz: DeviceBuffer,
-    jast: DeviceBuffer,
-    params: DeviceBuffer,
-    tape: DeviceBuffer,
-    hop_off: DeviceBuffer,
-    hops_done: DeviceBuffer,
-    rebuild: DeviceBuffer,
-    accepts: DeviceBuffer,
+    pub(crate) geom: IntervalGeometry,
+    pub(crate) total_hops: usize,
+    pub(crate) exchange_fraction: f64,
+    pub(crate) ele: DeviceBuffer,
+    pub(crate) occ: DeviceBuffer,
+    pub(crate) inv: DeviceBuffer,
+    pub(crate) pf: DeviceBuffer,
+    pub(crate) aw: DeviceBuffer,
+    pub(crate) logip: DeviceBuffer,
+    pub(crate) slater: DeviceBuffer,
+    pub(crate) weights: DeviceBuffer,
+    pub(crate) gutz: DeviceBuffer,
+    pub(crate) jast: DeviceBuffer,
+    pub(crate) params: DeviceBuffer,
+    pub(crate) tape: DeviceBuffer,
+    pub(crate) hop_off: DeviceBuffer,
+    pub(crate) hops_done: DeviceBuffer,
+    pub(crate) rebuild: DeviceBuffer,
+    pub(crate) accepts: DeviceBuffer,
     // Rebuild scratch (sized for all walkers).
-    rec_walker: DeviceBuffer,
-    planes: DeviceBuffer,
-    pfinv_w: DeviceBuffer,
-    pfinv_out: DeviceBuffer,
-    pfinv_pf: DeviceBuffer,
-    pfinv_st: DeviceBuffer,
+    pub(crate) rec_walker: DeviceBuffer,
+    pub(crate) planes: DeviceBuffer,
+    pub(crate) pfinv_w: DeviceBuffer,
+    pub(crate) pfinv_out: DeviceBuffer,
+    pub(crate) pfinv_pf: DeviceBuffer,
+    pub(crate) pfinv_st: DeviceBuffer,
 }
 
 fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
@@ -170,7 +170,7 @@ fn f64_log_ip(pf: &[f64], weights: &[f64]) -> f64 {
     for (w, p) in weights.iter().zip(pf) {
         ip += w * p;
     }
-    ip.abs().ln()
+    (ip.abs() + 1e-100).ln()
 }
 
 fn occupancy(ele: &[i32], geom: &IntervalGeometry) -> Vec<i32> {

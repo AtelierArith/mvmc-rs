@@ -1,0 +1,68 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 2.52s
+────────────
+ Nextest run ID 03a5e6ea-48b3-4fe7-866f-3773eed904a9 with nextest profile: default
+    Starting 5 tests across 1 binary (5 tests skipped)
+        PASS [   8.797s] (1/5) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_general_operators
+  stdout ───
+
+    running 1 test
+    independent Julia stages passed; SR backward error=6.545253071718334e-17
+    test opt::tests::resident_opt_matches_julia_general_operators ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 8.61s
+
+
+        PASS [   8.136s] (2/5) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_l128_stages
+  stdout ───
+
+    running 1 test
+    independent Julia stages passed; SR backward error=1.8716174494267565e-16
+    test opt::tests::resident_opt_matches_julia_l128_stages ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 7.94s
+
+
+        PASS [   1.130s] (3/5) mvmc-gpu-cuda opt::tests::resident_opt_rejects_failed_sr
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_rejects_failed_sr ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.95s
+
+
+        PASS [  31.335s] (4/5) mvmc-gpu-cuda opt::tests::resident_opt_repeats_twenty_steps
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_repeats_twenty_steps ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 31.07s
+
+
+        PASS [   8.180s] (5/5) mvmc-gpu-cuda opt::tests::resident_opt_single_walker_has_zero_sr_update
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_single_walker_has_zero_sr_update ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 7.99s
+
+
+────────────
+     Summary [  57.588s] 5 tests run: 5 passed, 5 skipped

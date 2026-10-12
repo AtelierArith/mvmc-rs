@@ -114,6 +114,13 @@ pub trait Reducer {
         self.world_size()
     }
 
+    /// Whether all ranks can rendezvous through process-local shared memory.
+    /// Multi-rank reducers must explicitly opt in; MPI rank counts alone do not
+    /// establish this capability. Serial execution needs no cross-rank sharing.
+    fn shares_address_space(&self) -> bool {
+        self.world_size() == 1 && self.reduction_size() == 1
+    }
+
     /// 0-based rank of this process. The single-process implementation
     /// always returns 0.
     fn rank(&self) -> usize {

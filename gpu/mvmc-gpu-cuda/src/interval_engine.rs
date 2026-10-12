@@ -18,7 +18,9 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use mvmc_core::reducer::Reducer;
-use mvmc_core::sampler_backend::{SamplerStages, SamplerTiming};
+use mvmc_core::sampler_backend::{
+    check_sampler_reducer, check_supported_input, SamplerBackendKind, SamplerStages, SamplerTiming,
+};
 use mvmc_core::sampling::driver::SampleStats;
 use mvmc_core::sampling::engine::{BlockCtx, SamplingEngine};
 use mvmc_core::sampling::projection::projection_tables;
@@ -760,12 +762,9 @@ impl SamplerStages for CudaIntervalSamplerStages {
         timing: &mut dyn SamplerTiming,
         reducer: &dyn Reducer,
     ) -> Result<SampleStats, StageError> {
-        if reducer.world_size() != reducer.reduction_size() {
-            return Err(StageError::Unsupported(
-                "the interval sampler supports ungrouped walker chains (world size == reduction size)"
-                    .to_string(),
-            ));
-        }
+        let kind = SamplerBackendKind::CudaInterval(self.device);
+        check_sampler_reducer(kind, reducer)?;
+        check_supported_input(kind, data).map_err(StageError::Unsupported)?;
         let nsite = data.modpara.nsite as usize;
         let ne = data.modpara.nelec as usize;
         let nqp = state.slater_matrix.slater_elm_real.n_qp_full();
@@ -833,6 +832,59 @@ impl SamplerStages for CudaIntervalSamplerStages {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_inputs_return_before_device_setup_or_rendezvous() {
+        struct RemoteRanks;
+        impl Reducer for RemoteRanks {
+            fn world_size(&self) -> usize {
+                2
+            }
+            fn barrier(&self) {
+                panic!("unsupported reducer reached a rendezvous");
+            }
+            fn allreduce_sum_f64(&self, _: &mut [f64]) {
+                panic!("unexpected collective");
+            }
+            fn allreduce_sum_c64(&self, _: &mut [num_complex::Complex64]) {
+                panic!("unexpected collective");
+            }
+            fn allreduce_sum_i64(&self, _: &mut [i64]) {
+                panic!("unexpected collective");
+            }
+        }
+        // An impossible device ordinal makes any accidental CUDA setup fail too.
+        let mut sampler = CudaIntervalSamplerStages::new(usize::MAX);
+        let mut data = ExpertModeData::default();
+        let mut state = VmcOptimizationState::zeros(2, 1, 0, 0, 1, 1, false, false);
+        let mut rng = Sfmt19937Rng::new(79);
+        let mut timer = mvmc_core::c_timer::CTimer::<false>::new();
+        let serial = mvmc_core::reducer::SingleProcessReducer;
+        let error = sampler
+            .sample_real_group(&data, &mut state, &mut rng, &mut timer, &RemoteRanks)
+            .unwrap_err();
+        assert!(matches!(error, StageError::Unsupported(_)));
+        assert!(error.to_string().contains("shared address space"));
+        for path in [1, 2] {
+            data.modpara.nex_update_path = path;
+            let error = sampler
+                .sample_real_group(&data, &mut state, &mut rng, &mut timer, &serial)
+                .unwrap_err();
+            assert!(matches!(error, StageError::Unsupported(_)));
+            assert!(error.to_string().contains("NExUpdatePath=0"));
+        }
+        data.modpara.nex_update_path = 0;
+        data.locspin_terms.push(mvmc_expert_parsers::LocSpinTerm {
+            site: 0,
+            spin_value: 1,
+        });
+        let error = sampler
+            .sample_real_group(&data, &mut state, &mut rng, &mut timer, &serial)
+            .unwrap_err();
+        assert!(matches!(error, StageError::Unsupported(_)));
+        assert!(error.to_string().contains("local-spin"));
+        assert_eq!(rng.words_consumed(), 0);
+    }
 
     #[test]
     #[ignore = "requires CUDA"]

@@ -17,11 +17,11 @@ mod tests;
 ///
 /// Numerical rebuild failures are latched on device. Call `check_status` before
 /// consuming results on the host (or use `snapshot`, which checks automatically).
-/// This sampling primitive does not yet provide the resident observable/SR pipeline.
+/// Use [`crate::opt`] for the complete resident observable/SR pipeline.
 pub struct ResidentInterval {
-    sampler: IntervalSampler,
-    rng: DeviceRng,
-    error: DeviceBuffer,
+    pub(crate) sampler: IntervalSampler,
+    pub(crate) rng: DeviceRng,
+    pub(crate) error: DeviceBuffer,
     total_accepts: DeviceBuffer,
 }
 
@@ -36,6 +36,15 @@ impl ResidentInterval {
     ) -> Result<Self, String> {
         validate(geom, host, hops)?;
         let sampler = IntervalSampler::prepare(backend, geom, host, hops, 0.0)?;
+        Self::from_sampler(backend, sampler, seed)
+    }
+
+    pub(crate) fn from_sampler<B: BackendSession + ?Sized>(
+        backend: &mut B,
+        sampler: IntervalSampler,
+        seed: u64,
+    ) -> Result<Self, String> {
+        let geom = sampler.geom;
         with_raw_exec(backend, "mvmc.resident.prepare", |exec| {
             let rng = DeviceRng::new(exec, seed)?;
             let error = exec.alloc_bytes(4)?;
@@ -88,6 +97,24 @@ impl ResidentInterval {
     }
 
     fn enqueue(&self, exec: &RawExec<'_, '_>) -> tenferro_tensor::Result<()> {
+        self.enqueue_hops(exec, self.sampler.total_hops)
+    }
+
+    pub(crate) fn enqueue_random(
+        &mut self,
+        exec: &RawExec<'_, '_>,
+        hops: usize,
+    ) -> tenferro_tensor::Result<()> {
+        assert!(hops <= self.sampler.total_hops);
+        self.rng.fill_u32(
+            exec,
+            &mut self.sampler.tape,
+            self.sampler.geom.walkers * hops * 5,
+        )?;
+        self.enqueue_hops(exec, hops)
+    }
+
+    fn enqueue_hops(&self, exec: &RawExec<'_, '_>, hops: usize) -> tenferro_tensor::Result<()> {
         let s = &self.sampler;
         let g = s.geom;
         let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
@@ -96,7 +123,7 @@ impl ResidentInterval {
         // Starting window <= nsite. The first rebuild may be after one hop;
         // every later one needs >= nsite+1 hops. One final launch finishes any
         // remainder. Masked kernels are no-ops once each walker has completed.
-        let rounds = 1 + s.total_hops.div_ceil(g.nsite + 1);
+        let rounds = 1 + hops.div_ceil(g.nsite + 1);
         // SAFETY: dimensions validated at construction, buffers remain resident
         // through all launches; one stream orders every producer and consumer.
         unsafe {
@@ -121,7 +148,7 @@ impl ResidentInterval {
                         p(&s.jast)?,
                         p(&s.params)?,
                         p(&s.tape)?,
-                        i(s.total_hops),
+                        i(hops),
                         p(&s.hop_off)?,
                         i(g.n),
                         i(g.ne),
@@ -143,7 +170,7 @@ impl ResidentInterval {
         Ok(())
     }
 
-    fn enqueue_rebuild(
+    pub(crate) fn enqueue_rebuild(
         &self,
         exec: &RawExec<'_, '_>,
         module: &RawModule,
