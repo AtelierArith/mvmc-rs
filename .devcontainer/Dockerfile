@@ -6,6 +6,7 @@ ARG KACHE_VERSION=0.28.1
 ARG UV_VERSION=0.12.21
 ARG MPICH_VERSION=4.2.0
 ARG MPICH_SHA256=a64a66781b9e5312ad052d32689e23252f745b27ee8818ac2ac0c8209bc0b90e
+ARG MVMC_BUILD_JOBS=""
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,7 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # cannot communicate with Hydra's internal PMI server (each process sees a
 # singleton world). Keep MPICH 4.2.0 and ch4:ucx, repairing only PMI/launcher
 # compatibility. The checksum is of the official release archive below.
-RUN curl -fsSL "https://www.mpich.org/static/downloads/${MPICH_VERSION}/mpich-${MPICH_VERSION}.tar.gz" \
+COPY build-jobs.sh /opt/devcontainer/build-jobs.sh
+RUN build_jobs=$(sh /opt/devcontainer/build-jobs.sh) \
+    && curl -fsSL "https://www.mpich.org/static/downloads/${MPICH_VERSION}/mpich-${MPICH_VERSION}.tar.gz" \
        -o /tmp/mpich.tar.gz \
     && echo "${MPICH_SHA256}  /tmp/mpich.tar.gz" | sha256sum -c - \
     && tar xzf /tmp/mpich.tar.gz -C /tmp \
@@ -26,7 +29,7 @@ RUN curl -fsSL "https://www.mpich.org/static/downloads/${MPICH_VERSION}/mpich-${
     && CC=gcc CXX=g++ FC=gfortran ./configure --prefix=/opt/mpich \
        --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra \
        --with-pmi=pmi1 --without-pmix \
-    && make -j4 && make install \
+    && make -j"$build_jobs" && make -j"$build_jobs" install \
     && rm -rf "/tmp/mpich-${MPICH_VERSION}" /tmp/mpich.tar.gz
 
 # Install tools in the image; persisted Cargo/cache volumes do not hide binaries.
