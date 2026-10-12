@@ -1,0 +1,9 @@
+# 2026年 10月 12日 月曜日 09:21:18 UTC
+Linux primerose 6.8.0-101-generic #101-Ubuntu SMP PREEMPT_DYNAMIC Mon Feb  9 10:15:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+# runtime CUDA libs used: /usr/local/cuda-12.6/lib64 (nvrtc 12.6, cublas 12.6.4, cusolver 11.7.1 from the device report)
+NVIDIA A100 80GB PCIe, 580.126.09, 81920 MiB
+Build cuda_12.0.r12.0/compiler.32267302_0
+rustc 1.99.0 (b940084d7 2026-09-28)
+cargo 1.99.0 (5f94df478 2026-08-27)
+julia version 1.13.1
+832369d2eb7bacb1caad66b5b5c164d5d58ea5d4

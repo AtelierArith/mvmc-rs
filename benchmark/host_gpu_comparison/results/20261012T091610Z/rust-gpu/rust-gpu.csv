@@ -1,0 +1,9 @@
+case,phase,rep,wall_s,all_s
+rust-gpu,opt-warmup,1,32.695028,30.18494
+rust-gpu,opt-measure,2,32.350584,29.85442
+rust-gpu,opt-measure,3,32.906361,30.37771
+rust-gpu,opt-measure,4,32.668099,30.15060
+rust-gpu,physcal-warmup,1,4.122891,1.59397
+rust-gpu,physcal-measure,2,4.086968,1.61319
+rust-gpu,physcal-measure,3,4.093145,1.60552
+rust-gpu,physcal-measure,4,4.079654,1.61093
