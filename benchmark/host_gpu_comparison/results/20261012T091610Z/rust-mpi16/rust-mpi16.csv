@@ -1,0 +1,9 @@
+case,phase,rep,wall_s,all_s
+rust-mpi16,opt-warmup,1,4.961963,4.75356
+rust-mpi16,opt-measure,2,4.986633,4.78019
+rust-mpi16,opt-measure,3,4.921001,4.72181
+rust-mpi16,opt-measure,4,4.993256,4.80258
+rust-mpi16,physcal-warmup,1,0.500513,0.31307
+rust-mpi16,physcal-measure,2,0.494442,0.31110
+rust-mpi16,physcal-measure,3,0.502228,0.31736
+rust-mpi16,physcal-measure,4,0.512577,0.33183

@@ -1,0 +1,6 @@
+# Keep recorded times (CSV, logs, environment) but not the bulky cloned inputs,
+# per-repetition outputs or checkpoints.
+**/input/
+**/run-*/
+**/checkpoint-input/
+**/checkpoint-out/

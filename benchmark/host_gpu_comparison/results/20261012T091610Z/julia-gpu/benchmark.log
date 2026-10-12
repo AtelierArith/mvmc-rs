@@ -1,0 +1,47 @@
+benchmark_scope=whole public runner, including parsing, initialization, sampling, numerical work, SR where applicable, and final returned summary
+Julia=1.13.1 Julia_threads=1 CPU_BLAS=LBTConfig([ILP64] libopenblas64_.so)
+GPU_device=0 GPU_name=NVIDIA A100 80GB PCIe
+original_input=/home/terasaki/work/mvmc-rs/benchmark/hubbard_chain/inputs/hubbard_chain_L128/namelist.def retained_run_directory=/tmp/jl_uLHLLz
+backend=gpu nsite=128 optimization_steps=20 samples_per_step=320 PhysCal_runs=1 warmup_sweeps=1 interval_sweeps=1 seed=79 repetitions=3
+fixed_parameter_sha256=36cef06347facd5645882d229405bc81095d31731454d821df5fc1bcad014db8
+benchmark_source_sha256=7c3ad955163cf6b2d31aa6265d8aafa0cffd11ea8f179be69a8dd07c8a71d65b
+namelist_sha256=8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00 modpara_sha256=7af01a064b4d0bdf7d78d7bdfb918182e7d503e281f2ae8d14d006d76aa77ed6
+CPU_source_sha256 vmc_sampling.jl ccdf89e6481969d5986d6e04293bf4ef6f1a85babb346a6927732e54a4e9ccdf
+CPU_source_sha256 vmc_para_opt.jl 3903655bdc4ac0dc0bd3dfadc4b5e0e98c64a7504b54cc62ed4663ee447a46d1
+CPU_source_sha256 vmc_phys_cal.jl 591ed75b32317ec487b1f8d8c8019856b0c6003a33f5b3e29faf079eb7e917f7
+script_loading_compilation_and_untimed_benchmark_preparation_seconds=31.560069237
+CPU_opt_attempt_budget=821760 GPU_opt_attempt_budget=860160 CPU_PhysCal_attempt_budget=41088 GPU_PhysCal_attempt_budget=81920
+sampling_difference=CPU one sequential SFMT chain with draw-until-empty destinations and burn-state reuse; GPU 320 independent XORWOW chains with one initial warmup and 128 attempts per interval; see selected proposal-mode metadata below
+GPU_sampling_mode=update GPU_initialization_mode=gpu
+GPU_configured_proposals=empty GPU_configured_correlation=delta GPU_configured_observables=reuse GPU_configured_inverse=batched
+GPU_proposal_mode_description=production default; inspect the recorded CUDA sampling source for proposal semantics
+GPU_source_sha256 cuda_runners.jl 7ebab66bb0c7cbe950c521d65c1516ef2c9aae775117bf47236601c850b7ae03
+GPU_source_sha256 cuda_state.jl 138c08915e0c6914750d36adcbcae71a632a80b165b16734ef536b4a0e0e2261
+GPU_source_sha256 cuda_sampling_update.jl d8942da163f934a3c7b6d136680f6ff2216857c7b9537a677c57731ff29856a3
+proposal_counts_are_not_valid_move_counts_or_effective_sample_sizes=true
+CPU_valid_and_accepted_counts=not_exposed_by_public_runner GPU_valid_counts=not_exposed GPU_accepted_count=last_interval_only_after_timing
+derived_valid_hopping_candidate_budgets=all configured attempts have a legal empty destination for this nonlocal-spin input; these are model/proposal deductions, not measured counters
+output_difference=CPU writes C-format per-step/final files; GPU returns numerical arrays and performs final summaries/transfers without those files
+cold_first_execution_includes_compilation_and_real_work=true; reported separately, not used in warm timing ratio
+phase=cold rep=1 GPU_optimization_seconds=36.001279348 energy_per_site=0.7795418080428663 accepted_last_interval=14742
+phase=cold rep=1 GPU_PhysCal_seconds=9.187685688 energy_per_site=0.9130034448262638 accepted_last_interval=15019
+phase=cold CPU_opt_seconds=Float64[] GPU_opt_seconds=[36.001279348]
+phase=cold CPU_PhysCal_seconds=Float64[] GPU_PhysCal_seconds=[9.187685688]
+phase=warm rep=1 GPU_optimization_seconds=3.064614381 energy_per_site=0.7795418080428663 accepted_last_interval=14742
+phase=warm rep=1 GPU_PhysCal_seconds=0.296789752 energy_per_site=0.9130034448262638 accepted_last_interval=15019
+phase=warm rep=2 GPU_optimization_seconds=3.068984826 energy_per_site=0.7795418080428663 accepted_last_interval=14742
+phase=warm rep=2 GPU_PhysCal_seconds=0.294927965 energy_per_site=0.9130034448262638 accepted_last_interval=15019
+phase=warm rep=3 GPU_optimization_seconds=3.065371949 energy_per_site=0.7795418080428663 accepted_last_interval=14742
+phase=warm rep=3 GPU_PhysCal_seconds=0.29538253 energy_per_site=0.9130034448262638 accepted_last_interval=15019
+phase=warm CPU_opt_seconds=Float64[] GPU_opt_seconds=[3.064614381, 3.068984826, 3.065371949]
+phase=warm CPU_PhysCal_seconds=Float64[] GPU_PhysCal_seconds=[0.296789752, 0.294927965, 0.29538253]
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
+[ Info: Parsing completed successfully
