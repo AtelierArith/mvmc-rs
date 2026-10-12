@@ -39,6 +39,36 @@ use crate::sampling::projection::{
 use crate::sampling::stage::{CpuStage, RealPfStage, StageGeom, StageTables};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 
+fn initialize_real_engine_tables<R: Reducer + ?Sized, E: SamplingEngine>(
+    engine: &mut E,
+    geom: &StageGeom,
+    tables: &mut StageTables<'_>,
+    ele_idx: &[i64],
+    n_in_step: usize,
+    reducer: &R,
+) -> Result<i32, NormalInitializationError> {
+    if engine
+        .initialize_real(geom, tables, ele_idx, n_in_step, reducer)
+        .map_err(NormalInitializationError::Precondition)?
+    {
+        return Ok(0);
+    }
+    coordinate_normal_setup(
+        calc_m_all_real_native_info(
+            ele_idx,
+            tables.slater_elm,
+            tables.inv_m,
+            tables.pf_m,
+            geom.qp_start,
+            geom.qp_end,
+            geom.n_site,
+            geom.n_elec,
+            tables.pool,
+        ),
+        |info| reducer.sampling_max_info(info),
+    )
+}
+
 /// Output of [`vmc_make_sample_real`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SampleStats {
@@ -188,6 +218,15 @@ pub fn vmc_make_sample_real_engine<
     let i_flg_general = data.i_flg_orbital_general;
     let two_sz = data.modpara.two_sz;
 
+    let inv_stride = n_size * n_size + 1;
+    let geom = StageGeom {
+        n_site,
+        n_elec,
+        qp_start,
+        qp_end,
+        inv_stride,
+    };
+
     let loc_spn = state.workspace.loc_spn.clone();
     // Working buffers.
     let mut tmp_ele_idx = state.electron_config.tmp_ele_idx.clone();
@@ -199,17 +238,17 @@ pub fn vmc_make_sample_real_engine<
     let pool = ThreadedPfaPackWorkspace::new(state.workspace.n_size, 1);
     let initialization = (|| {
         // Sync the real-mode Slater table from the complex master.
-        for qp in 0..state.slater_matrix.slater_elm_real.n_qp_full() {
-            for row in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                for col in 0..state.slater_matrix.slater_elm_real.n_site2() {
-                    state.slater_matrix.slater_elm_real.set(
-                        qp,
-                        row,
-                        col,
-                        state.slater_matrix.slater_elm.get(qp, row, col).re,
-                    );
-                }
-            }
+        // Both tables use the same flat layout. Borrow once so the content version
+        // advances once per table update, rather than contending on its global atomic
+        // for every element of every walker (issue #550).
+        for (dst, src) in state
+            .slater_matrix
+            .slater_elm_real
+            .as_mut_slice()
+            .iter_mut()
+            .zip(state.slater_matrix.slater_elm.as_slice())
+        {
+            *dst = src.re;
         }
 
         if burn_flag {
@@ -235,19 +274,18 @@ pub fn vmc_make_sample_real_engine<
         }
         // C performs this separate real setup once and ignores numeric INFO.
         // Invalid Rust/input preconditions are not fabricated native INFO.
-        let _real_info = coordinate_normal_setup(
-            calc_m_all_real_native_info(
-                &tmp_ele_idx,
-                &state.slater_matrix.slater_elm_real,
-                &mut state.slater_matrix.inv_m_real,
-                &mut state.slater_matrix.pf_m_real,
-                qp_start,
-                qp_end,
-                n_site,
-                n_elec,
-                &pool,
-            ),
-            |info| reducer.sampling_max_info(info),
+        let _real_info = initialize_real_engine_tables(
+            engine,
+            &geom,
+            &mut StageTables {
+                slater_elm: &state.slater_matrix.slater_elm_real,
+                inv_m: &mut state.slater_matrix.inv_m_real,
+                pf_m: &mut state.slater_matrix.pf_m_real,
+                pool: &pool,
+            },
+            &tmp_ele_idx,
+            shape.n_in_step,
+            reducer,
         )?;
         let mut log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
         if !log_ip.is_finite() {
@@ -264,19 +302,18 @@ pub fn vmc_make_sample_real_engine<
                 &pool,
                 |info| reducer.sampling_max_info(info),
             )?;
-            let _real_info = coordinate_normal_setup(
-                calc_m_all_real_native_info(
-                    &tmp_ele_idx,
-                    &state.slater_matrix.slater_elm_real,
-                    &mut state.slater_matrix.inv_m_real,
-                    &mut state.slater_matrix.pf_m_real,
-                    qp_start,
-                    qp_end,
-                    n_site,
-                    n_elec,
-                    &pool,
-                ),
-                |info| reducer.sampling_max_info(info),
+            let _real_info = initialize_real_engine_tables(
+                engine,
+                &geom,
+                &mut StageTables {
+                    slater_elm: &state.slater_matrix.slater_elm_real,
+                    inv_m: &mut state.slater_matrix.inv_m_real,
+                    pf_m: &mut state.slater_matrix.pf_m_real,
+                    pool: &pool,
+                },
+                &tmp_ele_idx,
+                shape.n_in_step,
+                reducer,
             )?;
             log_ip = sampling_log_ip_real(&state.slater_matrix.pf_m_real, data, reducer);
             burn_flag = false;
@@ -296,14 +333,6 @@ pub fn vmc_make_sample_real_engine<
         }
     };
 
-    let inv_stride = n_size * n_size + 1;
-    let geom = StageGeom {
-        n_site,
-        n_elec,
-        qp_start,
-        qp_end,
-        inv_stride,
-    };
     {
         let mut tables = StageTables {
             slater_elm: &state.slater_matrix.slater_elm_real,

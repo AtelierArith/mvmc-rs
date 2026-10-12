@@ -1486,6 +1486,7 @@ dependencies = [
  "libloading 0.8.9",
  "mvmc-cli",
  "mvmc-core",
+ "mvmc-expert-parsers",
  "mvmc-gpu",
  "num-complex",
  "sfmt19937",

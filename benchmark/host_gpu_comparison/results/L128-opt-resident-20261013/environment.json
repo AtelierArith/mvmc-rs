@@ -1,0 +1,44 @@
+{
+  "rust_source": "6c80cbc0a100a5741148840dc73eb4877e490382",
+  "julia_source": "47452f9061ec3de049d891a7aa7fd9cfeac228a4",
+  "platform": "Linux-6.8.0-146-generic-x86_64-with-glibc2.39",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "cuda_visible_devices": "1",
+  "openblas_num_threads": 1,
+  "omp_num_threads": 1,
+  "julia_num_threads": 1,
+  "julia_num_gc_threads": 1,
+  "nsite": 128,
+  "nelec_per_spin": 64,
+  "nqp": 8,
+  "nparameters": 772,
+  "walkers": 320,
+  "steps": 20,
+  "warmup": 128,
+  "interval": 128,
+  "seed": 79,
+  "gpu": [
+    "0, NVIDIA GeForce RTX 3060, GPU-a78d5217-eba3-72c2-3d5b-8ae496ebbc2e, 580.178.04, 12288 MiB",
+    "1, NVIDIA GeForce RTX 3060, GPU-ed896702-ca5c-93f6-2537-06fffdac4a91, 580.178.04, 12288 MiB"
+  ],
+  "loaded_libraries": {
+    "rust": [
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcublas.so.12.8.4.1",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcublasLt.so.12.8.4.1",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcurand.so.10.3.9.90",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcusolver.so.11.7.3.90",
+      "/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib/libnvrtc-builtins.so.12.8.93",
+      "/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib/libnvrtc.so.12.8.93"
+    ],
+    "julia": [
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcublas.so.13.8.0.4",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcublasLt.so.13.8.0.4",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcurand.so.10.4.4.72",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcusolver.so.12.3.4.7",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcusolverMg.so.12.3.4.7",
+      "/home/terasaki/.julia/artifacts/b45ee04956fd146b4ecfa1b82aff3a7614d22e1f/lib/libnvrtc-builtins.so.13.4.92",
+      "/home/terasaki/.julia/artifacts/b45ee04956fd146b4ecfa1b82aff3a7614d22e1f/lib/libnvrtc.so.13.4.92",
+      "/home/terasaki/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/libopenblas64_.0.3.30.so"
+    ]
+  }
+}

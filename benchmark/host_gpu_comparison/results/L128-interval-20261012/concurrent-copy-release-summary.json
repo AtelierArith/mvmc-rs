@@ -1,0 +1,36 @@
+{
+  "production_commit": "d2f73ee9ebe796e8244f0d6afea825ca58788bc5",
+  "worker_commit": "e29343c6",
+  "seconds": [
+    26.239604497,
+    25.516081238,
+    25.767081723,
+    25.742292897
+  ],
+  "warm_median": 25.742292897,
+  "warm_min": 25.516081238,
+  "warm_max": 25.767081723,
+  "timer_enabled": true,
+  "max_absolute_differences": {
+    "rep-0-zvo_out.dat": 0.0,
+    "rep-0-zvo_var.dat": 0.0,
+    "rep-0-zqp_opt.dat": 0.0,
+    "rep-1-zvo_out.dat": 0.0,
+    "rep-1-zvo_var.dat": 0.0,
+    "rep-1-zqp_opt.dat": 0.0,
+    "rep-2-zvo_out.dat": 0.0,
+    "rep-2-zvo_var.dat": 0.0,
+    "rep-2-zqp_opt.dat": 0.0,
+    "rep-3-zvo_out.dat": 0.0,
+    "rep-3-zvo_var.dat": 0.0,
+    "rep-3-zqp_opt.dat": 0.0
+  },
+  "stage_medians": {
+    "sampling": 11.24042,
+    "sampling_initialization_nested": 3.47783,
+    "observables": 5.07501,
+    "weight_average": 5.64533,
+    "sr": 1.28441,
+    "slater_update": 0.79525
+  }
+}

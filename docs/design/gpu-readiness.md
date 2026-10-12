@@ -1,5 +1,12 @@
 # GPU readiness: routing tensor-shaped operations through tenferro-rs
 
+2026-10-13 update: [GPU-resident Opt](gpu-resident-opt.md) implements the
+Julia-compatible GPU ensemble lifecycle authorized in `AGENTS.md` (#560).
+Its [L128 E2E report](../../benchmark/host_gpu_comparison/results/L128-opt-resident-20261013/README.md)
+records 7.688 s Rust versus 5.144 s Julia, with zero explicit intermediate
+host/device copies in the optimization loop. The inventory below records the
+earlier C-order migration plan and its measurements.
+
 Status: design and inventory (issue #417, related to #185, #360, #361). No production
 code changes in #417. The `gpu-cuda` build path and optional gate landed with issue #420
 (section 10); the validation harness of #424 is described in `docs/NUMERICAL_COMPARISONS.md`
@@ -988,6 +995,17 @@ through either backend of #421 (`MVMC_RS_SR_BACKEND`).
   `MPI_Allreduce` leaves the order to the MPI library, so Rust and C can differ by last-bit
   roundoff for `W > 2` (`W <= 2` is a single sum of two terms; observed agreement is within the
   1e-13 + 1e-12 relative bound of `tests/fixtures/mpi_matrix_179/README.md` in every cell).
+* **Collective storage (#550).** Each rank deposits into a reusable contribution buffer. The
+  last arrival reduces once in rank order, and each rank copies only the result. A second
+  barrier prevents reuse until all readers finish. This replaces cloning and reducing all
+  `W` contributions independently on every rank: a vector of length `N` now costs `O(W*N)`
+  copying and arithmetic, instead of `O(W*W*N)`. The same protocol serves sums, broadcasts
+  and integer MAX. Regression coverage varies arrival order, message length, root and numeric
+  type across repeated generations, including empty messages and non-associative sums.
+  Contribution copies use one lock per rank; result copies share a read lock, so neither
+  large copy serializes on the communicator mutex. Reduction still runs once in the same
+  rank order. The separate reusable result adds `O(N)` storage; the final barrier protects
+  both the contribution slots and the result across generations.
 * **Threads.** The collectives need all walkers running, so one OS thread per walker is used
   (not a pool smaller than `W`); everything inside a walker is single-threaded. The SR tenferro
   backend is a process-wide, mutex-guarded runtime (one runtime built once), so walkers

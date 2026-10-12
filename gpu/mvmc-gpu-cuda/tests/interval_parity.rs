@@ -12,7 +12,7 @@
 
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
-use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
+use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler, ResidentInterval};
 use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
@@ -62,7 +62,10 @@ fn load_fixture() -> Fixture {
     let slater = array(&mut i, "slater");
     let weights = array(&mut i, "weights");
     let ele: Vec<i32> = array(&mut i, "ele").into_iter().map(|v| v as i32).collect();
-    let tape: Vec<u32> = array(&mut i, "tape").into_iter().map(|v| v as u32).collect();
+    let tape: Vec<u32> = array(&mut i, "tape")
+        .into_iter()
+        .map(|v| v as u32)
+        .collect();
     let final_ele: Vec<i32> = array(&mut i, "final_ele")
         .into_iter()
         .map(|v| v as i32)
@@ -169,13 +172,15 @@ fn interval_shared_tape_matches_julia_gpu() {
     // Run to completion, rebuilding a walker that asks (the Julia kernel rebuilds inline).
     let mut rounds = 0usize;
     let mut rebuilds = 0usize;
+    let mut accepted = 0i32;
     loop {
         let results = backend
             .with_backend_session(|s| sampler.run(s))
             .expect("run");
         rounds += 1;
         let mut need = Vec::new();
-        for (w, &(_, r, _a)) in results.iter().enumerate() {
+        for (w, &(_, r, a)) in results.iter().enumerate() {
+            accepted += a;
             if r != 0 {
                 need.push(w);
             }
@@ -200,6 +205,153 @@ fn interval_shared_tape_matches_julia_gpu() {
     eprintln!("rust   ele={final_ele:?} occ={occ:?} rounds={rounds} rebuilds={rebuilds}");
     assert_eq!(final_ele, fx.final_ele, "final configuration");
     assert_eq!(occ, fx.final_occupancy, "final occupancy");
+    assert_eq!(accepted, fx.accepted, "accepted moves on the shared tape");
+
+    // Independent Julia expectation also gates the schedule with device-side
+    // rebuild selection. This uses the fixture tape, not Rust-generated output.
+    let mut resident = backend
+        .with_backend_session(|s| ResidentInterval::prepare(s, geom, &host, fx.steps, 79))
+        .unwrap();
+    backend
+        .with_backend_session(|s| resident.advance_with_tape(s, &fx.tape))
+        .unwrap();
+    let result = backend
+        .with_backend_session(|s| resident.snapshot(s))
+        .unwrap();
+    assert_eq!(result.ele, fx.final_ele);
+    assert_eq!(
+        occupancy_of(&result.ele, fx.nsite, fx.ne),
+        fx.final_occupancy
+    );
+    assert_eq!(
+        backend
+            .with_backend_session(|s| resident.accepted(s))
+            .unwrap(),
+        vec![fx.accepted]
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA"]
+fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
+    if !gpu_available() {
+        eprintln!("skipped: no CUDA device");
+        return;
+    }
+    let devices = cuda_devices().unwrap();
+    let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+    // Small fallback, non-power-of-two QP tails, the L128 specialization, and n=256
+    // where allocating 3*n*nqp doubles would exceed CUDA's default shared-memory limit.
+    for (n, nqp) in [(8, 1), (64, 3), (128, 5), (256, 8)] {
+        let (walkers, hops, ne, nsite) = (3, 4, n / 2, n + 2);
+        let n2 = 2 * nsite;
+        let geom = IntervalGeometry {
+            walkers,
+            n,
+            ne,
+            nsite,
+            nqp,
+            ngutz: 0,
+            nproj: 0,
+        };
+        assert!(geom.shared_bytes() <= 48 * 1024);
+        let mut slater = SlaterElmFlat::<f64>::zeros(nqp, nsite);
+        let mut rng = sfmt19937::Sfmt19937Rng::new(79);
+        for q in 0..nqp {
+            for i in 0..n2 {
+                for j in 0..i {
+                    let v = rng.gen_rand32() as f64 / 4294967296.0 - 0.5;
+                    slater.set(q, i, j, v);
+                    slater.set(q, j, i, -v);
+                }
+            }
+        }
+        let pool = ThreadedPfaPackWorkspace::new(n, 1);
+        let ele: Vec<i32> = (0..walkers)
+            .flat_map(|w| (0..n).map(move |i| ((i + w) % nsite) as i32))
+            .collect();
+        let mut inv_all = Vec::new();
+        let mut pf_all = Vec::new();
+        for w in 0..walkers {
+            let cfg: Vec<i64> = ele[w * n..(w + 1) * n].iter().map(|&v| v as i64).collect();
+            let mut inv = InvMColMajor::<f64>::zeros(nqp, ne);
+            let mut pf = vec![0.0; nqp];
+            calc_m_all_real(&cfg, &slater, &mut inv, &mut pf, 0, nqp, nsite, ne, &pool).unwrap();
+            for q in 0..nqp {
+                inv_all.extend_from_slice(inv.qp_matrix_slice(q));
+            }
+            pf_all.extend(pf);
+        }
+        let weights = vec![1.0; nqp];
+        let gutz = vec![-1; nsite];
+        let jast = vec![-1; nsite * nsite];
+        let host = IntervalHost {
+            ele: &ele,
+            inv: &inv_all,
+            pf: &pf_all,
+            slater: slater.as_slice(),
+            weights: &weights,
+            gutz: &gutz,
+            jast: &jast,
+            params: &[0.0],
+        };
+        let sampler = backend
+            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, hops, 0.0))
+            .unwrap();
+        let mut tape = vec![0; walkers * hops * 5];
+        for h in 0..hops {
+            for w in 0..walkers {
+                let t = &mut tape[5 * (w + walkers * h)..5 * (w + walkers * h) + 5];
+                t[0] = (h + w) as u32;
+                t[1] = ((h % 2) as u32) << 31;
+                t[2] = (h + 2 * w) as u32;
+                // Acceptance uniform zero: these finite, nonsingular hops must all accept.
+            }
+        }
+        backend
+            .with_backend_session(|s| sampler.upload_tape(s, &tape))
+            .unwrap();
+        let counts = backend.with_backend_session(|s| sampler.run(s)).unwrap();
+        assert_eq!(counts, vec![(hops as i32, 0, hops as i32); walkers]);
+        let all = backend
+            .with_backend_session(|s| sampler.download_all(s))
+            .unwrap();
+        for w in 0..walkers {
+            let (cfg, pf, aw, logip) = backend
+                .with_backend_session(|s| sampler.download_walker(s, w))
+                .unwrap();
+            assert_eq!(cfg, all.ele[w * n..(w + 1) * n]);
+            assert_eq!(aw, all.aw[w]);
+            assert_eq!(pf, all.pf[w * nqp..(w + 1) * nqp]); // exact transfer identity
+            assert_eq!(logip, all.logip[w]);
+            let cfg: Vec<i64> = cfg.iter().map(|&v| v as i64).collect();
+            let mut inv = InvMColMajor::<f64>::zeros(nqp, ne);
+            let mut expected = vec![0.0; nqp];
+            calc_m_all_real(
+                &cfg,
+                &slater,
+                &mut inv,
+                &mut expected,
+                0,
+                nqp,
+                nsite,
+                ne,
+                &pool,
+            )
+            .unwrap();
+            for q in 0..nqp {
+                // Four rank-two updates versus an independent pivoted factorization.
+                // Allow accumulated FP64 update/factorization roundoff (no trajectory slack).
+                let tol = 1e-10 + 1e-9 * expected[q].abs();
+                assert!(
+                    (pf[q] - expected[q]).abs() <= tol,
+                    "n={n} q={q} w={w}: GPU {} CPU {}",
+                    pf[q],
+                    expected[q]
+                );
+            }
+        }
+    }
 }
 
 #[test]

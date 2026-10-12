@@ -346,7 +346,7 @@ mod tests {
 // In-process collectives and multi-walker optimization (issue #435)
 // ---------------------------------------------------------------------------------------------
 
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 
 use num_complex::Complex64;
 
@@ -359,10 +359,23 @@ struct CommState {
     /// Number of participants that arrived at the current barrier generation.
     arrived: usize,
     generation: u64,
-    /// Per-rank contribution slots of the current collective.
-    f64s: Vec<Vec<f64>>,
-    c64s: Vec<Vec<Complex64>>,
-    i64s: Vec<Vec<i64>>,
+}
+
+/// Each walker stages independently; readers may copy the reduced result concurrently.
+/// The communicator's second barrier protects both buffers between generations.
+#[derive(Debug)]
+struct CollectiveBuffers<T> {
+    contributions: Vec<Mutex<Vec<T>>>,
+    result: RwLock<Vec<T>>,
+}
+
+impl<T> CollectiveBuffers<T> {
+    fn new(size: usize) -> Self {
+        Self {
+            contributions: (0..size).map(|_| Mutex::new(Vec::new())).collect(),
+            result: RwLock::new(Vec::new()),
+        }
+    }
 }
 
 /// Shared state of `W` walker threads standing in for one MPI communicator.
@@ -371,6 +384,9 @@ pub struct ThreadComm {
     size: usize,
     state: Mutex<CommState>,
     cv: Condvar,
+    f64s: CollectiveBuffers<f64>,
+    c64s: CollectiveBuffers<Complex64>,
+    i64s: CollectiveBuffers<i64>,
 }
 
 impl ThreadComm {
@@ -381,11 +397,11 @@ impl ThreadComm {
             state: Mutex::new(CommState {
                 arrived: 0,
                 generation: 0,
-                f64s: vec![Vec::new(); size],
-                c64s: vec![Vec::new(); size],
-                i64s: vec![Vec::new(); size],
             }),
             cv: Condvar::new(),
+            f64s: CollectiveBuffers::new(size),
+            c64s: CollectiveBuffers::new(size),
+            i64s: CollectiveBuffers::new(size),
         })
     }
 
@@ -405,25 +421,50 @@ impl ThreadComm {
         }
     }
 
-    /// Deposit this rank's data, wait for all, read everything, wait again (so the slots can be
-    /// reused by the next collective).
-    fn gather<T: Clone>(
+    /// Reduce once, on the last arrival, then copy only the result to each rank.
+    /// The second barrier keeps the result immutable until every rank has read it.
+    /// Only the reduction holds the communicator mutex; large input/output copies use
+    /// per-rank locks and concurrent read locks. Arithmetic remains in rank order.
+    fn collective<T: Clone>(
         &self,
         rank: usize,
-        data: &[T],
-        slots: impl Fn(&mut CommState) -> &mut Vec<Vec<T>>,
-    ) -> Vec<Vec<T>> {
+        data: &mut [T],
+        buffers: &CollectiveBuffers<T>,
+        reduce: impl FnOnce(&mut Vec<T>, &[MutexGuard<'_, Vec<T>>]),
+    ) {
         {
-            let mut st = self.state.lock().expect("thread comm lock");
-            slots(&mut st)[rank] = data.to_vec();
+            let mut slot = buffers.contributions[rank]
+                .lock()
+                .expect("contribution lock");
+            slot.clear();
+            slot.extend_from_slice(data);
+        }
+        let mut st = self.state.lock().expect("thread comm lock");
+        let generation = st.generation;
+        st.arrived += 1;
+        if st.arrived == self.size {
+            let contributions: Vec<_> = buffers
+                .contributions
+                .iter()
+                .map(|slot| slot.lock().expect("contribution lock"))
+                .collect();
+            let mut result = buffers.result.write().expect("collective result lock");
+            result.clone_from(&contributions[0]);
+            reduce(&mut result, &contributions);
+            st.arrived = 0;
+            st.generation += 1;
+            self.cv.notify_all();
+        } else {
+            while st.generation == generation {
+                st = self.cv.wait(st).expect("thread comm wait");
+            }
+        }
+        drop(st);
+        {
+            let result = buffers.result.read().expect("collective result lock");
+            data.clone_from_slice(&result);
         }
         self.barrier();
-        let all = {
-            let mut st = self.state.lock().expect("thread comm lock");
-            slots(&mut st).clone()
-        };
-        self.barrier();
-        all
     }
 }
 
@@ -450,65 +491,81 @@ impl ThreadReducer {
 }
 
 impl Reducer for ThreadReducer {
+    fn shares_address_space(&self) -> bool {
+        true
+    }
+
     fn allreduce_sum_f64(&self, buf: &mut [f64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            let mut acc = all[0][i];
-            for v in &all[1..] {
-                acc += v[i];
-            }
-            *slot = acc;
+        if self.comm.size > 1 {
+            self.comm
+                .collective(self.rank, buf, &self.comm.f64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
+                            *acc += *value;
+                        }
+                    }
+                });
         }
     }
 
     fn allreduce_sum_c64(&self, buf: &mut [Complex64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            // real and imaginary parts are reduced separately, as the MPI path does
-            let (mut re, mut im) = (all[0][i].re, all[0][i].im);
-            for v in &all[1..] {
-                re += v[i].re;
-                im += v[i].im;
-            }
-            *slot = Complex64::new(re, im);
+        if self.comm.size > 1 {
+            self.comm
+                .collective(self.rank, buf, &self.comm.c64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
+                            acc.re += value.re;
+                            acc.im += value.im;
+                        }
+                    }
+                });
         }
     }
 
     fn allreduce_sum_i64(&self, buf: &mut [i64]) {
-        if self.comm.size == 1 {
-            return;
-        }
-        let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
-        for (i, slot) in buf.iter_mut().enumerate() {
-            *slot = all.iter().map(|v| v[i]).sum();
+        if self.comm.size > 1 {
+            self.comm
+                .collective(self.rank, buf, &self.comm.i64s, |sum, all| {
+                    for rank in &all[1..] {
+                        for (acc, value) in sum.iter_mut().zip(rank.iter()) {
+                            *acc += *value;
+                        }
+                    }
+                });
         }
     }
 
     fn broadcast_f64(&self, root: usize, buf: &mut [f64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.f64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm
+                .collective(self.rank, buf, &self.comm.f64s, |result, all| {
+                    if root != 0 {
+                        result.clone_from(&all[root]);
+                    }
+                });
         }
         Ok(())
     }
 
     fn broadcast_c64(&self, root: usize, buf: &mut [Complex64]) {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.c64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm
+                .collective(self.rank, buf, &self.comm.c64s, |result, all| {
+                    if root != 0 {
+                        result.clone_from(&all[root]);
+                    }
+                });
         }
     }
 
     fn broadcast_i64(&self, root: usize, buf: &mut [i64]) -> Result<(), String> {
         if self.comm.size > 1 {
-            let all = self.comm.gather(self.rank, buf, |s| &mut s.i64s);
-            buf.copy_from_slice(&all[root]);
+            self.comm
+                .collective(self.rank, buf, &self.comm.i64s, |result, all| {
+                    if root != 0 {
+                        result.clone_from(&all[root]);
+                    }
+                });
         }
         Ok(())
     }
@@ -523,10 +580,12 @@ impl Reducer for ThreadReducer {
         if self.comm.size == 1 {
             return Ok(info);
         }
-        let all = self
-            .comm
-            .gather(self.rank, &[i64::from(info)], |s| &mut s.i64s);
-        Ok(all.iter().map(|v| v[0]).max().expect("nonempty") as i32)
+        let mut result = [i64::from(info)];
+        self.comm
+            .collective(self.rank, &mut result, &self.comm.i64s, |result, all| {
+                result[0] = all.iter().map(|v| v[0]).max().expect("nonempty");
+            });
+        Ok(result[0] as i32)
     }
 
     fn world_size(&self) -> usize {

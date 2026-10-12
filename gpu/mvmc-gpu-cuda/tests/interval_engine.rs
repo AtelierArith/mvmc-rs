@@ -4,10 +4,13 @@
 
 use std::sync::{Arc, Barrier};
 
+use mvmc_core::multichain::{ThreadComm, ThreadReducer};
 use mvmc_core::pfaffian::calc_m_all_real;
+use mvmc_core::sampling::engine::SamplingEngine;
+use mvmc_core::sampling::stage::{StageGeom, StageTables};
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
-use mvmc_gpu_cuda::interval_engine::IntervalGroup;
+use mvmc_gpu_cuda::interval_engine::{IntervalEngine, IntervalGroup};
 use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
 use tenferro_tensor::BackendSessionHost;
 
@@ -77,8 +80,10 @@ fn interval_group_threaded_matches_single_threaded() {
     let mut slater = SlaterElmFlat::<f64>::zeros(NQP, NSITE);
     for q in 0..NQP {
         for row in 0..n2 {
-            for col in 0..n2 {
-                slater.set(q, row, col, rng.next_u32() as f64 / u32::MAX as f64 - 0.5);
+            for col in row + 1..n2 {
+                let value = rng.next_u32() as f64 / u32::MAX as f64 - 0.5;
+                slater.set(q, row, col, value);
+                slater.set(q, col, row, -value);
             }
         }
     }
@@ -96,8 +101,10 @@ fn interval_group_threaded_matches_single_threaded() {
         let ele_i64: Vec<i64> = ele.iter().map(|&v| v as i64).collect();
         let mut inv = InvMColMajor::<f64>::zeros(NQP, NE);
         let mut pf = vec![0.0f64; NQP];
-        calc_m_all_real(&ele_i64, &slater, &mut inv, &mut pf, 0, NQP, NSITE, NE, &pool)
-            .expect("host Pfaffian");
+        calc_m_all_real(
+            &ele_i64, &slater, &mut inv, &mut pf, 0, NQP, NSITE, NE, &pool,
+        )
+        .expect("host Pfaffian");
         ele_all.extend_from_slice(&ele);
         for q in 0..NQP {
             inv_all.extend_from_slice(inv.qp_matrix_slice(q));
@@ -167,54 +174,125 @@ fn interval_group_threaded_matches_single_threaded() {
         reference = states;
     }
 
-    // --- Threaded group. ---
-    let group = IntervalGroup::new(
-        geom(),
-        slater.as_slice().to_vec(),
-        weights.clone(),
-        gutz.clone(),
-        jast.clone(),
-        params.clone(),
-    );
-    for w in 0..WALKERS {
-        group.stage_initial(
-            w,
-            ele_all[w * n..(w + 1) * n].to_vec(),
-            inv_all[w * NQP * n * n..(w + 1) * NQP * n * n].to_vec(),
-            pf_all[w * NQP..(w + 1) * NQP].to_vec(),
+    // --- Threaded group: the common tables are published once, by walker 0.
+    // Exercise both arrival orders; a non-root rank may stage before or after the root.
+    for (root_last, device_initialization) in [(false, false), (true, false), (false, true)] {
+        let group = IntervalGroup::new(
+            geom(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
         );
-    }
-    let barrier = Arc::new(Barrier::new(WALKERS));
-    let mut out = vec![(Vec::<i32>::new(), Vec::<f64>::new()); WALKERS];
-    std::thread::scope(|scope| {
-        let mut handles = Vec::new();
-        for w in 0..WALKERS {
-            let group = group.clone();
-            let barrier = barrier.clone();
-            handles.push(scope.spawn(move || {
-                let mut tapes = Vec::new();
-                for block in 0..BLOCKS {
-                    tapes.push(block_tape(w, block));
-                }
-                for tape in &tapes {
-                    group
-                        .run_block(w, BLOCK, tape, &|| {
-                            barrier.wait();
-                        })
-                        .expect("group run_block");
-                }
-                group.walker_state(w)
-            }));
+        for arrival in 0..WALKERS {
+            let w = if root_last {
+                WALKERS - 1 - arrival
+            } else {
+                arrival
+            };
+            group.begin_series_walker(
+                w,
+                geom(),
+                if w == 0 {
+                    slater.as_slice().to_vec()
+                } else {
+                    Vec::new()
+                },
+                if w == 0 { weights.clone() } else { Vec::new() },
+                if w == 0 { gutz.clone() } else { Vec::new() },
+                if w == 0 { jast.clone() } else { Vec::new() },
+                if w == 0 { params.clone() } else { Vec::new() },
+                ele_all[w * n..(w + 1) * n].to_vec(),
+                inv_all[w * NQP * n * n..(w + 1) * NQP * n * n].to_vec(),
+                pf_all[w * NQP..(w + 1) * NQP].to_vec(),
+            );
         }
-        for (w, h) in handles.into_iter().enumerate() {
-            let st = h.join().expect("thread");
-            out[w] = (st.ele.clone(), st.pf.clone());
-        }
-    });
+        let barrier = Arc::new(Barrier::new(WALKERS));
+        let comm = ThreadComm::new(WALKERS);
+        let mut out = vec![(Vec::<i32>::new(), Vec::<f64>::new()); WALKERS];
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for w in 0..WALKERS {
+                let group = group.clone();
+                let barrier = barrier.clone();
+                let reducer = ThreadReducer::new(comm.clone(), w, 0);
+                let (slater, weights, gutz, jast, params, ele_all, pf_all) =
+                    (&slater, &weights, &gutz, &jast, &params, &ele_all, &pf_all);
+                handles.push(scope.spawn(move || {
+                    if device_initialization {
+                        let mut engine = IntervalEngine::new(
+                            group.clone(),
+                            w,
+                            geom(),
+                            weights.clone(),
+                            gutz.clone(),
+                            jast.clone(),
+                            params.clone(),
+                        );
+                        let mut inv = InvMColMajor::<f64>::zeros(NQP, NE);
+                        let mut pf = vec![f64::NAN; NQP];
+                        let pool = ThreadedPfaPackWorkspace::new(n, 1);
+                        let cfg: Vec<i64> = ele_all[w * n..(w + 1) * n]
+                            .iter()
+                            .map(|&v| i64::from(v))
+                            .collect();
+                        let stage_geom = StageGeom {
+                            n_site: NSITE,
+                            n_elec: NE,
+                            qp_start: 0,
+                            qp_end: NQP,
+                            inv_stride: n * n + 1,
+                        };
+                        let mut tables = StageTables {
+                            slater_elm: slater,
+                            inv_m: &mut inv,
+                            pf_m: &mut pf,
+                            pool: &pool,
+                        };
+                        assert!(engine
+                            .initialize_real(&stage_geom, &mut tables, &cfg, BLOCK, &reducer)
+                            .expect("device initialization"));
+                        // Same pivoted FP64 algorithm on valid skew input. No relaxed
+                        // trajectory comparison: the following tapes/configurations are exact.
+                        for (q, &actual) in tables.pf_m.iter().enumerate() {
+                            let expected = pf_all[w * NQP + q];
+                            assert!((actual - expected).abs() <= 1e-12 + 1e-12 * expected.abs());
+                        }
+                        assert!(tables.inv_m.is_stale());
+                        engine
+                            .begin(&stage_geom, &mut tables, &cfg)
+                            .expect("resident begin");
+                    }
+                    let mut tapes = Vec::new();
+                    for block in 0..BLOCKS {
+                        tapes.push(block_tape(w, block));
+                    }
+                    for tape in &tapes {
+                        group
+                            .run_block(w, BLOCK, tape, &|| {
+                                barrier.wait();
+                            })
+                            .expect("group run_block");
+                    }
+                    group.walker_state(w)
+                }));
+            }
+            for (w, h) in handles.into_iter().enumerate() {
+                let st = h.join().expect("thread");
+                out[w] = (st.ele.clone(), st.pf.clone());
+            }
+        });
 
-    for w in 0..WALKERS {
-        let (ref_ele, ref_pf, _, _) = &reference[w];
-        assert_eq!(&out[w].0, ref_ele, "walker {w} configuration");
-        assert_eq!(&out[w].1, ref_pf, "walker {w} Pfaffian");
+        for w in 0..WALKERS {
+            let (ref_ele, ref_pf, _, _) = &reference[w];
+            assert_eq!(&out[w].0, ref_ele, "walker {w} configuration");
+            for (&a, &b) in out[w].1.iter().zip(ref_pf) {
+                assert!(
+                    (a - b).abs() <= 1e-12 + 1e-12 * b.abs(),
+                    "walker {w} Pfaffian: {a} vs {b}"
+                );
+            }
+        }
     }
 }

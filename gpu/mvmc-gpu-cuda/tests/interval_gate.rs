@@ -45,8 +45,10 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let mut rng = Lcg(0x1234_5678_9abc_def0);
     let mut slater = SlaterElmFlat::<f64>::zeros(nqp, nsite);
     for row in 0..n2 {
-        for col in 0..n2 {
-            slater.set(0, row, col, rng.next_f64() - 0.5);
+        for col in row + 1..n2 {
+            let value = rng.next_f64() - 0.5;
+            slater.set(0, row, col, value);
+            slater.set(0, col, row, -value);
         }
     }
     let ele_idx: Vec<i64> = vec![0, 1, 2, 3];
@@ -94,7 +96,9 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let tape: Vec<u32> = (0..total_hops * 5).map(|_| rng.next_u32()).collect();
 
     let sampler = backend
-        .with_backend_session(|session| IntervalSampler::prepare(session, geom, &host, total_hops, 0.0))
+        .with_backend_session(|session| {
+            IntervalSampler::prepare(session, geom, &host, total_hops, 0.0)
+        })
         .expect("prepare");
 
     backend

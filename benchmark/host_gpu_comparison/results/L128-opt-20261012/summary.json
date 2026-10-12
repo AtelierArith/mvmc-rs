@@ -1,0 +1,86 @@
+{
+  "rust": {
+    "median": 47.858827265,
+    "min": 47.738788764,
+    "max": 48.063632809,
+    "per_step": 2.3929413632500003,
+    "cold": 55.461385919,
+    "startup": 0.006189697996887844
+  },
+  "julia": {
+    "median": 5.124929273,
+    "min": 5.120736923,
+    "max": 5.139374207,
+    "per_step": 0.25624646365000003,
+    "cold": 55.313755989,
+    "startup": 6.812934356996266
+  },
+  "rust_over_julia": 9.338436633094195,
+  "rust_timer_medians": {
+    "All [0]": 47.85199,
+    "Initialization [1]": 0.00528,
+    "read options [10]": 0.0,
+    "ReadDefFile [11]": 0.00519,
+    "SetMemory [12]": 0.0,
+    "InitParameter [13]": 5e-05,
+    "VMCParaOpt [2]": 47.82351,
+    "VMCMakeSample [3]": 40.50339,
+    "makeInitialSample [30]": 0.26957,
+    "make candidate [31]": 0.12836,
+    "hopping update [32]": 33.60879,
+    "UpdateProjCnt [60]": 0.91657,
+    "CalculateNewPfM2 [61]": 31.59648,
+    "CalculateLogIP [62]": 0.08992,
+    "UpdateMAll [63]": 0.0143,
+    "exchange update [33]": 0.0,
+    "UpdateProjCnt [65]": 0.0,
+    "CalculateNewPfMTwo2 [66]": 0.0,
+    "CalculateLogIP [67]": 0.0,
+    "UpdateMAllTwo [68]": 0.0,
+    "lspinflip update [36]": 0.0,
+    "UpdateProjCnt [600]": 0.0,
+    "CalculateNewPfMTwo2 [601]": 0.0,
+    "CalculateLogIP [602]": 0.0,
+    "UpdateMAllTwo [603]": 0.0,
+    "recal PfM and InvM [34]": 6.40626,
+    "save electron config [35]": 0.00544,
+    "VMCMainCal [4]": 7.01587,
+    "CalculateMAll [40]": 5.41526,
+    "LocEnergyCal [41]": 1.32014,
+    "CalHamiltonian0 [70]": 0.0022,
+    "CalHamiltonian1 [71]": 0.95982,
+    "CalHamiltonian2 [72]": 0.0,
+    "ReturnSlaterElmDiff [42]": 0.00529,
+    "calculate OO and HO [43]": 0.04022,
+    "multiply store OO [45]": 6e-05,
+    "StochasticOpt [5]": 0.13373,
+    "preprocess [50]": 0.00025,
+    "stcOptMain [51]": 0.13317,
+    "initBLACS [55]": 0.0,
+    "calculate S and g [56]": 0.04326,
+    "DPOSV [57]": 0.08991,
+    "gatherParaChange [58]": 0.0,
+    "postprocess [52]": 0.00016,
+    "UpdateSlaterElm [20]": 0.1026,
+    "WeightAverage [21]": 9e-05,
+    "outputData [22]": 0.06519,
+    "SyncModifiedParameter [23]": 0.00014,
+    "cal [24]": 0.06436,
+    "SR [25]": 7e-05,
+    "MAll [69]": 0.0
+  },
+  "rust_repeatability": {
+    "zvo_out.dat": {
+      "identical_files": 6,
+      "sha256": "c8864712e28abe33d1e091e7d6b3f7ab1aca801c61e23c6a2a086d1d1ee4afda"
+    },
+    "zvo_var.dat": {
+      "identical_files": 6,
+      "sha256": "f96fdabedb91ad8386e34fbe0f0cc4baab4a8817716f7a13b395dae02f3e866e"
+    },
+    "zqp_opt.dat": {
+      "identical_files": 6,
+      "sha256": "43ceb81f01371b80e0bc91e64f7dd9d00f059d4bd518b0ab4317d9badf3fe184"
+    }
+  }
+}
