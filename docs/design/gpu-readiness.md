@@ -988,6 +988,13 @@ through either backend of #421 (`MVMC_RS_SR_BACKEND`).
   `MPI_Allreduce` leaves the order to the MPI library, so Rust and C can differ by last-bit
   roundoff for `W > 2` (`W <= 2` is a single sum of two terms; observed agreement is within the
   1e-13 + 1e-12 relative bound of `tests/fixtures/mpi_matrix_179/README.md` in every cell).
+* **Collective storage (#550).** Each rank deposits into a reusable contribution buffer. The
+  last arrival reduces once in rank order, and each rank copies only the result. A second
+  barrier prevents reuse until all readers finish. This replaces cloning and reducing all
+  `W` contributions independently on every rank: a vector of length `N` now costs `O(W*N)`
+  copying and arithmetic, instead of `O(W*W*N)`. The same protocol serves sums, broadcasts
+  and integer MAX. Regression coverage varies arrival order, message length, root and numeric
+  type across repeated generations, including empty messages and non-associative sums.
 * **Threads.** The collectives need all walkers running, so one OS thread per walker is used
   (not a pool smaller than `W`); everything inside a walker is single-threaded. The SR tenferro
   backend is a process-wide, mutex-guarded runtime (one runtime built once), so walkers
