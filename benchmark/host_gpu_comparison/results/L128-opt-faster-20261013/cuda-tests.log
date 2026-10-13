@@ -1,0 +1,347 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+   Compiling mvmc-gpu-cuda v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 4.55s
+────────────
+ Nextest run ID 29db48d7-33be-4aac-a652-fc7335f110dd with nextest profile: default
+    Starting 26 tests across 7 binaries (2 tests skipped)
+        PASS [   4.851s] ( 1/26) mvmc-gpu-cuda interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries
+  stdout ───
+
+    running 1 test
+    test interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 4.68s
+
+  stderr ───
+    delayed n=128 max inverse residual=1.0416667528545531e-11 relative inverse=1.426310095565025e-12 relative pf=1.2986041811424493e-12
+    delayed n=130 max inverse residual=7.1064265583231645e-12 relative inverse=1.783141134602289e-12 relative pf=1.8289888436538607e-12
+    delayed n=192 max inverse residual=2.2648480313414154e-11 relative inverse=1.6306246316428395e-12 relative pf=1.9825001063943454e-12
+
+        PASS [   6.502s] ( 2/26) mvmc-gpu-cuda interval::resident::tests::failed_rebuild_is_latched_and_cannot_publish_results
+  stdout ───
+
+    running 1 test
+    test interval::resident::tests::failed_rebuild_is_latched_and_cannot_publish_results ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 6.30s
+
+
+        PASS [   4.708s] ( 3/26) mvmc-gpu-cuda interval::resident::tests::paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers
+  stdout ───
+
+    running 1 test
+    test interval::resident::tests::paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 4.52s
+
+  stderr ───
+    paired n=128 q=0 cancellation=false inverse=2.1858252790467522e-14 pf=1.971243044611494e-14 residual=6.905587213168474e-14 bound=1.7849251837751109e-9
+    paired n=128 q=1 cancellation=false inverse=2.0148238857529138e-13 pf=2.0208965526053106e-13 residual=4.738431869100168e-13 bound=8.498289704726329e-9
+    paired n=130 q=0 cancellation=false inverse=2.1603533783330658e-14 pf=2.3466219032960615e-14 residual=7.349676423018536e-14 bound=1.6495423558608937e-9
+    paired n=130 q=1 cancellation=false inverse=1.023068395471004e-14 pf=7.97713314441481e-15 residual=4.894695759816159e-14 bound=1.0834379416496517e-9
+    paired n=256 q=0 cancellation=false inverse=9.529049662050658e-14 pf=9.094521647370381e-14 residual=3.051864316816477e-13 bound=1.2948114421433804e-8
+    paired n=256 q=1 cancellation=false inverse=5.6842491675246514e-14 pf=4.8164405672923326e-14 residual=6.553646514362299e-13 bound=2.680372478912023e-8
+    paired n=512 q=0 cancellation=false inverse=9.060045567842843e-14 pf=7.001232128549333e-14 residual=3.8525432843883323e-13 bound=2.5371032438212826e-8
+    paired n=512 q=1 cancellation=false inverse=1.5638144013223813e-13 pf=3.364130656470975e-14 residual=4.405087405956465e-13 bound=2.489383775721149e-8
+    paired n=128 q=0 cancellation=true inverse=2.5313381159492363e-14 pf=2.633120271269368e-14 residual=2.853273173286652e-14 bound=1.7849251837751109e-9
+    paired n=128 q=1 cancellation=true inverse=2.5313381159492363e-14 pf=2.633120271269368e-14 residual=2.853273173286652e-14 bound=1.7849251837751109e-9
+
+        PASS [   0.014s] ( 4/26) mvmc-gpu-cuda interval::resident::tests::resident_geometry_fits_shared_memory_and_whole_warp_groups
+  stdout ───
+
+    running 1 test
+    test interval::resident::tests::resident_geometry_fits_shared_memory_and_whole_warp_groups ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+
+        PASS [   3.591s] ( 5/26) mvmc-gpu-cuda interval::tests::failed_rebuild_preserves_all_resident_tables
+  stdout ───
+
+    running 1 test
+    test interval::tests::failed_rebuild_preserves_all_resident_tables ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 3.41s
+
+
+        PASS [   0.015s] ( 6/26) mvmc-gpu-cuda interval_engine::tests::failed_device_pass_releases_every_peer_and_allows_next_pass
+  stdout ───
+
+    running 1 test
+    test interval_engine::tests::failed_device_pass_releases_every_peer_and_allows_next_pass ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+
+        PASS [   0.648s] ( 7/26) mvmc-gpu-cuda interval_engine::tests::interval_backend_honors_device_selection_and_switches
+  stdout ───
+
+    running 1 test
+    test interval_engine::tests::interval_backend_honors_device_selection_and_switches ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.47s
+
+  stderr ───
+    verified selection across 2 visible CUDA devices
+
+        PASS [   0.012s] ( 8/26) mvmc-gpu-cuda interval_engine::tests::unsupported_inputs_return_before_device_setup_or_rendezvous
+  stdout ───
+
+    running 1 test
+    test interval_engine::tests::unsupported_inputs_return_before_device_setup_or_rendezvous ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+
+        PASS [  10.262s] ( 9/26) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_general_operators
+  stdout ───
+
+    running 1 test
+    independent Julia stages passed; SR backward error=6.545253071718334e-17
+    test opt::tests::resident_opt_matches_julia_general_operators ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 10.05s
+
+
+        PASS [  10.172s] (10/26) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_l128_stages
+  stdout ───
+
+    running 1 test
+    independent Julia stages passed; SR backward error=1.8716174494267565e-16
+    test opt::tests::resident_opt_matches_julia_l128_stages ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 9.97s
+
+
+        PASS [   1.157s] (11/26) mvmc-gpu-cuda opt::tests::resident_opt_rejects_failed_sr
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_rejects_failed_sr ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.97s
+
+
+        PASS [  30.175s] (12/26) mvmc-gpu-cuda opt::tests::resident_opt_repeats_twenty_steps
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_repeats_twenty_steps ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 29.90s
+
+
+        PASS [  10.196s] (13/26) mvmc-gpu-cuda opt::tests::resident_opt_single_walker_has_zero_sr_update
+  stdout ───
+
+    running 1 test
+    test opt::tests::resident_opt_single_walker_has_zero_sr_update ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 10.00s
+
+
+        PASS [   6.531s] (14/26) mvmc-gpu-cuda::interval_e2e interval_group_opt_hubbard_l16_e2e
+  stdout ───
+
+    running 1 test
+    test interval_group_opt_hubbard_l16_e2e ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.35s
+
+  stderr ───
+    walker 0: status=0 etot=16.078084075634404+0i
+    walker 1: status=0 etot=16.078084075634404+0i
+    walker 2: status=0 etot=16.078084075634404+0i
+    walker 3: status=0 etot=16.078084075634404+0i
+    walker 4: status=0 etot=16.078084075634404+0i
+    walker 5: status=0 etot=16.078084075634404+0i
+    walker 6: status=0 etot=16.078084075634404+0i
+    walker 7: status=0 etot=16.078084075634404+0i
+    walker 8: status=0 etot=16.078084075634404+0i
+    walker 9: status=0 etot=16.078084075634404+0i
+    walker 10: status=0 etot=16.078084075634404+0i
+    walker 11: status=0 etot=16.078084075634404+0i
+    walker 12: status=0 etot=16.078084075634404+0i
+    walker 13: status=0 etot=16.078084075634404+0i
+    walker 14: status=0 etot=16.078084075634404+0i
+    walker 15: status=0 etot=16.078084075634404+0i
+    walker 16: status=0 etot=16.078084075634404+0i
+    walker 17: status=0 etot=16.078084075634404+0i
+    walker 18: status=0 etot=16.078084075634404+0i
+    walker 19: status=0 etot=16.078084075634404+0i
+    walker 20: status=0 etot=16.078084075634404+0i
+    walker 21: status=0 etot=16.078084075634404+0i
+    walker 22: status=0 etot=16.078084075634404+0i
+    walker 23: status=0 etot=16.078084075634404+0i
+    walker 24: status=0 etot=16.078084075634404+0i
+    walker 25: status=0 etot=16.078084075634404+0i
+    walker 26: status=0 etot=16.078084075634404+0i
+    walker 27: status=0 etot=16.078084075634404+0i
+    walker 28: status=0 etot=16.078084075634404+0i
+    walker 29: status=0 etot=16.078084075634404+0i
+    walker 30: status=0 etot=16.078084075634404+0i
+    walker 31: status=0 etot=16.078084075634404+0i
+    walker 32: status=0 etot=16.078084075634404+0i
+    walker 33: status=0 etot=16.078084075634404+0i
+    walker 34: status=0 etot=16.078084075634404+0i
+    walker 35: status=0 etot=16.078084075634404+0i
+    walker 36: status=0 etot=16.078084075634404+0i
+    walker 37: status=0 etot=16.078084075634404+0i
+    walker 38: status=0 etot=16.078084075634404+0i
+    walker 39: status=0 etot=16.078084075634404+0i
+    walker 40: status=0 etot=16.078084075634404+0i
+    walker 41: status=0 etot=16.078084075634404+0i
+    walker 42: status=0 etot=16.078084075634404+0i
+    walker 43: status=0 etot=16.078084075634404+0i
+    walker 44: status=0 etot=16.078084075634404+0i
+    walker 45: status=0 etot=16.078084075634404+0i
+    walker 46: status=0 etot=16.078084075634404+0i
+    walker 47: status=0 etot=16.078084075634404+0i
+    walker 48: status=0 etot=16.078084075634404+0i
+    walker 49: status=0 etot=16.078084075634404+0i
+    walker 50: status=0 etot=16.078084075634404+0i
+    walker 51: status=0 etot=16.078084075634404+0i
+    walker 52: status=0 etot=16.078084075634404+0i
+    walker 53: status=0 etot=16.078084075634404+0i
+    walker 54: status=0 etot=16.078084075634404+0i
+    walker 55: status=0 etot=16.078084075634404+0i
+    walker 56: status=0 etot=16.078084075634404+0i
+    walker 57: status=0 etot=16.078084075634404+0i
+    walker 58: status=0 etot=16.078084075634404+0i
+    walker 59: status=0 etot=16.078084075634404+0i
+    walker 60: status=0 etot=16.078084075634404+0i
+    walker 61: status=0 etot=16.078084075634404+0i
+    walker 62: status=0 etot=16.078084075634404+0i
+    walker 63: status=0 etot=16.078084075634404+0i
+    interval E2E final energy per site (root summary): [1.0048802547271503, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN]
+
+        PASS [   6.567s] (15/26) mvmc-gpu-cuda::interval_e2e_l128 interval_group_opt_hubbard_l128_timing
+  stdout ───
+
+    running 1 test
+    test interval_group_opt_hubbard_l128_timing ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.29s
+
+  stderr ───
+    interval E2E L128: walkers=64 steps=2 smp=1 wall=5.766 s etot=134.29787438200754
+
+        PASS [  12.814s] (16/26) mvmc-gpu-cuda::interval_engine interval_group_threaded_matches_single_threaded
+  stdout ───
+
+    running 1 test
+    test interval_group_threaded_matches_single_threaded ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.64s
+
+
+        PASS [   3.622s] (17/26) mvmc-gpu-cuda::interval_gate interval_kernel_runs_and_keeps_finite_state
+  stdout ───
+
+    running 1 test
+    test interval_kernel_runs_and_keeps_finite_state ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.43s
+
+  stderr ───
+    interval: hops_done=16 rebuild=1
+
+        PASS [   4.014s] (18/26) mvmc-gpu-cuda::interval_parity interval_qp_tiles_and_batch_download_match_cpu_rebuild
+  stdout ───
+
+    running 1 test
+    test interval_qp_tiles_and_batch_download_match_cpu_rebuild ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.83s
+
+
+        PASS [   6.705s] (19/26) mvmc-gpu-cuda::interval_parity interval_shared_tape_matches_julia_gpu
+  stdout ───
+
+    running 1 test
+    test interval_shared_tape_matches_julia_gpu ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.53s
+
+  stderr ───
+    julia  ele=[4, 6, 0, 2, 4, 6, 1, 7] occ=[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1] accepted=12
+    rust   ele=[4, 6, 0, 2, 4, 6, 1, 7] occ=[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1] rounds=2 rebuilds=1
+
+        PASS [   0.558s] (20/26) mvmc-gpu-cuda::interval_parity interval_walker_upload_download_roundtrip
+  stdout ───
+
+    running 1 test
+    test interval_walker_upload_download_roundtrip ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.40s
+
+
+        PASS [   0.553s] (21/26) mvmc-gpu-cuda::resident_interval device_rng_matches_julia_calls_reseed_and_independent_owners
+  stdout ───
+
+    running 1 test
+    test device_rng_matches_julia_calls_reseed_and_independent_owners ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.40s
+
+
+        PASS [   0.792s] (22/26) mvmc-gpu-cuda::resident_interval device_rng_rejects_a_different_device_context
+  stdout ───
+
+    running 1 test
+    test device_rng_rejects_a_different_device_context ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.55s
+
+
+        PASS [   3.565s] (23/26) mvmc-gpu-cuda::resident_interval julia_log_decision_handles_overflow_and_zero_uniform
+  stdout ───
+
+    running 1 test
+    test julia_log_decision_handles_overflow_and_zero_uniform ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.39s
+
+
+        PASS [   6.583s] (24/26) mvmc-gpu-cuda::resident_interval nonfinite_proposal_overlap_preserves_walker_state
+  stdout ───
+
+    running 1 test
+    test nonfinite_proposal_overlap_preserves_walker_state ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 6.39s
+
+
+        PASS [   3.664s] (25/26) mvmc-gpu-cuda::resident_interval resident_intervals_complete_rebuild_boundaries_without_transfers
+  stdout ───
+
+    running 1 test
+    test resident_intervals_complete_rebuild_boundaries_without_transfers ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.49s
+
+
+        PASS [   6.967s] (26/26) mvmc-gpu-cuda::resident_interval resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling
+  stdout ───
+
+    running 1 test
+    test resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 6.79s
+
+
+────────────
+     Summary [ 145.244s] 26 tests run: 26 passed, 2 skipped

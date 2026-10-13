@@ -63,6 +63,25 @@ device, avoiding repeated compilation on consecutive API calls. RNG and model
 arrays belong to individual calls and are not stored in this cache. Tests
 interleave seeds and device ordinals to check isolation.
 
+For matrices of side 128 or larger, sampling retains four accepted rank-two
+updates as vectors before materializing the inverse. Ratios include every
+pending correction, including the separate electron-slot unit vectors.
+Each return, partial interval and rebuild boundary flushes the queue. A second
+inverse buffer uses the existing factorization output allocation, whose lifetime
+does not overlap sampling; only small per-walker vector packets are added.
+The resident kernel uses four warps per walker, with QP groups limited by the
+shared-memory budget. It keeps the five-word proposal tape and acceptance rule.
+
+The same matrix sizes use paired skew elimination after parameter updates or
+sampling rebuilds. Up to four rank-two elimination changes are held in shared
+memory, and the inverse grows two columns at a time. A failed factor, nonfinite
+inverse, or projected overlap cancellation above 1024 triggers the conventional
+factorizer on the device before publication. The cancellation threshold follows
+Julia's conservative fallback policy; it is not a universal forward-error bound.
+Smaller matrices retain the original operation order. FMA and warp reductions
+on the larger-matrix path change rounding, with independent CPU factorization,
+inverse residual, supplied-tape and complete Opt numerical checks under #550.
+
 ## Supported scope and checks
 
 The current runner requires real normal orbitals, conserved spin in each
@@ -71,8 +90,8 @@ direct SR (`NSRCG=0`) and serial execution. Local spins, RBM, DH, OptTrans,
 complex/general orbitals and grouped execution return errors. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
 spin-conserving InterAll. Individual QP matrices must remain nonsingular;
-singular-sector cofactor fallback and delayed/paired inverse optimizations are
-remaining work under #560/#550. Failed state reconstruction or SR is reported.
+singular-sector cofactor fallback remains under #560. Failed state reconstruction
+or SR is reported.
 Nonfinite proposal overlaps are rejected before updating the configuration,
 inverse, Pfaffian or cached overlap (#564); finite overlaps retain log-space
 acceptance for extreme ratios and zero uniform draws.

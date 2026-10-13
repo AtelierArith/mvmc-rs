@@ -1,0 +1,21 @@
+Julia=1.13.1 GPU=NVIDIA GeForce RTX 3060 BLAS=LBTConfig([ILP64] libopenblas64_.so) Julia_threads=1 BLAS_threads=1
+optimizer_source=/home/terasaki/work/atelierarith/julia-mvmc-double-main/MVMCOptimizers.jl/src/MVMCOptimizers.jl
+READY
+[ Info: Parsing completed successfully
+rep=0 seconds=55.124393567 energy_per_site=0.7795418080426915
+DONE 0
+[ Info: Parsing completed successfully
+rep=1 seconds=5.154680842 energy_per_site=0.7795418080426915
+DONE 1
+[ Info: Parsing completed successfully
+rep=2 seconds=5.134940316 energy_per_site=0.7795418080426915
+DONE 2
+[ Info: Parsing completed successfully
+rep=3 seconds=5.137973162 energy_per_site=0.7795418080426915
+DONE 3
+[ Info: Parsing completed successfully
+rep=4 seconds=5.133839196 energy_per_site=0.7795418080426915
+DONE 4
+[ Info: Parsing completed successfully
+rep=5 seconds=5.143356748 energy_per_site=0.7795418080426915
+DONE 5

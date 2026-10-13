@@ -7,16 +7,16 @@ extern "C" __global__ void interval_resident_hop(
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj,
-    int* hops_done, int* rebuild, int* accepts, int* total_accepts, const int* error) {
+    int* hops_done, int* rebuild, int* accepts, int* total_accepts, const int* error, double* delayed, double* flush) {
   if (*error) return;  // block-uniform; previous launch owns the error flag
   if (n == 128) {
-    interval_hop_impl(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
+    interval_hop_impl<true>(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
       params, tape, total_hops, hop_off, 128, ne, nsite, nqp, qp_groups, ngutz,
-      nproj, 0.0, hops_done, rebuild, accepts);
+      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 ? delayed : nullptr, flush);
   } else {
-    interval_hop_impl(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
+    interval_hop_impl<true>(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
       params, tape, total_hops, hop_off, n, ne, nsite, nqp, qp_groups, ngutz,
-      nproj, 0.0, hops_done, rebuild, accepts);
+      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 ? delayed : nullptr, flush);
   }
   // interval_hop_impl publishes accepts from thread 0 of the same block.
   if (threadIdx.x == 0) total_accepts[blockIdx.x] += accepts[blockIdx.x];

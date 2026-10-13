@@ -1,0 +1,30 @@
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> /home/terasaki/work/atelierarith/mvmc-rs-gpu-interval-opt/third_party/tenferro-runtime/src/runtime/snapshot.rs:2584:10
+     |
+2584 |         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |          ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+2584 -         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+2584 +         .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+     |
+
+warning: `tenferro-runtime` (lib) generated 1 warning (run `cargo fix --lib -p tenferro-runtime` to apply 1 suggestion)
+    Finished `test` profile [optimized] target(s) in 0.19s
+────────────
+ Nextest run ID 7568b6eb-d363-4623-85b9-74dc1160b8a5 with nextest profile: default
+    Starting 1 test across 1 binary (13 tests skipped)
+        PASS [  14.985s] (1/1) mvmc-gpu-cuda opt::tests::resident_opt_pipeline
+  stdout ───
+
+    running 1 test
+    resident run=10.596525544s traffic=RawExecCounters { upload_calls: 0, upload_bytes: 0, download_calls: 0, download_bytes: 0, synchronizations: 1, scopes: 1 } energies=[116.86444093797245, 115.90031725538918, 116.19029187988345, 113.83890316340164, 112.69098734504416, 112.58784502863205, 111.78673234413561, 110.27447746569385, 110.12754107564464, 106.83337193417285, 108.32349824477815, 105.40975322470811, 106.0920350308148, 106.07606024728652, 104.15433717695377, 102.46819179545938, 102.02432413487954, 99.54661423275124, 99.40393227010262, 99.78135142946314]
+    test opt::tests::resident_opt_pipeline ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 14.79s
+
+
+────────────
+     Summary [  14.985s] 1 test run: 1 passed, 13 skipped

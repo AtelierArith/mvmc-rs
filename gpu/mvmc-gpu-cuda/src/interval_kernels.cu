@@ -10,10 +10,10 @@
 // per-hop host<->device round trip that dominates the production lock-step sampler
 // (`k_propose`/`k_accept` driven once per hop from the host).
 //
-// The arithmetic of the rank-one ratio and the rank-two inverse update is the same as
-// `k_propose` / `k_accept` (sampler_kernels.cu): products are formed in parallel and
-// summed in index order by one thread, so each serial sum keeps the host's C-order
-// rounding while the gather latency is spread over the block.
+// The legacy entry retains `k_propose` / `k_accept`'s separate products and
+// ordered sums. At n >= 128 the resident entry follows Julia GPU's FMA
+// arithmetic and four queued rank-two updates with warp-reduced ratios. The
+// supplied tape, projection delta and log-space decision contract are shared.
 //
 // Proposal contract: the tape is the Julia GPU sampler's device tape
 // (MVMCOptimizers.jl/ext/cuda_sampling_update.jl:cached_sampling_kernel!), so a tape can be
@@ -40,8 +40,8 @@
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-two inverse update (the k_accept `!two` branch) for one QP plane.
 // ---------------------------------------------------------------------------------------------
-// All groups reach every block barrier, including an inactive final QP tile. Within
-// each QP, every scalar sum keeps exactly the original ascending-j arithmetic order.
+// All groups reach every block barrier, including an inactive final QP tile.
+// Immediate updates retain the original separate products and ascending-j order.
 __device__ inline void interval_hop_update(double* invq, const double* tab, int qp, const int* rs,
                                            int n, int n2, int msa, double* v1, double* v2,
                                            double* v3, int tid, int nt, bool active) {
@@ -144,12 +144,13 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
 //
 // Shared memory: aligned n ints, nqp+1 doubles, reusable ratio/update scratch, 8 ints.
 // ---------------------------------------------------------------------------------------------
+template <bool resident = false>
 __device__ __forceinline__ void interval_hop_impl(
     int* ele, int* occ, double* inv, double* pf, int* aw, double* logip,
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
-    int* hops_done, int* rebuild, int* accepts) {
+    int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -175,6 +176,13 @@ __device__ __forceinline__ void interval_hop_impl(
   int* occ_w = occ + (size_t)w * 2 * nsite;
   double* inv_w = inv + (size_t)w * nqp * n * n;
   double* pf_w = pf + (size_t)w * nqp;
+  const bool queue = resident && delayed != nullptr;
+  const int packet = 2*INTERVAL_DELAY*n+2*INTERVAL_DELAY+1;
+  double* delay_w = queue ? delayed+(size_t)w*nqp*packet : nullptr;
+  double* original_inv = inv_w;
+  double* alternate = queue ? flush+(size_t)w*nqp*n*n : nullptr;
+  int* sites = mvw+8;
+  int pending = 0;
   // Julia tape layout [word][walker][step]: 5*(walker + walkers*step) + word.
   const unsigned int* tape_w = tape + (size_t)w * 5;
   const size_t tape_stride = 5 * (size_t)gridDim.x;
@@ -240,13 +248,17 @@ __device__ __forceinline__ void interval_hop_impl(
         const int rsa = rs[msa];
         const double* row = tab + (((size_t)q * n2) + rsa) * n2;
         const double* inv_row = invq + (size_t)msa * n;
-        for (int j = lane; j < n; j += 32) sc[j] = inv_row[j] * row[rs[j]];
-        __syncwarp();
-        if (lane == 0) {
-          double ratio = 0.0;
+        if (queue) {
+          interval_delayed_ratio(invq,delay_w+q*packet,sites,pending,row,rs,n,msa,lane,pf_w[q],pfnew+q);
+        } else {
+          for (int j = lane; j < n; j += 32) sc[j] = inv_row[j] * row[rs[j]];
+          __syncwarp();
+          if (lane == 0) {
+            double ratio = 0.0;
 #pragma unroll 8
-          for (int j = 0; j < n; ++j) ratio += sc[j];
-          pfnew[q] = -ratio * pf_w[q];
+            for (int j = 0; j < n; ++j) ratio += sc[j];
+            pfnew[q] = -ratio * pf_w[q];
+          }
         }
         __syncwarp();  // lane 0 must finish reading before the next QP reuses scratch
       }
@@ -279,11 +291,23 @@ __device__ __forceinline__ void interval_hop_impl(
         const int q = base + group;
         const bool active = q < nqp;
         double* invq = active ? inv_w + (size_t)q * n * n : inv_w;
-        interval_hop_update(invq, tab, q, rs, n, n2, msa, v1, v2, v3,
-                            group_tid, group_threads, active);
+        if (queue)
+          interval_delayed_update(invq,delay_w+(active?q:0)*packet,sites,pending,tab,q,rs,n,n2,msa,
+                                  v1,v2,v3,group_tid,group_threads,active);
+        else
+          interval_hop_update(invq, tab, q, rs, n, n2, msa, v1, v2, v3,
+                                    group_tid, group_threads, active);
         if (active && group_tid == 0) pf_w[q] = pfnew[q];
       }
       __syncthreads();
+      if (queue) {
+        if (tid == 0) sites[pending] = msa;
+        __syncthreads();
+        if (++pending == INTERVAL_DELAY) {
+          interval_delayed_flush(inv_w,alternate,delay_w,sites,pending,n,nqp,tid,nt);
+          pending = 0;
+        }
+      }
       if (tid == 0) {
         log_old = out[0];
         ++accepted;
@@ -298,6 +322,13 @@ __device__ __forceinline__ void interval_hop_impl(
     }
   }
 
+  if (queue) {
+    interval_delayed_flush(inv_w,alternate,delay_w,sites,pending,n,nqp,tid,nt);
+    if (inv_w != original_inv) {
+      for (size_t e=tid; e<(size_t)nqp*n*n; e+=nt) original_inv[e]=inv_w[e];
+      __syncthreads();
+    }
+  }
   if (tid == 0) {
     hop_off[w] = start + advanced;
     hops_done[w] = advanced;
