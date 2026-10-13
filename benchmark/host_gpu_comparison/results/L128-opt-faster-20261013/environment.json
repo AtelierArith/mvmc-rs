@@ -1,0 +1,88 @@
+{
+  "rust_source": "051f8983ebbeb47a5edc4a9f770fc70d5a159916",
+  "rust_binary_sha256": "1c6792abe3847f7db3d17601ae797d7014dab6e18673ea00d7880e40bb744246",
+  "julia_source": "47452f9061ec3de049d891a7aa7fd9cfeac228a4",
+  "julia_submodules": [
+    "9161cda40d6f69370b4104db865805de947686d9 PfaPack.jl (v0.1.0-2-g9161cda)",
+    " 1526553009f318ae78338151460fda78beadddc2 SFMT.jl (v0.1.0)"
+  ],
+  "julia_gpu_lock_sha256": "86c69ea3a0c04c2b6af6f48a3f36ec2a08fa2bc564ac4845f5799e53244fc573",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "platform": "Linux-6.8.0-146-generic-x86_64-with-glibc2.39",
+  "date": "2026-10-13T09:10:21+09:00",
+  "gpu": [
+    "0, NVIDIA GeForce RTX 3060, GPU-a78d5217-eba3-72c2-3d5b-8ae496ebbc2e, 580.178.04, 12288 MiB",
+    "1, NVIDIA GeForce RTX 3060, GPU-ed896702-ca5c-93f6-2537-06fffdac4a91, 580.178.04, 12288 MiB"
+  ],
+  "cuda_visible_devices": "1",
+  "host_threads": 1,
+  "blas_threads": 1,
+  "nsite": 128,
+  "nelec_per_spin": 64,
+  "nqp": 8,
+  "nparameters": 772,
+  "walkers": 320,
+  "steps": 20,
+  "warmup": 128,
+  "interval": 128,
+  "seed": 79,
+  "loaded_libraries": {
+    "rust": [
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcublas.so.12.8.4.1",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcublasLt.so.12.8.4.1",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcudart.so.12.8.90",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcurand.so.10.3.9.90",
+      "/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib/libcusolver.so.11.7.3.90",
+      "/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib/libnvrtc-builtins.so.12.8.93",
+      "/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib/libnvrtc.so.12.8.93",
+      "/usr/lib/x86_64-linux-gnu/libcuda.so.580.178.04"
+    ],
+    "julia": [
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcublas.so.13.8.0.4",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcublasLt.so.13.8.0.4",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcudart.so.13.4.92",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcurand.so.10.4.4.72",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcusolver.so.12.3.4.7",
+      "/home/terasaki/.julia/artifacts/48ebf904c06694f2b482ffa6b0ef661d41b78bb2/lib/libcusolverMg.so.12.3.4.7",
+      "/home/terasaki/.julia/artifacts/5bf47e8b1f0daf3dafb58ff7f319899fecdd4372/lib/libcuda.so.610.57.04",
+      "/home/terasaki/.julia/artifacts/5bf47e8b1f0daf3dafb58ff7f319899fecdd4372/lib/libcudadebugger.so.610.57.04",
+      "/home/terasaki/.julia/artifacts/b45ee04956fd146b4ecfa1b82aff3a7614d22e1f/lib/libnvrtc-builtins.so.13.4.92",
+      "/home/terasaki/.julia/artifacts/b45ee04956fd146b4ecfa1b82aff3a7614d22e1f/lib/libnvrtc.so.13.4.92",
+      "/home/terasaki/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/libopenblas64_.0.3.30.so"
+    ]
+  },
+  "input_sha256": {
+    "StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+    "coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+    "greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+    "greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+    "gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+    "jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+    "locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+    "modpara.def": "7ca59366e516f2b057e37dfcfe27cdd1bd36a0d11d331bd03dc94ada74c667d1",
+    "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+    "orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697",
+    "qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+    "trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da"
+  },
+  "receipt_sha256": {
+    "rust-output/rep-0.txt": "74c1699075f9a8e6c05f98c4c6b67789aefabc810ce1d294b3760e07ac20827a",
+    "rust-output/rep-1.txt": "f39198f5615901887daa849e1316ce9346f0f2ca1f7fa41e6404bd9061f55727",
+    "rust-output/rep-2.txt": "00c738cf3b78c6ee090119b50ba548ac92aeeccfc723f4e80e82781d78d6d5ab",
+    "rust-output/rep-3.txt": "6f06d0a3f22a86722889f9827db25343ad4f0551c4abb0191af09f1361d61402",
+    "rust-output/rep-4.txt": "06d621935144c8280ffba3559f60f700fe18b56bd7dc49679ff5895d72483e69",
+    "rust-output/rep-5.txt": "80586e8364e925e6b29adeccaca341b19cc606aaec5fd5398d662894af6909a9",
+    "julia-output/rep-0.bin": "c0de4c4223fe162d4898cde9e86cbc6427ebb5281f42a27db6194107da0c27e0",
+    "julia-output/rep-0.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699",
+    "julia-output/rep-1.bin": "c2038bacf18097e81370f364889ba838010e86c389ac1bc21d9216180e9da753",
+    "julia-output/rep-1.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699",
+    "julia-output/rep-2.bin": "23fb8f089b5c4dc67722e51ad062798922703209130d4c4f1d6ca555dd0982f2",
+    "julia-output/rep-2.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699",
+    "julia-output/rep-3.bin": "f82ad2c829a48e2b390f001f1c84addbe8549acec043621e24e3ab442a6f09f1",
+    "julia-output/rep-3.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699",
+    "julia-output/rep-4.bin": "7d497be27faa6a15480af65acaeed7fad80f332256d26acc05aa93c9041a149b",
+    "julia-output/rep-4.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699",
+    "julia-output/rep-5.bin": "08b46048061129f847ce2cf6f626549d7f0def7290d5f0721e3f8d1c65125f2f",
+    "julia-output/rep-5.txt": "c30f81c0290cc736b4be20f402cab352524c3be9cd83d12a9801217fb2129699"
+  }
+}
