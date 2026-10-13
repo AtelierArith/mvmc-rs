@@ -42,10 +42,10 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 > - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
 > - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
 > - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
-> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:654`
-> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:116`
-> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1212`
-> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:635`
+> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:462`
+> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:147`
+> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1022`
+> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:443`
 > - Parity: the number of outer steps, the saved-sample index and the `nAccept > Nsite` refresh follow `vmcmake.c:141, 309, 334-349` (Rust `driver.rs:271-278, 532-552, 558-562`). The refresh test uses a strict `>`. `copyToBurnSample` after the last step is reproduced by the "burn" buffers of `ElectronConfiguration`; the carry-over is detected by `counter[9] != 0` (`driver.rs:167`).
 
 ## 4.2 Initial configuration
@@ -65,9 +65,9 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 > **Implementation**
 > - C: `makeInitialSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:359`
 > - Rust: `make_initial_sample` — `crates/mvmc-core/src/sampling/initial.rs:76`
-> - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:251`
-> - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:273`
-> - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:198`
+> - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:252`
+> - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:274`
+> - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:199`
 > - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:159`
 > - Parity: the draw order (local spins first, then spin 0 electrons, then spin 1 electrons), the retry limit of 100 and the collective maximum of the Pfaffian status across ranks (`MPI_Allreduce(..., MPI_MAX)`) are reproduced; the typed status/coordination tests are in `normal_initial.rs`.
 
@@ -93,7 +93,9 @@ reader).
 **Hopping candidate** (`makeCandidate_hopping`):
 
 1. Repeat `mi = gen_rand32() % Ne; s = (genrand_real2() < 0.5) ? 0 : 1; ri = eleIdx[mi + s*Ne]` while site `ri` carries a localized spin.
-2. Repeat `rj = gen_rand32() % Nsite` while `eleCfg[rj + s*Nsite] != -1` or `LocSpn[rj] == 1`, giving up after more than `Nsite*Nsite` attempts (then `rejectFlag = 1`).
+2. Repeat: draw `rj = gen_rand32() % Nsite`; if the retry counter already exceeds `Nsite*Nsite`, set `rejectFlag = 1` and stop; otherwise increment the counter and stop if `eleCfg[rj + s*Nsite] == -1` and `LocSpn[rj] != 1`. The draw made after the cap is therefore rejected even when it names an empty site (`Nsite*Nsite + 2` destination draws at most).
+
+Step 1 has no retry cap in C. If no itinerant electron exists, C never terminates; Rust treats that input as unsupported and rejects after `Nsite*Nsite + 1` source draws (#559).
 
 **Exchange candidate** (`makeCandidate_exchange`): reject immediately (no draw) if no
 site is singly occupied. Otherwise repeat `(mi, s, ri)` as above until the opposite-spin
@@ -119,13 +121,13 @@ non-finite or zero.
 > - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:670`
 > - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:728`
 > - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:756`
-> - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:306`
-> - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:136`
-> - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:216`
-> - Rust: `make_candidate_hopping_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:373`
-> - Rust: `make_candidate_exchange_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:606`
-> - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:555`
-> - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:480`
+> - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:320`
+> - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:137`
+> - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:230`
+> - Rust: `make_candidate_hopping_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:387`
+> - Rust: `make_candidate_exchange_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:620`
+> - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:569`
+> - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:494`
 > - Rust: `update_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:416`
 > - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:441`
 > - Parity: draw counts and order are exact: `gen_rand32() % n` (`Sfmt19937Rng::gen_rand32`, `crates/sfmt19937/src/lib.rs:138`) and `genrand_real2` (`crates/sfmt19937/src/lib.rs:182`) are consumed in the same sequence, including draws on rejected moves and in retry loops. The test `rejected_candidate_consumes_no_rng_and_mutates_nothing` (`one_move.rs:640`) pins the "no draw on `rejectFlag`" rule.
@@ -148,10 +150,10 @@ $\ln\mathrm{IP}$ are updated; on rejection the occupation arrays are reverted
 
 > **Implementation**
 > - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:194`
-> - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:41`
-> - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:59`
-> - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:199`
-> - Rust: `attempt_exchange_move` — `crates/mvmc-core/src/sampling/one_move.rs:282`
+> - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:42`
+> - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:60`
+> - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:200`
+> - Rust: `attempt_exchange_move` — `crates/mvmc-core/src/sampling/one_move.rs:283`
 > - Parity: C forms `x = LogProjRatio(...)`, `x += LogRBMRatio(...)` (complex), then `exp(2.0*(creal(x + logIpNew - logIpOld)))`; Rust evaluates `2.0 * ((proj + rbm.re + ip_new.re) - ip_old.re)`, the same real-part sums in the same order, with `julia_exp::exp` instead of libm `exp`. `-1.0` is substituted for a non-finite weight, and the draw is always consumed (`metropolis_decision` draws before comparing). The libm-versus-Julia `exp` difference is one of the few places where a last-bit difference can flip an acceptance; this is expected and handled by [11.4](11-compatibility.md#114-numerical-comparison-policy).
 
 ## 4.5 Pfaffian ratio and inverse updates
@@ -211,12 +213,12 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:1026`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:1045`
 > - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:341`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1294`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:703`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1142`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:760`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1405`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:722`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
 > - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:227`, `pfupdate_two_real.c:227`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
 
 ## 4.6 Parallelism inside the sampler
@@ -234,5 +236,5 @@ made identically on every rank of the group. See [8.4](08-running.md#84-mpi-and-
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2044`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2093`
 > - Parity: `partition_range` reproduces `SplitLoop` including the "remainder to the last ranks" rule and the small-work branch. `resolve_rnd_seed` adds the group index to the base seed with wrapping `i64` arithmetic and then requires the result to fit in `u32` (`seeded_rng`, `run.rs:1799`); a negative `RndSeed` uses one clock value read on the output root and broadcast (Julia lifecycle).
