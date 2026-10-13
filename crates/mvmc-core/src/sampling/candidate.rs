@@ -172,42 +172,55 @@ fn make_candidate_hopping_inner(
         reject: false,
     };
     let icnt_max = n_site * n_site;
+    let is_local = |r: usize| loc_spn.get(r).copied().unwrap_or(1) == 1;
 
-    // Select a non-local-spin electron. The loop cap mirrors the Julia
-    // guard added to avoid infinite loops when all selected electrons are local.
+    // Select a non-local-spin electron. C `makeCandidate_hopping` has no cap
+    // here, so every finite C trajectory keeps drawing. Only when no itinerant
+    // electron exists (C never terminates) do we reject, after the same
+    // `Nsite^2 + 1` draws as the Julia guard.
     let mut icnt_electron = 0usize;
     loop {
-        if icnt_electron > icnt_max {
-            candidate.reject = true;
-            candidate.rj = 0;
-            return candidate;
+        // Checked once, when the Julia guard would have fired.
+        if icnt_electron == icnt_max + 1 {
+            let has_itinerant = ele_idx
+                .iter()
+                .take(2 * n_elec)
+                .any(|&r| !is_local(r.max(0) as usize));
+            if !has_itinerant {
+                candidate.reject = true;
+                candidate.rj = 0;
+                return candidate;
+            }
         }
         icnt_electron += 1;
         candidate.mi = rng_mod(rng, n_elec);
         candidate.spin = rng_spin(rng);
         let idx = candidate.mi + (candidate.spin as usize) * n_elec;
         candidate.ri = ele_idx.get(idx).copied().unwrap_or(0).max(0) as usize;
-        if loc_spn.get(candidate.ri).copied().unwrap_or(1) != 1 {
+        if !is_local(candidate.ri) {
             break;
         }
     }
 
-    // Pick an empty, non-local destination in the same spin sector.
+    // Pick an empty, non-local destination in the same spin sector. C draws,
+    // then tests the cap, then tests occupancy: the draw made after `icnt`
+    // passes `Nsite^2` is rejected even when it names an empty site.
     let mut icnt = 0usize;
-    candidate.rj = rng_mod(rng, n_site);
-    while ele_cfg
-        .get(candidate.rj + (candidate.spin as usize) * n_site)
-        .copied()
-        .unwrap_or(0)
-        != -1
-        || loc_spn.get(candidate.rj).copied().unwrap_or(1) == 1
-    {
+    loop {
+        candidate.rj = rng_mod(rng, n_site);
         if icnt > icnt_max {
             candidate.reject = true;
             break;
         }
-        candidate.rj = rng_mod(rng, n_site);
         icnt += 1;
+        let occupied = ele_cfg
+            .get(candidate.rj + (candidate.spin as usize) * n_site)
+            .copied()
+            .unwrap_or(0)
+            != -1;
+        if !occupied && !is_local(candidate.rj) {
+            break;
+        }
     }
 
     candidate

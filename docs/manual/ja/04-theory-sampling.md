@@ -36,10 +36,10 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
 > - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
 > - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
 > - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
-> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:654`
-> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:116`
-> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1212`
-> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:635`
+> - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:462`
+> - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:147`
+> - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1022`
+> - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:443`
 > - 整合性: 外側ステップ数、保存サンプルの添字、および `nAccept > Nsite` のリフレッシュは `vmcmake.c:141, 309, 334-349` に従っています(Rustでは `driver.rs:271-278, 532-552, 558-562`)。リフレッシュの判定は厳密な `>` を用います。最終ステップ後の `copyToBurnSample` は `ElectronConfiguration` の「burn」バッファで再現されており、持ち越しは `counter[9] != 0` で検出されます(`driver.rs:167`)。
 
 ## 4.2 初期配置
@@ -57,9 +57,9 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
 > **実装**
 > - C: `makeInitialSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:359`
 > - Rust: `make_initial_sample` — `crates/mvmc-core/src/sampling/initial.rs:76`
-> - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:251`
-> - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:273`
-> - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:198`
+> - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:252`
+> - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:274`
+> - Rust: `generate_initial_fsz_configuration` — `crates/mvmc-core/src/sampling/initial.rs:199`
 > - Rust: `init_loc_spn` — `crates/mvmc-core/src/sampling/projection.rs:159`
 > - 整合性: 乱数の抽出順序(局在スピン、次にスピン0の電子、次にスピン1の電子)、100回の再試行の上限、およびランク間でのパフィアン状態の集団最大値(`MPI_Allreduce(..., MPI_MAX)`)が再現されています。型付き状態/協調のテストは `normal_initial.rs` にあります。
 
@@ -84,7 +84,9 @@ Cマニュアルの目安は次のとおりです。`0` はホッピングのみ
 **ホッピング候補**(`makeCandidate_hopping`):
 
 1. サイト `ri` が局在スピンを持つ間、`mi = gen_rand32() % Ne; s = (genrand_real2() < 0.5) ? 0 : 1; ri = eleIdx[mi + s*Ne]` を繰り返します。
-2. `eleCfg[rj + s*Nsite] != -1` または `LocSpn[rj] == 1` の間、`rj = gen_rand32() % Nsite` を繰り返し、`Nsite*Nsite` 回を超えて試行した場合は断念します(その場合 `rejectFlag = 1`)。
+2. 次を繰り返します。`rj = gen_rand32() % Nsite` を抽出し、試行カウンタがすでに `Nsite*Nsite` を超えていれば `rejectFlag = 1` として終了します。そうでなければカウンタを増やし、`eleCfg[rj + s*Nsite] == -1` かつ `LocSpn[rj] != 1` なら終了します。したがって上限を超えた後の抽出は、空きサイトを指していても棄却されます(行き先の抽出は最大 `Nsite*Nsite + 2` 回)。
+
+手順1には C では試行上限がありません。遍歴電子が1つも存在しない場合 C は終了しないため、Rust はその入力を非対応として扱い、`Nsite*Nsite + 1` 回の抽出後に棄却します(#559)。
 
 **交換候補**(`makeCandidate_exchange`): 単占有のサイトが存在しない場合は、(乱数を抽出せずに)直ちに棄却します。そうでなければ、上と同様に `(mi, s, ri)` を、`ri` の逆スピン側の
 サイトが空になるまで繰り返し、次にスピン $t=1-s$ について `rj = eleIdx[mj + t*Ne]` に対して同じ条件が成り立つまで
@@ -107,13 +109,13 @@ Cマニュアルの目安は次のとおりです。`0` はホッピングのみ
 > - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:670`
 > - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:728`
 > - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:756`
-> - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:306`
-> - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:136`
-> - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:216`
-> - Rust: `make_candidate_hopping_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:373`
-> - Rust: `make_candidate_exchange_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:606`
-> - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:555`
-> - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:480`
+> - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:320`
+> - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:137`
+> - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:230`
+> - Rust: `make_candidate_hopping_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:387`
+> - Rust: `make_candidate_exchange_fsz` — `crates/mvmc-core/src/sampling/candidate.rs:620`
+> - Rust: `make_candidate_local_spin_flip_localspin` — `crates/mvmc-core/src/sampling/candidate.rs:569`
+> - Rust: `make_candidate_local_spin_flip_conduction` — `crates/mvmc-core/src/sampling/candidate.rs:494`
 > - Rust: `update_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:416`
 > - Rust: `revert_ele_config` — `crates/mvmc-core/src/sampling/projection.rs:441`
 > - 整合性: 乱数の抽出回数と順序は厳密に一致します。`gen_rand32() % n`(`Sfmt19937Rng::gen_rand32`、`crates/sfmt19937/src/lib.rs:138`)と `genrand_real2`(`crates/sfmt19937/src/lib.rs:182`)は、棄却された更新や再試行ループでの抽出も含めて、同じ順序で消費されます。テスト `rejected_candidate_consumes_no_rng_and_mutates_nothing`(`one_move.rs:640`)が、「`rejectFlag` では乱数を抽出しない」という規則を固定しています。
@@ -135,10 +137,10 @@ $\ln\mathrm{IP}$ が更新されます。棄却された場合は占有配列が
 
 > **実装**
 > - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:194`
-> - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:41`
-> - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:59`
-> - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:199`
-> - Rust: `attempt_exchange_move` — `crates/mvmc-core/src/sampling/one_move.rs:282`
+> - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:42`
+> - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:60`
+> - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:200`
+> - Rust: `attempt_exchange_move` — `crates/mvmc-core/src/sampling/one_move.rs:283`
 > - 整合性: Cは `x = LogProjRatio(...)`、`x += LogRBMRatio(...)`(複素数)を形成し、その後 `exp(2.0*(creal(x + logIpNew - logIpOld)))` を計算します。Rustは `2.0 * ((proj + rbm.re + ip_new.re) - ip_old.re)` を評価し、同じ実部の和を同じ順序で取りますが、libmの `exp` ではなく `julia_exp::exp` を用います。有限でない重みには `-1.0` が代入され、乱数は常に消費されます(`metropolis_decision` は比較の前に抽出します)。libmとJuliaの `exp` の差は、最下位ビットの差が採択を反転させうる数少ない箇所の一つです。これは想定された事象であり、[11.4](11-compatibility.md#114-数値比較ポリシー)で扱われます。
 
 ## 4.5 パフィアン比と逆行列の更新
@@ -196,12 +198,12 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
-> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:1026`
+> - Rust: `update_one_complex` — `crates/mvmc-core/src/sampling/updates.rs:1045`
 > - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:341`
-> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1294`
-> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:703`
-> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1142`
-> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:760`
+> - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1405`
+> - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:722`
+> - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
+> - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
 > - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
 
 ## 4.6 サンプラー内の並列化
@@ -219,5 +221,5 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
-> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2044`
+> - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2093`
 > - 整合性: `partition_range` は、「余りを最後のランクに割り当てる」規則と少量の仕事量の場合の分岐を含めて `SplitLoop` を再現します。`resolve_rnd_seed` は基本シードにグループ番号を `i64` のラップアラウンド演算で加え、その結果が `u32` に収まることを要求します(`seeded_rng`、`run.rs:1799`)。負の `RndSeed` では、出力ルートで読み取った1つの時計の値を用い、ブロードキャストします(Juliaのライフサイクル)。
