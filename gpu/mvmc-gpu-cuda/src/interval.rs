@@ -25,11 +25,15 @@ pub use resident::ResidentInterval;
 pub const INTERVAL_MODULE: &str = concat!(
     include_str!("pfaffian_batched.cu"),
     "\n",
+    include_str!("interval_delayed.cu"),
+    "\n",
     include_str!("interval_kernels.cu"),
     "\n",
     include_str!("interval_rebuild.cu"),
     "\n",
     include_str!("interval_resident.cu"),
+    "\n",
+    include_str!("interval_paired.cu"),
 );
 
 /// Kernels loaded from [`INTERVAL_MODULE`].
@@ -41,6 +45,8 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_resident_hop",
     "interval_resident_factor",
     "interval_resident_commit",
+    "interval_paired_factor",
+    "interval_paired_fallback",
 ];
 
 /// Geometry shared by every interval call of one series.

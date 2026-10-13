@@ -23,6 +23,8 @@ pub struct ResidentInterval {
     pub(crate) rng: DeviceRng,
     pub(crate) error: DeviceBuffer,
     total_accepts: DeviceBuffer,
+    fallback: DeviceBuffer,
+    delayed: DeviceBuffer,
 }
 
 impl ResidentInterval {
@@ -59,6 +61,14 @@ impl ResidentInterval {
                 rng,
                 error,
                 total_accepts,
+                fallback: exec.alloc_bytes(geom.walkers * 4)?,
+                // n>=128 uses four queued (u,v) pairs plus two dots per pair
+                // and one ratio. This is smaller than the validated inverse.
+                delayed: exec.alloc_bytes(if geom.n >= 128 {
+                    geom.walkers * geom.nqp * (8 * geom.n + 9) * 8
+                } else {
+                    1
+                })?,
             })
         })
         .map_err(|e| e.to_string())
@@ -124,6 +134,7 @@ impl ResidentInterval {
         // every later one needs >= nsite+1 hops. One final launch finishes any
         // remainder. Masked kernels are no-ops once each walker has completed.
         let rounds = 1 + hops.div_ceil(g.nsite + 1);
+        let (threads, groups, shared) = launch_geometry(g);
         // SAFETY: dimensions validated at construction, buffers remain resident
         // through all launches; one stream orders every producer and consumer.
         unsafe {
@@ -133,8 +144,8 @@ impl ResidentInterval {
                 exec.launch(
                     module.function("interval_resident_hop")?,
                     (g.walkers as u32, 1, 1),
-                    g.block(),
-                    g.shared_bytes(),
+                    threads,
+                    shared,
                     &[
                         p(&s.ele)?,
                         p(&s.occ)?,
@@ -154,7 +165,7 @@ impl ResidentInterval {
                         i(g.ne),
                         i(g.nsite),
                         i(g.nqp),
-                        i(g.qp_groups()),
+                        i(groups),
                         i(g.ngutz),
                         i(g.nproj),
                         p(&s.hops_done)?,
@@ -162,6 +173,8 @@ impl ResidentInterval {
                         p(&s.accepts)?,
                         p(&self.total_accepts)?,
                         p(&self.error)?,
+                        p(&self.delayed)?,
+                        p(&s.pfinv_out)?,
                     ],
                 )?;
                 self.enqueue_rebuild(exec, &module)?;
@@ -182,13 +195,56 @@ impl ResidentInterval {
         let (nt, shared) = crate::pfaffian::launch_geometry(g.n, 8, 1);
         // SAFETY: all buffers and dimensions are owned/validated by this ensemble.
         unsafe {
+            // The panel, diagonal and permutations share at most 48 KiB. Smaller
+            // geometries retain the established generic path.
+            let capacity = ((48 * 1024 - 12 * g.n) / (32 * g.n)).min(4);
+            let paired = g.n >= 128 && capacity > 0;
+            if paired {
+                exec.launch(
+                    module.function("interval_paired_factor")?,
+                    ((g.walkers * g.nqp) as u32, 1, 1),
+                    128,
+                    (32 * g.n * capacity + 12 * g.n) as u32,
+                    &[
+                        p(&s.rebuild)?,
+                        p(&self.error)?,
+                        p(&s.ele)?,
+                        p(&s.slater)?,
+                        p(&s.planes)?,
+                        p(&s.pfinv_w)?,
+                        p(&s.pfinv_out)?,
+                        p(&s.pfinv_pf)?,
+                        p(&s.pfinv_st)?,
+                        i(g.n),
+                        i(g.ne),
+                        i(g.nsite),
+                        i(g.nqp),
+                        i(capacity),
+                    ],
+                )?;
+                exec.launch(
+                    module.function("interval_paired_fallback")?,
+                    (g.walkers.div_ceil(128) as u32, 1, 1),
+                    128,
+                    0,
+                    &[
+                        p(&s.rebuild)?,
+                        p(&s.pfinv_st)?,
+                        p(&s.pfinv_pf)?,
+                        p(&s.weights)?,
+                        p(&self.fallback)?,
+                        i(g.walkers),
+                        i(g.nqp),
+                    ],
+                )?;
+            }
             exec.launch(
                 module.function("interval_resident_factor")?,
                 ((g.walkers * g.nqp) as u32, 1, 1),
                 nt,
                 shared,
                 &[
-                    p(&s.rebuild)?,
+                    p(if paired { &self.fallback } else { &s.rebuild })?,
                     p(&self.error)?,
                     p(&s.ele)?,
                     p(&s.slater)?,
@@ -272,6 +328,21 @@ impl ResidentInterval {
     }
 }
 
+// Four warps balance QP cooperation with the number of resident walker blocks.
+// The ratio scratch is reused by updates; the four queued sites follow mvw[8].
+fn launch_geometry(g: IntervalGeometry) -> (u32, usize, u32) {
+    let threads = g.block().min(128);
+    let mut groups = g.qp_groups().min(threads as usize / 32);
+    loop {
+        let scratch = (threads as usize / 32).min(g.nqp).max(3 * groups) * g.n;
+        let shared = ((g.n + 1) & !1) * 4 + (g.nqp + 1 + scratch) * 8 + 12 * 4;
+        if shared <= 48 * 1024 || groups == 1 {
+            return (threads, groups, shared as u32);
+        }
+        groups /= 2;
+    }
+}
+
 fn validate(g: IntervalGeometry, h: &IntervalHost<'_>, hops: usize) -> Result<(), String> {
     let fail = || "invalid resident interval dimensions or initial state".to_string();
     if g.walkers == 0
@@ -298,7 +369,7 @@ fn validate(g: IntervalGeometry, h: &IntervalHost<'_>, hops: usize) -> Result<()
     let wq = product(&[g.walkers, g.nqp])?;
     let inverse = product(&[wq, g.n, g.n])?;
     let slater = product(&[g.nqp, 2, g.nsite, 2, g.nsite])?;
-    if g.shared_bytes() > 48 * 1024 {
+    if g.shared_bytes() > 48 * 1024 || launch_geometry(g).2 > 48 * 1024 {
         return Err("resident interval exceeds the CUDA shared-memory limit".into());
     }
     for len in [inverse, slater, product(&[g.walkers, hops, 5])?] {
