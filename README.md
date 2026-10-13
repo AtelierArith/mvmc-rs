@@ -1,5 +1,7 @@
 # Julia-mVMC → Rust port
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/AtelierArith/mvmc-rs)
+
 This Cargo workspace is the Rust port of [Julia-mVMC](extern/Julia-mVMC) — a Julia port of the C-mVMC many-variable Variational Monte Carlo solver.
 
 ## Status
