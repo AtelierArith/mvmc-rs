@@ -40,6 +40,51 @@ written, C `return -1`) and 1 for input errors.
 The `*_opt.dat` files are read by the Rust optimizer through the
 `InOrbital` namelist key, as in `samples/tutorial_1.3/run_uhf.sh`.
 
+## Large normal Slater matrices and initialization retries (#526)
+
+Normal sampling validates each initial electron placement using the complex
+Slater factorization, including for a real-valued run. `Nsize = 2 * Ne` is
+the matrix dimension; it need not equal `Nsite`. Positive factorization INFO
+causes another placement. After **101 completed calls**, initialization fails,
+even if call 101 returns a nonpositive INFO. This matches
+`src/mVMC/vmcmake.c::makeInitialSample` in the C reference: increment `loop`,
+abort if `loop > 100`, then test whether the reduced INFO is positive.
+Rust returns a typed error with `Nsize` and the local/comm1 INFO instead of
+calling `MPI_Abort`. Increasing the retry limit changes the C contract.
+
+The investigation recorded in [issue #526](https://github.com/AtelierArith/mvmc-rs/issues/526)
+found that the default random Slater initialization failed at half-filled
+Hubbard-chain sizes 464, 500 and 512, while sizes 448 through 460 and
+`Nsite=512, Nsize=256` started. These are observations for that input and
+reference environment, **not a universal dimension limit**. The issue reports
+the same failure in the C executable. A positive INFO alone does not establish
+the cause of singularity or justify changing the factorization.
+
+An external starting orbital can be supplied without changing the default
+initialization algorithm:
+
+1. Run `mvmc uhf namelist.def` with matching sites, particle number and orbital
+   index definitions, using the UHF input contract below.
+2. Check convergence and the generated `zqp_APOrbital_opt.dat` (or the matching
+   parallel/general orbital output).
+3. Add `InOrbital zqp_APOrbital_opt.dat` to the optimizer's Expert-mode
+   namelist and run `mvmc namelist.def`. The filename prefix follows
+   `CParaFileHead`; copy the file or use the appropriate input path.
+
+This is an input workflow, not a demonstrated L=512 workaround. The #526
+investigation did not obtain a converged L=512 UHF orbital within ten minutes
+and did not establish that such an orbital starts the sampler. An arbitrary
+scalar rescaling of `initial.def` is insufficient: parameter synchronization
+normalizes the Slater block to `D_AMP_MAX=4.0`. Replacing the random default
+would require an independently validated orbital with the same parameter map,
+followed by a C/Rust initialization comparison. Neither an unconverged UHF
+output nor a differently indexed orbital supplies that evidence.
+
+The checked-in C-derived normal-initialization fixtures exercised by
+`sampling::normal_initial::tests` and `native274_boundaries` pin the retry,
+INFO reduction and RNG behavior independently of this size observation.
+Ordinary Rust tests do not invoke the C executable or UHF.
+
 ## Reader contract (`readdef.c`) and why it is a separate reader
 
 The UHF reader is not the Expert-mode reader used for `vmc.out`: it has its
