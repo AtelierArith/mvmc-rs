@@ -182,6 +182,7 @@ fn check_boundary(case: &str, complex: bool) {
         let Err(NormalInitializationError::RetryLimit(info)) = result else {
             panic!("expected typed exhaustion: {result:?}");
         };
+        assert_eq!(info.n_size, 2);
         assert_eq!(
             (info.attempts, info.local_info, info.comm1_info),
             (101, 1, 1)

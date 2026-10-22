@@ -155,6 +155,8 @@ pub(crate) fn coordinate_normal_setup(
 /// Last actual local and comm1 INFO, including negative native codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NormalInitializationInfo {
+    /// Normal Slater matrix dimension, `Nsize = 2 * Ne`.
+    pub n_size: usize,
     /// Number of completed placement/complex-validation/collective attempts.
     pub attempts: usize,
     /// Actual status from this rank's owned QP slice.
@@ -193,8 +195,8 @@ impl std::fmt::Display for NormalInitializationError {
             Self::Coordination(error) => write!(f, "normal initialization comm1 INFO: {error}"),
             Self::RetryLimit(info) => write!(
                 f,
-                "normal initialization exhausted {} calls (local INFO {}, comm1 INFO {})",
-                info.attempts, info.local_info, info.comm1_info
+                "normal initialization exhausted {} calls (Nsize {}, local INFO {}, comm1 INFO {}); C makeInitialSample: Too many loops; see docs/COMPLEX_UHF.md for the InOrbital initial-orbital workflow",
+                info.attempts, info.n_size, info.local_info, info.comm1_info
             ),
         }
     }
@@ -207,6 +209,7 @@ impl std::error::Error for NormalInitializationError {}
 /// The callbacks are used to bind the real kernel and comm1 implementation;
 /// they are not alternate RNG or numerical algorithms.
 fn initialize_loop(
+    n_size: usize,
     mut attempt: impl FnMut() -> Result<i32, NormalInitializationError>,
     mut max_info: impl FnMut(i32) -> Result<i32, String>,
 ) -> Result<NormalInitializationInfo, NormalInitializationError> {
@@ -229,6 +232,7 @@ fn initialize_loop(
             )));
         }
         let info = NormalInitializationInfo {
+            n_size,
             attempts,
             local_info,
             comm1_info,
@@ -299,6 +303,7 @@ pub fn make_initial_sample_normal_with_info(
         &mut max_info,
     )?;
     initialize_loop(
+        2 * n_elec,
         || {
             super::initial::make_initial_sample(
                 ele_idx,
@@ -667,6 +672,7 @@ mod tests {
             let mut calls = 0;
             let mut reductions = 0;
             let result = initialize_loop(
+                512,
                 || {
                     let info = local[calls];
                     calls += 1;
@@ -685,6 +691,7 @@ mod tests {
             // counts: C size-one cases skip MPI_Allreduce altogether.
             assert_eq!(reductions, expected_calls, "{name}");
             let info = NormalInitializationInfo {
+                n_size: 512,
                 attempts: expected_calls,
                 local_info: *local.last().unwrap(),
                 comm1_info: *maxima.last().unwrap(),
@@ -703,10 +710,11 @@ mod tests {
 
     #[test]
     fn negative_info_is_not_a_boolean_retry() {
-        let info = initialize_loop(|| Ok(-3), Ok).unwrap();
+        let info = initialize_loop(2, || Ok(-3), Ok).unwrap();
         assert_eq!(
             info,
             NormalInitializationInfo {
+                n_size: 2,
                 attempts: 1,
                 local_info: -3,
                 comm1_info: -3
@@ -718,6 +726,7 @@ mod tests {
     fn maximum_status_controls_retry_not_local_status() {
         let mut calls = 0;
         let info = initialize_loop(
+            2,
             || Ok(0),
             |_| {
                 calls += 1;
@@ -733,6 +742,7 @@ mod tests {
     fn call101_exhausts_even_if_its_status_succeeds() {
         let mut calls = 0;
         let error = initialize_loop(
+            512,
             || {
                 calls += 1;
                 Ok(if calls == 101 { 0 } else { 1 })
@@ -741,9 +751,14 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(calls, 101);
+        let diagnostic = error.to_string();
+        assert!(diagnostic.contains("Nsize 512"));
+        assert!(diagnostic.contains("Too many loops"));
+        assert!(diagnostic.contains("docs/COMPLEX_UHF.md"));
         assert_eq!(
             error,
             NormalInitializationError::RetryLimit(NormalInitializationInfo {
+                n_size: 512,
                 attempts: 101,
                 local_info: 0,
                 comm1_info: 0
@@ -755,6 +770,7 @@ mod tests {
     fn local_precondition_error_still_enters_collective() {
         let mut received = Vec::new();
         let error = initialize_loop(
+            2,
             || Err(NormalInitializationError::Placement),
             |info| {
                 received.push(info);
@@ -768,7 +784,7 @@ mod tests {
 
     #[test]
     fn successful_rank_gets_typed_peer_precondition() {
-        let error = initialize_loop(|| Ok(0), |_| Ok(i32::MAX)).unwrap_err();
+        let error = initialize_loop(2, || Ok(0), |_| Ok(i32::MAX)).unwrap_err();
         assert_eq!(error, NormalInitializationError::PeerPrecondition);
     }
 }
