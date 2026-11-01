@@ -218,6 +218,8 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 
 Back-flow (`BF`) and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
+The C-source rationale for rejecting BackFlow, `SpinJastrow` and grouped CG is in the [CPU restriction audit](../reference/c-to-julia/verification/issue-577-cpu-restrictions.md).
+
 ## 7.6 Standard mode (StdFace)
 
 `mvmc -s <stan.in>` ports the C `-s` option: the Standard-mode keyword file is read by the pure-Rust

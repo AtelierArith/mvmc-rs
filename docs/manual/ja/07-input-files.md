@@ -197,6 +197,8 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 
 バックフロー(`BF`)、および `InterAll` の Lanczos は利用できません([11.3](11-compatibility.md#113-cリファレンスとの既知の相違)を参照)。
 
+BackFlow、`SpinJastrow`、グループ CG を拒否する C ソース上の根拠は [CPU 制限の調査](../../reference/c-to-julia/verification/issue-577-cpu-restrictions.md)に記録しています。
+
 ## 7.6 Standard モード(StdFace)
 
 `mvmc -s <stan.in>` は C の `-s` オプションの移植です。Standard モードのキーワードファイルを純 Rust の
