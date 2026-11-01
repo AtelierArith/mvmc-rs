@@ -8,7 +8,7 @@
 //! slot (a per-walker lock, no cross-walker contention), rendezvous through `Reducer::barrier()`
 //! outside any lock, rank 0 runs `k_interval_hop` for all walkers (with device rebuilds), and
 //! each walker reads its slot back (again a per-walker lock). Only rank 0 touches the device;
-//! its `CudaBackend` is a thread-local (a tenferro context is thread-affine) while the resident
+//! its `CudaEngine` is a thread-local (a tenferro context is thread-affine) while the resident
 //! `DeviceBuffer`s, which are `Send`, live in the shared group.
 //!
 //! The RNG contract: each walker generates its own block tape from its own stream (5 words per
@@ -30,15 +30,14 @@ use mvmc_core::stage_backend::StageError;
 use mvmc_core::state::VmcOptimizationState;
 use mvmc_core::ExpertModeData;
 use sfmt19937::Sfmt19937Rng;
-use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
 
 use crate::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
 
 thread_local! {
     /// The device backend of the rank-0 thread. A tenferro context is thread-affine, and only
     /// rank 0 issues device work, so the group keeps it here rather than behind the shared lock.
-    static RANK0_BACKEND: RefCell<Option<(usize, CudaBackend)>> = const { RefCell::new(None) };
+    static RANK0_BACKEND: RefCell<Option<(usize, CudaEngine)>> = const { RefCell::new(None) };
 }
 
 /// Draw a block tape of `5 * n_hops` words from `rng` (source, spin, destination rank,
@@ -292,7 +291,7 @@ impl IntervalGroup {
 
     fn with_backend<T>(
         &self,
-        f: impl FnOnce(&mut CudaBackend) -> Result<T, String>,
+        f: impl FnOnce(&mut CudaEngine) -> Result<T, String>,
     ) -> Result<T, String> {
         RANK0_BACKEND.with(|cell| {
             let mut slot = cell.borrow_mut();
@@ -306,7 +305,7 @@ impl IntervalGroup {
                     .ok_or_else(|| format!("CUDA device {} unavailable", self.device))?;
                 *slot = Some((
                     self.device,
-                    CudaBackend::new(device.id()).map_err(|e| e.to_string())?,
+                    CudaEngine::open(device.id()).map_err(|e| e.to_string())?,
                 ));
             }
             f(&mut slot.as_mut().unwrap().1)
@@ -318,7 +317,8 @@ impl IntervalGroup {
     fn initialize_device(&self) -> Result<bool, String> {
         let start = std::time::Instant::now();
         self.with_backend(|backend| {
-            backend.with_backend_session(|s| {
+            let s: &mut CudaEngine = &mut *backend;
+            {
                 let geom = *self.geom.lock().unwrap_or_else(|e| e.into_inner());
                 let n_in_step = *self.n_in_step.lock().unwrap_or_else(|e| e.into_inner());
                 let states = self.states();
@@ -365,14 +365,14 @@ impl IntervalGroup {
                     );
                 }
                 Ok(true)
-            })
+            }
         })
     }
 
     /// Rank-0 device pass.
     fn run_device(&self) -> Result<(), String> {
         self.with_backend(|backend| {
-            backend.with_backend_session(|s| -> Result<(), String> {
+            { let s: &mut CudaEngine = &mut *backend; {
                 let geom = *self.geom.lock().unwrap_or_else(|e| e.into_inner());
                 let n_in_step = *self.n_in_step.lock().unwrap_or_else(|e| e.into_inner());
                 let states = self.states();
@@ -467,7 +467,7 @@ impl IntervalGroup {
                     );
                 }
                 Ok(())
-            })
+            } }
         })
     }
 }
@@ -904,7 +904,7 @@ mod tests {
             let group =
                 IntervalGroup::new_on_device(ordinal, geom, vec![], vec![], vec![], vec![], vec![]);
             let actual = group
-                .with_backend(|backend| Ok(backend.device_id()))
+                .with_backend(|backend| Ok(backend.runtime().device_id()))
                 .unwrap();
             assert_eq!(actual, devices[ordinal].id());
         }

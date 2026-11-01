@@ -1,6 +1,5 @@
 use super::*;
-use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
 
 #[test]
 fn resident_geometry_fits_shared_memory_and_whole_warp_groups() {
@@ -29,7 +28,7 @@ fn resident_geometry_fits_shared_memory_and_whole_warp_groups() {
 #[ignore = "requires CUDA; queued inverse updates against independently refactored matrices"]
 fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
     use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
-    let mut backend = CudaBackend::new(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
     for (n, ns) in [(128, 80), (130, 80), (192, 128)] {
         let w = 2;
         let nq = 3; // a partial final QP group
@@ -74,9 +73,11 @@ fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
             jast: &jast,
             params: &[],
         };
-        let mut resident = backend
-            .with_backend_session(|s| ResidentInterval::prepare(s, g, &host, 9, 79))
-            .unwrap();
+        let mut resident = {
+            let s: &mut CudaEngine = &mut backend;
+            ResidentInterval::prepare(s, g, &host, 9, 79)
+        }
+        .unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(79);
         let mut expected_cfg = ele.clone();
         let mut max_residual = 0f64;
@@ -104,8 +105,9 @@ fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
                 }
             }
             let borrowed = &mut resident;
-            let (cfg, actual_inv, pf, accepted) = backend
-                .with_backend_session(move |s| {
+            let (cfg, actual_inv, pf, accepted) = {
+                let s: &mut CudaEngine = &mut backend;
+                {
                     with_raw_exec(s, "delayed.residual", |exec| {
                         let r = &borrowed.sampler;
                         unsafe {
@@ -130,8 +132,9 @@ fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
                         assert_eq!(error, [0]);
                         Ok((cfg, inv, pf, accepted))
                     })
-                })
-                .unwrap();
+                }
+            }
+            .unwrap();
             assert_eq!(accepted, vec![hops as i32; w]);
             assert_eq!(cfg, expected_cfg);
             let planes = gather(&cfg);
@@ -177,7 +180,7 @@ fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
 #[ignore = "requires CUDA; independent CPU factors and inverse residuals"]
 fn paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers() {
     use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
-    let mut backend = CudaBackend::new(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
     // Non-power-of-two dimensions exercise partial panels; 512 reduces panel
     // capacity to fit the shared-memory budget. Cancellation invokes fallback.
     for (n, cancellation) in [
@@ -228,10 +231,12 @@ fn paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers() {
             jast: &jast,
             params: &[],
         };
-        let resident = backend
-            .with_backend_session(|s| ResidentInterval::prepare(s, g, &host, 0, 79))
-            .unwrap();
-        backend.with_backend_session(move |s| {
+        let resident = {
+            let s: &mut CudaEngine = &mut backend;
+            ResidentInterval::prepare(s, g, &host, 0, 79)
+        }
+        .unwrap();
+        { let s: &mut CudaEngine = &mut backend; {
             with_raw_exec(s, "paired.verify", |exec| {
             let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
             let r = &resident.sampler;
@@ -285,7 +290,7 @@ fn paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers() {
             assert!(failed_pf.iter().zip(&pf).all(|(a,b)| (a-b).abs() <= 1e-15));
             Ok(())
             })
-        }).unwrap();
+        } }.unwrap();
     }
 }
 
@@ -293,7 +298,7 @@ fn paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers() {
 #[ignore = "requires CUDA"]
 fn failed_rebuild_is_latched_and_cannot_publish_results() {
     let devices = cuda_devices().unwrap();
-    let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+    let mut backend = CudaEngine::open(devices[0].id()).unwrap();
     let g = IntervalGeometry {
         walkers: 2,
         n: 2,
@@ -321,12 +326,15 @@ fn failed_rebuild_is_latched_and_cannot_publish_results() {
         jast: &[-1; 4],
         params: &[],
     };
-    let mut resident = backend
-        .with_backend_session(|s| ResidentInterval::prepare(s, g, &h, 7, 79))
-        .unwrap();
+    let mut resident = {
+        let s: &mut CudaEngine = &mut backend;
+        ResidentInterval::prepare(s, g, &h, 7, 79)
+    }
+    .unwrap();
     let borrowed = &mut resident;
-    backend
-        .with_backend_session(move |s| {
+    {
+        let s: &mut CudaEngine = &mut backend;
+        {
             with_raw_exec(s, "resident.failure.inject", |exec| {
                 // Replace the Slater table by a singular one at the parameter-refresh
                 // boundary, then request a rebuild. Failed factors must not publish zeros.
@@ -351,18 +359,27 @@ fn failed_rebuild_is_latched_and_cannot_publish_results() {
                 }
                 Ok(())
             })
-        })
-        .unwrap();
-    assert!(backend
-        .with_backend_session(|s| resident.check_status(s))
-        .is_err());
-    backend
-        .with_backend_session(|s| resident.advance(s))
-        .unwrap();
-    assert!(backend
-        .with_backend_session(|s| resident.snapshot(s))
-        .is_err());
-    assert!(backend
-        .with_backend_session(|s| resident.accepted(s))
-        .is_err());
+        }
+    }
+    .unwrap();
+    assert!({
+        let s: &mut CudaEngine = &mut backend;
+        resident.check_status(s)
+    }
+    .is_err());
+    {
+        let s: &mut CudaEngine = &mut backend;
+        resident.advance(s)
+    }
+    .unwrap();
+    assert!({
+        let s: &mut CudaEngine = &mut backend;
+        resident.snapshot(s)
+    }
+    .is_err());
+    assert!({
+        let s: &mut CudaEngine = &mut backend;
+        resident.accepted(s)
+    }
+    .is_err());
 }

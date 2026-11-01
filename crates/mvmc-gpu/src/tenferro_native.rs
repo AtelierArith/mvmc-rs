@@ -1,4 +1,4 @@
-//! Tensor-native batched Pfaffian and inverse on tenferro `CpuBackend` (faer provider).
+//! Tensor-native batched Pfaffian and inverse on tenferro `CpuEngine` (faer provider).
 //!
 //! This is a reference for how a device-portable formulation looks, not a fast CPU path. All
 //! state lives in tenferro tensors with the plane axis `P = NQP * B` trailing (`[n, n, P]`
@@ -28,10 +28,10 @@
 
 use std::marker::PhantomData;
 
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
+use tenferro_runtime::TensorSessionOpsExt;
 use tenferro_tensor::{
-    BackendSession, BackendSessionHost, CompareDir, DType, DotGeneralConfig, PadConfig,
-    SliceConfig, Tensor, TypedTensor,
+    CompareDir, DType, DotGeneralConfig, Engine, PadConfig, SliceConfig, Tensor, TypedTensor,
 };
 
 use crate::scalar::private::Impl;
@@ -40,7 +40,7 @@ use crate::{BatchOutput, Error, PfScalar, PlaneStatus};
 type R<X> = tenferro_tensor::Result<X>;
 
 struct Ops<'a, T: PfScalar> {
-    sess: &'a mut dyn BackendSession,
+    sess: &'a mut dyn Engine,
     /// Number of tenferro session operations issued (reported with `MVMC_GPU_NATIVE_OPCOUNT=1`).
     ops: usize,
     n: usize,
@@ -49,7 +49,7 @@ struct Ops<'a, T: PfScalar> {
 }
 
 impl<'a, T: PfScalar> Ops<'a, T> {
-    fn s(&mut self) -> &mut dyn BackendSession {
+    fn s(&mut self) -> &mut dyn Engine {
         self.ops += 1;
         &mut *self.sess
     }
@@ -63,21 +63,21 @@ impl<'a, T: PfScalar> Ops<'a, T> {
     /// `T`-typed tensor filled with `v`.
     fn full(&mut self, shape: &[usize], v: f64) -> R<Tensor> {
         let c = self.scalar(v)?;
-        self.s().broadcast_in_dim(&c, shape, &[])
+        c.broadcast_in_dim(shape, &[], self.s())
     }
 
     /// `f64` tensor filled with `v`.
     fn fullf(&mut self, shape: &[usize], v: f64) -> R<Tensor> {
         let c = <f64 as Impl>::make_tensor(vec![], vec![v])?;
-        self.s().broadcast_in_dim(&c, shape, &[])
+        c.broadcast_in_dim(shape, &[], self.s())
     }
 
     fn bc(&mut self, t: &Tensor, shape: &[usize], dims: &[usize]) -> R<Tensor> {
-        self.s().broadcast_in_dim(t, shape, dims)
+        t.broadcast_in_dim(shape, dims, self.s())
     }
 
     fn rs(&mut self, t: &Tensor, shape: &[usize]) -> R<Tensor> {
-        self.s().reshape(t, shape)
+        t.reshape(shape, self.s())
     }
 
     fn sl(&mut self, t: &Tensor, starts: &[usize], limits: &[usize]) -> R<Tensor> {
@@ -86,7 +86,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             limits: limits.to_vec(),
             strides: vec![1; starts.len()],
         };
-        self.s().slice(t, &config)
+        t.slice(config, self.s())
     }
 
     fn pad(&mut self, t: &Tensor, low: &[i64], high: &[i64]) -> R<Tensor> {
@@ -95,7 +95,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             edge_padding_high: high.to_vec(),
             interior_padding: vec![0; low.len()],
         };
-        self.s().pad(t, &config)
+        t.pad(config, self.s())
     }
 
     /// Static boolean mask `[rows, cols]` broadcast to `[rows, cols, P]`.
@@ -109,79 +109,79 @@ impl<'a, T: PfScalar> Ops<'a, T> {
         let m =
             Tensor::from_typed::<bool>(TypedTensor::from_vec_col_major(vec![rows, cols], data)?);
         let p = self.p;
-        self.s().broadcast_in_dim(&m, &[rows, cols, p], &[0, 1])
+        m.broadcast_in_dim(&[rows, cols, p], &[0, 1], self.s())
     }
 
     /// `f64` index vector `0..len` broadcast along a trailing plane axis: `[len, P]`.
     fn iota_p(&mut self, len: usize) -> R<Tensor> {
         let v = <f64 as Impl>::make_tensor(vec![len], (0..len).map(|i| i as f64).collect())?;
         let p = self.p;
-        self.s().broadcast_in_dim(&v, &[len, p], &[0])
+        v.broadcast_in_dim(&[len, p], &[0], self.s())
     }
 
     // ----- small helpers over the session -----------------------------------------------
 
     fn add(&mut self, a: &Tensor, b: &Tensor) -> R<Tensor> {
-        self.s().add(a, b)
+        a.add(b, self.s())
     }
     fn sub(&mut self, a: &Tensor, b: &Tensor) -> R<Tensor> {
-        self.s().sub(a, b)
+        a.sub(b, self.s())
     }
     fn mul(&mut self, a: &Tensor, b: &Tensor) -> R<Tensor> {
-        self.s().mul(a, b)
+        a.mul(b, self.s())
     }
     fn div(&mut self, a: &Tensor, b: &Tensor) -> R<Tensor> {
-        self.s().div(a, b)
+        a.div(b, self.s())
     }
     fn neg(&mut self, a: &Tensor) -> R<Tensor> {
-        self.s().neg(a)
+        a.neg(self.s())
     }
     fn select(&mut self, pred: &Tensor, a: &Tensor, b: &Tensor) -> R<Tensor> {
-        self.s().select(pred, a, b)
+        pred.where_select(a, b, self.s())
     }
     fn cmp(&mut self, a: &Tensor, b: &Tensor, dir: CompareDir) -> R<Tensor> {
-        self.s().compare(a, b, &dir)
+        a.compare(b, dir, self.s())
     }
 
     /// Batched matrix product `lhs[:, :, p] * rhs[:, :, p]` (contract `lhs` dim 1 with `rhs`
     /// dim 0, batch on the trailing axis).
     fn bmm(&mut self, lhs: &Tensor, rhs: &Tensor) -> R<Tensor> {
         let config = DotGeneralConfig {
-            lhs_contracting_dims: vec![1],
-            rhs_contracting_dims: vec![0],
-            lhs_batch_dims: vec![2],
-            rhs_batch_dims: vec![2],
+            lhs_contracting_dims: [1].as_slice().into(),
+            rhs_contracting_dims: [0].as_slice().into(),
+            lhs_batch_dims: [2].as_slice().into(),
+            rhs_batch_dims: [2].as_slice().into(),
         };
-        self.s().dot_general(lhs, rhs, &config)
+        lhs.dot_general(rhs, config, self.s())
     }
 
     /// `lhs[:, :, p]^T * rhs[:, :, p]`.
     fn bmm_tn(&mut self, lhs: &Tensor, rhs: &Tensor) -> R<Tensor> {
         let config = DotGeneralConfig {
-            lhs_contracting_dims: vec![0],
-            rhs_contracting_dims: vec![0],
-            lhs_batch_dims: vec![2],
-            rhs_batch_dims: vec![2],
+            lhs_contracting_dims: [0].as_slice().into(),
+            rhs_contracting_dims: [0].as_slice().into(),
+            lhs_batch_dims: [2].as_slice().into(),
+            rhs_batch_dims: [2].as_slice().into(),
         };
-        self.s().dot_general(lhs, rhs, &config)
+        lhs.dot_general(rhs, config, self.s())
     }
 
     /// `|re| + |im|` (BLAS `izamax` magnitude; `|x|` for reals) as an `f64` tensor.
     fn magnitude(&mut self, t: &Tensor) -> R<Tensor> {
         if !T::IS_COMPLEX {
-            return self.s().abs(t);
+            return t.abs(self.s());
         }
         let shape = t.shape().to_vec();
-        let re = self.s().cast(t, DType::F64)?;
+        let re = t.cast(DType::F64, self.s())?;
         let i_unit = {
             let c = self.scalar_complex(0.0, 1.0)?;
-            self.s().broadcast_in_dim(&c, &shape, &[])?
+            c.broadcast_in_dim(&shape, &[], self.s())?
         };
         let iz = self.mul(t, &i_unit)?;
-        let im = self.s().cast(&iz, DType::F64)?;
-        let are = self.s().abs(&re)?;
-        let aim = self.s().abs(&im)?;
-        self.s().add(&are, &aim)
+        let im = iz.cast(DType::F64, self.s())?;
+        let are = re.abs(self.s())?;
+        let aim = im.abs(self.s())?;
+        are.add(&aim, self.s())
     }
 
     fn scalar_complex(&mut self, re: f64, im: f64) -> R<Tensor> {
@@ -190,7 +190,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
 
     /// Finite-value predicate of a `[P]` `T` tensor, as bool `[P]`.
     fn is_finite(&mut self, t: &Tensor) -> R<Tensor> {
-        let mag = self.s().abs(t)?;
+        let mag = t.abs(self.s())?;
         let max = self.fullf(&[self.p], f64::MAX)?;
         self.cmp(&mag, &max, CompareDir::Le)
     }
@@ -212,15 +212,15 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             let col = self.sl(&a, &[0, k0, 0], &[kk + 1, k0 + 1, p])?;
             let col = self.rs(&col, &[kk + 1, p])?;
             let mag = self.magnitude(&col)?;
-            let colmax = self.s().reduce_max(&mag, &[0])?;
+            let colmax = mag.reduce_max(Some(&[0]), self.s())?;
             let colmax_b = self.bc(&colmax, &[kk + 1, p], &[1])?;
             let eq = self.cmp(&mag, &colmax_b, CompareDir::Eq)?;
             let iota_k = self.iota_p(kk + 1)?;
             let big = self.fullf(&[kk + 1, p], 1.0e30)?;
             let cand = self.select(&eq, &iota_k, &big)?;
-            let kp = self.s().reduce_min(&cand, &[0])?;
+            let kp = cand.reduce_min(Some(&[0]), self.s())?;
             let cap = self.fullf(&[p], kk as f64)?;
-            let kp = self.s().minimum(&kp, &cap)?; // NaN columns would leave `big` behind
+            let kp = kp.minimum(&cap, self.s())?; // NaN columns would leave `big` behind
             let zero_f = self.fullf(&[p], 0.0)?;
             let is_zero = self.cmp(&colmax, &zero_f, CompareDir::Eq)?;
             let kp = self.select(&is_zero, &cap, &kp)?; // no swap on a zero column
@@ -234,7 +234,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             let oh = self.cmp(&iota_n, &kp_b, CompareDir::Eq)?; // [n, P] bool
             let oh_rows = self.bc(&oh, &[n, n, p], &[0, 2])?;
             let sel = self.select(&oh_rows, &a, &zeros3)?;
-            let row_kp = self.s().reduce_sum(&sel, &[0])?; // [n(j), P]
+            let row_kp = sel.reduce_sum(Some(&[0]), self.s())?; // [n(j), P]
             let row_kk = self.sl(&a, &[kk, 0, 0], &[kk + 1, n, p])?;
             let row_kk = self.rs(&row_kk, &[n, p])?;
             let m_kk = self.mask3(n, n, |i, _| i == kk)?;
@@ -245,7 +245,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
 
             let oh_cols = self.bc(&oh, &[n, n, p], &[1, 2])?;
             let sel = self.select(&oh_cols, &a1, &zeros3)?;
-            let col_kp = self.s().reduce_sum(&sel, &[1])?; // [n(i), P]
+            let col_kp = sel.reduce_sum(Some(&[1]), self.s())?; // [n(i), P]
             let col_kk = self.sl(&a1, &[0, kk, 0], &[n, kk + 1, p])?;
             let col_kk = self.rs(&col_kk, &[n, p])?;
             let m_kkc = self.mask3(n, n, |_, j| j == kk)?;
@@ -276,7 +276,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
                 let acc = self.add(&blk, &xt)?;
                 let u = self.sub(&acc, &yt)?; // (c + x t1) - y t2, as pfapack
                                               // Keep the block exactly skew: upper strict from `u`, lower = -u^T, diag 0.
-                let ut = self.s().transpose(&u, &[1, 0, 2])?;
+                let ut = u.transpose(&[1, 0, 2], self.s())?;
                 let nut = self.neg(&ut)?;
                 let zk = self.full(&[kk, kk, p], 0.0)?;
                 let upper = self.mask3(kk, kk, |i, j| i < j)?;
@@ -364,7 +364,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
                     let coef = self.rs(&coef, &[k, p])?;
                     let coef3 = self.bc(&coef, &[k, m, p], &[0, 2])?;
                     let prod = self.mul(&coef3, sub)?;
-                    let sum = self.s().reduce_sum(&prod, &[0])?; // [m, P]
+                    let sum = prod.reduce_sum(Some(&[0]), self.s())?; // [m, P]
                     self.sub(&e_i, &sum)?
                 }
             };
@@ -373,7 +373,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
                 None => row3,
                 Some(sub) => {
                     let parts = [&row3, &sub];
-                    self.s().concatenate(&parts, 0)?
+                    Tensor::concatenate(&parts, 0, self.s())?
                 }
             });
         }
@@ -433,7 +433,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             })
             .collect::<R<_>>()?;
         let refs: Vec<&Tensor> = rows3.iter().collect();
-        let c = self.s().concatenate(&refs, 0)?; // [n, n, P]
+        let c = Tensor::concatenate(&refs, 0, self.s())?; // [n, n, P]
 
         // W = M^T C, then the symmetric pivot permutation Out = Q^T W Q.
         let w = self.bmm_tn(&mm, &c)?;
@@ -445,7 +445,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
             let piv_b = self.bc(piv, &[n, p], &[1])?;
             let oh = self.cmp(&iota_n, &piv_b, CompareDir::Eq)?;
             let sel = self.select(&oh, &idx, &zeros_np)?;
-            let idx_t = self.s().reduce_sum(&sel, &[0])?; // [P]
+            let idx_t = sel.reduce_sum(Some(&[0]), self.s())?; // [P]
             let idx_j = self.sl(&idx, &[j, 0], &[j + 1, p])?;
             let idx_j = self.rs(&idx_j, &[p])?;
             let idx_t_b = self.bc(&idx_t, &[n, p], &[1])?;
@@ -455,7 +455,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
                 data[j] = true;
                 let mk =
                     Tensor::from_typed::<bool>(TypedTensor::from_vec_col_major(vec![n], data)?);
-                self.s().broadcast_in_dim(&mk, &[n, p], &[0])?
+                mk.broadcast_in_dim(&[n, p], &[0], self.s())?
             };
             let inner = self.select(&oh, &idx_j_b, &idx)?;
             idx = self.select(&jmask, &idx_t_b, &inner)?;
@@ -463,7 +463,7 @@ impl<'a, T: PfScalar> Ops<'a, T> {
         // Q[i, c, P] = (i == idx[c, P]).
         let i3 = {
             let v = <f64 as Impl>::make_tensor(vec![n], (0..n).map(|i| i as f64).collect())?;
-            self.s().broadcast_in_dim(&v, &[n, n, p], &[0])?
+            v.broadcast_in_dim(&[n, n, p], &[0], self.s())?
         };
         let idx3 = self.bc(&idx, &[n, n, p], &[1, 2])?;
         let hit = self.cmp(&i3, &idx3, CompareDir::Eq)?;
@@ -480,7 +480,7 @@ fn backend_err(err: impl std::fmt::Display) -> Error {
 }
 
 fn solve<T: PfScalar>(
-    s: &mut dyn BackendSession,
+    s: &mut dyn Engine,
     n: usize,
     p: usize,
     planes: Tensor,
@@ -522,10 +522,8 @@ pub(crate) fn run<T: PfScalar>(
     count: usize,
 ) -> crate::Result<BatchOutput<T>> {
     let input = T::make_tensor(vec![n, n, count], planes.to_vec()).map_err(backend_err)?;
-    let mut backend = CpuBackend::new();
-    let (pf, inv, status) = backend
-        .with_backend_session(|session| solve::<T>(session, n, count, input))
-        .map_err(backend_err)?;
+    let mut backend = CpuEngine::serial();
+    let (pf, inv, status) = solve::<T>(&mut backend, n, count, input).map_err(backend_err)?;
     let pf = T::read_vec(&pf).map_err(backend_err)?;
     let inv = T::read_vec(&inv).map_err(backend_err)?;
     let status = <f64 as Impl>::read_vec(&status)

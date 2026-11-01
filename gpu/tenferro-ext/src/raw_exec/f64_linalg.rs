@@ -66,7 +66,7 @@ impl RawExec<'_, '_> {
     }
 
     fn solver(&self) -> tenferro_tensor::Result<sys::cusolverDnHandle_t> {
-        let identity = self.raw.runtime_identity();
+        let identity = self.identity.clone();
         let cached = SOLVERS.with(|cache| {
             cache
                 .borrow()

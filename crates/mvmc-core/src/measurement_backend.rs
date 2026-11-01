@@ -73,8 +73,8 @@ fn unsupported<T>(reason: impl std::fmt::Display) -> Result<T, StageError> {
 /// Batched contraction over the trailing axis of `[batch..., k]` operands.
 fn batched_dot(lhs_dim: usize, batch: usize) -> DotGeneralConfig {
     DotGeneralConfig {
-        lhs_contracting_dims: vec![lhs_dim],
-        rhs_contracting_dims: vec![lhs_dim],
+        lhs_contracting_dims: [lhs_dim].into_iter().collect(),
+        rhs_contracting_dims: [lhs_dim].into_iter().collect(),
         lhs_batch_dims: (0..batch).collect(),
         rhs_batch_dims: (0..batch).collect(),
     }
@@ -83,10 +83,10 @@ fn batched_dot(lhs_dim: usize, batch: usize) -> DotGeneralConfig {
 /// Contraction of a trailing axis into a leading axis.
 fn contract_into(contract_l: usize, contract_r: usize) -> DotGeneralConfig {
     DotGeneralConfig {
-        lhs_contracting_dims: vec![contract_l],
-        rhs_contracting_dims: vec![contract_r],
-        lhs_batch_dims: vec![],
-        rhs_batch_dims: vec![],
+        lhs_contracting_dims: [contract_l].into_iter().collect(),
+        rhs_contracting_dims: [contract_r].into_iter().collect(),
+        lhs_batch_dims: [].into_iter().collect(),
+        rhs_batch_dims: [].into_iter().collect(),
     }
 }
 
@@ -108,20 +108,26 @@ impl std::fmt::Debug for TenferroMeasurement {
 }
 
 impl TenferroMeasurement {
-    /// CPU runtime with the `cpu-faer` provider.
+    /// CPU runtime with the `native` provider.
     pub fn new_cpu() -> Result<Self, StageError> {
-        let ctx = EagerRuntime::with_cpu_backend(tenferro_cpu::CpuBackend::new()).map_err(err)?;
+        let ctx = EagerRuntime::new().map_err(err)?;
         Ok(Self::with_runtime(
             ctx,
+            crate::sr_backend::cpu_engine()?,
             Placement::Host,
-            "tenferro-measurement cpu-faer".to_string(),
+            "tenferro-measurement native".to_string(),
         ))
     }
 
     /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
-    pub fn with_runtime(ctx: Arc<EagerRuntime>, placement: Placement, label: String) -> Self {
+    pub fn with_runtime(
+        ctx: Arc<EagerRuntime>,
+        engine: Arc<std::sync::Mutex<Box<dyn tenferro_runtime::ExecutionEngine + Send>>>,
+        placement: Placement,
+        label: String,
+    ) -> Self {
         Self {
-            io: EagerTransfer::new(ctx, placement),
+            io: EagerTransfer::new(ctx, engine, placement),
             label,
         }
     }
@@ -232,7 +238,9 @@ impl TenferroMeasurement {
         }
         let a_t = self.io.upload_real(vec![terms, n_qp, n_size], a)?;
         let b_t = self.io.upload_real(vec![terms, n_qp, n_size], b)?;
-        let ratio = a_t.dot_general(&b_t, batched_dot(2, 2)).map_err(err)?;
+        let ratio = self
+            .io
+            .run(|s| s.dot_general(&a_t, &b_t, batched_dot(2, 2)))?;
         let pf = self.io.upload_real(
             vec![n_qp],
             input.state.slater_matrix.pf_m_real[..n_qp].to_vec(),
@@ -249,8 +257,13 @@ impl TenferroMeasurement {
         let w_t = self.io.upload_real(vec![n_qp], w)?;
         // `new_pf = -(ratio * pf)` then `new_ip = sum_qp w * new_pf`: the C grouping,
         // with only the QP summation order left to the tensor reduction.
-        let new_pf = ratio.mul(&pf).map_err(err)?.neg().map_err(err)?;
-        let new_ip_t = new_pf.dot_general(&w_t, contract_into(1, 0)).map_err(err)?;
+        let new_pf = self.io.run(|s| {
+            let product = s.mul(&ratio, &pf)?;
+            s.neg(&product)
+        })?;
+        let new_ip_t = self
+            .io
+            .run(|s| s.dot_general(&new_pf, &w_t, contract_into(1, 0)))?;
         self.io.download_f64(&new_ip_t)
     }
 
@@ -345,7 +358,9 @@ impl TenferroMeasurement {
             }
             let w_t = self.io.upload_real(vec![4, sp_len], w)?;
             let inv_t = self.io.upload_real(vec![sp_len, n_size, n_size], inv_sub)?;
-            let a_t = w_t.dot_general(&inv_t, contract_into(1, 0)).map_err(err)?;
+            let a_t = self
+                .io
+                .run(|s| s.dot_general(&w_t, &inv_t, contract_into(1, 0)))?;
             let a = self.io.download_f64(&a_t)?;
             let base = trans * nn;
             for msi in 0..n_size {
@@ -381,10 +396,10 @@ impl MeasurementStages for TenferroMeasurement {
     fn provider(&self) -> String {
         match self.io.placement {
             Placement::Host => {
-                "tenferro-ad EagerRuntime + CpuBackend (cpu-faer); tensor ratio tables".to_string()
+                "tenferro-ad EagerRuntime + CpuEngine (native); tensor ratio tables".to_string()
             }
             Placement::Device => {
-                "tenferro-ad EagerRuntime + tenferro-gpu CudaBackend (cuBLAS); tensor ratio tables"
+                "tenferro-ad EagerRuntime + tenferro-gpu CudaEngine (cuBLAS); tensor ratio tables"
                     .to_string()
             }
         }
@@ -1338,12 +1353,19 @@ mod layout_tests {
         let lhs: Vec<f64> = (0..b * s).map(|_| next()).collect();
         // rhs[s, m, n], column-major [s, m, n].
         let rhs: Vec<f64> = (0..s * m * n).map(|_| next()).collect();
-        let ctx = EagerRuntime::with_cpu_backend(tenferro_cpu::CpuBackend::new()).unwrap();
-        let io = EagerTransfer::new(ctx, Placement::Host);
+        let ctx = EagerRuntime::new().unwrap();
+        let engine = Arc::new(std::sync::Mutex::new(
+            Box::new(tenferro_cpu::CpuEngine::serial())
+                as Box<dyn tenferro_runtime::ExecutionEngine + Send>,
+        ));
+        let io = EagerTransfer::new(ctx, engine, Placement::Host);
         let lhs_t = io.upload_real(vec![b, s], lhs.clone()).unwrap();
         let rhs_t = io.upload_real(vec![s, m, n], rhs.clone()).unwrap();
         let out = io
-            .download_f64(&lhs_t.dot_general(&rhs_t, contract_into(1, 0)).unwrap())
+            .download_f64(
+                &io.run(|s| s.dot_general(&lhs_t, &rhs_t, contract_into(1, 0)))
+                    .unwrap(),
+            )
             .unwrap();
         assert_eq!(out.len(), b * m * n);
         for nn_ in 0..n {
@@ -1388,12 +1410,19 @@ mod layout_tests {
                 inv_sub[s + sp * k] = value;
             }
         }
-        let ctx = EagerRuntime::with_cpu_backend(tenferro_cpu::CpuBackend::new()).unwrap();
-        let io = EagerTransfer::new(ctx, Placement::Host);
+        let ctx = EagerRuntime::new().unwrap();
+        let engine = Arc::new(std::sync::Mutex::new(
+            Box::new(tenferro_cpu::CpuEngine::serial())
+                as Box<dyn tenferro_runtime::ExecutionEngine + Send>,
+        ));
+        let io = EagerTransfer::new(ctx, engine, Placement::Host);
         let w_t = io.upload_real(vec![4, sp], w.clone()).unwrap();
         let inv_t = io.upload_real(vec![sp, n, n], inv_sub).unwrap();
         let a = io
-            .download_f64(&w_t.dot_general(&inv_t, contract_into(1, 0)).unwrap())
+            .download_f64(
+                &io.run(|s| s.dot_general(&w_t, &inv_t, contract_into(1, 0)))
+                    .unwrap(),
+            )
             .unwrap();
         // The C-order scatter reads `plane[msj + msi * n]` for the block/coefficient pair
         // of `(msi, msj)`; the tensor index is `blk + 4 * (msj + n * msi)`.

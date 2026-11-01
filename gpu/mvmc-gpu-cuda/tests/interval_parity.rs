@@ -13,8 +13,7 @@
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler, ResidentInterval};
-use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaEngine};
 
 /// Parsed fixture.
 struct Fixture {
@@ -111,7 +110,7 @@ fn interval_shared_tape_matches_julia_gpu() {
     }
     let fx = load_fixture();
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
 
     let n = fx.npair;
     let n2 = 2 * fx.nsite;
@@ -162,21 +161,27 @@ fn interval_shared_tape_matches_julia_gpu() {
         params: &params,
     };
 
-    let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, fx.steps, 0.0))
-        .expect("prepare");
-    backend
-        .with_backend_session(|s| sampler.upload_tape(s, &fx.tape))
-        .expect("upload tape");
+    let sampler = {
+        let s: &mut CudaEngine = &mut backend;
+        IntervalSampler::prepare(s, geom, &host, fx.steps, 0.0)
+    }
+    .expect("prepare");
+    {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.upload_tape(s, &fx.tape)
+    }
+    .expect("upload tape");
 
     // Run to completion, rebuilding a walker that asks (the Julia kernel rebuilds inline).
     let mut rounds = 0usize;
     let mut rebuilds = 0usize;
     let mut accepted = 0i32;
     loop {
-        let results = backend
-            .with_backend_session(|s| sampler.run(s))
-            .expect("run");
+        let results = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.run(s)
+        }
+        .expect("run");
         rounds += 1;
         let mut need = Vec::new();
         for (w, &(_, r, a)) in results.iter().enumerate() {
@@ -189,14 +194,18 @@ fn interval_shared_tape_matches_julia_gpu() {
             break;
         }
         rebuilds += need.len();
-        backend
-            .with_backend_session(|s| sampler.rebuild(s, &need))
-            .expect("rebuild");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.rebuild(s, &need)
+        }
+        .expect("rebuild");
     }
 
-    let final_ele = backend
-        .with_backend_session(|s| sampler.download_ele(s, 0))
-        .expect("download ele");
+    let final_ele = {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.download_ele(s, 0)
+    }
+    .expect("download ele");
     let occ = occupancy_of(&final_ele, fx.nsite, fx.ne);
     eprintln!(
         "julia  ele={:?} occ={:?} accepted={}",
@@ -209,24 +218,32 @@ fn interval_shared_tape_matches_julia_gpu() {
 
     // Independent Julia expectation also gates the schedule with device-side
     // rebuild selection. This uses the fixture tape, not Rust-generated output.
-    let mut resident = backend
-        .with_backend_session(|s| ResidentInterval::prepare(s, geom, &host, fx.steps, 79))
-        .unwrap();
-    backend
-        .with_backend_session(|s| resident.advance_with_tape(s, &fx.tape))
-        .unwrap();
-    let result = backend
-        .with_backend_session(|s| resident.snapshot(s))
-        .unwrap();
+    let mut resident = {
+        let s: &mut CudaEngine = &mut backend;
+        ResidentInterval::prepare(s, geom, &host, fx.steps, 79)
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        resident.advance_with_tape(s, &fx.tape)
+    }
+    .unwrap();
+    let result = {
+        let s: &mut CudaEngine = &mut backend;
+        resident.snapshot(s)
+    }
+    .unwrap();
     assert_eq!(result.ele, fx.final_ele);
     assert_eq!(
         occupancy_of(&result.ele, fx.nsite, fx.ne),
         fx.final_occupancy
     );
     assert_eq!(
-        backend
-            .with_backend_session(|s| resident.accepted(s))
-            .unwrap(),
+        {
+            let s: &mut CudaEngine = &mut backend;
+            resident.accepted(s)
+        }
+        .unwrap(),
         vec![fx.accepted]
     );
 }
@@ -239,7 +256,7 @@ fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
         return;
     }
     let devices = cuda_devices().unwrap();
-    let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+    let mut backend = CudaEngine::open(devices[0].id()).unwrap();
     // Small fallback, non-power-of-two QP tails, the L128 specialization, and n=256
     // where allocating 3*n*nqp doubles would exceed CUDA's default shared-memory limit.
     for (n, nqp) in [(8, 1), (64, 3), (128, 5), (256, 8)] {
@@ -295,9 +312,11 @@ fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
             jast: &jast,
             params: &[0.0],
         };
-        let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, hops, 0.0))
-            .unwrap();
+        let sampler = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, geom, &host, hops, 0.0)
+        }
+        .unwrap();
         let mut tape = vec![0; walkers * hops * 5];
         for h in 0..hops {
             for w in 0..walkers {
@@ -308,18 +327,28 @@ fn interval_qp_tiles_and_batch_download_match_cpu_rebuild() {
                 // Acceptance uniform zero: these finite, nonsingular hops must all accept.
             }
         }
-        backend
-            .with_backend_session(|s| sampler.upload_tape(s, &tape))
-            .unwrap();
-        let counts = backend.with_backend_session(|s| sampler.run(s)).unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.upload_tape(s, &tape)
+        }
+        .unwrap();
+        let counts = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.run(s)
+        }
+        .unwrap();
         assert_eq!(counts, vec![(hops as i32, 0, hops as i32); walkers]);
-        let all = backend
-            .with_backend_session(|s| sampler.download_all(s))
-            .unwrap();
+        let all = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.download_all(s)
+        }
+        .unwrap();
         for w in 0..walkers {
-            let (cfg, pf, aw, logip) = backend
-                .with_backend_session(|s| sampler.download_walker(s, w))
-                .unwrap();
+            let (cfg, pf, aw, logip) = {
+                let s: &mut CudaEngine = &mut backend;
+                sampler.download_walker(s, w)
+            }
+            .unwrap();
             assert_eq!(cfg, all.ele[w * n..(w + 1) * n]);
             assert_eq!(aw, all.aw[w]);
             assert_eq!(pf, all.pf[w * nqp..(w + 1) * nqp]); // exact transfer identity
@@ -362,7 +391,7 @@ fn interval_walker_upload_download_roundtrip() {
         return;
     }
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
 
     let (nsite, ne, nqp) = (8usize, 4usize, 2usize);
     let n = 2 * ne;
@@ -394,26 +423,34 @@ fn interval_walker_upload_download_roundtrip() {
         jast: &jast,
         params: &params,
     };
-    let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 4, 0.0))
-        .expect("prepare");
+    let sampler = {
+        let s: &mut CudaEngine = &mut backend;
+        IntervalSampler::prepare(s, geom, &host, 4, 0.0)
+    }
+    .expect("prepare");
 
     // Upload a distinct walker-0 state and read it back.
     let ele1 = vec![4i32, 6, 0, 2, 5, 7, 1, 3];
     let inv1 = vec![-0.125f64; nqp * n * n];
     let pf1 = vec![0.75f64, -0.25];
-    backend
-        .with_backend_session(|s| sampler.upload_walker(s, 0, &ele1, &inv1, &pf1, 3, -1.5))
-        .expect("upload_walker");
-    let (ele_back, pf_back, aw_back, logip_back) = backend
-        .with_backend_session(|s| sampler.download_walker(s, 0))
-        .expect("download_walker");
+    {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.upload_walker(s, 0, &ele1, &inv1, &pf1, 3, -1.5)
+    }
+    .expect("upload_walker");
+    let (ele_back, pf_back, aw_back, logip_back) = {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.download_walker(s, 0)
+    }
+    .expect("download_walker");
     assert_eq!(ele_back, ele1, "configuration round trip");
     assert_eq!(pf_back, pf1, "Pfaffian round trip");
     assert_eq!(aw_back, 3, "accepted-window round trip");
     assert_eq!(logip_back, -1.5, "log|IP| round trip");
-    let ele_only = backend
-        .with_backend_session(|s| sampler.download_ele(s, 0))
-        .expect("download ele");
+    let ele_only = {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.download_ele(s, 0)
+    }
+    .expect("download ele");
     assert_eq!(ele_only, ele1);
 }

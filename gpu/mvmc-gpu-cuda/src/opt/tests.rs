@@ -122,13 +122,17 @@ fn resident_opt_matches_julia_general_operators() {
 }
 
 fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
-    let mut backend = runtime(0).unwrap();
-    let mut state = backend
-        .with_backend_session(|s| State::prepare(s, model, &config))
-        .unwrap();
-    backend
-        .with_backend_session(|s| state.initialize(s))
-        .unwrap();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut state = {
+        let s: &mut CudaEngine = &mut backend;
+        State::prepare(s, model, &config)
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.initialize(s)
+    }
+    .unwrap();
     let mut tokens = fixture_text.split_whitespace();
     let mut fixture = HashMap::new();
     while let Some(name) = tokens.next() {
@@ -140,8 +144,9 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
                 .collect::<Vec<_>>(),
         );
     }
-    let (derivatives, energy) = backend
-        .with_backend_session(|s| {
+    let (derivatives, energy) = {
+        let s: &mut CudaEngine = &mut backend;
+        {
             let state = &mut state;
             with_raw_exec(s, "opt.julia.stages", |exec| {
                 let module = exec.module(SOURCE, KERNELS)?;
@@ -189,10 +194,15 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
                 ))
             })
             .map_err(|e| e.to_string())
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
     let before = raw_exec_counters();
-    backend.with_backend_session(|s| state.run(s)).unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.run(s)
+    }
+    .unwrap();
     let traffic = raw_exec_counters() - before;
     assert_eq!(
         (
@@ -202,7 +212,11 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
         ),
         (0, 0, 1)
     );
-    let result = backend.with_backend_session(|s| state.result(s)).unwrap();
+    let result = {
+        let s: &mut CudaEngine = &mut backend;
+        state.result(s)
+    }
+    .unwrap();
     close(
         "parameters_after",
         &result.parameters,
@@ -217,8 +231,9 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
         1e-10,
         1e-10,
     );
-    let update = backend
-        .with_backend_session(|s| {
+    let update = {
+        let s: &mut CudaEngine = &mut backend;
+        {
             let state = &mut state;
             with_raw_exec(s, "opt.julia.residual", |exec| {
                 let mut update = vec![0.; state.model.np];
@@ -228,8 +243,9 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
                 Ok(update)
             })
             .map_err(|e| e.to_string())
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
     // Independently reconstruct the mathematical SR system on CPU and measure
     // its normalized solve residual, rather than checking library success alone.
     let np = state.model.np;
@@ -349,12 +365,15 @@ fn resident_opt_rejects_failed_sr() {
     let model = Model::prepare(&input, &config).unwrap();
     let expected = model.parameters.clone();
     let n = model.np;
-    let mut backend = runtime(0).unwrap();
-    let mut state = backend
-        .with_backend_session(|s| State::prepare(s, model, &config))
-        .unwrap();
-    backend
-        .with_backend_session(|s| {
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut state = {
+        let s: &mut CudaEngine = &mut backend;
+        State::prepare(s, model, &config)
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        {
             let state = &mut state;
             with_raw_exec(s, "opt.failed-solve", |exec| {
                 let mut matrix = vec![0.; n * n];
@@ -407,13 +426,16 @@ fn resident_opt_rejects_failed_sr() {
                 Ok(())
             })
             .map_err(|e| e.to_string())
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
     for _ in 0..2 {
         let before = raw_exec_counters();
-        let error = backend
-            .with_backend_session(|s| state.result(s))
-            .unwrap_err();
+        let error = {
+            let s: &mut CudaEngine = &mut backend;
+            state.result(s)
+        }
+        .unwrap_err();
         assert!(error.contains("device status 3"), "{error}");
         let traffic = raw_exec_counters() - before;
         assert_eq!(
@@ -472,17 +494,22 @@ fn resident_opt_pipeline() {
         ..Default::default()
     };
     let model = Model::prepare(Path::new(&input), &config).unwrap();
-    let mut backend = CudaBackend::new(cuda_devices().unwrap()[0].id()).unwrap();
-    let mut state = backend
-        .with_backend_session(|s| State::prepare(s, model, &config))
-        .unwrap();
-    backend
-        .with_backend_session(|s| state.initialize(s))
-        .unwrap();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut state = {
+        let s: &mut CudaEngine = &mut backend;
+        State::prepare(s, model, &config)
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.initialize(s)
+    }
+    .unwrap();
     // Explicit diagnostic downloads are outside the production run's counters.
     if let Ok(path) = std::env::var("MVMC_RESIDENT_DUMP") {
-        let dump = backend
-            .with_backend_session(|s| {
+        let dump = {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 let state = &mut state;
                 with_raw_exec(s, "opt.diagnostic", |exec| {
                     let module = exec.module(SOURCE, KERNELS)?;
@@ -525,18 +552,27 @@ fn resident_opt_pipeline() {
                     Ok(text)
                 })
                 .map_err(|e| e.to_string())
-            })
-            .unwrap();
+            }
+        }
+        .unwrap();
         std::fs::write(path, dump).unwrap();
     }
     let before = raw_exec_counters();
     let start = std::time::Instant::now();
-    backend.with_backend_session(|s| state.run(s)).unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.run(s)
+    }
+    .unwrap();
     let seconds = start.elapsed().as_secs_f64();
     let traffic = raw_exec_counters() - before;
     assert_eq!((traffic.upload_calls, traffic.download_calls), (0, 0));
     assert_eq!((traffic.synchronizations, traffic.scopes), (1, 1));
-    let result = backend.with_backend_session(|s| state.result(s)).unwrap();
+    let result = {
+        let s: &mut CudaEngine = &mut backend;
+        state.result(s)
+    }
+    .unwrap();
     if let Ok(path) = std::env::var("MVMC_RESIDENT_DUMP") {
         use std::io::Write;
         let mut file = std::fs::OpenOptions::new().append(true).open(path).unwrap();

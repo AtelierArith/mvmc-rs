@@ -19,9 +19,9 @@
 //! * [`Backend::CpuPfapack`] / [`Backend::CpuPfapackRayon`]: loop over `pfapack` per plane.
 //!   This is the reference; the results are bit-identical to calling pfapack directly.
 //! * [`Backend::TenferroNative`]: the same algorithm expressed as batched tenferro tensor
-//!   operations on `CpuBackend` (reference for a device-portable formulation).
+//!   operations on `CpuEngine` (reference for a device-portable formulation).
 //! * [`Backend::TenferroExtension`]: the pfapack per-plane kernel wrapped as a tenferro
-//!   `ExtensionOp`, run in a tenferro runtime on `CpuBackend` (bit-identical to pfapack).
+//!   `ExtensionOp`, run in a tenferro runtime on `CpuEngine` (bit-identical to pfapack).
 //! * [`Backend::Engine`]: an external [`BatchedEngine`]; the CUDA engine (one thread block per
 //!   plane, NVRTC kernel launched through tenferro's raw session) lives in the standalone
 //!   workspace `gpu/mvmc-gpu-cuda` so this crate and `Cargo.lock` stay GPU-free.
@@ -34,7 +34,7 @@ use num_complex::Complex64;
 
 mod cpu;
 mod scalar;
-mod tenferro_ext;
+pub mod tenferro_ext;
 mod tenferro_native;
 
 pub mod stages;
@@ -122,9 +122,9 @@ pub enum Backend<'a> {
     CpuPfapack,
     /// pfapack per plane, rayon over planes (one workspace per rayon task).
     CpuPfapackRayon,
-    /// Batched tenferro tensor operations on `CpuBackend` (faer provider).
+    /// Batched tenferro tensor operations on `CpuEngine` (faer provider).
     TenferroNative,
-    /// pfapack wrapped as a tenferro `ExtensionOp` in a tenferro runtime on `CpuBackend`.
+    /// pfapack wrapped as a tenferro `ExtensionOp` in a tenferro runtime on `CpuEngine`.
     TenferroExtension,
     /// An external engine, for example the CUDA kernel of `gpu/mvmc-gpu-cuda`.
     Engine(&'a dyn BatchedEngine),

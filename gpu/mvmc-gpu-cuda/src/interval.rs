@@ -15,7 +15,7 @@
 //! non-FSZ, ordinary-hopping mode without local spins is represented.
 
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
-use tenferro_tensor::BackendSession;
+use tenferro_tensor::Engine;
 
 mod resident;
 pub use resident::ResidentInterval;
@@ -209,7 +209,7 @@ impl IntervalSampler {
     /// per walker (uploaded with [`Self::upload_tape`]); `exchange_fraction` is the Julia GPU
     /// exchange threshold (0 for the hopping-only `NExUpdatePath == 0` inputs; a nonzero value is
     /// rejected by the caller until the exchange branch exists).
-    pub fn prepare<B: BackendSession + ?Sized>(
+    pub fn prepare<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
@@ -220,7 +220,7 @@ impl IntervalSampler {
     }
 
     /// Allocate an initial configuration whose tables will be factored on the device.
-    pub(crate) fn prepare_for_rebuild<B: BackendSession + ?Sized>(
+    pub(crate) fn prepare_for_rebuild<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
@@ -229,7 +229,7 @@ impl IntervalSampler {
         Self::prepare_buffers(backend, geom, host, total_hops, 0.0, false)
     }
 
-    fn prepare_buffers<B: BackendSession + ?Sized>(
+    fn prepare_buffers<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
@@ -342,7 +342,7 @@ impl IntervalSampler {
     /// `[word][walker][step]` (word-fastest, then walker, then step; linear index
     /// `5*(walker + walkers*step) + word`). The same tape can be handed to Julia's
     /// `gpu_sample!(s; tape=...)` for a shared-tape parity check.
-    pub fn upload_tape<B: BackendSession + ?Sized>(
+    pub fn upload_tape<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         tape: &[u32],
@@ -354,7 +354,7 @@ impl IntervalSampler {
     }
 
     /// Reset every walker to `hop_off = 0` (call before a fresh sweep over the same tape).
-    pub fn reset_offsets<B: BackendSession + ?Sized>(&self, backend: &mut B) -> Result<(), String> {
+    pub fn reset_offsets<B: Engine + ?Sized>(&self, backend: &mut B) -> Result<(), String> {
         let zeros = vec![0i32; self.geom.walkers];
         with_raw_exec(backend, "mvmc.interval.reset", |exec| unsafe {
             exec.upload(exec.ptr(&self.hop_off)?, &zeros)
@@ -364,7 +364,7 @@ impl IntervalSampler {
 
     /// Re-upload the inverse/Pfaffian state (a host-rebuild fallback or a benchmark reset):
     /// the tables, the accepted-move window (`aw`) and the cached `log|inner product|`.
-    pub fn upload_tables<B: BackendSession + ?Sized>(
+    pub fn upload_tables<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         inv: &[f64],
@@ -386,10 +386,7 @@ impl IntervalSampler {
 
     /// Advance every walker until it reaches `total_hops` or requests a rebuild. Returns the
     /// per-walker `(hops_done, rebuild)`.
-    pub fn run<B: BackendSession + ?Sized>(
-        &self,
-        backend: &mut B,
-    ) -> Result<Vec<(i32, i32, i32)>, String> {
+    pub fn run<B: Engine + ?Sized>(&self, backend: &mut B) -> Result<Vec<(i32, i32, i32)>, String> {
         let g = self.geom;
         with_raw_exec(backend, "mvmc.interval.run", |exec| {
             let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
@@ -455,7 +452,7 @@ impl IntervalSampler {
 
     /// Rebuild the inverse/Pfaffian of the listed walkers on the device (assemble + batched
     /// Pfaffian + commit) and reset their accepted-move windows.
-    pub fn rebuild<B: BackendSession + ?Sized>(
+    pub fn rebuild<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         walkers: &[usize],
@@ -470,7 +467,7 @@ impl IntervalSampler {
     /// Factor into scratch, committing only when every requested plane succeeded.
     /// Initialization may retain the C setup on a numeric failure; runtime CUDA errors
     /// remain errors, and an unsuccessful factor never overwrites resident tables.
-    pub(crate) fn try_rebuild<B: BackendSession + ?Sized>(
+    pub(crate) fn try_rebuild<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         walkers: &[usize],
@@ -579,7 +576,7 @@ impl IntervalSampler {
     }
 
     /// Download walker `w`'s configuration.
-    pub fn download_ele<B: BackendSession + ?Sized>(
+    pub fn download_ele<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         w: usize,
@@ -597,7 +594,7 @@ impl IntervalSampler {
     }
 
     /// Download walker `w`'s Pfaffians.
-    pub fn download_pf<B: BackendSession + ?Sized>(
+    pub fn download_pf<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         w: usize,
@@ -619,7 +616,7 @@ impl IntervalSampler {
     /// `log|IP|`. Used by a group coordinator to stage each walker before a batched interval
     /// run; `inv` is the walker's `nqp*n*n` inverse and `pf` its `nqp` Pfaffians.
     #[allow(clippy::too_many_arguments)]
-    pub fn upload_walker<B: BackendSession + ?Sized>(
+    pub fn upload_walker<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         w: usize,
@@ -651,7 +648,7 @@ impl IntervalSampler {
     }
 
     /// Download the complete group's results with four blocking transfers.
-    pub fn download_all<B: BackendSession + ?Sized>(
+    pub fn download_all<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
     ) -> Result<IntervalResults, String> {
@@ -678,7 +675,7 @@ impl IntervalSampler {
 
     /// Download walker `w`'s resident sampling state after an interval run: configuration,
     /// Pfaffians, accepted-move window and cached `log|IP|`.
-    pub fn download_walker<B: BackendSession + ?Sized>(
+    pub fn download_walker<B: Engine + ?Sized>(
         &self,
         backend: &mut B,
         w: usize,
@@ -706,14 +703,13 @@ impl IntervalSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-    use tenferro_tensor::BackendSessionHost;
+    use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
 
     #[test]
     #[ignore = "requires CUDA"]
     fn failed_rebuild_preserves_all_resident_tables() {
         let devices = cuda_devices().unwrap();
-        let mut backend = CudaBackend::new(devices[0].id()).unwrap();
+        let mut backend = CudaEngine::open(devices[0].id()).unwrap();
         let geom = IntervalGeometry {
             walkers: 2,
             n: 2,
@@ -739,38 +735,50 @@ mod tests {
             jast: &[-1; 4],
             params: &[0.0],
         };
-        let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, 1, 0.0))
-            .unwrap();
-        backend
-            .with_backend_session(|s| {
+        let sampler = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, geom, &host, 1, 0.0)
+        }
+        .unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 with_raw_exec(s, "test.set_windows", |exec| unsafe {
                     exec.upload(exec.ptr(&sampler.aw)?, &[7i32, 9])
                 })
-            })
-            .unwrap();
-        let before = backend
-            .with_backend_session(|s| sampler.download_all(s))
-            .unwrap();
-        let error = backend
-            .with_backend_session(|s| sampler.rebuild(s, &[0, 1]))
-            .unwrap_err();
+            }
+        }
+        .unwrap();
+        let before = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.download_all(s)
+        }
+        .unwrap();
+        let error = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.rebuild(s, &[0, 1])
+        }
+        .unwrap_err();
         assert!(error.contains("singular or nonfinite"), "{error}");
-        let after = backend
-            .with_backend_session(|s| sampler.download_all(s))
-            .unwrap();
+        let after = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.download_all(s)
+        }
+        .unwrap();
         assert_eq!(after.ele, before.ele);
         assert_eq!(after.pf, before.pf); // exact unchanged-buffer identity
         assert_eq!(after.aw, before.aw);
         assert_eq!(after.logip, before.logip);
         let mut inverse_after = vec![0.0f64; 8];
-        backend
-            .with_backend_session(|s| {
+        {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 with_raw_exec(s, "test.inverse", |exec| unsafe {
                     exec.download(&mut inverse_after, exec.ptr(&sampler.inv)?)
                 })
-            })
-            .unwrap();
+            }
+        }
+        .unwrap();
         assert_eq!(inverse_after, inv);
     }
 }

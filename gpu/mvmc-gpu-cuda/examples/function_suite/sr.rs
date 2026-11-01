@@ -412,7 +412,8 @@ fn timing_only(
         version: std::cell::Cell::new(100),
     };
     match cuda_runtime(0).and_then(|rt| {
-        let mut b = TenferroSr::with_runtime(rt, Placement::Device, "tenferro cuda".into());
+        let mut b =
+            TenferroSr::with_runtime(rt.ctx, rt.engine, Placement::Device, "tenferro cuda".into());
         run_backend(&mut b, &case, cx, true)
     }) {
         Ok(o) => {
@@ -546,7 +547,12 @@ fn run_case(cfg: &Cfg, cx: &Cx, csv: &mut Csv, n: usize, k: usize, dev_mem: Opti
     let faer_cap = if cfg.full { 2e11 } else { 2e10 };
     if flops <= faer_cap && !one_core {
         match cpu_runtime().and_then(|rt| {
-            let mut b = TenferroSr::with_runtime(rt, Placement::Host, "tenferro cpu-faer".into());
+            let mut b = TenferroSr::with_runtime(
+                rt.ctx,
+                rt.engine,
+                Placement::Host,
+                "tenferro cpu-faer".into(),
+            );
             run_backend(&mut b, &case, cx, false)
         }) {
             Ok(o) => variant_rows(
@@ -584,7 +590,8 @@ fn run_case(cfg: &Cfg, cx: &Cx, csv: &mut Csv, n: usize, k: usize, dev_mem: Opti
         }
     }
     match cuda_runtime(0).and_then(|rt| {
-        let mut b = TenferroSr::with_runtime(rt, Placement::Device, "tenferro cuda".into());
+        let mut b =
+            TenferroSr::with_runtime(rt.ctx, rt.engine, Placement::Device, "tenferro cuda".into());
         run_backend(&mut b, &case, cx, true)
     }) {
         Ok(o) => variant_rows(

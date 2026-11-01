@@ -15,5 +15,5 @@ rayon = { workspace = true }
 thiserror = { workspace = true }
 tenferro-tensor = { workspace = true }
 tenferro-cpu = { workspace = true }
-tenferro-runtime = { version = "0.7.1", default-features = false }
+tenferro-runtime = { version = "0.8.0", default-features = false }
 mvmc-core = { workspace = true }

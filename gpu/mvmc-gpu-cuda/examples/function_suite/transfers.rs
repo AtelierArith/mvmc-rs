@@ -9,7 +9,7 @@
 use cudarc::driver::CudaContext;
 use mvmc_gpu_cuda::transfer::{PinnedBuf, PinnedKind, TransferStream};
 use mvmc_gpu_cuda::transfer_bench as tb;
-use tenferro_gpu::cuda::{download_tensor, upload_tensor, CudaBackend};
+use tenferro_gpu::cuda::{download_tensor, upload_tensor, CudaEngine};
 use tenferro_tensor::Tensor;
 
 use crate::csv::{Csv, Row, Stat, Verdict};
@@ -34,7 +34,7 @@ fn mismatches(a: &[f64], b: &[f64]) -> f64 {
 fn integrity(
     csv: &mut Csv,
     ctx: &std::sync::Arc<CudaContext>,
-    backend: &mut CudaBackend,
+    backend: &mut CudaEngine,
     bytes: usize,
 ) {
     let n = bytes / 8;
@@ -124,7 +124,7 @@ pub fn run(cfg: &Cfg, csv: &mut Csv) {
             return;
         }
     };
-    let mut backend = match CudaBackend::new(devs[0].id()) {
+    let mut backend = match CudaEngine::open(devs[0].id()) {
         Ok(b) => b,
         Err(e) => {
             csv.push(Row::new(FAMILY, "all", "-", "-", "").error(&e.to_string()));

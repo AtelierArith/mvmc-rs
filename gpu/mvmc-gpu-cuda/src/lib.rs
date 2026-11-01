@@ -13,6 +13,7 @@ pub mod interval_engine;
 pub mod measurement;
 pub mod opt;
 pub mod pfaffian;
+pub mod pfaffian_extension;
 pub mod sampler_stages;
 pub mod sr_bench;
 pub mod sr_device;

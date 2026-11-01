@@ -19,9 +19,9 @@ use std::time::Instant;
 
 use mvmc_gpu::{BatchOutput, BatchedEngine, Error, PfScalar, PlaneStatus};
 use num_complex::Complex64;
-use tenferro_gpu::cuda::raw::{Function, KernelArg, LaunchConfig, NvrtcOptions, Session};
-use tenferro_gpu::cuda::{cuda_devices, with_cuda_exec_session, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use std::rc::Rc;
+use tenferro_ext::raw_exec::{with_raw_exec, Arg, Function, RawExec, RawModule};
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine as TenferroCudaEngine};
 
 use crate::transfer::{download_pinned_raw, upload_pinned_raw, PinnedBuf, PinnedKind};
 
@@ -140,11 +140,8 @@ pub type LaneOutput<E> = (Vec<E>, Vec<E>, Vec<i32>, Timings);
 
 /// A loaded kernel module inside one raw CUDA session.
 pub struct PfSession<'a, 's> {
-    sess: &'a mut Session<'s>,
-    f64_real: Function,
-    f64_complex: Function,
-    f32_real: Function,
-    f32_complex: Function,
+    exec: &'a RawExec<'a, 's>,
+    module: Rc<RawModule>,
     /// Page-locked staging reused by every batch call (interior mutability keeps the public
     /// `&self` receiver of the lane runners).
     scratch: std::cell::RefCell<TransferScratch>,
@@ -175,7 +172,7 @@ macro_rules! lane_runner {
             let mut inv = vec![<$elem>::default(); count * plane_elems];
             let mut status = vec![0i32; count];
             let mut t = Timings::default();
-            let sess: &Session = &*self.sess;
+            let exec = self.exec;
             let mut scratch = self.scratch.borrow_mut();
             let mut done = 0usize;
             while done < count {
@@ -187,23 +184,17 @@ macro_rules! lane_runner {
                 let st_bytes = m * std::mem::size_of::<i32>();
 
                 let t0 = Instant::now();
-                let d_a = sess
-                    .alloc_bytes(up_bytes, "pfaffian.upload")
-                    .map_err(cuerr)?;
-                let d_w = sess
-                    .alloc_bytes(m * plane_elems * esz, "pfaffian.workspace")
-                    .map_err(cuerr)?;
-                let mut d_out = sess
-                    .alloc_output::<$elem>(&[m * plane_elems])
-                    .map_err(cuerr)?;
-                let mut d_pf = sess.alloc_output::<$elem>(&[m * lanes]).map_err(cuerr)?;
-                let mut d_st = sess.alloc_output::<i32>(&[m]).map_err(cuerr)?;
+                let d_a = exec.alloc_bytes(up_bytes).map_err(cuerr)?;
+                let d_w = exec.alloc_bytes(out_bytes).map_err(cuerr)?;
+                let d_out = exec.alloc_bytes(out_bytes).map_err(cuerr)?;
+                let d_pf = exec.alloc_bytes(pf_bytes).map_err(cuerr)?;
+                let d_st = exec.alloc_bytes(st_bytes).map_err(cuerr)?;
                 t.alloc_s += t0.elapsed().as_secs_f64();
 
                 // Every copy runs on the session's own captured stream, so the pinned HtoD, the
                 // kernel and the pinned DtoH are ordered by stream order with no host barrier in
                 // between; `Session::synchronize` below is the barrier.
-                let stream = unsafe { sess.stream().raw_handle() };
+                let stream = exec.stream_handle();
 
                 // SAFETY: f32/f64 have no padding or invalid byte patterns; `host` is copied into
                 // the reused pinned staging buffer before the copy is enqueued.
@@ -214,8 +205,7 @@ macro_rules! lane_runner {
                     )
                 };
                 let t0 = Instant::now();
-                let mut dev_a = std::ptr::null_mut();
-                d_a.with_ptr(|p| dev_a = p);
+                let dev_a = exec.ptr(&d_a).map_err(cuerr)? as *mut std::ffi::c_void;
                 {
                     let up = scratch.upload(up_bytes)?;
                     up.as_u8_mut()[..up_bytes].copy_from_slice(host_bytes);
@@ -227,60 +217,56 @@ macro_rules! lane_runner {
 
                 let t1 = Instant::now();
                 {
-                    let out_ref = sess.tensor_mut(&mut d_out).map_err(cuerr)?;
-                    let pf_ref = sess.tensor_mut(&mut d_pf).map_err(cuerr)?;
-                    let st_ref = sess.tensor_mut(&mut d_st).map_err(cuerr)?;
-                    let config = LaunchConfig {
-                        grid: [m as u32, 1, 1],
-                        block: [nt as u32, 1, 1],
-                        shared_mem_bytes: shared,
-                    };
+                    let ptr_a = exec.ptr(&d_a).map_err(cuerr)?;
+                    let ptr_w = exec.ptr(&d_w).map_err(cuerr)?;
+                    let ptr_out = exec.ptr(&d_out).map_err(cuerr)?;
+                    let ptr_pf = exec.ptr(&d_pf).map_err(cuerr)?;
+                    let ptr_st = exec.ptr(&d_st).map_err(cuerr)?;
                     // SAFETY: kernel ABI is (T* A, T* W, T* OUT, T* PF, int* ST, int n). A and W
                     // are device byte buffers of `m` planes, OUT/PF/ST are freshly allocated
                     // tensors of exactly `m` planes / `m` scalars / `m` ints, none alias, the
                     // grid has one block per plane, the dynamic shared size matches the
                     // kernel layout, and every buffer outlives the synchronize below.
                     unsafe {
-                        sess.launch(
+                        exec.launch(
                             kernel,
-                            config,
+                            (m as u32, 1, 1),
+                            nt,
+                            shared,
                             &[
-                                KernelArg::workspace(&d_a),
-                                KernelArg::workspace(&d_w),
-                                KernelArg::output(&out_ref),
-                                KernelArg::output(&pf_ref),
-                                KernelArg::output(&st_ref),
-                                KernelArg::i32(n as i32),
+                                Arg::P(ptr_a),
+                                Arg::P(ptr_w),
+                                Arg::P(ptr_out),
+                                Arg::P(ptr_pf),
+                                Arg::P(ptr_st),
+                                Arg::I(n as i32),
                             ],
                         )
                     }
                     .map_err(cuerr)?;
                 }
-                sess.synchronize().map_err(cuerr)?;
+                exec.synchronize().map_err(cuerr)?;
                 t.kernel_s += t1.elapsed().as_secs_f64();
 
                 let t2 = Instant::now();
                 {
                     let out = scratch.out(out_bytes)?;
-                    let dev = sess.tensor_mut(&mut d_out).map_err(cuerr)?;
+                    let dev = exec.ptr(&d_out).map_err(cuerr)? as *mut std::ffi::c_void;
                     // SAFETY: `out` is page-locked, `dev` is a live output tensor of `out_bytes`
                     // and both stay put until the synchronize below completes the copy.
-                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), out, out_bytes) }
-                        .map_err(cuerr)?;
+                    unsafe { download_pinned_raw(stream, dev, out, out_bytes) }.map_err(cuerr)?;
                 }
                 {
                     let pf_buf = scratch.pf(pf_bytes)?;
-                    let dev = sess.tensor_mut(&mut d_pf).map_err(cuerr)?;
-                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), pf_buf, pf_bytes) }
-                        .map_err(cuerr)?;
+                    let dev = exec.ptr(&d_pf).map_err(cuerr)? as *mut std::ffi::c_void;
+                    unsafe { download_pinned_raw(stream, dev, pf_buf, pf_bytes) }.map_err(cuerr)?;
                 }
                 {
                     let st_buf = scratch.status(st_bytes)?;
-                    let dev = sess.tensor_mut(&mut d_st).map_err(cuerr)?;
-                    unsafe { download_pinned_raw(stream, dev.raw_ptr(), st_buf, st_bytes) }
-                        .map_err(cuerr)?;
+                    let dev = exec.ptr(&d_st).map_err(cuerr)? as *mut std::ffi::c_void;
+                    unsafe { download_pinned_raw(stream, dev, st_buf, st_bytes) }.map_err(cuerr)?;
                 }
-                sess.synchronize().map_err(cuerr)?;
+                exec.synchronize().map_err(cuerr)?;
 
                 // Pin -> typed output vectors. The staging buffers are page-aligned and the byte
                 // ranges are exact multiples of the element size, so the casts are aligned.
@@ -332,11 +318,10 @@ impl PfSession<'_, '_> {
         count: usize,
     ) -> Result<(BatchOutput<T>, Timings), Error> {
         let complex = T::lanes() == 2;
-        let kernel = if complex {
-            &self.f64_complex
-        } else {
-            &self.f64_real
-        };
+        let kernel = self
+            .module
+            .function(if complex { "pfinv_c64" } else { "pfinv_f64" })
+            .map_err(cuerr)?;
         let (pf, inv, status, t) =
             self.run_lanes_f64(kernel, complex, T::as_f64_lanes(planes), n, count)?;
         // Reinterpret the f64 lane buffers as `T`: a no-op for `T = f64` (the hot measurement
@@ -357,11 +342,10 @@ impl PfSession<'_, '_> {
         n: usize,
         count: usize,
     ) -> Result<LaneOutput<f32>, Error> {
-        let kernel = if complex {
-            &self.f32_complex
-        } else {
-            &self.f32_real
-        };
+        let kernel = self
+            .module
+            .function(if complex { "pfinv_c32" } else { "pfinv_f32" })
+            .map_err(cuerr)?;
         self.run_lanes_f32(kernel, complex, planes, n, count)
     }
 }
@@ -384,38 +368,21 @@ pub fn with_session<R: Send>(
     let device = devices.get(device).ok_or_else(|| {
         Error::BackendUnavailable(format!("no CUDA device with ordinal {device}"))
     })?;
-    let mut backend = CudaBackend::new(device.id())
+    let mut backend = TenferroCudaEngine::open(device.id())
         .map_err(|e| Error::BackendUnavailable(format!("CUDA backend: {e}")))?;
-    let outcome = backend.with_backend_session(|session| {
-        with_cuda_exec_session(session, |exec| {
-            exec.with_raw("mvmc-gpu.pfaffian", |sess| {
-                // --fmad=false keeps pfapack's operation order in the rank-2 update.
-                let opts = NvrtcOptions {
-                    arch: Some("compute_80".into()),
-                    std: None,
-                    extra: vec!["--fmad=false".into()],
-                };
-                let module = sess.compile_nvrtc(KERNEL_SRC, &opts)?;
-                let load = |name: &str| module.function(name);
-                let mut ps = PfSession {
-                    f64_real: load("pfinv_f64")?,
-                    f64_complex: load("pfinv_c64")?,
-                    f32_real: load("pfinv_f32")?,
-                    f32_complex: load("pfinv_c32")?,
-                    scratch: std::cell::RefCell::new(TransferScratch::default()),
-                    sess,
-                };
-                Ok(f(&mut ps))
-            })
-        })
-    });
-    match outcome {
-        Some(Ok(inner)) => inner,
-        Some(Err(e)) => Err(Error::BackendUnavailable(format!("CUDA session: {e}"))),
-        None => Err(Error::BackendUnavailable(
-            "backend session is not a CUDA execution session".into(),
-        )),
-    }
+    with_raw_exec(&mut backend, "mvmc-gpu.pfaffian", |exec| {
+        let module = exec.module_without_fmad(
+            KERNEL_SRC,
+            &["pfinv_f64", "pfinv_c64", "pfinv_f32", "pfinv_c32"],
+        )?;
+        let mut ps = PfSession {
+            exec,
+            module,
+            scratch: std::cell::RefCell::new(TransferScratch::default()),
+        };
+        Ok(f(&mut ps))
+    })
+    .map_err(|e| Error::BackendUnavailable(format!("CUDA session: {e}")))?
 }
 
 /// Convenience engine for [`mvmc_gpu::Backend::Engine`]: compiles and loads the module for
@@ -466,7 +433,12 @@ enum Job {
 /// is dropped.
 pub struct PersistentCudaEngine {
     device: usize,
-    tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<Job>>>,
+    worker: std::sync::Mutex<Option<Worker>>,
+}
+
+struct Worker {
+    tx: std::sync::mpsc::Sender<Job>,
+    join: std::thread::JoinHandle<()>,
 }
 
 impl PersistentCudaEngine {
@@ -474,17 +446,17 @@ impl PersistentCudaEngine {
     pub fn new(device: usize) -> Self {
         Self {
             device,
-            tx: std::sync::Mutex::new(None),
+            worker: std::sync::Mutex::new(None),
         }
     }
 
     fn submit(&self, job: Job) -> Result<(), Error> {
-        let mut guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
-        let tx = guard.get_or_insert_with(|| {
+        let mut guard = self.worker.lock().unwrap_or_else(|e| e.into_inner());
+        let worker = guard.get_or_insert_with(|| {
             let (tx, rx) = std::sync::mpsc::channel::<Job>();
             let rx = std::sync::Arc::new(std::sync::Mutex::new(rx));
             let device = self.device;
-            std::thread::spawn(move || {
+            let join = std::thread::spawn(move || {
                 let worker_rx = rx.clone();
                 let started = with_session(device, move |s| {
                     let rx = worker_rx.lock().unwrap_or_else(|e| e.into_inner());
@@ -525,10 +497,22 @@ impl PersistentCudaEngine {
                     }
                 }
             });
-            tx
+            Worker { tx, join }
         });
-        tx.send(job)
+        worker
+            .tx
+            .send(job)
             .map_err(|_| Error::Backend("CUDA worker thread ended".to_string()))
+    }
+}
+
+impl Drop for PersistentCudaEngine {
+    fn drop(&mut self) {
+        let slot = self.worker.get_mut().unwrap_or_else(|e| e.into_inner());
+        if let Some(Worker { tx, join }) = slot.take() {
+            drop(tx);
+            let _ = join.join();
+        }
     }
 }
 

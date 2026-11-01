@@ -203,3 +203,40 @@ fn invalid_shapes_are_typed_errors() {
         Err(Error::InvalidShape(_))
     ));
 }
+
+#[test]
+fn owned_stage_releases_its_engine_on_drop() {
+    use mvmc_gpu::{BatchOutput, BatchedEngine};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    struct Tracked(Arc<AtomicBool>);
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+    impl BatchedEngine for Tracked {
+        fn name(&self) -> String {
+            "tracked".to_string()
+        }
+        fn run_f64(&self, _: &[f64], _: usize, _: usize) -> mvmc_gpu::Result<BatchOutput<f64>> {
+            unreachable!()
+        }
+        fn run_c64(
+            &self,
+            _: &[Complex64],
+            _: usize,
+            _: usize,
+        ) -> mvmc_gpu::Result<BatchOutput<Complex64>> {
+            unreachable!()
+        }
+    }
+    let dropped = Arc::new(AtomicBool::new(false));
+    let stage =
+        mvmc_gpu::stages::BatchedStages::with_owned_engine(Tracked(dropped.clone()), "tracked");
+    assert!(!dropped.load(Ordering::SeqCst));
+    drop(stage);
+    assert!(dropped.load(Ordering::SeqCst));
+}
