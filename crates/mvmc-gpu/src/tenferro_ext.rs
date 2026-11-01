@@ -237,7 +237,6 @@ pub(crate) fn run<T: PfScalar>(
         .map_err(backend_err)?
         .iter()
         .copied()
-        .into_iter()
         .map(PlaneStatus::from_code)
         .collect();
     Ok((pf, inv, status))

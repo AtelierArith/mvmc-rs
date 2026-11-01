@@ -32,6 +32,12 @@ impl RawExec<'_, '_> {
         c: DevPtr,
         ldc: usize,
     ) -> tenferro_tensor::Result<()> {
+        if self.blas.is_null() {
+            return Err(backend(
+                "raw_exec::dgemm",
+                "scope was opened without cuBLAS",
+            ));
+        }
         if [m, n, k, lda, ldb, ldc]
             .iter()
             .any(|&v| v > i32::MAX as usize)

@@ -19,7 +19,7 @@ use std::time::Instant;
 
 use mvmc_gpu::{BatchOutput, BatchedEngine, Error, PfScalar, PlaneStatus};
 use num_complex::Complex64;
-use std::rc::Rc;
+use std::sync::Arc;
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, Function, RawExec, RawModule};
 use tenferro_gpu::cuda::{cuda_devices, CudaEngine as TenferroCudaEngine};
 
@@ -141,7 +141,7 @@ pub type LaneOutput<E> = (Vec<E>, Vec<E>, Vec<i32>, Timings);
 /// A loaded kernel module inside one raw CUDA session.
 pub struct PfSession<'a, 's> {
     exec: &'a RawExec<'a, 's>,
-    module: Rc<RawModule>,
+    module: Arc<RawModule>,
     /// Page-locked staging reused by every batch call (interior mutability keeps the public
     /// `&self` receiver of the lane runners).
     scratch: std::cell::RefCell<TransferScratch>,
@@ -425,8 +425,8 @@ enum Job {
     },
 }
 
-/// Engine that keeps one CUDA session and the compiled kernel module alive on a worker thread
-/// (`raw::Module` is `!Send`, so it cannot be stored in the engine itself). The first call
+/// Engine that keeps one CUDA session and the compiled kernel module alive on a worker thread.
+/// The first call
 /// pays the context creation and NVRTC compile; later calls only upload, launch and download.
 /// This is the engine of the unified stage backend (`stages::cuda_stage_backend`), where the
 /// validation harness and production issue many small calls. The worker ends when the engine

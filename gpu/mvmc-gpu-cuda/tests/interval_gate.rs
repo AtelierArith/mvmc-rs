@@ -94,9 +94,12 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let total_hops = 64usize;
     let tape: Vec<u32> = (0..total_hops * 5).map(|_| rng.next_u32()).collect();
 
-    let sampler = IntervalSampler::prepare(&mut backend, geom, &host, total_hops, 0.0).expect("prepare");
+    let sampler =
+        IntervalSampler::prepare(&mut backend, geom, &host, total_hops, 0.0).expect("prepare");
 
-    sampler.upload_tape(&mut backend, &tape).expect("upload tape");
+    sampler
+        .upload_tape(&mut backend, &tape)
+        .expect("upload tape");
 
     // Advance until the window forces a rebuild; a rebuild is expected at nsite=8 accepts.
     let results = sampler.run(&mut backend).expect("run interval");

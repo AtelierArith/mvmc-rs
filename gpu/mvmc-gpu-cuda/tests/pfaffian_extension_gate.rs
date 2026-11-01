@@ -8,6 +8,7 @@ use tenferro_runtime::program::ProgramInputSpec;
 use tenferro_runtime::{
     DType, ExecutionEngine, GraphCompiler, Runtime, Tensor, TensorRead, TraceContext,
 };
+use tenferro_tensor::TensorDeviceTransfer;
 
 fn exercise(engine: &mut dyn ExecutionEngine, runtime: &Runtime, device: bool) {
     let shape = [2, 2, 2, 2];
@@ -133,7 +134,22 @@ fn shared_extension_cuda_preserves_layout_status_and_residency() {
     });
     assert_eq!(stats.entries, 1);
     assert!(stats.hits > 0 && stats.retained_bytes <= 64 * 1024 * 1024);
+    let modules = caches.stats(tenferro_runtime::ExtensionCacheSelector::Cache {
+        family_id: mvmc_gpu::tenferro_ext::FAMILY,
+        cache_name: "cuda-module",
+    });
+    assert_eq!(modules.entries, 1);
+    assert!(modules.hits > 0 && modules.retained_bytes > 0);
     engine.restore_extension_caches(caches);
+    // A deliberately tiny retention budget forces scoped scratch and module
+    // release; both must remain live until the GPU launch completes.
+    let mut caches = engine.take_extension_caches();
+    caches.set_limits(
+        tenferro_runtime::ExtensionCacheLimits::default()
+            .with_max_retained_bytes(std::num::NonZeroUsize::new(1).unwrap()),
+    );
+    engine.restore_extension_caches(caches);
+    exercise(&mut engine, &runtime, true);
 }
 
 fn exercise_complex(engine: &mut dyn ExecutionEngine, runtime: &Runtime, device: bool) {
@@ -214,4 +230,48 @@ fn shared_extension_rejects_invalid_shape_and_dtype() {
             .add_extension(Arc::new(PfaffianInverseOp), &[x])
             .is_err());
     }
+}
+
+#[test]
+#[ignore = "optional CUDA gate: requires a device"]
+fn shared_extension_cuda_supports_an_empty_batch() {
+    let devices = tenferro_gpu::cuda::cuda_devices().unwrap();
+    assert!(!devices.is_empty(), "CUDA device required");
+    let mut engine = tenferro_gpu::cuda::CudaEngine::open(devices[0].id()).unwrap();
+    let mut builder = Runtime::builder();
+    builder
+        .register_engine(tenferro_gpu::cuda::cuda_runtime_engine_registration(&engine).unwrap())
+        .unwrap();
+    builder
+        .install_extension_module(
+            cuda_extension_module(engine.runtime_engine_id().clone()).unwrap(),
+        )
+        .unwrap();
+    let runtime = builder.build().unwrap();
+    let shape = [2, 2, 0, 1];
+    let host = Tensor::from_vec_col_major(shape.to_vec(), Vec::<f64>::new()).unwrap();
+    let input = engine
+        .upload_host_tensor(TensorRead::from_tensor(&host))
+        .unwrap();
+    let mut trace = TraceContext::new();
+    let x = trace
+        .input(ProgramInputSpec::new(DType::F64, shape.map(DimExpr::Const)))
+        .unwrap();
+    let y = trace
+        .add_extension(Arc::new(PfaffianInverseOp), &[x])
+        .unwrap();
+    let graph = trace.finish(&y).unwrap();
+    let program = GraphCompiler::new().compile_traced_graph(&graph).unwrap();
+    let reads = [TensorRead::from_tensor(&input)];
+    let prepared = runtime
+        .prepare(&program, &reads, &[engine.target()])
+        .unwrap();
+    let outputs = runtime.run(&mut [&mut engine], &prepared, &reads).unwrap();
+    let outputs: Vec<_> = outputs
+        .into_iter()
+        .map(|v| v.into_tensor(&mut engine).unwrap())
+        .collect();
+    assert_eq!(outputs[0].shape(), &[0, 1]);
+    assert_eq!(outputs[1].shape(), &shape);
+    assert_eq!(outputs[2].shape(), &[0, 1]);
 }

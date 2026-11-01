@@ -472,4 +472,18 @@ fn raw_buffers_reject_another_runtime_on_the_same_device() {
         error.to_string().contains("different CUDA runtime"),
         "{error}"
     );
+    const EMPTY_KERNEL: &str = "extern \"C\" __global__ void empty_kernel() {}";
+    let module = with_raw_exec(&mut owner, "owner module", |exec| {
+        exec.module(EMPTY_KERNEL, &["empty_kernel"])
+    })
+    .unwrap();
+    let error = with_raw_exec(&mut other, "foreign module", |exec| {
+        // SAFETY: an empty kernel uses no buffers and has no arguments.
+        unsafe { exec.launch(module.function("empty_kernel")?, (1, 1, 1), 1, 0, &[]) }
+    })
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("different CUDA runtime"),
+        "{error}"
+    );
 }

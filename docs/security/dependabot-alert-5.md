@@ -76,3 +76,5 @@ cargo tree --manifest-path benchmark/pfapack_compare/Cargo.toml --locked -i lru
 ```
 
 The old snapshots and the historical evidence above are retained as provenance; the new graphs do not use those patches. This check concerns the lru remediation and is not a complete security audit of the new dependency graphs.
+
+On 2026-11-02, `cargo audit --file` reported no lru advisory in any of the three locks. The root and standalone benchmark audits still exit 1 for the pre-existing crossbeam-epoch 0.9.18 finding RUSTSEC-2026-0204; the CUDA lock audit exits 0. The root additionally reports the pre-existing custom_derive and paste unmaintained warnings and the anyhow unsoundness warning; the benchmark and CUDA locks report the paste warning. No advisory was suppressed. These results are specific to the advisory database available at the time of the check.

@@ -16,16 +16,15 @@
 //! reserved after the engine is gone. Addresses are passed to kernels as
 //! 64-bit scalars, which is ABI-identical to a pointer parameter.
 //!
-//! Compiled modules and cuBLAS handles are `!Send` / context-bound, so they
-//! live in per-thread caches keyed by runtime identity (CUDA eager sessions
-//! run their callback on the calling thread). cuBLAS handles are created on
-//! the tenferro primary context and intentionally never destroyed (one per
-//! thread and runtime; destroying them at thread exit could race context
-//! teardown).
+//! The legacy raw path caches compiled modules and cuBLAS handles per thread
+//! and runtime. Modules retain the runtime and validate its identity at launch.
+//! Kernel-only callers can compile without this cache and retain a module in an
+//! engine-owned extension cache instead. The legacy cuBLAS handles remain
+//! context-bound and are intentionally retained until process exit.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use cudarc::cublas::{result as cublas, sys as cublas_sys};
 use cudarc::driver::{result as driver, sys as driver_sys};
@@ -169,14 +168,25 @@ pub struct RawModule {
     module: driver_sys::CUmodule,
     context: driver_sys::CUcontext,
     _runtime: CudaRuntime,
+    estimated_bytes: usize,
 }
 
 /// A function whose owning module is retained by the caller's `RawModule`.
-pub struct Function(driver_sys::CUfunction);
+pub struct Function {
+    handle: driver_sys::CUfunction,
+    runtime: CudaRuntimeIdentity,
+}
+
+// SAFETY: modules and functions are immutable CUDA driver handles. Launches are
+// restricted to the owning runtime and serialized by its raw scope. Drop pushes
+// the retained runtime's context before unloading the module.
+unsafe impl Send for RawModule {}
+// SAFETY: immutable access only exposes lookup; the engine serializes launches.
+unsafe impl Sync for RawModule {}
 
 impl Drop for RawModule {
     fn drop(&mut self) {
-        // The runtime retains the context. Modules are thread-local and every raw
+        // The runtime retains the context, and every raw
         // scope synchronizes before its caller may release the last reference.
         unsafe {
             if driver_sys::cuCtxPushCurrent_v2(self.context)
@@ -192,6 +202,11 @@ impl Drop for RawModule {
 }
 
 impl RawModule {
+    /// Host PTX size used as an estimate for bounded cache accounting.
+    pub fn estimated_bytes(&self) -> usize {
+        self.estimated_bytes
+    }
+
     /// A function of the module.
     pub fn function(&self, name: &str) -> tenferro_tensor::Result<&Function> {
         self.functions
@@ -201,7 +216,7 @@ impl RawModule {
 }
 
 thread_local! {
-    static MODULES: RefCell<Vec<Rc<RawModule>>> = const { RefCell::new(Vec::new()) };
+    static MODULES: RefCell<Vec<Arc<RawModule>>> = const { RefCell::new(Vec::new()) };
     static BLAS: RefCell<Vec<(CudaRuntimeIdentity, usize)>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -344,8 +359,8 @@ impl<'r, 's> RawExec<'r, 's> {
         &self,
         source: &'static str,
         kernels: &[&'static str],
-    ) -> tenferro_tensor::Result<Rc<RawModule>> {
-        self.module_with_options(source, kernels, false)
+    ) -> tenferro_tensor::Result<Arc<RawModule>> {
+        self.module_with_options(source, kernels, false, true)
     }
 
     /// Compile a module with fused multiply-add disabled for C-order numerical kernels.
@@ -353,8 +368,18 @@ impl<'r, 's> RawExec<'r, 's> {
         &self,
         source: &'static str,
         kernels: &[&'static str],
-    ) -> tenferro_tensor::Result<Rc<RawModule>> {
-        self.module_with_options(source, kernels, true)
+    ) -> tenferro_tensor::Result<Arc<RawModule>> {
+        self.module_with_options(source, kernels, true, true)
+    }
+
+    /// Compile a module with FMA disabled without entering the thread-local cache.
+    /// Callers must retain the returned module until submitted work has completed.
+    pub fn compile_without_fmad(
+        &self,
+        source: &'static str,
+        kernels: &[&'static str],
+    ) -> tenferro_tensor::Result<Arc<RawModule>> {
+        self.module_with_options(source, kernels, true, false)
     }
 
     fn module_with_options(
@@ -362,21 +387,27 @@ impl<'r, 's> RawExec<'r, 's> {
         source: &'static str,
         kernels: &[&'static str],
         disable_fmad: bool,
-    ) -> tenferro_tensor::Result<Rc<RawModule>> {
+        use_cache: bool,
+    ) -> tenferro_tensor::Result<Arc<RawModule>> {
         let runtime = self.identity.clone();
         let key = source.as_ptr() as usize;
-        if let Some(module) = MODULES.with(|cache| {
-            cache
-                .borrow()
-                .iter()
-                .find(|m| {
-                    m.runtime == runtime
-                        && m.source == key
-                        && m.disable_fmad == disable_fmad
-                        && m.kernels == kernels
+        if let Some(module) = use_cache
+            .then(|| {
+                MODULES.with(|cache| {
+                    cache
+                        .borrow()
+                        .iter()
+                        .find(|m| {
+                            m.runtime == runtime
+                                && m.source == key
+                                && m.disable_fmad == disable_fmad
+                                && m.kernels == kernels
+                        })
+                        .cloned()
                 })
-                .cloned()
-        }) {
+            })
+            .flatten()
+        {
             return Ok(module);
         }
         let mut options = cudarc::nvrtc::CompileOptions::default();
@@ -391,6 +422,7 @@ impl<'r, 's> RawExec<'r, 's> {
             .map_err(|e| backend("raw_exec::module", e.to_string()))?;
         let ptx = std::ffi::CString::new(ptx.to_src())
             .map_err(|e| backend("raw_exec::module", e.to_string()))?;
+        let estimated_bytes = ptx.as_bytes().len();
         // SAFETY: the raw scope has made this runtime's CUDA context current.
         let module = unsafe { driver::module::load_data(ptx.as_ptr().cast()) }
             .map_err(|e| backend("raw_exec::module", e.to_string()))?;
@@ -401,7 +433,13 @@ impl<'r, 's> RawExec<'r, 's> {
             let function = unsafe { driver::module::get_function(module, c_name) };
             match function {
                 Ok(function) => {
-                    functions.insert(*name, Function(function));
+                    functions.insert(
+                        *name,
+                        Function {
+                            handle: function,
+                            runtime: runtime.clone(),
+                        },
+                    );
                 }
                 Err(e) => {
                     unsafe {
@@ -411,7 +449,7 @@ impl<'r, 's> RawExec<'r, 's> {
                 }
             }
         }
-        let module = Rc::new(RawModule {
+        let module = Arc::new(RawModule {
             runtime,
             source: key,
             disable_fmad,
@@ -420,14 +458,17 @@ impl<'r, 's> RawExec<'r, 's> {
             module,
             context: self.context,
             _runtime: self.runtime.clone(),
+            estimated_bytes,
         });
-        MODULES.with(|cache| {
-            let mut cache = cache.borrow_mut();
-            if cache.len() >= MAX_CACHED_MODULES {
-                cache.remove(0);
-            }
-            cache.push(module.clone());
-        });
+        if use_cache {
+            MODULES.with(|cache| {
+                let mut cache = cache.borrow_mut();
+                if cache.len() >= MAX_CACHED_MODULES {
+                    cache.remove(0);
+                }
+                cache.push(module.clone());
+            });
+        }
         Ok(module)
     }
 
@@ -448,6 +489,12 @@ impl<'r, 's> RawExec<'r, 's> {
         if block == 0 || block > 1024 || grid.0 > i32::MAX as u32 {
             return Err(backend("raw_exec::launch", "invalid CUDA launch geometry"));
         }
+        if function.runtime != self.identity {
+            return Err(backend(
+                "raw_exec::launch",
+                "kernel belongs to a different CUDA runtime",
+            ));
+        }
         let mut params: Vec<*mut std::ffi::c_void> = args
             .iter()
             .map(|arg| match arg {
@@ -461,7 +508,7 @@ impl<'r, 's> RawExec<'r, 's> {
         // SAFETY: forwarded ABI and lifetime contract; CUDA copies parameters on enqueue.
         unsafe {
             driver::launch_kernel(
-                function.0,
+                function.handle,
                 (grid.0.max(1), grid.1.max(1), grid.2.max(1)),
                 (block, 1, 1),
                 shared,
@@ -497,6 +544,9 @@ impl<'r, 's> RawExec<'r, 's> {
     ) -> tenferro_tensor::Result<()> {
         if m == 0 || n == 0 {
             return Ok(());
+        }
+        if self.blas.is_null() {
+            return Err(backend("raw_exec::gemm", "scope was opened without cuBLAS"));
         }
         // SAFETY: forwarded caller contract; alpha/beta are host scalars
         // (pointer mode host, the handle default).
@@ -543,6 +593,12 @@ impl<'r, 's> RawExec<'r, 's> {
     ) -> tenferro_tensor::Result<()> {
         if m == 0 || n == 0 || batch == 0 {
             return Ok(());
+        }
+        if self.blas.is_null() {
+            return Err(backend(
+                "raw_exec::gemm_batched",
+                "scope was opened without cuBLAS",
+            ));
         }
         // SAFETY: forwarded caller contract.
         unsafe {
@@ -665,7 +721,10 @@ impl<'r, 's> RawExec<'r, 's> {
 
 /// The NVRTC virtual architecture: `TENFERRO_CUDA_ARCH` when set, else the
 /// session device's compute capability.
-fn cuda_arch<B: Engine + ?Sized>(session: &mut B) -> tenferro_tensor::Result<String> {
+fn cuda_arch<B: Engine + ?Sized>(
+    session: &mut B,
+    use_cache: bool,
+) -> tenferro_tensor::Result<String> {
     if let Ok(arch) = std::env::var("TENFERRO_CUDA_ARCH") {
         if !arch.is_empty() {
             return Ok(arch);
@@ -678,13 +737,18 @@ fn cuda_arch<B: Engine + ?Sized>(session: &mut B) -> tenferro_tensor::Result<Str
         (cuda.runtime().device_id(), cuda.runtime_identity())
     })
     .ok_or_else(|| backend("tenferro-ext::raw_exec", "CUDA execution session required"))?;
-    if let Some(arch) = ARCH.with(|cache| {
-        cache
-            .borrow()
-            .iter()
-            .find(|(id, _)| *id == identity)
-            .map(|(_, arch)| arch.clone())
-    }) {
+    if let Some(arch) = use_cache
+        .then(|| {
+            ARCH.with(|cache| {
+                cache
+                    .borrow()
+                    .iter()
+                    .find(|(id, _)| *id == identity)
+                    .map(|(_, arch)| arch.clone())
+            })
+        })
+        .flatten()
+    {
         return Ok(arch);
     }
     let devices = tenferro_gpu::cuda::cuda_devices().map_err(|error| {
@@ -699,7 +763,9 @@ fn cuda_arch<B: Engine + ?Sized>(session: &mut B) -> tenferro_tensor::Result<Str
         .ok_or_else(|| backend("tenferro-ext::raw_exec", "session device not discovered"))?;
     let capability = info.compute_capability();
     let arch = format!("compute_{}{}", capability.major, capability.minor);
-    ARCH.with(|cache| cache.borrow_mut().push((identity, arch.clone())));
+    if use_cache {
+        ARCH.with(|cache| cache.borrow_mut().push((identity, arch.clone())));
+    }
     Ok(arch)
 }
 
@@ -736,18 +802,47 @@ pub fn with_raw_exec<B, R>(
 where
     B: Engine + ?Sized,
 {
-    let arch = cuda_arch(session)?;
+    with_raw_exec_impl(session, label, true, f)
+}
+
+/// Run a kernel-only scope without creating or caching a cuBLAS handle.
+pub fn with_kernel_exec<B, R>(
+    session: &mut B,
+    label: &'static str,
+    f: impl FnOnce(&mut RawExec<'_, '_>) -> tenferro_tensor::Result<R>,
+) -> tenferro_tensor::Result<R>
+where
+    B: Engine + ?Sized,
+{
+    with_raw_exec_impl(session, label, false, f)
+}
+
+fn with_raw_exec_impl<B, R>(
+    session: &mut B,
+    label: &'static str,
+    use_blas: bool,
+    f: impl FnOnce(&mut RawExec<'_, '_>) -> tenferro_tensor::Result<R>,
+) -> tenferro_tensor::Result<R>
+where
+    B: Engine + ?Sized,
+{
+    let arch = cuda_arch(session, use_blas)?;
     let result = with_cuda_engine(session, |cuda| {
         let runtime = cuda.runtime().clone();
         let identity = cuda.runtime_identity();
         cuda.with_raw(label, |raw| {
             Ok((|| -> tenferro_tensor::Result<R> {
-                let blas = blas_handle(identity.clone())?;
                 // SAFETY: the stream handle is used only inside this scope.
                 let stream = raw.stream().raw_handle();
-                // SAFETY: valid handle and the scope's captured stream.
-                unsafe { cublas::set_stream(blas, stream as cublas_sys::cudaStream_t) }
-                    .map_err(|error| backend(label, format!("cublasSetStream: {error}")))?;
+                let blas = if use_blas {
+                    let handle = blas_handle(identity.clone())?;
+                    // SAFETY: valid handle and the scope's captured stream.
+                    unsafe { cublas::set_stream(handle, stream as cublas_sys::cudaStream_t) }
+                        .map_err(|error| backend(label, format!("cublasSetStream: {error}")))?;
+                    handle
+                } else {
+                    std::ptr::null_mut()
+                };
                 let mut context = std::ptr::null_mut();
                 // SAFETY: the provider has entered the captured stream's context.
                 unsafe { driver_sys::cuCtxGetCurrent(&mut context).result() }

@@ -7,7 +7,7 @@
 use mvmc_gpu::tenferro_ext::{PfaffianInverseOp, FAMILY};
 use num_complex::Complex64;
 use std::sync::Arc;
-use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer, RawExec};
+use tenferro_ext::raw_exec::{with_kernel_exec, Arg, DeviceBuffer, RawExec, RawModule};
 use tenferro_runtime::extension::{
     define_extension_runtime, ExtensionCacheKey, ExtensionCacheStore, ExtensionExecutionContext,
 };
@@ -68,10 +68,10 @@ fn execute_reads<B: Engine + ?Sized + 'static>(
     }
     let (engine, caches) = ctx.parts_mut();
     match input.dtype() {
-        DType::F64 => with_raw_exec(engine, FAMILY, |exec| {
+        DType::F64 => with_kernel_exec(engine, FAMILY, |exec| {
             run::<f64>(exec, input, "pfinv_f64", 1, caches)
         }),
-        DType::C64 => with_raw_exec(engine, FAMILY, |exec| {
+        DType::C64 => with_kernel_exec(engine, FAMILY, |exec| {
             run::<Complex64>(exec, input, "pfinv_c64", 2, caches)
         }),
         _ => Err(tenferro_tensor::Error::invalid_argument(
@@ -134,6 +134,15 @@ fn run<T: TensorScalar>(
     let pf = session.alloc_output::<T>(&shape[2..]).map_err(error)?;
     let status = session.alloc_output::<i32>(&shape[2..]).map_err(error)?;
     if count != 0 {
+        let module_key = ExtensionCacheKey::new(FAMILY, "cuda-module", 0);
+        let module = if let Some(module) = caches.get_mut::<Arc<RawModule>>(&module_key) {
+            module.clone()
+        } else {
+            let module = exec
+                .compile_without_fmad(crate::pfaffian::KERNEL_SRC, &["pfinv_f64", "pfinv_c64"])?;
+            caches.put(module_key, module.clone(), module.estimated_bytes());
+            module
+        };
         // Keep at most 64 MiB of scratch per engine; oversized work is temporary.
         // The engine-owned extension cache may impose a smaller retention limit.
         let key = ExtensionCacheKey::new(FAMILY, "cuda-scratch", 0);
@@ -165,14 +174,15 @@ fn run<T: TensorScalar>(
         let out = session.tensor_mut(&inv).map_err(error)?;
         let pfout = session.tensor_mut(&pf).map_err(error)?;
         let st = session.tensor_mut(&status).map_err(error)?;
-        let module =
-            exec.module_without_fmad(crate::pfaffian::KERNEL_SRC, &["pfinv_f64", "pfinv_c64"])?;
+        // A caller may set the cache byte limit below the module estimate. In
+        // that case keep the module alive until the queued launch is complete.
+        let module_cached = caches.get_mut::<Arc<RawModule>>(&module_key).is_some();
         let function = module.function(kernel)?;
         let (threads, shared) = crate::pfaffian::launch_geometry(n, 8, lanes);
         // SAFETY: each allocation spans the batch, outputs are disjoint and the
         // one-block-per-plane kernel ABI matches the supplied arguments. The raw
         // scope synchronizes before these buffers or the module can be released.
-        unsafe {
+        let launched = unsafe {
             exec.launch(
                 function,
                 (grid, 1, 1),
@@ -186,8 +196,12 @@ fn run<T: TensorScalar>(
                     Arg::P(st.raw_ptr() as u64),
                     Arg::I(n as i32),
                 ],
-            )?;
+            )
+        };
+        if !module_cached {
+            exec.synchronize()?;
         }
+        launched?;
     }
     Ok(vec![
         Tensor::from_typed(pf),
