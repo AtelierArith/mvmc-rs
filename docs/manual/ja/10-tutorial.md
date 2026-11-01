@@ -196,7 +196,7 @@ $\langle n_{0\uparrow}n_{0\uparrow}\rangle=\langle n_{0\uparrow}\rangle$、`0 0 
 
 ## 10.4 シングルステップLanczosエネルギー
 
-`NLanczosMode 1` を設定します(この入力には `InterAll` もスピンフリップホッピングもないため、Lanczos の経路はサポートされます、[7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
+`NLanczosMode 1` を設定します(この入力にはスピンフリップホッピングがないため、Lanczos の経路はサポートされます、[7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
 
 ```bash
 cp -r phys_in phys_ls

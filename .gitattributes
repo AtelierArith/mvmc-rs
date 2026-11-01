@@ -6,3 +6,5 @@ tests/fixtures/c_kernel_order/**/*.dat whitespace=-blank-at-eol
 c_toolbox/sr_operand_dump/*.patch whitespace=-blank-at-eol
 # greenr2k expected outputs keep gfortran list-directed trailing blanks.
 tests/fixtures/greenr2k/** whitespace=-blank-at-eol
+# Preserve native C inputs and outputs, including their trailing blank lines.
+tests/fixtures/native_c_lanczos_576/** whitespace=-blank-at-eol,-blank-at-eof

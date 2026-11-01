@@ -171,7 +171,6 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 |-----------|--------|
 | 一般(FSZ)軌道での `NLanczosMode > 0` | 拒否 |
 | スピンを変える `Trans` 行がある場合の `NLanczosMode > 0` | 拒否 |
-| 任意の `InterAll` 項がある場合の `NLanczosMode > 0` | 拒否 |
 | `TwoBodyGEx` がなく `OneBodyG` のエントリが重複している場合の `NLanczosMode = 2` | 拒否 |
 
 ### グループ実行(`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-44`。`NSplitSize > 1` のとき適用)
@@ -195,7 +194,7 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 
 ### C プログラムの動作のうち Rust が提供しないもの
 
-バックフロー(`BF`)、および `InterAll` の Lanczos は利用できません([11.3](11-compatibility.md#113-cリファレンスとの既知の相違)を参照)。
+バックフロー(`BF`)は利用できません([11.3](11-compatibility.md#113-cリファレンスとの既知の相違)を参照)。
 
 ## 7.6 Standard モード(StdFace)
 

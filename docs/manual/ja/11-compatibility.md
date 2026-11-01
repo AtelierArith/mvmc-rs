@@ -57,7 +57,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 7 | `modpara.def` のパーサーの既定値 | `SetDefaultValuesModPara` | `ModParaParameters::default`([7.2](07-input-files.md#72-modparadef)) |
 | 8 | `NMPTrans = 0` | リーダーでは拒否されない(既定値0で `NQPFix = 0` となる、`readdef.c:778`) | 拒否 |
 | 9 | `NSROptItrSmp > NSROptItrStep` | 行が書き出されないまま残る | 拒否 |
-| 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、`InterAll` なし、スピンを変える `Trans` なし。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
+| 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、スピンを変える `Trans` なし。スピン保存 `InterAll` はサポート。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
 | 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
 | 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 は拒否 | 最適化と PhysCal の両方で拒否 |
 | 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | 非ゼロの `NSRCG` は CG を選択。`NStore=0` ではストレージが未定義。他の2つは C のキーではない | `NSRCG >= 2` は `NStore != 0` で CG、`NStore=0` は拒否。他の2つは値に関係なく未知のキーとして拒否 |

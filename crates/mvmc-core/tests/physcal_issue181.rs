@@ -866,6 +866,17 @@ fn assert_reference(actual: &Path, expected: &Path) {
                 // Retain the old gate's upper bound too: adopting an
                 // independent contract must not loosen any existing check.
                 let tolerance = tolerance.min(1.0e-10 + 1.0e-8 * scale);
+                // #576: the observed largest Lanczos output difference is
+                // 1.4e-12 on Linux x86_64; see the fixture README.
+                let tolerance = if expected
+                    .components()
+                    .any(|component| component.as_os_str() == "native_c_lanczos_576")
+                    && name.starts_with("zvo_ls_")
+                {
+                    tolerance.min(1.0e-10)
+                } else {
+                    tolerance
+                };
                 assert!(a.is_finite() && e.is_finite() && (a - e).abs() <= tolerance,
                     "{name} row {row} column {column}: actual={a:.17e}, expected={e:.17e}, tolerance={tolerance:.3e}");
             }
@@ -2218,6 +2229,38 @@ fn all_six_non_interall_terms_match_independent_lanczos_modes() {
             .collect::<BTreeSet<_>>();
         assert_eq!(actual_ls, expected_ls);
         assert_eq!(expected_ls.len(), if mode == 1 { 2 } else { 5 });
+        let _ = fs::remove_dir_all(out);
+    }
+}
+
+#[test]
+fn lanczos_interall_matches_native_c_modes_one_and_two() {
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/native_c_lanczos_576");
+    for (name, mode, orbital_mode) in [
+        ("interall_real1", 1, "real"),
+        ("interall_real2", 2, "real"),
+        ("interall_complex1", 1, "cmp"),
+        ("interall_complex2", 2, "cmp"),
+        ("interall_nodal1", 1, "real"),
+        ("interall_nodal2", 2, "real"),
+    ] {
+        let fixture = root.join(name);
+        let preparation = mvmc_core::prepare_phys_cal_from_namelist(
+            fixture.join("inputs/namelist.def"),
+            fixture.join("zqp_opt.dat"),
+            orbital_mode,
+            Some(1),
+        )
+        .unwrap();
+        assert_eq!(preparation.data.modpara.lanczos_mode, mode);
+        assert!(!preparation.data.inter_all_terms.is_empty());
+        let out = output_dir("interall-lanczos", name);
+        mvmc_core::vmc_phys_cal_to_dir(preparation, &out).unwrap();
+        for entry in fs::read_dir(fixture.join("expected")).unwrap() {
+            let path = entry.unwrap().path();
+            assert_reference(&out.join(path.file_name().unwrap()), &path);
+        }
         let _ = fs::remove_dir_all(out);
     }
 }

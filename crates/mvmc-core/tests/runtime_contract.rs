@@ -251,12 +251,19 @@ fn interall_rejects_invalid_sites_and_fixed_twosz_spin_changes_as_in_c() {
                 error.contains("InterAll") && error.contains("site"),
                 "{error}"
             );
+            let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
+            assert!(
+                error.contains("InterAll") && error.contains("site"),
+                "{error}"
+            );
         }
         data.inter_all_terms[0].site0 = 0;
         data.inter_all_terms[0].spin1 = 1;
         data.inter_all_terms[0].spin3 = 0;
         data.modpara.two_sz = 0;
         let error = mvmc_core::validation::validate_para_opt(&data).unwrap_err();
+        assert!(error.contains("spin-conserving"), "{error}");
+        let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
         assert!(error.contains("spin-conserving"), "{error}");
         data.modpara.two_sz = -1;
         assert_eq!(
