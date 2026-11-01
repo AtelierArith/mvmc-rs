@@ -42,6 +42,14 @@ are independent of this bound. See the issue #181 Lanczos sensitivity audit
 for the conditioning of the alpha solve. The macOS CI result must be recorded
 separately; these Linux differences are not a macOS measurement.
 
+Grouped follow-up on the same Linux Dev Container: copy the real mode 1/2
+inputs, set `NSplitSize 2`, and run both the unmodified C executable and Rust
+CLI with `mpiexec -n 2`, one OpenMP and OpenBLAS thread. With identical
+fixed parameters, the maximum absolute formatted Lanczos differences were
+`1.71e-13` for moments, `7.84e-12` for the energy output and `7.77e-16` for
+mode 2 Green outputs. This is an explicit two-rank experiment, not a checked-in
+MPI fixture or an assertion about other group widths.
+
 SHA-256 of relevant vendored sources (paths under `src/mVMC/`):
 
 | File | SHA-256 |
