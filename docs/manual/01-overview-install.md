@@ -51,7 +51,7 @@ builds and tests do not need `c_toolbox/`.
 | `Orbital`/`OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral` (FSZ) | supported |
 | Gutzwiller, Jastrow, 2-/4-site doublon-holon, charge/spin/general RBM, `OptTrans` | supported |
 | `InterAll` Hamiltonian terms | parsed and evaluated for optimization; ownership of this family is separate from this manual |
-| BackFlow (`BF`, `BFRange`), `SpinJastrow`, `NSRCG >= 2`, `useDiagScale`, `RescaleSmat` | rejected |
+| BackFlow (`BF`, `BFRange`), `SpinJastrow` | rejected; see [7.5](07-input-files.md#75-supported-and-rejected-inputs) for SR and ModPara conditions |
 | Multi-definition mode (`-m N`, one calculation per MPI group and directory) | supported with the `mpi` feature or serially with `-m 1` ([8.1](08-running.md#multidef-mode--m)) |
 | MPI, including grouped execution (`NSplitSize > 1`) | supported with the `mpi` feature, with restrictions ([8.4](08-running.md#84-mpi-and-grouped-execution)) |
 

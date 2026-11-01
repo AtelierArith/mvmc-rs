@@ -229,7 +229,7 @@ $E_{\rm LS}=-8.8934$(1サイトあたり $-0.5558$)で、相対分散は $2.4\ti
   ここでは CG ソルバーが最大の100反復まで実行されており(`NSROptCGMaxIter` のデフォルトは $=n_S$)、`DSROptCGTol` には到達しませんでした。
 - **タイマー。** `MVMC_C_TIMER=1 mvmc hubbard_L16/namelist.def --nsteps 30 --nsmp 5 --out-dir out_t` は、追加で `zvo_CalcTimer.dat` を書き出します
   ([9.5](09-output-files.md#95-タイマー))。このモデルでは、時間の大部分が `hopping update` と `UpdateMAll` にかかります。
-- **拒否される入力。** `NSRCG 2` を追加すると、`mvmc` は `error: NSRCG >= 2 is not supported by Julia-mVMC; use NSRCG = 0 or 1` を出力し、終了ステータス1で停止します。
+- **拒否される入力。** `NSRCG 2` と `NStore 0` の組み合わせは、C で O ストレージが未定義のため拒否されます。`NStore` が非ゼロなら CG が選択されます。
 - **再現性。** 同じコマンドを `--seed 5` で2回実行すると、バイト単位で同一の `zvo_out.dat` が得られます。
 
 サンプルプログラム(`cargo run -p mvmc-cli --example hubbard_chain`、`heisenberg_chain_real`、`heisenberg_chain_cmp`、`heisenberg_chain_fsz`)は、Julia リファレンスの入力

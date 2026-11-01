@@ -6,7 +6,7 @@ This Cargo workspace is the Rust port of [Julia-mVMC](https://github.com/tmisawa
 
 ## Status
 
-**Phase 5 complete.** All four upstream models run end-to-end with full bit-parity against the Julia gold standard:
+**Phase 5 complete.** Four upstream example models run end-to-end; the recorded comparisons below use numerical tolerances:
 
 | Gate | Tolerance | Result |
 |---|---|---|
@@ -258,7 +258,7 @@ cargo run -p xtask -- bench-julia --steps 50 --reps 3 --warmups 1 --threads 1
 
 The authoritative list of rejected inputs is [the supported/rejected matrix in the manual](docs/manual/07-input-files.md#75-supported-and-rejected-inputs) (`crates/mvmc-core/src/validation.rs`).
 
-- BackFlow correlation factor and `SpinJastrow` (rejected), `NSRCG >= 2`, `useDiagScale`, `RescaleSmat`.
+- BackFlow and `SpinJastrow` are rejected. `useDiagScale` and `RescaleSmat` are rejected as unknown ModPara keywords regardless of value. `NSRCG >= 2` selects CG with `NStore != 0`; `NStore = 0` is rejected because C leaves its storage undefined.
 - Lanczos corrections for FSZ/general orbitals (also rejected by C), or with `InterAll` or spin-changing `Trans` (rejected). The single-step Lanczos correction itself (`NLanczosMode` 1/2) is implemented.
 - The `cimpl_utu2inv!` ccall path and `fimpl_zsktf2_/_dsktf2_` Fortran wrappers from `PfaPack.jl` — the optimizer's hot path uses the pure-Julia routines, so we port those directly and drop the FFI surface entirely (no `gfortran` / `g++` required).
 

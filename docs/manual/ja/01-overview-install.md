@@ -43,7 +43,7 @@ Rust ワークスペースは、本マニュアル全体で用いる階層的な
 | `Orbital`/`OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral` (FSZ) | サポート |
 | Gutzwiller因子、Jastrow因子、2/4サイトのダブロン-ホロン相関因子、電荷/スピン/一般のRBM、`OptTrans` | サポート |
 | `InterAll` ハミルトニアン項 | パース済みで最適化時に評価されます。この項目群の所有は本マニュアルとは別です |
-| BackFlow(`BF`, `BFRange`)、`SpinJastrow`、`NSRCG >= 2`、`useDiagScale`、`RescaleSmat` | 拒否 |
+| BackFlow (`BF`, `BFRange`)、`SpinJastrow` | 拒否。SR と ModPara の条件は [7.5](07-input-files.md#75-サポートされる入力と拒否される入力) を参照 |
 | 複数定義モード(`-m N`、MPI グループとディレクトリごとに 1 計算) | `mpi` フィーチャー、またはシリアルでの `-m 1` でサポート([8.1](08-running.md#multidef-モード-m)) |
 | グループ実行(`NSplitSize > 1`)を含む MPI | `mpi` フィーチャーでサポート。制約あり([8.4](08-running.md#84-mpiとグループ実行)) |
 

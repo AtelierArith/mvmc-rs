@@ -83,13 +83,10 @@ parser and **differ from C**. Always specify every key that matters explicitly.
 | `RndSeed` | SFMT seed; the seed of rank/group $g$ is `RndSeed + g`; negative = clock | 11272 | 11272 |
 | `NSplitSize` | MPI group width ([8.4](08-running.md#84-mpi-and-grouped-execution)) | 1 | 1 |
 | `Nneuron`, `NneuronCharge`, `NneuronSpin`, `NneuronGeneral`, `NBlockSize_RBMRatio` | RBM hidden neurons and block size | 0, 0, 0, 0, 200 | 0, 0, 0, 0, 200 |
-| `NFileFlushInterval` | flush interval (C `-F` option) | 1 | 1 (parsed, **not used**) |
-| `ComplexType` | legacy complex flag | – | 0 |
-| `NOneBodyG`, `NTwoBodyG`, `NTwoBodyGEx` | counts normally taken from the Green-function files | 0 | 0 |
-| `useDiagScale`, `RescaleSmat` | unsupported options of the Julia reference | – | 0 (nonzero rejected) |
+| `useDiagScale`, `RescaleSmat` | Julia-only options, not C keywords | – | rejected as unknown keywords regardless of value |
 
 `NOrbitalIdx` is not a `modpara.def` key; the number of orbital parameters is derived from the orbital file.
-`NSROptFixSmp` is parsed by Rust (default 0) but is not a key of the C `GetInfoFromModPara`.
+`NSROptFixSmp`, `NFileFlushInterval`, `ComplexType` and `NOneBodyG` are not ModPara keys and are rejected if supplied.
 
 ## 7.3 Definition files
 
@@ -152,33 +149,32 @@ For a fixed-parameter PhysCal run the parameter file given to `--physcal` is rea
 
 ## 7.5 Supported and rejected inputs
 
-The checks below are in `crates/mvmc-core/src/validation.rs` (commit `37348eac`). They run before any
+The checks below are in `crates/mvmc-core/src/validation.rs`. They run before any
 initialization or output; a rejected input exits with `error: ...` and non-zero status.
 
-### Namelist keywords (`validate_para_opt`, `crates/mvmc-core/src/validation.rs:162-214`)
+### Namelist keywords (`validate_namelist_sections`, `crates/mvmc-core/src/validation.rs`)
 
 | Keywords | Parameter optimization | PhysCal |
 |----------|-----------------------|---------|
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | accepted | accepted |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | accepted | accepted |
-| `TwoBodyGEx` | accepted and ignored | accepted **(observed)** |
-| any other `In…` keyword | rejected ("unsupported namelist section") | not checked |
-| `SpinJastrow` | rejected ("projection layout would be wrong") | not checked |
-| `BF`, `BFRange` (BackFlow) and any unknown keyword | rejected ("unsupported namelist section …") | **not checked: a `BF` entry is accepted and BackFlow is not applied (observed on current `main`)** |
+| `TwoBodyGEx` | accepted and ignored | accepted and used in PhysCal |
+| any other `In…` keyword | rejected ("unsupported namelist section") | rejected |
+| `SpinJastrow` | rejected ("projection layout would be wrong") | rejected |
+| `BF`, `BFRange` (BackFlow) and any unknown keyword | rejected ("unsupported namelist section …") | rejected |
 
-The PhysCal row follows from `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`), which does not repeat the keyword
-check; this asymmetry was observed with a release build and is listed in [11.5](11-compatibility.md#115-open-observations).
+Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cli/tests/issue366_physcal_admission.rs` for PhysCal rejection tests.
 
-### ModPara values (`validate_supported_modpara`, `crates/mvmc-core/src/validation.rs:77-105`; both entry points)
+### ModPara values (`validate_supported_modpara`, `validate_sr_storage_contract`; both entry points)
 
 | Condition | Result |
 |-----------|--------|
 | `NMPTrans == 0` | rejected (use 1 for "no translation projection", the C contract) |
 | `NSplitSize < 1` | rejected |
 | `NLanczosMode` not in 0..2 | rejected |
-| `NSRCG >= 2` | rejected ("not supported by Julia-mVMC") |
-| `useDiagScale != 0` | rejected |
-| `RescaleSmat != 0` | rejected |
+| `NSRCG >= 2`, `NStore = 0` | rejected because C leaves O storage undefined; `NStore != 0` selects CG |
+| `useDiagScale` | rejected as an unknown ModPara keyword regardless of value |
+| `RescaleSmat` | rejected as an unknown ModPara keyword regardless of value |
 
 ### Parameter optimization (`validate_para_opt`, `crates/mvmc-core/src/validation.rs:108-241`)
 
