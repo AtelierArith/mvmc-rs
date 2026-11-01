@@ -2103,8 +2103,8 @@ pub fn calculate_local_energy(
 /// Calculate the second Lanczos Hamiltonian moment for diagonal and transfer
 /// terms. The moved configuration is evaluated with the same local-energy
 /// kernel as the original sample, preserving the Julia operator order.
-/// PairHop and Exchange use the sequential two-body moves from Julia;
-/// InterAll and FSZ callers remain outside this helper.
+/// PairHop, Exchange and InterAll use sequential two-body moves;
+/// FSZ callers remain outside this helper.
 type LanczosMovedConfig = (Vec<i64>, Vec<i64>, Vec<i64>, Vec<i64>);
 
 type LanczosMovedTerm = (Complex64, LanczosMovedConfig);
@@ -3252,6 +3252,129 @@ pub(crate) fn calculate_lanczos_h2_transfer(
         Some(term.value * exchange)
     };
 
+    let inter_all_term = |term: &mvmc_expert_parsers::InterAllTerm,
+                          task: &mut VmcOptimizationState|
+     -> Option<Complex64> {
+        let (ri, rj, rk, rl) = (
+            usize::try_from(term.site0).ok()?,
+            usize::try_from(term.site1).ok()?,
+            usize::try_from(term.site2).ok()?,
+            usize::try_from(term.site3).ok()?,
+        );
+        let (s, t) = (
+            u8::try_from(term.spin1).ok()?,
+            u8::try_from(term.spin3).ok()?,
+        );
+        let ctx = lanczos_nodal::NodalContext {
+            data,
+            state: &*task,
+            ele_idx,
+            ele_cfg,
+            ele_num,
+            ele_proj_cnt,
+            ip,
+        };
+        let hcaca = match ctx.plan_hcaca(ri, rj, rk, rl, s, t) {
+            lanczos_nodal::Reduced::Zero => Complex64::new(0.0, 0.0),
+            lanczos_nodal::Reduced::H1(sign) => h1 * sign,
+            lanczos_nodal::Reduced::Hop { sign, ri, rj, s } => {
+                if let Some(nodal) = ctx.nodal_hca(ri, rj, s) {
+                    nodal * sign
+                } else {
+                    let green = ctx.green1(ri, rj, s);
+                    let (idx, cfg, num, proj) = lanczos_apply_one_body(
+                        ele_idx,
+                        ele_cfg,
+                        ele_num,
+                        ele_proj_cnt,
+                        ri,
+                        rj,
+                        s,
+                        data,
+                    )?;
+                    let moved_h = lanczos_evaluate_moved(
+                        ele_idx,
+                        s,
+                        &idx,
+                        &cfg,
+                        &num,
+                        &proj,
+                        data,
+                        task,
+                        &original_slater,
+                        all_complex,
+                        n_site,
+                        n_elec,
+                        n_qp_full,
+                        &pool,
+                    )?;
+                    green * moved_h * sign
+                }
+            }
+            lanczos_nodal::Reduced::General => {
+                if let Some(nodal) = ctx.nodal_hcaca(ri, rj, rk, rl, s, t) {
+                    nodal
+                } else {
+                    let green = if all_complex {
+                        green_func2_complex
+                    } else {
+                        green_func2
+                    }(
+                        ri,
+                        rj,
+                        rk,
+                        rl,
+                        s,
+                        t,
+                        ip,
+                        data,
+                        task,
+                        ele_idx,
+                        ele_cfg,
+                        ele_num,
+                        ele_proj_cnt,
+                    );
+                    let (idx, cfg, num, proj) = lanczos_apply_two_body(
+                        ele_idx,
+                        ele_cfg,
+                        ele_num,
+                        ele_proj_cnt,
+                        ri,
+                        rj,
+                        rk,
+                        rl,
+                        s,
+                        t,
+                        data,
+                    )?;
+                    let moved_h = lanczos_evaluate_moved(
+                        ele_idx,
+                        t,
+                        &idx,
+                        &cfg,
+                        &num,
+                        &proj,
+                        data,
+                        task,
+                        &original_slater,
+                        all_complex,
+                        n_site,
+                        n_elec,
+                        n_qp_full,
+                        &pool,
+                    )?;
+                    green * moved_h
+                }
+            }
+        };
+        let coefficient = if all_complex {
+            term.value
+        } else {
+            Complex64::new(term.value.re, 0.0)
+        };
+        Some(coefficient * hcaca)
+    };
+
     if let Some(values) = crate::threading::collect_terms(
         data.transfer_terms.len(),
         crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
@@ -3302,6 +3425,22 @@ pub(crate) fn calculate_lanczos_h2_transfer(
     } else {
         for term in &data.exchange_terms {
             if let Some(value) = exchange_term(term, state) {
+                h2 += value;
+            }
+        }
+    }
+    if let Some(values) = crate::threading::collect_terms(
+        data.inter_all_terms.len(),
+        crate::pfaffian::pfaffian_qp_cost_ns(2 * n_elec),
+        || lanczos_task_state(state, n_site, n_elec),
+        |task, index| inter_all_term(&data.inter_all_terms[index], task),
+    ) {
+        for value in values.into_iter().flatten() {
+            h2 += value;
+        }
+    } else {
+        for term in &data.inter_all_terms {
+            if let Some(value) = inter_all_term(term, state) {
                 h2 += value;
             }
         }

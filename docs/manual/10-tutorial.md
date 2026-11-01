@@ -196,7 +196,7 @@ The energy is reproducible at the $10^{-2}$ level while the local density varies
 
 ## 10.4 Single-step Lanczos energy
 
-Set `NLanczosMode 1` (this input has neither `InterAll` nor spin-flip hopping, so the Lanczos path is supported, [7.5](07-input-files.md#75-supported-and-rejected-inputs)):
+Set `NLanczosMode 1` (this input has no spin-flip hopping, so the Lanczos path is supported, [7.5](07-input-files.md#75-supported-and-rejected-inputs)):
 
 ```bash
 cp -r phys_in phys_ls

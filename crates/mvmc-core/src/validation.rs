@@ -165,24 +165,8 @@ fn validate_namelist_sections(data: &ExpertModeData) -> Result<(), String> {
     Ok(())
 }
 
-/// Validate parameter-optimization entry points before initialization or IO.
-pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
-    crate::run::get_all_complex_flag(data)?;
+fn validate_inter_all(data: &ExpertModeData) -> Result<(), String> {
     let p = &data.modpara;
-    validate_supported_modpara(p)?;
-    validate_sr_storage_contract(p)?;
-    validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
-    if p.lanczos_mode > 0 {
-        return Err(
-            "NLanczosMode > 0 is not supported for parameter optimization; use PhysCal".into(),
-        );
-    }
-    if p.vmc_calc_mode != 0 {
-        return Err(format!(
-            "NVMCCalMode={} cannot run parameter optimization; use fixed-parameter PhysCal",
-            p.vmc_calc_mode
-        ));
-    }
     let has_interall = !data.inter_all_terms.is_empty()
         || data.namelist.iter().any(|(kind, _)| kind == "InterAll");
     if has_interall {
@@ -221,6 +205,28 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
             }
         }
     }
+    Ok(())
+}
+
+/// Validate parameter-optimization entry points before initialization or IO.
+pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
+    crate::run::get_all_complex_flag(data)?;
+    let p = &data.modpara;
+    validate_supported_modpara(p)?;
+    validate_sr_storage_contract(p)?;
+    validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
+    if p.lanczos_mode > 0 {
+        return Err(
+            "NLanczosMode > 0 is not supported for parameter optimization; use PhysCal".into(),
+        );
+    }
+    if p.vmc_calc_mode != 0 {
+        return Err(format!(
+            "NVMCCalMode={} cannot run parameter optimization; use fixed-parameter PhysCal",
+            p.vmc_calc_mode
+        ));
+    }
+    validate_inter_all(data)?;
     validate_namelist_sections(data)?;
     if !data.input_errors.is_empty() {
         return Err(format!(
@@ -262,6 +268,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     }
     validate_namelist_sections(data)?;
     validate_supported_modpara(p)?;
+    validate_inter_all(data)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::PhysCal)?;
     if p.lanczos_mode > 0 {
         if data.i_flg_orbital_general != 0 {
@@ -276,9 +283,6 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
             .any(|term| term.spin1 != term.spin2)
         {
             return Err("spin-changing Transfer is not implemented for Lanczos PhysCal".into());
-        }
-        if !data.inter_all_terms.is_empty() {
-            return Err("InterAll Lanczos PhysCal is not implemented".into());
         }
         if p.lanczos_mode > 1 && data.green_two_ex_terms.is_empty() {
             let mut seen = std::collections::HashSet::new();

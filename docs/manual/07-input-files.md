@@ -192,7 +192,6 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 |-----------|--------|
 | `NLanczosMode > 0` with general (FSZ) orbitals | rejected |
 | `NLanczosMode > 0` with a spin-changing `Trans` row | rejected |
-| `NLanczosMode > 0` with any `InterAll` term | rejected |
 | `NLanczosMode = 2` without `TwoBodyGEx` and with duplicate `OneBodyG` entries | rejected |
 
 ### Grouped execution (`validate_grouped_runtime`, `crates/mvmc-core/src/validation.rs:23-44`; applies when `NSplitSize > 1`)
@@ -216,7 +215,7 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 
 ### Behaviour of the C program that Rust does not provide
 
-Back-flow (`BF`) and `InterAll` Lanczos are not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
+Back-flow (`BF`) is not available (see [11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
 The C-source rationale for rejecting BackFlow, `SpinJastrow` and grouped CG is in the [CPU restriction audit](../reference/c-to-julia/verification/issue-577-cpu-restrictions.md).
 

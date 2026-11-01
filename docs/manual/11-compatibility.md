@@ -57,7 +57,7 @@ Differences that a user can observe:
 | 7 | Parser defaults of `modpara.def` | `SetDefaultValuesModPara` | `ModParaParameters::default` ([7.2](07-input-files.md#72-modparadef)) |
 | 8 | `NMPTrans = 0` | not rejected by the reader (the default 0 gives `NQPFix = 0`, `readdef.c:778`) | rejected |
 | 9 | `NSROptItrSmp > NSROptItrStep` | leaves rows unwritten | rejected |
-| 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ (C also rejects it), no `InterAll`, no spin-changing `Trans`; `NSplitSize>1` is supported as in C; a failed $\alpha$ writes `NaN` |
+| 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ (C also rejects it), no spin-changing `Trans`; spin-conserving `InterAll` is supported; `NSplitSize>1` is supported as in C; a failed $\alpha$ writes `NaN` |
 | 11 | `TwoBodyGEx` in optimization | read and ignored by the optimizer | read and ignored (accepted by `validate_para_opt`, as by PhysCal) |
 | 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 rejects it | rejected in both optimization and PhysCal |
 | 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | nonzero `NSRCG` selects CG; storage is undefined with `NStore=0`. The other keys are not C keywords | `NSRCG >= 2` selects CG with `NStore != 0` and is rejected with `NStore=0`; the other keys are rejected as unknown regardless of value |
