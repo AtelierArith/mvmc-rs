@@ -71,13 +71,10 @@ TransSym qptransidx.def
 | `RndSeed` | SFMT のシード。ランク/グループ $g$ のシードは `RndSeed + g`。負の値 = 時計 | 11272 | 11272 |
 | `NSplitSize` | MPI グループの幅([8.4](08-running.md#84-mpiとグループ実行)) | 1 | 1 |
 | `Nneuron`, `NneuronCharge`, `NneuronSpin`, `NneuronGeneral`, `NBlockSize_RBMRatio` | RBM の隠れニューロンとブロックサイズ | 0, 0, 0, 0, 200 | 0, 0, 0, 0, 200 |
-| `NFileFlushInterval` | フラッシュ間隔(C の `-F` オプション) | 1 | 1(パースされるが**使われません**) |
-| `ComplexType` | レガシーの複素数フラグ | – | 0 |
-| `NOneBodyG`, `NTwoBodyG`, `NTwoBodyGEx` | 個数。通常はグリーン関数ファイルから取られます | 0 | 0 |
-| `useDiagScale`, `RescaleSmat` | Julia リファレンスのサポートされないオプション | – | 0(ゼロ以外は拒否) |
+| `useDiagScale`, `RescaleSmat` | C にない Julia のオプション | – | 値に関係なく未知のキーワードとして拒否 |
 
 `NOrbitalIdx` は `modpara.def` のキーではありません。軌道パラメータの個数は軌道ファイルから導出されます。
-`NSROptFixSmp` は Rust ではパースされます(デフォルト 0)が、C の `GetInfoFromModPara` のキーではありません。
+`NSROptFixSmp`、`NFileFlushInterval`、`ComplexType`、`NOneBodyG` などは ModPara のキーではなく、指定すると拒否されます。
 
 ## 7.3 定義ファイル
 
@@ -132,31 +129,31 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 
 ## 7.5 サポートされる入力と拒否される入力
 
-以下のチェックは `crates/mvmc-core/src/validation.rs`(コミット `37348eac`)にあります。これらは初期化や出力より前に実行され、拒否された入力は `error: ...` とゼロ以外の終了ステータスで終了します。
+以下のチェックは `crates/mvmc-core/src/validation.rs`にあります。これらは初期化や出力より前に実行され、拒否された入力は `error: ...` とゼロ以外の終了ステータスで終了します。
 
-### ネームリストのキーワード(`validate_para_opt`, `crates/mvmc-core/src/validation.rs:162-214`)
+### ネームリストのキーワード(`validate_namelist_sections`, `crates/mvmc-core/src/validation.rs`)
 
 | キーワード | パラメータ最適化 | PhysCal |
 |----------|-----------------------|---------|
 | `ModPara`, `LocSpin`, `Trans`, `CoulombIntra`, `CoulombInter`, `Hund`, `Exchange`, `Gutzwiller`, `Jastrow`, `Orbital`, `OrbitalAntiParallel`, `OrbitalParallel`, `OrbitalGeneral`, `OneBodyG`, `TwoBodyG`, `TransSym` (alias `QPTrans`) | 受理 | 受理 |
 | `PairHop`, `InterAll`, `DH2` (`DoublonHolon2Site`), `DH4` (`DoublonHolon4Site`), `OptTrans`, `InOptTrans`, all `{Charge,Spin,General}RBM_*`, `In{Gutzwiller,Jastrow,Orbital,OrbitalAntiParallel,OrbitalParallel,OrbitalGeneral,DH2,DH4}` (and aliases `InDoublonHolon*`), `In{Charge,Spin,General}RBM_*` | 受理 | 受理 |
-| `TwoBodyGEx` | 受理され無視される | 受理 **(観測)** |
-| その他の `In…` キーワード | 拒否("unsupported namelist section") | チェックされない |
-| `SpinJastrow` | 拒否("projection layout would be wrong") | チェックされない |
-| `BF`, `BFRange` (BackFlow) および未知のキーワード | 拒否("unsupported namelist section …") | **チェックされない: `BF` エントリは受理され、BackFlow は適用されません(現在の `main` で観測)** |
+| `TwoBodyGEx` | 受理され無視される | 受理し、PhysCal で使用 |
+| その他の `In…` キーワード | 拒否("unsupported namelist section") | 拒否 |
+| `SpinJastrow` | 拒否("projection layout would be wrong") | 拒否 |
+| `BF`, `BFRange` (BackFlow) および未知のキーワード | 拒否("unsupported namelist section …") | 拒否 |
 
-PhysCal の列は `validate_phys_cal` (`crates/mvmc-core/src/validation.rs:244`)に由来し、そこではキーワードチェックが繰り返されません。この非対称性はリリースビルドで観測されたもので、[11.5](11-compatibility.md#115-未解決の観測事項)に挙げています。
+最適化と PhysCal は共通のネームリスト検証を使います。PhysCal の拒否テストは `crates/mvmc-cli/tests/issue366_physcal_admission.rs` を参照してください。
 
-### ModPara の値(`validate_supported_modpara`, `crates/mvmc-core/src/validation.rs:77-105`。両方のエントリポイント)
+### ModPara の値(`validate_supported_modpara`, `validate_sr_storage_contract`。両方のエントリポイント)
 
 | 条件 | 結果 |
 |-----------|--------|
 | `NMPTrans == 0` | 拒否(「並進射影なし」には 1 を使います。C の規約) |
 | `NSplitSize < 1` | 拒否 |
 | `NLanczosMode` が 0..2 にない | 拒否 |
-| `NSRCG >= 2` | 拒否("not supported by Julia-mVMC") |
-| `useDiagScale != 0` | 拒否 |
-| `RescaleSmat != 0` | 拒否 |
+| `NSRCG >= 2`、`NStore = 0` | C で O ストレージが未定義のため拒否。`NStore != 0` なら CG を選択 |
+| `useDiagScale` | 値に関係なく未知の ModPara キーワードとして拒否 |
+| `RescaleSmat` | 値に関係なく未知の ModPara キーワードとして拒否 |
 
 ### パラメータ最適化(`validate_para_opt`, `crates/mvmc-core/src/validation.rs:108-241`)
 

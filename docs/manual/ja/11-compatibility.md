@@ -32,7 +32,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | MPIの検出 | `JULIA_MVMC_MPI=1` とランチャーの変数 | ランチャーの変数のみ(`LaunchContext::from_env`)。`JULIA_MVMC_MPI` はテストのヘルパーにのみ現れます |
 | デバッグダンプ | `MVMC_DEBUG_*` | 未実装 |
 | タイマー出力 | `MVMC_C_TIMER=1` | 同じ変数、同じファイル `zvo_CalcTimer.dat`、加えて `MVMC_*_DIAG` 系列 |
-| サポートされないオプション | BackFlow、スピンJastrow、CGでの `NSplitSize>1`(Cでも未定義: 保存した `O` が未書き込みメモリから読まれます)、`NSRCG>=2`、`useDiagScale`、`RescaleSmat`、FSZのLanczos法(Cも拒否) | 同じ一覧が `validation.rs` で拒否されます([7.5](07-input-files.md#75-サポートされる入力と拒否される入力)) |
+| 対応外・条件付き入力 | Julia と C の入力規約は異なります | BackFlow、SpinJastrow、FSZ Lanczos と、C で未定義のグループ化 CG を拒否。詳細は [7.5](07-input-files.md#75-サポートされる入力と拒否される入力) |
 | 高水準ランナー | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `RunConfig` を伴う `run::run_para_opt_from_namelist`(同じ引数)。CLIはこれをラップします |
 | `1e-14` のスレーター振幅カットオフ | 従来のJuliaのテーブル構築で適用 | 適用**しません**(Cは宣言された値を読み込みます、`slater_update.rs:46`) |
 | 最適化中の出力名 | `zvo_out.dat`, `zvo_var.dat` | 同じ(Cとは異なります、[9.1](09-output-files.md#91-ステップごとのエネルギー-zvo_outdat-opt-と-zvo_out_nnndat-phys)) |
@@ -59,16 +59,16 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 9 | `NSROptItrSmp > NSROptItrStep` | 行が書き出されないまま残る | 拒否 |
 | 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、`InterAll` なし、スピンを変える `Trans` なし。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
 | 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
-| 12 | BackFlow(`BF`, `NProjBF`) | サポート | 最適化では拒否。PhysCalでは**チェックされない**([11.5](#115-未解決の観測事項)) |
-| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | `NSRCG != 0` でCGを選択(`vmcmain.c:485`)。他の2つのキーはC 1.3.0には存在しない(Julia-mVMCのオプション) | `NSRCG >= 2` と、非ゼロの `useDiagScale`/`RescaleSmat` は拒否 |
+| 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 は拒否 | 最適化と PhysCal の両方で拒否 |
+| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | 非ゼロの `NSRCG` は CG を選択。`NStore=0` ではストレージが未定義。他の2つは C のキーではない | `NSRCG >= 2` は `NStore != 0` で CG、`NStore=0` は拒否。他の2つは値に関係なく未知のキーとして拒否 |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99の複素数 | Julia互換の移植(最下位ビットの差が生じうる) |
 | 15 | ローカルエネルギーと `NProj` の和におけるOpenMPのリダクション順序 | スレッド依存 | 固定された逐次順序 |
 | 16 | $\lvert\langle H\rangle\rvert\le10^{-14}$ のときの分散の列 | $\pm\infty$/NaN | `0.0`(最適化の出力のみ) |
 | 17 | 実数モードのLTL/逆行列の演算順序 | C PFAPACK(`DSKR2` の加算してから減算) | オプティマイザはJuliaの順序を用いる(`dsktf2`, `utu2inv_real`, `crates/mvmc-core/src/pfaffian.rs:693,706`)。C順序の変種 `dsktf2_c_compat` と `utu2inv_real_c_compat` は `crates/pfapack` に存在する(PR #334)が、ランナーでは選択されない |
 | 18 | Hund / Exchange / CoulombInter の行 | 1行につき1項 | 同じ。`PairHop` の行は両方で両方の順序に展開 |
 | 19 | MPIのグリーン関数のリダクション | ランク0への `MPI_Reduce` | all-reduce、ルートが書き出し |
-| 20 | 負の `DSROptStepDt` | `SRFlag = 1`(「Diagonalization Mode」の注記、ヘッダー `sEigenMax sEigenMin`)を設定し、`dt` を `-dt` に置き換える(`readdef.c:746-752`) | 処理されない: 負の値はそのまま使われ、SRステップの向きが逆になる |
-| 21 | `modpara.def` における $N_e$ のキー | `Nelectron`, `Ne` | `NElec`, `Nelec`(Cの綴りは無視される) |
+| 20 | 負の `DSROptStepDt` | `SRFlag` を設定し正の値に変換 | パーサーは同じ処理を行う |
+| 21 | `modpara.def` の電子数キー | `Nelectron`, `Ne` | 同じキーを受理 |
 | 22 | `MVMC_RS_SR_BACKEND=tenferro` または `cuda` での SR ステージ | 該当なし | オプトインの Rust 拡張([第 12 章](12-accelerated-backends.md)): RNG の消費と Metropolis のプロトコルは同じ。SR の Gram、求解、CG 積は C 順序パスと導出された境界内で一致し、バイト単位では一致しない。デフォルトの `c-order` パスは変更なし |
 
 ## 11.4 数値比較ポリシー
@@ -96,8 +96,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
    `pfupdate_two_fsz.c:232`、`pfupdate_two_fsz_real.c:218`)。すなわち、古い行列要素 $M^{\rm old}_{ab}$ の第2添字に*電子 a の古いサイト*を用います。Rustの*実数*版の更新は
    これを意図的に保っています(`crates/mvmc-core/src/sampling/updates.rs:588`)が、Rustの*複素数の通常*版の更新
    `update_m_all_two_complex_flat` は、Juliaと同様に電子 b の古いサイトを用います(`crates/mvmc-core/src/sampling/updates.rs:537`)。これが複素数の交換更新の数値に影響するかどうかは**検証していません**(コード読解)。
-2. **PhysCalはネームリストのセクションをチェックしません。** `validate_phys_cal` には `validate_para_opt` のキーワードチェックがありません。`namelist.def` に `BF bf.def` の行があると、最適化は `unsupported namelist section BF` で停止しますが、
-   `--physcal` は最後まで実行され、BackFlowは適用されません(観測)。未知のキーワード、`SpinJastrow`、未知の `In…` キーワードも、同様にPhysCalでは拒否されません。
+2. **PhysCal のネームリスト検証。** 以前の検証漏れは #366 で修正され、最適化と PhysCal は共通の検査で未対応セクションを拒否します。
 3. **最適化における `TwoBodyGEx`** は C と同様に受理され無視されます(#349 までは古い「issue #30」メッセージで拒否されていました)。
 4. **`--help` のテキスト**は、既定の出力ディレクトリが「namelist parent dir」であると述べていますが、コードは `<namelist parent>/output` を使います(観測)。
 5. **`--mode`** は検証されるだけのラベルであり、一致しないラベル(たとえば実数モデルでの `--mode fsz`)も黙って受け付けられます(観測)。
@@ -106,8 +105,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 8. **実数モードでのOptTransの微分のレイアウト**(決定は #370 に記録)。C の `calculateOptTransDiff`(`vmccal.c:639`)は `double complex *` のポインタオフセット付きで呼ばれる(`vmccal.c:466`)ため、微分 *i* はパラメータスロット *i* ではなく複素スロット `offset + i` に書かれます。`NQPOptTrans = 3` の実数モード実行では、ネイティブCのステップ1オペランド(`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`、観測)で、微分1が欠落し、微分2が微分1のスロットに入り、最後のスロットは0になります。Rust の `opt_trans_diff`(`observables.rs:957`)は数学的に正しいレイアウトを保ち、`real_mode_opttrans_derivatives_use_their_own_slots`(`sum_i w_i O_i = 1`)で固定されています。この欠陥は tmisawa/Julia-mVMC#55 として報告済みで、各オペランド配列の影響を受ける末尾2要素はC比較から除外しています([NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md))。複素モードは調べていません。
 9. **Lanczos法の失敗時の出力**が異なります([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 10. **Rustの `modpara.def` の既定値**はCと異なります([7.2](07-input-files.md#72-modparadef))。したがって、キーを省略した実行の結果は、2つのプログラム間で互換ではありません。
-11. **負の `DSROptStepDt`** は、Cでは注記つきで正のステップに変換されます(`readdef.c:746-752`)が、Rustではそのまま使われます(コード読解、`crates/` に `SRFlag` の使用なし)。
-12. **`Nelectron`/`Ne` はRustの `modpara.def` パーサーに無視されます**(観測: `Nelectron 8` を持ち `Ncond` のないモデルは `Nelec=0` と報告し、「normal initialization precondition: ...」で失敗します)。Cマニュアル自身の例は `Nelectron` を使っています。
+11. **負の `DSROptStepDt`** は C と同様に正に変換され、`SRFlag` が設定されます。
+12. **`Nelectron`／`Ne`** は ModPara パーサーで受理されます。
 13. **Cは実数モードでRBMパラメータを無視します**(#379、tmisawa/Julia-mVMC#59 として報告済み)。実数モデル(軌道が `ComplexType 0`)がRBMセクションを宣言しても、Cは `FlagRBM=1` を黙って受理しますが、実数用サンプラー `vmcmake_real.c` にはRBMのコードがなく(`RBM` の出現は0回。複素用の `vmcmake.c` には27回)、RBMの重みは一度も適用されません。`tests/fixtures/c_orbital_inputs/namelist_rbm_real.def`(シード1、ステップ1)での観測:Cは NPara = 55(NProj 7、NRBM 36、NSlater 12)、ステップ1のエネルギー 5.984544891656925 を報告し、RBMの初期値を 0.125/-0.25 から全て0に変えても変化せず、RBM値を全て0にしたRustとビット単位で一致します。Rustは(エネルギー 6.228711216019723 のように)RBMの重みを適用します。RustはRBMの正しい数学を維持し、そのため `rbm_real` にはネイティブCのオペランド参照がありません。
 14. **CはFSZ/一般軌道の実行でもRBMパラメータを無視します**(#397/#403、tmisawa/Julia-mVMC#59 に追記済み)。`vmcmake_fsz.c`、`calham_fsz.c`、`locgrn_fsz.c`、`calgrn_fsz.c`、`vmccal_fsz.c`、`slater_fsz.c` のいずれにもRBMのコードはなく(出現は0回。複素用の `vmcmake.c` には27回)、それでも `FlagRBM` は設定され、RBMパラメータは読み込まれ数えられます。そのためネイティブCはFSZ + RBM入力をRBMの重みなしでサンプリング・測定します(ネイティブCの `fsz_rbm_physcal` シナリオでの観測:`In*RBM*` オーバーレイを0にするとRustは 1.4e-14 で一致し、0でない値ではエネルギーがO(1)で異なります)。Rustは、FSZサンプラー(採択比、スピンを変える手の後に再構築するRBMカウンタ)、FSZハミルトニアン、FSZグリーン関数のすべてでRBM因子を一貫して適用します。#403以前は、RustのFSZサンプラーがCの欠陥をそのまま踏襲し、測定側は踏襲していませんでした。Rustは正しい数学を維持するため、0でないRBM値のFSZ + RBMにはネイティブCの数値参照がありません。値を0にしたオーバーレイのシナリオはネイティブCとの比較を保ち、`crates/mvmc-core/tests/issue403_fsz_rbm_sampler.rs` はサンプリングされた全ての手を、Pfaffian × 射影 × RBM の完全再計算と照合します。
 

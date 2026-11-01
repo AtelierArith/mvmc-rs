@@ -32,7 +32,7 @@ Chapters 2-6 give the line-level map for every equation.
 | MPI detection | `JULIA_MVMC_MPI=1` and launcher variables | launcher variables only (`LaunchContext::from_env`); `JULIA_MVMC_MPI` appears only in a test helper |
 | Debug dumps | `MVMC_DEBUG_*` | not implemented |
 | Timer output | `MVMC_C_TIMER=1` | same variable, same file `zvo_CalcTimer.dat`, plus `MVMC_*_DIAG` families |
-| Unsupported options | BackFlow, spin Jastrow, `NSplitSize>1` with CG (undefined in C: stored `O` is read from unwritten memory), `NSRCG>=2`, `useDiagScale`, `RescaleSmat`, FSZ Lanczos (also rejected by C) | the same list is rejected by `validation.rs` ([7.5](07-input-files.md#75-supported-and-rejected-inputs)) |
+| Unsupported or conditional inputs | Julia and C have different input contracts | BackFlow, SpinJastrow, FSZ Lanczos and C-undefined grouped CG are rejected; see [7.5](07-input-files.md#75-supported-and-rejected-inputs) |
 | High-level runner | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `run::run_para_opt_from_namelist` with `RunConfig` (same arguments); CLI wraps it |
 | `1e-14` Slater amplitude cutoff | applied in the historical Julia table build | **not** applied (C reads the declared value, `slater_update.rs:46`) |
 | Output names during optimization | `zvo_out.dat`, `zvo_var.dat` | same (differs from C, [9.1](09-output-files.md#91-energy-per-step-zvo_outdat-opt-and-zvo_out_nnndat-phys)) |
@@ -59,16 +59,16 @@ Differences that a user can observe:
 | 9 | `NSROptItrSmp > NSROptItrStep` | leaves rows unwritten | rejected |
 | 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ (C also rejects it), no `InterAll`, no spin-changing `Trans`; `NSplitSize>1` is supported as in C; a failed $\alpha$ writes `NaN` |
 | 11 | `TwoBodyGEx` in optimization | read and ignored by the optimizer | read and ignored (accepted by `validate_para_opt`, as by PhysCal) |
-| 12 | BackFlow (`BF`, `NProjBF`) | supported | rejected in optimization; **not checked** in PhysCal ([11.5](#115-open-observations)) |
-| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | `NSRCG != 0` selects CG (`vmcmain.c:485`); the other two keys do not exist in C 1.3.0 (Julia-mVMC options) | `NSRCG >= 2` and nonzero `useDiagScale`/`RescaleSmat` are rejected |
+| 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 rejects it | rejected in both optimization and PhysCal |
+| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | nonzero `NSRCG` selects CG; storage is undefined with `NStore=0`. The other keys are not C keywords | `NSRCG >= 2` selects CG with `NStore != 0` and is rejected with `NStore=0`; the other keys are rejected as unknown regardless of value |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99 complex | Julia-compatible ports (last-bit differences possible) |
 | 15 | OpenMP reduction order in the local energy and `NProj` sums | thread-dependent | fixed sequential order |
 | 16 | Variance column when $\lvert\langle H\rangle\rvert\le10^{-14}$ | $\pm\infty$/NaN | `0.0` (optimization output only) |
 | 17 | Real-mode LTL/inverse operation order | C PFAPACK (`DSKR2` add-then-subtract) | the optimizer uses Julia's order (`dsktf2`, `utu2inv_real`, `crates/mvmc-core/src/pfaffian.rs:693,706`); C-order variants `dsktf2_c_compat` and `utu2inv_real_c_compat` exist in `crates/pfapack` (PR #334) but are not selected by the runner |
 | 18 | Hund / Exchange / CoulombInter rows | one term per row | same; `PairHop` rows expanded to both orders in both |
 | 19 | MPI Green-function reduction | `MPI_Reduce` to rank 0 | all-reduce, root writes |
-| 20 | Negative `DSROptStepDt` | sets `SRFlag = 1` ("Diagonalization Mode" remark, header `sEigenMax sEigenMin`) and replaces `dt` by `-dt` (`readdef.c:746-752`) | not handled: a negative value is used as given, which reverses the direction of the SR step |
-| 21 | Key for $N_e$ in `modpara.def` | `Nelectron`, `Ne` | `NElec`, `Nelec` (the C spellings are ignored) |
+| 20 | Negative `DSROptStepDt` | sets `SRFlag` and negates the value | parser performs the same transformation |
+| 21 | Electron count key in `modpara.def` | `Nelectron`, `Ne` | accepts the same keys |
 | 22 | SR stages with `MVMC_RS_SR_BACKEND=tenferro` or `cuda` | not applicable | opt-in Rust extension ([chapter 12](12-accelerated-backends.md)): same RNG draws and Metropolis protocol; the SR Gram, solve and CG product agree with the C-order path within derived bounds, not byte-identical; the default `c-order` path is unchanged |
 
 ## 11.4 Numerical comparison policy
@@ -96,8 +96,7 @@ Items noticed while writing this manual, to be handled by separate issues. "Obse
    `pfupdate_two_fsz.c:232`, `pfupdate_two_fsz_real.c:218`), i.e. it uses the *old site of electron a* for the second index of the old matrix element $M^{\rm old}_{ab}$. The Rust *real* update
    preserves this deliberately (`crates/mvmc-core/src/sampling/updates.rs:588`), while the Rust *complex* normal update
    `update_m_all_two_complex_flat` uses the old site of electron b (`crates/mvmc-core/src/sampling/updates.rs:537`), as Julia does. Whether this changes complex exchange updates numerically was **not tested** (code reading).
-2. **PhysCal does not check namelist sections.** `validate_phys_cal` omits the keyword check of `validate_para_opt`. With a `BF bf.def` line in `namelist.def`, optimization stops with `unsupported namelist section BF`, whereas
-   `--physcal` runs to completion and BackFlow is not applied (observed). Unknown keywords, `SpinJastrow` and unknown `In…` keywords are likewise not rejected in PhysCal.
+2. **PhysCal namelist admission.** The former validation gap was fixed in #366; optimization and PhysCal now share the check that rejects unsupported sections.
 3. **`TwoBodyGEx` in optimization** is accepted and ignored, as in C (it was rejected with a stale "issue #30" message until #349).
 4. **`--help` text** claims the default output directory is "namelist parent dir"; the code uses `<namelist parent>/output` (observed).
 5. **`--mode`** is only a validated label; a mismatching label (for example `--mode fsz` on a real model) is silently accepted (observed).
@@ -106,8 +105,8 @@ Items noticed while writing this manual, to be handled by separate issues. "Obse
 8. **OptTrans derivative layout in real mode** (decision recorded in #370). C `calculateOptTransDiff` (`vmccal.c:639`) is called with a `double complex *` pointer offset (`vmccal.c:466`), so derivative *i* lands at complex slot `offset + i`, not at parameter slot *i*. In a real-mode run with `NQPOptTrans = 3` the native step-1 operands (`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`, observed) show derivative 1 missing, derivative 2 stored in the slot of derivative 1 and the last slot zero. Rust `opt_trans_diff` (`observables.rs:957`) keeps the mathematically correct layout, pinned by `real_mode_opttrans_derivatives_use_their_own_slots` (`sum_i w_i O_i = 1`). The defect is reported as tmisawa/Julia-mVMC#55; the two affected trailing entries of every operand array are excluded from the C comparison ([NUMERICAL_COMPARISONS](../NUMERICAL_COMPARISONS.md)). Complex mode was not examined.
 9. **Lanczos failure output** differs ([6.2](06-theory-observables-lanczos.md#62-the-single-step-lanczos-wave-function)).
 10. **Rust `modpara.def` defaults** differ from C ([7.2](07-input-files.md#72-modparadef)); results of a run that omits keys are therefore not interchangeable between the two programs.
-11. **Negative `DSROptStepDt`** is turned into a positive step with a remark by C (`readdef.c:746-752`) but used unchanged by Rust (code reading, no use of `SRFlag` in `crates/`).
-12. **`Nelectron`/`Ne` are ignored by the Rust `modpara.def` parser** (observed: a model with `Nelectron 8` and no `Ncond` reports `Nelec=0` and fails with "normal initialization precondition: ..."); the C manual's own example uses `Nelectron`.
+11. **Negative `DSROptStepDt`** is negated and sets `SRFlag`, as in C.
+12. **`Nelectron`/`Ne`** are accepted by the ModPara parser.
 13. **C ignores RBM parameters in real mode** (#379, reported as tmisawa/Julia-mVMC#59). With a real model (`ComplexType 0` orbitals) that declares RBM sections, C accepts `FlagRBM=1` silently, but the real sampler `vmcmake_real.c` contains no RBM code (0 occurrences of `RBM`; the complex `vmcmake.c` has 27), so the RBM weight is never applied. Observed on `tests/fixtures/c_orbital_inputs/namelist_rbm_real.def` (seed 1, step 1): C reports NPara = 55 (NProj 7, NRBM 36, NSlater 12) and a step-1 energy of 5.984544891656925, unchanged when the RBM overlay is changed from 0.125/-0.25 to all zeros and bit-identical to Rust with all RBM values zero. Rust applies the RBM weight (energy 6.228711216019723). Rust keeps the correct RBM math; `rbm_real` therefore has no native C operand reference.
 14. **C ignores RBM parameters in FSZ/general-orbital runs** (#397/#403, added to tmisawa/Julia-mVMC#59). None of `vmcmake_fsz.c`, `calham_fsz.c`, `locgrn_fsz.c`, `calgrn_fsz.c`, `vmccal_fsz.c`, `slater_fsz.c` contains RBM code (0 occurrences; the complex `vmcmake.c` has 27), although `FlagRBM` is set and the RBM parameters are read and counted. Native C therefore samples and measures FSZ + RBM inputs with the RBM weight dropped (observed on the `fsz_rbm_physcal` native-C scenarios: with the `In*RBM*` overlays zeroed Rust agrees to 1.4e-14, with nonzero values the energies differ by O(1)). Rust applies the RBM factor in the FSZ sampler (acceptance ratio, rebuilt RBM counters after each spin-changing move), the FSZ Hamiltonian and the FSZ Green functions consistently; before #403 the Rust FSZ sampler mirrored the C defect while its measurement did not. Rust keeps the correct math, so FSZ + RBM with nonzero RBM values has no native-C numerical reference; the zeroed-overlay scenarios keep the native-C comparison, and `crates/mvmc-core/tests/issue403_fsz_rbm_sampler.rs` replays every sampled move against a full recomputation of Pfaffian x projection x RBM.
 

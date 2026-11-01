@@ -229,7 +229,7 @@ $E_{\rm LS}=-8.8934$ ($-0.5558$ per site), the relative variance dropped from $2
   Here the CG solver ran its maximum of 100 iterations (`NSROptCGMaxIter` default $=n_S$), i.e. it did not reach `DSROptCGTol`.
 - **Timers.** `MVMC_C_TIMER=1 mvmc hubbard_L16/namelist.def --nsteps 30 --nsmp 5 --out-dir out_t` additionally writes `zvo_CalcTimer.dat`
   ([9.5](09-output-files.md#95-timers)); for this model most of the time is in `hopping update` and `UpdateMAll`.
-- **Rejected input.** Appending `NSRCG 2` makes `mvmc` stop with `error: NSRCG >= 2 is not supported by Julia-mVMC; use NSRCG = 0 or 1` and exit status 1.
+- **Rejected input.** `NSRCG 2` with `NStore 0` is rejected because C leaves O storage undefined. With nonzero `NStore`, CG is selected.
 - **Reproducibility.** Running the same command twice with `--seed 5` gives byte-identical `zvo_out.dat`.
 
 The example programs (`cargo run -p mvmc-cli --example hubbard_chain`, `heisenberg_chain_real`, `heisenberg_chain_cmp`, `heisenberg_chain_fsz`) run the inputs of the Julia reference
