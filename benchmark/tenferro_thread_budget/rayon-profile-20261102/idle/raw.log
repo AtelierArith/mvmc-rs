@@ -1,0 +1,384 @@
+100
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=0 inside=false calls=911470 wall_s=3.000000 process_ticks=509 caller_ticks=209 other_ticks=300
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=false calls=32552 wall_s=3.000079 process_ticks=233 caller_ticks=47 other_ticks=186
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=false calls=22425 wall_s=3.000010 process_ticks=190 caller_ticks=35 other_ticks=155
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=false calls=2515 wall_s=3.000729 process_ticks=34 caller_ticks=10 other_ticks=24
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=false calls=335322 wall_s=3.000001 process_ticks=1180 caller_ticks=174 other_ticks=1006
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=false calls=32316 wall_s=3.000001 process_ticks=664 caller_ticks=51 other_ticks=613
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=false calls=20247 wall_s=3.000123 process_ticks=556 caller_ticks=46 other_ticks=510
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=false calls=2479 wall_s=3.000326 process_ticks=127 caller_ticks=13 other_ticks=114
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=0 inside=true calls=15377344 wall_s=3.000000 process_ticks=300 caller_ticks=299 other_ticks=1
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=true calls=39492 wall_s=3.000056 process_ticks=23 caller_ticks=23 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=true calls=25564 wall_s=3.000110 process_ticks=17 caller_ticks=17 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=true calls=2681 wall_s=3.001113 process_ticks=7 caller_ticks=7 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=true calls=1793459 wall_s=3.000001 process_ticks=1199 caller_ticks=299 other_ticks=900
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=true calls=36933 wall_s=3.000064 process_ticks=506 caller_ticks=42 other_ticks=464
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=true calls=23764 wall_s=3.000049 process_ticks=534 caller_ticks=37 other_ticks=497
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=1
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=true calls=2532 wall_s=3.000557 process_ticks=98 caller_ticks=25 other_ticks=73
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=0 inside=false calls=871738 wall_s=3.000005 process_ticks=508 caller_ticks=208 other_ticks=300
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=false calls=32079 wall_s=3.000062 process_ticks=181 caller_ticks=51 other_ticks=130
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=false calls=22224 wall_s=3.000105 process_ticks=189 caller_ticks=35 other_ticks=154
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=false calls=2516 wall_s=3.000279 process_ticks=34 caller_ticks=9 other_ticks=25
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=false calls=329296 wall_s=3.000001 process_ticks=1194 caller_ticks=177 other_ticks=1017
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=false calls=32504 wall_s=3.000093 process_ticks=651 caller_ticks=51 other_ticks=600
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=false calls=20151 wall_s=3.000088 process_ticks=557 caller_ticks=47 other_ticks=510
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=false calls=2487 wall_s=3.000894 process_ticks=127 caller_ticks=12 other_ticks=115
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=0 inside=true calls=15202665 wall_s=3.000000 process_ticks=300 caller_ticks=299 other_ticks=1
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=true calls=39161 wall_s=3.000041 process_ticks=25 caller_ticks=24 other_ticks=1
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=true calls=25805 wall_s=3.000025 process_ticks=16 caller_ticks=16 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=true calls=2680 wall_s=3.000005 process_ticks=7 caller_ticks=7 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=true calls=1689199 wall_s=3.000000 process_ticks=1185 caller_ticks=292 other_ticks=893
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=true calls=37240 wall_s=3.000076 process_ticks=604 caller_ticks=41 other_ticks=563
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=true calls=23749 wall_s=3.000122 process_ticks=552 caller_ticks=42 other_ticks=510
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=2
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=true calls=2539 wall_s=3.001082 process_ticks=99 caller_ticks=24 other_ticks=75
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+threads=1 requested_sleep_us=0 inside=false calls=839235 wall_s=3.000001 process_ticks=505 caller_ticks=204 other_ticks=301
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=false calls=31999 wall_s=3.000004 process_ticks=226 caller_ticks=50 other_ticks=176
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=false calls=22397 wall_s=3.000034 process_ticks=189 caller_ticks=36 other_ticks=153
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=false calls=2525 wall_s=3.000375 process_ticks=35 caller_ticks=10 other_ticks=25
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=false calls=336404 wall_s=3.000008 process_ticks=1140 caller_ticks=186 other_ticks=954
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=false calls=32951 wall_s=3.000042 process_ticks=576 caller_ticks=46 other_ticks=530
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=false calls=20484 wall_s=3.000097 process_ticks=561 caller_ticks=46 other_ticks=515
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=false calls=2481 wall_s=3.000714 process_ticks=127 caller_ticks=13 other_ticks=114
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=0 inside=true calls=15086447 wall_s=3.000000 process_ticks=300 caller_ticks=299 other_ticks=1
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=20 inside=true calls=39044 wall_s=3.000064 process_ticks=25 caller_ticks=25 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=60 inside=true calls=25538 wall_s=3.000046 process_ticks=18 caller_ticks=17 other_ticks=1
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=1 requested_sleep_us=1000 inside=true calls=2686 wall_s=3.000947 process_ticks=7 caller_ticks=7 other_ticks=0
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=0 inside=true calls=1807978 wall_s=3.000000 process_ticks=1200 caller_ticks=299 other_ticks=901
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=20 inside=true calls=36406 wall_s=3.000026 process_ticks=490 caller_ticks=44 other_ticks=446
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=60 inside=true calls=23828 wall_s=3.000009 process_ticks=545 caller_ticks=39 other_ticks=506
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
+
+repetition=3
+
+running 1 test
+threads=4 requested_sleep_us=1000 inside=true calls=2537 wall_s=3.000134 process_ticks=99 caller_ticks=24 other_ticks=75
+test rayon_idle_probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
