@@ -11,7 +11,9 @@ image, volume, inputs, output, threads = sys.argv[1:]
 inputs, output = str(Path(inputs).resolve()), Path(output).resolve()
 output.mkdir(parents=True, exist_ok=True)
 name = f"mvmc-585-observe-{os.getpid()}"
-cmd = ["docker", "run", "--rm", "--name", name, "--platform=linux/amd64", "--cpuset-cpus=0-3", "--shm-size=1g", "-v", f"{inputs}:/input:ro", "-v", f"{output}:/results", "-v", f"{volume}:/target", "-w", "/input/opt", "-e", "OPENBLAS_NUM_THREADS=1", "-e", "OMP_NUM_THREADS=1", "-e", "MVMC_RS_INNER_THREADS=1", "-e", "RAYON_NUM_THREADS=4", "-e", f"MVMC_RS_TENFERRO_THREADS={threads}", "-e", "MVMC_RS_SR_BACKEND=tenferro", "--entrypoint", "bash", image, "-lc", "timeout --kill-after=5s 120s /opt/mpich/bin/mpirun -n 4 /target/release/mvmc /input/opt/namelist.def --nsteps 20 --nsmp 1 --initial-def none --out-dir /results/opt"]
+cpu_set = os.environ.get("MVMC_BENCH_CPUSET", "0-3")
+inner_threads = os.environ.get("MVMC_BENCH_INNER_THREADS", "1")
+cmd = ["docker", "run", "--rm", "--name", name, "--platform=linux/amd64", f"--cpuset-cpus={cpu_set}", "--shm-size=1g", "-v", f"{inputs}:/input:ro", "-v", f"{output}:/results", "-v", f"{volume}:/target", "-w", "/input/opt", "-e", "OPENBLAS_NUM_THREADS=1", "-e", "OMP_NUM_THREADS=1", "-e", f"MVMC_RS_INNER_THREADS={inner_threads}", "-e", "RAYON_NUM_THREADS=4", "-e", f"MVMC_RS_TENFERRO_THREADS={threads}", "-e", "MVMC_RS_SR_BACKEND=tenferro", "--entrypoint", "bash", image, "-lc", "timeout --kill-after=5s 120s /opt/mpich/bin/mpirun -n 4 /target/release/mvmc /input/opt/namelist.def --nsteps 20 --nsmp 1 --initial-def none --out-dir /results/opt"]
 previous = {}
 seen = {}
 samples = []
@@ -58,6 +60,6 @@ if proc.returncode != 0:
     raise SystemExit(f"container failed: {proc.returncode}; see {output / 'run.txt'}")
 if len(seen) != 4:
     raise SystemExit(f"observed CPU ticks for {len(seen)} of 4 ranks; sampling was incomplete")
-report = {"threads_per_engine": int(threads), "clock_ticks_per_second": clock_ticks, "distinct_active_tids_by_pid": {str(pid): sorted(tids) for pid, tids in seen.items()}, "samples": samples}
+report = {"threads_per_engine": int(threads), "cpu_set": cpu_set, "inner_threads": int(inner_threads), "clock_ticks_per_second": clock_ticks, "distinct_active_tids_by_pid": {str(pid): sorted(tids) for pid, tids in seen.items()}, "samples": samples}
 (output / "thread-samples.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({"threads_per_engine": int(threads), "ranks": len(seen), "sample_count": len(samples), "distinct_active_counts": {str(pid): len(tids) for pid, tids in seen.items()}}, indent=2))

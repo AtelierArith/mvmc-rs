@@ -8,6 +8,8 @@ fi
 image=$1
 volume=$2
 out=$3
+cpu_set=${MVMC_BENCH_CPUSET:-0-3}
+inner_threads=${MVMC_BENCH_INNER_THREADS:-1}
 repo=$(git rev-parse --show-toplevel)
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
@@ -16,6 +18,7 @@ if [[ -e "$out/inputs" ]]; then
     exit 2
 fi
 mkdir -p "$out/inputs/opt" "$out/inputs/phys" "$out/results"
+printf 'cpuset=%s\ninner_threads=%s\n' "$cpu_set" "$inner_threads" > "$out/config.env"
 cp "$repo"/benchmark/hubbard_chain/inputs/hubbard_chain_L32/*.def "$out/inputs/opt/"
 cp "$repo"/benchmark/physcal/inputs/hubbard_chain_L32/*.def "$out/inputs/phys/"
 cp "$repo/benchmark/physcal/inputs/hubbard_chain_L32/zqp_opt.dat" "$out/inputs/phys/"
@@ -25,10 +28,10 @@ for mode in opt phys; do
     for repetition in 0 1 2 3; do
         if (( repetition % 2 == 0 )); then settings='1 4'; else settings='4 1'; fi
         for threads in $settings; do
-            docker run --rm --platform=linux/amd64 --cpuset-cpus=0-3 --shm-size=1g \
+            docker run --rm --platform=linux/amd64 --cpuset-cpus="$cpu_set" --shm-size=1g \
                 -v "$out/inputs:/input:ro" -v "$out/results:/results" -v "$volume:/target" \
                 -w "/input/$mode" \
-                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MVMC_RS_INNER_THREADS=1 \
+                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MVMC_RS_INNER_THREADS="$inner_threads" \
                 -e RAYON_NUM_THREADS=4 -e MVMC_RS_TENFERRO_THREADS="$threads" \
                 -e MVMC_RS_SR_BACKEND=tenferro -e "BENCH_MODE=$mode" \
                 -e "BENCH_DEST=/results/${mode}-t${threads}-r${repetition}" \

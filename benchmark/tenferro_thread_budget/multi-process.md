@@ -92,3 +92,30 @@ uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
 uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
   DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-results/inputs /tmp/observe-4 4
 ```
+
+## Four ranks × four mVMC threads on 16 CPUs
+
+The same release binary and L=32 inputs were run on CPUs 0–15 with four MPI ranks and `MVMC_RS_INNER_THREADS=4` per rank. Rayon=4, BLAS/OMP=1, tenferro=1 or 4 per rank; the same alternating one-warmup/three-measurement procedure, time scope, output comparison and limitations apply. Input hashes and exact CPU/inner-thread configuration are recorded with the results.
+
+| Workload | tenferro threads per rank | Wall samples (s) | Median wall (s) | User CPU samples (s) |
+|---|---:|---|---:|---|
+| Opt | 1 | 2.650, 2.668, 2.713 | 2.668 | 23.385, 23.454, 23.959 |
+| Opt | 4 | 2.786, 2.760, 2.792 | 2.786 | 25.315, 25.042, 25.371 |
+| PhysCal | 1 | 3.149, 3.103, 2.824 | 3.103 | 26.582, 26.075, 24.432 |
+| PhysCal | 4 | 3.235, 3.356, 3.216 | 3.235 | 26.633, 27.427, 26.564 |
+
+All compared finite numeric output tokens (four Opt and 80 PhysCal files, excluding wall-clock time files) had maximum absolute difference 0 against the first 1-thread run. This is a comparison of formatted results, not complete RNG or trajectory parity. The differences in time are small compared with variation and cannot establish the best budget. [Timings and output summary](results/mpi-l32-hybrid/).
+
+Separate `/proc` observations of L=32 Opt used the same setup and method as the previous section. With tenferro=1, each rank had at most 6 OS threads, and 5 distinct TIDs per rank accumulated CPU time during observation; a maximum of 16 TIDs accumulated ticks in one interval. With tenferro=4, the corresponding values were at most 10 OS threads per rank, 8 CPU-active TIDs per rank, and 28 TIDs with increased CPU ticks in one interval. These counts include MPI/runtime and mVMC workers; they are not all tenferro threads, do not show simultaneous execution, and do not quantify waiting time. [Observation samples](results/mpi-l32-hybrid/).
+
+```sh
+MVMC_BENCH_CPUSET=0-15 MVMC_BENCH_INNER_THREADS=4 \
+  benchmark/tenferro_thread_budget/mpi-l32.sh DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-hybrid
+uv run --no-project python benchmark/tenferro_thread_budget/analyze-mpi-l32.py /tmp/mpi-l32-hybrid > /tmp/mpi-l32-hybrid-summary.json
+MVMC_BENCH_CPUSET=0-15 MVMC_BENCH_INNER_THREADS=4 \
+  uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-hybrid/inputs /tmp/observe-hybrid-1 1
+MVMC_BENCH_CPUSET=0-15 MVMC_BENCH_INNER_THREADS=4 \
+  uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-hybrid/inputs /tmp/observe-hybrid-4 4
+```
