@@ -1,0 +1,120 @@
+
+### phys-c-order-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-c-order-r0
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.94s ===
+Output files written to: /results/phys-c-order-r0
+wall=3.059 user=25.623 sys=5.095
+
+### phys-c-order-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-c-order-r1
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.08s ===
+Output files written to: /results/phys-c-order-r1
+wall=3.198 user=26.359 sys=5.281
+
+### phys-c-order-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-c-order-r2
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.08s ===
+Output files written to: /results/phys-c-order-r2
+wall=3.193 user=26.266 sys=5.199
+
+### phys-c-order-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-c-order-r3
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.86s ===
+Output files written to: /results/phys-c-order-r3
+wall=2.975 user=24.958 sys=5.220
+
+### phys-tenferro-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-tenferro-r0
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.89s ===
+Output files written to: /results/phys-tenferro-r0
+wall=3.009 user=25.364 sys=5.067
+
+### phys-tenferro-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-tenferro-r1
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.79s ===
+Output files written to: /results/phys-tenferro-r1
+wall=2.919 user=24.737 sys=5.114
+
+### phys-tenferro-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-tenferro-r2
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.85s ===
+Output files written to: /results/phys-tenferro-r2
+wall=2.971 user=25.166 sys=4.937
+
+### phys-tenferro-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-tenferro-r3
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.97s ===
+Output files written to: /results/phys-tenferro-r3
+wall=3.097 user=25.565 sys=5.298

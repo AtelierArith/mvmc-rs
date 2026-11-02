@@ -1,0 +1,256 @@
+
+### opt-shared-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-shared-r0
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.66s ===
+Output files written to: /results/opt-shared-r0
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.792 user=25.187 sys=3.893
+
+### opt-shared-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-shared-r1
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.66s ===
+Output files written to: /results/opt-shared-r1
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.786 user=25.503 sys=3.916
+
+### opt-shared-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-shared-r2
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.68s ===
+Output files written to: /results/opt-shared-r2
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.804 user=25.347 sys=4.040
+
+### opt-shared-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-shared-r3
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.63s ===
+Output files written to: /results/opt-shared-r3
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.753 user=25.089 sys=3.911
+
+### opt-pinned-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-pinned-r0
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.58s ===
+Output files written to: /results/opt-pinned-r0
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.712 user=23.533 sys=3.848
+
+### opt-pinned-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-pinned-r1
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.57s ===
+Output files written to: /results/opt-pinned-r1
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.692 user=23.452 sys=3.773
+
+### opt-pinned-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-pinned-r2
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.61s ===
+Output files written to: /results/opt-pinned-r2
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.742 user=23.920 sys=3.795
+
+### opt-pinned-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/opt-pinned-r3
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.63s ===
+Output files written to: /results/opt-pinned-r3
+Final energy / site: 0.5066285838
+Final-window means (1 steps): [16.21211468054111, 0.0]
+wall=2.758 user=23.851 sys=3.776
+
+### phys-shared-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-shared-r0
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.88s ===
+Output files written to: /results/phys-shared-r0
+wall=3.009 user=25.483 sys=5.172
+
+### phys-shared-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-shared-r1
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.03s ===
+Output files written to: /results/phys-shared-r1
+wall=3.153 user=26.156 sys=5.255
+
+### phys-shared-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-shared-r2
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.88s ===
+Output files written to: /results/phys-shared-r2
+wall=3.000 user=25.406 sys=5.086
+
+### phys-shared-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-shared-r3
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.11s ===
+Output files written to: /results/phys-shared-r3
+wall=3.239 user=27.062 sys=5.461
+
+### phys-pinned-r0.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-pinned-r0
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.03s ===
+Output files written to: /results/phys-pinned-r0
+wall=3.156 user=26.330 sys=5.386
+
+### phys-pinned-r1.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-pinned-r1
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.83s ===
+Output files written to: /results/phys-pinned-r1
+wall=2.956 user=25.094 sys=5.169
+
+### phys-pinned-r2.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-pinned-r2
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.95s ===
+Output files written to: /results/phys-pinned-r2
+wall=3.072 user=25.709 sys=5.207
+
+### phys-pinned-r3.txt
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-pinned-r3
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.87s ===
+Output files written to: /results/phys-pinned-r3
+wall=2.992 user=25.339 sys=5.198

@@ -1,0 +1,48 @@
+{
+  "phys": {
+    "files_compared": 80,
+    "max_abs_from_first": 0.0,
+    "timings": {
+      "c-order": {
+        "samples": [
+          {
+            "wall": 3.198,
+            "user": 26.359,
+            "system": 5.281
+          },
+          {
+            "wall": 3.193,
+            "user": 26.266,
+            "system": 5.199
+          },
+          {
+            "wall": 2.975,
+            "user": 24.958,
+            "system": 5.22
+          }
+        ],
+        "wall_median": 3.193
+      },
+      "tenferro": {
+        "samples": [
+          {
+            "wall": 2.919,
+            "user": 24.737,
+            "system": 5.114
+          },
+          {
+            "wall": 2.971,
+            "user": 25.166,
+            "system": 4.937
+          },
+          {
+            "wall": 3.097,
+            "user": 25.565,
+            "system": 5.298
+          }
+        ],
+        "wall_median": 2.971
+      }
+    }
+  }
+}
