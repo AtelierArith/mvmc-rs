@@ -1096,7 +1096,7 @@ fn assemble_inv_m_real(
     assemble_inv_m_real_plane(qp, ele_idx, slater_elm, plane, n_site, ne, n_size, n_site2)
 }
 
-fn assemble_inv_m_real_plane(
+pub(crate) fn assemble_inv_m_real_plane(
     qp: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<f64>,
@@ -1240,7 +1240,7 @@ fn frobenius_norm_sqr_real(inv_m: &InvMColMajor<f64>, qp: usize) -> f64 {
     max_abs2_real(inv_m.qp_matrix_slice(qp))
 }
 
-fn max_abs2_real(plane: &[f64]) -> f64 {
+pub(crate) fn max_abs2_real(plane: &[f64]) -> f64 {
     // Column-major plane order, as the former `(col, row)` loops.
     plane
         .iter()

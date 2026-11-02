@@ -1,0 +1,10 @@
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 0.76s
+────────────
+ Nextest run ID 1b880250-a4e0-4cf5-9c32-0aa594a0fec1 with nextest profile: default
+    Starting 1 test across 1 binary (1 test skipped)
+        PASS [   0.025s] (1/1) mvmc-core::c_order_pfaffian_threading mixed_c_order_planes_preserve_layout_status_and_actual_parallel_execution
+────────────
+     Summary [   0.025s] 1 test run: 1 passed, 1 skipped
+    Checking mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `dev` profile [unoptimized] target(s) in 0.45s

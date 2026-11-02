@@ -1,0 +1,347 @@
+{
+  "note": "Only complete groups have all three measured repetitions. Timers are inclusive; never sum nested phases. Outside All includes all untimed work, not pure startup.",
+  "completed_runs": 32,
+  "expected_runs": 32,
+  "groups": [
+    {
+      "mode": "opt",
+      "kind": "rust",
+      "threads": 1,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 77.615,
+        "min": 77.298,
+        "max": 77.699
+      },
+      "user": {
+        "median": 77.524,
+        "min": 77.197,
+        "max": 77.6
+      },
+      "sys": {
+        "median": 0.089,
+        "min": 0.081,
+        "max": 0.092
+      },
+      "cpu_percent": {
+        "median": 99.98712982149063,
+        "min": 99.98711589254656,
+        "max": 99.98835674920439
+      },
+      "outside_internal_all": {
+        "median": 0.02394999999999925,
+        "min": 0.02370000000000516,
+        "max": 0.0247099999999989
+      },
+      "inclusive_phase_medians": {
+        "0": 77.59029,
+        "3": 43.46426,
+        "4": 33.67981,
+        "5": 0.17193,
+        "34": 10.83342,
+        "40": 29.95984,
+        "41": 3.26397,
+        "63": 28.8842,
+        "71": 1.43999
+      }
+    },
+    {
+      "mode": "opt",
+      "kind": "rust",
+      "threads": 4,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 28.41,
+        "min": 28.154,
+        "max": 29.285
+      },
+      "user": {
+        "median": 96.786,
+        "min": 96.1,
+        "max": 99.594
+      },
+      "sys": {
+        "median": 7.993,
+        "min": 7.869,
+        "max": 8.241
+      },
+      "cpu_percent": {
+        "median": 368.8102780711017,
+        "min": 368.22605429400716,
+        "max": 369.286779853662
+      },
+      "outside_internal_all": {
+        "median": 0.0244800000000005,
+        "min": 0.023740000000000094,
+        "max": 0.02762999999999849
+      },
+      "inclusive_phase_medians": {
+        "0": 28.38626,
+        "3": 16.33317,
+        "4": 11.73602,
+        "5": 0.15422,
+        "34": 3.3826,
+        "40": 9.50825,
+        "41": 1.73874,
+        "63": 8.764,
+        "71": 0.68879
+      }
+    },
+    {
+      "mode": "opt",
+      "kind": "rust",
+      "threads": 8,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 19.61,
+        "min": 19.574,
+        "max": 19.655
+      },
+      "user": {
+        "median": 116.189,
+        "min": 115.838,
+        "max": 116.393
+      },
+      "sys": {
+        "median": 17.921,
+        "min": 17.548,
+        "max": 18.178
+      },
+      "cpu_percent": {
+        "median": 683.8857725650178,
+        "min": 681.8417705418467,
+        "max": 684.2801675692244
+      },
+      "outside_internal_all": {
+        "median": 0.02657000000000309,
+        "min": 0.026180000000000092,
+        "max": 0.027460000000001372
+      },
+      "inclusive_phase_medians": {
+        "0": 19.58382,
+        "3": 11.61614,
+        "4": 7.69725,
+        "5": 0.14968,
+        "34": 2.02477,
+        "40": 5.64308,
+        "41": 1.57205,
+        "63": 5.1393,
+        "71": 0.58562
+      }
+    },
+    {
+      "mode": "opt",
+      "kind": "rust",
+      "threads": 16,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 22.949,
+        "min": 21.773,
+        "max": 23.075
+      },
+      "user": {
+        "median": 206.324,
+        "min": 199.246,
+        "max": 207.713
+      },
+      "sys": {
+        "median": 42.993,
+        "min": 41.406,
+        "max": 43.497
+      },
+      "cpu_percent": {
+        "median": 1088.667388949079,
+        "min": 1086.3959213909102,
+        "max": 1105.2771781564322
+      },
+      "outside_internal_all": {
+        "median": 0.02977000000000274,
+        "min": 0.029239999999997934,
+        "max": 0.02991000000000099
+      },
+      "inclusive_phase_medians": {
+        "0": 22.91923,
+        "3": 13.6971,
+        "4": 8.90838,
+        "5": 0.14998,
+        "34": 2.98548,
+        "40": 6.97986,
+        "41": 1.44452,
+        "63": 6.19526,
+        "71": 0.49968
+      }
+    },
+    {
+      "mode": "phys",
+      "kind": "rust",
+      "threads": 1,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 4.221,
+        "min": 4.183,
+        "max": 4.284
+      },
+      "user": {
+        "median": 4.175,
+        "min": 4.138,
+        "max": 4.238
+      },
+      "sys": {
+        "median": 0.045,
+        "min": 0.044,
+        "max": 0.046
+      },
+      "cpu_percent": {
+        "median": 99.97630893153281,
+        "min": 99.97609371264642,
+        "max": 100.00000000000003
+      },
+      "outside_internal_all": {
+        "median": 0.023719999999999963,
+        "min": 0.02102999999999966,
+        "max": 0.02507999999999999
+      },
+      "inclusive_phase_medians": {
+        "0": 4.19728,
+        "3": 2.16795,
+        "4": 1.95851,
+        "34": 0.5319,
+        "40": 1.52831,
+        "41": 0.07083,
+        "63": 1.43365,
+        "71": 0.07022
+      }
+    },
+    {
+      "mode": "phys",
+      "kind": "rust",
+      "threads": 4,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 2.936,
+        "min": 2.889,
+        "max": 2.984
+      },
+      "user": {
+        "median": 7.886,
+        "min": 7.775,
+        "max": 7.956
+      },
+      "sys": {
+        "median": 0.649,
+        "min": 0.636,
+        "max": 0.667
+      },
+      "cpu_percent": {
+        "median": 291.13880235375564,
+        "min": 288.37131367292227,
+        "max": 291.3147138964578
+      },
+      "outside_internal_all": {
+        "median": 0.03422999999999998,
+        "min": 0.0302399999999996,
+        "max": 0.03544999999999998
+      },
+      "inclusive_phase_medians": {
+        "0": 2.90055,
+        "3": 1.03432,
+        "4": 1.76763,
+        "34": 0.21148,
+        "40": 0.95915,
+        "41": 0.08257,
+        "63": 0.54211,
+        "71": 0.08083
+      }
+    },
+    {
+      "mode": "phys",
+      "kind": "rust",
+      "threads": 8,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 2.185,
+        "min": 2.177,
+        "max": 2.234
+      },
+      "user": {
+        "median": 9.908,
+        "min": 9.658,
+        "max": 9.948
+      },
+      "sys": {
+        "median": 1.318,
+        "min": 1.18,
+        "max": 1.446
+      },
+      "cpu_percent": {
+        "median": 508.1922196796338,
+        "min": 504.29722470904204,
+        "max": 509.3247588424437
+      },
+      "outside_internal_all": {
+        "median": 0.034270000000000245,
+        "min": 0.0336599999999998,
+        "max": 0.03746000000000027
+      },
+      "inclusive_phase_medians": {
+        "0": 2.14754,
+        "3": 0.71365,
+        "4": 1.36794,
+        "34": 0.1315,
+        "40": 0.62279,
+        "41": 0.07509,
+        "63": 0.29566,
+        "71": 0.07314
+      }
+    },
+    {
+      "mode": "phys",
+      "kind": "rust",
+      "threads": 16,
+      "measured_repetitions": 3,
+      "complete": true,
+      "wall": {
+        "median": 1.347,
+        "min": 1.335,
+        "max": 1.39
+      },
+      "user": {
+        "median": 10.813,
+        "min": 10.483,
+        "max": 10.951
+      },
+      "sys": {
+        "median": 2.21,
+        "min": 2.077,
+        "max": 2.212
+      },
+      "cpu_percent": {
+        "median": 950.7865168539328,
+        "min": 946.9784172661871,
+        "max": 956.9413511507053
+      },
+      "outside_internal_all": {
+        "median": 0.025009999999999977,
+        "min": 0.024909999999999988,
+        "max": 0.026189999999999936
+      },
+      "inclusive_phase_medians": {
+        "0": 1.32199,
+        "3": 0.67846,
+        "4": 0.59241,
+        "34": 0.13643,
+        "40": 0.34307,
+        "41": 0.03147,
+        "63": 0.30302,
+        "71": 0.03049
+      }
+    }
+  ]
+}

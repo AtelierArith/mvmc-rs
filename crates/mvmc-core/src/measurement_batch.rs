@@ -338,51 +338,47 @@ pub fn stage_a_pfaffian(
     } else {
         x.truncate(x_len);
     }
-    let src = slater.as_slice();
-    let mut sample_ok = vec![true; active.len()];
-    let mut cols = vec![0usize; n];
-    for (a, &slot) in active.iter().enumerate() {
-        let ele = &batch.ele_idx[slot * n..(slot + 1) * n];
-        let mut valid = true;
-        for (msi, c) in cols.iter_mut().enumerate() {
-            let rsi = ele[msi] + ((msi / n_elec) as i64) * (n_site as i64);
-            if rsi < 0 || rsi >= n2 as i64 {
-                valid = false;
-                break;
-            }
-            *c = rsi as usize;
-        }
-        if !valid {
-            // The batched backend evaluates every plane of `x`; keep the invalid sample's
-            // planes zero, exactly as the previous whole-buffer zero fill did.
-            x[a * n_qp * nn..(a + 1) * n_qp * nn].fill(0.0);
-            sample_ok[a] = false;
-            continue;
-        }
-        for qp in 0..n_qp {
-            let plane = &mut x[(a * n_qp + qp) * nn..(a * n_qp + qp + 1) * nn];
-            let mut max_abs2 = 0.0_f64;
-            // Same visiting order and formula as `assemble_inv_m_real`.
-            for (&rsi, out) in cols.iter().zip(plane.chunks_exact_mut(n)) {
-                let start = (qp * n2 + rsi) * n2;
-                let row = &src[start..start + n2];
-                for (o, &rsj) in out.iter_mut().zip(&cols) {
-                    let v = -row[rsj];
-                    *o = v;
-                    max_abs2 = max_abs2.max(v * v);
+    // Each sample/QP plane is independent. Reuse the production real-plane
+    // assembler, including its all-zero threshold, on disjoint output windows.
+    // Invalid electron sites must zero the whole plane before the backend reads
+    // it, matching the former sample-first serial loop (#586).
+    let mut assembled = vec![false; planes];
+    crate::threading::for_each_chunk_pair_mut(
+        &mut x,
+        nn,
+        &mut assembled,
+        1,
+        crate::threading::scaled_cost_ns(n, 4 * nn),
+        |plane_index, plane, valid| {
+            let sample = plane_index / n_qp;
+            let qp = plane_index % n_qp;
+            let slot = active[sample];
+            let ele = &batch.ele_idx[slot * n..(slot + 1) * n];
+            valid[0] = match crate::pfaffian::assemble_inv_m_real_plane(
+                qp, ele, slater, plane, n_site, n_elec, n, n2,
+            ) {
+                Ok(fused_max) => {
+                    let maximum =
+                        fused_max.unwrap_or_else(|| crate::pfaffian::max_abs2_real(plane));
+                    let too_small = maximum < MIN_ABS2;
+                    !too_small
                 }
-            }
-            if max_abs2 < MIN_ABS2 {
-                sample_ok[a] = false;
-            }
-        }
-    }
+                Err(_) => {
+                    plane.fill(0.0);
+                    false
+                }
+            };
+        },
+    );
     let result = backend.pfaffian_inverse_batch(&x, n, planes);
     batch.stage_x = x;
     let out = result?;
     for (a, &slot) in active.iter().enumerate() {
-        let planes_ok = (0..n_qp).all(|qp| out.outcome[a * n_qp + qp] == PlaneOutcome::Ok);
-        if !sample_ok[a] || !planes_ok {
+        let planes_ok = (0..n_qp).all(|qp| {
+            let plane = a * n_qp + qp;
+            assembled[plane] && out.outcome[plane] == PlaneOutcome::Ok
+        });
+        if !planes_ok {
             batch.status[slot] = SlotStatus::Failed;
             continue;
         }
