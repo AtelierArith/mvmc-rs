@@ -33,7 +33,7 @@ use cudarc::driver::{
     sys, CudaContext, CudaEvent, CudaFunction, CudaGraph, CudaSlice, DevicePtr, DevicePtrMut,
     LaunchConfig, PushKernelArg,
 };
-use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
+use cudarc::nvrtc::CompileOptions;
 use mvmc_core::device_sampler::{DeviceService, FastBatch, Geometry, SlowBatch, SlowReply};
 use mvmc_core::state::SlaterElmFlat;
 
@@ -417,20 +417,25 @@ impl<T: TransferPath> CudaSamplerService<T> {
         device: usize,
         mut make: impl FnMut(&Arc<CudaContext>, Arc<TransferStream>) -> T,
     ) -> Result<Self, String> {
+        let init_start = std::time::Instant::now();
         let ctx = CudaContext::new(device).map_err(cu)?;
         // SAFETY: every cross-stream dependency is ordered by this module with events.
         unsafe { crate::transfer::disable_event_tracking(&ctx) };
         let src = format!("{SRC_PFAFFIAN}\n{SRC_SAMPLER}");
-        let ptx = compile_ptx_with_opts(
+        let context_seconds = init_start.elapsed().as_secs_f64();
+        let module = crate::kernel_cache::load(
+            &ctx,
             &src,
             CompileOptions {
                 fmad: Some(false),
                 arch: Some("compute_80"),
                 ..Default::default()
             },
-        )
-        .map_err(|e| format!("NVRTC: {e:?}"))?;
-        let module = ctx.load_module(ptx).map_err(cu)?;
+            "sampler",
+        )?;
+        if std::env::var_os("MVMC_RS_CUDA_INIT_PROFILE").is_some() {
+            eprintln!("cuda-init component=sampler context_s={context_seconds:.6}");
+        }
         let f = |name: &str| module.load_function(name).map_err(cu);
         let funcs = Funcs {
             propose: f("k_propose")?,

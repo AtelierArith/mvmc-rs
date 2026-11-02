@@ -10,6 +10,7 @@ pub mod bench;
 pub mod device_sampler;
 pub mod interval;
 pub mod interval_engine;
+mod kernel_cache;
 pub mod measurement;
 pub mod opt;
 pub mod pfaffian;

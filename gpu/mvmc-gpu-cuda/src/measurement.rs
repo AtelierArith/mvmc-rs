@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use cudarc::driver::{
     CudaContext, CudaFunction, CudaSlice, CudaStream, LaunchConfig, PushKernelArg,
 };
-use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
+use cudarc::nvrtc::CompileOptions;
 use mvmc_core::c_timer::CTimer;
 use mvmc_core::measurement_backend::{
     ResidentGreenTwo, ResidentMeasurementOps, ResidentRatioTerms, ResidentSlaterDiff,
@@ -221,19 +221,24 @@ pub struct ResidentDevice {
 impl ResidentDevice {
     /// Compile the kernels and open the device state.
     pub fn new(device: usize) -> Result<Self, String> {
+        let init_start = std::time::Instant::now();
         let ctx = CudaContext::new(device).map_err(|e| format!("{e:?}"))?;
         let stream = ctx.default_stream();
         let src = format!("{SRC_PFAFFIAN}\n{SRC_MEASUREMENT}");
-        let ptx = compile_ptx_with_opts(
+        let context_seconds = init_start.elapsed().as_secs_f64();
+        let module = crate::kernel_cache::load(
+            &ctx,
             &src,
             CompileOptions {
                 fmad: Some(false),
                 arch: Some("compute_80"),
                 ..Default::default()
             },
-        )
-        .map_err(|e| format!("NVRTC: {e:?}"))?;
-        let module = ctx.load_module(ptx).map_err(|e| format!("{e:?}"))?;
+            "measurement",
+        )?;
+        if std::env::var_os("MVMC_RS_CUDA_INIT_PROFILE").is_some() {
+            eprintln!("cuda-init component=measurement context_s={context_seconds:.6}");
+        }
         let f = |name: &str| {
             module
                 .load_function(name)

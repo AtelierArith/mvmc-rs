@@ -1468,10 +1468,10 @@ where
     service.prepare(geom, 1)?;
     let teacher = std::mem::take(&mut opts.teachers).into_iter().next();
     let mut stage = InlineStage::new(service, geom, teacher);
-    trace::start_decisions();
+    let capture = trace::nested_decisions();
     sync_slater_real(state);
     let result = vmc_make_sample_real_staged(data, state, rng, timer, reducer, &mut stage);
-    let decisions = trace::finish_decisions();
+    let decisions = capture.finish();
     // Same issue #454 contract as the channel runner: the device holds the accepted inverses.
     state.slater_matrix.inv_m_real.mark_stale(STALE_REASON);
     // Issue #465: the last accepted move may still be queued.

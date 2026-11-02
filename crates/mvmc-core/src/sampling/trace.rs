@@ -16,6 +16,53 @@ pub fn start_decisions() {
     DECISIONS.with(|slot| *slot.borrow_mut() = Some(Vec::new()));
 }
 
+/// Nested capture for a runner that also returns its own decision log.
+/// Finishing restores an outer capture and appends this scope's observations in order.
+/// Dropping on an error/unwind restores the outer capture as well; no RNG is touched.
+pub struct DecisionCapture {
+    parent: Option<Vec<(f64, f64)>>,
+    finished: bool,
+    // Restoring a thread-local observer must happen on the thread that opened it.
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+/// Begin a nested decision capture without discarding a caller's observations.
+pub fn nested_decisions() -> DecisionCapture {
+    let parent = DECISIONS.with(|slot| slot.replace(Some(Vec::new())));
+    DecisionCapture {
+        parent,
+        finished: false,
+        _thread: std::marker::PhantomData,
+    }
+}
+
+impl DecisionCapture {
+    /// Return this scope's decisions and preserve an active outer observer.
+    pub fn finish(mut self) -> Vec<(f64, f64)> {
+        let decisions = finish_decisions();
+        self.restore(&decisions);
+        self.finished = true;
+        decisions
+    }
+
+    fn restore(&mut self, decisions: &[(f64, f64)]) {
+        let parent = self.parent.take().map(|mut parent| {
+            parent.extend_from_slice(decisions);
+            parent
+        });
+        DECISIONS.with(|slot| *slot.borrow_mut() = parent);
+    }
+}
+
+impl Drop for DecisionCapture {
+    fn drop(&mut self) {
+        if !self.finished {
+            let decisions = finish_decisions();
+            self.restore(&decisions);
+        }
+    }
+}
+
 /// Stop recording and return the decisions in execution order (empty if not started).
 pub fn finish_decisions() -> Vec<(f64, f64)> {
     DECISIONS.with(|slot| slot.borrow_mut().take().unwrap_or_default())
@@ -230,5 +277,28 @@ mod tests {
             .unwrap();
         super::record(7, &[0, 123]);
         assert_eq!(super::finish(), vec![vec![1, 2, 3], vec![7, 0, 123]]);
+    }
+    #[test]
+    fn nested_decision_capture_preserves_outer_order_and_unwind() {
+        super::start_decisions();
+        super::record_decision(2.0, 0.5);
+        let capture = super::nested_decisions();
+        super::record_decision(3.0, 0.25);
+        assert_eq!(capture.finish(), vec![(3.0, 0.25)]);
+        let failed = std::panic::catch_unwind(|| {
+            let _capture = super::nested_decisions();
+            super::record_decision(4.0, 0.125);
+            panic!("probe unwind");
+        });
+        assert!(failed.is_err());
+        super::record_decision(5.0, 0.0625);
+        assert_eq!(
+            super::finish_decisions(),
+            vec![(2.0, 0.5), (3.0, 0.25), (4.0, 0.125), (5.0, 0.0625)]
+        );
+        let capture = super::nested_decisions();
+        super::record_decision(6.0, 0.03125);
+        assert_eq!(capture.finish(), vec![(6.0, 0.03125)]);
+        assert!(super::finish_decisions().is_empty());
     }
 }
