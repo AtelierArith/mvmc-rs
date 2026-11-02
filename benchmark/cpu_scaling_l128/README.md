@@ -219,4 +219,3 @@ text for inspection without extracting the larger records.
 
 This milestone improves the explicit CPU route. It does not claim that all
 remaining C performance differences or GPU PhysCal issue #587 are resolved.
-
