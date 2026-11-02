@@ -1,0 +1,992 @@
+{
+  "l32-opt": {
+    "files_compared": 4,
+    "max_absolute_difference": 0.0,
+    "groups": [
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.436,
+            "user": 2.879,
+            "system": 0.062
+          },
+          {
+            "wall": 2.383,
+            "user": 2.827,
+            "system": 0.063
+          },
+          {
+            "wall": 2.364,
+            "user": 2.807,
+            "system": 0.069
+          }
+        ],
+        "medians": {
+          "wall": 2.383,
+          "user": 2.827,
+          "system": 0.063
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.391,
+            "user": 2.838,
+            "system": 0.065
+          },
+          {
+            "wall": 2.457,
+            "user": 2.899,
+            "system": 0.07
+          },
+          {
+            "wall": 2.425,
+            "user": 2.86,
+            "system": 0.07
+          }
+        ],
+        "medians": {
+          "wall": 2.425,
+          "user": 2.86,
+          "system": 0.07
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.441,
+            "user": 2.884,
+            "system": 0.069
+          },
+          {
+            "wall": 2.382,
+            "user": 2.823,
+            "system": 0.068
+          },
+          {
+            "wall": 2.455,
+            "user": 2.886,
+            "system": 0.079
+          }
+        ],
+        "medians": {
+          "wall": 2.441,
+          "user": 2.884,
+          "system": 0.069
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.423,
+            "user": 2.868,
+            "system": 0.065
+          },
+          {
+            "wall": 2.438,
+            "user": 2.881,
+            "system": 0.067
+          },
+          {
+            "wall": 2.487,
+            "user": 2.927,
+            "system": 0.073
+          }
+        ],
+        "medians": {
+          "wall": 2.438,
+          "user": 2.881,
+          "system": 0.067
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.439,
+            "user": 2.876,
+            "system": 0.073
+          },
+          {
+            "wall": 2.452,
+            "user": 2.895,
+            "system": 0.067
+          },
+          {
+            "wall": 2.387,
+            "user": 2.82,
+            "system": 0.071
+          }
+        ],
+        "medians": {
+          "wall": 2.439,
+          "user": 2.876,
+          "system": 0.071
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.371,
+            "user": 2.807,
+            "system": 0.066
+          },
+          {
+            "wall": 2.382,
+            "user": 2.832,
+            "system": 0.062
+          },
+          {
+            "wall": 2.454,
+            "user": 2.884,
+            "system": 0.078
+          }
+        ],
+        "medians": {
+          "wall": 2.382,
+          "user": 2.832,
+          "system": 0.066
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.018,
+            "user": 4.545,
+            "system": 0.702
+          },
+          {
+            "wall": 2.156,
+            "user": 4.744,
+            "system": 0.73
+          },
+          {
+            "wall": 2.208,
+            "user": 4.938,
+            "system": 0.79
+          }
+        ],
+        "medians": {
+          "wall": 2.156,
+          "user": 4.744,
+          "system": 0.73
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.55,
+            "user": 5.895,
+            "system": 0.09
+          },
+          {
+            "wall": 1.588,
+            "user": 6.04,
+            "system": 0.099
+          },
+          {
+            "wall": 1.562,
+            "user": 5.934,
+            "system": 0.088
+          }
+        ],
+        "medians": {
+          "wall": 1.562,
+          "user": 5.934,
+          "system": 0.09
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 1.884,
+            "user": 4.213,
+            "system": 0.581
+          },
+          {
+            "wall": 1.999,
+            "user": 4.579,
+            "system": 0.687
+          },
+          {
+            "wall": 2.115,
+            "user": 4.581,
+            "system": 0.692
+          }
+        ],
+        "medians": {
+          "wall": 1.999,
+          "user": 4.579,
+          "system": 0.687
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.668,
+            "user": 6.31,
+            "system": 0.104
+          },
+          {
+            "wall": 1.595,
+            "user": 6.083,
+            "system": 0.084
+          },
+          {
+            "wall": 1.664,
+            "user": 6.288,
+            "system": 0.101
+          }
+        ],
+        "medians": {
+          "wall": 1.664,
+          "user": 6.288,
+          "system": 0.101
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.628,
+            "user": 5.968,
+            "system": 0.678
+          },
+          {
+            "wall": 2.732,
+            "user": 6.078,
+            "system": 0.714
+          },
+          {
+            "wall": 2.75,
+            "user": 5.978,
+            "system": 0.755
+          }
+        ],
+        "medians": {
+          "wall": 2.732,
+          "user": 5.978,
+          "system": 0.714
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.652,
+            "user": 6.297,
+            "system": 0.081
+          },
+          {
+            "wall": 1.745,
+            "user": 6.625,
+            "system": 0.095
+          },
+          {
+            "wall": 1.644,
+            "user": 6.273,
+            "system": 0.079
+          }
+        ],
+        "medians": {
+          "wall": 1.652,
+          "user": 6.297,
+          "system": 0.081
+        }
+      }
+    ]
+  },
+  "l32-phys": {
+    "files_compared": 80,
+    "max_absolute_difference": 0.0,
+    "groups": [
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.145,
+            "user": 2.119,
+            "system": 0.036
+          },
+          {
+            "wall": 2.185,
+            "user": 2.159,
+            "system": 0.036
+          },
+          {
+            "wall": 2.182,
+            "user": 2.159,
+            "system": 0.036
+          }
+        ],
+        "medians": {
+          "wall": 2.182,
+          "user": 2.159,
+          "system": 0.036
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.246,
+            "user": 2.222,
+            "system": 0.035
+          },
+          {
+            "wall": 2.14,
+            "user": 2.116,
+            "system": 0.037
+          },
+          {
+            "wall": 2.151,
+            "user": 2.135,
+            "system": 0.03
+          }
+        ],
+        "medians": {
+          "wall": 2.151,
+          "user": 2.135,
+          "system": 0.035
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.145,
+            "user": 2.121,
+            "system": 0.034
+          },
+          {
+            "wall": 2.177,
+            "user": 2.153,
+            "system": 0.036
+          },
+          {
+            "wall": 2.22,
+            "user": 2.201,
+            "system": 0.03
+          }
+        ],
+        "medians": {
+          "wall": 2.177,
+          "user": 2.153,
+          "system": 0.034
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.19,
+            "user": 2.168,
+            "system": 0.036
+          },
+          {
+            "wall": 2.254,
+            "user": 2.234,
+            "system": 0.035
+          },
+          {
+            "wall": 2.166,
+            "user": 2.145,
+            "system": 0.032
+          }
+        ],
+        "medians": {
+          "wall": 2.19,
+          "user": 2.168,
+          "system": 0.035
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.113,
+            "user": 2.101,
+            "system": 0.023
+          },
+          {
+            "wall": 2.14,
+            "user": 2.115,
+            "system": 0.036
+          },
+          {
+            "wall": 2.121,
+            "user": 2.094,
+            "system": 0.037
+          }
+        ],
+        "medians": {
+          "wall": 2.121,
+          "user": 2.101,
+          "system": 0.036
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 2.279,
+            "user": 2.254,
+            "system": 0.036
+          },
+          {
+            "wall": 2.126,
+            "user": 2.094,
+            "system": 0.042
+          },
+          {
+            "wall": 2.298,
+            "user": 2.281,
+            "system": 0.031
+          }
+        ],
+        "medians": {
+          "wall": 2.279,
+          "user": 2.254,
+          "system": 0.036
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.088,
+            "user": 4.839,
+            "system": 1.073
+          },
+          {
+            "wall": 2.743,
+            "user": 6.021,
+            "system": 1.252
+          },
+          {
+            "wall": 2.613,
+            "user": 5.848,
+            "system": 1.126
+          }
+        ],
+        "medians": {
+          "wall": 2.613,
+          "user": 5.848,
+          "system": 1.126
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.591,
+            "user": 6.127,
+            "system": 0.065
+          },
+          {
+            "wall": 1.611,
+            "user": 6.205,
+            "system": 0.071
+          },
+          {
+            "wall": 1.569,
+            "user": 6.05,
+            "system": 0.055
+          }
+        ],
+        "medians": {
+          "wall": 1.591,
+          "user": 6.127,
+          "system": 0.065
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 2.349,
+            "user": 5.378,
+            "system": 1.168
+          },
+          {
+            "wall": 2.721,
+            "user": 5.981,
+            "system": 1.272
+          },
+          {
+            "wall": 2.15,
+            "user": 5.028,
+            "system": 1.059
+          }
+        ],
+        "medians": {
+          "wall": 2.349,
+          "user": 5.378,
+          "system": 1.168
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.643,
+            "user": 6.318,
+            "system": 0.077
+          },
+          {
+            "wall": 1.684,
+            "user": 6.509,
+            "system": 0.057
+          },
+          {
+            "wall": 1.685,
+            "user": 6.497,
+            "system": 0.071
+          }
+        ],
+        "medians": {
+          "wall": 1.684,
+          "user": 6.497,
+          "system": 0.071
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 3.186,
+            "user": 6.598,
+            "system": 1.381
+          },
+          {
+            "wall": 3.425,
+            "user": 7.045,
+            "system": 1.458
+          },
+          {
+            "wall": 3.37,
+            "user": 6.876,
+            "system": 1.504
+          }
+        ],
+        "medians": {
+          "wall": 3.37,
+          "user": 6.876,
+          "system": 1.458
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 1.626,
+            "user": 6.278,
+            "system": 0.061
+          },
+          {
+            "wall": 1.786,
+            "user": 6.898,
+            "system": 0.058
+          },
+          {
+            "wall": 1.626,
+            "user": 6.278,
+            "system": 0.048
+          }
+        ],
+        "medians": {
+          "wall": 1.626,
+          "user": 6.278,
+          "system": 0.058
+        }
+      }
+    ]
+  },
+  "l64-opt": {
+    "files_compared": 4,
+    "max_absolute_difference": 0.0,
+    "groups": [
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 11.49,
+            "user": 12.367,
+            "system": 0.106
+          },
+          {
+            "wall": 11.658,
+            "user": 12.538,
+            "system": 0.106
+          },
+          {
+            "wall": 11.812,
+            "user": 12.7,
+            "system": 0.101
+          }
+        ],
+        "medians": {
+          "wall": 11.658,
+          "user": 12.538,
+          "system": 0.106
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 11.534,
+            "user": 12.415,
+            "system": 0.107
+          },
+          {
+            "wall": 11.722,
+            "user": 12.607,
+            "system": 0.102
+          },
+          {
+            "wall": 11.606,
+            "user": 12.511,
+            "system": 0.095
+          }
+        ],
+        "medians": {
+          "wall": 11.606,
+          "user": 12.511,
+          "system": 0.102
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 11.724,
+            "user": 12.62,
+            "system": 0.106
+          },
+          {
+            "wall": 11.541,
+            "user": 12.423,
+            "system": 0.104
+          },
+          {
+            "wall": 11.642,
+            "user": 12.536,
+            "system": 0.102
+          }
+        ],
+        "medians": {
+          "wall": 11.642,
+          "user": 12.536,
+          "system": 0.104
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 11.581,
+            "user": 12.476,
+            "system": 0.1
+          },
+          {
+            "wall": 11.394,
+            "user": 12.263,
+            "system": 0.113
+          },
+          {
+            "wall": 11.633,
+            "user": 12.517,
+            "system": 0.11
+          }
+        ],
+        "medians": {
+          "wall": 11.581,
+          "user": 12.476,
+          "system": 0.11
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 11.722,
+            "user": 12.603,
+            "system": 0.114
+          },
+          {
+            "wall": 11.497,
+            "user": 12.373,
+            "system": 0.096
+          },
+          {
+            "wall": 11.581,
+            "user": 12.461,
+            "system": 0.111
+          }
+        ],
+        "medians": {
+          "wall": 11.581,
+          "user": 12.461,
+          "system": 0.111
+        }
+      },
+      {
+        "workers": 1,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 11.589,
+            "user": 12.467,
+            "system": 0.107
+          },
+          {
+            "wall": 11.732,
+            "user": 12.61,
+            "system": 0.12
+          },
+          {
+            "wall": 11.718,
+            "user": 12.602,
+            "system": 0.108
+          }
+        ],
+        "medians": {
+          "wall": 11.718,
+          "user": 12.602,
+          "system": 0.108
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 5.341,
+            "user": 17.238,
+            "system": 2.638
+          },
+          {
+            "wall": 5.273,
+            "user": 17.196,
+            "system": 2.697
+          },
+          {
+            "wall": 5.339,
+            "user": 17.424,
+            "system": 2.526
+          }
+        ],
+        "medians": {
+          "wall": 5.339,
+          "user": 17.238,
+          "system": 2.638
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 20000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 5.338,
+            "user": 20.821,
+            "system": 0.221
+          },
+          {
+            "wall": 5.389,
+            "user": 21.02,
+            "system": 0.207
+          },
+          {
+            "wall": 5.335,
+            "user": 20.793,
+            "system": 0.23
+          }
+        ],
+        "medians": {
+          "wall": 5.338,
+          "user": 20.821,
+          "system": 0.221
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 5.376,
+            "user": 17.32,
+            "system": 2.753
+          },
+          {
+            "wall": 5.343,
+            "user": 17.283,
+            "system": 2.722
+          },
+          {
+            "wall": 5.26,
+            "user": 17.241,
+            "system": 2.623
+          }
+        ],
+        "medians": {
+          "wall": 5.343,
+          "user": 17.283,
+          "system": 2.722
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 40000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 5.443,
+            "user": 21.13,
+            "system": 0.261
+          },
+          {
+            "wall": 5.364,
+            "user": 20.915,
+            "system": 0.239
+          },
+          {
+            "wall": 5.419,
+            "user": 21.08,
+            "system": 0.245
+          }
+        ],
+        "medians": {
+          "wall": 5.419,
+          "user": 21.08,
+          "system": 0.245
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 0,
+        "samples": [
+          {
+            "wall": 9.462,
+            "user": 20.576,
+            "system": 1.6
+          },
+          {
+            "wall": 9.333,
+            "user": 20.38,
+            "system": 1.596
+          },
+          {
+            "wall": 9.409,
+            "user": 20.612,
+            "system": 1.481
+          }
+        ],
+        "medians": {
+          "wall": 9.409,
+          "user": 20.576,
+          "system": 1.596
+        }
+      },
+      {
+        "workers": 4,
+        "gate_ns": 80000,
+        "shared": 1,
+        "samples": [
+          {
+            "wall": 7.529,
+            "user": 29.623,
+            "system": 0.132
+          },
+          {
+            "wall": 7.477,
+            "user": 29.43,
+            "system": 0.127
+          },
+          {
+            "wall": 7.308,
+            "user": 28.722,
+            "system": 0.14
+          }
+        ],
+        "medians": {
+          "wall": 7.477,
+          "user": 29.43,
+          "system": 0.132
+        }
+      }
+    ]
+  }
+}

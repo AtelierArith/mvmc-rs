@@ -1,0 +1,26 @@
+rustc 1.99.0 (b940084d7 2026-09-28)
+MPICH Version:      4.2.0
+MPICH Release date: Fri Feb  9 12:29:21 CST 2024
+MPICH ABI:          16:0:4
+MPICH Device:       ch4:ucx
+MPICH configure:    --prefix=/opt/mpich --with-device=ch4:ucx --with-ucx=/usr --with-pm=hydra --with-pmi=pmi1 --without-pmix
+MPICH CC:           gcc    -O2
+MPICH CXX:          g++   -O2
+MPICH F77:          gfortran   -O2
+MPICH FC:           gfortran   -O2
+MPICH features:     threadcomm
+
+	linux-vdso.so.1 (0x00007ffee9de6000)
+	libopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x000073bed2c20000)
+	libmpi.so.12 => /opt/mpich/lib/libmpi.so.12 (0x000073bed02cc000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000073bed77ef000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x000073bed01e3000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x000073becffd1000)
+	/lib64/ld-linux-x86-64.so.2 (0x000073bed7823000)
+	libgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x000073becfcb3000)
+	libucp.so.0 => /lib/x86_64-linux-gnu/libucp.so.0 (0x000073becfb50000)
+	libucs.so.0 => /lib/x86_64-linux-gnu/libucs.so.0 (0x000073bed7787000)
+	libuct.so.0 => /lib/x86_64-linux-gnu/libuct.so.0 (0x000073bed7741000)
+	libucm.so.0 => /lib/x86_64-linux-gnu/libucm.so.0 (0x000073becfb33000)
+libopenblas0-pthread:amd64	0.3.26+ds-1ubuntu0.1
+/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so

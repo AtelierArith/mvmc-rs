@@ -1,0 +1,1920 @@
+{
+  "l32-opt": {
+    "0": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 8098,
+          "items": 64784,
+          "total_ms": 922.2,
+          "us_per_call": 113.89,
+          "ns_per_item": 14235.6
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "serial",
+          "calls": 69622,
+          "items": 556976,
+          "total_ms": 510.8,
+          "us_per_call": 7.34,
+          "ns_per_item": 917.1
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 192928,
+          "items": 1543424,
+          "total_ms": 99.5,
+          "us_per_call": 0.52,
+          "ns_per_item": 64.4
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 768000,
+          "total_ms": 76.9,
+          "us_per_call": 12.81,
+          "ns_per_item": 100.1
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 65.4,
+          "us_per_call": 10.91,
+          "ns_per_item": 1363.2
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "mode": "pool",
+          "calls": 20,
+          "items": 776180,
+          "total_ms": 46.9,
+          "us_per_call": 2345.29,
+          "ns_per_item": 60.4
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 36.4,
+          "us_per_call": 1817.65,
+          "ns_per_item": 227206.7
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 1182000,
+          "total_ms": 11.7,
+          "us_per_call": 1.95,
+          "ns_per_item": 9.9
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 5.2,
+          "us_per_call": 259.9,
+          "ns_per_item": 32486.9
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 20,
+          "items": 655360,
+          "total_ms": 4.3,
+          "us_per_call": 212.63,
+          "ns_per_item": 6.5
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 1.1,
+          "us_per_call": 0.19,
+          "ns_per_item": 23.3
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.8,
+          "us_per_call": 772.92,
+          "ns_per_item": 96614.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "mode": "serial",
+          "calls": 20,
+          "items": 3920,
+          "total_ms": 0.1,
+          "us_per_call": 2.87,
+          "ns_per_item": 14.6
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "mode": "serial",
+          "calls": 20,
+          "items": 3940,
+          "total_ms": 0.0,
+          "us_per_call": 1.46,
+          "ns_per_item": 7.4
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "hot": false,
+          "counts": [
+            0,
+            5919,
+            80,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            5917,
+            81,
+            2,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5641,
+            334,
+            5,
+            0,
+            0,
+            20,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            2097,
+            2,
+            0,
+            9,
+            10,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            5538,
+            451,
+            11,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            134147,
+            58422,
+            358,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            68540,
+            1009,
+            73,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            5991,
+            9,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            19
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            16
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          11219,
+          12621,
+          6168,
+          12,
+          0,
+          24,
+          55
+        ],
+        "hot": [
+          204784,
+          59433,
+          431,
+          10,
+          10,
+          1,
+          0
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 0,
+        "successes": 0,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 0
+      }
+    },
+    "1": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 8098,
+          "items": 64784,
+          "total_ms": 569.8,
+          "us_per_call": 70.37,
+          "ns_per_item": 8795.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "serial",
+          "calls": 69622,
+          "items": 556976,
+          "total_ms": 436.0,
+          "us_per_call": 6.26,
+          "ns_per_item": 782.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 192928,
+          "items": 1543424,
+          "total_ms": 84.2,
+          "us_per_call": 0.44,
+          "ns_per_item": 54.6
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 768000,
+          "total_ms": 71.2,
+          "us_per_call": 11.87,
+          "ns_per_item": 92.8
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 61.3,
+          "us_per_call": 10.22,
+          "ns_per_item": 1277.0
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 1182000,
+          "total_ms": 10.2,
+          "us_per_call": 1.69,
+          "ns_per_item": 8.6
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 4.3,
+          "us_per_call": 214.39,
+          "ns_per_item": 26798.2
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 20,
+          "items": 655360,
+          "total_ms": 1.4,
+          "us_per_call": 69.18,
+          "ns_per_item": 2.1
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 1.2,
+          "us_per_call": 61.4,
+          "ns_per_item": 7675.0
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "mode": "pool",
+          "calls": 20,
+          "items": 776180,
+          "total_ms": 1.0,
+          "us_per_call": 51.88,
+          "ns_per_item": 1.3
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 1.0,
+          "us_per_call": 0.16,
+          "ns_per_item": 20.0
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.8,
+          "us_per_call": 764.29,
+          "ns_per_item": 95536.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "mode": "serial",
+          "calls": 20,
+          "items": 3920,
+          "total_ms": 0.1,
+          "us_per_call": 2.97,
+          "ns_per_item": 15.2
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "mode": "serial",
+          "calls": 20,
+          "items": 3940,
+          "total_ms": 0.0,
+          "us_per_call": 1.69,
+          "ns_per_item": 8.6
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            17,
+            3
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "hot": false,
+          "counts": [
+            0,
+            5932,
+            68,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            5909,
+            88,
+            3,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5901,
+            74,
+            5,
+            0,
+            0,
+            20,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            2099,
+            0,
+            0,
+            15,
+            4,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            5626,
+            356,
+            18,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            179122,
+            13415,
+            391,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            69259,
+            290,
+            73,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            5992,
+            8,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            19
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          11567,
+          12271,
+          6171,
+          11,
+          0,
+          37,
+          42
+        ],
+        "hot": [
+          250480,
+          13705,
+          464,
+          15,
+          4,
+          1,
+          0
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 20158,
+        "successes": 20158,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 4
+      }
+    }
+  },
+  "l32-phys": {
+    "0": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 1152000,
+          "total_ms": 1068.6,
+          "us_per_call": 178.11,
+          "ns_per_item": 927.6
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 6450,
+          "items": 51600,
+          "total_ms": 967.9,
+          "us_per_call": 150.06,
+          "ns_per_item": 18757.0
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:425",
+          "mode": "serial",
+          "calls": 59947,
+          "items": 479576,
+          "total_ms": 776.1,
+          "us_per_call": 12.95,
+          "ns_per_item": 1618.3
+        },
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 384000,
+          "total_ms": 193.4,
+          "us_per_call": 32.24,
+          "ns_per_item": 503.7
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 288000,
+          "items": 2304000,
+          "total_ms": 165.6,
+          "us_per_call": 0.57,
+          "ns_per_item": 71.9
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 768000,
+          "total_ms": 148.5,
+          "us_per_call": 24.75,
+          "ns_per_item": 193.4
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "serial",
+          "calls": 15150,
+          "items": 121200,
+          "total_ms": 129.2,
+          "us_per_call": 8.53,
+          "ns_per_item": 1066.0
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 6.5,
+          "us_per_call": 323.24,
+          "ns_per_item": 40405.5
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 2.8,
+          "us_per_call": 0.46,
+          "ns_per_item": 57.6
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.8,
+          "us_per_call": 757.82,
+          "ns_per_item": 94728.0
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.2,
+          "us_per_call": 199.82,
+          "ns_per_item": 24977.0
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 1,
+          "items": 32768,
+          "total_ms": 0.2,
+          "us_per_call": 165.28,
+          "ns_per_item": 5.0
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            2220,
+            3775,
+            5,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "hot": false,
+          "counts": [
+            5933,
+            5993,
+            74,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5598,
+            370,
+            12,
+            0,
+            0,
+            20,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            450,
+            1,
+            0,
+            0,
+            0,
+            0,
+            19
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            0,
+            5920,
+            80,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            65954,
+            126664,
+            308,
+            2,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:425",
+          "hot": false,
+          "counts": [
+            0,
+            55031,
+            273,
+            10,
+            3091,
+            1036,
+            504
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            15018,
+            119,
+            13,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          11532,
+          69534,
+          4214,
+          15,
+          3091,
+          1056,
+          504
+        ],
+        "hot": [
+          81422,
+          126784,
+          321,
+          2,
+          0,
+          1,
+          19
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 0,
+        "successes": 0,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 0
+      }
+    },
+    "1": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 1152000,
+          "total_ms": 546.9,
+          "us_per_call": 91.15,
+          "ns_per_item": 474.7
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 6450,
+          "items": 51600,
+          "total_ms": 464.4,
+          "us_per_call": 72.0,
+          "ns_per_item": 8999.6
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:425",
+          "mode": "serial",
+          "calls": 59947,
+          "items": 479576,
+          "total_ms": 416.6,
+          "us_per_call": 6.95,
+          "ns_per_item": 868.7
+        },
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 384000,
+          "total_ms": 135.3,
+          "us_per_call": 22.54,
+          "ns_per_item": 352.2
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 288000,
+          "items": 2304000,
+          "total_ms": 121.2,
+          "us_per_call": 0.42,
+          "ns_per_item": 52.6
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "serial",
+          "calls": 15150,
+          "items": 121200,
+          "total_ms": 100.8,
+          "us_per_call": 6.65,
+          "ns_per_item": 831.8
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 768000,
+          "total_ms": 81.2,
+          "us_per_call": 13.53,
+          "ns_per_item": 105.7
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 4.7,
+          "us_per_call": 236.75,
+          "ns_per_item": 29593.9
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 1.4,
+          "us_per_call": 0.24,
+          "ns_per_item": 30.1
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.8,
+          "us_per_call": 754.57,
+          "ns_per_item": 94321.8
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 1,
+          "items": 32768,
+          "total_ms": 0.1,
+          "us_per_call": 138.96,
+          "ns_per_item": 4.2
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 0.1,
+          "us_per_call": 112.89,
+          "ns_per_item": 14111.4
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            5911,
+            88,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables/green_measurements.rs:220",
+          "hot": false,
+          "counts": [
+            5984,
+            5967,
+            49,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5610,
+            362,
+            8,
+            0,
+            0,
+            20,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            450,
+            1,
+            0,
+            0,
+            0,
+            7,
+            12
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            115,
+            5859,
+            26,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            178379,
+            14096,
+            452,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:425",
+          "hot": false,
+          "counts": [
+            0,
+            55107,
+            200,
+            2991,
+            1023,
+            143,
+            481
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            15084,
+            49,
+            17,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          11710,
+          73206,
+          371,
+          2992,
+          1023,
+          163,
+          481
+        ],
+        "hot": [
+          193913,
+          14146,
+          469,
+          1,
+          0,
+          8,
+          12
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 18452,
+        "successes": 18452,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 4
+      }
+    }
+  },
+  "l64-opt": {
+    "0": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 8144,
+          "items": 65152,
+          "total_ms": 2172.9,
+          "us_per_call": 266.81,
+          "ns_per_item": 33351.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "pool",
+          "calls": 139978,
+          "items": 1119824,
+          "total_ms": 1300.3,
+          "us_per_call": 9.29,
+          "ns_per_item": 1161.1
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 385856,
+          "items": 3086848,
+          "total_ms": 428.4,
+          "us_per_call": 1.11,
+          "ns_per_item": 138.8
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 163.6,
+          "us_per_call": 27.27,
+          "ns_per_item": 3408.5
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 1536000,
+          "total_ms": 158.3,
+          "us_per_call": 26.39,
+          "ns_per_item": 103.1
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 30.7,
+          "us_per_call": 1537.24,
+          "ns_per_item": 192155.2
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 2334000,
+          "total_ms": 18.9,
+          "us_per_call": 3.16,
+          "ns_per_item": 8.1
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 20,
+          "items": 2621440,
+          "total_ms": 18.8,
+          "us_per_call": 938.53,
+          "ns_per_item": 7.2
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 17.3,
+          "us_per_call": 866.88,
+          "ns_per_item": 108360.3
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "mode": "pool",
+          "calls": 20,
+          "items": 3026420,
+          "total_ms": 14.6,
+          "us_per_call": 728.53,
+          "ns_per_item": 4.8
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 2.8,
+          "us_per_call": 2751.66,
+          "ns_per_item": 343957.4
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 1.1,
+          "us_per_call": 0.18,
+          "ns_per_item": 22.9
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "mode": "serial",
+          "calls": 20,
+          "items": 7760,
+          "total_ms": 0.1,
+          "us_per_call": 4.66,
+          "ns_per_item": 12.0
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "mode": "serial",
+          "calls": 20,
+          "items": 7780,
+          "total_ms": 0.0,
+          "us_per_call": 1.8,
+          "ns_per_item": 4.6
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "hot": false,
+          "counts": [
+            0,
+            2876,
+            3124,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            5923,
+            76,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5520,
+            450,
+            10,
+            0,
+            0,
+            18,
+            2
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            2140,
+            2,
+            3,
+            0,
+            0,
+            19,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            3002,
+            2968,
+            30,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            57121,
+            327388,
+            1344,
+            2,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            138262,
+            1509,
+            206,
+            0,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            5998,
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            19
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          8562,
+          6294,
+          9087,
+          6074,
+          3,
+          18,
+          61
+        ],
+        "hot": [
+          197523,
+          328899,
+          1553,
+          2,
+          1,
+          21,
+          0
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 0,
+        "successes": 0,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 0
+      }
+    },
+    "1": {
+      "scopes": [
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "pool",
+          "calls": 8144,
+          "items": 65152,
+          "total_ms": 2130.2,
+          "us_per_call": 261.57,
+          "ns_per_item": 32695.8
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "mode": "pool",
+          "calls": 139978,
+          "items": 1119824,
+          "total_ms": 1552.5,
+          "us_per_call": 11.09,
+          "ns_per_item": 1386.4
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "mode": "serial",
+          "calls": 385856,
+          "items": 3086848,
+          "total_ms": 388.8,
+          "us_per_call": 1.01,
+          "ns_per_item": 126.0
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 1536000,
+          "total_ms": 163.5,
+          "us_per_call": 27.25,
+          "ns_per_item": 106.4
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "mode": "pool",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 142.4,
+          "us_per_call": 23.74,
+          "ns_per_item": 2966.9
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 2334000,
+          "total_ms": 18.8,
+          "us_per_call": 3.13,
+          "ns_per_item": 8.0
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "mode": "serial",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 18.3,
+          "us_per_call": 916.59,
+          "ns_per_item": 114573.9
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "mode": "pool",
+          "calls": 20,
+          "items": 2621440,
+          "total_ms": 4.4,
+          "us_per_call": 221.02,
+          "ns_per_item": 1.7
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "mode": "pool",
+          "calls": 20,
+          "items": 160,
+          "total_ms": 3.8,
+          "us_per_call": 191.71,
+          "ns_per_item": 23963.8
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "mode": "serial",
+          "calls": 1,
+          "items": 8,
+          "total_ms": 3.1,
+          "us_per_call": 3148.8,
+          "ns_per_item": 393600.1
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "mode": "pool",
+          "calls": 20,
+          "items": 3026420,
+          "total_ms": 2.9,
+          "us_per_call": 142.72,
+          "ns_per_item": 0.9
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "mode": "serial",
+          "calls": 6000,
+          "items": 48000,
+          "total_ms": 1.1,
+          "us_per_call": 0.18,
+          "ns_per_item": 23.1
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "mode": "serial",
+          "calls": 20,
+          "items": 7760,
+          "total_ms": 0.1,
+          "us_per_call": 5.51,
+          "ns_per_item": 14.2
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "mode": "serial",
+          "calls": 20,
+          "items": 7780,
+          "total_ms": 0.0,
+          "us_per_call": 1.63,
+          "ns_per_item": 4.2
+        }
+      ],
+      "gap_sites": [
+        {
+          "site": "crates/mvmc-core/src/average.rs:62",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/average.rs:68",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:309",
+          "hot": false,
+          "counts": [
+            0,
+            3762,
+            2237,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/observables.rs:3491",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            5924,
+            75,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": false,
+          "counts": [
+            5548,
+            424,
+            8,
+            0,
+            0,
+            16,
+            4
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:222",
+          "hot": true,
+          "counts": [
+            2141,
+            2,
+            2,
+            0,
+            0,
+            19,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/pfaffian.rs:541",
+          "hot": true,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/run.rs:3273",
+          "hot": false,
+          "counts": [
+            4056,
+            1913,
+            31,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:116",
+          "hot": true,
+          "counts": [
+            27157,
+            357180,
+            1517,
+            2,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sampling/updates.rs:604",
+          "hot": true,
+          "counts": [
+            138341,
+            1378,
+            259,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_derivative.rs:504",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            5998,
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:53",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            19
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/slater_update.rs:115",
+          "hot": false,
+          "counts": [
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "site": "crates/mvmc-core/src/sr.rs:372",
+          "hot": false,
+          "counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            20
+          ]
+        }
+      ],
+      "gaps": {
+        "cold": [
+          9644,
+          6099,
+          8200,
+          6074,
+          3,
+          16,
+          63
+        ],
+        "hot": [
+          167639,
+          358560,
+          1778,
+          2,
+          0,
+          20,
+          0
+        ]
+      },
+      "output_max_absolute_difference": 0.0,
+      "dispatch": {
+        "attempts": 160182,
+        "successes": 160182,
+        "busy": 0,
+        "unavailable": 0,
+        "participants": 4
+      }
+    }
+  }
+}
