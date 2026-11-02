@@ -1,0 +1,512 @@
+### before, threads 1, repetition 0 (warmup)
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.31 | 0.02 / 0.35 | 0.03 / 0.29 | 0.010 / 0.155 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.17 | 0.02 / 0.35 | 0.03 / 0.29 | 0.004 / 0.132 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.52 / 2.09 | 0.09 / 1.27 | 0.16 / 0.76 | 0.036 / 0.271 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.44 / 1.81 | 0.11 / 1.44 | 0.17 / 0.78 | 0.026 / 0.241 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.10
+	System time (seconds): 0.05
+	Percent of CPU this job got: 106%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.14
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 21336
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 7266
+	Voluntary context switches: 559
+	Involuntary context switches: 7
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 1, repetition 0 (warmup)
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.48 | 0.02 / 0.26 | 0.03 / 0.20 | 0.012 / 0.121 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.16 | 0.02 / 0.26 | 0.03 / 0.20 | 0.004 / 0.084 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.10 | 0.08 / 0.47 | 0.12 / 0.41 | 0.027 / 0.159 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.84 | 0.07 / 0.45 | 0.12 / 0.40 | 0.021 / 0.139 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.07
+	System time (seconds): 0.01
+	Percent of CPU this job got: 98%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24144
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3161
+	Voluntary context switches: 1
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 1, repetition 1
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.28 | 0.02 / 0.32 | 0.03 / 0.27 | 0.011 / 0.142 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.16 | 0.02 / 0.32 | 0.03 / 0.26 | 0.004 / 0.094 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.80 | 0.09 / 1.21 | 0.15 / 0.69 | 0.031 / 0.215 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.44 / 1.70 | 0.10 / 1.30 | 0.16 / 0.72 | 0.024 / 0.220 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.08
+	System time (seconds): 0.04
+	Percent of CPU this job got: 107%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 21748
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 7524
+	Voluntary context switches: 543
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 1, repetition 1
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.41 | 0.02 / 0.25 | 0.03 / 0.18 | 0.010 / 0.110 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.25 | 0.03 / 0.19 | 0.004 / 0.075 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.38 / 1.03 | 0.07 / 0.45 | 0.12 / 0.40 | 0.027 / 0.158 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.84 | 0.07 / 0.45 | 0.12 / 0.40 | 0.021 / 0.134 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.06
+	System time (seconds): 0.02
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24140
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3159
+	Voluntary context switches: 1
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 1, repetition 2
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.35 | 0.02 / 0.36 | 0.03 / 0.28 | 0.012 / 0.154 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.16 | 0.02 / 0.36 | 0.03 / 0.28 | 0.004 / 0.110 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.40 / 1.97 | 0.10 / 1.33 | 0.17 / 0.74 | 0.034 / 0.242 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.45 / 1.79 | 0.10 / 1.33 | 0.16 / 0.74 | 0.028 / 0.239 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.10
+	System time (seconds): 0.03
+	Percent of CPU this job got: 107%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.13
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 21456
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 7517
+	Voluntary context switches: 556
+	Involuntary context switches: 2
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 1, repetition 2
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.44 | 0.02 / 0.26 | 0.03 / 0.20 | 0.010 / 0.118 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.25 | 0.03 / 0.20 | 0.004 / 0.081 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.09 | 0.08 / 0.47 | 0.12 / 0.40 | 0.025 / 0.150 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.86 | 0.08 / 0.45 | 0.12 / 0.40 | 0.020 / 0.133 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.06
+	System time (seconds): 0.02
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24396
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3165
+	Voluntary context switches: 1
+	Involuntary context switches: 5
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 1, repetition 3
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.29 | 0.02 / 0.32 | 0.03 / 0.27 | 0.010 / 0.151 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.06 / 0.17 | 0.02 / 0.39 | 0.04 / 0.30 | 0.006 / 0.117 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.51 / 1.80 | 0.10 / 1.30 | 0.16 / 0.70 | 0.033 / 0.230 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.44 / 1.71 | 0.10 / 1.33 | 0.16 / 0.75 | 0.026 / 0.226 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.10
+	System time (seconds): 0.03
+	Percent of CPU this job got: 106%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.13
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 21744
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 7521
+	Voluntary context switches: 556
+	Involuntary context switches: 5
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 1, repetition 3
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.42 | 0.02 / 0.26 | 0.03 / 0.19 | 0.011 / 0.116 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.26 | 0.03 / 0.20 | 0.004 / 0.081 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.06 | 0.07 / 0.48 | 0.12 / 0.41 | 0.023 / 0.170 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.88 | 0.07 / 0.47 | 0.12 / 0.40 | 0.019 / 0.144 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.07
+	System time (seconds): 0.01
+	Percent of CPU this job got: 98%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24156
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3129
+	Voluntary context switches: 1
+	Involuntary context switches: 5
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 4, repetition 0 (warmup)
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.49 | 0.02 / 0.47 | 0.03 / 0.33 | 0.011 / 0.172 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.07 / 0.18 | 0.03 / 0.53 | 0.04 / 0.38 | 0.005 / 0.150 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.56 / 1.44 | 0.11 / 1.73 | 0.17 / 1.02 | 0.043 / 0.316 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.56 / 1.35 | 0.11 / 1.80 | 0.19 / 0.99 | 0.030 / 0.298 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.16
+	System time (seconds): 0.08
+	Percent of CPU this job got: 155%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.15
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 23588
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 9035
+	Voluntary context switches: 1493
+	Involuntary context switches: 7
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 4, repetition 0 (warmup)
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.40 | 0.02 / 0.30 | 0.03 / 0.22 | 0.010 / 0.133 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.30 | 0.03 / 0.22 | 0.006 / 0.100 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.40 / 0.59 | 0.08 / 0.52 | 0.12 / 0.44 | 0.026 / 0.165 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.48 | 0.08 / 0.50 | 0.12 / 0.42 | 0.019 / 0.147 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.18
+	System time (seconds): 0.02
+	Percent of CPU this job got: 229%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24356
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3220
+	Voluntary context switches: 44
+	Involuntary context switches: 6
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 4, repetition 1
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.41 | 0.02 / 0.45 | 0.03 / 0.32 | 0.010 / 0.179 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.41 | 0.03 / 0.30 | 0.003 / 0.118 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.03 | 0.07 / 1.15 | 0.12 / 0.78 | 0.029 / 0.251 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.42 / 1.08 | 0.09 / 1.36 | 0.15 / 0.83 | 0.022 / 0.233 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.13
+	System time (seconds): 0.07
+	Percent of CPU this job got: 162%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 22108
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 8981
+	Voluntary context switches: 1468
+	Involuntary context switches: 7
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 4, repetition 1
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.34 | 0.02 / 0.28 | 0.03 / 0.20 | 0.010 / 0.118 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.14 | 0.02 / 0.27 | 0.03 / 0.20 | 0.004 / 0.089 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.38 / 0.51 | 0.07 / 0.48 | 0.12 / 0.41 | 0.024 / 0.178 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.44 | 0.07 / 0.48 | 0.12 / 0.41 | 0.019 / 0.153 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.18
+	System time (seconds): 0.02
+	Percent of CPU this job got: 231%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24068
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3247
+	Voluntary context switches: 46
+	Involuntary context switches: 5
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 4, repetition 2
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.46 | 0.02 / 0.44 | 0.03 / 0.33 | 0.010 / 0.190 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.16 | 0.02 / 0.42 | 0.03 / 0.30 | 0.004 / 0.107 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.40 / 1.12 | 0.08 / 1.27 | 0.13 / 0.79 | 0.035 / 0.240 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.37 / 0.98 | 0.08 / 1.32 | 0.13 / 0.81 | 0.023 / 0.231 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.14
+	System time (seconds): 0.06
+	Percent of CPU this job got: 163%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 22880
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 8996
+	Voluntary context switches: 1496
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 4, repetition 2
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.37 | 0.02 / 0.31 | 0.03 / 0.22 | 0.013 / 0.128 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.15 | 0.02 / 0.30 | 0.03 / 0.21 | 0.004 / 0.096 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.38 / 0.53 | 0.08 / 0.52 | 0.12 / 0.43 | 0.027 / 0.171 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.46 | 0.08 / 0.50 | 0.12 / 0.42 | 0.021 / 0.149 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.18
+	System time (seconds): 0.02
+	Percent of CPU this job got: 234%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24688
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3257
+	Voluntary context switches: 44
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### before, threads 4, repetition 3
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.41 | 0.02 / 0.42 | 0.03 / 0.34 | 0.010 / 0.167 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.14 | 0.02 / 0.41 | 0.03 / 0.30 | 0.003 / 0.103 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.39 / 1.04 | 0.08 / 1.18 | 0.13 / 0.72 | 0.027 / 0.223 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.34 / 0.92 | 0.08 / 1.23 | 0.12 / 0.75 | 0.019 / 0.206 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-570-baseline/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.12
+	System time (seconds): 0.07
+	Percent of CPU this job got: 166%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 22448
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 8893
+	Voluntary context switches: 1458
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### after, threads 4, repetition 3
+ms, median of 7, C-order / tenferro (cpu-faer)
+| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |
+|---:|---:|---|---|---|---|---|---|
+| 64 | 300 | 0.11 / 0.36 | 0.02 / 0.29 | 0.03 / 0.22 | 0.010 / 0.128 | 7.8e-16 0.0e0 6.3e-16 1.0e-15 | 6.7e-17 / 8.0e-17 |
+| 64 | 128 | 0.05 / 0.14 | 0.02 / 0.29 | 0.03 / 0.21 | 0.004 / 0.092 | 0.0e0 0.0e0 6.1e-16 8.5e-16 | 5.8e-17 / 6.1e-17 |
+| 128 | 300 | 0.38 / 0.52 | 0.08 / 0.51 | 0.13 / 0.43 | 0.027 / 0.181 | 1.1e-15 0.0e0 1.0e-15 1.3e-15 | 5.3e-17 / 8.2e-17 |
+| 128 | 256 | 0.35 / 0.46 | 0.08 / 0.50 | 0.12 / 0.43 | 0.021 / 0.169 | 0.0e0 0.0e0 9.5e-16 1.5e-15 | 5.6e-17 / 4.9e-17 |
+	Command being timed: "/tmp/mvmc-585-residual/target/test-fast/examples/sr_backend_bench 64 128"
+	User time (seconds): 0.17
+	System time (seconds): 0.02
+	Percent of CPU this job got: 232%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24548
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3257
+	Voluntary context switches: 46
+	Involuntary context switches: 4
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
