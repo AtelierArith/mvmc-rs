@@ -35,6 +35,8 @@ Nothing changes: `cargo build --release -p mvmc-cli`. The accelerated code that 
 
 For the optional tenferro CPU stage, `MVMC_RS_TENFERRO_THREADS` sets the thread count for each tenferro CPU Engine independently of the mVMC inner Rayon pool (`MVMC_RS_INNER_THREADS`) and other Rayon users. Set a positive integer; `1` uses a serial tenferro Engine. If it is unset, the Engine uses `RAYON_NUM_THREADS` if set, or the process's available parallelism otherwise. An invalid or zero selected value is an error. The normal shared stage has one Engine per process; directly creating multiple stages or using multiple MPI processes creates additional Engines. Set the per-process budgets and BLAS threads deliberately, for example `MVMC_RS_TENFERRO_THREADS=1 OPENBLAS_NUM_THREADS=1`, to limit contention. This setting alone does not coordinate or cap all pools, walkers, or MPI ranks.
 
+For experiments with a multi-threaded tenferro CPU Engine, `MVMC_RS_TENFERRO_SPIN_POLLS` sets threadteam's wait-spin poll count to a nonnegative integer. If unset, the upstream default is used; `0` skips those spin polls but still yields before sleeping. It is validated even when the Engine is serial. This option affects team waiting and does not limit the number of threads or provide a process-wide budget; choose it only after measuring the workload.
+
 ```bash
 cargo nextest run -p mvmc-gpu --cargo-profile test-fast          # batched Pfaffian CPU variants and harness
 cargo nextest run -p mvmc-core --cargo-profile test-fast \
