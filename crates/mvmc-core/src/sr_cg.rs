@@ -287,6 +287,13 @@ pub struct CgSolution {
     pub direction: Vec<f64>,
 }
 
+type LocalCgProduct<'a> = dyn FnMut(
+        &crate::sr_backend::CgSamples<'_>,
+        &[f64],
+        &mut [f64],
+    ) -> Result<(), crate::stage_backend::StageError>
+    + 'a;
+
 /// Apply the covariance matrix from saved samples without materializing S.
 /// Sample matrices have shape [active component, sample] in column-major order.
 pub struct SampledSrOperator {
@@ -336,9 +343,11 @@ impl SampledSrOperator {
         max_iterations: usize,
         reducer: &R,
     ) -> Result<CgSolution, String> {
-        // One backend handle and one operand version per solve (issue #421): the sampled
-        // matrices are constant during the solve, so a device backend uploads them once.
-        let mut backend = crate::stage_backend::acquire();
+        // One operand version per solve (issue #421) identifies its constant sampled
+        // matrices. Shared backends are acquired for each product so collective waits
+        // cannot block other walkers from accessing the same stage.
+        let kind = crate::stage_backend::selected_stage_backend();
+        let mut backend = crate::stage_backend::acquire_kind(kind);
         // Issue #452: a resident backend runs the whole loop on the device, with the sample
         // matrices uploaded once. The host loop below stays the path for every other backend,
         // for several ranks (the sampled products are reduced across ranks) and while a CG
@@ -370,8 +379,27 @@ impl SampledSrOperator {
                 direction: Vec::new(),
             });
         }
-        self.solve_with_stages(
-            backend.sr(),
+        if matches!(backend, crate::stage_backend::StageHandle::Owned(_)) {
+            return self.solve_with_stages(
+                backend.sr(),
+                gradient,
+                inv_weight,
+                shift,
+                tolerance,
+                max_iterations,
+                reducer,
+            );
+        }
+        // A shared stage must not be held while another walker enters a
+        // collective. Lock it only around the local product, retaining the
+        // solve's operand version for the backend's cache.
+        drop(backend);
+        self.solve_with_product(
+            &mut |samples, x, z| {
+                crate::stage_backend::acquire_kind(kind)
+                    .sr()
+                    .cg_local_product(samples, x, z)
+            },
             gradient,
             inv_weight,
             shift,
@@ -387,6 +415,28 @@ impl SampledSrOperator {
     pub fn solve_with_stages<R: Reducer + ?Sized>(
         &mut self,
         stages: &mut dyn crate::sr_backend::SrStages,
+        gradient: &[f64],
+        inv_weight: f64,
+        shift: f64,
+        tolerance: f64,
+        max_iterations: usize,
+        reducer: &R,
+    ) -> Result<CgSolution, String> {
+        self.solve_with_product(
+            &mut |samples, x, z| stages.cg_local_product(samples, x, z),
+            gradient,
+            inv_weight,
+            shift,
+            tolerance,
+            max_iterations,
+            reducer,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn solve_with_product<R: Reducer + ?Sized>(
+        &mut self,
+        local_product: &mut LocalCgProduct<'_>,
         gradient: &[f64],
         inv_weight: f64,
         shift: f64,
@@ -421,8 +471,8 @@ impl SampledSrOperator {
                 iterations = iteration - 1;
                 break;
             }
-            self.apply_with_backend(
-                stages,
+            self.apply_with_product(
+                local_product,
                 version,
                 &mut product,
                 &mut direction,
@@ -437,8 +487,8 @@ impl SampledSrOperator {
                 *value += alpha * direction[i]
             });
             if iteration % 20 == 0 {
-                self.apply_with_backend(
-                    stages,
+                self.apply_with_product(
+                    local_product,
                     version,
                     &mut residual,
                     &mut solution,
@@ -522,16 +572,41 @@ impl SampledSrOperator {
         shift: f64,
         reducer: &R,
     ) -> Result<(), String> {
-        let mut backend = crate::stage_backend::acquire();
+        let kind = crate::stage_backend::selected_stage_backend();
+        let mut backend = crate::stage_backend::acquire_kind(kind);
         let version = crate::stage_backend::next_operand_version();
-        self.apply_with_backend(backend.sr(), version, z, x, inv_weight, shift, reducer)
+        if matches!(backend, crate::stage_backend::StageHandle::Owned(_)) {
+            return self.apply_with_product(
+                &mut |samples, x, z| backend.sr().cg_local_product(samples, x, z),
+                version,
+                z,
+                x,
+                inv_weight,
+                shift,
+                reducer,
+            );
+        }
+        drop(backend);
+        self.apply_with_product(
+            &mut |samples, x, z| {
+                crate::stage_backend::acquire_kind(kind)
+                    .sr()
+                    .cg_local_product(samples, x, z)
+            },
+            version,
+            z,
+            x,
+            inv_weight,
+            shift,
+            reducer,
+        )
     }
 
-    /// [`Self::apply_with_reducer`] with an explicit SR backend and operand version.
+    /// [`Self::apply_with_reducer`] with an explicit local product and operand version.
     #[allow(clippy::too_many_arguments)]
-    fn apply_with_backend<R: Reducer + ?Sized>(
+    fn apply_with_product<R: Reducer + ?Sized>(
         &mut self,
-        backend: &mut dyn crate::sr_backend::SrStages,
+        product: &mut LocalCgProduct<'_>,
         version: u64,
         z: &mut [f64],
         x: &mut [f64],
@@ -556,19 +631,18 @@ impl SampledSrOperator {
         if self.samples == 0 {
             z.fill(0.0);
         } else {
-            backend
-                .cg_local_product(
-                    &crate::sr_backend::CgSamples {
-                        real: &self.real_samples,
-                        imag: &self.imag_samples,
-                        components: n,
-                        samples: self.samples,
-                        version,
-                    },
-                    x,
-                    z,
-                )
-                .map_err(|e| e.to_string())?;
+            product(
+                &crate::sr_backend::CgSamples {
+                    real: &self.real_samples,
+                    imag: &self.imag_samples,
+                    components: n,
+                    samples: self.samples,
+                    version,
+                },
+                x,
+                z,
+            )
+            .map_err(|e| e.to_string())?;
         }
         observe(|observer| observer.product(CgProductPhase::Local, x, z));
         reducer.barrier();
