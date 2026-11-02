@@ -1,0 +1,574 @@
+{
+  "1": {
+    "before": {
+      "process_samples": [
+        {
+          "wall": 0.104,
+          "user": 0.193,
+          "system": 0.038
+        },
+        {
+          "wall": 0.097,
+          "user": 0.177,
+          "system": 0.034
+        },
+        {
+          "wall": 0.108,
+          "user": 0.204,
+          "system": 0.036
+        }
+      ],
+      "process_wall_median": 0.104,
+      "cases": {
+        "64-300": {
+          "tenferro_ms_samples": [
+            [
+              0.21,
+              0.28,
+              0.21,
+              0.127
+            ],
+            [
+              0.2,
+              0.29,
+              0.22,
+              0.128
+            ],
+            [
+              0.21,
+              0.28,
+              0.21,
+              0.119
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.21,
+            0.28,
+            0.21,
+            0.127
+          ],
+          "max_relative_difference": 1e-15,
+          "max_scaled_residual": 8e-17
+        },
+        "64-128": {
+          "tenferro_ms_samples": [
+            [
+              0.15,
+              0.28,
+              0.21,
+              0.095
+            ],
+            [
+              0.14,
+              0.29,
+              0.21,
+              0.095
+            ],
+            [
+              0.14,
+              0.28,
+              0.21,
+              0.088
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.14,
+            0.28,
+            0.21,
+            0.095
+          ],
+          "max_relative_difference": 8.5e-16,
+          "max_scaled_residual": 6.1e-17
+        },
+        "128-300": {
+          "tenferro_ms_samples": [
+            [
+              0.55,
+              0.51,
+              0.44,
+              0.172
+            ],
+            [
+              0.51,
+              0.48,
+              0.43,
+              0.175
+            ],
+            [
+              0.54,
+              0.5,
+              0.43,
+              0.169
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.54,
+            0.5,
+            0.43,
+            0.172
+          ],
+          "max_relative_difference": 1.3e-15,
+          "max_scaled_residual": 8.2e-17
+        },
+        "128-256": {
+          "tenferro_ms_samples": [
+            [
+              0.48,
+              0.51,
+              0.45,
+              0.162
+            ],
+            [
+              0.44,
+              0.49,
+              0.42,
+              0.152
+            ],
+            [
+              0.46,
+              0.5,
+              0.44,
+              0.152
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.46,
+            0.5,
+            0.44,
+            0.152
+          ],
+          "max_relative_difference": 1.5e-15,
+          "max_scaled_residual": 5.6e-17
+        }
+      }
+    },
+    "after": {
+      "process_samples": [
+        {
+          "wall": 0.1,
+          "user": 0.183,
+          "system": 0.035
+        },
+        {
+          "wall": 0.104,
+          "user": 0.182,
+          "system": 0.039
+        },
+        {
+          "wall": 0.102,
+          "user": 0.184,
+          "system": 0.032
+        }
+      ],
+      "process_wall_median": 0.102,
+      "cases": {
+        "64-300": {
+          "tenferro_ms_samples": [
+            [
+              0.21,
+              0.29,
+              0.21,
+              0.128
+            ],
+            [
+              0.21,
+              0.28,
+              0.22,
+              0.125
+            ],
+            [
+              0.2,
+              0.28,
+              0.21,
+              0.126
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.21,
+            0.28,
+            0.21,
+            0.126
+          ],
+          "max_relative_difference": 1e-15,
+          "max_scaled_residual": 8e-17
+        },
+        "64-128": {
+          "tenferro_ms_samples": [
+            [
+              0.15,
+              0.28,
+              0.22,
+              0.092
+            ],
+            [
+              0.15,
+              0.29,
+              0.21,
+              0.093
+            ],
+            [
+              0.14,
+              0.27,
+              0.21,
+              0.094
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.15,
+            0.28,
+            0.21,
+            0.093
+          ],
+          "max_relative_difference": 8.5e-16,
+          "max_scaled_residual": 6.1e-17
+        },
+        "128-300": {
+          "tenferro_ms_samples": [
+            [
+              0.53,
+              0.5,
+              0.44,
+              0.169
+            ],
+            [
+              0.52,
+              0.5,
+              0.44,
+              0.166
+            ],
+            [
+              0.52,
+              0.51,
+              0.42,
+              0.185
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.52,
+            0.5,
+            0.44,
+            0.169
+          ],
+          "max_relative_difference": 1.3e-15,
+          "max_scaled_residual": 8.2e-17
+        },
+        "128-256": {
+          "tenferro_ms_samples": [
+            [
+              0.47,
+              0.5,
+              0.44,
+              0.169
+            ],
+            [
+              0.46,
+              0.49,
+              0.43,
+              0.155
+            ],
+            [
+              0.48,
+              0.51,
+              0.44,
+              0.16
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.47,
+            0.5,
+            0.44,
+            0.16
+          ],
+          "max_relative_difference": 1.5e-15,
+          "max_scaled_residual": 5.6e-17
+        }
+      }
+    }
+  },
+  "4": {
+    "before": {
+      "process_samples": [
+        {
+          "wall": 0.104,
+          "user": 0.173,
+          "system": 0.039
+        },
+        {
+          "wall": 0.116,
+          "user": 0.193,
+          "system": 0.037
+        },
+        {
+          "wall": 0.114,
+          "user": 0.206,
+          "system": 0.031
+        }
+      ],
+      "process_wall_median": 0.114,
+      "cases": {
+        "64-300": {
+          "tenferro_ms_samples": [
+            [
+              0.2,
+              0.28,
+              0.21,
+              0.122
+            ],
+            [
+              0.2,
+              0.28,
+              0.21,
+              0.125
+            ],
+            [
+              0.21,
+              0.27,
+              0.21,
+              0.13
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.2,
+            0.28,
+            0.21,
+            0.125
+          ],
+          "max_relative_difference": 1e-15,
+          "max_scaled_residual": 8e-17
+        },
+        "64-128": {
+          "tenferro_ms_samples": [
+            [
+              0.14,
+              0.28,
+              0.21,
+              0.09
+            ],
+            [
+              0.14,
+              0.27,
+              0.21,
+              0.096
+            ],
+            [
+              0.14,
+              0.27,
+              0.2,
+              0.09
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.14,
+            0.27,
+            0.21,
+            0.09
+          ],
+          "max_relative_difference": 8.5e-16,
+          "max_scaled_residual": 6.1e-17
+        },
+        "128-300": {
+          "tenferro_ms_samples": [
+            [
+              0.5,
+              0.5,
+              0.43,
+              0.187
+            ],
+            [
+              0.5,
+              0.48,
+              0.42,
+              0.18
+            ],
+            [
+              0.51,
+              0.48,
+              0.42,
+              0.155
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.5,
+            0.48,
+            0.42,
+            0.18
+          ],
+          "max_relative_difference": 1.3e-15,
+          "max_scaled_residual": 8.2e-17
+        },
+        "128-256": {
+          "tenferro_ms_samples": [
+            [
+              0.46,
+              0.5,
+              0.43,
+              0.155
+            ],
+            [
+              0.45,
+              0.5,
+              0.43,
+              0.155
+            ],
+            [
+              0.45,
+              0.49,
+              0.43,
+              0.157
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.45,
+            0.5,
+            0.43,
+            0.155
+          ],
+          "max_relative_difference": 1.5e-15,
+          "max_scaled_residual": 5.6e-17
+        }
+      }
+    },
+    "after": {
+      "process_samples": [
+        {
+          "wall": 0.104,
+          "user": 0.074,
+          "system": 0.033
+        },
+        {
+          "wall": 0.104,
+          "user": 0.072,
+          "system": 0.035
+        },
+        {
+          "wall": 0.103,
+          "user": 0.075,
+          "system": 0.032
+        }
+      ],
+      "process_wall_median": 0.104,
+      "cases": {
+        "64-300": {
+          "tenferro_ms_samples": [
+            [
+              0.34,
+              0.26,
+              0.2,
+              0.115
+            ],
+            [
+              0.27,
+              0.26,
+              0.19,
+              0.114
+            ],
+            [
+              0.25,
+              0.25,
+              0.19,
+              0.114
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.27,
+            0.26,
+            0.19,
+            0.114
+          ],
+          "max_relative_difference": 1e-15,
+          "max_scaled_residual": 8e-17
+        },
+        "64-128": {
+          "tenferro_ms_samples": [
+            [
+              0.15,
+              0.26,
+              0.2,
+              0.084
+            ],
+            [
+              0.15,
+              0.25,
+              0.19,
+              0.08
+            ],
+            [
+              0.15,
+              0.25,
+              0.19,
+              0.078
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.15,
+            0.25,
+            0.19,
+            0.08
+          ],
+          "max_relative_difference": 8.5e-16,
+          "max_scaled_residual": 6.1e-17
+        },
+        "128-300": {
+          "tenferro_ms_samples": [
+            [
+              1.09,
+              0.47,
+              0.41,
+              0.176
+            ],
+            [
+              1.13,
+              0.46,
+              0.41,
+              0.15
+            ],
+            [
+              1.14,
+              0.46,
+              0.42,
+              0.151
+            ]
+          ],
+          "tenferro_ms_medians": [
+            1.13,
+            0.46,
+            0.41,
+            0.151
+          ],
+          "max_relative_difference": 1.3e-15,
+          "max_scaled_residual": 8.2e-17
+        },
+        "128-256": {
+          "tenferro_ms_samples": [
+            [
+              0.91,
+              0.48,
+              0.42,
+              0.15
+            ],
+            [
+              0.92,
+              0.46,
+              0.4,
+              0.146
+            ],
+            [
+              0.94,
+              0.45,
+              0.41,
+              0.151
+            ]
+          ],
+          "tenferro_ms_medians": [
+            0.92,
+            0.46,
+            0.41,
+            0.15
+          ],
+          "max_relative_difference": 1.5e-15,
+          "max_scaled_residual": 5.6e-17
+        }
+      }
+    }
+  }
+}
