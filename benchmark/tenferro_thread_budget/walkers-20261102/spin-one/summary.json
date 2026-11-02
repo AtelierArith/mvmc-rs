@@ -1,0 +1,98 @@
+{
+  "discrete_match": true,
+  "root_energy_max_abs": 0.0,
+  "timings": {
+    "held": {
+      "default": {
+        "samples": [
+          {
+            "wall": 2.49,
+            "user": 2.943,
+            "system": 0.05
+          },
+          {
+            "wall": 2.322,
+            "user": 2.79,
+            "system": 0.034
+          },
+          {
+            "wall": 2.451,
+            "user": 2.9,
+            "system": 0.05
+          }
+        ],
+        "wall_median": 2.451,
+        "user_median": 2.9,
+        "system_median": 0.05
+      },
+      "0": {
+        "samples": [
+          {
+            "wall": 2.371,
+            "user": 2.362,
+            "system": 0.044
+          },
+          {
+            "wall": 2.398,
+            "user": 2.39,
+            "system": 0.042
+          },
+          {
+            "wall": 2.32,
+            "user": 2.307,
+            "system": 0.046
+          }
+        ],
+        "wall_median": 2.371,
+        "user_median": 2.362,
+        "system_median": 0.044
+      }
+    },
+    "stage": {
+      "default": {
+        "samples": [
+          {
+            "wall": 2.372,
+            "user": 2.535,
+            "system": 0.098
+          },
+          {
+            "wall": 2.486,
+            "user": 2.668,
+            "system": 0.095
+          },
+          {
+            "wall": 2.414,
+            "user": 2.596,
+            "system": 0.089
+          }
+        ],
+        "wall_median": 2.414,
+        "user_median": 2.596,
+        "system_median": 0.095
+      },
+      "0": {
+        "samples": [
+          {
+            "wall": 2.37,
+            "user": 2.339,
+            "system": 0.088
+          },
+          {
+            "wall": 2.447,
+            "user": 2.4,
+            "system": 0.103
+          },
+          {
+            "wall": 2.382,
+            "user": 2.332,
+            "system": 0.104
+          }
+        ],
+        "wall_median": 2.382,
+        "user_median": 2.339,
+        "system_median": 0.103
+      }
+    }
+  }
+}
