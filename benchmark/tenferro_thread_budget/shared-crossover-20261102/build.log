@@ -1,0 +1,36 @@
+   Compiling shlex v2.0.1
+   Compiling glob v0.3.4
+   Compiling find-msvc-tools v0.1.14
+   Compiling libc v0.2.186
+   Compiling minimal-lexical v0.2.1
+   Compiling regex-syntax v0.8.10
+   Compiling memchr v2.8.0
+   Compiling cfg-if v1.0.4
+   Compiling pkg-config v0.3.34
+   Compiling either v1.16.0
+   Compiling bindgen v0.72.1
+   Compiling shell-words v1.1.1
+   Compiling rustc-hash v2.1.3
+   Compiling bitflags v2.11.1
+   Compiling shlex v1.3.0
+   Compiling custom_derive v0.1.7
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+   Compiling mvmc-uhf v0.0.0 (/work/crates/mvmc-uhf)
+   Compiling mvmc-stdface v0.0.0 (/work/crates/mvmc-stdface)
+   Compiling libloading v0.8.9
+   Compiling build-probe-mpi v0.1.6
+   Compiling cc v1.5.1
+   Compiling clang-sys v1.9.1
+   Compiling nom v7.1.3
+   Compiling conv v0.3.3
+   Compiling regex-automata v0.4.14
+   Compiling itertools v0.13.0
+   Compiling mpi v0.8.2
+   Compiling libffi-sys v4.2.2
+   Compiling cexpr v0.6.0
+   Compiling regex v1.12.3
+   Compiling mpi-sys v0.2.4
+   Compiling libffi v5.2.0
+   Compiling mvmc-cli v0.0.0 (/work/crates/mvmc-cli)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2m 23s
+731ca0eb15ce0d5e18aa866094105034cc56d71a5f2f6620eb34c32ab2d8fb98  /target/release/mvmc

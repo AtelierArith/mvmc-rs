@@ -1,5 +1,11 @@
 # Experimental shared CPU team, L=32 (#582)
 
+The later [matched threshold evaluation](../shared-crossover-20261102/README.md)
+adds load-recorded 1/4-participant controls, a paired Rayon/shared 20/40/80 µs
+gate sweep, separate Pfaffian/update/Green observations and archived reanalysis.
+Its decision is to retain Rayon and the existing default gates. The historical
+measurements below remain tied to their recorded candidate revisions.
+
 This experiment compares the **same Rust binary** with `MVMC_EXPERIMENT_SHARED_CPU_TEAM` disabled and enabled. When enabled, fixed inner-kernel blocks may use the already held tenferro CPU Engine team via a nonblocking lease; a busy Engine executes the blocks serially on the caller, while an unavailable Engine falls back to the existing Rayon path. The change is experimental, does not provide a global pool budget, and does not cover the `stage` team-lifetime setting. It must not be interpreted as completion of #582, #583, or #584.
 
 Both workloads use the fixed L=32 inputs and settings in [mpi-placement.md](../mpi-placement.md): 300 samples, warmup 10, interval 1, fixed seed 1, Opt 20 SR steps/window 1 and fixed-parameter PhysCal 20 windows. Each pair uses the same executable, OpenBLAS and OMP one thread, Rayon 4, tenferro SR, inferred tenferro budget, default wait settings, and one warmup plus three alternating measurements. Inner workers are 1 or 4. Bash wall time includes process launch, initialization, calculation and output, and for MPI includes MPICH startup; Docker startup is excluded. The single process is pinned to CPUs 0–3; four MPI ranks are each pinned to disjoint four-CPU masks among CPUs 0–15. The CPUs occupy separate physical cores on socket 0. No frequency control was applied.
