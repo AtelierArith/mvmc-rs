@@ -13,6 +13,8 @@ This is an implementation audit; it introduces no timing measurements or new pol
 | Stage access | `StageHandle` holds the shared stage mutex and its own optional team lease | Serializes stage access; replacing the stage object does not lose the handle's acquired lease |
 | SR-CG solve | `retain_cpu_team` returns a separate team lease | Retains the Engine across products without holding the stage mutex across walker/MPI collectives |
 | Shared inner dispatch experiment | Existing process Engine, selected by `MVMC_EXPERIMENT_SHARED_CPU_TEAM=1` | Busy/reservation failure uses the sequential caller; unavailable shared Engine uses the Rayon path; it does not allocate a global CPU budget |
+| Optimization walkers | `run_para_opt_multichain` creates one OS thread per walker | All walkers must be runnable for in-process collectives; replacing these with a smaller blocking worker pool can deadlock |
+| PhysCal walkers | `run_phys_cal_multichain` owns a separate Rayon pool | Requested threads (or available parallelism) capped by walker count; this is separate from the inner pool and Engine |
 | BLAS and MPI processes | Outside the shared stage registry | BLAS threads and overlapping rank CPU masks must be accounted for separately |
 
 The explicit tenferro setting is independent of the Rayon setting. Engine settings
