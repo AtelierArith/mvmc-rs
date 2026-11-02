@@ -180,7 +180,7 @@ fn flatten(t: &Tensor, dtype: Dtype, n: usize, lower_only: bool) -> Result<Vec<f
     }
 }
 
-pub type SharedEngine = Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>;
+pub type SharedEngine = Arc<std::sync::Mutex<mvmc_core::engine_resource::EngineResource>>;
 
 /// Eager context and its caller-owned execution engine.
 #[derive(Clone)]
@@ -200,7 +200,7 @@ fn run_once(runtime: &BenchRuntime, op: Op, hosts: &[Tensor]) -> Result<(Tensor,
             .upload_host_tensor(TensorRead::from_tensor(h))
             .map_err(|e| e.to_string())?;
         eager.push(
-            ctx.with_eager_session(&mut **engine, |s| s.constant_from(dev))
+            ctx.with_eager_session(&mut ***engine, |s| s.constant_from(dev))
                 .map_err(|e| e.to_string())?,
         );
     }
@@ -216,16 +216,16 @@ fn run_once(runtime: &BenchRuntime, op: Op, hosts: &[Tensor]) -> Result<(Tensor,
                 lhs_batch_dims: [].as_slice().into(),
                 rhs_batch_dims: [].as_slice().into(),
             };
-            ctx.with_eager_session(&mut **engine, |s| s.dot_general(&eager[0], &eager[1], cfg))
+            ctx.with_eager_session(&mut ***engine, |s| s.dot_general(&eager[0], &eager[1], cfg))
         }
-        Op::Cholesky => ctx.with_eager_session(&mut **engine, |s| s.cholesky(&eager[0])),
+        Op::Cholesky => ctx.with_eager_session(&mut ***engine, |s| s.cholesky(&eager[0])),
     }
     .map_err(|e| e.to_string())?;
     engine.synchronize().map_err(|e| e.to_string())?;
     let compute_ms = ms(t);
 
     let t = Instant::now();
-    let dev_out = out.to_tensor(&mut **engine).map_err(|e| e.to_string())?;
+    let dev_out = out.to_tensor(&mut ***engine).map_err(|e| e.to_string())?;
     let host_out = engine
         .download_to_host(TensorRead::from_tensor(&dev_out))
         .map_err(|e| e.to_string())?;
@@ -290,7 +290,9 @@ pub fn cpu_runtime() -> Result<BenchRuntime, String> {
     };
     Ok(BenchRuntime {
         ctx,
-        engine: Arc::new(std::sync::Mutex::new(Box::new(engine))),
+        engine: Arc::new(std::sync::Mutex::new(
+            mvmc_core::engine_resource::EngineResource::new(Box::new(engine)),
+        )),
     })
 }
 
@@ -303,7 +305,9 @@ pub fn cuda_runtime(ordinal: usize) -> Result<BenchRuntime, String> {
     let engine = CudaEngine::open(device.id()).map_err(|e| e.to_string())?;
     Ok(BenchRuntime {
         ctx: EagerRuntime::new().map_err(|e| e.to_string())?,
-        engine: Arc::new(std::sync::Mutex::new(Box::new(engine))),
+        engine: Arc::new(std::sync::Mutex::new(
+            mvmc_core::engine_resource::EngineResource::new(Box::new(engine)),
+        )),
     })
 }
 
@@ -428,20 +432,20 @@ pub fn roundtrip(
         Ok(t)
     };
     let (mut up, mut op, mut down) = (vec![], vec![], vec![]);
-    let a = upload(&mut **engine)?;
-    let b = upload(&mut **engine)?;
+    let a = upload(&mut ***engine)?;
+    let b = upload(&mut ***engine)?;
     for i in 0..warmups + reps.max(1) {
         let t = Instant::now();
-        let _ = upload(&mut **engine)?;
+        let _ = upload(&mut ***engine)?;
         let u = t.elapsed().as_secs_f64() * 1e3;
         let t = Instant::now();
         let c = ctx
-            .with_eager_session(&mut **engine, |s| s.add(&a, &b))
+            .with_eager_session(&mut ***engine, |s| s.add(&a, &b))
             .map_err(|e| e.to_string())?;
         engine.synchronize().map_err(|e| e.to_string())?;
         let o = t.elapsed().as_secs_f64() * 1e3;
         let t = Instant::now();
-        let dev = c.to_tensor(&mut **engine).map_err(|e| e.to_string())?;
+        let dev = c.to_tensor(&mut ***engine).map_err(|e| e.to_string())?;
         let _ = engine
             .download_to_host(TensorRead::from_tensor(&dev))
             .map_err(|e| e.to_string())?;

@@ -53,3 +53,22 @@ execution, failed reservation, unwind and cleanup, and collective progress. Comp
 Opt, PhysCal and standalone SR with matched inputs and explicit worker/BLAS
 settings. Preserve independent walker RNG ownership and C-authoritative numerical
 contracts. The current options and measurements do not complete #583 or #585.
+
+## Process worker-budget candidate (not yet adopted)
+
+`MVMC_RS_TENFERRO_WORKER_BUDGET=N` experimentally bounds the sum of additional
+workers reserved by mvmc-rs CPU Engine factories within one process. An Engine
+requesting `T` participants reserves `T - 1` workers; if the complete reservation
+is unavailable, construction selects a serial Engine immediately. Reservations
+remain attached to the Engine resource, including shared ownership and scoped
+Engine replacement, and return capacity only after the resource is destroyed.
+The first factory call captures the optional budget; subsequent changes, including
+setting or unsetting it, are errors. Zero permits only serial Engines.
+
+This is not a bound on all runnable threads: walker callers, inner Rayon, externally
+supplied Engines, BLAS and other MPI processes are outside this accounting. Assign
+per-process budgets only after accounting for those resources and actual rank CPU
+placement. Different Engine acquisition orders may select different parallel or
+serial paths; numerical behavior and repeatability under contention must be
+validated before adoption. No default, speedup or global allocation policy is
+established by this candidate.

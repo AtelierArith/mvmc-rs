@@ -39,6 +39,8 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
   -E 'binary(multichain) | binary(multiwalker_sr_435) | binary(stage_backend_437) | binary(sr_backend_421) | binary(device_sampler)'
 ```
 
+実験設定 `MVMC_RS_TENFERRO_WORKER_BUDGET=N` は、同一プロセス内で mvmc-rs が生成する CPU Engine の追加ワーカー予約数を制限します。参加数 `T` の Engine は `T - 1` 個を予約し、空きがなければ待機せず逐次 Engine を使用します。予約は共有所有者がすべて解放されて Engine が破棄された後に戻ります。スコープ付きチームの交換にも適用します。`0` は逐次実行のみを許可します。最初の CPU Engine 生成前に設定し、その後の変更・設定・解除はエラーです。未設定時は従来の割当方式を使用します。walker の呼び出しスレッド、内部 Rayon、BLAS、外部から渡した Engine、別 MPI ランクはこの上限に含まれません。それらの CPU 使用量を別途考慮してください。予約の取得順によって並列・逐次の選択が変わるため、検証用の設定として扱い、一般的な高速化はまだ保証しません。
+
 ### `gpu-cuda` feature と単体ワークスペース
 
 `mvmc-core` と `mvmc-cli` には feature `gpu-cuda` があります(`crates/mvmc-core/Cargo.toml`、`crates/mvmc-cli/Cargo.toml` で転送)。これは**依存を追加せず**、`Cargo.lock` も変更しません。`mvmc_core::backend` の `CudaProvider` 登録を有効にするだけです。したがって `cargo check -p mvmc-cli --features gpu-cuda` には CUDA ツールキットは不要で、**CUDA はリンクされません**。
