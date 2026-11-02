@@ -72,3 +72,23 @@ uv run --no-project python benchmark/tenferro_thread_budget/analyze-mpi-l32.py /
 ```
 
 The script copies the repository inputs, changes only PhysCal `NDataQtySmp` to 20, records their hashes, uses `--nsteps 20 --nsmp 1` for Opt, and runs the four-rank configurations in separate containers. Adapt the CPU set and `/opt/mpich/bin/mpirun` path for a different image.
+
+## OS thread participation on the four-rank L=32 Opt case
+
+In separate **observation**, not timing, runs of the same L=32 Opt case, `observe-linux.py` sampled `/proc/PID/task/TID/stat` approximately every 0.1 s. A thread is counted as active when its user+system tick count increased since its previous observation; the host exposes 100 ticks per second. `docker top` was used to discover each rank's host PID. Sampling, Docker calls and host scheduling perturb execution; the run is not included in the timing table. Both conditions completed successfully, each observed four ranks, and outputs are not revalidated by this probe.
+
+| tenferro threads per rank | Highest observed OS threads per rank | Distinct CPU-active TIDs observed per rank | Largest number of TIDs with increased CPU ticks in one observation interval |
+|---:|---:|---|---:|
+| 1 | 2 | 1, 1, 1, 1 | 4 |
+| 4 | 6 | 4, 4, 4, 4 | 13 |
+
+The last column counts threads that accumulated CPU time at some point in an interval, **not** simultaneous execution; only four CPUs were available. The extra OS threads include MPI/runtime threads and may not all do work. In this workload the 4-thread configuration actually used more than one TID per rank, and more than four TIDs accumulated CPU time across a sampled interval, consistent with contention; this does not identify the hottest kernel or prove a specific causal contribution to the timing difference. The 1-thread setting bounds tenferro execution per Engine, but it is not a global scheduler or automatic budget for MPI and Rayon. No conclusions are drawn for different affinities, walkers, nested pools or waiting policies. [Raw 1-thread samples](results/thread-observation/tenferro-1.json), [raw 4-thread samples](results/thread-observation/tenferro-4.json).
+
+Reproduce on Linux after preparing the same input directory and release binary as above; use fresh output paths and a host where `docker top` and `/proc` are readable:
+
+```sh
+uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-results/inputs /tmp/observe-1 1
+uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-results/inputs /tmp/observe-4 4
+```
