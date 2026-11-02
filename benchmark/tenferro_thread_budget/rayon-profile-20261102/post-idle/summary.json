@@ -1,0 +1,717 @@
+{
+  "ticks_per_second": 100,
+  "results": {
+    "1": {
+      "0": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010138,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010099,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010075,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.01011,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.01011,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050145,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050136,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050115,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050099,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100158,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100145,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100135,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100136,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100134,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500117,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.50006,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500144,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500155,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500118,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000079,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000143,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000145,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000155,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000167,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        }
+      },
+      "1": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010074,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010131,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010083,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010158,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.01013,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050139,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050146,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050135,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050161,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050154,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100133,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100142,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100168,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100143,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500155,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500137,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500116,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500106,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000129,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.00015,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.00014,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000135,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000113,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        }
+      }
+    },
+    "4": {
+      "0": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010082,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010129,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010146,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010118,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010138,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050112,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050147,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050068,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050137,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100135,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100133,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.10013,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100149,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100128,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500131,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.50012,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500141,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500144,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500143,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000131,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000134,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000116,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        }
+      },
+      "1": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010146,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010068,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.010068,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050157,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050134,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050137,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050132,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.050138,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100113,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100141,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100144,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100107,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.100137,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500161,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500116,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500111,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500123,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 0.500136,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000135,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000116,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000141,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000137,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            },
+            {
+              "elapsed_s": 1.000136,
+              "process_ticks": 0,
+              "caller_ticks": 0,
+              "other_ticks": 0
+            }
+          ],
+          "median_other_cpu_s": 0.0
+        }
+      }
+    }
+  }
+}
