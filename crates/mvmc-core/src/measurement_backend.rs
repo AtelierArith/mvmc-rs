@@ -122,7 +122,7 @@ impl TenferroMeasurement {
     /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
     pub fn with_runtime(
         ctx: Arc<EagerRuntime>,
-        engine: Arc<std::sync::Mutex<Box<dyn tenferro_runtime::ExecutionEngine + Send>>>,
+        engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
         placement: Placement,
         label: String,
     ) -> Self {
@@ -1355,8 +1355,9 @@ mod layout_tests {
         let rhs: Vec<f64> = (0..s * m * n).map(|_| next()).collect();
         let ctx = EagerRuntime::new().unwrap();
         let engine = Arc::new(std::sync::Mutex::new(
-            Box::new(tenferro_cpu::CpuEngine::serial())
-                as Box<dyn tenferro_runtime::ExecutionEngine + Send>,
+            crate::engine_resource::EngineResource::new(
+                Box::new(tenferro_cpu::CpuEngine::serial()),
+            ),
         ));
         let io = EagerTransfer::new(ctx, engine, Placement::Host);
         let lhs_t = io.upload_real(vec![b, s], lhs.clone()).unwrap();
@@ -1412,8 +1413,9 @@ mod layout_tests {
         }
         let ctx = EagerRuntime::new().unwrap();
         let engine = Arc::new(std::sync::Mutex::new(
-            Box::new(tenferro_cpu::CpuEngine::serial())
-                as Box<dyn tenferro_runtime::ExecutionEngine + Send>,
+            crate::engine_resource::EngineResource::new(
+                Box::new(tenferro_cpu::CpuEngine::serial()),
+            ),
         ));
         let io = EagerTransfer::new(ctx, engine, Placement::Host);
         let w_t = io.upload_real(vec![4, sp], w.clone()).unwrap();

@@ -675,7 +675,7 @@ impl MeasurementStages for UnsupportedMeasurement {
     }
 }
 
-type CpuEngineHandle = std::sync::Arc<Mutex<Box<dyn tenferro_runtime::ExecutionEngine + Send>>>;
+type CpuEngineHandle = std::sync::Arc<Mutex<crate::engine_resource::EngineResource>>;
 
 // Count stage handles and solve leases separately from the stage mutex. A solve lease may
 // span MPI collectives, but it never carries the stage mutex across those collectives.
@@ -693,7 +693,9 @@ impl ScopedCpuTeam {
             let fresh = crate::sr_backend::cpu_engine_with_settings(self.settings)?;
             let replacement = std::mem::replace(
                 &mut *fresh.lock().unwrap_or_else(|e| e.into_inner()),
-                Box::new(tenferro_cpu::CpuEngine::serial()),
+                crate::engine_resource::EngineResource::new(Box::new(
+                    tenferro_cpu::CpuEngine::serial(),
+                )),
             );
             let old = std::mem::replace(
                 &mut *self.engine.lock().unwrap_or_else(|e| e.into_inner()),
@@ -711,7 +713,9 @@ impl ScopedCpuTeam {
         if *leases == 0 {
             let old = std::mem::replace(
                 &mut *self.engine.lock().unwrap_or_else(|e| e.into_inner()),
-                Box::new(tenferro_cpu::CpuEngine::serial()),
+                crate::engine_resource::EngineResource::new(Box::new(
+                    tenferro_cpu::CpuEngine::serial(),
+                )),
             );
             drop(old);
         }
@@ -803,7 +807,9 @@ impl<'a> StageBackend<'a> {
         if transient {
             let old = std::mem::replace(
                 &mut *engine.lock().unwrap_or_else(|e| e.into_inner()),
-                Box::new(tenferro_cpu::CpuEngine::serial()),
+                crate::engine_resource::EngineResource::new(Box::new(
+                    tenferro_cpu::CpuEngine::serial(),
+                )),
             );
             drop(old);
             backend.transient_cpu = Some(std::sync::Arc::new(ScopedCpuTeam {
@@ -1062,7 +1068,7 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
             return probe_outcome(ProbeCpuDispatch::Busy, profile);
         }
     };
-    let outcome = tenferro_cpu::with_cpu_engine(&mut **engine, |cpu| {
+    let outcome = tenferro_cpu::with_cpu_engine(&mut ***engine, |cpu| {
         if !cpu.has_team() {
             return ProbeCpuDispatch::Unavailable;
         }
@@ -1399,7 +1405,7 @@ mod transient_probe_tests {
             .engine
             .lock()
             .unwrap();
-        tenferro_cpu::with_cpu_engine(&mut **engine, |cpu| cpu.num_threads()).unwrap()
+        tenferro_cpu::with_cpu_engine(&mut ***engine, |cpu| cpu.num_threads()).unwrap()
     }
 
     #[test]

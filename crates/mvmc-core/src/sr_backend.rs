@@ -44,7 +44,6 @@ use num_complex::Complex64;
 use tenferro_ad::{EagerRuntime, EagerTensor};
 use tenferro_cpu::CpuEngine;
 use tenferro_linalg::EagerSessionLinalgExt;
-use tenferro_runtime::ExecutionEngine;
 use tenferro_tensor::{DotGeneralConfig, Tensor, TensorRead};
 
 use crate::stage_backend::{centered, SrSg, StageError};
@@ -737,7 +736,7 @@ pub struct TenferroStats {
 /// placement always uploads on creation and downloads on read.
 pub(crate) struct EagerTransfer {
     pub(crate) ctx: Arc<EagerRuntime>,
-    pub(crate) engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
+    pub(crate) engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
     pub(crate) placement: Placement,
 }
 
@@ -806,6 +805,7 @@ mod cpu_thread_count_tests {
 pub(crate) struct CpuEngineSettings {
     threads: usize,
     spin: Option<u32>,
+    worker_budget: Option<usize>,
 }
 
 pub(crate) fn cpu_engine_settings() -> Result<CpuEngineSettings, StageError> {
@@ -829,12 +829,48 @@ pub(crate) fn cpu_engine_settings() -> Result<CpuEngineSettings, StageError> {
     let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available)?;
     let spin = read("MVMC_RS_TENFERRO_SPIN_POLLS")?;
     let spin = cpu_spin_polls(spin.as_deref())?;
-    Ok(CpuEngineSettings { threads, spin })
+    let worker_budget = read("MVMC_RS_TENFERRO_WORKER_BUDGET")?
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|_| err("MVMC_RS_TENFERRO_WORKER_BUDGET must be a nonnegative integer"))
+        })
+        .transpose()?;
+    Ok(CpuEngineSettings {
+        threads,
+        spin,
+        worker_budget,
+    })
 }
 
 pub(crate) fn cpu_engine_with_settings(
-    CpuEngineSettings { threads, spin }: CpuEngineSettings,
-) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
+    CpuEngineSettings {
+        threads,
+        spin,
+        worker_budget,
+    }: CpuEngineSettings,
+) -> Result<Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>, StageError> {
+    use crate::cpu_worker_budget::CpuWorkerBudget;
+    static BUDGET: std::sync::OnceLock<Option<(usize, Arc<CpuWorkerBudget>)>> =
+        std::sync::OnceLock::new();
+    let current = BUDGET.get_or_init(|| worker_budget.map(|n| (n, CpuWorkerBudget::new(n))));
+    let budget = match (current, worker_budget) {
+        (Some((capacity, budget)), Some(requested)) if *capacity == requested => {
+            Some(budget.clone())
+        }
+        (None, None) => None,
+        _ => {
+            return Err(err(
+                "CPU worker budget cannot change after Engine initialization",
+            ))
+        }
+    };
+    let reservation = budget.as_ref().and_then(|b| b.try_reserve(threads - 1));
+    let threads = if budget.is_some() && reservation.is_none() {
+        1
+    } else {
+        threads
+    };
     let engine = if threads == 1 {
         CpuEngine::serial()
     } else {
@@ -844,19 +880,25 @@ pub(crate) fn cpu_engine_with_settings(
         }
         CpuEngine::new(builder.build().map_err(err)?)
     };
-    Ok(Arc::new(std::sync::Mutex::new(Box::new(engine))))
+    let resource = match reservation {
+        Some(reservation) => {
+            crate::engine_resource::EngineResource::reserved(Box::new(engine), reservation)
+        }
+        None => crate::engine_resource::EngineResource::new(Box::new(engine)),
+    };
+    Ok(Arc::new(std::sync::Mutex::new(resource)))
 }
 
 /// Share one caller-owned CPU engine between stages using the configured thread budget.
 pub(crate) fn cpu_engine(
-) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
+) -> Result<Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>, StageError> {
     cpu_engine_with_settings(cpu_engine_settings()?)
 }
 
 impl EagerTransfer {
     pub(crate) fn new(
         ctx: Arc<EagerRuntime>,
-        engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
+        engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
         placement: Placement,
     ) -> Self {
         Self {
@@ -871,7 +913,7 @@ impl EagerTransfer {
         f: impl FnOnce(&mut tenferro_ad::EagerSession<'_>) -> tenferro_ad::Result<T>,
     ) -> Result<T, StageError> {
         let mut engine = self.engine.lock().map_err(err)?;
-        self.ctx.with_eager_session(&mut **engine, f).map_err(err)
+        self.ctx.with_eager_session(&mut ***engine, f).map_err(err)
     }
 
     pub(crate) fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
@@ -883,7 +925,7 @@ impl EagerTransfer {
                 .map_err(err)?,
         };
         self.ctx
-            .with_eager_session(&mut **engine, |session| session.constant_from(tensor))
+            .with_eager_session(&mut ***engine, |session| session.constant_from(tensor))
             .map_err(err)
     }
 
@@ -898,7 +940,7 @@ impl EagerTransfer {
 
     pub(crate) fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
         let mut engine = self.engine.lock().map_err(err)?;
-        let dev = t.to_tensor(&mut **engine).map_err(err)?;
+        let dev = t.to_tensor(&mut ***engine).map_err(err)?;
         match self.placement {
             Placement::Host => Ok(dev),
             Placement::Device => engine
@@ -949,7 +991,7 @@ impl TenferroSr {
     /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
     pub fn with_runtime(
         ctx: Arc<EagerRuntime>,
-        engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
+        engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
         placement: Placement,
         label: String,
     ) -> Self {
@@ -1287,5 +1329,54 @@ mod complex_gram_tests {
             }
             std::hint::black_box(out);
         });
+    }
+}
+
+#[cfg(test)]
+mod worker_budget_tests {
+    use super::*;
+
+    #[test]
+    fn engine_budget_is_shared_until_last_owner_drops() {
+        const CHILD: &str = "MVMC_TEST_ENGINE_BUDGET_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            for budget in ["0", "3"] {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "sr_backend::worker_budget_tests::engine_budget_is_shared_until_last_owner_drops", "--nocapture"])
+                    .env(CHILD, "1")
+                    .env("MVMC_RS_TENFERRO_THREADS", "4")
+                    .env("MVMC_RS_TENFERRO_WORKER_BUDGET", budget)
+                    .output().unwrap();
+                assert!(
+                    output.status.success(),
+                    "budget {budget}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            return;
+        }
+        let count = |engine: &Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>| {
+            let mut locked = engine.lock().unwrap();
+            tenferro_cpu::with_cpu_engine(&mut ***locked, |cpu| cpu.num_threads()).unwrap()
+        };
+        let expected = if std::env::var("MVMC_RS_TENFERRO_WORKER_BUDGET").unwrap() == "0" {
+            1
+        } else {
+            4
+        };
+        let first = cpu_engine().unwrap();
+        assert_eq!(count(&first), expected);
+        let second = cpu_engine().unwrap();
+        assert_eq!(count(&second), 1);
+        let retained = first.clone();
+        drop(first);
+        assert_eq!(count(&cpu_engine().unwrap()), 1);
+        drop(retained);
+        assert_eq!(count(&cpu_engine().unwrap()), expected);
+        std::env::remove_var("MVMC_RS_TENFERRO_WORKER_BUDGET");
+        assert!(
+            cpu_engine().is_err(),
+            "changing a captured budget must fail"
+        );
     }
 }
