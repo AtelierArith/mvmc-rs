@@ -271,7 +271,21 @@ fn negative_clock_and_asymmetric_runner_failures() {
             checks: Cell::new(0),
         };
         assert!(vmc_phys_cal_with_reducer(prepared(), Some(&sampling_output), &fault).is_err());
-        assert_eq!(std::fs::read_dir(&sampling_output).unwrap().count(), 0);
+        // C InitFile opens the time file before sampling. An injected failure
+        // before the first sample must leave exactly that empty file, and no
+        // sample outputs; an entirely empty directory is not C-compatible.
+        let mut names: Vec<_> = std::fs::read_dir(&sampling_output)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        names.sort();
+        assert_eq!(names, [std::ffi::OsString::from("zvo_time_001.dat")]);
+        assert_eq!(
+            std::fs::metadata(sampling_output.join("zvo_time_001.dat"))
+                .unwrap()
+                .len(),
+            0
+        );
 
         // Some ranks have no callback, but still join the failure agreement.
         let callback_output = directory.join(format!("{case}-callback"));

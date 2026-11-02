@@ -22,3 +22,20 @@ MVMC_RS_TENFERRO_THREADS=1 benchmark/tenferro_thread_budget/probe.sh target/test
 ```
 
 Use fresh output paths. The script fixes `OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1`, controls `RAYON_NUM_THREADS` internally, and records three group times plus per-process raw output.
+
+## MPI protocol check
+
+The existing ignored `run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures` test was run in the Linux x86_64 development-container image with MPICH, for 2 and 4 actual ranks. `MVMC_RS_SR_BACKEND` was `c-order` or `tenferro`, `RAYON_NUM_THREADS=4`, and `MVMC_RS_TENFERRO_THREADS` was 1 or 4 for each combination. `MVMC_RS_INNER_THREADS=1`, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`; no CPU affinity was set. All ranks passed in all eight runs. This tests the existing fault-injection and collective protocol only; it does not establish throughput or arbitrary nested/multi-walker behavior. The C-order and tenferro controls both initially exposed the outdated output-file assertion tracked by #590. C `InitFile` creates the empty time file before the PhysCal loop; the corrected test checks exactly that file and no sample output.
+
+Raw outputs: [results/mpi](results/mpi/). Build and execute inside the development container (the test binary hash will differ by build):
+
+```sh
+cargo test -p mvmc-core --features mpi --lib --profile test-fast --no-run
+# Find the executable printed by the preceding command and substitute it below.
+MVMC_RS_SR_BACKEND=tenferro MVMC_RS_INNER_THREADS=1 RAYON_NUM_THREADS=4 \
+  MVMC_RS_TENFERRO_THREADS=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  timeout --kill-after=5s 120s mpirun -n 4 /path/to/mvmc_core_test_binary \
+  --ignored --exact run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures --nocapture
+```
+
+Repeat with `-n 2`, `MVMC_RS_TENFERRO_THREADS=4`, and the `c-order` backend for the complete matrix. The container needs sufficient shared memory (the recorded run used `--shm-size=1g`).
