@@ -1,0 +1,240 @@
+### threads=1, repetition=0 (warmup)
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered outtest run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.22s
+
+; finished in 0.22s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.22s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.22s
+
+wall=0.280 user=0.554 sys=0.237
+
+### threads=1, repetition=1
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+wall=0.261 user=0.542 sys=0.204
+
+### threads=1, repetition=2
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+wall=0.282 user=0.582 sys=0.225
+
+### threads=1, repetition=3
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.21s
+
+wall=0.268 user=0.565 sys=0.194
+
+### threads=4, repetition=0 (warmup)
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered outtest run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok; finished in 0.23s
+
+. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.23s
+
+wall=0.290 user=0.641 sys=0.201
+
+### threads=4, repetition=1
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+wall=0.242 user=0.526 sys=0.181
+
+### threads=4, repetition=2
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.19s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.20s
+
+wall=0.250 user=0.529 sys=0.212
+
+### threads=4, repetition=3
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+warning: initial.def not found (path: /tmp/mvmc-runtime-mpi-11/missing.def)
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.25s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.24s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.25s
+
+test run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 312 filtered out; finished in 0.25s
+
+wall=0.303 user=0.671 sys=0.196
+

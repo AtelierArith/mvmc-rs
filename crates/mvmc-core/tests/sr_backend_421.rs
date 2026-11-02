@@ -240,6 +240,22 @@ fn non_positive_definite_fails_like_c_order() {
     assert!(tenferro().cholesky_solve(&mut s, &mut x, n).is_err());
 }
 
+#[test]
+fn singular_cholesky_is_reported_instead_of_returning_a_solution() {
+    for matrix in [[0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0]] {
+        let mut reference_matrix = matrix;
+        let mut reference_rhs = [1.0, 1.0];
+        let mut tenferro_matrix = matrix;
+        let mut tenferro_rhs = [1.0, 1.0];
+        assert!(COrderSr::default()
+            .cholesky_solve(&mut reference_matrix, &mut reference_rhs, 2)
+            .is_err());
+        assert!(tenferro()
+            .cholesky_solve(&mut tenferro_matrix, &mut tenferro_rhs, 2)
+            .is_err());
+    }
+}
+
 fn cg_case(complex: bool) {
     let (n, samples) = (37usize, 90usize);
     let real = random(n * samples, 12);

@@ -1,0 +1,264 @@
+### threads=1, repetition=0 (warmup)
+    Finished `test-fast` profile [optimized] target(s) in 0.10s
+────────────
+ Nextest run ID 4fe7ff6c-72d2-4fa5-9049-0a93b9a14a9d with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.193s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.144s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.339s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.32
+	System time (seconds): 1.02
+	Percent of CPU this job got: 208%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51544
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 263082
+	Voluntary context switches: 8379
+	Involuntary context switches: 637
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5696
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=1, repetition=1
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID d5f0337d-cb68-4f0c-b1c5-29cc1ba99da0 with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.193s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.141s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.336s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.26
+	System time (seconds): 1.01
+	Percent of CPU this job got: 207%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51544
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 263051
+	Voluntary context switches: 8185
+	Involuntary context switches: 657
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5696
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=1, repetition=2
+    Finished `test-fast` profile [optimized] target(s) in 0.10s
+────────────
+ Nextest run ID 6ef94f64-141b-4f98-b51d-5b1d988d5889 with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.186s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.136s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.324s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.24
+	System time (seconds): 1.01
+	Percent of CPU this job got: 209%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51832
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2
+	Minor (reclaiming a frame) page faults: 263046
+	Voluntary context switches: 8371
+	Involuntary context switches: 700
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5704
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=1, repetition=3
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID e2c4c79b-31cc-463a-b8d7-58139b9f6adf with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.184s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.153s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.338s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.26
+	System time (seconds): 1.02
+	Percent of CPU this job got: 208%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51544
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 263075
+	Voluntary context switches: 8293
+	Involuntary context switches: 663
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5696
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=4, repetition=0 (warmup)
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID a7848cb7-6f5c-49e7-884d-3420fd5c9eca with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.191s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.130s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.322s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.26
+	System time (seconds): 1.02
+	Percent of CPU this job got: 211%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.08
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51540
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2
+	Minor (reclaiming a frame) page faults: 263234
+	Voluntary context switches: 8341
+	Involuntary context switches: 724
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5696
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=4, repetition=1
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID ef6cdad5-c384-4c7d-8c5b-39e5526b6607 with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.197s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.134s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.332s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.28
+	System time (seconds): 0.99
+	Percent of CPU this job got: 208%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51836
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 263278
+	Voluntary context switches: 8306
+	Involuntary context switches: 607
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5696
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=4, repetition=2
+    Finished `test-fast` profile [optimized] target(s) in 0.10s
+────────────
+ Nextest run ID 42605cd3-0cf7-4411-af98-8a0d7451f079 with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.193s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.134s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.329s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.27
+	System time (seconds): 1.00
+	Percent of CPU this job got: 207%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51544
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 263189
+	Voluntary context switches: 8444
+	Involuntary context switches: 662
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 6096
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+### threads=4, repetition=3
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID 1adec8dd-fe10-4701-bbea-7699b5077098 with nextest profile: default
+    Starting 2 tests across 122 binaries (1000 tests skipped)
+        PASS [   0.201s] (1/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_four_ranks
+        PASS [   0.133s] (2/2) mvmc-core::multiwalker_sr_435 walkers_match_native_c_ungrouped_cells_two_ranks
+────────────
+     Summary [   0.335s] 2 tests run: 2 passed, 1000 skipped
+	Command being timed: "cargo nextest run -p mvmc-core --cargo-profile test-fast -E test(walkers_match_native_c_ungrouped_cells_two_ranks) | test(walkers_match_native_c_ungrouped_cells_four_ranks) --test-threads 1 --no-fail-fast --retries 0"
+	User time (seconds): 1.28
+	System time (seconds): 1.01
+	Percent of CPU this job got: 210%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 51540
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 263214
+	Voluntary context switches: 8419
+	Involuntary context switches: 739
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5704
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
