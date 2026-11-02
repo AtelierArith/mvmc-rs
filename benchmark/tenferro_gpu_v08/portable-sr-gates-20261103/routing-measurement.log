@@ -1,0 +1,83 @@
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 3.64s
+────────────
+ Nextest run ID 3e0b634d-3e66-4d91-901b-1dd1b6e6ef5b with nextest profile: default
+    Starting 6 tests across 2 binaries
+        PASS [  59.397s] (1/6) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_b_matches_c_order
+  stdout ───
+
+    running 1 test
+    physcal:hubbard_chain_real: 964 numeric tokens, worst absolute 1.37e-12, worst relative (|v| > 1e-6) 7.49e-13
+    opt:hubbard_chain_real: 277 numeric tokens, worst absolute 1.49e-13, worst relative (|v| > 1e-6) 2.60e-13
+    test cuda_measurement_stage_b_matches_c_order ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 59.18s
+
+
+        PASS [   1.864s] (2/6) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_matches_calc_m_all
+  stdout ───
+
+    running 1 test
+    hubbard_chain_real: 964 numeric tokens, worst relative difference 7.90e-14
+    hubbard_all_terms_lanczos2: 964 numeric tokens, worst relative difference 4.10e-13
+    test cuda_measurement_stage_matches_calc_m_all ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.76s
+
+
+        PASS [   1.827s] (3/6) mvmc-gpu-cuda::measurement_gate cuda_resident_measurement_matches_c_order
+  stdout ───
+
+    running 1 test
+    resident physcal:hubbard_chain_real: 964 numeric tokens, worst absolute 1.45e-13, worst relative (|v| > 1e-6) 7.90e-14
+    resident opt:hubbard_chain_real: 277 numeric tokens, worst absolute 9.24e-14, worst relative (|v| > 1e-6) 5.35e-13
+    resident counters before ResidentStats { slater_uploads: 1, slater_upload_bytes: 9216, stage_a_calls: 15, planes_factorized: 800, inv_download_planes: 800, inv_download_bytes: 230400, pf_download_bytes: 9600, ratio_tables: 180, slater_diffs: 0 } after ResidentStats { slater_uploads: 3, slater_upload_bytes: 27648, stage_a_calls: 21, planes_factorized: 1120, inv_download_planes: 800, inv_download_bytes: 230400, pf_download_bytes: 13440, ratio_tables: 220, slater_diffs: 40 }
+    resident Opt repeat: 277 numeric tokens, worst absolute 0.00e0, worst relative (|v| > 1e-6) 0.00e0
+    test cuda_resident_measurement_matches_c_order ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.73s
+
+
+        PASS [  59.979s] (4/6) mvmc-gpu-cuda::sr_routing_gate complex_direct_sr_stays_on_the_per_stage_path
+  stdout ───
+
+    running 1 test
+    test complex_direct_sr_stays_on_the_per_stage_path ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 59.72s
+
+  stderr ───
+      heisenberg_chain_cmp   complex direct 2 steps (per-stage path): worst relative difference 1.85e-11
+
+        PASS [   3.343s] (5/6) mvmc-gpu-cuda::sr_routing_gate resident_cg_sr_run_is_routed_and_repeatable
+  stdout ───
+
+    running 1 test
+    test resident_cg_sr_run_is_routed_and_repeatable ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.16s
+
+  stderr ───
+      hubbard_chain_dh_real  cg 3 steps: routed, repeatable, structure equal
+      hubbard_chain_L16      cg 3 steps: routed, repeatable, structure equal
+      hubbard_chain_L32      cg 3 steps: routed, repeatable, structure equal
+      heisenberg_chain_cmp   cg 3 steps: routed, repeatable, structure equal
+
+        PASS [   3.743s] (6/6) mvmc-gpu-cuda::sr_routing_gate resident_direct_sr_run_matches_c_order
+  stdout ───
+
+    running 1 test
+    test resident_direct_sr_run_matches_c_order ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.58s
+
+  stderr ───
+      hubbard_chain_dh_real  n=  36 nm=  33 k=  60: S err/bound 0.00e0, g err/bound 0.00e0, kappa~2.00e4, |dx|/|x| 1.47e-14 (bound 2.08e-8)
+      hubbard_chain_dh_real  4 steps: worst relative difference of any output number vs C order 6.06e-15
+      hubbard_chain_L16      n= 101 nm= 100 k= 120: S err/bound 1.68e-3, g err/bound 0.00e0, kappa~2.09e4, |dx|/|x| 9.44e-15 (bound 1.39e-7)
+      hubbard_chain_L16      4 steps: worst relative difference of any output number vs C order 9.03e-15
+      hubbard_chain_L32      n= 197 nm= 196 k= 160: S err/bound 3.12e-3, g err/bound 0.00e0, kappa~3.51e4, |dx|/|x| 5.34e-14 (bound 4.84e-7)
+      hubbard_chain_L32      4 steps: worst relative difference of any output number vs C order 4.84e-14
+
+────────────
+     Summary [ 130.155s] 6 tests run: 6 passed, 0 skipped

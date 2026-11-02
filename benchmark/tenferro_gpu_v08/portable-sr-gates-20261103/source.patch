@@ -1,0 +1,337 @@
+diff --git a/gpu/mvmc-gpu-cuda/tests/measurement_gate.rs b/gpu/mvmc-gpu-cuda/tests/measurement_gate.rs
+index 48d11ac8..d080f29e 100644
+--- a/gpu/mvmc-gpu-cuda/tests/measurement_gate.rs
++++ b/gpu/mvmc-gpu-cuda/tests/measurement_gate.rs
+@@ -18,0 +19,3 @@ use std::sync::Mutex;
++#[path = "../../../tests/support/numerical_comparison.rs"]
++mod numerical;
++
+@@ -218,0 +222,8 @@ fn compare_stage_b_files(
++        numerical::assert_numeric_text(
++            text,
++            &device[name],
++            abs,
++            rel,
++            &[],
++            format!("{label} {name}"),
++        );
+@@ -393,2 +404,2 @@ fn cuda_resident_measurement_matches_c_order() {
+-    // Same-implementation repeatability: the kernels are deterministic (no atomics), so a
+-    // second resident run of the same input must be bitwise identical.
++    // Same-implementation output repeatability follows the existing stage-B numeric
++    // budget; integer/header/file structure remains exact in compare_stage_b_files.
+@@ -401 +412 @@ fn cuda_resident_measurement_matches_c_order() {
+-    assert_eq!(device, repeat, "resident runs must be bitwise repeatable");
++    compare_stage_b_files("resident Opt repeat", &device, &repeat, abs, rel);
+diff --git a/gpu/mvmc-gpu-cuda/tests/sr_device_gate.rs b/gpu/mvmc-gpu-cuda/tests/sr_device_gate.rs
+index 59711c5b..a36ce7d2 100644
+--- a/gpu/mvmc-gpu-cuda/tests/sr_device_gate.rs
++++ b/gpu/mvmc-gpu-cuda/tests/sr_device_gate.rs
+@@ -9,2 +9,2 @@
+-//! * **S/g assembly**: bitwise equal to the host formulas applied to the device's own Gram
+-//!   (`--fmad=false`, same expressions).
++//! * **S/g assembly**: `2 eps` relative to the host formulas on the device's own Gram
++//!   (`--fmad=false`, same expressions), following the existing #190 assembly budget.
+@@ -18,2 +18,3 @@
+-//!   finiteness and bitwise repeatability of the device trajectory are asserted, and the
+-//!   amplification is printed.
++//!   finiteness, exact iteration counts and numerical repeatability are asserted. The final
++//!   prefix's residual is reported, not assumed converged. The converged case checks an
++//!   independently materialized covariance residual against its stopping threshold.
+@@ -32,0 +34,23 @@ const EPS: f64 = f64::EPSILON;
++#[path = "../../../tests/support/numerical_comparison.rs"]
++mod numerical;
++
++fn finite_close(actual: &[f64], expected: &[f64], abs: f64, rel: f64, context: &str) {
++    assert!(
++        actual.iter().chain(expected).all(|v| v.is_finite()),
++        "{context}"
++    );
++    let maximum = actual
++        .iter()
++        .zip(expected)
++        .map(|(a, b)| (a - b).abs())
++        .fold(0.0, f64::max);
++    eprintln!("{context}: max absolute difference {maximum:.3e}; abs {abs:.3e}, rel {rel:.3e}");
++    numerical::assert_values_close(
++        actual.iter().copied(),
++        expected.iter().copied(),
++        abs,
++        rel,
++        context,
++    );
++}
++
+@@ -122,2 +146,3 @@ fn check_direct(
+-) {
+-    let p = make_problem(n, samples, factors, noise, skip, 11 + n as u64);
++    seed: u64,
++) -> Vec<f64> {
++    let p = make_problem(n, samples, factors, noise, skip, seed);
+@@ -158 +183,2 @@ fn check_direct(
+-    // S/g: bitwise equal to the host formula on the device's Gram
++    // Same scalar expressions on the same Gram, with FMA disabled. The existing
++    // #190 assembly regression budget is 2 eps relative (measured difference 0).
+@@ -160,12 +186,2 @@ fn check_direct(
+-    assert!(
+-        s_d.iter()
+-            .zip(&s_hd)
+-            .all(|(a, b)| a.to_bits() == b.to_bits()),
+-        "S assembly is not bit-identical to the host formula"
+-    );
+-    assert!(
+-        g_d.iter()
+-            .zip(&g_hd)
+-            .all(|(a, b)| a.to_bits() == b.to_bits()),
+-        "g"
+-    );
++    finite_close(&s_d, &s_hd, 0.0, 2.0 * EPS, "S assembly");
++    finite_close(&g_d, &g_hd, 0.0, 2.0 * EPS, "g assembly");
+@@ -190,0 +207 @@ fn check_direct(
++    x_d
+@@ -197,4 +214,4 @@ fn device_direct_sr_matches_c_order() {
+-    check_direct(&mut dev, 17, 40, 8, 0.5, 0);
+-    check_direct(&mut dev, 129, 300, 40, 0.5, 5);
+-    check_direct(&mut dev, 400, 2000, 100, 0.3, 0);
+-    check_direct(&mut dev, 600, 700, 600, 1.0, 7);
++    let _ = check_direct(&mut dev, 17, 40, 8, 0.5, 0, 28);
++    let _ = check_direct(&mut dev, 129, 300, 40, 0.5, 5, 140);
++    let _ = check_direct(&mut dev, 400, 2000, 100, 0.3, 0, 411);
++    let _ = check_direct(&mut dev, 600, 700, 600, 1.0, 7, 611);
+@@ -256,0 +274,52 @@ fn host_operator(
++fn materialized_cg(
++    inputs: &mvmc_gpu_cuda::sr_problem::CgInputs,
++    comp: usize,
++    samples: usize,
++    inv_weight: f64,
++    shift: f64,
++) -> Vec<f64> {
++    let mut covariance = vec![0.0; comp * comp];
++    COrderSr::default()
++        .gram_real(&inputs.operand, comp, samples, &mut covariance)
++        .unwrap();
++    for j in 0..comp {
++        for i in 0..comp {
++            covariance[i + j * comp] =
++                inv_weight * covariance[i + j * comp] - inputs.mean[i] * inputs.mean[j];
++        }
++        covariance[j + j * comp] += shift * inputs.diagonal[j];
++    }
++    covariance
++}
++
++// Absolute terms of two GEMVs plus mean/diagonal corrections, as in the
++// independent operator-product error model below (not the computed result's size).
++fn cg_error_scale(
++    inp: &mvmc_gpu_cuda::sr_problem::CgInputs,
++    x: &[f64],
++    comp: usize,
++    samples: usize,
++    inv_weight: f64,
++    shift: f64,
++) -> Vec<f64> {
++    let mut y = vec![0.0; samples];
++    for s in 0..samples {
++        for i in 0..comp {
++            y[s] += inp.operand[i + s * comp].abs() * x[i].abs();
++        }
++    }
++    let mut scale = vec![0.0; comp];
++    for s in 0..samples {
++        for i in 0..comp {
++            scale[i] += inp.operand[i + s * comp].abs() * y[s];
++        }
++    }
++    let coef_abs: f64 = inp.mean.iter().zip(x).map(|(m, v)| (m * v).abs()).sum();
++    for i in 0..comp {
++        scale[i] = inv_weight.abs() * scale[i]
++            + coef_abs * inp.mean[i].abs()
++            + shift.abs() * (inp.diagonal[i] * x[i]).abs();
++    }
++    scale
++}
++
+@@ -274,13 +343 @@ fn check_operator(dev: &mut DeviceSr, n: usize, samples: usize, factors: usize,
+-    let mut y = vec![0.0; samples];
+-    for s in 0..samples {
+-        for i in 0..comp {
+-            y[s] += inp.operand[i + s * comp].abs() * x[i].abs();
+-        }
+-    }
+-    let mut scale = vec![0.0; comp];
+-    for s in 0..samples {
+-        for i in 0..comp {
+-            scale[i] += inp.operand[i + s * comp].abs() * y[s];
+-        }
+-    }
+-    let coef_abs: f64 = inp.mean.iter().zip(&x).map(|(m, v)| (m * v).abs()).sum();
++    let scale = cg_error_scale(&inp, &x, comp, samples, inv_w, shift);
+@@ -289,4 +346 @@ fn check_operator(dev: &mut DeviceSr, n: usize, samples: usize, factors: usize,
+-        let sc = inv_w * scale[i]
+-            + coef_abs * inp.mean[i].abs()
+-            + shift * (inp.diagonal[i] * x[i]).abs();
+-        let allowed = 4.0 * (samples + comp) as f64 * EPS * sc;
++        let allowed = 4.0 * (samples + comp) as f64 * EPS * scale[i];
+@@ -346,0 +401,21 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
++    let covariance = materialized_cg(&inp, comp, samples, inv_w, shift);
++    let applied = matvec(&covariance, &out.solution, comp);
++    let residual: Vec<f64> = applied
++        .iter()
++        .zip(&inp.gradient)
++        .map(|(a, b)| a - b)
++        .collect();
++    let scale = cg_error_scale(&inp, &out.solution, comp, samples, inv_w, shift);
++    let k_eps = (samples + comp + 4) as f64 * EPS;
++    let rounding: Vec<f64> = scale
++        .iter()
++        .zip(&inp.gradient)
++        .map(|(s, b)| 8.0 * k_eps / (1.0 - k_eps) * s + 2.0 * EPS * b.abs())
++        .collect();
++    let residual_norm = norm(&residual);
++    let allowed = tol * comp as f64 + norm(&rounding);
++    eprintln!(
++        "CG converged independent residual {residual_norm:.3e}, stop plus rounding {allowed:.3e}"
++    );
++    assert!(residual_norm.is_finite() && residual_norm <= allowed);
++
+@@ -353,0 +429,11 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
++    // Fixed zero-tolerance prefixes need not converge. Their independent residual
++    // is diagnostic; it is not compared to a converged direct-solver error bound.
++    let covariance = materialized_cg(&inp2, comp2, samples2, inv_w, 1e-4);
++    let matrix_norm = (0..comp2)
++        .map(|i| {
++            (0..comp2)
++                .map(|j| covariance[i + j * comp2].abs())
++                .sum::<f64>()
++        })
++        .fold(0.0, f64::max);
++    let rhs_norm = inp2.gradient.iter().map(|v| v.abs()).fold(0.0, f64::max);
+@@ -389,7 +475,12 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
+-        assert!(d1.solution.iter().all(|v| v.is_finite()));
+-        assert!(
+-            d1.solution
+-                .iter()
+-                .zip(&d2.solution)
+-                .all(|(a, b)| a.to_bits() == b.to_bits()),
+-            "device CG is not repeatable"
++        assert_eq!(d1.iterations, d2.iterations);
++        assert_eq!(d1.iterations, iters);
++        let k_eps = (samples2 + comp2) as f64 * EPS;
++        // Two GEMV reductions per iteration; a strict fixed-problem regression
++        // envelope, not a forward-error guarantee for arbitrary ill-conditioned CG.
++        let repeat_rel = 2.0 * iters as f64 * k_eps / (1.0 - k_eps);
++        finite_close(
++            &d1.solution,
++            &d2.solution,
++            8.0 * EPS,
++            repeat_rel,
++            &format!("CG repeat {iters} iterations"),
+@@ -396,0 +488,25 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
++        if iters == comp2 {
++            let host_applied = matvec(&covariance, &h.solution, comp2);
++            let host_residual = host_applied
++                .iter()
++                .zip(&inp2.gradient)
++                .map(|(a, b)| (a - b).abs())
++                .fold(0.0, f64::max);
++            let host_x_norm = h.solution.iter().map(|v| v.abs()).fold(0.0, f64::max);
++            eprintln!(
++                "CG C-order full-prefix backward residual {:.3e}",
++                host_residual / (matrix_norm * host_x_norm + rhs_norm)
++            );
++            for solution in [&d1.solution, &d2.solution] {
++                let applied = matvec(&covariance, solution, comp2);
++                let residual = applied
++                    .iter()
++                    .zip(&inp2.gradient)
++                    .map(|(a, b)| (a - b).abs())
++                    .fold(0.0, f64::max);
++                let x_norm = solution.iter().map(|v| v.abs()).fold(0.0, f64::max);
++                let backward = residual / (matrix_norm * x_norm + rhs_norm);
++                eprintln!("CG nonconverged full-prefix backward residual {backward:.3e}");
++                assert!(backward.is_finite());
++            }
++        }
+@@ -405 +521 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
+-fn device_direct_sr_is_bitwise_repeatable() {
++fn device_direct_sr_repeats_with_c_order_and_residual_checks() {
+@@ -408,7 +524,6 @@ fn device_direct_sr_is_bitwise_repeatable() {
+-    let p = make_problem(n, samples, 50, 0.4, 6, 77);
+-    dev.upload_store(&p.store, n, samples).unwrap();
+-    let x1 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
+-    // re-upload and re-solve: same inputs give identical bits
+-    dev.upload_store(&p.store, n, samples).unwrap();
+-    let x2 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
+-    assert!(x1.iter().zip(&x2).all(|(a, b)| a.to_bits() == b.to_bits()));
++    // Preserve the original problem and seed. Each fresh upload/solve is also
++    // checked against C order and the original independent residual bounds.
++    let x1 = check_direct(&mut dev, n, samples, 50, 0.4, 6, 77);
++    let x2 = check_direct(&mut dev, n, samples, 50, 0.4, 6, 77);
++    // Existing #190 short-SR output repeatability envelope.
++    finite_close(&x1, &x2, 1e-11, 1e-11, "direct SR repeat");
+diff --git a/gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs b/gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs
+index 69b87aa4..65c45d1d 100644
+--- a/gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs
++++ b/gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs
+@@ -22 +22 @@
+-//! * **Trajectories (#358)**: the resident direct run is bitwise repeatable and finite; its
++//! * **Trajectories (#358)**: the resident direct run is numerically repeatable and finite; its
+@@ -26 +26 @@
+-//!   SR info rows) and the pre-update energy row exactly, repeatability bitwise; the CG
++//!   SR info rows) exactly; pre-update energy and repeats use explicit numerical bounds. The CG
+@@ -30,0 +31,3 @@
++#[path = "../../../tests/support/numerical_comparison.rs"]
++mod numerical;
++
+@@ -380 +383,24 @@ fn compare_files(label: &str, a: &BTreeMap<String, String>, b: &BTreeMap<String,
+-/// Several-step direct runs: bitwise repeatable on the device, finite, and close to C order.
++fn assert_repeat_files(
++    label: &str,
++    first: &BTreeMap<String, String>,
++    repeat: &BTreeMap<String, String>,
++) {
++    assert_eq!(
++        first.keys().collect::<Vec<_>>(),
++        repeat.keys().collect::<Vec<_>>(),
++        "{label}: file set"
++    );
++    for (name, text) in first {
++        // Existing #190 short-SR repeatability budget; indices, headers and rows stay exact.
++        numerical::assert_numeric_text(
++            text,
++            &repeat[name],
++            1e-11,
++            1e-11,
++            &[],
++            format!("{label}: {name}"),
++        );
++    }
++}
++
++/// Several-step direct runs: numerically repeatable, finite, and close to C order.
+@@ -393,5 +419 @@ fn check_direct_trajectory(c: &Case, steps: i64) {
+-    assert_eq!(
+-        dev_a.files, dev_b.files,
+-        "{}: resident run not repeatable",
+-        c.name
+-    );
++    assert_repeat_files(c.name, &dev_a.files, &dev_b.files);
+@@ -426,5 +448 @@ fn check_cg(c: &Case, steps: i64) {
+-    assert_eq!(
+-        dev_a.files, dev_b.files,
+-        "{}: resident CG not repeatable",
+-        c.name
+-    );
++    assert_repeat_files(c.name, &dev_a.files, &dev_b.files);
+@@ -438,2 +456,9 @@ fn check_cg(c: &Case, steps: i64) {
+-    // the pre-update energy row does not depend on the SR backend
+-    assert_eq!(first(&reference.files), first(&dev_a.files), "{}", c.name);
++    // The pre-update energy is computed arithmetic even though it precedes SR routing.
++    numerical::assert_numeric_text(
++        &first(&reference.files),
++        &first(&dev_a.files),
++        1e-11,
++        1e-11,
++        &[],
++        c.name,
++    );

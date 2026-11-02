@@ -1,0 +1,12 @@
+    Finished `test` profile [optimized] target(s) in 0.09s
+────────────
+ Nextest run ID c70cb2f5-0314-4688-80a8-0c73feb76f61 with nextest profile: default
+    Starting 6 tests across 1 binary (8 tests skipped)
+        PASS [  10.373s] (1/6) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_general_operators
+        PASS [  10.118s] (2/6) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_l128_stages
+        PASS [  10.303s] (3/6) mvmc-gpu-cuda opt::tests::resident_opt_pipeline
+        PASS [   1.016s] (4/6) mvmc-gpu-cuda opt::tests::resident_opt_rejects_failed_sr
+        PASS [  19.961s] (5/6) mvmc-gpu-cuda opt::tests::resident_opt_repeats_twenty_steps
+        PASS [  10.086s] (6/6) mvmc-gpu-cuda opt::tests::resident_opt_single_walker_has_zero_sr_update
+────────────
+     Summary [  61.858s] 6 tests run: 6 passed, 8 skipped

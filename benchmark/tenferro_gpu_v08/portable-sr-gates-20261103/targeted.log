@@ -1,0 +1,65 @@
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.26s
+────────────
+ Nextest run ID b7226857-9a75-4895-bebc-bc6a9c754181 with nextest profile: default
+    Starting 3 tests across 1 binary (5 tests skipped)
+       START [         ] (1/3) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+
+running 1 test
+cg well-conditioned: iterations host 29 device 29, |dx|/|x| = 2.91e-15
+CG converged independent residual 2.234e-6, stop plus rounding 2.990e-6
+cg ill-conditioned,   1 iterations: device vs host rel 1.82e-16
+CG repeat 1 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 1.106e-13
+cg ill-conditioned,   2 iterations: device vs host rel 3.43e-16
+CG repeat 2 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 2.212e-13
+cg ill-conditioned,   4 iterations: device vs host rel 7.30e-16
+CG repeat 4 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 4.423e-13
+cg ill-conditioned,   8 iterations: device vs host rel 2.04e-15
+CG repeat 8 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 8.846e-13
+cg ill-conditioned, 119 iterations: device vs host rel 6.73e-4
+CG repeat 119 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 1.316e-11
+CG C-order full-prefix backward residual 7.063e-5
+CG nonconverged full-prefix backward residual 6.908e-5
+CG nonconverged full-prefix backward residual 6.908e-5
+test device_cg_solve_matches_c_order_and_is_repeatable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.64s
+
+        PASS [   0.808s] (1/3) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+       START [         ] (2/3) mvmc-gpu-cuda::sr_device_gate device_direct_sr_matches_c_order
+
+running 1 test
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=   17 ns=   40 nm=   16 kappa~   3.15e2: gram err/bound 9.76e-3, |dx|/|x| 6.04e-15 (bound 4.47e-12), residual 5.47e-15
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=  129 ns=  300 nm=  103 kappa~   8.43e2: gram err/bound 4.75e-2, |dx|/|x| 5.08e-14 (bound 7.71e-11), residual 2.24e-14
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=  400 ns= 2000 nm=  399 kappa~   1.13e3: gram err/bound 6.24e-2, |dx|/|x| 2.36e-13 (bound 4.01e-10), residual 8.56e-14
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=  600 ns=  700 nm=  514 kappa~   5.08e2: gram err/bound 2.36e-2, |dx|/|x| 2.82e-14 (bound 2.32e-10), residual 2.47e-14
+test device_direct_sr_matches_c_order ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.50s
+
+        PASS [   2.659s] (2/3) mvmc-gpu-cuda::sr_device_gate device_direct_sr_matches_c_order
+       START [         ] (3/3) mvmc-gpu-cuda::sr_device_gate device_direct_sr_repeats_with_c_order_and_residual_checks
+
+running 1 test
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=  257 ns=  600 nm=  214 kappa~   1.31e3: gram err/bound 3.83e-2, |dx|/|x| 1.10e-13 (bound 2.49e-10), residual 6.08e-14
+S assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+g assembly: max absolute difference 0.000e0; abs 0.000e0, rel 4.441e-16
+direct n=  257 ns=  600 nm=  214 kappa~   1.31e3: gram err/bound 3.83e-2, |dx|/|x| 1.10e-13 (bound 2.49e-10), residual 6.08e-14
+direct SR repeat: max absolute difference 0.000e0; abs 1.000e-11, rel 1.000e-11
+test device_direct_sr_repeats_with_c_order_and_residual_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.52s
+
+        PASS [   0.685s] (3/3) mvmc-gpu-cuda::sr_device_gate device_direct_sr_repeats_with_c_order_and_residual_checks
+────────────
+     Summary [   4.152s] 3 tests run: 3 passed, 5 skipped

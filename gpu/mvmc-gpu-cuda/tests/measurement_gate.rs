@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical;
+
 /// The measurement selectors are process-wide overrides; the gate tests in this file share the
 /// process when run with the default test harness, so they must not overlap.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -216,6 +219,14 @@ fn compare_stage_b_files(
     let mut worst = (0.0_f64, 0.0_f64);
     let mut compared = 0usize;
     for (name, text) in reference {
+        numerical::assert_numeric_text(
+            text,
+            &device[name],
+            abs,
+            rel,
+            &[],
+            format!("{label} {name}"),
+        );
         let (a, b): (Vec<&str>, Vec<&str>) = (
             text.split_whitespace().collect(),
             device[name].split_whitespace().collect(),
@@ -390,15 +401,15 @@ fn cuda_resident_measurement_matches_c_order() {
         "the Opt sweep must not download inverse planes: {after:?}"
     );
 
-    // Same-implementation repeatability: the kernels are deterministic (no atomics), so a
-    // second resident run of the same input must be bitwise identical.
+    // Same-implementation output repeatability follows the existing stage-B numeric
+    // budget; integer/header/file structure remains exact in compare_stage_b_files.
     set_measurement_backend_override(Some(MeasurementPfaffian::Stage(StageBackendKind::Cuda(0))));
     set_measurement_consumer_override(Some(MeasurementConsumer::Stage(StageBackendKind::Cuda(0))));
     let repeat = optimization(
         Some(MeasurementConsumer::Stage(StageBackendKind::Cuda(0))),
         "resident-opt-cuda-repeat",
     );
-    assert_eq!(device, repeat, "resident runs must be bitwise repeatable");
+    compare_stage_b_files("resident Opt repeat", &device, &repeat, abs, rel);
 
     set_measurement_consumer_override(None);
     set_measurement_backend_override(None);

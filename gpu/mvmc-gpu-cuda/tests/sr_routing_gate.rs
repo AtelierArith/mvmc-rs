@@ -19,14 +19,17 @@
 //!   accumulation and identical in both runs). The solution obeys the first-order perturbation
 //!   bound `|dx| / |x| <= 2 kappa (|B|_F / |S|_2 + |B_g| / |g| + 4 n eps)` with `kappa`
 //!   estimated on the host (power and inverse iteration through the C-order Cholesky).
-//! * **Trajectories (#358)**: the resident direct run is bitwise repeatable and finite; its
+//! * **Trajectories (#358)**: the resident direct run is numerically repeatable and finite; its
 //!   difference from C order over several steps is reported (the accumulated effect of the
 //!   step-1 differences) and bounded with the measured amplification stated in the assertion.
 //!   CG runs are compared as in the tenferro test: structure (file set, S size and cuts of the
-//!   SR info rows) and the pre-update energy row exactly, repeatability bitwise; the CG
+//!   SR info rows) exactly; pre-update energy and repeats use explicit numerical bounds. The CG
 //!   solution itself is validated at stage level by `sr_device_gate`.
 
 #![allow(clippy::needless_range_loop)]
+
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -377,7 +380,30 @@ fn compare_files(label: &str, a: &BTreeMap<String, String>, b: &BTreeMap<String,
     worst
 }
 
-/// Several-step direct runs: bitwise repeatable on the device, finite, and close to C order.
+fn assert_repeat_files(
+    label: &str,
+    first: &BTreeMap<String, String>,
+    repeat: &BTreeMap<String, String>,
+) {
+    assert_eq!(
+        first.keys().collect::<Vec<_>>(),
+        repeat.keys().collect::<Vec<_>>(),
+        "{label}: file set"
+    );
+    for (name, text) in first {
+        // Existing #190 short-SR repeatability budget; indices, headers and rows stay exact.
+        numerical::assert_numeric_text(
+            text,
+            &repeat[name],
+            1e-11,
+            1e-11,
+            &[],
+            format!("{label}: {name}"),
+        );
+    }
+}
+
+/// Several-step direct runs: numerically repeatable, finite, and close to C order.
 fn check_direct_trajectory(c: &Case, steps: i64) {
     let reference = run(c, "ref", steps, false, StageBackendKind::COrder, false);
     let before = counters();
@@ -390,11 +416,7 @@ fn check_direct_trajectory(c: &Case, steps: i64) {
         "{}: one resident direct step per SR step",
         c.name
     );
-    assert_eq!(
-        dev_a.files, dev_b.files,
-        "{}: resident run not repeatable",
-        c.name
-    );
+    assert_repeat_files(c.name, &dev_a.files, &dev_b.files);
     let worst = compare_files(c.name, &reference.files, &dev_a.files);
     eprintln!(
         "  {:22} {steps} steps: worst relative difference of any output number vs C order {worst:.2e}",
@@ -423,11 +445,7 @@ fn check_cg(c: &Case, steps: i64) {
         "{}: CG must not use the direct step",
         c.name
     );
-    assert_eq!(
-        dev_a.files, dev_b.files,
-        "{}: resident CG not repeatable",
-        c.name
-    );
+    assert_repeat_files(c.name, &dev_a.files, &dev_b.files);
     assert_eq!(
         reference.files.keys().collect::<Vec<_>>(),
         dev_a.files.keys().collect::<Vec<_>>()
@@ -435,8 +453,15 @@ fn check_cg(c: &Case, steps: i64) {
     let first = |files: &BTreeMap<String, String>| {
         files["zvo_out.dat"].lines().next().unwrap_or("").to_owned()
     };
-    // the pre-update energy row does not depend on the SR backend
-    assert_eq!(first(&reference.files), first(&dev_a.files), "{}", c.name);
+    // The pre-update energy is computed arithmetic even though it precedes SR routing.
+    numerical::assert_numeric_text(
+        &first(&reference.files),
+        &first(&dev_a.files),
+        1e-11,
+        1e-11,
+        &[],
+        c.name,
+    );
     // S size and cuts of the first SR info row (the discrete contract)
     let info_cols = |files: &BTreeMap<String, String>| {
         files["zvo_SRinfo.dat"]

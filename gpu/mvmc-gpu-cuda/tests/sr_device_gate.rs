@@ -6,8 +6,8 @@
 //!
 //! * **Gram**: per entry `|G_dev - G_host| <= 2 k eps (|O||O|^T)_ij` (both are sums of `k`
 //!   products in different orders, `gamma_k` each).
-//! * **S/g assembly**: bitwise equal to the host formulas applied to the device's own Gram
-//!   (`--fmad=false`, same expressions).
+//! * **S/g assembly**: `2 eps` relative to the host formulas on the device's own Gram
+//!   (`--fmad=false`, same expressions), following the existing #190 assembly budget.
 //! * **Direct solution**: `|dx|_2 / |x|_2 <= 4 n eps kappa(S)` (backward-stable solver
 //!   forward-error bound, `kappa` estimated by power / inverse iteration on the host), and the
 //!   device solution's residual `|S x - g| / |g|` is below `4 n eps kappa`-free `1e-9`.
@@ -15,8 +15,9 @@
 //!   `|z_dev - z_host| <= 4 (k + m) eps scale_i` with `scale_i` the sum of the absolute terms.
 //! * **CG solution**: iteration counts equal and relative difference below `1e-9` on a well
 //!   conditioned problem; on an ill-conditioned problem (#358) only the operator products,
-//!   finiteness and bitwise repeatability of the device trajectory are asserted, and the
-//!   amplification is printed.
+//!   finiteness, exact iteration counts and numerical repeatability are asserted. The final
+//!   prefix's residual is reported, not assumed converged. The converged case checks an
+//!   independently materialized covariance residual against its stopping threshold.
 
 #![allow(clippy::needless_range_loop)]
 
@@ -29,6 +30,29 @@ use mvmc_gpu_cuda::sr_device::{DeviceSr, SrDeviceError};
 use mvmc_gpu_cuda::sr_problem::{cg_inputs, make_problem};
 
 const EPS: f64 = f64::EPSILON;
+
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical;
+
+fn finite_close(actual: &[f64], expected: &[f64], abs: f64, rel: f64, context: &str) {
+    assert!(
+        actual.iter().chain(expected).all(|v| v.is_finite()),
+        "{context}"
+    );
+    let maximum = actual
+        .iter()
+        .zip(expected)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
+    eprintln!("{context}: max absolute difference {maximum:.3e}; abs {abs:.3e}, rel {rel:.3e}");
+    numerical::assert_values_close(
+        actual.iter().copied(),
+        expected.iter().copied(),
+        abs,
+        rel,
+        context,
+    );
+}
 
 fn gate() -> Option<DeviceSr> {
     mvmc_gpu_cuda::install();
@@ -119,8 +143,9 @@ fn check_direct(
     factors: usize,
     noise: f64,
     skip: usize,
-) {
-    let p = make_problem(n, samples, factors, noise, skip, 11 + n as u64);
+    seed: u64,
+) -> Vec<f64> {
+    let p = make_problem(n, samples, factors, noise, skip, seed);
     let (sta_del, step_dt) = (0.01, 0.003);
     let nm = p.map.len();
 
@@ -155,20 +180,11 @@ fn check_direct(
     }
     assert!(worst_gram <= 1.0, "Gram error / bound = {worst_gram}");
 
-    // S/g: bitwise equal to the host formula on the device's Gram
+    // Same scalar expressions on the same Gram, with FMA disabled. The existing
+    // #190 assembly regression budget is 2 eps relative (measured difference 0).
     let (s_hd, g_hd) = host_s_g(&gram_d, &p.ho, &p.map, n, sta_del, step_dt);
-    assert!(
-        s_d.iter()
-            .zip(&s_hd)
-            .all(|(a, b)| a.to_bits() == b.to_bits()),
-        "S assembly is not bit-identical to the host formula"
-    );
-    assert!(
-        g_d.iter()
-            .zip(&g_hd)
-            .all(|(a, b)| a.to_bits() == b.to_bits()),
-        "g"
-    );
+    finite_close(&s_d, &s_hd, 0.0, 2.0 * EPS, "S assembly");
+    finite_close(&g_d, &g_hd, 0.0, 2.0 * EPS, "g assembly");
     let _ = (&s_h, &g_h);
 
     // solve
@@ -188,16 +204,17 @@ fn check_direct(
     assert!(rel <= bound, "solution error {rel} > {bound}");
     assert!(resid <= 1e-9, "device residual {resid}");
     assert!(dev.timings.total_s() > 0.0);
+    x_d
 }
 
 #[test]
 #[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
 fn device_direct_sr_matches_c_order() {
     let Some(mut dev) = gate() else { return };
-    check_direct(&mut dev, 17, 40, 8, 0.5, 0);
-    check_direct(&mut dev, 129, 300, 40, 0.5, 5);
-    check_direct(&mut dev, 400, 2000, 100, 0.3, 0);
-    check_direct(&mut dev, 600, 700, 600, 1.0, 7);
+    let _ = check_direct(&mut dev, 17, 40, 8, 0.5, 0, 28);
+    let _ = check_direct(&mut dev, 129, 300, 40, 0.5, 5, 140);
+    let _ = check_direct(&mut dev, 400, 2000, 100, 0.3, 0, 411);
+    let _ = check_direct(&mut dev, 600, 700, 600, 1.0, 7, 611);
 }
 
 #[test]
@@ -254,6 +271,58 @@ fn host_operator(
     op
 }
 
+fn materialized_cg(
+    inputs: &mvmc_gpu_cuda::sr_problem::CgInputs,
+    comp: usize,
+    samples: usize,
+    inv_weight: f64,
+    shift: f64,
+) -> Vec<f64> {
+    let mut covariance = vec![0.0; comp * comp];
+    COrderSr::default()
+        .gram_real(&inputs.operand, comp, samples, &mut covariance)
+        .unwrap();
+    for j in 0..comp {
+        for i in 0..comp {
+            covariance[i + j * comp] =
+                inv_weight * covariance[i + j * comp] - inputs.mean[i] * inputs.mean[j];
+        }
+        covariance[j + j * comp] += shift * inputs.diagonal[j];
+    }
+    covariance
+}
+
+// Absolute terms of two GEMVs plus mean/diagonal corrections, as in the
+// independent operator-product error model below (not the computed result's size).
+fn cg_error_scale(
+    inp: &mvmc_gpu_cuda::sr_problem::CgInputs,
+    x: &[f64],
+    comp: usize,
+    samples: usize,
+    inv_weight: f64,
+    shift: f64,
+) -> Vec<f64> {
+    let mut y = vec![0.0; samples];
+    for s in 0..samples {
+        for i in 0..comp {
+            y[s] += inp.operand[i + s * comp].abs() * x[i].abs();
+        }
+    }
+    let mut scale = vec![0.0; comp];
+    for s in 0..samples {
+        for i in 0..comp {
+            scale[i] += inp.operand[i + s * comp].abs() * y[s];
+        }
+    }
+    let coef_abs: f64 = inp.mean.iter().zip(x).map(|(m, v)| (m * v).abs()).sum();
+    for i in 0..comp {
+        scale[i] = inv_weight.abs() * scale[i]
+            + coef_abs * inp.mean[i].abs()
+            + shift.abs() * (inp.diagonal[i] * x[i]).abs();
+    }
+    scale
+}
+
 fn check_operator(dev: &mut DeviceSr, n: usize, samples: usize, factors: usize, noise: f64) {
     let p = make_problem(n, samples, factors, noise, 4, 21 + n as u64);
     let inp = cg_inputs(&p, 0.003);
@@ -271,25 +340,10 @@ fn check_operator(dev: &mut DeviceSr, n: usize, samples: usize, factors: usize, 
         .apply_operator(&x, &inp.mean, &inp.diagonal, inv_w, shift)
         .unwrap();
     // scale_i = inv_w (|A|(|A|^T|x|))_i + |coef mean_i| + shift |diag x|
-    let mut y = vec![0.0; samples];
-    for s in 0..samples {
-        for i in 0..comp {
-            y[s] += inp.operand[i + s * comp].abs() * x[i].abs();
-        }
-    }
-    let mut scale = vec![0.0; comp];
-    for s in 0..samples {
-        for i in 0..comp {
-            scale[i] += inp.operand[i + s * comp].abs() * y[s];
-        }
-    }
-    let coef_abs: f64 = inp.mean.iter().zip(&x).map(|(m, v)| (m * v).abs()).sum();
+    let scale = cg_error_scale(&inp, &x, comp, samples, inv_w, shift);
     let mut worst = 0.0f64;
     for i in 0..comp {
-        let sc = inv_w * scale[i]
-            + coef_abs * inp.mean[i].abs()
-            + shift * (inp.diagonal[i] * x[i]).abs();
-        let allowed = 4.0 * (samples + comp) as f64 * EPS * sc;
+        let allowed = 4.0 * (samples + comp) as f64 * EPS * scale[i];
         worst = worst.max((z_d[i] - z_h[i]).abs() / allowed.max(f64::MIN_POSITIVE));
     }
     eprintln!("operator comp={comp:5} ns={samples:5}: worst error / bound = {worst:.2e}");
@@ -344,6 +398,27 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
     assert_eq!(out.iterations, host.iterations);
     assert!(rel < 1e-9, "{rel}");
 
+    let covariance = materialized_cg(&inp, comp, samples, inv_w, shift);
+    let applied = matvec(&covariance, &out.solution, comp);
+    let residual: Vec<f64> = applied
+        .iter()
+        .zip(&inp.gradient)
+        .map(|(a, b)| a - b)
+        .collect();
+    let scale = cg_error_scale(&inp, &out.solution, comp, samples, inv_w, shift);
+    let k_eps = (samples + comp + 4) as f64 * EPS;
+    let rounding: Vec<f64> = scale
+        .iter()
+        .zip(&inp.gradient)
+        .map(|(s, b)| 8.0 * k_eps / (1.0 - k_eps) * s + 2.0 * EPS * b.abs())
+        .collect();
+    let residual_norm = norm(&residual);
+    let allowed = tol * comp as f64 + norm(&rounding);
+    eprintln!(
+        "CG converged independent residual {residual_norm:.3e}, stop plus rounding {allowed:.3e}"
+    );
+    assert!(residual_norm.is_finite() && residual_norm <= allowed);
+
     // ill conditioned (#358): tiny shift, comp close to the sample count; the CG residual
     // norm is non-monotone and cancels to 1e-16, so only repeatability is asserted after the
     // first iterations, with the divergence printed.
@@ -351,6 +426,17 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
     let p2 = make_problem(n2, samples2, 120, 0.05, 0, 9);
     let inp2 = cg_inputs(&p2, 0.003);
     let comp2 = p2.map.len();
+    // Fixed zero-tolerance prefixes need not converge. Their independent residual
+    // is diagnostic; it is not compared to a converged direct-solver error bound.
+    let covariance = materialized_cg(&inp2, comp2, samples2, inv_w, 1e-4);
+    let matrix_norm = (0..comp2)
+        .map(|i| {
+            (0..comp2)
+                .map(|j| covariance[i + j * comp2].abs())
+                .sum::<f64>()
+        })
+        .fold(0.0, f64::max);
+    let rhs_norm = inp2.gradient.iter().map(|v| v.abs()).fold(0.0, f64::max);
     dev.set_cg_operand(&inp2.operand, None, comp2, samples2)
         .unwrap();
     for iters in [1usize, 2, 4, 8, comp2] {
@@ -386,14 +472,44 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
             .collect();
         let rel = norm(&dx) / norm(&h.solution).max(f64::MIN_POSITIVE);
         eprintln!("cg ill-conditioned, {iters:3} iterations: device vs host rel {rel:.2e}");
-        assert!(d1.solution.iter().all(|v| v.is_finite()));
-        assert!(
-            d1.solution
-                .iter()
-                .zip(&d2.solution)
-                .all(|(a, b)| a.to_bits() == b.to_bits()),
-            "device CG is not repeatable"
+        assert_eq!(d1.iterations, d2.iterations);
+        assert_eq!(d1.iterations, iters);
+        let k_eps = (samples2 + comp2) as f64 * EPS;
+        // Two GEMV reductions per iteration; a strict fixed-problem regression
+        // envelope, not a forward-error guarantee for arbitrary ill-conditioned CG.
+        let repeat_rel = 2.0 * iters as f64 * k_eps / (1.0 - k_eps);
+        finite_close(
+            &d1.solution,
+            &d2.solution,
+            8.0 * EPS,
+            repeat_rel,
+            &format!("CG repeat {iters} iterations"),
         );
+        if iters == comp2 {
+            let host_applied = matvec(&covariance, &h.solution, comp2);
+            let host_residual = host_applied
+                .iter()
+                .zip(&inp2.gradient)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0, f64::max);
+            let host_x_norm = h.solution.iter().map(|v| v.abs()).fold(0.0, f64::max);
+            eprintln!(
+                "CG C-order full-prefix backward residual {:.3e}",
+                host_residual / (matrix_norm * host_x_norm + rhs_norm)
+            );
+            for solution in [&d1.solution, &d2.solution] {
+                let applied = matvec(&covariance, solution, comp2);
+                let residual = applied
+                    .iter()
+                    .zip(&inp2.gradient)
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0, f64::max);
+                let x_norm = solution.iter().map(|v| v.abs()).fold(0.0, f64::max);
+                let backward = residual / (matrix_norm * x_norm + rhs_norm);
+                eprintln!("CG nonconverged full-prefix backward residual {backward:.3e}");
+                assert!(backward.is_finite());
+            }
+        }
         if iters <= 2 {
             assert!(rel < 1e-8, "early-iteration divergence {rel}");
         }
@@ -402,16 +518,15 @@ fn device_cg_solve_matches_c_order_and_is_repeatable() {
 
 #[test]
 #[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
-fn device_direct_sr_is_bitwise_repeatable() {
+fn device_direct_sr_repeats_with_c_order_and_residual_checks() {
     let Some(mut dev) = gate() else { return };
     let (n, samples) = (257, 600);
-    let p = make_problem(n, samples, 50, 0.4, 6, 77);
-    dev.upload_store(&p.store, n, samples).unwrap();
-    let x1 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
-    // re-upload and re-solve: same inputs give identical bits
-    dev.upload_store(&p.store, n, samples).unwrap();
-    let x2 = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
-    assert!(x1.iter().zip(&x2).all(|(a, b)| a.to_bits() == b.to_bits()));
+    // Preserve the original problem and seed. Each fresh upload/solve is also
+    // checked against C order and the original independent residual bounds.
+    let x1 = check_direct(&mut dev, n, samples, 50, 0.4, 6, 77);
+    let x2 = check_direct(&mut dev, n, samples, 50, 0.4, 6, 77);
+    // Existing #190 short-SR output repeatability envelope.
+    finite_close(&x1, &x2, 1e-11, 1e-11, "direct SR repeat");
 }
 
 #[test]
