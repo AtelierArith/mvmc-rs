@@ -78,3 +78,15 @@ cargo tree --manifest-path benchmark/pfapack_compare/Cargo.toml --locked -i lru
 The old snapshots and the historical evidence above are retained as provenance; the new graphs do not use those patches. This check concerns the lru remediation and is not a complete security audit of the new dependency graphs.
 
 On 2026-11-02, `cargo audit --file` reported no lru advisory in any of the three locks. The root and standalone benchmark audits still exit 1 for the pre-existing crossbeam-epoch 0.9.18 finding RUSTSEC-2026-0204; the CUDA lock audit exits 0. The root additionally reports the pre-existing custom_derive and paste unmaintained warnings and the anyhow unsoundness warning; the benchmark and CUDA locks report the paste warning. No advisory was suppressed. These results are specific to the advisory database available at the time of the check.
+
+## Follow-up: crossbeam-epoch (#595)
+
+On 2026-11-02, the root and standalone PfaPack benchmark lockfiles were updated from `crossbeam-epoch` 0.9.18 to 0.9.21, which is outside the affected range of RUSTSEC-2026-0204. The CUDA lock already used 0.9.21. Historical benchmark-result lockfiles are provenance and were not regenerated. The advisory describes formatting an invalid `Atomic`/`Shared` pointer; presence in a lockfile alone does not establish that the affected path is exercised.
+
+With Rust 1.99.0, `cargo-audit` 0.22.2 and the locally available advisory database at commit `2295466c4e9df26647fd67d8fa1c705ac2fc7f81`, each command below exited 0 and no longer reported RUSTSEC-2026-0204. The root lock still reported the unmaintained `custom_derive` and `paste` warnings and the `anyhow` unsoundness warning RUSTSEC-2026-0190. Each of the benchmark and CUDA locks still reported the `paste` unmaintained warning. Exit 0 therefore does not mean there are no warnings; none were suppressed by these commands. Results depend on the advisory database revision.
+
+```sh
+cargo audit --no-fetch --file Cargo.lock
+cargo audit --no-fetch --file benchmark/pfapack_compare/Cargo.lock
+cargo audit --no-fetch --file gpu/mvmc-gpu-cuda/Cargo.lock
+```
