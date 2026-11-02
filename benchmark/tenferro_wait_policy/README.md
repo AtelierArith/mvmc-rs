@@ -88,3 +88,16 @@ for ranks in 2 4; do
   done
 done
 ```
+
+## Separate inner-kernel diagnostics
+
+One additional instrumented run per workload/policy used the same MPI 4 × inner 4 / 16-CPU configuration, tenferro threads=4, `MVMC_RS_INNER_PROFILE=1`, `MVMC_RS_INNER_OBSERVE=1` and `MVMC_C_TIMER=1`. MPI stdout/stderr was separated by rank to avoid interleaved lines. Instrumentation changes timing; these are not the performance samples above. Every rank reported four distinct mVMC Rayon worker IDs.
+
+For rank 0, the Opt diagnostic recorded 20,166 pooled and 274,783 serial inner calls under both policies; its largest recorded sites included `pfaffian.rs:222` (8,106 pooled calls), `sampling/updates.rs:604` (69,794 serial calls), and `observables.rs:3491` (6,000 pooled calls). PhysCal recorded 18,452 pooled and 375,118 serial calls, with `green_measurements.rs:220` (6,000 pooled calls), `pfaffian.rs:222` (6,450 pooled calls), and `sampling/updates.rs:425` (59,947 serial calls) among its largest measured sites. Counts are identical for the two policies in this rank, and worker IDs were `[0,1,2,3]`. This instrumentation observes the mVMC Rayon pool, not tenferro team's individual wait states, and recorded scopes may overlap; their times must not be added as independent phases. It does not explain the 4-CPU Opt timing difference. [All rank profiles and root C timers](results/profile-observation.txt).
+
+```sh
+benchmark/tenferro_wait_policy/profile-mpi-l32.sh \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/wait-input/inputs /tmp/wait-profiles
+```
+
+The script uses the same input and build preparation as above, a fresh output directory, MPICH's rank-specific output files, and CPUs 0–15; adapt the affinity and launcher path for other hosts.

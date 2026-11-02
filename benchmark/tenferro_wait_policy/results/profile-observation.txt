@@ -1,0 +1,468 @@
+### opt-default-rank-0.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8106       64848    1120.0   138.16  17270.6
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69794      558352     541.2     7.75    969.3
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     337.8    56.31    439.9
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     257.7 12885.84    332.0
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     234.4 11720.82    357.7
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     162.6     0.84    105.4
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      84.4    14.07   1758.5
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      61.9    10.32     52.4
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160      53.5  2677.24 334654.9
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.6   282.18  35272.7
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.5     0.59     73.2
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.7   744.12  93014.6
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    11.58     58.8
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2    10.35     52.8
+inner-execution: ExecutionSnapshot { parallel_calls: 20166, serial_calls: 274783, executed_qp_items: 2166792, parallel_qp_items: 64848, serial_qp_items: 2101944, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312548, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-default-rank-1.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8111       64888    1176.0   144.99  18123.7
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       70065      560520     539.3     7.70    962.1
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     340.4    56.73    443.2
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     259.2 12961.49    334.0
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     232.3 11614.65    354.5
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     161.9     0.84    104.9
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      83.7    13.96   1744.7
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      61.0    10.17     51.6
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160      32.7  1636.18 204522.2
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.7   282.82  35352.8
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.4     0.57     71.6
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.7   681.08  85134.8
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    12.06     61.2
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2     9.81     50.0
+inner-execution: ExecutionSnapshot { parallel_calls: 20171, serial_calls: 275054, executed_qp_items: 2169000, parallel_qp_items: 64888, serial_qp_items: 2104112, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312588, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-default-rank-2.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8101       64808    1142.2   141.00  17625.1
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69646      557168     541.5     7.78    971.9
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     341.6    56.93    444.7
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     262.7 13133.23    338.4
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     224.7 11237.31    342.9
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     163.3     0.85    105.8
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      84.7    14.11   1764.1
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      62.3    10.38     52.7
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160      32.4  1621.29 202661.4
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.6   279.55  34943.9
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.6     0.60     75.0
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   754.61  94325.6
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2    10.59     54.0
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2     9.97     50.6
+inner-execution: ExecutionSnapshot { parallel_calls: 20161, serial_calls: 274635, executed_qp_items: 2165568, parallel_qp_items: 64808, serial_qp_items: 2100760, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312508, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-default-rank-3.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8100       64800    1190.6   146.99  18373.6
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69664      557312     545.7     7.83    979.1
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     355.0    59.17    462.2
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     272.4 13620.05    351.0
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     240.1 12006.30    366.4
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     164.5     0.85    106.6
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      85.0    14.16   1770.2
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      62.3    10.39     52.7
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160      36.3  1814.60 226825.5
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.5   276.58  34572.6
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.5     0.59     73.3
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   756.01  94501.6
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    11.69     59.3
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2    10.58     54.0
+inner-execution: ExecutionSnapshot { parallel_calls: 20160, serial_calls: 274653, executed_qp_items: 2165704, parallel_qp_items: 64800, serial_qp_items: 2100904, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312500, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-default/zvo_CalcTimer.dat
+All                         [0]      3.62074
+Initialization              [1]      0.00137
+  read options             [10]      0.00000
+  ReadDefFile              [11]      0.00118
+  SetMemory                [12]      0.00000
+  InitParameter            [13]      0.00011
+VMCParaOpt                  [2]      3.61545
+  VMCMakeSample             [3]      1.49908
+    makeInitialSample      [30]      0.03036
+    make candidate         [31]      0.02964
+    hopping update         [32]      0.94346
+      UpdateProjCnt        [60]      0.06579
+      CalculateNewPfM2     [61]      0.19913
+      CalculateLogIP       [62]      0.01806
+      UpdateMAll           [63]      0.55065
+    exchange update        [33]      0.00000
+      UpdateProjCnt        [65]      0.00000
+      CalculateNewPfMTwo2  [66]      0.00000
+      CalculateLogIP       [67]      0.00000
+      UpdateMAllTwo        [68]      0.00000
+    lspinflip update       [36]      0.00000
+      UpdateProjCnt       [600]      0.00000
+      CalculateNewPfMTwo2 [601]      0.00000
+      CalculateLogIP      [602]      0.00000
+      UpdateMAllTwo       [603]      0.00000
+    recal PfM and InvM     [34]      0.41082
+    save electron config   [35]      0.00178
+  VMCMainCal                [4]      1.38613
+    CalculateMAll          [40]      0.71158
+    LocEnergyCal           [41]      0.52725
+      CalHamiltonian0      [70]      0.00165
+      CalHamiltonian1      [71]      0.36063
+      CalHamiltonian2      [72]      0.00092
+    ReturnSlaterElmDiff    [42]      0.00145
+    calculate OO and HO    [43]      0.06484
+    multiply store OO      [45]      0.04555
+  StochasticOpt             [5]      0.03035
+    preprocess             [50]      0.00028
+    stcOptMain             [51]      0.02902
+      initBLACS            [55]      0.00000
+      calculate S and g    [56]      0.01724
+      DPOSV                [57]      0.01178
+      gatherParaChange     [58]      0.00000
+    postprocess            [52]      0.00004
+  UpdateSlaterElm          [20]      0.28804
+  WeightAverage            [21]      0.38023
+  outputData               [22]      0.02604
+  SyncModifiedParameter    [23]      0.00073
+  cal                      [24]      0.00442
+  SR                       [25]      0.25797
+  MAll                     [69]      0.00000
+
+### opt-zero-rank-0.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8106       64848    1204.0   148.53  18566.8
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69794      558352     500.7     7.17    896.7
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     342.2    57.03    445.6
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     301.2 15058.93    388.0
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     256.8 12842.40    391.9
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     151.9     0.79     98.4
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      87.5    14.59   1823.4
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      56.8     9.47     48.1
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.4   268.69  33586.5
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.3     0.56     69.6
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160       3.1   156.38  19547.9
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   762.82  95352.6
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    10.79     54.7
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2     8.80     44.9
+inner-execution: ExecutionSnapshot { parallel_calls: 20166, serial_calls: 274783, executed_qp_items: 2166792, parallel_qp_items: 64848, serial_qp_items: 2101944, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312548, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-zero-rank-1.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8111       64888    1215.0   149.80  18724.9
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       70065      560520     529.5     7.56    944.7
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     350.5    58.42    456.4
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     311.0 15550.58    400.7
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     259.3 12965.17    395.7
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     157.2     0.81    101.8
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      86.6    14.44   1804.6
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      59.7     9.94     50.5
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.5   276.92  34615.6
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.4     0.57     71.2
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160       3.1   152.68  19084.4
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   792.21  99026.2
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.3    12.69     64.4
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2     9.66     49.3
+inner-execution: ExecutionSnapshot { parallel_calls: 20171, serial_calls: 275054, executed_qp_items: 2169000, parallel_qp_items: 64888, serial_qp_items: 2104112, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312588, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-zero-rank-2.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8101       64808    1189.4   146.82  18352.2
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69646      557168     489.1     7.02    877.8
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     356.6    59.44    464.4
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     315.9 15792.68    406.9
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     263.7 13185.37    402.4
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     147.6     0.77     95.7
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      88.9    14.82   1852.2
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      56.3     9.39     47.6
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       6.2   308.03  38503.5
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.2     0.54     67.0
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160       3.1   155.50  19437.9
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   753.86  94232.4
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    10.12     51.4
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2     8.81     45.0
+inner-execution: ExecutionSnapshot { parallel_calls: 20161, serial_calls: 274635, executed_qp_items: 2165568, parallel_qp_items: 64808, serial_qp_items: 2100760, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312508, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-zero-rank-3.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         pool          8100       64800    1207.4   149.06  18633.0
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69664      557312     492.5     7.07    883.7
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     360.7    60.12    469.7
+  crates/mvmc-core/src/average.rs:62           pool            20      776180     321.0 16051.48    413.6
+  crates/mvmc-core/src/slater_update.rs:115    pool            20      655360     261.2 13059.82    398.6
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424     149.0     0.77     96.5
+  crates/mvmc-core/src/slater_derivative.rs:504 pool          6000       48000      87.9    14.66   1832.2
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000      56.4     9.41     47.8
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.3   263.78  32972.9
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.3     0.55     69.0
+  crates/mvmc-core/src/slater_update.rs:53     pool            20         160       3.3   162.90  20362.0
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   762.03  95253.5
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.2    11.34     57.5
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.2     9.04     46.1
+inner-execution: ExecutionSnapshot { parallel_calls: 20160, serial_calls: 274653, executed_qp_items: 2165704, parallel_qp_items: 64800, serial_qp_items: 2100904, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1479700, serial_entry_items: 1237860, worker_entries: 2312500, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### opt-zero/zvo_CalcTimer.dat
+All                         [0]      3.57675
+Initialization              [1]      0.00171
+  read options             [10]      0.00000
+  ReadDefFile              [11]      0.00121
+  SetMemory                [12]      0.00000
+  InitParameter            [13]      0.00021
+VMCParaOpt                  [2]      3.57069
+  VMCMakeSample             [3]      1.44143
+    makeInitialSample      [30]      0.01608
+    make candidate         [31]      0.02748
+    hopping update         [32]      0.87743
+      UpdateProjCnt        [60]      0.06239
+      CalculateNewPfM2     [61]      0.18597
+      CalculateLogIP       [62]      0.01649
+      UpdateMAll           [63]      0.50975
+    exchange update        [33]      0.00000
+      UpdateProjCnt        [65]      0.00000
+      CalculateNewPfMTwo2  [66]      0.00000
+      CalculateLogIP       [67]      0.00000
+      UpdateMAllTwo        [68]      0.00000
+    lspinflip update       [36]      0.00000
+      UpdateProjCnt       [600]      0.00000
+      CalculateNewPfMTwo2 [601]      0.00000
+      CalculateLogIP      [602]      0.00000
+      UpdateMAllTwo       [603]      0.00000
+    recal PfM and InvM     [34]      0.44053
+    save electron config   [35]      0.00169
+  VMCMainCal                [4]      1.44180
+    CalculateMAll          [40]      0.76635
+    LocEnergyCal           [41]      0.52852
+      CalHamiltonian0      [70]      0.00153
+      CalHamiltonian1      [71]      0.36312
+      CalHamiltonian2      [72]      0.00076
+    ReturnSlaterElmDiff    [42]      0.00112
+    calculate OO and HO    [43]      0.05944
+    multiply store OO      [45]      0.05171
+  StochasticOpt             [5]      0.02986
+    preprocess             [50]      0.00024
+    stcOptMain             [51]      0.02856
+      initBLACS            [55]      0.00000
+      calculate S and g    [56]      0.01641
+      DPOSV                [57]      0.01214
+      gatherParaChange     [58]      0.00000
+    postprocess            [52]      0.00003
+  UpdateSlaterElm          [20]      0.26008
+  WeightAverage            [21]      0.37036
+  outputData               [22]      0.02262
+  SyncModifiedParameter    [23]      0.00072
+  cal                      [24]      0.00437
+  SR                       [25]      0.30142
+  MAll                     [69]      0.00000
+
+### phys-default-rank-0.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1114.0   185.67    967.0
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6450       51600     958.4   148.58  18572.9
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       59947      479576     679.6    11.34   1417.1
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     412.8    68.80    537.5
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288000     2304000     237.0     0.82    102.9
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     212.8    35.47    554.2
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       15150      121200     122.6     8.09   1011.3
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      11.8 11753.60    358.7
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.4   272.21  34026.3
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       4.5     0.75     94.1
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   756.60  94574.4
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.3   273.48  34185.0
+inner-execution: ExecutionSnapshot { parallel_calls: 18452, serial_calls: 375118, executed_qp_items: 2956544, parallel_qp_items: 51600, serial_qp_items: 2904944, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004376, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-default-rank-1.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1333.3   222.22   1157.4
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6425       51400     930.8   144.88  18109.4
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       62209      497672     839.6    13.50   1687.0
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     380.4    63.39    495.3
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288720     2309760     235.1     0.81    101.8
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     215.2    35.87    560.5
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       14397      115176     118.2     8.21   1026.4
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      11.6 11602.63    354.1
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.4   270.60  33825.1
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       5.1     0.84    105.6
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   750.30  93787.0
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.2   208.40  26049.5
+inner-execution: ExecutionSnapshot { parallel_calls: 18427, serial_calls: 377347, executed_qp_items: 2974176, parallel_qp_items: 51400, serial_qp_items: 2922776, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004176, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-default-rank-2.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1364.1   227.36   1184.1
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6394       51152     912.8   142.75  17844.1
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       64251      514008     858.4    13.36   1670.0
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     401.2    66.87    522.4
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288768     2310144     239.2     0.83    103.5
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     218.7    36.45    569.5
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       13357      106856     108.8     8.15   1018.6
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      11.3 11310.17    345.2
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       5.7     0.96    119.4
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.5   275.57  34445.7
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   752.32  94039.5
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.1   137.76  17219.6
+inner-execution: ExecutionSnapshot { parallel_calls: 18396, serial_calls: 378397, executed_qp_items: 2982328, parallel_qp_items: 51152, serial_qp_items: 2931176, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2003928, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-default-rank-3.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1341.1   223.51   1164.1
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6435       51480     947.7   147.27  18408.3
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       61911      495288     840.8    13.58   1697.6
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     394.5    65.75    513.6
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      289824     2318592     241.6     0.83    104.2
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     222.6    37.10    579.7
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       14730      117840     120.3     8.17   1021.1
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      10.9 10872.99    331.8
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       5.6     0.93    115.8
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.5   272.86  34107.3
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   754.65  94330.8
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.2   213.13  26641.6
+inner-execution: ExecutionSnapshot { parallel_calls: 18437, serial_calls: 378486, executed_qp_items: 2983368, parallel_qp_items: 51480, serial_qp_items: 2931888, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004256, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-default/zvo_CalcTimer.dat
+All                         [0]      3.75840
+Initialization              [1]      0.00344
+  read options             [10]      0.00000
+  ReadDefFile              [11]      0.00183
+  SetMemory                [12]      0.00000
+  InitParameter            [13]      0.00157
+VMCPhysCal                  [2]      3.75496
+  VMCMakeSample             [3]      0.66857
+    makeInitialSample      [30]      0.00821
+    make candidate         [31]      0.02859
+    hopping update         [32]      0.50485
+      UpdateProjCnt        [60]      0.06263
+      CalculateNewPfM2     [61]      0.19611
+      CalculateLogIP       [62]      0.01752
+      UpdateMAll           [63]      0.12539
+    exchange update        [33]      0.00000
+      UpdateProjCnt        [65]      0.00000
+      CalculateNewPfMTwo2  [66]      0.00000
+      CalculateLogIP       [67]      0.00000
+      UpdateMAllTwo        [68]      0.00000
+    lspinflip update       [36]      0.00000
+      UpdateProjCnt       [600]      0.00000
+      CalculateNewPfMTwo2 [601]      0.00000
+      CalculateLogIP      [602]      0.00000
+      UpdateMAllTwo       [603]      0.00000
+    recal PfM and InvM     [34]      0.10813
+    save electron config   [35]      0.00160
+  VMCMainCal                [4]      2.68435
+    CalculateMAll          [40]      0.85195
+    LocEnergyCal           [41]      0.44948
+      CalHamiltonian0      [70]      0.00197
+      CalHamiltonian1      [71]      0.43550
+      CalHamiltonian2      [72]      0.00125
+    CalculateGreenFunc     [42]      0.00000
+      GreenFunc1           [50]      0.00000
+      GreenFunc2           [51]      0.00000
+      addPhysCA            [52]      0.00000
+      addPhysCACA          [53]      0.00000
+    Lanczos1               [43]      0.00000
+    Lanczos2               [44]      0.00000
+  UpdateSlaterElm          [20]      0.01203
+  WeightAverage            [21]      0.33559
+  outputData               [22]      0.01809
+
+### phys-zero-rank-0.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1027.9   171.32    892.3
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6450       51600     915.5   141.93  17741.3
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       59947      479576     638.9    10.66   1332.3
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     379.9    63.32    494.7
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288000     2304000     220.7     0.77     95.8
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     197.5    32.91    514.3
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       15150      121200     116.8     7.71    963.7
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      14.8 14809.97    452.0
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.1   256.24  32030.5
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       4.2     0.70     88.0
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   750.25  93781.2
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.1   133.19  16649.2
+inner-execution: ExecutionSnapshot { parallel_calls: 18452, serial_calls: 375118, executed_qp_items: 2956544, parallel_qp_items: 51600, serial_qp_items: 2904944, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004376, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-zero-rank-1.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1224.6   204.10   1063.0
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6425       51400     912.0   141.94  17742.9
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       62209      497672     760.0    12.22   1527.2
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     364.2    60.69    474.2
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288720     2309760     233.6     0.81    101.1
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     211.9    35.32    551.8
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       14397      115176     117.2     8.14   1017.3
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      15.0 15004.02    457.9
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.5   273.95  34244.0
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       5.0     0.83    103.6
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   775.08  96885.4
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.1   137.39  17173.1
+inner-execution: ExecutionSnapshot { parallel_calls: 18427, serial_calls: 377347, executed_qp_items: 2974176, parallel_qp_items: 51400, serial_qp_items: 2922776, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004176, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-zero-rank-2.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1081.7   180.29    939.0
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6394       51152     882.7   138.06  17257.0
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       64251      514008     687.3    10.70   1337.1
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     382.5    63.75    498.1
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288768     2310144     231.2     0.80    100.1
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     208.4    34.74    542.8
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       13357      106856     107.0     8.01   1001.3
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      14.5 14499.67    442.5
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.4   272.15  34018.6
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       4.1     0.68     84.9
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   793.47  99183.2
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.1   127.23  15904.4
+inner-execution: ExecutionSnapshot { parallel_calls: 18396, serial_calls: 378397, executed_qp_items: 2982328, parallel_qp_items: 51152, serial_qp_items: 2931176, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2003928, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-zero-rank-3.stderr
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1035.9   172.65    899.2
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6435       51480     913.3   141.93  17741.4
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       61911      495288     647.7    10.46   1307.7
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     373.8    62.30    486.7
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      289824     2318592     225.5     0.78     97.3
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     201.9    33.65    525.8
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       14730      117840     114.1     7.75    968.4
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768      14.1 14118.44    430.9
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       5.1   254.45  31806.7
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       4.3     0.72     89.8
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   765.01  95626.9
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.1   130.51  16313.8
+inner-execution: ExecutionSnapshot { parallel_calls: 18437, serial_calls: 378486, executed_qp_items: 2983368, parallel_qp_items: 51480, serial_qp_items: 2931888, executed_term_items: 768000, parallel_term_items: 768000, serial_term_items: 0, executed_region_items: 0, parallel_region_items: 0, serial_region_items: 0, parallel_entry_items: 1184776, serial_entry_items: 432000, worker_entries: 2004256, distinct_workers: 4, worker_ids: [0, 1, 2, 3] }
+
+### phys-zero/zvo_CalcTimer.dat
+All                         [0]      3.45950
+Initialization              [1]      0.00344
+  read options             [10]      0.00000
+  ReadDefFile              [11]      0.00120
+  SetMemory                [12]      0.00000
+  InitParameter            [13]      0.00178
+VMCPhysCal                  [2]      3.45607
+  VMCMakeSample             [3]      0.63714
+    makeInitialSample      [30]      0.00820
+    make candidate         [31]      0.02715
+    hopping update         [32]      0.47888
+      UpdateProjCnt        [60]      0.06009
+      CalculateNewPfM2     [61]      0.18540
+      CalculateLogIP       [62]      0.01632
+      UpdateMAll           [63]      0.11914
+    exchange update        [33]      0.00000
+      UpdateProjCnt        [65]      0.00000
+      CalculateNewPfMTwo2  [66]      0.00000
+      CalculateLogIP       [67]      0.00000
+      UpdateMAllTwo        [68]      0.00000
+    lspinflip update       [36]      0.00000
+      UpdateProjCnt       [600]      0.00000
+      CalculateNewPfMTwo2 [601]      0.00000
+      CalculateLogIP      [602]      0.00000
+      UpdateMAllTwo       [603]      0.00000
+    recal PfM and InvM     [34]      0.10500
+    save electron config   [35]      0.00154
+  VMCMainCal                [4]      2.49825
+    CalculateMAll          [40]      0.81209
+    LocEnergyCal           [41]      0.41266
+      CalHamiltonian0      [70]      0.00164
+      CalHamiltonian1      [71]      0.40093
+      CalHamiltonian2      [72]      0.00090
+    CalculateGreenFunc     [42]      0.00000
+      GreenFunc1           [50]      0.00000
+      GreenFunc2           [51]      0.00000
+      addPhysCA            [52]      0.00000
+      addPhysCACA          [53]      0.00000
+    Lanczos1               [43]      0.00000
+    Lanczos2               [44]      0.00000
+  UpdateSlaterElm          [20]      0.01495
+  WeightAverage            [21]      0.23062
+  outputData               [22]      0.01595
+
