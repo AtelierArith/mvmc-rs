@@ -1,0 +1,350 @@
+[
+  {
+    "mode": "opt",
+    "walkers": 1,
+    "budget": "unset",
+    "median": {
+      "wall": 2.346,
+      "user": 2.806,
+      "sys": 0.043
+    },
+    "samples": [
+      {
+        "wall": 2.334,
+        "user": 2.785,
+        "sys": 0.043
+      },
+      {
+        "wall": 2.346,
+        "user": 2.806,
+        "sys": 0.036
+      },
+      {
+        "wall": 2.374,
+        "user": 2.821,
+        "sys": 0.047
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "opt",
+    "walkers": 1,
+    "budget": "0",
+    "median": {
+      "wall": 2.321,
+      "user": 2.287,
+      "sys": 0.04
+    },
+    "samples": [
+      {
+        "wall": 2.379,
+        "user": 2.337,
+        "sys": 0.04
+      },
+      {
+        "wall": 2.32,
+        "user": 2.273,
+        "sys": 0.047
+      },
+      {
+        "wall": 2.321,
+        "user": 2.287,
+        "sys": 0.033
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "opt",
+    "walkers": 1,
+    "budget": "3",
+    "median": {
+      "wall": 2.345,
+      "user": 2.811,
+      "sys": 0.039
+    },
+    "samples": [
+      {
+        "wall": 2.321,
+        "user": 2.776,
+        "sys": 0.039
+      },
+      {
+        "wall": 2.345,
+        "user": 2.811,
+        "sys": 0.036
+      },
+      {
+        "wall": 2.375,
+        "user": 2.827,
+        "sys": 0.042
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "opt",
+    "walkers": 4,
+    "budget": "unset",
+    "median": {
+      "wall": 3.202,
+      "user": 11.725,
+      "sys": 0.158
+    },
+    "samples": [
+      {
+        "wall": 3.243,
+        "user": 11.732,
+        "sys": 0.158
+      },
+      {
+        "wall": 3.193,
+        "user": 11.688,
+        "sys": 0.167
+      },
+      {
+        "wall": 3.202,
+        "user": 11.725,
+        "sys": 0.131
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "opt",
+    "walkers": 4,
+    "budget": "0",
+    "median": {
+      "wall": 3.003,
+      "user": 10.705,
+      "sys": 0.154
+    },
+    "samples": [
+      {
+        "wall": 3.003,
+        "user": 10.705,
+        "sys": 0.164
+      },
+      {
+        "wall": 2.956,
+        "user": 10.689,
+        "sys": 0.11
+      },
+      {
+        "wall": 3.02,
+        "user": 10.752,
+        "sys": 0.154
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "opt",
+    "walkers": 4,
+    "budget": "3",
+    "median": {
+      "wall": 3.252,
+      "user": 11.676,
+      "sys": 0.173
+    },
+    "samples": [
+      {
+        "wall": 3.277,
+        "user": 11.518,
+        "sys": 0.15
+      },
+      {
+        "wall": 3.232,
+        "user": 11.676,
+        "sys": 0.173
+      },
+      {
+        "wall": 3.252,
+        "user": 11.754,
+        "sys": 0.179
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 1,
+    "budget": "unset",
+    "median": {
+      "wall": 2.131,
+      "user": 2.111,
+      "sys": 0.02
+    },
+    "samples": [
+      {
+        "wall": 2.112,
+        "user": 2.09,
+        "sys": 0.022
+      },
+      {
+        "wall": 2.131,
+        "user": 2.111,
+        "sys": 0.019
+      },
+      {
+        "wall": 2.177,
+        "user": 2.156,
+        "sys": 0.02
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 1,
+    "budget": "0",
+    "median": {
+      "wall": 2.158,
+      "user": 2.139,
+      "sys": 0.018
+    },
+    "samples": [
+      {
+        "wall": 2.184,
+        "user": 2.169,
+        "sys": 0.015
+      },
+      {
+        "wall": 2.158,
+        "user": 2.139,
+        "sys": 0.018
+      },
+      {
+        "wall": 2.146,
+        "user": 2.128,
+        "sys": 0.018
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 1,
+    "budget": "3",
+    "median": {
+      "wall": 2.148,
+      "user": 2.127,
+      "sys": 0.019
+    },
+    "samples": [
+      {
+        "wall": 2.141,
+        "user": 2.124,
+        "sys": 0.017
+      },
+      {
+        "wall": 2.177,
+        "user": 2.157,
+        "sys": 0.019
+      },
+      {
+        "wall": 2.148,
+        "user": 2.127,
+        "sys": 0.02
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 4,
+    "budget": "unset",
+    "median": {
+      "wall": 2.579,
+      "user": 9.832,
+      "sys": 0.061
+    },
+    "samples": [
+      {
+        "wall": 2.58,
+        "user": 9.832,
+        "sys": 0.061
+      },
+      {
+        "wall": 2.579,
+        "user": 9.838,
+        "sys": 0.062
+      },
+      {
+        "wall": 2.574,
+        "user": 9.81,
+        "sys": 0.061
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 4,
+    "budget": "0",
+    "median": {
+      "wall": 2.607,
+      "user": 9.869,
+      "sys": 0.066
+    },
+    "samples": [
+      {
+        "wall": 2.607,
+        "user": 9.854,
+        "sys": 0.078
+      },
+      {
+        "wall": 2.59,
+        "user": 9.877,
+        "sys": 0.066
+      },
+      {
+        "wall": 2.616,
+        "user": 9.869,
+        "sys": 0.057
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  },
+  {
+    "mode": "phys",
+    "walkers": 4,
+    "budget": "3",
+    "median": {
+      "wall": 2.598,
+      "user": 9.846,
+      "sys": 0.063
+    },
+    "samples": [
+      {
+        "wall": 2.582,
+        "user": 9.846,
+        "sys": 0.05
+      },
+      {
+        "wall": 2.605,
+        "user": 9.843,
+        "sys": 0.083
+      },
+      {
+        "wall": 2.598,
+        "user": 9.863,
+        "sys": 0.063
+      }
+    ],
+    "max_absolute_numeric_difference": 0.0,
+    "discrete_records_match": true
+  }
+]

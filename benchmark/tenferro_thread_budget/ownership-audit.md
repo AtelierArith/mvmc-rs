@@ -3,7 +3,16 @@
 Source inspected: `35269150deebb39adcd2a79ef37290c0fc49120b`.
 This is an implementation audit; it introduces no timing measurements or new policy.
 
-## Current ownership
+This is a historical snapshot. The later
+[ownership evaluation and explicit bounded policy](ownership-evaluation-20261102/README.md)
+adds the merged process reservation budget (#616), Linux MPI existing-worker
+placement and failure/recovery (#620), repeated load-recorded walker/MPI
+comparisons, and the retained-default decision. The remaining-work statements
+below describe this audit's older revision, not a claim that those later changes
+are absent. Automatic quota discovery and a global scheduler remain outside
+the explicit operator-selected contract.
+
+## Ownership at the audited revision
 
 | Resource | Owner and lifetime | Bound and limitation |
 |---|---|---|
@@ -40,7 +49,7 @@ addresses repeated construction within a solve; it does not coordinate all other
 runnable work. See [the cap experiment](hoisted-cap-experiment.md) and
 [the rejected per-acquisition experiment](scoped-engine-experiment.md).
 
-## Remaining acceptance work
+## Remaining work at the audited revision
 
 A complete resource policy must explicitly handle independently opened Engines,
 concurrent walker callers, an already initialized shared stage, BLAS, rank CPU

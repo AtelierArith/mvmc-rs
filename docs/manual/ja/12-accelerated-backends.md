@@ -43,6 +43,8 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
 
 ### 実験的な Linux MPI CPU 割当
 
+[所有権の評価と設定方針](../../../benchmark/tenferro_thread_budget/ownership-evaluation-20261102/README.md)に、予算の数え方と測定結果を記録しています。CLI の単一ランクでは、driver を含む内部参加数と Engine の追加ワーカー予約数を数えます。ライブラリの複数 walker では独立した呼び出しスレッドも必要で、内部1スレッド・最適化 walker 数 `W`・追加ワーカー上限 `E` なら計算参加数は `W + E` です。collective のため全 optimizer 呼び出しスレッドを実行可能に保ってください。BLAS は1スレッドとし、ランタイム補助スレッド・外部プール・物理コアの割当・quota は別途考慮します。既定の Rayon と作業量の閾値を維持し、shared team は実測で確認したワークロードと割当で選ぶ実験設定として扱います。
+
 `MVMC_RS_MPI_CPUS_PER_RANK=N` は、各ランクの初期 affinity の範囲内で、同一ノードのランク間で重複しない `N` 個の論理 CPU を割り当てます。Linux の MPI ビルドを複数ランクで起動し、`MVMC_RS_TENFERRO_WORKER_BUDGET` を明示してください。内部並列の参加数と Engine の追加ワーカー上限の合計が `N` 以下である必要があります。
 
 ```bash
