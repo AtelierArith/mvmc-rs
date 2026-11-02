@@ -1,0 +1,66 @@
+diff --git a/crates/mvmc-core/src/sr_backend.rs b/crates/mvmc-core/src/sr_backend.rs
+index 6f80a4c3..37ed1574 100644
+--- a/crates/mvmc-core/src/sr_backend.rs
++++ b/crates/mvmc-core/src/sr_backend.rs
+@@ -748,0 +749 @@ fn cpu_thread_count(
++    inner: usize,
+@@ -750,5 +751,2 @@ fn cpu_thread_count(
+-    let selected = tenferro
+-        .map(|value| ("MVMC_RS_TENFERRO_THREADS", value))
+-        .or_else(|| rayon.map(|value| ("RAYON_NUM_THREADS", value)));
+-    match selected {
+-        Some((name, value)) => value
++    let parse = |name, value: &str| {
++        value
+@@ -757,2 +755,4 @@ fn cpu_thread_count(
+-            .map_err(|_| err(format!("{name} must be a positive integer"))),
+-        None => Ok(available),
++            .map_err(|_| err(format!("{name} must be a positive integer")))
++    };
++    if let Some(value) = tenferro {
++        return parse("MVMC_RS_TENFERRO_THREADS", value);
+@@ -759,0 +760,8 @@ fn cpu_thread_count(
++    let requested = match rayon {
++        Some(value) => parse("RAYON_NUM_THREADS", value)?,
++        None => available,
++    };
++    // The normal hoisted driver is one of the inner workers and is also the
++    // team leader. This is a local heuristic, not a global MPI/walker budget.
++    let remaining = available.saturating_sub(inner.saturating_sub(1)).max(1);
++    Ok(requested.min(remaining))
+@@ -778,4 +786,15 @@ mod cpu_thread_count_tests {
+-        assert_eq!(cpu_thread_count(Some("1"), Some("4"), 8).unwrap(), 1);
+-        assert_eq!(cpu_thread_count(Some("3"), Some("invalid"), 8).unwrap(), 3);
+-        assert_eq!(cpu_thread_count(None, Some("4"), 8).unwrap(), 4);
+-        assert_eq!(cpu_thread_count(None, None, 8).unwrap(), 8);
++        assert_eq!(cpu_thread_count(Some("1"), Some("4"), 8, 4).unwrap(), 1);
++        assert_eq!(
++            cpu_thread_count(Some("8"), Some("invalid"), 4, 4).unwrap(),
++            8
++        );
++        assert_eq!(cpu_thread_count(None, Some("4"), 8, 4).unwrap(), 4);
++        assert_eq!(cpu_thread_count(None, None, 8, 1).unwrap(), 8);
++    }
++
++    #[test]
++    fn inferred_budget_reserves_capacity_for_inner_workers() {
++        assert_eq!(cpu_thread_count(None, Some("4"), 4, 4).unwrap(), 1);
++        assert_eq!(cpu_thread_count(None, Some("4"), 6, 4).unwrap(), 3);
++        assert_eq!(cpu_thread_count(None, None, 2, 8).unwrap(), 1);
++        assert_eq!(cpu_thread_count(None, Some("4"), 16, 4).unwrap(), 4);
+@@ -787,2 +806,2 @@ mod cpu_thread_count_tests {
+-            assert!(cpu_thread_count(Some(value), Some("4"), 8).is_err());
+-            assert!(cpu_thread_count(None, Some(value), 8).is_err());
++            assert!(cpu_thread_count(Some(value), Some("4"), 8, 1).is_err());
++            assert!(cpu_thread_count(None, Some(value), 8, 1).is_err());
+@@ -820 +839 @@ pub(crate) fn cpu_engine(
+-    let available = if tenferro.is_none() && rayon.is_none() {
++    let available = if tenferro.is_none() {
+@@ -825 +844,6 @@ pub(crate) fn cpu_engine(
+-    let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available)?;
++    let inner = if tenferro.is_none() {
++        crate::threading::inner_thread_config().threads
++    } else {
++        1
++    };
++    let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available, inner)?;
