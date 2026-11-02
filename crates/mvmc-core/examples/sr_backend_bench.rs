@@ -141,6 +141,14 @@ fn run(n: usize, samples: usize) {
 }
 
 fn main() {
+    if std::env::var("MVMC_BENCH_SR_HOIST").is_ok_and(|value| value == "1") {
+        mvmc_core::threading::install(run_main);
+    } else {
+        run_main();
+    }
+}
+
+fn run_main() {
     let sizes: Vec<usize> = std::env::args()
         .skip(1)
         .filter_map(|a| a.parse().ok())

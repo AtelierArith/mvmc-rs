@@ -1,0 +1,13 @@
+diff --git a/crates/mvmc-core/examples/sr_backend_bench.rs b/crates/mvmc-core/examples/sr_backend_bench.rs
+index 67a6bfe8..6faa00b3 100644
+--- a/crates/mvmc-core/examples/sr_backend_bench.rs
++++ b/crates/mvmc-core/examples/sr_backend_bench.rs
+@@ -143,0 +144,8 @@ fn main() {
++    if std::env::var("MVMC_BENCH_SR_HOIST").is_ok_and(|value| value == "1") {
++        mvmc_core::threading::install(run_main);
++    } else {
++        run_main();
++    }
++}
++
++fn run_main() {

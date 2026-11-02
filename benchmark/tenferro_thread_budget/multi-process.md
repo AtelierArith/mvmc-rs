@@ -125,3 +125,5 @@ For a read-only node-local rank-affinity and overlap diagnostic, see [affinity-a
 A matched comparison of shared and disjoint rank affinity on 16 CPUs is in [mpi-placement.md](mpi-placement.md). It does not establish a general automatic resource policy.
 
 A static per-process cap was evaluated and rejected because of a standalone SR Gram regression; see [local-cap-experiment.md](local-cap-experiment.md).
+
+A second, inner-pool-aware cap also regressed hoisted SR Gram and was rejected; see [hoisted-cap-experiment.md](hoisted-cap-experiment.md).
