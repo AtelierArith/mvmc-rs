@@ -25,7 +25,9 @@ mod c_complex;
 mod c_complex_gnu;
 pub mod c_timer;
 pub mod counter;
-#[cfg(test)]
+#[cfg(all(target_os = "linux", any(test, feature = "mpi")))]
+mod cpu_affinity;
+#[cfg(any(test, all(feature = "mpi", target_os = "linux")))]
 mod cpu_placement;
 mod cpu_worker_budget;
 pub mod engine_resource;
