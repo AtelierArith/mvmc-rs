@@ -9,7 +9,7 @@ Linux x86_64 6.8.0-147, Xeon E5-2699 v3, GeForce RTX 3060 12 GiB, UUID `GPU-ed89
 | 0.7.1 | 4.838939, 4.849528, 4.843106, 4.849659, 4.859443 | 4.849528 s |
 | 0.8 | 4.829981, 4.823095, 4.864835, 4.855331, 4.874908 | 4.855331 s |
 
-The archived same-GPU 0.7.1 result was 4.851715 s, from a different source revision (`051f8983…`) and measurement session; it is context, not the matched before value above. Across all five timed calls, the maximum absolute difference was zero for both recorded energy sequences and final parameters, within and between implementations. This does not by itself compare every intermediate walker state. Explicit raw-exec counters for each complete call were 27 uploads / 27,621,476 bytes, 4 downloads / 6,344 bytes, 11 synchronizations and 7 scopes for both versions. These counters only cover instrumented raw-exec operations, include initialization and output, and are not a measurement of all CUDA traffic. Raw worker logs are [before](results/rtx3060-before.log) and [after](results/rtx3060-after.log).
+The archived same-GPU 0.7.1 result was 4.851715 s, from a different source revision (`051f8983…`) and measurement session; it is context, not the matched before value above. Across all five timed calls, the maximum absolute difference was zero for both recorded energy sequences and final parameters, within and between implementations. This does not by itself compare every intermediate walker state. Explicit raw-exec counters for each complete call were 27 uploads / 27,621,476 bytes, 4 downloads / 6,344 bytes, 11 synchronizations and 7 scopes for both versions. These counters only cover instrumented raw-exec operations, include initialization and output, and are not a measurement of all CUDA traffic. Raw worker logs are [before](results/rtx3060-before.txt) and [after](results/rtx3060-after.txt).
 
 ## Reproduction
 
@@ -43,7 +43,7 @@ On the same RTX 3060 and CPU, release build at `e4240834…` plus the benchmark 
 | Existing CUDA synchronized kernel phase | 0.390659 ms |
 | CUDA extension, device-resident input/output, prepared graph | 0.419736 ms |
 
-The CUDA rows have different scopes: the legacy kernel phase excludes transfers and allocation, whereas the extension call includes runtime execution and output allocation but excludes explicit host upload/download. They cannot be used as an end-to-end speedup ratio. Raw-exec counters reported zero explicit transfer bytes for the extension calls; this is not an independent measurement of all driver traffic. Correctness and failure/status cases are covered separately by the CPU/CUDA gates. Full process time and output: [results/rtx3060-pfaffian.log](results/rtx3060-pfaffian.log).
+The CUDA rows have different scopes: the legacy kernel phase excludes transfers and allocation, whereas the extension call includes runtime execution and output allocation but excludes explicit host upload/download. They cannot be used as an end-to-end speedup ratio. Raw-exec counters reported zero explicit transfer bytes for the extension calls; this is not an independent measurement of all driver traffic. Correctness and failure/status cases are covered separately by the CPU/CUDA gates. Full process time and output: [results/rtx3060-pfaffian.txt](results/rtx3060-pfaffian.txt).
 
 ```sh
 cargo build --release --locked --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --example bench_shared_pfaffian
