@@ -476,7 +476,46 @@ thread_local! {
 
 fn gap_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var("MVMC_RS_INNER_GAP_PROFILE").as_deref() == Ok("1"))
+    *ENABLED.get_or_init(|| {
+        std::env::var("MVMC_RS_INNER_GAP_PROFILE").as_deref() == Ok("1") || gap_site_enabled()
+    })
+}
+
+fn gap_site_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("MVMC_RS_INNER_GAP_SITE_PROFILE").as_deref() == Ok("1"))
+}
+
+type GapSiteTable = Mutex<std::collections::BTreeMap<(&'static str, u32, bool), [usize; 7]>>;
+
+fn gap_site_table() -> &'static GapSiteTable {
+    static TABLE: OnceLock<GapSiteTable> = OnceLock::new();
+    TABLE.get_or_init(|| Mutex::new(std::collections::BTreeMap::new()))
+}
+
+/// A diagnostic histogram of gaps preceding one next call site on the same thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GapSiteProfile {
+    /// Next instrumented call site.
+    pub site: String,
+    /// Whether the next scope entered under the hot marker.
+    pub hot: bool,
+    /// Counts for the same seven limits as [`dispatch_gap_profile`].
+    pub counts: [usize; 7],
+}
+
+/// Return opt-in per-next-site histograms. Caller and worker streams can overlap.
+pub fn dispatch_gap_sites() -> Vec<GapSiteProfile> {
+    gap_site_table()
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(&(file, line, hot), &counts)| GapSiteProfile {
+            site: format!("{file}:{line}"),
+            hot,
+            counts,
+        })
+        .collect()
 }
 
 /// Counts of gaps preceding the next top-level instrumented kernel on the same
@@ -491,14 +530,19 @@ pub fn dispatch_gap_profile() -> [[usize; 7]; 2] {
 struct GapScope(PhantomData<Rc<()>>);
 
 impl GapScope {
-    fn start(items: usize) -> Option<Self> {
+    fn start(items: usize, site: (&'static str, u32)) -> Option<Self> {
         if items == 0 || !gap_enabled() {
             return None;
         }
-        Some(Self::begin())
+        Some(Self::begin_at(Some(site), gap_site_enabled()))
     }
 
+    #[cfg(test)]
     fn begin() -> Self {
+        Self::begin_at(None, false)
+    }
+
+    fn begin_at(site: Option<(&'static str, u32)>, site_enabled: bool) -> Self {
         GAP_DEPTH.with(|depth| {
             let previous_depth = depth.get();
             depth.set(previous_depth + 1);
@@ -508,6 +552,12 @@ impl GapScope {
                     let bucket = GAP_LIMITS_NS.partition_point(|&limit| nanos >= limit);
                     let hot = usize::from(HOT.with(|value| value.get()));
                     GAP_COUNTS[hot * 7 + bucket].fetch_add(1, Ordering::Relaxed);
+                    if site_enabled {
+                        if let Some((file, line)) = site {
+                            let mut table = gap_site_table().lock().unwrap();
+                            table.entry((file, line, hot != 0)).or_insert([0; 7])[bucket] += 1;
+                        }
+                    }
                 }
             }
         });
@@ -539,7 +589,7 @@ impl ProfileScope {
     fn start(parallel: bool, items: usize) -> Self {
         // `Location::caller` must be read here: closures do not inherit `track_caller`.
         let location = std::panic::Location::caller();
-        let gap = GapScope::start(items);
+        let gap = GapScope::start(items, (location.file(), location.line()));
         let timing = profile_enabled().then(|| {
             (
                 location.file(),
@@ -1137,6 +1187,33 @@ pub fn copy_complex_realpart(dst: &mut [f64], src: &[Complex64]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gap_site_profile_attributes_only_top_level_next_scope() {
+        use super::{dispatch_gap_sites, GapScope, GAP_DEPTH, GAP_END};
+        GAP_DEPTH.with(|depth| depth.set(0));
+        GAP_END.with(|end| end.set(None));
+        let before = dispatch_gap_sites()
+            .into_iter()
+            .find(|p| p.site == "test-gap-site:7" && !p.hot)
+            .map_or(0, |p| p.counts.iter().sum::<usize>());
+        let outer = GapScope::begin_at(Some(("test-gap-site", 6)), true);
+        drop(GapScope::begin_at(Some(("nested-gap-site", 9)), true));
+        drop(outer);
+        drop(GapScope::begin_at(Some(("test-gap-site", 7)), true));
+        let after = dispatch_gap_sites()
+            .into_iter()
+            .find(|p| p.site == "test-gap-site:7" && !p.hot)
+            .unwrap()
+            .counts
+            .iter()
+            .sum::<usize>();
+        assert_eq!(after - before, 1);
+        assert!(!dispatch_gap_sites()
+            .iter()
+            .any(|p| p.site == "nested-gap-site:9"));
+        GAP_END.with(|end| end.set(None));
+    }
+
     #[test]
     fn gap_profile_counts_top_level_hot_and_cold_after_nested_unwind() {
         use super::{dispatch_gap_profile, hot_scope, GapScope, GAP_DEPTH, GAP_END, GAP_LIMITS_NS};

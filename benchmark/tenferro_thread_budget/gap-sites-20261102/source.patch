@@ -1,0 +1,131 @@
+diff --git a/crates/mvmc-cli/src/lib.rs b/crates/mvmc-cli/src/lib.rs
+index 4bda7aea..b15e47ae 100644
+--- a/crates/mvmc-cli/src/lib.rs
++++ b/crates/mvmc-cli/src/lib.rs
+@@ -829 +829,2 @@ fn report_inner_profile() {
+-    if sites.is_empty() && gaps.iter().flatten().all(|&count| count == 0) {
++    let gap_sites = mvmc_core::threading::dispatch_gap_sites();
++    if sites.is_empty() && gap_sites.is_empty() && gaps.iter().flatten().all(|&count| count == 0) {
+@@ -860,0 +862,13 @@ fn report_inner_profile() {
++    if !gap_sites.is_empty() {
++        eprintln!(
++            "inner-kernel gap sites (next site, hot/cold, counts in aggregate bucket order):"
++        );
++        for site in gap_sites {
++            eprintln!(
++                "  {} {} {:?}",
++                site.site,
++                if site.hot { "hot" } else { "cold" },
++                site.counts
++            );
++        }
++    }
+diff --git a/crates/mvmc-core/src/threading.rs b/crates/mvmc-core/src/threading.rs
+index 4fe4af3b..2aa76d8d 100644
+--- a/crates/mvmc-core/src/threading.rs
++++ b/crates/mvmc-core/src/threading.rs
+@@ -479 +479,40 @@ fn gap_enabled() -> bool {
+-    *ENABLED.get_or_init(|| std::env::var("MVMC_RS_INNER_GAP_PROFILE").as_deref() == Ok("1"))
++    *ENABLED.get_or_init(|| {
++        std::env::var("MVMC_RS_INNER_GAP_PROFILE").as_deref() == Ok("1") || gap_site_enabled()
++    })
++}
++
++fn gap_site_enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var("MVMC_RS_INNER_GAP_SITE_PROFILE").as_deref() == Ok("1"))
++}
++
++type GapSiteTable = Mutex<std::collections::BTreeMap<(&'static str, u32, bool), [usize; 7]>>;
++
++fn gap_site_table() -> &'static GapSiteTable {
++    static TABLE: OnceLock<GapSiteTable> = OnceLock::new();
++    TABLE.get_or_init(|| Mutex::new(std::collections::BTreeMap::new()))
++}
++
++/// A diagnostic histogram of gaps preceding one next call site on the same thread.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct GapSiteProfile {
++    /// Next instrumented call site.
++    pub site: String,
++    /// Whether the next scope entered under the hot marker.
++    pub hot: bool,
++    /// Counts for the same seven limits as [`dispatch_gap_profile`].
++    pub counts: [usize; 7],
++}
++
++/// Return opt-in per-next-site histograms. Caller and worker streams can overlap.
++pub fn dispatch_gap_sites() -> Vec<GapSiteProfile> {
++    gap_site_table()
++        .lock()
++        .unwrap()
++        .iter()
++        .map(|(&(file, line, hot), &counts)| GapSiteProfile {
++            site: format!("{file}:{line}"),
++            hot,
++            counts,
++        })
++        .collect()
+@@ -494 +533 @@ impl GapScope {
+-    fn start(items: usize) -> Option<Self> {
++    fn start(items: usize, site: (&'static str, u32)) -> Option<Self> {
+@@ -498 +537 @@ impl GapScope {
+-        Some(Self::begin())
++        Some(Self::begin_at(Some(site), gap_site_enabled()))
+@@ -500,0 +540 @@ impl GapScope {
++    #[cfg(test)]
+@@ -501,0 +542,4 @@ impl GapScope {
++        Self::begin_at(None, false)
++    }
++
++    fn begin_at(site: Option<(&'static str, u32)>, site_enabled: bool) -> Self {
+@@ -510,0 +555,6 @@ impl GapScope {
++                    if site_enabled {
++                        if let Some((file, line)) = site {
++                            let mut table = gap_site_table().lock().unwrap();
++                            table.entry((file, line, hot != 0)).or_insert([0; 7])[bucket] += 1;
++                        }
++                    }
+@@ -542 +592 @@ impl ProfileScope {
+-        let gap = GapScope::start(items);
++        let gap = GapScope::start(items, (location.file(), location.line()));
+@@ -1139,0 +1190,27 @@ mod tests {
++    #[test]
++    fn gap_site_profile_attributes_only_top_level_next_scope() {
++        use super::{dispatch_gap_sites, GapScope, GAP_DEPTH, GAP_END};
++        GAP_DEPTH.with(|depth| depth.set(0));
++        GAP_END.with(|end| end.set(None));
++        let before = dispatch_gap_sites()
++            .into_iter()
++            .find(|p| p.site == "test-gap-site:7" && !p.hot)
++            .map_or(0, |p| p.counts.iter().sum::<usize>());
++        let outer = GapScope::begin_at(Some(("test-gap-site", 6)), true);
++        drop(GapScope::begin_at(Some(("nested-gap-site", 9)), true));
++        drop(outer);
++        drop(GapScope::begin_at(Some(("test-gap-site", 7)), true));
++        let after = dispatch_gap_sites()
++            .into_iter()
++            .find(|p| p.site == "test-gap-site:7" && !p.hot)
++            .unwrap()
++            .counts
++            .iter()
++            .sum::<usize>();
++        assert_eq!(after - before, 1);
++        assert!(!dispatch_gap_sites()
++            .iter()
++            .any(|p| p.site == "nested-gap-site:9"));
++        GAP_END.with(|end| end.set(None));
++    }
++
+diff --git a/docs/manual/08-running.md b/docs/manual/08-running.md
+index d24624c6..faa4c848 100644
+--- a/docs/manual/08-running.md
++++ b/docs/manual/08-running.md
+@@ -264,0 +265 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather
++| `MVMC_RS_INNER_GAP_SITE_PROFILE` | `threading::dispatch_gap_sites` | `1` also groups same-thread top-level gap histograms by the next call site and hot/cold state. It enables the aggregate gap profile; a shared table adds significant diagnostic overhead. It does not measure global serial time or worker idle time. |
+diff --git a/docs/manual/ja/08-running.md b/docs/manual/ja/08-running.md
+index 0da60c60..c6b0635c 100644
+--- a/docs/manual/ja/08-running.md
++++ b/docs/manual/ja/08-running.md
+@@ -257,0 +258 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化
++| `MVMC_RS_INNER_GAP_SITE_PROFILE` | `threading::dispatch_gap_sites` | `1` にすると、同じスレッドの最上位スコープ間の間隔を、次の呼び出し箇所と hot/cold 別にも集計します。全体の間隔集計も有効になり、共有テーブルへの記録負荷が加わります。全体の逐次時間やワーカーの待機時間ではありません。 |
