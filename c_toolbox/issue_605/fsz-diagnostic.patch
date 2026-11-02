@@ -1,0 +1,4 @@
+--- a/src/mVMC/vmccal_fsz.c
++++ b/src/mVMC/vmccal_fsz.c
+@@ -165,0 +166 @@
++      fprintf(stderr,"CDIAG605 %d %.17e %.17e %.17e %.17e %.17e %.17e\n", sample, creal(ip), cimag(ip), creal(e), cimag(e), creal(srOptO[8]), cimag(srOptO[8]));
