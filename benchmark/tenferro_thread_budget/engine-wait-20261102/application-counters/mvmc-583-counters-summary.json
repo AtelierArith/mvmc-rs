@@ -1,0 +1,146 @@
+[
+  {
+    "mode": "opt",
+    "walkers": 1,
+    "spin": "default",
+    "wait_counters": [
+      [
+        1,
+        0,
+        64
+      ],
+      [
+        0,
+        0,
+        64
+      ],
+      [
+        1,
+        2,
+        66
+      ]
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "opt",
+    "walkers": 1,
+    "spin": "0",
+    "wait_counters": [
+      [
+        37,
+        0,
+        103
+      ],
+      [
+        32,
+        0,
+        105
+      ],
+      [
+        33,
+        0,
+        104
+      ]
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "opt",
+    "walkers": 4,
+    "spin": "default",
+    "wait_counters": [
+      [
+        1,
+        0,
+        154
+      ],
+      [
+        2,
+        0,
+        147
+      ],
+      [
+        4,
+        0,
+        156
+      ]
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "opt",
+    "walkers": 4,
+    "spin": "0",
+    "wait_counters": [
+      [
+        105,
+        2,
+        391
+      ],
+      [
+        107,
+        0,
+        397
+      ],
+      [
+        118,
+        0,
+        393
+      ]
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "phys",
+    "walkers": 1,
+    "spin": "default",
+    "wait_counters": [
+      null,
+      null,
+      null
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "phys",
+    "walkers": 1,
+    "spin": "0",
+    "wait_counters": [
+      null,
+      null,
+      null
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "phys",
+    "walkers": 4,
+    "spin": "default",
+    "wait_counters": [
+      null,
+      null,
+      null
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  },
+  {
+    "mode": "phys",
+    "walkers": 4,
+    "spin": "0",
+    "wait_counters": [
+      null,
+      null,
+      null
+    ],
+    "discrete_matches_baseline": true,
+    "max_absolute_numeric_difference": 0.0
+  }
+]

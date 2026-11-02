@@ -1,0 +1,41 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 4f10c38d..84be87c0 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1889,8 +1889,6 @@ checksum = "9ba5fc29333bbeaf822c060d24743d485b3802ab576006bb431f95271899d74d"
+ [[package]]
+ name = "tenferro-cpu"
+ version = "0.8.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "63b6a5f9d1efd8bb0417d53585580d15b9f621674df42885702f4ce064d253d2"
+ dependencies = [
+  "cpueinsum",
+  "elem-simd-math",
+diff --git a/crates/mvmc-core/examples/bench_walkers_583.rs b/crates/mvmc-core/examples/bench_walkers_583.rs
+index 93422886..a1c22a0a 100644
+--- a/crates/mvmc-core/examples/bench_walkers_583.rs
++++ b/crates/mvmc-core/examples/bench_walkers_583.rs
+@@ -82,4 +82,8 @@ fn main() {
+     let (attempts, successes, busy, unavailable, participants) =
+         mvmc_core::stage_backend::probe_cpu_snapshot();
+     eprintln!("shared-team-probe attempts={attempts} successes={successes} busy={busy} unavailable={unavailable} participants={participants}");
++    eprintln!(
++        "engine-wait-counters={:?}",
++        mvmc_core::stage_backend::diagnostic_cpu_wait_counters()
++    );
+ }
+diff --git a/crates/mvmc-core/src/stage_backend.rs b/crates/mvmc-core/src/stage_backend.rs
+index b1b17902..7c0fee44 100644
+--- a/crates/mvmc-core/src/stage_backend.rs
++++ b/crates/mvmc-core/src/stage_backend.rs
+@@ -1529,3 +1529,10 @@ mod transient_probe_tests {
+         assert_eq!(threads(&mut original), 1);
+     }
+ }
++
++/// Diagnostic copy only: cumulative shared Engine wait-event counts.
++pub fn diagnostic_cpu_wait_counters() -> Option<[u64; 3]> {
++    let engine = PROBE_CPU_ENGINE.get()?;
++    let mut engine = engine.lock().ok()?;
++    tenferro_cpu::with_cpu_engine(&mut ***engine, |cpu| cpu.diagnostic_wait_counters())
++}

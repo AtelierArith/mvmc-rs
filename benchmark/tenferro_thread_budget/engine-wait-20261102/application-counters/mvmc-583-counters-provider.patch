@@ -1,0 +1,33 @@
+--- a/src/contraction.rs
++++ b/src/contraction.rs
+@@ -201,6 +201,16 @@
+     }
+ }
+ impl ExecutionResources {
++    pub(crate) fn diagnostic_wait_counters(&self) -> [u64; 3] {
++        let pool = match &self.placement {
++            Placement::Serial => return [0; 3],
++            Placement::Single(pool) => pool,
++            Placement::Team(team) => team.pool(),
++        };
++        let counts = pool.wait_counters();
++        [counts.join_sleeps, counts.barrier_sleeps, counts.member_parks]
++    }
++
+     /// Take over `pool`, or run serially without one.
+     ///
+     /// A pool of two or more workers becomes a team. When its members cannot
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -88,6 +88,11 @@
+ }
+ 
+ impl CpuEngine {
++    /// Diagnostic copy only: join sleeps, barrier sleeps and member parks.
++    pub fn diagnostic_wait_counters(&self) -> [u64; 3] {
++        self.resources.diagnostic_wait_counters()
++    }
++
+     fn with_resources(resources: ExecutionResources) -> Self {
+         Self {
+             resources,
