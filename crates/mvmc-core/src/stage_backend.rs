@@ -292,6 +292,9 @@ impl PfaffianStages for COrderPfaffian {
     }
 }
 
+pub(crate) const TENFERRO_PFAFFIAN_UNAVAILABLE: &str =
+    "tenferro 0.8 has no skew-symmetric factorization or Pfaffian";
+
 /// A Pfaffian stage that always reports [`StageError::Unsupported`] with the stated reason
 /// (tenferro 0.8 has no skew-symmetric factorization or Pfaffian).
 #[derive(Debug, Clone)]
@@ -311,10 +314,7 @@ impl UnsupportedPfaffian {
 
     /// The tenferro 0.8 gap.
     pub fn tenferro() -> Self {
-        Self::new(
-            "none",
-            "tenferro 0.8 has no skew-symmetric factorization or Pfaffian",
-        )
+        Self::new("none", TENFERRO_PFAFFIAN_UNAVAILABLE)
     }
 }
 

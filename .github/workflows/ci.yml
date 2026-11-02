@@ -91,7 +91,7 @@ jobs:
           UCX_TLS: self,sm,tcp
         run: |
           test "$UCX_TLS" = self,sm,tcp
-          sudo apt-get install -y jq libucx-dev gfortran build-essential
+          sudo apt-get install -y jq ripgrep libucx-dev gfortran build-essential
           bash scripts/issue234/native/install-pmi1-mpich.sh "$GITHUB_WORKSPACE" \
             "$RUNNER_TEMP/scalar-mpich" "$RUNNER_TEMP/scalar-mpi-provider"
           bash scripts/issue234/native/validate-local-transport.sh \
@@ -127,6 +127,13 @@ jobs:
             echo "$stray"
             exit 1
           fi
+      - name: Verify MPI measurement Pfaffian preflight
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
+        run: |
+          set -euo pipefail
+          cargo build -p mvmc-cli --features mpi --profile ci --locked
+          MVMC_MPI_LAUNCHER="$MVMC_ISSUE234_MPI_PREFIX/bin/mpiexec" \
+            scripts/issue613/mpi-preflight.sh "${CARGO_TARGET_DIR:-target}/ci/mvmc"
       - name: Launch exact-head scalar contracts on worlds2 and4
         if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'all-features'
         run: |
