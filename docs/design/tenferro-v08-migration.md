@@ -22,6 +22,8 @@ The production Pfaffian stage owns its persistent CUDA worker instead of leaking
 
 CPU C-order execution retains the C numerical and SFMT contract. The resident GPU Opt path has a separate Julia GPU numerical and RNG contract; passing one path's tests does not validate the other. Review singular solve behavior and reduction-order changes when validating tenferro 0.8. Preserve explicit tolerances, first-divergence evidence and independent RNG checks.
 
+The migration checks compare real and complex CPU Gram products to the C-order path under explicit dot-product bounds, and verify Cholesky solutions with residual bounds (`sr_backend_421`). The same gate rejects a non-positive-definite matrix and exact singular zero/rank-one matrices for both C-order and the CPU Engine; CUDA's resident SR gate also exercises non-positive-definite and singular zero-Gram solves and subsequent reuse. These are tested cases, not a claim that every ill-conditioned or provider-specific failure mode is classified. The 1- and 4-thread CPU SR timings and observed differences are in `benchmark/tenferro_cpu_v08/README.md`; different legal contraction/reduction orders need not be bitwise identical. Four-rank Opt/PhysCal formatted-output comparisons and their RNG limitations are recorded in `benchmark/tenferro_thread_budget/multi-process.md`.
+
 The old tenferro 0.7.1 patches for `lru` are not active in the three migrated workspace locks. Verify each dependency tree and retain the historical provenance in `docs/security/dependabot-alert-5.md`.
 
 ## Shared Pfaffian extension
