@@ -701,6 +701,19 @@ fn issue182_child() {
             );
         }
     }
+    if std::env::var("MVMC_EXPERIMENT_ASSERT_SHARED").as_deref() == Ok("1")
+        && config.threads > 1
+        && matches!(job.as_str(), "runners" | "runners-observed")
+    {
+        let (attempts, successes, busy, unavailable, participants) =
+            mvmc_core::stage_backend::probe_cpu_snapshot();
+        assert_eq!(attempts, successes + busy + unavailable);
+        assert!(
+            attempts > 0 && successes > 0 && participants >= 2,
+            "shared team was not exercised: {attempts}/{successes}/{participants}"
+        );
+        eprintln!("shared team probe attempts={attempts}, successes={successes}, busy={busy}, unavailable={unavailable}, participants={participants}");
+    }
     case_observation::finish_child();
 }
 
@@ -1732,6 +1745,13 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                         && cg == 0)
                     .then(|| mvmc_core::sr::observer::capture().unwrap());
                 executed_optimization_cases += 1;
+                let trace_moves = std::env::var_os("MVMC_EXPERIMENT_TRACE_MOVES").is_some()
+                    && size == 32
+                    && store == 0
+                    && cg == 0;
+                if trace_moves {
+                    mvmc_core::sampling::driver::trace::start();
+                }
                 let result = mvmc_core::vmc_para_opt(
                     &mut data,
                     &mut state,
@@ -1745,6 +1765,14 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                         binary_output: false,
                     },
                 );
+                if trace_moves {
+                    let events = mvmc_core::sampling::driver::trace::finish();
+                    assert!(
+                        events.iter().any(|event| event[0] == 7),
+                        "no Metropolis decisions captured"
+                    );
+                    discrete(&format!("{label}-sampling-events"), events);
+                }
                 if diagnostic_collect_all {
                     let mut next = rng.clone();
                     std::fs::write(

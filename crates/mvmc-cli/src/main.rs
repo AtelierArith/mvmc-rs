@@ -18,4 +18,9 @@ fn main() {
     if let Some(observation) = observation {
         eprintln!("inner-execution: {:?}", observation.finish());
     }
+    if std::env::var("MVMC_EXPERIMENT_SHARED_CPU_TEAM_PROFILE").as_deref() == Ok("1") {
+        let (attempts, successes, busy, unavailable, participants) =
+            mvmc_core::stage_backend::probe_cpu_snapshot();
+        eprintln!("shared-team-probe: attempts={attempts} successes={successes} busy={busy} unavailable={unavailable} participants={participants}");
+    }
 }
