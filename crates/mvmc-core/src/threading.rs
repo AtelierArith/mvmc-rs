@@ -630,6 +630,11 @@ pub fn install<R: Send>(operation: impl FnOnce() -> R + Send) -> R {
 
 static POOL: OnceLock<ThreadPool> = OnceLock::new();
 
+#[cfg(all(target_os = "linux", any(test, feature = "mpi")))]
+pub(crate) fn existing_inner_pool() -> Option<&'static ThreadPool> {
+    POOL.get()
+}
+
 fn pool() -> &'static ThreadPool {
     POOL.get_or_init(|| {
         ThreadPoolBuilder::new()

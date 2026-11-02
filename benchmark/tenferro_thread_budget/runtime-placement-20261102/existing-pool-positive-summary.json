@@ -1,0 +1,26 @@
+[
+  {
+    "ranks": 2,
+    "mode": "opt",
+    "files": 4,
+    "max_absolute_difference": 0.0
+  },
+  {
+    "ranks": 2,
+    "mode": "phys",
+    "files": 80,
+    "max_absolute_difference": 0.0
+  },
+  {
+    "ranks": 4,
+    "mode": "opt",
+    "files": 4,
+    "max_absolute_difference": 0.0
+  },
+  {
+    "ranks": 4,
+    "mode": "phys",
+    "files": 80,
+    "max_absolute_difference": 0.0
+  }
+]

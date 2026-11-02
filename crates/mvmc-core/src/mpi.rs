@@ -591,3 +591,114 @@ impl Reducer for MpiGroupContext {
         self.assignment.group == 0 && self.assignment.local_rank == 0
     }
 }
+
+/// Calling-thread and existing mvmc inner-worker affinity retained until restoration
+/// or drop (Linux only). New threads inherit their creator's assigned mask.
+#[cfg(target_os = "linux")]
+pub struct CpuPlacementGuard {
+    // Restore existing pool workers before restoring the caller (which may be a worker).
+    pool_affinity: Option<crate::cpu_affinity::PoolAffinity>,
+    affinity: crate::cpu_affinity::ThreadAffinity,
+    cpus: std::collections::BTreeSet<usize>,
+}
+
+#[cfg(target_os = "linux")]
+impl CpuPlacementGuard {
+    /// Assigned logical CPUs; this is not a cgroup-quota or physical-core budget.
+    pub fn cpus(&self) -> &std::collections::BTreeSet<usize> {
+        &self.cpus
+    }
+
+    /// Restore original caller and inner-worker affinities, reporting an OS error.
+    pub fn restore(&mut self) -> Result<(), String> {
+        if let Some(pool) = &mut self.pool_affinity {
+            pool.restore()?;
+        }
+        self.affinity.restore()
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl MpiContext {
+    /// Collectively plan and restrict each calling thread to disjoint node-local CPUs.
+    ///
+    /// Every world rank must call this on its MPI initializing thread, before
+    /// creating other worker pools. Existing mvmc inner Rayon workers are updated;
+    /// other existing threads are unaffected. All ranks agree
+    /// planning and application errors; successful peers restore on application failure.
+    /// This does not resize pools or inspect cgroup quotas.
+    ///
+    /// # Errors
+    /// Returns an error on unavailable affinity, impossible requests, or OS failures.
+    pub fn restrict_cpu_placement(&self, requested: usize) -> Result<CpuPlacementGuard, String> {
+        use std::collections::BTreeSet;
+        let node = self.world.split_shared(self.world.rank());
+        let width = 9 + libc::CPU_SETSIZE as usize;
+        let mut encoded = vec![0u8; width];
+        let local = crate::cpu_affinity::current();
+        if let Ok(cpus) = &local {
+            encoded[0] = 1;
+            encoded[1..9].copy_from_slice(&(requested as u64).to_le_bytes());
+            for &cpu in cpus {
+                encoded[9 + cpu] = 1;
+            }
+        }
+        let mut gathered = vec![0u8; width * node.size() as usize];
+        node.all_gather_into(&encoded[..], &mut gathered[..]);
+        let mut masks = Vec::new();
+        let mut requests = Vec::new();
+        let mut valid = true;
+        for rank in gathered.chunks_exact(width) {
+            valid &= rank[0] == 1;
+            requests.push(
+                usize::try_from(u64::from_le_bytes(rank[1..9].try_into().unwrap())).unwrap_or(0),
+            );
+            masks.push(
+                rank[9..]
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(cpu, &v)| (v != 0).then_some(cpu))
+                    .collect::<BTreeSet<_>>(),
+            );
+        }
+        let plan = if valid {
+            crate::cpu_placement::plan(&masks, &requests)
+        } else {
+            Err("node-local CPU affinity inspection failed".into())
+        };
+        if self.any_failure(plan.is_err()) {
+            return Err(plan
+                .err()
+                .unwrap_or_else(|| "CPU placement planning failed on another rank".into()));
+        }
+        let cpus = plan.unwrap().swap_remove(node.rank() as usize);
+        let mut applied = (|| {
+            let affinity = crate::cpu_affinity::ThreadAffinity::restrict(&cpus)?;
+            let pool_affinity = crate::cpu_affinity::PoolAffinity::restrict_existing(&cpus)?;
+            Ok::<_, String>(CpuPlacementGuard {
+                pool_affinity,
+                affinity,
+                cpus,
+            })
+        })();
+        if self.any_failure(applied.is_err()) {
+            let local_error = applied
+                .as_ref()
+                .err()
+                .cloned()
+                .unwrap_or_else(|| "application failed on another rank".into());
+            let rollback = match &mut applied {
+                Ok(guard) => guard.restore(),
+                Err(_) => Ok(()),
+            };
+            let rollback_failed = self.any_failure(rollback.is_err());
+            let status = if rollback_failed {
+                "CPU placement failed and affinity rollback failed on a rank"
+            } else {
+                "CPU placement application failed; successful peers completed restoration"
+            };
+            return Err(format!("{status}; {local_error}"));
+        }
+        applied
+    }
+}

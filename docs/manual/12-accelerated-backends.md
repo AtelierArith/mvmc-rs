@@ -47,6 +47,19 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
   -E 'binary(multichain) | binary(multiwalker_sr_435) | binary(stage_backend_437) | binary(sr_backend_421) | binary(device_sampler)'
 ```
 
+### Experimental Linux MPI CPU placement
+
+`MVMC_RS_MPI_CPUS_PER_RANK=N` assigns each rank a disjoint set of `N` logical CPUs within its node, respecting its initial affinity. Use a Linux MPI build and a multi-rank launch, and set an explicit `MVMC_RS_TENFERRO_WORKER_BUDGET`. The sum of configured inner participants and this additional Engine worker budget must fit `N`. For example:
+
+```bash
+cargo build --release -p mvmc-cli --features mpi
+MVMC_RS_MPI_CPUS_PER_RANK=2 MVMC_RS_INNER_THREADS=1 \
+MVMC_RS_TENFERRO_WORKER_BUDGET=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+mpirun -n 4 target/release/mvmc namelist.def
+```
+
+All ranks must use the same placement setting. Impossible assignments or inconsistent controls stop collectively before input/output. Affinity is applied to the MPI calling thread and every existing mvmc inner Rayon worker; future threads inherit their creator's mask. Existing MPI/BLAS threads are unaffected. This option does not inspect cgroup CPU quotas, distinguish SMT siblings, or cap externally created threads. Set BLAS threads separately. The library guard restores the original caller and inner-worker affinities on drop; explicit `restore()` reports restoration errors. No performance benefit is established by this option alone.
+
 ### The `gpu-cuda` feature and the standalone workspace
 
 `mvmc-core` and `mvmc-cli` have a feature `gpu-cuda` (`crates/mvmc-core/Cargo.toml`, forwarded by `crates/mvmc-cli/Cargo.toml`). It adds **no dependency** and leaves `Cargo.lock` unchanged: it only enables the `CudaProvider` registry of `mvmc_core::backend`. `cargo check -p mvmc-cli --features gpu-cuda` therefore needs no CUDA toolkit, and **does not link CUDA**.

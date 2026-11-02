@@ -471,6 +471,9 @@ pub fn run_cli() {
         }
     };
 
+    #[cfg(all(feature = "mpi", target_os = "linux"))]
+    let mut cpu_placement: Option<mvmc_core::mpi::CpuPlacementGuard> = None;
+
     // Resolve and open the accelerated backends selected by `MVMC_RS_SR_BACKEND` and
     // `MVMC_RS_MEASURE_PF_BACKEND` once, before
     // any file is read or written (issue #464). An invalid value or an unavailable backend is a
@@ -484,8 +487,9 @@ pub fn run_cli() {
             let consumer =
                 std::env::var(mvmc_core::measurement_batch::MEASURE_CONSUMER_VARIABLE).ok();
             let sampler = std::env::var(mvmc_core::sampler_backend::SAMPLER_BACKEND_VARIABLE).ok();
+            let placement = std::env::var_os("MVMC_RS_MPI_CPUS_PER_RANK");
             let value = format!(
-                "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?};sampler={sampler:?}"
+                "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?};sampler={sampler:?};cpu_placement={placement:?}"
             );
             agree_controls(&value, context).err()
         });
@@ -496,6 +500,68 @@ pub fn run_cli() {
             // skips destructors and can make the launcher report a false success.
             drop(mpi_world);
             process::exit(1);
+        }
+        let placement_checked = (|| -> Result<(), String> {
+            let value = match std::env::var("MVMC_RS_MPI_CPUS_PER_RANK") {
+                Ok(value) => value,
+                Err(std::env::VarError::NotPresent) => return Ok(()),
+                Err(error) => return Err(format!("MVMC_RS_MPI_CPUS_PER_RANK: {error}")),
+            };
+            let requested = value
+                .parse::<usize>()
+                .ok()
+                .filter(|&n| n > 0)
+                .ok_or("MVMC_RS_MPI_CPUS_PER_RANK must be a positive integer")?;
+            #[cfg(all(feature = "mpi", target_os = "linux"))]
+            {
+                let context = mpi_world
+                    .as_ref()
+                    .ok_or("CPU placement requires a multi-rank MPI launch")?;
+                let budget_checked = (|| -> Result<(), String> {
+                    let inner = mvmc_core::threading::inner_thread_config().threads;
+                    let budget = std::env::var("MVMC_RS_TENFERRO_WORKER_BUDGET")
+                        .map_err(|_| {
+                            "CPU placement requires an explicit MVMC_RS_TENFERRO_WORKER_BUDGET"
+                        })?
+                        .parse::<usize>()
+                        .map_err(|_| "invalid MVMC_RS_TENFERRO_WORKER_BUDGET")?;
+                    if inner > requested || budget > requested - inner {
+                        return Err(
+                            "inner workers plus Engine worker budget exceed assigned CPUs".into(),
+                        );
+                    }
+                    Ok(())
+                })();
+                agree_result(
+                    budget_checked,
+                    context as &dyn mvmc_core::Reducer,
+                    "CPU worker budget",
+                )?;
+                cpu_placement = Some(context.restrict_cpu_placement(requested)?);
+                Ok(())
+            }
+            #[cfg(not(all(feature = "mpi", target_os = "linux")))]
+            {
+                let _ = requested;
+                Err("MVMC_RS_MPI_CPUS_PER_RANK requires Linux and the MPI feature".into())
+            }
+        })();
+        #[cfg(feature = "mpi")]
+        let placement_checked = match mpi_world.as_ref() {
+            Some(context) => agree_result(
+                placement_checked,
+                context as &dyn mvmc_core::Reducer,
+                "CPU placement",
+            ),
+            None => placement_checked,
+        };
+        if let Err(message) = placement_checked {
+            eprintln!("error: {message}");
+            #[cfg(all(feature = "mpi", target_os = "linux"))]
+            drop(cpu_placement);
+            #[cfg(feature = "mpi")]
+            drop(mpi_world);
+            process::exit(2);
         }
         let checked = mvmc_core::stage_backend::validate_selected_stage_backend()
             .and_then(|_| mvmc_core::measurement_batch::validate_measurement_pfaffian())
@@ -510,6 +576,8 @@ pub fn run_cli() {
         if let Err(message) = checked {
             eprintln!("error: {message}");
             // `checked` was collectively agreed, so all ranks can finalize before exiting.
+            #[cfg(all(feature = "mpi", target_os = "linux"))]
+            drop(cpu_placement);
             #[cfg(feature = "mpi")]
             drop(mpi_world);
             process::exit(2);

@@ -951,6 +951,7 @@ dependencies = [
  "blas",
  "flate2",
  "lapack",
+ "libc",
  "mpi",
  "mvmc-expert-parsers",
  "ndarray",

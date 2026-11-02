@@ -41,6 +41,19 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
 
 実験設定 `MVMC_RS_TENFERRO_WORKER_BUDGET=N` は、同一プロセス内で mvmc-rs が生成する CPU Engine の追加ワーカー予約数を制限します。参加数 `T` の Engine は `T - 1` 個を予約し、空きがなければ待機せず逐次 Engine を使用します。予約は共有所有者がすべて解放されて Engine が破棄された後に戻ります。スコープ付きチームの交換にも適用します。`0` は逐次実行のみを許可します。最初の CPU Engine 生成前に設定し、その後の変更・設定・解除はエラーです。未設定時は従来の割当方式を使用します。walker の呼び出しスレッド、内部 Rayon、BLAS、外部から渡した Engine、別 MPI ランクはこの上限に含まれません。それらの CPU 使用量を別途考慮してください。予約の取得順によって並列・逐次の選択が変わるため、検証用の設定として扱い、一般的な高速化はまだ保証しません。
 
+### 実験的な Linux MPI CPU 割当
+
+`MVMC_RS_MPI_CPUS_PER_RANK=N` は、各ランクの初期 affinity の範囲内で、同一ノードのランク間で重複しない `N` 個の論理 CPU を割り当てます。Linux の MPI ビルドを複数ランクで起動し、`MVMC_RS_TENFERRO_WORKER_BUDGET` を明示してください。内部並列の参加数と Engine の追加ワーカー上限の合計が `N` 以下である必要があります。
+
+```bash
+cargo build --release -p mvmc-cli --features mpi
+MVMC_RS_MPI_CPUS_PER_RANK=2 MVMC_RS_INNER_THREADS=1 \
+MVMC_RS_TENFERRO_WORKER_BUDGET=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+mpirun -n 4 target/release/mvmc namelist.def
+```
+
+割当設定は全ランクで揃えてください。割当不能や設定の不一致は入出力前に全ランクでエラーになります。MPI 呼び出しスレッドと既存の mvmc 内部 Rayon ワーカーの affinity を変更し、その後の生成スレッドに継承させます。既存の MPI・BLAS スレッドには適用しません。cgroup の CPU quota、SMT の物理コア共有、外部生成スレッドの上限は扱わないため、BLAS のスレッド数も別途設定してください。ライブラリの guard は破棄時に呼び出しスレッドと内部ワーカーを元の affinity に戻し、明示的な `restore()` では復元エラーを確認できます。この設定だけで高速化を保証するものではありません。
+
 ### `gpu-cuda` feature と単体ワークスペース
 
 `mvmc-core` と `mvmc-cli` には feature `gpu-cuda` があります(`crates/mvmc-core/Cargo.toml`、`crates/mvmc-cli/Cargo.toml` で転送)。これは**依存を追加せず**、`Cargo.lock` も変更しません。`mvmc_core::backend` の `CudaProvider` 登録を有効にするだけです。したがって `cargo check -p mvmc-cli --features gpu-cuda` には CUDA ツールキットは不要で、**CUDA はリンクされません**。
