@@ -1,0 +1,32 @@
+{
+  "l32-opt": {
+    "1": {
+      "files": 4,
+      "max_abs_from_reference": 0.0
+    },
+    "4": {
+      "files": 4,
+      "max_abs_from_reference": 0.0
+    }
+  },
+  "l32-phys": {
+    "1": {
+      "files": 80,
+      "max_abs_from_reference": 0.0
+    },
+    "4": {
+      "files": 80,
+      "max_abs_from_reference": 0.0
+    }
+  },
+  "l64-opt": {
+    "1": {
+      "files": 4,
+      "max_abs_from_reference": 0.0
+    },
+    "4": {
+      "files": 4,
+      "max_abs_from_reference": 0.0
+    }
+  }
+}

@@ -834,7 +834,8 @@ pub fn run_cli() {
 fn report_inner_profile() {
     let sites = mvmc_core::threading::dispatch_profile();
     let gaps = mvmc_core::threading::dispatch_gap_profile();
-    if sites.is_empty() && gaps.iter().flatten().all(|&count| count == 0) {
+    let gap_sites = mvmc_core::threading::dispatch_gap_sites();
+    if sites.is_empty() && gap_sites.is_empty() && gaps.iter().flatten().all(|&count| count == 0) {
         return;
     }
     if !sites.is_empty() {
@@ -864,6 +865,19 @@ fn report_inner_profile() {
         );
         for (name, counts) in ["cold", "hot"].into_iter().zip(gaps) {
             eprintln!("  {name}: {counts:?}");
+        }
+    }
+    if !gap_sites.is_empty() {
+        eprintln!(
+            "inner-kernel gap sites (next site, hot/cold, counts in aggregate bucket order):"
+        );
+        for site in gap_sites {
+            eprintln!(
+                "  {} {} {:?}",
+                site.site,
+                if site.hot { "hot" } else { "cold" },
+                site.counts
+            );
         }
     }
 }
