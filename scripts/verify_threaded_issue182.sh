@@ -31,7 +31,7 @@ if [[ -n ${MVMC_RS_THREADED_FILTER:-} ]]; then
     filter="($filter) & (${MVMC_RS_THREADED_FILTER})"
 fi
 fixture_root=${MVMC_RS_THREADED_FIXTURE_ROOT:-$repo}
-paths=(tests/fixtures/ctest_model_prefixes/provenance.txt)
+paths=(tests/fixtures/ctest_model_prefixes/provenance.txt tests/fixtures/c_counter_605)
 paths+=(tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-1
     tests/fixtures/reviewed_cg_62b/canonical_general_rbm
     extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs)

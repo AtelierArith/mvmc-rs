@@ -97,6 +97,17 @@ jobs:
           bash scripts/issue234/native/validate-local-transport.sh \
             "$RUNNER_TEMP/scalar-mpi-provider/settings.txt"
           printf 'UCX_TLS=%s\n' "$UCX_TLS" >> "$GITHUB_ENV"
+      - name: Check C-referenced threaded runner matrix
+        if: matrix.configuration.cache == 'default'
+        env:
+          MVMC_RS_THREADED_182: '1'
+          MVMC_DIAG_605: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          TMPDIR: /tmp
+        run: >-
+          cargo nextest run -p mvmc-core --test threaded_issue182 --locked --cargo-profile ci
+          --run-ignored only --no-fail-fast --retries 0
+          -E 'test(runner_workers_preserve_rng_configurations_direct_store_cg_and_physcal)'
       - name: Run unit and integration tests
         env:
           FEATURE_ARGS: ${{ matrix.configuration.args }}
