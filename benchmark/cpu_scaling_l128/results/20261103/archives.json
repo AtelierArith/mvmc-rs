@@ -1,0 +1,72 @@
+[
+  {
+    "archive": "before-c-order.tar.gz",
+    "sha256": "8c357fb27a2c07e54e310e83b40e8098c73b44bf803bd08e96db0ee0ae3a45f7",
+    "bytes": 3196809,
+    "files": 1543,
+    "unique_payloads": 314
+  },
+  {
+    "archive": "intermediate-c-order.tar.gz",
+    "sha256": "a5d7c64035706f75855255e18f8b1af8c95cc6f74dfcb8d4cef1d444bfeb86a8",
+    "bytes": 3144946,
+    "files": 1537,
+    "unique_payloads": 305
+  },
+  {
+    "archive": "before-default.tar.gz",
+    "sha256": "91e3c992ff1eac9fcdd23b44fbfcda42a06adf47b10855a61de2b38c2b57da02",
+    "bytes": 447243,
+    "files": 785,
+    "unique_payloads": 158
+  },
+  {
+    "archive": "intermediate-default.tar.gz",
+    "sha256": "71377e0475d8dd093b41889ef11b61cc742f85c1c499469628c60df184afc770",
+    "bytes": 447497,
+    "files": 785,
+    "unique_payloads": 157
+  },
+  {
+    "archive": "final-c-order.tar.gz",
+    "sha256": "49e08757fb52f95c7f88af10dac7cf7d68c7b892cf99ee93a1796686a8c5eea7",
+    "bytes": 448273,
+    "files": 785,
+    "unique_payloads": 156
+  },
+  {
+    "archive": "profile-before.tar.gz",
+    "sha256": "680609e34613e9d5012d7d666aa91849c2bd56b031829a642f3f99c6687f6fdb",
+    "bytes": 1398243,
+    "files": 394,
+    "unique_payloads": 128
+  },
+  {
+    "archive": "profile-intermediate.tar.gz",
+    "sha256": "142794707e4759dd14da55bc7734124649d5fd798cacea7de1e4fb68e4fbe270",
+    "bytes": 449222,
+    "files": 100,
+    "unique_payloads": 49
+  },
+  {
+    "archive": "profile-final.tar.gz",
+    "sha256": "0e018afb8adc44dab3a1a83f9cbd5f173917b2286172a0b0ba2abfdeb488501b",
+    "bytes": 444452,
+    "files": 100,
+    "unique_payloads": 49
+  },
+  {
+    "archive": "contract-intermediate.tar.gz",
+    "sha256": "14a3a5af3af468638604aae7bd17b0b7c6611c3e811ac4b874e68306b0fe996a",
+    "bytes": 13189159,
+    "files": 103,
+    "unique_payloads": 30
+  },
+  {
+    "archive": "contract-final.tar.gz",
+    "sha256": "f41ea12937820c527ebf3639df4150c7c8afeab860b1efa1cbee8868a820e2fe",
+    "bytes": 13184632,
+    "files": 86,
+    "unique_payloads": 25
+  }
+]
