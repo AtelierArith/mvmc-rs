@@ -153,3 +153,5 @@ ms, median of 7, C-order / tenferro (cpu-faer)
 	Page size (bytes): 4096
 	Exit status: 0
 ```
+
+The separate [residual comparison](residual-report.md) adds the scaled backward error of each timed solve for the matched 0.7.1/0.8 cases.
