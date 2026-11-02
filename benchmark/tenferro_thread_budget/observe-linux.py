@@ -56,6 +56,8 @@ with (output / "run.txt").open("w") as log:
             proc.wait()
 if proc.returncode != 0:
     raise SystemExit(f"container failed: {proc.returncode}; see {output / 'run.txt'}")
+if len(seen) != 4:
+    raise SystemExit(f"observed CPU ticks for {len(seen)} of 4 ranks; sampling was incomplete")
 report = {"threads_per_engine": int(threads), "clock_ticks_per_second": clock_ticks, "distinct_active_tids_by_pid": {str(pid): sorted(tids) for pid, tids in seen.items()}, "samples": samples}
 (output / "thread-samples.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({"threads_per_engine": int(threads), "ranks": len(seen), "sample_count": len(samples), "distinct_active_counts": {str(pid): len(tids) for pid, tids in seen.items()}}, indent=2))
