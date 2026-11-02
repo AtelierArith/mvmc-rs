@@ -64,3 +64,17 @@ Upstream's existing deprecated fetch_update usage emits a warning when compiled 
 ## Lifecycle
 
 The initial implementation was recorded in checkpoint 9e58590. After parent review and the isolated full-workspace verification above, [PR #195](https://github.com/AtelierArith/mvmc-rs/pull/195) was merged into main as `99e144b5d2c406198a82a87029581455b5488f93` at `2026-10-03T06:11:40Z`. GitHub then marked alert #5 fixed at `2026-10-03T06:11:47Z`; `dismissed_at` remained null. Issue #192 was closed after that confirmation. No alert dismissal or write to the dependency's upstream repository was performed. Replace these snapshots with a supported fixed tenferro release when available and validate both lockfiles again. The unrelated crossbeam audit finding remains outside this completed lru remediation.
+
+## tenferro v0.8 migration
+
+The root, standalone CUDA, and standalone `benchmark/pfapack_compare` workspaces now resolve tenferro 0.8 from the registry instead of using the 0.7.1 snapshots as Cargo patches. The corresponding lockfiles resolve `lru 0.18.5`. Check each graph independently with:
+
+```sh
+cargo tree --locked -i lru
+cargo tree --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --locked -i lru
+cargo tree --manifest-path benchmark/pfapack_compare/Cargo.toml --locked -i lru
+```
+
+The old snapshots and the historical evidence above are retained as provenance; the new graphs do not use those patches. This check concerns the lru remediation and is not a complete security audit of the new dependency graphs.
+
+On 2026-11-02, `cargo audit --file` reported no lru advisory in any of the three locks. The root and standalone benchmark audits still exit 1 for the pre-existing crossbeam-epoch 0.9.18 finding RUSTSEC-2026-0204; the CUDA lock audit exits 0. The root additionally reports the pre-existing custom_derive and paste unmaintained warnings and the anyhow unsoundness warning; the benchmark and CUDA locks report the paste warning. No advisory was suppressed. These results are specific to the advisory database available at the time of the check.

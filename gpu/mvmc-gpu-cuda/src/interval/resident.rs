@@ -5,7 +5,7 @@ use super::{
     INTERVAL_MODULE,
 };
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer, DeviceRng, RawExec, RawModule};
-use tenferro_tensor::BackendSession;
+use tenferro_tensor::Engine;
 
 #[cfg(test)]
 mod tests;
@@ -29,7 +29,7 @@ pub struct ResidentInterval {
 
 impl ResidentInterval {
     /// Upload initial state once, seed one ensemble-owned cuRAND generator once.
-    pub fn prepare<B: BackendSession + ?Sized>(
+    pub fn prepare<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
@@ -41,7 +41,7 @@ impl ResidentInterval {
         Self::from_sampler(backend, sampler, seed)
     }
 
-    pub(crate) fn from_sampler<B: BackendSession + ?Sized>(
+    pub(crate) fn from_sampler<B: Engine + ?Sized>(
         backend: &mut B,
         sampler: IntervalSampler,
         seed: u64,
@@ -76,7 +76,7 @@ impl ResidentInterval {
 
     /// Generate a fresh tape on the device and advance the entire ensemble. No
     /// transfer of random words, rebuild decisions or intermediate configurations.
-    pub fn advance<B: BackendSession + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
+    pub fn advance<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
         with_raw_exec(backend, "mvmc.resident.advance", |exec| {
             let words = self.sampler.geom.walkers * self.sampler.total_hops * 5;
             self.rng.fill_u32(exec, &mut self.sampler.tape, words)?;
@@ -87,7 +87,7 @@ impl ResidentInterval {
 
     /// Explicit supplied-tape seam for independent Julia parity checks. Does not
     /// advance this object's RNG. Use `advance` to avoid the upload.
-    pub fn advance_with_tape<B: BackendSession + ?Sized>(
+    pub fn advance_with_tape<B: Engine + ?Sized>(
         &mut self,
         backend: &mut B,
         tape: &[u32],
@@ -285,10 +285,7 @@ impl ResidentInterval {
 
     /// One four-byte read at an explicit observation boundary. Error is sticky;
     /// a failed ensemble cannot silently resume and publish partial results.
-    pub fn check_status<B: BackendSession + ?Sized>(
-        &mut self,
-        backend: &mut B,
-    ) -> Result<(), String> {
+    pub fn check_status<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
         let mut error = [0i32];
         with_raw_exec(backend, "mvmc.resident.status", |exec| {
             // SAFETY: one i32 status word.
@@ -304,7 +301,7 @@ impl ResidentInterval {
     }
 
     /// Explicit diagnostic/result boundary; ordinary sampling keeps these resident.
-    pub fn snapshot<B: BackendSession + ?Sized>(
+    pub fn snapshot<B: Engine + ?Sized>(
         &mut self,
         backend: &mut B,
     ) -> Result<IntervalResults, String> {
@@ -313,10 +310,7 @@ impl ResidentInterval {
     }
 
     /// Download acceptance counts of the most recent call, for parity/diagnostics.
-    pub fn accepted<B: BackendSession + ?Sized>(
-        &mut self,
-        backend: &mut B,
-    ) -> Result<Vec<i32>, String> {
+    pub fn accepted<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<Vec<i32>, String> {
         self.check_status(backend)?;
         let mut out = vec![0i32; self.sampler.geom.walkers];
         with_raw_exec(backend, "mvmc.resident.accepted", |exec| {

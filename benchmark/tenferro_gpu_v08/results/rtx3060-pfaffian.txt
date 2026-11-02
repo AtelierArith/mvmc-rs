@@ -1,0 +1,28 @@
+f64 n=32 NQP=8 B=8, milliseconds, median of 7 after warmup
+CPU PfaPack host: 1.722426; CPU extension host: 1.787294
+CUDA legacy host including uploads/downloads: 0.754287; CUDA extension device-resident: 0.419736
+CUDA legacy synchronized kernel phase: 0.390659
+Extension explicit raw transfers: upload=0 download=0 bytes
+	Command being timed: "gpu/mvmc-gpu-cuda/target/release/examples/bench_shared_pfaffian"
+	User time (seconds): 2.70
+	System time (seconds): 0.45
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.16
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 420280
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 43672
+	Voluntary context switches: 96
+	Involuntary context switches: 18
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

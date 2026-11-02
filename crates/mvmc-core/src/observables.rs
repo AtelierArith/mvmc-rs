@@ -465,14 +465,13 @@ fn sr_store_gram_julia(
 // pay a Vec -> tensor conversion for every sample until the store is tensor-backed.
 #[allow(dead_code)]
 fn qp_weighted_orbital_sum_einsum(
-    backend: &mut tenferro_cpu::CpuBackend,
+    backend: &mut tenferro_cpu::CpuEngine,
     weights: &tenferro_tensor::TypedTensor<Complex64>,
     buffer: &tenferro_tensor::TypedTensor<Complex64>,
 ) -> tenferro_einsum::Result<tenferro_tensor::TypedTensor<Complex64>> {
     use tenferro_einsum::TypedTensorEinsumExt;
-    use tenferro_tensor::BackendSessionHost;
 
-    backend.with_backend_session(|session| [buffer, weights].einsum("oq,q->o", session))
+    [buffer, weights].einsum("oq,q->o", backend)
 }
 
 /// Diagonal-only Hamiltonian terms (no off-diagonal Green-function calls).
@@ -4414,7 +4413,7 @@ mod tests {
 
     #[test]
     fn qp_weighted_orbital_sum_einsum_matches_manual_complex_reference() {
-        let mut backend = tenferro_cpu::CpuBackend::new();
+        let mut backend = tenferro_cpu::CpuEngine::serial();
         let buffer = tenferro_tensor::TypedTensor::<Complex64>::from_vec_col_major(
             vec![2, 3],
             vec![

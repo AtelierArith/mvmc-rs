@@ -20,8 +20,8 @@
 //!   (`MVMC_RS_SR_BACKEND=tenferro`) and is validated against [`COrderSr`] with explicit
 //!   tolerances (`crates/mvmc-core/tests/sr_backend_421.rs`, `docs/NUMERICAL_COMPARISONS.md`).
 //!
-//! The runtime is the tenferro CPU backend with the `cpu-faer` provider; `cpu-blas` must stay
-//! off because tenferro's CPU linear algebra (`cholesky`, `triangular_solve`) fails with it.
+//! The CPU engine uses tenferro's `native` provider. The `blas` provider is not selected
+//! or validated by this workspace.
 //! [`TenferroSr::with_runtime`] accepts any eager runtime, so the standalone
 //! `gpu/mvmc-gpu-cuda` crate runs the identical stages on a CUDA device
 //! ([`Placement::Device`] uploads and downloads explicitly; tenferro never transfers
@@ -42,8 +42,9 @@ use std::sync::Arc;
 
 use num_complex::Complex64;
 use tenferro_ad::{EagerRuntime, EagerTensor};
-use tenferro_cpu::CpuBackend;
-use tenferro_linalg::EagerTensorLinalgExt;
+use tenferro_cpu::CpuEngine;
+use tenferro_linalg::EagerSessionLinalgExt;
+use tenferro_runtime::ExecutionEngine;
 use tenferro_tensor::{DotGeneralConfig, Tensor, TensorRead};
 
 use crate::stage_backend::{centered, SrSg, StageError};
@@ -706,7 +707,7 @@ impl SrStages for COrderSr {
 /// Where the eager runtime keeps its tensors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Placement {
-    /// Host memory (`CpuBackend`): tensors are created directly.
+    /// Host memory (`CpuEngine`): tensors are created directly.
     Host,
     /// Device memory (CUDA): explicit upload and download, never implicit transfers.
     Device,
@@ -736,24 +737,65 @@ pub struct TenferroStats {
 /// placement always uploads on creation and downloads on read.
 pub(crate) struct EagerTransfer {
     pub(crate) ctx: Arc<EagerRuntime>,
+    pub(crate) engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
     pub(crate) placement: Placement,
 }
 
+/// Share one caller-owned CPU engine between stages using the configured thread budget.
+pub(crate) fn cpu_engine(
+) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
+    let threads = match std::env::var("RAYON_NUM_THREADS") {
+        Ok(value) => value.parse::<usize>().map_err(err)?,
+        Err(std::env::VarError::NotPresent) => {
+            std::thread::available_parallelism().map_err(err)?.get()
+        }
+        Err(error) => return Err(err(error)),
+    };
+    let engine = if threads == 1 {
+        CpuEngine::serial()
+    } else {
+        CpuEngine::new(
+            tenferro_cpu::Pool::builder()
+                .threads(threads)
+                .build()
+                .map_err(err)?,
+        )
+    };
+    Ok(Arc::new(std::sync::Mutex::new(Box::new(engine))))
+}
+
 impl EagerTransfer {
-    pub(crate) fn new(ctx: Arc<EagerRuntime>, placement: Placement) -> Self {
-        Self { ctx, placement }
+    pub(crate) fn new(
+        ctx: Arc<EagerRuntime>,
+        engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
+        placement: Placement,
+    ) -> Self {
+        Self {
+            ctx,
+            engine,
+            placement,
+        }
+    }
+
+    pub(crate) fn run<T>(
+        &self,
+        f: impl FnOnce(&mut tenferro_ad::EagerSession<'_>) -> tenferro_ad::Result<T>,
+    ) -> Result<T, StageError> {
+        let mut engine = self.engine.lock().map_err(err)?;
+        self.ctx.with_eager_session(&mut **engine, f).map_err(err)
     }
 
     pub(crate) fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
+        let mut engine = self.engine.lock().map_err(err)?;
         let tensor = match self.placement {
             Placement::Host => host,
-            Placement::Device => self
-                .ctx
-                .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(&host)))
-                .map_err(err)?
+            Placement::Device => engine
+                .upload_host_tensor(TensorRead::from_tensor(&host))
                 .map_err(err)?,
         };
-        EagerTensor::from_tensor_in(tensor, self.ctx.clone()).map_err(err)
+        self.ctx
+            .with_eager_session(&mut **engine, |session| session.constant_from(tensor))
+            .map_err(err)
     }
 
     pub(crate) fn upload_real(
@@ -766,14 +808,12 @@ impl EagerTransfer {
     }
 
     pub(crate) fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
-        self.ctx.synchronize().map_err(err)?;
-        let dev = t.to_tensor().map_err(err)?;
+        let mut engine = self.engine.lock().map_err(err)?;
+        let dev = t.to_tensor(&mut **engine).map_err(err)?;
         match self.placement {
             Placement::Host => Ok(dev),
-            Placement::Device => self
-                .ctx
-                .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev)))
-                .map_err(err)?
+            Placement::Device => engine
+                .download_to_host(TensorRead::from_tensor(&dev))
                 .map_err(err),
         }
     }
@@ -806,20 +846,26 @@ impl std::fmt::Debug for TenferroSr {
 }
 
 impl TenferroSr {
-    /// CPU runtime with the `cpu-faer` provider (built once; see [`acquire`]).
+    /// CPU runtime with the `native` provider (built once; see [`acquire`]).
     pub fn new_cpu() -> Result<Self, StageError> {
-        let ctx = EagerRuntime::with_cpu_backend(CpuBackend::new()).map_err(err)?;
+        let ctx = EagerRuntime::new().map_err(err)?;
         Ok(Self::with_runtime(
             ctx,
+            cpu_engine()?,
             Placement::Host,
-            "tenferro cpu-faer".to_string(),
+            "tenferro native".to_string(),
         ))
     }
 
     /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
-    pub fn with_runtime(ctx: Arc<EagerRuntime>, placement: Placement, label: String) -> Self {
+    pub fn with_runtime(
+        ctx: Arc<EagerRuntime>,
+        engine: Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>,
+        placement: Placement,
+        label: String,
+    ) -> Self {
         Self {
-            io: EagerTransfer::new(ctx, placement),
+            io: EagerTransfer::new(ctx, engine, placement),
             label,
             cg: None,
             stats: TenferroStats::default(),
@@ -850,10 +896,10 @@ impl TenferroSr {
 
 fn dot(contract_l: usize, contract_r: usize) -> DotGeneralConfig {
     DotGeneralConfig {
-        lhs_contracting_dims: vec![contract_l],
-        rhs_contracting_dims: vec![contract_r],
-        lhs_batch_dims: vec![],
-        rhs_batch_dims: vec![],
+        lhs_contracting_dims: [contract_l].into_iter().collect(),
+        rhs_contracting_dims: [contract_r].into_iter().collect(),
+        lhs_batch_dims: [].into_iter().collect(),
+        rhs_batch_dims: [].into_iter().collect(),
     }
 }
 
@@ -868,9 +914,9 @@ impl SrStages for TenferroSr {
 
     fn provider(&self) -> String {
         match self.io.placement {
-            Placement::Host => "tenferro-ad EagerRuntime + CpuBackend (cpu-faer)".to_string(),
+            Placement::Host => "tenferro-ad EagerRuntime + CpuEngine (native)".to_string(),
             Placement::Device => {
-                "tenferro-ad EagerRuntime + tenferro-gpu CudaBackend (cuBLAS/cuSOLVER)".to_string()
+                "tenferro-ad EagerRuntime + tenferro-gpu CudaEngine (cuBLAS/cuSOLVER)".to_string()
             }
         }
     }
@@ -897,8 +943,8 @@ impl SrStages for TenferroSr {
         let dt = self.upload_real(vec![ns, np], d)?;
         let dwt = self.upload_real(vec![ns, np], dw)?;
         let det = self.upload_real(vec![ns], de)?;
-        let st = dwt.dot_general(&dt, dot(0, 0)).map_err(err)?;
-        let gt = dwt.dot_general(&det, dot(0, 0)).map_err(err)?;
+        let st = self.io.run(|s| s.dot_general(&dwt, &dt, dot(0, 0)))?;
+        let gt = self.io.run(|s| s.dot_general(&dwt, &det, dot(0, 0)))?;
         Ok(SrSg {
             s: self.download_f64(&st)?,
             g: self.download_f64(&gt)?,
@@ -914,7 +960,7 @@ impl SrStages for TenferroSr {
     ) -> Result<(), StageError> {
         let o = self.upload_real(vec![n, samples], store.to_vec())?;
         // OO[i,j] = sum_s O[i,s] O[j,s]: contract the sample axis of both operands.
-        let gram = o.dot_general(&o, dot(1, 1)).map_err(err)?;
+        let gram = self.io.run(|s| s.dot_general(&o, &o, dot(1, 1)))?;
         let host = self.download_f64(&gram)?;
         out[..n * n].copy_from_slice(&host);
         // GEMM does not guarantee exact symmetry; the C-order SYRK copies one triangle.
@@ -936,9 +982,9 @@ impl SrStages for TenferroSr {
         let host = Tensor::from_vec_col_major(vec![n, samples], store.to_vec()).map_err(err)?;
         let o = self.upload(host)?;
         // G[i,j] = sum_s O[i,s] conj(O[j,s]).
-        let gram = o
-            .dot_general_with_conj(&o, dot(1, 1), false, true)
-            .map_err(err)?;
+        let gram = self
+            .io
+            .run(|s| s.dot_general_with_conj(&o, &o, dot(1, 1), false, true))?;
         let host = self.download(&gram)?;
         let typed = host
             .into_typed::<Complex64>()
@@ -978,8 +1024,11 @@ impl SrStages for TenferroSr {
         // m m^T as [n,1] x [1,n] contracting the unit axis: one exact product per entry.
         let m_col = self.upload_real(vec![n, 1], mean.clone())?;
         let m_row = self.upload_real(vec![1, n], mean.clone())?;
-        let outer = m_col.dot_general(&m_row, dot(1, 0)).map_err(err)?;
-        let s_t = oo.sub(&outer).map_err(err)?.mul(&w).map_err(err)?;
+        let outer = self.io.run(|s| s.dot_general(&m_col, &m_row, dot(1, 0)))?;
+        let s_t = self.io.run(|s| {
+            let diff = s.sub(&oo, &outer)?;
+            s.mul(&diff, &w)
+        })?;
         // g = -2 dt (ho - ho_0 m); each elementwise step is one correctly rounded IEEE
         // operation in the same order as the C expression. Scalars are uploaded as constant
         // vectors: tenferro never creates device tensors implicitly, and a host scalar
@@ -988,11 +1037,11 @@ impl SrStages for TenferroSr {
         let ho = self.upload_real(vec![n], ho_sub)?;
         let ho0 = self.upload_real(vec![n], vec![input.ho.at(0); n])?;
         let coef = self.upload_real(vec![n], vec![-2.0 * input.step_dt; n])?;
-        let g_t = ho
-            .sub(&m.mul(&ho0).map_err(err)?)
-            .map_err(err)?
-            .mul(&coef)
-            .map_err(err)?;
+        let g_t = self.io.run(|s| {
+            let product = s.mul(&m, &ho0)?;
+            let diff = s.sub(&ho, &product)?;
+            s.mul(&diff, &coef)
+        })?;
         s[..n * n].copy_from_slice(&self.download_f64(&s_t)?);
         g[..n].copy_from_slice(&self.download_f64(&g_t)?);
         Ok(())
@@ -1006,13 +1055,11 @@ impl SrStages for TenferroSr {
             let a = self.upload_real(vec![n, n], s[..n * n].to_vec())?;
             let b = self.upload_real(vec![n, 1], rhs[..n].to_vec())?;
             // S = L L^T with lower L; solve L y = b, then L^T x = y.
-            let l = a.cholesky().map_err(err)?;
-            let y = l
-                .triangular_solve(&b, true, true, false, false)
-                .map_err(err)?;
-            let x = l
-                .triangular_solve(&y, true, true, true, false)
-                .map_err(err)?;
+            let x = self.io.run(|s| {
+                let l = s.cholesky(&a)?;
+                let y = s.triangular_solve(&l, &b, true, true, false, false)?;
+                s.triangular_solve(&l, &y, true, true, true, false)
+            })?;
             self.download_f64(&x)
         };
         match run() {
@@ -1065,8 +1112,8 @@ impl SrStages for TenferroSr {
         let xt = self.upload_real(vec![m.components, 1], x.to_vec())?;
         let op = self.cg.as_ref().expect("operand just cached");
         // y = O^T x  -> [cols, 1];  z = O y -> [components, 1].
-        let y = op.tensor.dot_general(&xt, dot(0, 0)).map_err(err)?;
-        let zt = op.tensor.dot_general(&y, dot(1, 0)).map_err(err)?;
+        let y = self.io.run(|s| s.dot_general(&op.tensor, &xt, dot(0, 0)))?;
+        let zt = self.io.run(|s| s.dot_general(&op.tensor, &y, dot(1, 0)))?;
         z.copy_from_slice(&self.download_f64(&zt)?);
         Ok(())
     }

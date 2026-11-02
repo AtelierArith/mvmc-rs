@@ -11,8 +11,7 @@ use std::time::Instant;
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
-use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaEngine};
 
 const NSITE: usize = 128;
 const NE: usize = 64;
@@ -57,7 +56,7 @@ fn interval_walker_sweep_l128() {
         return;
     }
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
 
     let n = 2 * NE;
     let n2 = 2 * NSITE;
@@ -121,35 +120,49 @@ fn interval_walker_sweep_l128() {
             params: &params,
         };
         let tape: Vec<u32> = (0..walkers * HOPS * 5).map(|_| rng.next_u32()).collect();
-        let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
-            .expect("prepare");
-        backend
-            .with_backend_session(|s| sampler.upload_tape(s, &tape))
-            .expect("upload tape");
+        let sampler = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, geom, &host, HOPS, 0.0)
+        }
+        .expect("prepare");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.upload_tape(s, &tape)
+        }
+        .expect("upload tape");
         // Warm up (NVRTC compile) with a short run, then measure a single fresh run: the
         // accepted-move window (`aw`) persists on the device, so a stale window would break
         // the next run immediately.
-        let _ = backend
-            .with_backend_session(|s| sampler.run(s))
-            .expect("warmup");
-        let _ = backend
-            .with_backend_session(|s| sampler.download_pf(s, 0))
-            .expect("warmup pf");
+        let _ = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.run(s)
+        }
+        .expect("warmup");
+        let _ = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.download_pf(s, 0)
+        }
+        .expect("warmup pf");
         // Issue #552: resetting only inverse/Pfaffians after warm-up leaves the mutated
         // configuration/occupancy paired with the original inverse. Recreate the entire
         // state; the compiled module stays cached on the backend.
         drop(sampler);
-        let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, HOPS, 0.0))
-            .expect("prepare fresh timed state");
-        backend
-            .with_backend_session(|s| sampler.upload_tape(s, &tape))
-            .expect("upload fresh tape");
+        let sampler = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, geom, &host, HOPS, 0.0)
+        }
+        .expect("prepare fresh timed state");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.upload_tape(s, &tape)
+        }
+        .expect("upload fresh tape");
         let t = Instant::now();
-        let results = backend
-            .with_backend_session(|s| sampler.run(s))
-            .expect("run");
+        let results = {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.run(s)
+        }
+        .expect("run");
         let best = t.elapsed().as_secs_f64();
         let total_hops: usize = results.iter().map(|&(d, _, _)| d.max(0) as usize).sum();
         let rb_any = results.iter().any(|&(_, r, _)| r != 0);
@@ -167,14 +180,16 @@ const FULL_HOPS: usize = 2688;
 
 /// Drain the sampler: run rounds, rebuilding every walker that asks, until all reach
 /// `FULL_HOPS`. Returns `(hops advanced, rebuilds, rounds)`.
-fn drain(backend: &mut CudaBackend, sampler: &IntervalSampler) -> (usize, usize, usize) {
+fn drain(backend: &mut CudaEngine, sampler: &IntervalSampler) -> (usize, usize, usize) {
     let mut hops = 0usize;
     let mut rebuilds = 0usize;
     let mut rounds = 0usize;
     loop {
-        let results = backend
-            .with_backend_session(|s| sampler.run(s))
-            .expect("run");
+        let results = {
+            let s: &mut CudaEngine = &mut *backend;
+            sampler.run(s)
+        }
+        .expect("run");
         rounds += 1;
         let mut need = Vec::new();
         for (w, &(d, r, _a)) in results.iter().enumerate() {
@@ -187,9 +202,11 @@ fn drain(backend: &mut CudaBackend, sampler: &IntervalSampler) -> (usize, usize,
             break;
         }
         rebuilds += need.len();
-        backend
-            .with_backend_session(|s| sampler.rebuild(s, &need))
-            .expect("rebuild");
+        {
+            let s: &mut CudaEngine = &mut *backend;
+            sampler.rebuild(s, &need)
+        }
+        .expect("rebuild");
     }
     (hops, rebuilds, rounds)
 }
@@ -202,7 +219,7 @@ fn interval_full_run_l128() {
         return;
     }
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
 
     let n = 2 * NE;
     let n2 = 2 * NSITE;
@@ -267,23 +284,31 @@ fn interval_full_run_l128() {
 
     // Warm-up sampler: compiles the NVRTC module and runs the loop once (untimed).
     {
-        let sampler = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
-            .expect("prepare warmup");
-        backend
-            .with_backend_session(|s| sampler.upload_tape(s, &tape))
-            .expect("upload warmup tape");
+        let sampler = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0)
+        }
+        .expect("prepare warmup");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.upload_tape(s, &tape)
+        }
+        .expect("upload warmup tape");
         let (h, rb, rounds) = drain(&mut backend, &sampler);
         eprintln!("warmup: hops={h} rebuilds={rb} rounds={rounds}");
     }
 
     // Timed sampler: fresh state, module already cached.
-    let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0))
-        .expect("prepare");
-    backend
-        .with_backend_session(|s| sampler.upload_tape(s, &tape))
-        .expect("upload tape");
+    let sampler = {
+        let s: &mut CudaEngine = &mut backend;
+        IntervalSampler::prepare(s, geom, &host, FULL_HOPS, 0.0)
+    }
+    .expect("prepare");
+    {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.upload_tape(s, &tape)
+    }
+    .expect("upload tape");
     let t = Instant::now();
     let (hops, rebuilds, rounds) = drain(&mut backend, &sampler);
     let secs = t.elapsed().as_secs_f64();
@@ -293,8 +318,10 @@ fn interval_full_run_l128() {
         secs / hops.max(1) as f64 * 1e9,
         hops as f64 / secs / 1e6
     );
-    let pf0 = backend
-        .with_backend_session(|s| sampler.download_pf(s, 0))
-        .expect("download pf");
+    let pf0 = {
+        let s: &mut CudaEngine = &mut backend;
+        sampler.download_pf(s, 0)
+    }
+    .expect("download pf");
     assert!(pf0.iter().all(|v| v.is_finite()), "pf finite: {pf0:?}");
 }

@@ -219,13 +219,17 @@ pub fn run_case(ordinal: usize, n: usize, samples: usize, reps: usize) -> Result
     let store: Vec<f64> = (0..n * samples).map(|_| lcg(&mut st)).collect();
     let spd_s = spd(n);
     let mut c = COrderSr::default();
+    let cpu_ctx = cpu_runtime()?;
+    let cuda_ctx = cuda_runtime(ordinal)?;
     let mut cpu = TenferroSr::with_runtime(
-        cpu_runtime()?,
+        cpu_ctx.ctx,
+        cpu_ctx.engine,
         Placement::Host,
         "tenferro cpu-faer".to_string(),
     );
     let mut cuda = TenferroSr::with_runtime(
-        cuda_runtime(ordinal)?,
+        cuda_ctx.ctx,
+        cuda_ctx.engine,
         Placement::Device,
         "tenferro cuda".to_string(),
     );

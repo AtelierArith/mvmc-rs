@@ -4,12 +4,11 @@ use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler, ResidentInterval};
 use tenferro_ext::raw_exec::{raw_exec_counters, with_raw_exec, DeviceRng};
-use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
 
-fn backend() -> CudaBackend {
+fn backend() -> CudaEngine {
     let devices = cuda_devices().expect("CUDA discovery");
-    CudaBackend::new(devices[0].id()).expect("CUDA backend")
+    CudaEngine::open(devices[0].id()).expect("CUDA backend")
 }
 
 #[test]
@@ -30,18 +29,28 @@ fn julia_log_decision_handles_overflow_and_zero_uniform() {
         state.geom.nproj = 1;
         state.gutz.fill(0);
         state.params = vec![1000.];
-        let mut run = backend
-            .with_backend_session(|s| {
-                ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
-            })
-            .unwrap();
-        backend
-            .with_backend_session(|s| run.advance_with_tape(s, &[0, 0, 0, 0, uniform]))
-            .unwrap();
-        let result = backend.with_backend_session(|s| run.snapshot(s)).unwrap();
+        let mut run = {
+            let s: &mut CudaEngine = &mut backend;
+            ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
+        }
+        .unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            run.advance_with_tape(s, &[0, 0, 0, 0, uniform])
+        }
+        .unwrap();
+        let result = {
+            let s: &mut CudaEngine = &mut backend;
+            run.snapshot(s)
+        }
+        .unwrap();
         assert_eq!(result.ele, vec![i32::from(accepted), down]);
         assert_eq!(
-            backend.with_backend_session(|s| run.accepted(s)).unwrap(),
+            {
+                let s: &mut CudaEngine = &mut backend;
+                run.accepted(s)
+            }
+            .unwrap(),
             vec![i32::from(accepted)]
         );
     }
@@ -85,39 +94,55 @@ fn nonfinite_proposal_overlap_preserves_walker_state() {
             assert!((result.logip[0] - initial_ip.abs().ln()).abs() <= 1e-12);
         };
         let tape = [0, 0, 0, 0, 0]; // Even u=0 must not accept a nonfinite overlap.
-        let mut resident = backend
-            .with_backend_session(|s| {
-                ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
-            })
-            .unwrap();
-        backend
-            .with_backend_session(|s| resident.advance_with_tape(s, &tape))
-            .unwrap();
+        let mut resident = {
+            let s: &mut CudaEngine = &mut backend;
+            ResidentInterval::prepare(s, state.geom, &state.host(), 1, 79)
+        }
+        .unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            resident.advance_with_tape(s, &tape)
+        }
+        .unwrap();
         check(
-            backend
-                .with_backend_session(|s| resident.snapshot(s))
-                .unwrap(),
+            {
+                let s: &mut CudaEngine = &mut backend;
+                resident.snapshot(s)
+            }
+            .unwrap(),
         );
         assert_eq!(
-            backend
-                .with_backend_session(|s| resident.accepted(s))
-                .unwrap(),
+            {
+                let s: &mut CudaEngine = &mut backend;
+                resident.accepted(s)
+            }
+            .unwrap(),
             vec![0]
         );
-        let legacy = backend
-            .with_backend_session(|s| IntervalSampler::prepare(s, state.geom, &state.host(), 1, 0.))
-            .unwrap();
-        backend
-            .with_backend_session(|s| legacy.upload_tape(s, &tape))
-            .unwrap();
+        let legacy = {
+            let s: &mut CudaEngine = &mut backend;
+            IntervalSampler::prepare(s, state.geom, &state.host(), 1, 0.)
+        }
+        .unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            legacy.upload_tape(s, &tape)
+        }
+        .unwrap();
         assert_eq!(
-            backend.with_backend_session(|s| legacy.run(s)).unwrap(),
+            {
+                let s: &mut CudaEngine = &mut backend;
+                legacy.run(s)
+            }
+            .unwrap(),
             vec![(1, 0, 0)]
         );
         check(
-            backend
-                .with_backend_session(|s| legacy.download_all(s))
-                .unwrap(),
+            {
+                let s: &mut CudaEngine = &mut backend;
+                legacy.download_all(s)
+            }
+            .unwrap(),
         );
     }
 }
@@ -126,13 +151,15 @@ fn nonfinite_proposal_overlap_preserves_walker_state() {
 #[ignore = "requires CUDA"]
 fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
     let mut backend = backend();
-    let (mut rng, mut buffer) = backend
-        .with_backend_session(|s| {
+    let (mut rng, mut buffer) = {
+        let s: &mut CudaEngine = &mut backend;
+        {
             with_raw_exec(s, "rng.fixture.prepare", |exec| {
                 Ok((DeviceRng::new(exec, 42)?, exec.alloc_bytes(4097 * 4)?))
             })
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
     let fixture = include_str!("fixtures/curand_julia.txt");
     let mut tokens = fixture
         .lines()
@@ -141,11 +168,13 @@ fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
     while let Some(key) = tokens.next() {
         let value: u64 = tokens.next().unwrap().parse().unwrap();
         match key {
-            "seed" => backend
-                .with_backend_session(|s| {
+            "seed" => {
+                let s: &mut CudaEngine = &mut backend;
+                {
                     with_raw_exec(s, "rng.fixture.reseed", |exec| rng.reseed(exec, value))
-                })
-                .unwrap(),
+                }
+            }
+            .unwrap(),
             "words" => {
                 let words = value as usize;
                 let expected: Vec<u32> = (0..words)
@@ -153,8 +182,9 @@ fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
                     .collect();
                 // A second generator must not reseed or consume the first one's stream.
                 let before = raw_exec_counters();
-                backend
-                    .with_backend_session(|s| {
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    {
                         with_raw_exec(s, "rng.fixture.generate", |exec| {
                             let mut unrelated = DeviceRng::new(exec, 999)?;
                             unrelated.fill_u32(exec, &mut buffer, words)?;
@@ -162,18 +192,21 @@ fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
                             exec.synchronize()?;
                             Ok(())
                         })
-                    })
-                    .unwrap();
+                    }
+                }
+                .unwrap();
                 let traffic = raw_exec_counters() - before;
                 assert_eq!((traffic.upload_calls, traffic.download_calls), (0, 0));
                 let mut actual = vec![0u32; words];
-                backend
-                    .with_backend_session(|s| {
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    {
                         with_raw_exec(s, "rng.fixture.read", |exec| unsafe {
                             exec.download(&mut actual, exec.ptr(&buffer)?)
                         })
-                    })
-                    .unwrap();
+                    }
+                }
+                .unwrap();
                 assert_eq!(
                     actual, expected,
                     "exact Julia cuRAND UInt32 sequence, length {words}"
@@ -183,14 +216,16 @@ fn device_rng_matches_julia_calls_reseed_and_independent_owners() {
         }
     }
     // Wrong capacity is rejected before launching; no RNG state is consumed.
-    backend
-        .with_backend_session(|s| {
+    {
+        let s: &mut CudaEngine = &mut backend;
+        {
             with_raw_exec(s, "rng.bounds", |exec| {
                 assert!(rng.fill_u32(exec, &mut buffer, 4098).is_err());
                 Ok(())
             })
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
     // Owners retain the primary context and may be destroyed on another host thread.
     std::thread::spawn(move || drop((rng, buffer)))
         .join()
@@ -293,11 +328,13 @@ fn resident_intervals_complete_rebuild_boundaries_without_transfers() {
     // bound (including rebuild on the very last hop), across 20 persistent calls.
     for hops in [0, 1, 2, 3, 4, 17] {
         let state = State::new(3, 2, 1, 1, true);
-        let mut resident = backend
-            .with_backend_session(|s| {
+        let mut resident = {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 ResidentInterval::prepare(s, state.geom, &state.host(), hops, 79)
-            })
-            .unwrap();
+            }
+        }
+        .unwrap();
         let mut expected = state.ele.clone();
         for step in 0..20 {
             let mut tape = vec![0u32; 5 * 3 * hops];
@@ -308,18 +345,24 @@ fn resident_intervals_complete_rebuild_boundaries_without_transfers() {
                     expected[w * 2 + spin] ^= 1;
                 }
             }
-            backend
-                .with_backend_session(|s| resident.advance_with_tape(s, &tape))
-                .unwrap();
+            {
+                let s: &mut CudaEngine = &mut backend;
+                resident.advance_with_tape(s, &tape)
+            }
+            .unwrap();
             assert_eq!(
-                backend
-                    .with_backend_session(|s| resident.accepted(s))
-                    .unwrap(),
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    resident.accepted(s)
+                }
+                .unwrap(),
                 vec![hops as i32; 3]
             );
-            let snapshot = backend
-                .with_backend_session(|s| resident.snapshot(s))
-                .unwrap();
+            let snapshot = {
+                let s: &mut CudaEngine = &mut backend;
+                resident.snapshot(s)
+            }
+            .unwrap();
             assert_eq!(snapshot.ele, expected);
             assert!(snapshot
                 .aw
@@ -331,9 +374,11 @@ fn resident_intervals_complete_rebuild_boundaries_without_transfers() {
         }
         let before = raw_exec_counters();
         for _ in 0..20 {
-            backend
-                .with_backend_session(|s| resident.advance(s))
-                .unwrap();
+            {
+                let s: &mut CudaEngine = &mut backend;
+                resident.advance(s)
+            }
+            .unwrap();
         }
         let traffic = raw_exec_counters() - before;
         assert_eq!(
@@ -346,9 +391,11 @@ fn resident_intervals_complete_rebuild_boundaries_without_transfers() {
             (0, 0, 0, 0)
         );
         assert_eq!((traffic.scopes, traffic.synchronizations), (20, 20));
-        backend
-            .with_backend_session(|s| resident.check_status(s))
-            .unwrap();
+        {
+            let s: &mut CudaEngine = &mut backend;
+            resident.check_status(s)
+        }
+        .unwrap();
     }
 }
 
@@ -358,33 +405,45 @@ fn resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling() {
     let mut backend = backend();
     for (nsite, ne, nqp, hops) in [(8, 4, 3, 73), (3, 3, 2, 17), (66, 32, 2, 140)] {
         let state = State::new(4, nsite, ne, nqp, false);
-        let mut resident = backend
-            .with_backend_session(|s| {
+        let mut resident = {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 ResidentInterval::prepare(s, state.geom, &state.host(), hops, 79)
-            })
-            .unwrap();
-        let host_control = backend
-            .with_backend_session(|s| {
+            }
+        }
+        .unwrap();
+        let host_control = {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 IntervalSampler::prepare(s, state.geom, &state.host(), hops, 0.0)
-            })
-            .unwrap();
+            }
+        }
+        .unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(19);
         for _ in 0..20 {
             let tape: Vec<u32> = (0..4 * hops * 5).map(|_| rng.gen_rand32()).collect();
-            backend
-                .with_backend_session(|s| resident.advance_with_tape(s, &tape))
-                .unwrap();
-            backend
-                .with_backend_session(|s| host_control.upload_tape(s, &tape))
-                .unwrap();
-            backend
-                .with_backend_session(|s| host_control.reset_offsets(s))
-                .unwrap();
+            {
+                let s: &mut CudaEngine = &mut backend;
+                resident.advance_with_tape(s, &tape)
+            }
+            .unwrap();
+            {
+                let s: &mut CudaEngine = &mut backend;
+                host_control.upload_tape(s, &tape)
+            }
+            .unwrap();
+            {
+                let s: &mut CudaEngine = &mut backend;
+                host_control.reset_offsets(s)
+            }
+            .unwrap();
             let mut accepted = vec![0i32; 4];
             loop {
-                let progress = backend
-                    .with_backend_session(|s| host_control.run(s))
-                    .unwrap();
+                let progress = {
+                    let s: &mut CudaEngine = &mut backend;
+                    host_control.run(s)
+                }
+                .unwrap();
                 let mut rebuild = vec![];
                 for (w, &(_, flag, count)) in progress.iter().enumerate() {
                     accepted[w] += count;
@@ -395,22 +454,30 @@ fn resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling() {
                 if rebuild.is_empty() {
                     break;
                 }
-                backend
-                    .with_backend_session(|s| host_control.rebuild(s, &rebuild))
-                    .unwrap();
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    host_control.rebuild(s, &rebuild)
+                }
+                .unwrap();
             }
-            let actual = backend
-                .with_backend_session(|s| resident.snapshot(s))
-                .unwrap();
-            let expected = backend
-                .with_backend_session(|s| host_control.download_all(s))
-                .unwrap();
+            let actual = {
+                let s: &mut CudaEngine = &mut backend;
+                resident.snapshot(s)
+            }
+            .unwrap();
+            let expected = {
+                let s: &mut CudaEngine = &mut backend;
+                host_control.download_all(s)
+            }
+            .unwrap();
             assert_eq!(actual.ele, expected.ele);
             assert_eq!(actual.aw, expected.aw);
             assert_eq!(
-                backend
-                    .with_backend_session(|s| resident.accepted(s))
-                    .unwrap(),
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    resident.accepted(s)
+                }
+                .unwrap(),
                 accepted
             );
             for (a, b) in actual.pf.iter().zip(&expected.pf) {
@@ -436,17 +503,20 @@ fn device_rng_rejects_a_different_device_context() {
     if devices.len() < 2 {
         return;
     }
-    let mut first = CudaBackend::new(devices[0].id()).unwrap();
-    let mut second = CudaBackend::new(devices[1].id()).unwrap();
-    let (mut rng, mut buffer) = first
-        .with_backend_session(|s| {
+    let mut first = CudaEngine::open(devices[0].id()).unwrap();
+    let mut second = CudaEngine::open(devices[1].id()).unwrap();
+    let (mut rng, mut buffer) = {
+        let s: &mut CudaEngine = &mut first;
+        {
             with_raw_exec(s, "rng.device.first", |exec| {
                 Ok((DeviceRng::new(exec, 79)?, exec.alloc_bytes(64)?))
             })
-        })
-        .unwrap();
-    second
-        .with_backend_session(|s| {
+        }
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut second;
+        {
             with_raw_exec(s, "rng.device.second", |exec| {
                 let mut foreign = exec.alloc_bytes(64)?;
                 assert!(exec.ptr(&buffer).is_err());
@@ -455,15 +525,18 @@ fn device_rng_rejects_a_different_device_context() {
                 assert!(rng.reseed(exec, 79).is_err());
                 Ok(())
             })
-        })
-        .unwrap();
-    first
-        .with_backend_session(|s| {
+        }
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut first;
+        {
             with_raw_exec(s, "rng.device.valid", |exec| {
                 rng.fill_u32(exec, &mut buffer, 16)
             })
-        })
-        .unwrap();
+        }
+    }
+    .unwrap();
 }
 
 #[test]
@@ -478,8 +551,9 @@ fn resident_l128_sampling_transfer_benchmark() {
         let state = State::new(walkers, 128, 64, 32, false);
         // Untimed fixture staging gives the host-controlled baseline the exact
         // same 20 library calls. Baseline time excludes generating these tapes.
-        let tapes = backend
-            .with_backend_session(|s| {
+        let tapes = {
+            let s: &mut CudaEngine = &mut backend;
+            {
                 with_raw_exec(s, "bench.tapes", |exec| {
                     let mut rng = DeviceRng::new(exec, 79)?;
                     let mut buffer = exec.alloc_bytes(words * 4)?;
@@ -494,25 +568,36 @@ fn resident_l128_sampling_transfer_benchmark() {
                     }
                     Ok(tapes)
                 })
-            })
-            .unwrap();
+            }
+        }
+        .unwrap();
         for rep in 0..4 {
-            let legacy = backend
-                .with_backend_session(|s| {
+            let legacy = {
+                let s: &mut CudaEngine = &mut backend;
+                {
                     IntervalSampler::prepare(s, state.geom, &state.host(), hops, 0.0)
-                })
-                .unwrap();
+                }
+            }
+            .unwrap();
             let before = raw_exec_counters();
             let start = Instant::now();
             for tape in &tapes {
-                backend
-                    .with_backend_session(|s| legacy.upload_tape(s, tape))
-                    .unwrap();
-                backend
-                    .with_backend_session(|s| legacy.reset_offsets(s))
-                    .unwrap();
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    legacy.upload_tape(s, tape)
+                }
+                .unwrap();
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    legacy.reset_offsets(s)
+                }
+                .unwrap();
                 loop {
-                    let result = backend.with_backend_session(|s| legacy.run(s)).unwrap();
+                    let result = {
+                        let s: &mut CudaEngine = &mut backend;
+                        legacy.run(s)
+                    }
+                    .unwrap();
                     let rebuild: Vec<_> = result
                         .iter()
                         .enumerate()
@@ -521,36 +606,46 @@ fn resident_l128_sampling_transfer_benchmark() {
                     if rebuild.is_empty() {
                         break;
                     }
-                    backend
-                        .with_backend_session(|s| legacy.rebuild(s, &rebuild))
-                        .unwrap();
+                    {
+                        let s: &mut CudaEngine = &mut backend;
+                        legacy.rebuild(s, &rebuild)
+                    }
+                    .unwrap();
                 }
             }
             let elapsed = start.elapsed().as_secs_f64();
             let traffic = raw_exec_counters() - before;
-            let expected = backend
-                .with_backend_session(|s| legacy.download_all(s))
-                .unwrap();
+            let expected = {
+                let s: &mut CudaEngine = &mut backend;
+                legacy.download_all(s)
+            }
+            .unwrap();
             eprintln!("L128 sampling only W={walkers} QP=32 steps={steps} hops={hops} rep={rep} host_control seconds={elapsed:.9} {traffic:?}");
             drop(legacy);
 
-            let mut resident = backend
-                .with_backend_session(|s| {
+            let mut resident = {
+                let s: &mut CudaEngine = &mut backend;
+                {
                     ResidentInterval::prepare(s, state.geom, &state.host(), hops, 79)
-                })
-                .unwrap();
+                }
+            }
+            .unwrap();
             let before = raw_exec_counters();
             let start = Instant::now();
             for _ in 0..steps {
-                backend
-                    .with_backend_session(|s| resident.advance(s))
-                    .unwrap();
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    resident.advance(s)
+                }
+                .unwrap();
             }
             let elapsed = start.elapsed().as_secs_f64();
             let traffic = raw_exec_counters() - before;
-            let actual = backend
-                .with_backend_session(|s| resident.snapshot(s))
-                .unwrap();
+            let actual = {
+                let s: &mut CudaEngine = &mut backend;
+                resident.snapshot(s)
+            }
+            .unwrap();
             assert_eq!(traffic.upload_bytes + traffic.download_bytes, 0);
             assert_eq!(
                 actual.ele, expected.ele,

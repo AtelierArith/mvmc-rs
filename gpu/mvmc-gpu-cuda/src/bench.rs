@@ -11,9 +11,10 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use tenferro_ad::{EagerRuntime, EagerTensor};
-use tenferro_cpu::CpuBackend;
-use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-use tenferro_linalg::EagerTensorLinalgExt;
+use tenferro_cpu::CpuEngine;
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
+use tenferro_linalg::EagerSessionLinalgExt;
+use tenferro_runtime::ExecutionEngine;
 use tenferro_tensor::{DotGeneralConfig, Tensor, TensorRead};
 
 /// Relative max-norm tolerance for `dot_general` CUDA vs CPU: both accumulate `n` products of
@@ -179,42 +180,54 @@ fn flatten(t: &Tensor, dtype: Dtype, n: usize, lower_only: bool) -> Result<Vec<f
     }
 }
 
-fn run_once(ctx: &Arc<EagerRuntime>, op: Op, hosts: &[Tensor]) -> Result<(Tensor, Stages), String> {
+pub type SharedEngine = Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>;
+
+/// Eager context and its caller-owned execution engine.
+#[derive(Clone)]
+pub struct BenchRuntime {
+    pub ctx: Arc<EagerRuntime>,
+    pub engine: SharedEngine,
+}
+
+fn run_once(runtime: &BenchRuntime, op: Op, hosts: &[Tensor]) -> Result<(Tensor, Stages), String> {
+    let ctx = &runtime.ctx;
+    let mut engine = runtime.engine.lock().map_err(|e| e.to_string())?;
     let ms = |t: Instant| t.elapsed().as_secs_f64() * 1e3;
     let t = Instant::now();
     let mut eager = Vec::new();
     for h in hosts {
-        let dev = ctx
-            .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(h)))
-            .map_err(|e| e.to_string())?
+        let dev = engine
+            .upload_host_tensor(TensorRead::from_tensor(h))
             .map_err(|e| e.to_string())?;
-        eager.push(EagerTensor::from_tensor_in(dev, ctx.clone()).map_err(|e| e.to_string())?);
+        eager.push(
+            ctx.with_eager_session(&mut **engine, |s| s.constant_from(dev))
+                .map_err(|e| e.to_string())?,
+        );
     }
-    ctx.synchronize().map_err(|e| e.to_string())?;
+    engine.synchronize().map_err(|e| e.to_string())?;
     let upload_ms = ms(t);
 
     let t = Instant::now();
     let out = match op {
         Op::Dot => {
             let cfg = DotGeneralConfig {
-                lhs_contracting_dims: vec![1],
-                rhs_contracting_dims: vec![0],
-                lhs_batch_dims: vec![],
-                rhs_batch_dims: vec![],
+                lhs_contracting_dims: [1].as_slice().into(),
+                rhs_contracting_dims: [0].as_slice().into(),
+                lhs_batch_dims: [].as_slice().into(),
+                rhs_batch_dims: [].as_slice().into(),
             };
-            eager[0].dot_general(&eager[1], cfg)
+            ctx.with_eager_session(&mut **engine, |s| s.dot_general(&eager[0], &eager[1], cfg))
         }
-        Op::Cholesky => eager[0].cholesky(),
+        Op::Cholesky => ctx.with_eager_session(&mut **engine, |s| s.cholesky(&eager[0])),
     }
     .map_err(|e| e.to_string())?;
-    ctx.synchronize().map_err(|e| e.to_string())?;
+    engine.synchronize().map_err(|e| e.to_string())?;
     let compute_ms = ms(t);
 
     let t = Instant::now();
-    let dev_out = out.to_tensor().map_err(|e| e.to_string())?;
-    let host_out = ctx
-        .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev_out)))
-        .map_err(|e| e.to_string())?
+    let dev_out = out.to_tensor(&mut **engine).map_err(|e| e.to_string())?;
+    let host_out = engine
+        .download_to_host(TensorRead::from_tensor(&dev_out))
         .map_err(|e| e.to_string())?;
     let download_ms = ms(t);
     Ok((
@@ -233,7 +246,7 @@ fn median(v: &mut [f64]) -> f64 {
 }
 
 fn measure(
-    ctx: &Arc<EagerRuntime>,
+    ctx: &BenchRuntime,
     op: Op,
     hosts: &[Tensor],
     reps: usize,
@@ -259,24 +272,45 @@ fn measure(
 }
 
 /// CPU runtime.
-pub fn cpu_runtime() -> Result<Arc<EagerRuntime>, String> {
-    EagerRuntime::with_cpu_backend(CpuBackend::new()).map_err(|e| e.to_string())
+pub fn cpu_runtime() -> Result<BenchRuntime, String> {
+    let ctx = EagerRuntime::new().map_err(|e| e.to_string())?;
+    let threads = std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()));
+    let engine = if threads == 1 {
+        CpuEngine::serial()
+    } else {
+        CpuEngine::new(
+            tenferro_cpu::Pool::builder()
+                .threads(threads)
+                .build()
+                .map_err(|e| e.to_string())?,
+        )
+    };
+    Ok(BenchRuntime {
+        ctx,
+        engine: Arc::new(std::sync::Mutex::new(Box::new(engine))),
+    })
 }
 
 /// CUDA runtime on the given device ordinal.
-pub fn cuda_runtime(ordinal: usize) -> Result<Arc<EagerRuntime>, String> {
+pub fn cuda_runtime(ordinal: usize) -> Result<BenchRuntime, String> {
     let devices = cuda_devices().map_err(|e| e.to_string())?;
     let device = devices
         .get(ordinal)
         .ok_or_else(|| format!("no CUDA device with ordinal {ordinal}"))?;
-    let backend = CudaBackend::new(device.id()).map_err(|e| e.to_string())?;
-    EagerRuntime::with_cuda_backend(backend).map_err(|e| e.to_string())
+    let engine = CudaEngine::open(device.id()).map_err(|e| e.to_string())?;
+    Ok(BenchRuntime {
+        ctx: EagerRuntime::new().map_err(|e| e.to_string())?,
+        engine: Arc::new(std::sync::Mutex::new(Box::new(engine))),
+    })
 }
 
 /// Run one case on both backends and compare.
 pub fn run_case(
-    cpu: &Arc<EagerRuntime>,
-    cuda: &Arc<EagerRuntime>,
+    cpu: &BenchRuntime,
+    cuda: &BenchRuntime,
     op: Op,
     dtype: Dtype,
     n: usize,
@@ -375,37 +409,41 @@ impl RoundTrip {
 /// Measure the device round trip for a vector of `n` f64 values (median of `reps` after
 /// `warmups`): the data cost a stage must amortize before any compute benefit.
 pub fn roundtrip(
-    ctx: &Arc<EagerRuntime>,
+    runtime: &BenchRuntime,
     n: usize,
     warmups: usize,
     reps: usize,
 ) -> Result<RoundTrip, String> {
     let host = Tensor::from_vec_col_major(vec![n], vec![1.0_f64; n]).map_err(|e| e.to_string())?;
-    let upload = |ctx: &Arc<EagerRuntime>| -> Result<EagerTensor, String> {
-        let dev = ctx
-            .with_execution_session(|s| s.upload_host_tensor(TensorRead::from_tensor(&host)))
-            .map_err(|e| e.to_string())?
+    let ctx = &runtime.ctx;
+    let mut engine = runtime.engine.lock().map_err(|e| e.to_string())?;
+    let upload = |engine: &mut dyn ExecutionEngine| -> Result<EagerTensor, String> {
+        let dev = engine
+            .upload_host_tensor(TensorRead::from_tensor(&host))
             .map_err(|e| e.to_string())?;
-        let t = EagerTensor::from_tensor_in(dev, ctx.clone()).map_err(|e| e.to_string())?;
-        ctx.synchronize().map_err(|e| e.to_string())?;
+        let t = ctx
+            .with_eager_session(engine, |s| s.constant_from(dev))
+            .map_err(|e| e.to_string())?;
+        engine.synchronize().map_err(|e| e.to_string())?;
         Ok(t)
     };
     let (mut up, mut op, mut down) = (vec![], vec![], vec![]);
-    let a = upload(ctx)?;
-    let b = upload(ctx)?;
+    let a = upload(&mut **engine)?;
+    let b = upload(&mut **engine)?;
     for i in 0..warmups + reps.max(1) {
         let t = Instant::now();
-        let _ = upload(ctx)?;
+        let _ = upload(&mut **engine)?;
         let u = t.elapsed().as_secs_f64() * 1e3;
         let t = Instant::now();
-        let c = a.add(&b).map_err(|e| e.to_string())?;
-        ctx.synchronize().map_err(|e| e.to_string())?;
+        let c = ctx
+            .with_eager_session(&mut **engine, |s| s.add(&a, &b))
+            .map_err(|e| e.to_string())?;
+        engine.synchronize().map_err(|e| e.to_string())?;
         let o = t.elapsed().as_secs_f64() * 1e3;
         let t = Instant::now();
-        let dev = c.to_tensor().map_err(|e| e.to_string())?;
-        let _ = ctx
-            .with_execution_session(|s| s.download_to_host(TensorRead::from_tensor(&dev)))
-            .map_err(|e| e.to_string())?
+        let dev = c.to_tensor(&mut **engine).map_err(|e| e.to_string())?;
+        let _ = engine
+            .download_to_host(TensorRead::from_tensor(&dev))
             .map_err(|e| e.to_string())?;
         let d = t.elapsed().as_secs_f64() * 1e3;
         if i >= warmups {

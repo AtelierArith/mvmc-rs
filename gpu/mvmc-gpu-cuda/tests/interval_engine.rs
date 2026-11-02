@@ -11,8 +11,7 @@ use mvmc_core::sampling::stage::{StageGeom, StageTables};
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
 use mvmc_gpu_cuda::interval_engine::{IntervalEngine, IntervalGroup};
-use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaEngine};
 
 const NSITE: usize = 8;
 const NE: usize = 4;
@@ -114,7 +113,7 @@ fn interval_group_threaded_matches_single_threaded() {
 
     // --- Reference: single-threaded W-walker IntervalSampler. ---
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
     let host = IntervalHost {
         ele: &ele_all,
         inv: &inv_all,
@@ -125,9 +124,11 @@ fn interval_group_threaded_matches_single_threaded() {
         jast: &jast,
         params: &params,
     };
-    let sampler = backend
-        .with_backend_session(|s| IntervalSampler::prepare(s, geom(), &host, BLOCK, 0.0))
-        .expect("prepare reference");
+    let sampler = {
+        let s: &mut CudaEngine = &mut backend;
+        IntervalSampler::prepare(s, geom(), &host, BLOCK, 0.0)
+    }
+    .expect("prepare reference");
     let mut reference = Vec::new();
     for block in 0..BLOCKS {
         // Concatenated tape [word][walker][step].
@@ -140,16 +141,22 @@ fn interval_group_threaded_matches_single_threaded() {
                 }
             }
         }
-        backend
-            .with_backend_session(|s| sampler.reset_offsets(s))
-            .expect("reset");
-        backend
-            .with_backend_session(|s| sampler.upload_tape(s, &tape))
-            .expect("upload tape");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.reset_offsets(s)
+        }
+        .expect("reset");
+        {
+            let s: &mut CudaEngine = &mut backend;
+            sampler.upload_tape(s, &tape)
+        }
+        .expect("upload tape");
         loop {
-            let results = backend
-                .with_backend_session(|s| sampler.run(s))
-                .expect("run");
+            let results = {
+                let s: &mut CudaEngine = &mut backend;
+                sampler.run(s)
+            }
+            .expect("run");
             let mut need = Vec::new();
             for (w, &(_, r, _)) in results.iter().enumerate() {
                 if r != 0 {
@@ -159,16 +166,20 @@ fn interval_group_threaded_matches_single_threaded() {
             if need.is_empty() {
                 break;
             }
-            backend
-                .with_backend_session(|s| sampler.rebuild(s, &need))
-                .expect("rebuild");
+            {
+                let s: &mut CudaEngine = &mut backend;
+                sampler.rebuild(s, &need)
+            }
+            .expect("rebuild");
         }
         let mut states = Vec::new();
         for w in 0..WALKERS {
             states.push(
-                backend
-                    .with_backend_session(|s| sampler.download_walker(s, w))
-                    .expect("download"),
+                {
+                    let s: &mut CudaEngine = &mut backend;
+                    sampler.download_walker(s, w)
+                }
+                .expect("download"),
             );
         }
         reference = states;

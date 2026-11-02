@@ -1,0 +1,88 @@
+{
+  "cuda_visible_devices": "1",
+  "ld_library_path": "/tmp/mvmc-570-cuda-env/lib/python3.12/site-packages/cutensor/lib:/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib:/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib",
+  "input_hashes": {
+    "StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+    "coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+    "greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+    "greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+    "gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+    "jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+    "locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+    "modpara.def": "7ca59366e516f2b057e37dfcfe27cdd1bd36a0d11d331bd03dc94ada74c667d1",
+    "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+    "orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697",
+    "qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+    "trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da"
+  },
+  "binary_hashes": {
+    "before": "08c0b298e75905debb4a8c741c936caba5234d520b87ea122858f52a3d7b84ec",
+    "after": "6c7926a320dcc43524b0e620720205c741da8448743083f6287406a27f7662db"
+  },
+  "samples": {
+    "before": [
+      {
+        "rep": 0,
+        "seconds": 14.95537925
+      },
+      {
+        "rep": 1,
+        "seconds": 4.838939152
+      },
+      {
+        "rep": 2,
+        "seconds": 4.849528291
+      },
+      {
+        "rep": 3,
+        "seconds": 4.843105877
+      },
+      {
+        "rep": 4,
+        "seconds": 4.84965935
+      },
+      {
+        "rep": 5,
+        "seconds": 4.859443102
+      }
+    ],
+    "after": [
+      {
+        "rep": 0,
+        "seconds": 14.816941006
+      },
+      {
+        "rep": 1,
+        "seconds": 4.829980864
+      },
+      {
+        "rep": 2,
+        "seconds": 4.823095072
+      },
+      {
+        "rep": 3,
+        "seconds": 4.864834722
+      },
+      {
+        "rep": 4,
+        "seconds": 4.855330559
+      },
+      {
+        "rep": 5,
+        "seconds": 4.874907503
+      }
+    ]
+  },
+  "comparison": {
+    "energies": {
+      "cross_version_max_abs": 0.0,
+      "before_repeat_max_abs": 0.0,
+      "after_repeat_max_abs": 0.0
+    },
+    "parameters": {
+      "cross_version_max_abs": 0.0,
+      "before_repeat_max_abs": 0.0,
+      "after_repeat_max_abs": 0.0
+    }
+  }
+}

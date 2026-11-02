@@ -266,9 +266,8 @@ fn device_sampler_exchange_matches_cpu_sampler() {
 #[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
 fn pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses() {
     use mvmc_gpu_cuda::transfer::{PinnedKind, PinnedPool, TransferStream};
-    use tenferro_gpu::cuda::raw::{KernelArg, LaunchConfig, NvrtcOptions};
-    use tenferro_gpu::cuda::{cuda_devices, with_cuda_exec_session, CudaBackend};
-    use tenferro_tensor::BackendSessionHost;
+    use tenferro_ext::raw_exec::{with_raw_exec, Arg};
+    use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
     if !gate() {
         return;
     }
@@ -278,59 +277,58 @@ extern "C" __global__ void twice(double* x, int n) {
   if (i < n) x[i] = 2.0 * x[i] + 1.0;
 }"#;
     let devices = cuda_devices().expect("devices");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("backend");
     let n = 1000usize;
-    let outcome = backend.with_backend_session(|session| {
-        with_cuda_exec_session(session, |exec| {
-            exec.with_raw("sampler-gate.interop", |sess| {
-                // device buffer owned by tenferro's allocator; its address from the raw session
-                let dev = sess.alloc_bytes(n * 8, "interop")?;
-                let mut ptr = std::ptr::null_mut::<std::ffi::c_void>();
-                dev.with_ptr(|p| ptr = p);
-                // a separate cudarc handle of the same primary context performs the copies
-                let ctx = cudarc::driver::CudaContext::new(0).expect("ctx");
-                // SAFETY: only this test uses the context; ordering is by host waits below.
-                unsafe { mvmc_gpu_cuda::transfer::disable_event_tracking(&ctx) };
-                let pool = PinnedPool::new(&ctx);
-                let ts = TransferStream::new(&ctx).expect("stream");
-                let mut up = pool.take(n * 8, PinnedKind::Cached).expect("pinned");
-                for (i, v) in up.as_f64_mut()[..n].iter_mut().enumerate() {
-                    *v = i as f64;
-                }
-                // SAFETY: `ptr` is a live device allocation of n*8 bytes owned by `dev`; `up` is
-                // pinned and untouched until the wait.
-                unsafe { ts.upload_raw(up.as_f64().as_ptr().cast(), ptr as u64, n * 8) }
-                    .expect("upload")
-                    .wait()
-                    .expect("wait");
-                // tenferro compiles and launches the kernel on its own stream
-                let module = sess.compile_nvrtc(SRC, &NvrtcOptions::default())?;
-                let f = module.function("twice")?;
-                // SAFETY: ABI (double*, int); `dev` outlives the synchronize.
-                unsafe {
-                    sess.launch(
-                        &f,
-                        LaunchConfig::flat(n as u32, 128, 0)?,
-                        &[KernelArg::workspace(&dev), KernelArg::i32(n as i32)],
-                    )?;
-                }
-                sess.synchronize()?;
-                let mut down = pool.take(n * 8, PinnedKind::Cached).expect("pinned");
-                // SAFETY: as above, device to host.
-                unsafe {
-                    ts.download_raw(ptr as u64, down.as_f64_mut().as_mut_ptr().cast(), n * 8)
-                }
-                .expect("download")
-                .wait()
-                .expect("wait");
-                for (i, v) in down.as_f64()[..n].iter().enumerate() {
-                    assert_eq!(*v, 2.0 * i as f64 + 1.0, "element {i}");
-                }
-                Ok(())
-            })
-        })
+    let outcome = with_raw_exec(&mut backend, "sampler-gate.interop", |exec| {
+        // device buffer owned by tenferro's allocator; its address from the raw session
+        let dev = exec
+            .raw_session()
+            .alloc_bytes(n * 8, "interop")
+            .expect("runtime scratch");
+        let mut ptr = std::ptr::null_mut::<std::ffi::c_void>();
+        dev.with_ptr(|p| ptr = p);
+        // a separate cudarc handle of the same primary context performs the copies
+        let ctx = cudarc::driver::CudaContext::new(0).expect("ctx");
+        // SAFETY: only this test uses the context; ordering is by host waits below.
+        unsafe { mvmc_gpu_cuda::transfer::disable_event_tracking(&ctx) };
+        let pool = PinnedPool::new(&ctx);
+        let ts = TransferStream::new(&ctx).expect("stream");
+        let mut up = pool.take(n * 8, PinnedKind::Cached).expect("pinned");
+        for (i, v) in up.as_f64_mut()[..n].iter_mut().enumerate() {
+            *v = i as f64;
+        }
+        // SAFETY: `ptr` is a live device allocation of n*8 bytes owned by `dev`; `up` is
+        // pinned and untouched until the wait.
+        unsafe { ts.upload_raw(up.as_f64().as_ptr().cast(), ptr as u64, n * 8) }
+            .expect("upload")
+            .wait()
+            .expect("wait");
+        // tenferro compiles and launches the kernel on its own stream
+        let module = exec.module(SRC, &["twice"])?;
+        let f = module.function("twice")?;
+        // SAFETY: ABI (double*, int); `dev` outlives the synchronize.
+        unsafe {
+            exec.launch(
+                f,
+                (n.div_ceil(128) as u32, 1, 1),
+                128,
+                0,
+                &[Arg::P(ptr as u64), Arg::I(n as i32)],
+            )?;
+        }
+        exec.synchronize()?;
+        let mut down = pool.take(n * 8, PinnedKind::Cached).expect("pinned");
+        // SAFETY: as above, device to host.
+        unsafe { ts.download_raw(ptr as u64, down.as_f64_mut().as_mut_ptr().cast(), n * 8) }
+            .expect("download")
+            .wait()
+            .expect("wait");
+        for (i, v) in down.as_f64()[..n].iter().enumerate() {
+            assert_eq!(*v, 2.0 * i as f64 + 1.0, "element {i}");
+        }
+        Ok(())
     });
-    outcome.expect("cuda session").expect("interop");
+    outcome.expect("interop");
 }
 
 #[allow(dead_code)]
@@ -446,4 +444,46 @@ fn device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker() {
     check_shared(32, 4, 5);
     check_shared(64, 3, 3);
     check_shared(128, 3, 2);
+}
+
+#[test]
+#[ignore = "optional CUDA gate: requires a device"]
+fn raw_buffers_reject_another_runtime_on_the_same_device() {
+    use tenferro_ext::raw_exec::with_raw_exec;
+    use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
+    if !gate() {
+        return;
+    }
+    let id = cuda_devices().expect("devices")[0].id();
+    let mut owner = CudaEngine::open(id).expect("owner");
+    let mut other = CudaEngine::open(id).expect("other");
+    let buffer = with_raw_exec(&mut owner, "owner alloc", |exec| exec.alloc_bytes(8)).unwrap();
+    with_raw_exec(&mut owner, "owner access", |exec| {
+        exec.ptr(&buffer)?;
+        Ok(())
+    })
+    .unwrap();
+    let error = with_raw_exec(&mut other, "foreign access", |exec| {
+        exec.ptr(&buffer)?;
+        Ok(())
+    })
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("different CUDA runtime"),
+        "{error}"
+    );
+    const EMPTY_KERNEL: &str = "extern \"C\" __global__ void empty_kernel() {}";
+    let module = with_raw_exec(&mut owner, "owner module", |exec| {
+        exec.module(EMPTY_KERNEL, &["empty_kernel"])
+    })
+    .unwrap();
+    let error = with_raw_exec(&mut other, "foreign module", |exec| {
+        // SAFETY: an empty kernel uses no buffers and has no arguments.
+        unsafe { exec.launch(module.function("empty_kernel")?, (1, 1, 1), 1, 0, &[]) }
+    })
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("different CUDA runtime"),
+        "{error}"
+    );
 }

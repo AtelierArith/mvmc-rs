@@ -7,8 +7,7 @@
 use mvmc_core::pfaffian::calc_m_all_real;
 use mvmc_core::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
 use mvmc_gpu_cuda::interval::{IntervalGeometry, IntervalHost, IntervalSampler};
-use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaBackend};
-use tenferro_tensor::BackendSessionHost;
+use tenferro_gpu::cuda::{cuda_devices, gpu_available, CudaEngine};
 
 struct Lcg(u64);
 impl Lcg {
@@ -36,7 +35,7 @@ fn interval_kernel_runs_and_keeps_finite_state() {
         return;
     }
     let devices = cuda_devices().expect("device discovery");
-    let mut backend = CudaBackend::new(devices[0].id()).expect("cuda backend");
+    let mut backend = CudaEngine::open(devices[0].id()).expect("cuda backend");
 
     // Small, valid half-filled-ish state: 2 electrons/spin on 8 sites leaves 4 empty sites.
     let (nqp, nsite, ne) = (1usize, 8usize, 2usize);
@@ -95,20 +94,15 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     let total_hops = 64usize;
     let tape: Vec<u32> = (0..total_hops * 5).map(|_| rng.next_u32()).collect();
 
-    let sampler = backend
-        .with_backend_session(|session| {
-            IntervalSampler::prepare(session, geom, &host, total_hops, 0.0)
-        })
-        .expect("prepare");
+    let sampler =
+        IntervalSampler::prepare(&mut backend, geom, &host, total_hops, 0.0).expect("prepare");
 
-    backend
-        .with_backend_session(|session| sampler.upload_tape(session, &tape))
+    sampler
+        .upload_tape(&mut backend, &tape)
         .expect("upload tape");
 
     // Advance until the window forces a rebuild; a rebuild is expected at nsite=8 accepts.
-    let results = backend
-        .with_backend_session(|session| sampler.run(session))
-        .expect("run interval");
+    let results = sampler.run(&mut backend).expect("run interval");
     let (done, rebuild, _accepts) = results[0];
     assert!(done > 0, "the interval must advance at least one hop");
     assert!(
@@ -117,12 +111,8 @@ fn interval_kernel_runs_and_keeps_finite_state() {
     );
     eprintln!("interval: hops_done={done} rebuild={rebuild}");
 
-    let pf_out = backend
-        .with_backend_session(|session| sampler.download_pf(session, 0))
-        .expect("download pf");
-    let ele_out = backend
-        .with_backend_session(|session| sampler.download_ele(session, 0))
-        .expect("download ele");
+    let pf_out = sampler.download_pf(&mut backend, 0).expect("download pf");
+    let ele_out = sampler.download_ele(&mut backend, 0).expect("download ele");
     assert!(
         pf_out.iter().all(|v| v.is_finite()),
         "Pfaffians must stay finite: {pf_out:?}"

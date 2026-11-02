@@ -14,11 +14,16 @@ use mvmc_core::stage_backend::{
     PfInvBatch, PfaffianStages, PlaneOutcome, StageBackend, StageError,
 };
 
-use crate::{pfaffian_inverse_batched, Backend, PlaneStatus};
+use crate::{pfaffian_inverse_batched, Backend, BatchedEngine, PlaneStatus};
+
+enum StageBackendChoice<'a> {
+    Borrowed(Backend<'a>),
+    Owned(Box<dyn BatchedEngine>),
+}
 
 /// Pfaffian stage backed by [`pfaffian_inverse_batched`] on `backend`.
 pub struct BatchedStages<'a> {
-    backend: Backend<'a>,
+    backend: StageBackendChoice<'a>,
     label: String,
 }
 
@@ -26,7 +31,7 @@ impl<'a> BatchedStages<'a> {
     /// Stage on `backend`, reported as `label` (e.g. `batched-cpu-pfapack`).
     pub fn new(backend: Backend<'a>, label: &str) -> Self {
         Self {
-            backend,
+            backend: StageBackendChoice::Borrowed(backend),
             label: label.to_string(),
         }
     }
@@ -39,16 +44,27 @@ impl<'a> BatchedStages<'a> {
     }
 }
 
+impl BatchedStages<'static> {
+    /// Own a persistent external engine for exactly the lifetime of this stage.
+    pub fn with_owned_engine(engine: impl BatchedEngine + 'static, label: &str) -> Self {
+        Self {
+            backend: StageBackendChoice::Owned(Box::new(engine)),
+            label: label.to_string(),
+        }
+    }
+}
+
 impl PfaffianStages for BatchedStages<'_> {
     fn label(&self) -> String {
         self.label.clone()
     }
 
     fn provider(&self) -> String {
-        format!(
-            "mvmc-gpu pfaffian_inverse_batched, backend {:?}",
-            self.backend
-        )
+        let backend = match &self.backend {
+            StageBackendChoice::Borrowed(backend) => format!("{backend:?}"),
+            StageBackendChoice::Owned(engine) => engine.name(),
+        };
+        format!("mvmc-gpu pfaffian_inverse_batched, backend {backend}")
     }
 
     fn pfaffian_inverse_batch(
@@ -57,7 +73,11 @@ impl PfaffianStages for BatchedStages<'_> {
         n: usize,
         planes: usize,
     ) -> Result<PfInvBatch, StageError> {
-        let out = pfaffian_inverse_batched(&self.backend, x, n, planes, 1)
+        let backend = match &self.backend {
+            StageBackendChoice::Borrowed(backend) => *backend,
+            StageBackendChoice::Owned(engine) => Backend::Engine(engine.as_ref()),
+        };
+        let out = pfaffian_inverse_batched(&backend, x, n, planes, 1)
             .map_err(|e| StageError::Failed(e.to_string()))?;
         Ok(PfInvBatch {
             pf: out.pf,

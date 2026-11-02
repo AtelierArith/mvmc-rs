@@ -14,7 +14,7 @@ use cudarc::driver::{
     sys, CudaContext, CudaSlice, CudaStream, DevicePtr, DevicePtrMut, DriverError, LaunchConfig,
     PushKernelArg,
 };
-use tenferro_gpu::cuda::{download_tensor, upload_tensor, CudaBackend};
+use tenferro_gpu::cuda::{download_tensor, upload_tensor, CudaEngine};
 use tenferro_tensor::Tensor;
 
 use crate::transfer::{PinnedBuf, PinnedKind, TransferStream};
@@ -96,7 +96,7 @@ fn reps_for(bytes: usize) -> usize {
 /// Run the sweep for the given byte sizes (multiples of 8).
 pub fn sweep(
     ctx: &Arc<CudaContext>,
-    backend: &mut CudaBackend,
+    backend: &mut CudaEngine,
     sizes: &[usize],
 ) -> Result<Vec<SweepRow>, String> {
     let stream = ctx.new_stream().map_err(drv)?;

@@ -17,8 +17,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer, Op, RawExec, RawModule};
-use tenferro_gpu::cuda::{cuda_devices, CudaBackend};
-use tenferro_tensor::{BackendSession, BackendSessionHost};
+use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
+use tenferro_tensor::Engine;
 
 const SOURCE: &str = include_str!("opt/kernels.cu");
 const KERNELS: &[&str] = &[
@@ -42,21 +42,25 @@ thread_local! {
     // Compiled modules and native library handles are keyed by the exact backend
     // runtime identity. Retain that identity across calls, as CUDA.jl does. Only
     // the execution context is cached: each run still owns fresh RNG and arrays.
-    static RUNTIMES: RefCell<HashMap<usize, CudaBackend>> = RefCell::new(HashMap::new());
+    static RUNTIMES: RefCell<HashMap<usize, CudaEngine>> = RefCell::new(HashMap::new());
 }
 
-fn runtime(device: usize) -> Result<CudaBackend, String> {
-    if let Some(backend) = RUNTIMES.with(|r| r.borrow().get(&device).cloned()) {
-        return Ok(backend);
-    }
-    let devices = cuda_devices().map_err(|e| e.to_string())?;
-    let id = devices
-        .get(device)
-        .ok_or("CUDA device ordinal out of bounds")?
-        .id();
-    let backend = CudaBackend::new(id).map_err(|e| e.to_string())?;
-    RUNTIMES.with(|r| r.borrow_mut().insert(device, backend.clone()));
-    Ok(backend)
+fn with_runtime<T>(
+    device: usize,
+    f: impl FnOnce(&mut CudaEngine) -> Result<T, String>,
+) -> Result<T, String> {
+    RUNTIMES.with(|r| {
+        let mut runtimes = r.borrow_mut();
+        if let std::collections::hash_map::Entry::Vacant(entry) = runtimes.entry(device) {
+            let devices = cuda_devices().map_err(|e| e.to_string())?;
+            let id = devices
+                .get(device)
+                .ok_or("CUDA device ordinal out of bounds")?
+                .id();
+            entry.insert(CudaEngine::open(id).map_err(|e| e.to_string())?);
+        }
+        f(runtimes.get_mut(&device).expect("engine inserted"))
+    })
 }
 
 /// Explicit CUDA runner settings. Omitted sampling lengths follow modpara.def.
@@ -103,11 +107,12 @@ pub fn run_gpu_para_opt_from_namelist(
     config: OptConfig,
 ) -> Result<OptResult, String> {
     let model = Model::prepare(path.as_ref(), &config)?;
-    let mut backend = runtime(config.device)?;
-    let mut state = backend.with_backend_session(|s| State::prepare(s, model, &config))?;
-    backend.with_backend_session(|s| state.initialize(s))?;
-    backend.with_backend_session(|s| state.run(s))?;
-    backend.with_backend_session(|s| state.result(s))
+    with_runtime(config.device, |engine| {
+        let mut state = State::prepare(engine, model, &config)?;
+        state.initialize(engine)?;
+        state.run(engine)?;
+        state.result(engine)
+    })
 }
 
 struct Buffers {
@@ -173,7 +178,7 @@ fn upload<T: Copy>(exec: &RawExec<'_, '_>, values: &[T]) -> tenferro_tensor::Res
 }
 
 impl State {
-    fn prepare<B: BackendSession + ?Sized>(
+    fn prepare<B: Engine + ?Sized>(
         backend: &mut B,
         model: Model,
         config: &OptConfig,
@@ -379,7 +384,7 @@ impl State {
         }
     }
 
-    fn initialize<B: BackendSession + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
+    fn initialize<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
         let w = self.resident.sampler.geom.walkers;
         with_raw_exec(backend, "mvmc.opt.initial_model", |exec| {
             let module = exec.module(SOURCE, KERNELS)?;
@@ -717,7 +722,7 @@ impl State {
         self.resident.enqueue_rebuild(exec, &interval)
     }
 
-    fn run<B: BackendSession + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
+    fn run<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
         // One raw scope for the complete warmup/optimization series. No intermediate
         // host reads, transfers, or per-step stream synchronization.
         with_raw_exec(backend, "mvmc.opt.run", |exec| {
@@ -733,7 +738,7 @@ impl State {
         .map_err(|e| e.to_string())
     }
 
-    fn result<B: BackendSession + ?Sized>(&mut self, backend: &mut B) -> Result<OptResult, String> {
+    fn result<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<OptResult, String> {
         with_raw_exec(backend, "mvmc.opt.result", |exec| {
             let mut error = [0i32];
             unsafe {

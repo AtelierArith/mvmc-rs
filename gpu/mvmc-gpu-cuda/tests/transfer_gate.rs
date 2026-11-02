@@ -91,7 +91,7 @@ fn transfer_microbenchmark_report() {
     // SAFETY: the benchmark orders cross-stream work with explicit events and synchronization.
     unsafe { mvmc_gpu_cuda::transfer::disable_event_tracking(&ctx) };
     let info = tb::engine_info(&ctx).expect("engine info");
-    let mut backend = tenferro_gpu::cuda::CudaBackend::new(
+    let mut backend = tenferro_gpu::cuda::CudaEngine::open(
         tenferro_gpu::cuda::cuda_devices()
             .expect("devices")
             .into_iter()

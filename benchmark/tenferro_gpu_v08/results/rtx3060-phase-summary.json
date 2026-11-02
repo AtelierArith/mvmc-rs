@@ -1,0 +1,100 @@
+{
+  "cuda_visible_devices": "1",
+  "ld_library_path": "/tmp/mvmc-570-cuda-env/lib/python3.12/site-packages/cutensor/lib:/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib:/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib",
+  "input_hashes": {
+    "StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+    "coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+    "greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+    "greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+    "gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+    "jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+    "locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+    "modpara.def": "7ca59366e516f2b057e37dfcfe27cdd1bd36a0d11d331bd03dc94ada74c667d1",
+    "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+    "orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697",
+    "qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+    "trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da"
+  },
+  "binary_hashes": {
+    "before": "a2d3fae4a5dce8d76f113cfd990f5ef68fb22106aa5379113781159a2731308d",
+    "after": "7e0d55785147c11e3564955aecfa7c7bde0b824ea91ee0ef95ca3ac66359981f"
+  },
+  "samples": {
+    "before": [
+      {
+        "rep": 0,
+        "seconds": 14.708685659,
+        "cpu_seconds": 14.72
+      },
+      {
+        "rep": 1,
+        "seconds": 4.844496451,
+        "cpu_seconds": 4.859999999999998
+      },
+      {
+        "rep": 2,
+        "seconds": 4.875997486,
+        "cpu_seconds": 4.880000000000003
+      },
+      {
+        "rep": 3,
+        "seconds": 4.861229703,
+        "cpu_seconds": 4.869999999999997
+      },
+      {
+        "rep": 4,
+        "seconds": 4.87223489,
+        "cpu_seconds": 4.870000000000001
+      },
+      {
+        "rep": 5,
+        "seconds": 4.879440578,
+        "cpu_seconds": 4.899999999999999
+      }
+    ],
+    "after": [
+      {
+        "rep": 0,
+        "seconds": 14.58714666,
+        "cpu_seconds": 14.59
+      },
+      {
+        "rep": 1,
+        "seconds": 4.843967727,
+        "cpu_seconds": 4.840000000000002
+      },
+      {
+        "rep": 2,
+        "seconds": 4.850855731,
+        "cpu_seconds": 4.859999999999999
+      },
+      {
+        "rep": 3,
+        "seconds": 4.860056263,
+        "cpu_seconds": 4.870000000000001
+      },
+      {
+        "rep": 4,
+        "seconds": 4.893222355,
+        "cpu_seconds": 4.899999999999999
+      },
+      {
+        "rep": 5,
+        "seconds": 4.848221894,
+        "cpu_seconds": 4.850000000000001
+      }
+    ]
+  },
+  "comparison": {
+    "energies": {
+      "cross_version_max_abs": 0.0,
+      "before_repeat_max_abs": 0.0,
+      "after_repeat_max_abs": 0.0
+    },
+    "parameters": {
+      "cross_version_max_abs": 0.0,
+      "before_repeat_max_abs": 0.0,
+      "after_repeat_max_abs": 0.0
+    }
+  }
+}

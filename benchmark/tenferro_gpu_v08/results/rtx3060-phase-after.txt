@@ -1,0 +1,20 @@
+config=OptConfig { device: 0, nsteps: 20, walkers: Some(320), warmup: Some(128), interval: Some(128), seed: Some(79), initial_def: Auto }
+READY
+PHASE model=0.073476741 prepare=0.253276921 initialize=3.681212652 run=10.563599365 result=0.000069656
+rep=0 seconds=14.587146660 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 0
+PHASE model=0.050258029 prepare=0.006789406 initialize=0.163054178 run=4.604963901 result=0.000035970
+rep=1 seconds=4.843967727 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 1
+PHASE model=0.053505283 prepare=0.006553479 initialize=0.170060368 run=4.601444847 result=0.000035697
+rep=2 seconds=4.850855731 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 2
+PHASE model=0.051670970 prepare=0.006757427 initialize=0.168247639 run=4.614637702 result=0.000033221
+rep=3 seconds=4.860056263 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 3
+PHASE model=0.053816306 prepare=0.006983677 initialize=0.170451835 run=4.642625997 result=0.000034808
+rep=4 seconds=4.893222355 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 4
+PHASE model=0.052360963 prepare=0.006786426 initialize=0.163499351 run=4.606661728 result=0.000060923
+rep=5 seconds=4.848221894 energy=99.78135142946314 traffic=RawExecCounters { upload_calls: 27, upload_bytes: 27621476, download_calls: 4, download_bytes: 6344, synchronizations: 11, scopes: 7 }
+DONE 5
