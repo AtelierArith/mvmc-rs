@@ -1,0 +1,25 @@
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-4
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 3.02s ===
+Output files written to: /results/phys-4
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/observables/green_measurements.rs:220 pool          6000     1152000    1043.1   173.84    905.4
+  crates/mvmc-core/src/pfaffian.rs:222         pool          6450       51600     972.3   150.74  18842.3
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       59947      479576     770.6    12.86   1606.9
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       15150      121200     214.0    14.13   1766.1
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial        6000      384000     189.4    31.57    493.3
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288000     2304000     158.8     0.55     68.9
+  crates/mvmc-core/src/observables.rs:3491     pool          6000      768000     147.5    24.58    192.1
+  crates/mvmc-core/src/pfaffian.rs:222         serial          20         160       6.3   316.32  39540.2
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       3.2     0.54     67.4
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   782.53  97816.5
+  crates/mvmc-core/src/slater_update.rs:53     pool             1           8       0.2   210.75  26344.1
+  crates/mvmc-core/src/slater_update.rs:115    pool             1       32768       0.1   121.91      3.7
