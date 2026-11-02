@@ -41,15 +41,37 @@ fn run(label: &str, n: usize, gap_ns: u64, work_ns: u64, mut region: impl FnMut(
 #[test]
 #[ignore]
 fn rayon_dispatch_variants() {
-    let threads = 8;
+    let threads = std::env::var("MVMC_DISPATCH_THREADS")
+        .map(|value| value.parse::<usize>().expect("valid MVMC_DISPATCH_THREADS"))
+        .unwrap_or(8);
+    let iterations = std::env::var("MVMC_DISPATCH_ITERATIONS")
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .expect("valid MVMC_DISPATCH_ITERATIONS")
+        })
+        .unwrap_or(3000);
+    assert!(threads > 0 && threads <= usize::BITS as usize);
+    assert!(iterations > 0);
     let pool = ThreadPoolBuilder::new()
         .num_threads(threads)
         .build()
         .unwrap();
     let sink = AtomicUsize::new(0);
+    // This is an independent, untimed participation probe. Do not add the
+    // extra shared atomic to each timed invocation.
+    let participants = AtomicUsize::new(0);
+    pool.broadcast(|ctx| {
+        participants.fetch_or(1usize << ctx.index(), Ordering::Relaxed);
+    });
+    let mask = participants.load(Ordering::Relaxed);
+    assert_eq!(mask.count_ones() as usize, threads);
+    eprintln!(
+        "dispatch probe threads={threads} iterations={iterations} participant_mask={mask:#x}"
+    );
     for gap in [0u64, 5_000, 20_000, 60_000] {
         for work in [0u64, 5_000] {
-            let n = 3000;
+            let n = iterations;
             // outside the pool
             run("outside: install+scope", n, gap, work, || {
                 pool.install(|| {
