@@ -29,7 +29,7 @@ use mvmc_core::backend::{register_cuda_provider, CudaProvider, DeviceReport};
 use tenferro_gpu::cuda::cuda_devices;
 
 /// Version string of the tenferro crates this provider is built against.
-pub const TENFERRO_VERSION: &str = "0.7.1";
+pub const TENFERRO_VERSION: &str = "0.8.0";
 
 struct Provider;
 
