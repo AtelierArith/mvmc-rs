@@ -49,6 +49,8 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
 
 ### Experimental Linux MPI CPU placement
 
+The [ownership evaluation and policy](../../benchmark/tenferro_thread_budget/ownership-evaluation-20261102/README.md) records the resource accounting and measurements. For a single hoisted CLI rank, count inner participants (including its driver) plus additional Engine reservations. Multiwalker library calls must also count their independent callers; with inner=1, `W` optimization walkers need `W + E` compute participants for an additional-worker budget `E`. Keep every optimizer caller runnable for collectives. Set BLAS=1 and account separately for runtime helpers, external pools, physical-core allocation and quota. Retain Rayon/default work gates; shared-team dispatch remains an experiment for a measured workload/allocation.
+
 `MVMC_RS_MPI_CPUS_PER_RANK=N` assigns each rank a disjoint set of `N` logical CPUs within its node, respecting its initial affinity. Use a Linux MPI build and a multi-rank launch, and set an explicit `MVMC_RS_TENFERRO_WORKER_BUDGET`. The sum of configured inner participants and this additional Engine worker budget must fit `N`. For example:
 
 ```bash

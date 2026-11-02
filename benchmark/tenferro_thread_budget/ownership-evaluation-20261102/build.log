@@ -1,0 +1,7 @@
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+   Compiling mvmc-cli v0.0.0 (/work/crates/mvmc-cli)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2m 14s
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 21s
+3f93221fd7e9fade7f31b9c8b851f2c34f02bd0a3f2d4bfce75a1f6d3f9a4506  /target/release/mvmc
+ffdf944846355123ff39a7bf26c6edbd3ff274228c8313666247e3a279836ff6  /target/release/examples/bench_walkers_583

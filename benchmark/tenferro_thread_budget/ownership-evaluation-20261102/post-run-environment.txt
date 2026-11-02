@@ -1,0 +1,9 @@
+2026-11-02T14:24:47+00:00
+/proc/self/cgroup
+0::/
+/sys/fs/cgroup/cpu.max
+max 100000
+/sys/fs/cgroup/cpuset.cpus.effective
+0-35
+libopenblas0-pthread:amd64	0.3.26+ds-1ubuntu0.1
+rustc 1.99.0 (b940084d7 2026-09-28)
