@@ -1,0 +1,13 @@
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/phys-before-i4-r2
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.98s ===
+Output files written to: /results/phys-before-i4-r2
+wall=3.030 user=6.513 sys=1.373

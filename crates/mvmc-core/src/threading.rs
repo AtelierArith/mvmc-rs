@@ -464,15 +464,83 @@ pub fn dispatch_profile() -> Vec<DispatchSite> {
     sites
 }
 
+const GAP_LIMITS_NS: [u128; 6] = [1_000, 5_000, 20_000, 60_000, 100_000, 1_000_000];
+static GAP_COUNTS: [AtomicUsize; 14] = [const { AtomicUsize::new(0) }; 14];
+
+thread_local! {
+    // Keep independent streams per calling thread. Nested scopes are excluded:
+    // they are not serial gaps between successive top-level kernel calls.
+    static GAP_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static GAP_END: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
+
+fn gap_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("MVMC_RS_INNER_GAP_PROFILE").as_deref() == Ok("1"))
+}
+
+/// Counts of gaps preceding the next top-level instrumented kernel on the same
+/// thread, grouped by the next kernel's hot-scope flag and by upper limit in ns.
+/// The last bucket has no upper limit. Profiling overhead is included.
+pub fn dispatch_gap_profile() -> [[usize; 7]; 2] {
+    std::array::from_fn(|hot| {
+        std::array::from_fn(|bucket| GAP_COUNTS[hot * 7 + bucket].load(Ordering::Relaxed))
+    })
+}
+
+struct GapScope(PhantomData<Rc<()>>);
+
+impl GapScope {
+    fn start(items: usize) -> Option<Self> {
+        if items == 0 || !gap_enabled() {
+            return None;
+        }
+        Some(Self::begin())
+    }
+
+    fn begin() -> Self {
+        GAP_DEPTH.with(|depth| {
+            let previous_depth = depth.get();
+            depth.set(previous_depth + 1);
+            if previous_depth == 0 {
+                if let Some(end) = GAP_END.with(|previous| previous.get()) {
+                    let nanos = end.elapsed().as_nanos();
+                    let bucket = GAP_LIMITS_NS.partition_point(|&limit| nanos >= limit);
+                    let hot = usize::from(HOT.with(|value| value.get()));
+                    GAP_COUNTS[hot * 7 + bucket].fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        });
+        Self(PhantomData)
+    }
+}
+
+impl Drop for GapScope {
+    fn drop(&mut self) {
+        GAP_DEPTH.with(|depth| {
+            let current = depth.get();
+            debug_assert!(current > 0);
+            depth.set(current - 1);
+            if current == 1 {
+                GAP_END.with(|previous| previous.set(Some(Instant::now())));
+            }
+        });
+    }
+}
+
 /// Records one kernel call on drop when profiling is enabled.
-pub struct ProfileScope(Option<(&'static str, u32, bool, u64, Instant)>);
+pub struct ProfileScope {
+    timing: Option<(&'static str, u32, bool, u64, Instant)>,
+    _gap: Option<GapScope>,
+}
 
 impl ProfileScope {
     #[track_caller]
     fn start(parallel: bool, items: usize) -> Self {
         // `Location::caller` must be read here: closures do not inherit `track_caller`.
         let location = std::panic::Location::caller();
-        Self(profile_enabled().then(|| {
+        let gap = GapScope::start(items);
+        let timing = profile_enabled().then(|| {
             (
                 location.file(),
                 location.line(),
@@ -480,13 +548,14 @@ impl ProfileScope {
                 items as u64,
                 Instant::now(),
             )
-        }))
+        });
+        Self { timing, _gap: gap }
     }
 }
 
 impl Drop for ProfileScope {
     fn drop(&mut self) {
-        if let Some((file, line, parallel, items, start)) = self.0.take() {
+        if let Some((file, line, parallel, items, start)) = self.timing.take() {
             let mut table = dispatch_table().lock().unwrap();
             let entry = table.entry((file, line, parallel)).or_default();
             entry.0 += 1;
@@ -1049,6 +1118,50 @@ pub fn copy_complex_realpart(dst: &mut [f64], src: &[Complex64]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gap_profile_counts_top_level_hot_and_cold_after_nested_unwind() {
+        use super::{dispatch_gap_profile, hot_scope, GapScope, GAP_DEPTH, GAP_END, GAP_LIMITS_NS};
+        for (nanos, expected_bucket) in [
+            (0, 0),
+            (999, 0),
+            (1_000, 1),
+            (5_000, 2),
+            (20_000, 3),
+            (60_000, 4),
+            (100_000, 5),
+            (1_000_000, 6),
+        ] {
+            assert_eq!(
+                GAP_LIMITS_NS.partition_point(|&limit| nanos >= limit),
+                expected_bucket
+            );
+        }
+        GAP_DEPTH.with(|depth| depth.set(0));
+        GAP_END.with(|end| end.set(None));
+        let before = dispatch_gap_profile();
+        let outer = GapScope::begin();
+        assert!(std::panic::catch_unwind(|| {
+            let _nested = GapScope::begin();
+            panic!("test nested unwind");
+        })
+        .is_err());
+        assert_eq!(dispatch_gap_profile(), before);
+        drop(outer);
+        {
+            let _hot = hot_scope();
+            let _scope = GapScope::begin();
+        }
+        drop(GapScope::begin());
+        let after = dispatch_gap_profile();
+        for kind in 0..2 {
+            assert_eq!(
+                after[kind].iter().sum::<usize>() - before[kind].iter().sum::<usize>(),
+                1
+            );
+        }
+        GAP_END.with(|end| end.set(None));
+    }
+
     #[test]
     fn saved_sample_team_preserves_ownership_and_releases_workers() {
         use std::process::{Command, Stdio};

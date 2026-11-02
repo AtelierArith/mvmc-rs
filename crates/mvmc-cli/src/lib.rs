@@ -825,10 +825,13 @@ pub fn run_cli() {
 /// `MVMC_RS_INNER_PROFILE=1`: print per-call-site inner-kernel counts and time.
 fn report_inner_profile() {
     let sites = mvmc_core::threading::dispatch_profile();
-    if sites.is_empty() {
+    let gaps = mvmc_core::threading::dispatch_gap_profile();
+    if sites.is_empty() && gaps.iter().flatten().all(|&count| count == 0) {
         return;
     }
-    eprintln!("inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):");
+    if !sites.is_empty() {
+        eprintln!("inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):");
+    }
     for site in sites {
         let millis = site.nanos as f64 / 1e6;
         let per_item = if site.items > 0 {
@@ -846,6 +849,14 @@ fn report_inner_profile() {
             millis * 1e3 / site.calls as f64,
             per_item
         );
+    }
+    if gaps.iter().flatten().any(|&count| count != 0) {
+        eprintln!(
+            "inner-kernel gap profile (next scope, <1us, <5us, <20us, <60us, <100us, <1ms, >=1ms):"
+        );
+        for (name, counts) in ["cold", "hot"].into_iter().zip(gaps) {
+            eprintln!("  {name}: {counts:?}");
+        }
     }
 }
 
