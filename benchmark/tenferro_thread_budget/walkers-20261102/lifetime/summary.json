@@ -1,0 +1,50 @@
+{
+  "discrete_match": true,
+  "root_energy_max_abs": 0.0,
+  "timings": {
+    "held": {
+      "samples": [
+        {
+          "wall": 3.254,
+          "user": 11.636,
+          "system": 0.159
+        },
+        {
+          "wall": 3.21,
+          "user": 11.624,
+          "system": 0.155
+        },
+        {
+          "wall": 3.267,
+          "user": 11.621,
+          "system": 0.187
+        }
+      ],
+      "wall_median": 3.254,
+      "user_median": 11.624,
+      "system_median": 0.159
+    },
+    "stage": {
+      "samples": [
+        {
+          "wall": 3.209,
+          "user": 11.866,
+          "system": 0.196
+        },
+        {
+          "wall": 3.24,
+          "user": 11.976,
+          "system": 0.174
+        },
+        {
+          "wall": 3.223,
+          "user": 11.974,
+          "system": 0.165
+        }
+      ],
+      "wall_median": 3.223,
+      "user_median": 11.974,
+      "system_median": 0.174
+    }
+  }
+}

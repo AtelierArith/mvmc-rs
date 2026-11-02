@@ -1,0 +1,210 @@
+{
+  "opt": {
+    "1": {
+      "discrete_match": true,
+      "numeric_max_abs": 0.0,
+      "numeric_components": 1,
+      "timings": {
+        "1": {
+          "samples": [
+            {
+              "wall": 2.334,
+              "user": 2.295,
+              "system": 0.038
+            },
+            {
+              "wall": 2.373,
+              "user": 2.331,
+              "system": 0.041
+            },
+            {
+              "wall": 2.404,
+              "user": 2.357,
+              "system": 0.047
+            }
+          ],
+          "wall_median": 2.373,
+          "user_median": 2.331,
+          "system_median": 0.041
+        },
+        "4": {
+          "samples": [
+            {
+              "wall": 2.439,
+              "user": 2.899,
+              "system": 0.045
+            },
+            {
+              "wall": 2.369,
+              "user": 2.834,
+              "system": 0.04
+            },
+            {
+              "wall": 2.348,
+              "user": 2.801,
+              "system": 0.046
+            }
+          ],
+          "wall_median": 2.369,
+          "user_median": 2.834,
+          "system_median": 0.045
+        }
+      }
+    },
+    "4": {
+      "discrete_match": true,
+      "numeric_max_abs": 0.0,
+      "numeric_components": 1,
+      "timings": {
+        "1": {
+          "samples": [
+            {
+              "wall": 3.825,
+              "user": 12.023,
+              "system": 0.196
+            },
+            {
+              "wall": 3.175,
+              "user": 11.017,
+              "system": 0.132
+            },
+            {
+              "wall": 2.98,
+              "user": 10.714,
+              "system": 0.13
+            }
+          ],
+          "wall_median": 3.175,
+          "user_median": 11.017,
+          "system_median": 0.132
+        },
+        "4": {
+          "samples": [
+            {
+              "wall": 4.443,
+              "user": 13.157,
+              "system": 0.182
+            },
+            {
+              "wall": 3.51,
+              "user": 11.723,
+              "system": 0.162
+            },
+            {
+              "wall": 3.321,
+              "user": 11.669,
+              "system": 0.143
+            }
+          ],
+          "wall_median": 3.51,
+          "user_median": 11.723,
+          "system_median": 0.162
+        }
+      }
+    }
+  },
+  "phys": {
+    "1": {
+      "discrete_match": true,
+      "numeric_max_abs": 0.0,
+      "numeric_components": 4,
+      "timings": {
+        "1": {
+          "samples": [
+            {
+              "wall": 2.165,
+              "user": 2.151,
+              "system": 0.015
+            },
+            {
+              "wall": 2.13,
+              "user": 2.116,
+              "system": 0.013
+            },
+            {
+              "wall": 2.189,
+              "user": 2.174,
+              "system": 0.015
+            }
+          ],
+          "wall_median": 2.165,
+          "user_median": 2.151,
+          "system_median": 0.015
+        },
+        "4": {
+          "samples": [
+            {
+              "wall": 2.115,
+              "user": 2.1,
+              "system": 0.015
+            },
+            {
+              "wall": 2.109,
+              "user": 2.086,
+              "system": 0.022
+            },
+            {
+              "wall": 2.113,
+              "user": 2.098,
+              "system": 0.015
+            }
+          ],
+          "wall_median": 2.113,
+          "user_median": 2.098,
+          "system_median": 0.015
+        }
+      }
+    },
+    "4": {
+      "discrete_match": true,
+      "numeric_max_abs": 0.0,
+      "numeric_components": 16,
+      "timings": {
+        "1": {
+          "samples": [
+            {
+              "wall": 2.609,
+              "user": 9.864,
+              "system": 0.062
+            },
+            {
+              "wall": 2.602,
+              "user": 9.909,
+              "system": 0.055
+            },
+            {
+              "wall": 2.594,
+              "user": 9.889,
+              "system": 0.062
+            }
+          ],
+          "wall_median": 2.602,
+          "user_median": 9.889,
+          "system_median": 0.062
+        },
+        "4": {
+          "samples": [
+            {
+              "wall": 2.584,
+              "user": 9.853,
+              "system": 0.052
+            },
+            {
+              "wall": 2.586,
+              "user": 9.87,
+              "system": 0.067
+            },
+            {
+              "wall": 2.576,
+              "user": 9.809,
+              "system": 0.053
+            }
+          ],
+          "wall_median": 2.584,
+          "user_median": 9.853,
+          "system_median": 0.053
+        }
+      }
+    }
+  }
+}

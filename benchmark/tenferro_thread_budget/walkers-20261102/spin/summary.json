@@ -1,0 +1,98 @@
+{
+  "discrete_match": true,
+  "root_energy_max_abs": 0.0,
+  "timings": {
+    "held": {
+      "default": {
+        "samples": [
+          {
+            "wall": 3.305,
+            "user": 11.686,
+            "system": 0.137
+          },
+          {
+            "wall": 3.313,
+            "user": 11.847,
+            "system": 0.171
+          },
+          {
+            "wall": 3.37,
+            "user": 11.715,
+            "system": 0.166
+          }
+        ],
+        "wall_median": 3.313,
+        "user_median": 11.715,
+        "system_median": 0.166
+      },
+      "0": {
+        "samples": [
+          {
+            "wall": 2.994,
+            "user": 10.768,
+            "system": 0.179
+          },
+          {
+            "wall": 2.98,
+            "user": 10.796,
+            "system": 0.17
+          },
+          {
+            "wall": 2.973,
+            "user": 10.794,
+            "system": 0.15
+          }
+        ],
+        "wall_median": 2.98,
+        "user_median": 10.794,
+        "system_median": 0.17
+      }
+    },
+    "stage": {
+      "default": {
+        "samples": [
+          {
+            "wall": 3.255,
+            "user": 11.994,
+            "system": 0.16
+          },
+          {
+            "wall": 3.274,
+            "user": 12.045,
+            "system": 0.166
+          },
+          {
+            "wall": 3.363,
+            "user": 12.305,
+            "system": 0.198
+          }
+        ],
+        "wall_median": 3.274,
+        "user_median": 12.045,
+        "system_median": 0.166
+      },
+      "0": {
+        "samples": [
+          {
+            "wall": 3.018,
+            "user": 10.825,
+            "system": 0.192
+          },
+          {
+            "wall": 3.032,
+            "user": 10.837,
+            "system": 0.215
+          },
+          {
+            "wall": 3.06,
+            "user": 10.947,
+            "system": 0.179
+          }
+        ],
+        "wall_median": 3.032,
+        "user_median": 10.837,
+        "system_median": 0.192
+      }
+    }
+  }
+}
