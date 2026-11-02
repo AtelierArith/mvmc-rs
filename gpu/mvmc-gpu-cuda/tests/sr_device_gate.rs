@@ -224,6 +224,24 @@ fn device_direct_sr_reports_non_positive_definite_like_host() {
     assert!(x.iter().all(|v| v.is_finite()));
 }
 
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn device_direct_sr_reports_singular_zero_gram() {
+    let Some(mut dev) = gate() else { return };
+    let (n, samples) = (30, 60);
+    let p = make_problem(n, samples, 10, 0.5, 0, 3);
+    let zero_store = vec![0.0; n * samples];
+    dev.upload_store(&zero_store, n, samples).unwrap();
+    match dev.solve_direct(&p.ho, &p.map, 1, 0.0, 0.003) {
+        Err(SrDeviceError::SolveFailed { info }) => assert!(info > 0, "info {info}"),
+        other => panic!("expected singular solve failure, got {other:?}"),
+    }
+    // The same device state remains usable after reporting the failure.
+    dev.upload_store(&p.store, n, samples).unwrap();
+    let x = dev.solve_direct(&p.ho, &p.map, 1, 0.01, 0.003).unwrap();
+    assert!(x.iter().all(|v| v.is_finite()));
+}
+
 fn host_operator(
     inputs: &mvmc_gpu_cuda::sr_problem::CgInputs,
     comp: usize,

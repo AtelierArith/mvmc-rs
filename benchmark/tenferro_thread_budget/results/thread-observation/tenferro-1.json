@@ -1,0 +1,780 @@
+{
+  "threads_per_engine": 1,
+  "clock_ticks_per_second": 100,
+  "distinct_active_tids_by_pid": {
+    "2687498": [
+      2687498
+    ],
+    "2687499": [
+      2687499
+    ],
+    "2687500": [
+      2687500
+    ],
+    "2687501": [
+      2687501
+    ]
+  },
+  "samples": [
+    {
+      "monotonic": 746650.403400129,
+      "pid": 2687498,
+      "thread_count": 1,
+      "active_tids": []
+    },
+    {
+      "monotonic": 746650.403400129,
+      "pid": 2687499,
+      "thread_count": 1,
+      "active_tids": []
+    },
+    {
+      "monotonic": 746650.403400129,
+      "pid": 2687500,
+      "thread_count": 1,
+      "active_tids": []
+    },
+    {
+      "monotonic": 746650.403400129,
+      "pid": 2687501,
+      "thread_count": 1,
+      "active_tids": []
+    },
+    {
+      "monotonic": 746650.538309405,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746650.538309405,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746650.538309405,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746650.538309405,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746650.674495195,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746650.674495195,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746650.674495195,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746650.674495195,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746650.808650923,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746650.808650923,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746650.808650923,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746650.808650923,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746650.943166432,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746650.943166432,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746650.943166432,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746650.943166432,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.078272592,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.078272592,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.078272592,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.078272592,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.212798041,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.212798041,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.212798041,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.212798041,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.346994058,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.346994058,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.346994058,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.346994058,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.483158661,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.483158661,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.483158661,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.483158661,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.6178632,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.6178632,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.6178632,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.6178632,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.753060154,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.753060154,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.753060154,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.753060154,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746651.889378362,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746651.889378362,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746651.889378362,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746651.889378362,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.025020493,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.025020493,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.025020493,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.025020493,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.160905037,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.160905037,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.160905037,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.160905037,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.296267933,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.296267933,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.296267933,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.296267933,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.433213703,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.433213703,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.433213703,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.433213703,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.568254194,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.568254194,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.568254194,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.568254194,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.705098844,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.705098844,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.705098844,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.705098844,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.841980927,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.841980927,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.841980927,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.841980927,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746652.976056308,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746652.976056308,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746652.976056308,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746652.976056308,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746653.11037952,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746653.11037952,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746653.11037952,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746653.11037952,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746653.2454933,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746653.2454933,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746653.2454933,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746653.2454933,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746653.38049515,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746653.38049515,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746653.38049515,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746653.38049515,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    },
+    {
+      "monotonic": 746653.515678119,
+      "pid": 2687498,
+      "thread_count": 2,
+      "active_tids": [
+        2687498
+      ]
+    },
+    {
+      "monotonic": 746653.515678119,
+      "pid": 2687499,
+      "thread_count": 2,
+      "active_tids": [
+        2687499
+      ]
+    },
+    {
+      "monotonic": 746653.515678119,
+      "pid": 2687500,
+      "thread_count": 2,
+      "active_tids": [
+        2687500
+      ]
+    },
+    {
+      "monotonic": 746653.515678119,
+      "pid": 2687501,
+      "thread_count": 2,
+      "active_tids": [
+        2687501
+      ]
+    }
+  ]
+}
