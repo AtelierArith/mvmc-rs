@@ -7,15 +7,17 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     assert!(
         args.len() == 4
-            || (args.len() == 5 && matches!(args[4].as_str(), "--contract" | "--initial-contract")),
-        "usage: physcal_warm_587 NAMELIST PARAMS FRESH_OUTPUT [--contract|--initial-contract]"
+            || (args.len() == 5 && matches!(args[4].as_str(), "--contract" | "--initial-contract" | "--no-output")),
+        "usage: physcal_warm_587 NAMELIST PARAMS FRESH_OUTPUT [--contract|--initial-contract|--no-output]"
     );
     let output = PathBuf::from(&args[3]);
     std::fs::create_dir(&output).expect("fresh output directory");
     mvmc_gpu_cuda::install();
     threading::install(|| {
         for rep in 0..4 {
-            let contract = args.len() == 5;
+            let contract = args
+                .get(4)
+                .is_some_and(|mode| mode == "--contract" || mode == "--initial-contract");
             if contract {
                 mvmc_core::sampling::driver::trace::start_decisions();
                 if args[4] == "--initial-contract" {
@@ -27,8 +29,12 @@ fn main() {
                 run::prepare_phys_cal_from_namelist(&args[1], &args[2], "real", Some(79))
                     .expect("PhysCal preparation");
             let prepared = start.elapsed().as_secs_f64();
-            let result = run::vmc_phys_cal_to_dir(preparation, output.join(format!("rep{rep}")))
-                .expect("PhysCal run");
+            let result = if args.get(4).is_some_and(|mode| mode == "--no-output") {
+                run::vmc_phys_cal(preparation)
+            } else {
+                run::vmc_phys_cal_to_dir(preparation, output.join(format!("rep{rep}")))
+            }
+            .expect("PhysCal run");
             let seconds = start.elapsed().as_secs_f64();
             assert_eq!(result.iterations, 1);
             let energy = result.state.energy.etot;
