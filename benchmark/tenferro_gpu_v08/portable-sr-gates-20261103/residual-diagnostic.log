@@ -1,0 +1,39 @@
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 1.16s
+────────────
+ Nextest run ID 7182d420-4086-4ad8-9173-134fba39c7e6 with nextest profile: default
+    Starting 1 test across 1 binary (7 tests skipped)
+       START [         ] (1/1) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+
+running 1 test
+cg well-conditioned: iterations host 29 device 29, |dx|/|x| = 2.91e-15
+cg ill-conditioned,   1 iterations: device vs host rel 1.82e-16
+CG repeat 1 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 1.106e-13
+cg ill-conditioned,   2 iterations: device vs host rel 3.43e-16
+CG repeat 2 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 2.212e-13
+cg ill-conditioned,   4 iterations: device vs host rel 7.30e-16
+CG repeat 4 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 4.423e-13
+cg ill-conditioned,   8 iterations: device vs host rel 2.04e-15
+CG repeat 8 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 8.846e-13
+cg ill-conditioned, 119 iterations: device vs host rel 6.73e-4
+CG repeat 119 iterations: max absolute difference 0.000e0; abs 1.776e-15, rel 1.316e-11
+CG C-order full-prefix backward residual 7.063e-5
+CG full-prefix backward residual 6.908e-5, bound 3.382e-12
+
+thread 'device_cg_solve_matches_c_order_and_is_repeatable' (411344) panicked at tests/sr_device_gate.rs:463:17:
+independent covariance residual 0.000069076582160573
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test device_cg_solve_matches_c_order_and_is_repeatable ... FAILED
+
+failures:
+
+failures:
+    device_cg_solve_matches_c_order_and_is_repeatable
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.70s
+
+        FAIL [   0.871s] (1/1) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+────────────
+     Summary [   0.872s] 1 test run: 0 passed, 1 failed, 7 skipped
+        FAIL [   0.871s] (1/1) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+error: test run failed

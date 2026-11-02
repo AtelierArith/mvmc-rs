@@ -1,0 +1,41 @@
+    Finished `test` profile [optimized] target(s) in 0.10s
+────────────
+ Nextest run ID 1a36e122-2d88-4b91-93b4-2eb1705dfec9 with nextest profile: default
+    Starting 34 tests across 8 binaries (1 test skipped)
+        PASS [   4.240s] ( 1/34) mvmc-gpu-cuda::interval_parity interval_qp_tiles_and_batch_download_match_cpu_rebuild
+        PASS [   6.543s] ( 2/34) mvmc-gpu-cuda::interval_parity interval_shared_tape_matches_julia_gpu
+        PASS [   0.411s] ( 3/34) mvmc-gpu-cuda::interval_parity interval_walker_upload_download_roundtrip
+        PASS [  57.945s] ( 4/34) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_b_matches_c_order
+        PASS [   1.800s] ( 5/34) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_matches_calc_m_all
+        PASS [   1.902s] ( 6/34) mvmc-gpu-cuda::measurement_gate cuda_resident_measurement_matches_c_order
+        PASS [   0.015s] ( 7/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cpu_preserves_layout_and_status
+        PASS [   2.866s] ( 8/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cuda_preserves_layout_status_and_residency
+        PASS [   0.287s] ( 9/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cuda_supports_an_empty_batch
+        PASS [   0.012s] (10/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_rejects_invalid_shape_and_dtype
+        PASS [   1.754s] (11/34) mvmc-gpu-cuda::pfaffian_gate cuda_large_batch_agrees_with_rayon_reference
+        PASS [  10.207s] (12/34) mvmc-gpu-cuda::pfaffian_gate cuda_matches_pfapack_complex
+        PASS [   9.838s] (13/34) mvmc-gpu-cuda::pfaffian_gate cuda_matches_pfapack_real
+        PASS [   5.884s] (14/34) mvmc-gpu-cuda::pfaffian_gate cuda_owned_stage_can_be_recreated_after_use_and_drop
+        PASS [   1.828s] (15/34) mvmc-gpu-cuda::pfaffian_gate cuda_pfaffian_passes_the_validation_harness_replay
+        PASS [   3.049s] (16/34) mvmc-gpu-cuda::pfaffian_gate cuda_reports_zero_pivot_and_non_finite_planes
+        PASS [   1.737s] (17/34) mvmc-gpu-cuda::pfaffian_gate cuda_tensor_native_and_extension_backends_agree_with_the_kernel
+        PASS [   5.087s] (18/34) mvmc-gpu-cuda::sampler_gate device_sampler_exchange_matches_cpu_sampler
+        PASS [  10.027s] (19/34) mvmc-gpu-cuda::sampler_gate device_sampler_hopping_matches_cpu_sampler
+        PASS [  15.917s] (20/34) mvmc-gpu-cuda::sampler_gate device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker
+        PASS [   0.478s] (21/34) mvmc-gpu-cuda::sampler_gate pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses
+        PASS [   0.467s] (22/34) mvmc-gpu-cuda::sampler_gate raw_buffers_reject_another_runtime_on_the_same_device
+        PASS [   1.193s] (23/34) mvmc-gpu-cuda::sr_device_gate device_cg_operator_matches_c_order
+        PASS [   0.550s] (24/34) mvmc-gpu-cuda::sr_device_gate device_cg_operator_with_imaginary_samples_matches_c_order
+        PASS [   0.737s] (25/34) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+        PASS [   2.715s] (26/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_matches_c_order
+        PASS [   0.683s] (27/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_repeats_with_c_order_and_residual_checks
+        PASS [   0.523s] (28/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_reports_non_positive_definite_like_host
+        PASS [   0.500s] (29/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_reports_singular_zero_gram
+        PASS [   2.115s] (30/34) mvmc-gpu-cuda::sr_device_gate resident_stage_backend_fused_steps_match_the_c_order_stage_backend
+        SLOW [> 60.000s] (─────) mvmc-gpu-cuda::sr_routing_gate complex_direct_sr_stays_on_the_per_stage_path
+        PASS [  61.172s] (31/34) mvmc-gpu-cuda::sr_routing_gate complex_direct_sr_stays_on_the_per_stage_path
+        PASS [   3.322s] (32/34) mvmc-gpu-cuda::sr_routing_gate resident_cg_sr_run_is_routed_and_repeatable
+        PASS [   3.744s] (33/34) mvmc-gpu-cuda::sr_routing_gate resident_direct_sr_run_matches_c_order
+        PASS [   0.344s] (34/34) mvmc-gpu-cuda::transfer_gate transfer_helper_is_correct_and_orders_streams
+────────────
+     Summary [ 219.899s] 34 tests run: 34 passed (1 slow), 1 skipped
