@@ -30,6 +30,18 @@ image digest `sha256:503e36a6615e772db4fe47adbe6f1e1dad0f417f6bb1d1857c1f9ab6f20
   values relative to unset. This comparison does not independently establish
   RNG draw parity or performance.
 
+`parallel-evidence.tar.gz` adds 16 successful CLI launches: 2/4 ranks ×
+Opt/PhysCal × Engine/Rayon configuration × placement unset/2. Engine mode sets
+inner=1, Engine participants=2 and additional worker budget=1; Rayon mode sets
+inner=2, Engine participants=1 and additional worker budget=0. Rayon capacity
+is 2 and BLAS/OMP=1 in both. Other model/seed settings match the preceding
+CLI checks. Every mode's finite output-token maximum absolute difference is 0
+between placement unset and 2; see `parallel-summary.json`. These settings
+permit parallel execution but do not measure actual kernel participation.
+Reanalyse extracted results using `uv run --no-project python
+compare-parallel.py EXTRACTED_ROOT/mvmc-583-runtime-parallel-positive`.
+`local-parallel-replay.sh` records the exact local launches.
+
 The `local-*-replay.sh` scripts and `wrapper.sh` preserve the actual local
 launch commands, including absolute `/tmp` paths and executable hashes in
 Cargo filenames. They are evidence, not portable entry points: regenerate

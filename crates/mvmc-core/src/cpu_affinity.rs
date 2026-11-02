@@ -89,4 +89,21 @@ mod tests {
         }
         assert_eq!(current().unwrap(), original);
     }
+
+    #[test]
+    fn restores_nested_masks_and_unwinding_without_crossing_threads() {
+        let original = current().unwrap();
+        let first = BTreeSet::from([*original.first().unwrap()]);
+        let result = std::panic::catch_unwind(|| {
+            let _outer = ThreadAffinity::restrict(&first).unwrap();
+            {
+                let _inner = ThreadAffinity::restrict(&first).unwrap();
+                assert_eq!(current().unwrap(), first);
+            }
+            assert_eq!(current().unwrap(), first);
+            panic!("exercise affinity guard unwind");
+        });
+        assert!(result.is_err());
+        assert_eq!(current().unwrap(), original);
+    }
 }
