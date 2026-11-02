@@ -1,0 +1,22 @@
+diff --git a/crates/mvmc-core/src/observables/green_measurements.rs b/crates/mvmc-core/src/observables/green_measurements.rs
+index eb12e90e..894ad260 100644
+--- a/crates/mvmc-core/src/observables/green_measurements.rs
++++ b/crates/mvmc-core/src/observables/green_measurements.rs
+@@ -246,7 +246,7 @@ pub(crate) fn ordinary_green_values(
+     let one = collect_green_values(
+         data.green_one_terms.len(),
+         crate::threading::green_cost_ns(idx.len(), 1),
+-        parallel,
++        false,
+         |i| {
+             let term = &data.green_one_terms[i];
+             super::green_func1(
+@@ -267,7 +267,7 @@ pub(crate) fn ordinary_green_values(
+     let direct = collect_green_values(
+         data.green_two_terms.len(),
+         crate::threading::green_cost_ns(idx.len(), 2),
+-        parallel,
++        false,
+         |i| {
+             let term = &data.green_two_terms[i];
+             super::green_func2(
