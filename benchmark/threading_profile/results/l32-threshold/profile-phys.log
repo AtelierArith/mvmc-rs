@@ -1,0 +1,23 @@
+model    : Nsite=32 Nelec=16 NSROptItrStep=300
+mode     : NVMCCalMode=1
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/phys/namelist.def
+out-dir  : /results/profile-phys
+physcal  : /input/phys/zqp_opt.dat
+
+
+=== Completed 20 PhysCal samples in 2.31s ===
+Output files written to: /results/profile-phys
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         serial        6470       51760    1151.8   178.02  22251.9
+  crates/mvmc-core/src/observables/green_measurements.rs:220 serial       12000     1536000     577.3    48.10    375.8
+  crates/mvmc-core/src/sampling/updates.rs:425 serial       59947      479576     358.1     5.97    746.8
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       15150      121200     146.9     9.69   1211.7
+  crates/mvmc-core/src/observables.rs:3491     serial        6000      768000     137.2    22.87    178.7
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      288000     2304000     108.1     0.38     46.9
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       1.1     0.19     23.9
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   760.44  95054.5
+  crates/mvmc-core/src/slater_update.rs:115    serial           1       32768       0.4   376.36     11.5
+  crates/mvmc-core/src/slater_update.rs:53     serial           1           8       0.2   218.34  27292.5

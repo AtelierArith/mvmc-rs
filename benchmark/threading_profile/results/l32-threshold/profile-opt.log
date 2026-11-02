@@ -1,0 +1,28 @@
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/opt/namelist.def
+out-dir  : /results/profile-opt
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.43s ===
+Output files written to: /results/profile-opt
+Final energy / site: 0.5242507417
+Final-window means (1 steps): [16.776023733648174, 0.0]
+inner-kernel profile (site, mode, calls, items, total ms, us/call, ns/item):
+  crates/mvmc-core/src/pfaffian.rs:222         serial        8118       64944    1396.3   171.99  21499.3
+  crates/mvmc-core/src/sampling/updates.rs:604 serial       69622      556976     402.3     5.78    722.3
+  crates/mvmc-core/src/observables.rs:3491     serial        6000      768000     107.7    17.94    140.2
+  crates/mvmc-core/src/slater_derivative.rs:504 serial        6000       48000      86.5    14.41   1801.1
+  crates/mvmc-core/src/sampling/updates.rs:116 serial      192928     1543424      77.0     0.40     49.9
+  crates/mvmc-core/src/observables.rs:309      serial        6000     1182000       8.7     1.45      7.3
+  crates/mvmc-core/src/slater_update.rs:115    serial          20      655360       4.1   204.46      6.2
+  crates/mvmc-core/src/slater_update.rs:53     serial          20         160       3.6   180.47  22559.2
+  crates/mvmc-core/src/average.rs:62           serial          20      776180       3.0   148.28      3.8
+  crates/mvmc-core/src/run.rs:3273             serial        6000       48000       0.9     0.14     17.8
+  crates/mvmc-core/src/pfaffian.rs:541         serial           1           8       0.8   771.74  96467.5
+  crates/mvmc-core/src/sr.rs:372               serial          20        3920       0.0     2.50     12.8
+  crates/mvmc-core/src/average.rs:68           serial          20        3940       0.0     1.09      5.5
