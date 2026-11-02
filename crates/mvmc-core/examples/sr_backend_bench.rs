@@ -44,6 +44,31 @@ fn rel(a: &[f64], b: &[f64]) -> f64 {
         / scale
 }
 
+/// Infinity-norm backward error for A*x=b, using the unchanged pre-solve matrix.
+fn scaled_residual(a: &[f64], x: &[f64], b: &[f64], n: usize) -> f64 {
+    let mut residual: f64 = 0.0;
+    let mut matrix_norm: f64 = 0.0;
+    for i in 0..n {
+        let mut product = 0.0;
+        let mut row_norm = 0.0;
+        for j in 0..n {
+            let value = a[i + j * n];
+            product += value * x[j];
+            row_norm += value.abs();
+        }
+        residual = residual.max((product - b[i]).abs());
+        matrix_norm = matrix_norm.max(row_norm);
+    }
+    let x_norm = x.iter().fold(0.0_f64, |v, x| v.max(x.abs()));
+    let b_norm = b.iter().fold(0.0_f64, |v, x| v.max(x.abs()));
+    let scale = matrix_norm * x_norm + b_norm;
+    if scale == 0.0 {
+        residual
+    } else {
+        residual / scale
+    }
+}
+
 fn run(n: usize, samples: usize) {
     let mut st = 7;
     let store: Vec<f64> = (0..n * samples).map(|_| lcg(&mut st)).collect();
@@ -94,6 +119,8 @@ fn run(n: usize, samples: usize) {
         x_t.copy_from_slice(&x);
     });
     let solve_err = rel(&x_t, &x_c);
+    let residual_c = scaled_residual(&s_c_keep, &x_c, &g_vec_c, n);
+    let residual_t = scaled_residual(&s_c_keep, &x_t, &g_vec_c, n);
 
     let x: Vec<f64> = (0..n).map(|_| lcg(&mut st)).collect();
     let view = CgSamples {
@@ -109,7 +136,7 @@ fn run(n: usize, samples: usize) {
     let cg_err = rel(&z_t, &z_c);
 
     println!(
-        "| {n} | {samples} | {g_c:.2} / {g_t:.2} | {a_c:.2} / {a_t:.2} | {solve_c:.2} / {solve_t:.2} | {cg_c:.3} / {cg_t:.3} | {gram_err:.1e} {asm_err:.1e} {solve_err:.1e} {cg_err:.1e} |"
+        "| {n} | {samples} | {g_c:.2} / {g_t:.2} | {a_c:.2} / {a_t:.2} | {solve_c:.2} / {solve_t:.2} | {cg_c:.3} / {cg_t:.3} | {gram_err:.1e} {asm_err:.1e} {solve_err:.1e} {cg_err:.1e} | {residual_c:.1e} / {residual_t:.1e} |"
     );
 }
 
@@ -124,10 +151,24 @@ fn main() {
         sizes
     };
     println!("ms, median of 7, C-order / tenferro (cpu-faer)");
-    println!("| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg |");
-    println!("|---:|---:|---|---|---|---|---|");
+    println!("| NPara | samples | Gram | S,g assembly | Cholesky solve | CG matvec | rel diff gram,asm,solve,cg | scaled residual C / tenferro |");
+    println!("|---:|---:|---|---|---|---|---|---|");
     for n in sizes {
         run(n, 300);
         run(n, 2 * n);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scaled_residual;
+
+    #[test]
+    fn residual_matches_a_diagonal_system_with_known_error() {
+        let a = [2.0, 0.0, 0.0, 3.0];
+        let b = [4.0, 9.0];
+        assert_eq!(scaled_residual(&a, &[2.0, 3.0], &b, 2), 0.0);
+        assert!((scaled_residual(&a, &[2.0, 2.0], &b, 2) - 0.2).abs() < 1e-15);
+        assert_eq!(scaled_residual(&[0.0; 4], &[0.0; 2], &[0.0; 2], 2), 0.0);
     }
 }
