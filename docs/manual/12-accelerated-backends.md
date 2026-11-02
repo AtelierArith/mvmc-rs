@@ -37,6 +37,8 @@ For the optional tenferro CPU stage, `MVMC_RS_TENFERRO_THREADS` sets the thread 
 
 For experiments with a multi-threaded tenferro CPU Engine, `MVMC_RS_TENFERRO_SPIN_POLLS` sets threadteam's wait-spin poll count to a nonnegative integer. If unset, the upstream default is used; `0` skips those spin polls but still yields before sleeping. It is validated even when the Engine is serial. This option affects team waiting and does not limit the number of threads or provide a process-wide budget; choose it only after measuring the workload.
 
+The experimental `MVMC_RS_TENFERRO_TEAM_LIFETIME=stage` setting releases the shared CPU stage's tenferro team after its last active stage or SR-CG solve ends and reacquires it for later use. An SR-CG solve retains the team across its local products, while releasing the shared stage lock between products and MPI collectives. The default, `held`, retains the Engine for the lifetime of the shared stage. Directly constructed stages and CUDA are unaffected. A measurement handle can live across many samples, so `stage` does not necessarily release the team after every sample. Recreating the Engine discards its local plans and scratch, and repeated acquisitions can cost more; measure the target workload. Thread and wait settings are fixed when the shared stage is created. This setting does not coordinate other Engines, Rayon pools, walkers or MPI ranks and is not a global CPU limit. Set it before the first shared CPU stage is opened; unsupported values fail during backend preflight.
+
 ```bash
 cargo nextest run -p mvmc-gpu --cargo-profile test-fast          # batched Pfaffian CPU variants and harness
 cargo nextest run -p mvmc-core --cargo-profile test-fast \

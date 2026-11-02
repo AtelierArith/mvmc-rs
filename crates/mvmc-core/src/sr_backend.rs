@@ -802,9 +802,13 @@ mod cpu_thread_count_tests {
     }
 }
 
-/// Share one caller-owned CPU engine between stages using the configured thread budget.
-pub(crate) fn cpu_engine(
-) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
+#[derive(Clone, Copy)]
+pub(crate) struct CpuEngineSettings {
+    threads: usize,
+    spin: Option<u32>,
+}
+
+pub(crate) fn cpu_engine_settings() -> Result<CpuEngineSettings, StageError> {
     let read = |name| match std::env::var(name) {
         Ok(value) => Ok(Some(value)),
         Err(std::env::VarError::NotPresent) => Ok(None),
@@ -825,6 +829,12 @@ pub(crate) fn cpu_engine(
     let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available)?;
     let spin = read("MVMC_RS_TENFERRO_SPIN_POLLS")?;
     let spin = cpu_spin_polls(spin.as_deref())?;
+    Ok(CpuEngineSettings { threads, spin })
+}
+
+pub(crate) fn cpu_engine_with_settings(
+    CpuEngineSettings { threads, spin }: CpuEngineSettings,
+) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
     let engine = if threads == 1 {
         CpuEngine::serial()
     } else {
@@ -835,6 +845,12 @@ pub(crate) fn cpu_engine(
         CpuEngine::new(builder.build().map_err(err)?)
     };
     Ok(Arc::new(std::sync::Mutex::new(Box::new(engine))))
+}
+
+/// Share one caller-owned CPU engine between stages using the configured thread budget.
+pub(crate) fn cpu_engine(
+) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
+    cpu_engine_with_settings(cpu_engine_settings()?)
 }
 
 impl EagerTransfer {
