@@ -1,0 +1,14 @@
+world_rank=0 affinity=ok:0,1
+world_rank=1 affinity=ok:2,3
+world_rank=2 affinity=ok:4,5
+world_rank=3 affinity=ok:6,7
+world_ranks=0,1 shared_cpus=0
+world_ranks=0,2 shared_cpus=0
+world_ranks=0,3 shared_cpus=0
+world_ranks=1,2 shared_cpus=0
+world_ranks=1,3 shared_cpus=0
+world_ranks=2,3 shared_cpus=0
+world_rank=0 planned_cpus=0
+world_rank=1 planned_cpus=2
+world_rank=2 planned_cpus=4
+world_rank=3 planned_cpus=6
