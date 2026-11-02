@@ -1,0 +1,15 @@
+model    : Nsite=32 Nelec=16 NSROptItrStep=20
+mode     : NVMCCalMode=0
+sample   : NVMCSample=300 NVMCWarmUp=10
+
+=== mvmc — Julia-mVMC Rust port ===
+namelist : /input/namelist.def
+out-dir  : /results/held-1
+nsteps   : 20 (override)
+
+
+=== Completed 20 SR steps in 2.85s ===
+Output files written to: /results/held-1
+Final energy / site: 0.5233520321
+Final-window means (1 steps): [16.747265026730396, 0.0]
+wall=2.963 user=24.840 sys=3.694
