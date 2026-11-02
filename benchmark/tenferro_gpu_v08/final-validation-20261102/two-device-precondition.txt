@@ -1,0 +1,1 @@
+CUDA driver visible devices: 2

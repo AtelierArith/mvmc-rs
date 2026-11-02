@@ -1,0 +1,165 @@
+   Compiling bytemuck v1.25.2
+   Compiling cfg-if v1.0.5
+   Compiling either v1.18.0
+   Compiling bitflags v2.13.2
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling tinyvec v1.13.3
+   Compiling once_cell v1.21.4
+   Compiling nano-gemm-core v0.2.1
+   Compiling generativity v1.2.1
+   Compiling fearless_simd v1.2.0
+   Compiling foldhash v0.2.0
+   Compiling tenferro-core-ops v0.8.0
+   Compiling computegraph v0.1.0
+   Compiling smallvec v1.16.2
+   Compiling crossbeam-utils v0.8.23
+   Compiling libc v0.2.190
+   Compiling crossbeam-epoch v0.9.21
+   Compiling crossbeam-deque v0.8.8
+   Compiling rayon-core v1.13.0
+   Compiling libm v0.2.16
+   Compiling thiserror v1.0.69
+   Compiling thiserror v2.0.21
+   Compiling equator v0.6.0
+   Compiling num-traits v0.2.19
+   Compiling pulp v0.22.3
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling zerocopy v0.8.60
+   Compiling getrandom v0.3.4
+   Compiling cudarc v0.19.10
+   Compiling equivalent v1.0.2
+   Compiling libloading v0.9.0
+   Compiling serde_core v1.0.229
+   Compiling libloading v0.8.9
+   Compiling zmij v1.0.23
+   Compiling t4a-cuda-kernels v0.1.0
+   Compiling serde v1.0.229
+   Compiling equator v0.4.2
+   Compiling equator v0.2.2
+   Compiling serde_json v1.0.151
+   Compiling t4a-private-gemm-x86 v0.1.27
+   Compiling itoa v1.0.18
+   Compiling rand_core v0.6.4
+   Compiling memchr v2.8.3
+   Compiling matrixmultiply v0.3.11
+   Compiling rawpointer v0.2.1
+   Compiling pin-project-lite v0.2.17
+   Compiling hashbrown v0.17.1
+   Compiling pfapack v0.0.0 (/tmp/mvmc-583-budget/crates/pfapack)
+   Compiling mvmc-core v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-core)
+   Compiling mvmc-uhf v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-uhf)
+   Compiling mvmc-stdface v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-stdface)
+   Compiling raw-cpuid v11.6.0
+   Compiling tracing-core v0.1.36
+   Compiling sfmt19937 v0.0.0 (/tmp/mvmc-583-budget/crates/sfmt19937)
+   Compiling dyn-stack v0.13.2
+   Compiling crossbeam-queue v0.3.14
+   Compiling crossbeam-channel v0.5.17
+   Compiling tracing v0.1.44
+   Compiling lru v0.18.5
+   Compiling indexmap v2.14.2
+   Compiling num-complex v0.4.6
+   Compiling num-integer v0.1.47
+   Compiling crossbeam v0.8.5
+   Compiling atomic-wait v1.1.0
+   Compiling num_cpus v1.17.0
+   Compiling lapack-sys v0.14.0
+   Compiling blas-sys v0.7.1
+   Compiling rand_core v0.9.5
+   Compiling rayon v1.12.0
+   Compiling strided-traits v0.7.0
+   Compiling tenferro-tensor-core v0.8.0
+   Compiling tcontract-kernel v0.3.1
+   Compiling blas v0.22.0
+   Compiling lapack v0.19.0
+   Compiling ndarray v0.16.1
+   Compiling mvmc-expert-parsers v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-expert-parsers)
+   Compiling strided-view v0.7.1
+   Compiling tenferro-tensor v0.8.0
+   Compiling priority-queue v2.7.0
+   Compiling threadteam v0.2.0
+   Compiling spindle v0.2.6
+   Compiling ppv-lite86 v0.2.21
+   Compiling strided-perm v0.9.1
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling tenferro-internal-ops v0.8.0
+   Compiling omeco v0.2.6
+   Compiling tenferro-runtime v0.8.0
+   Compiling nano-gemm v0.2.2
+   Compiling t4a-cuda-runtime v0.1.0
+   Compiling gemm-common v0.19.0
+   Compiling strided-basic v0.9.0
+   Compiling qd v0.8.0
+   Compiling elem-simd-math v0.1.2
+   Compiling t4a-faer-traits v0.24.2
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm v0.19.0
+   Compiling t4a-faer v0.27.1
+   Compiling strided-fused v0.9.0
+   Compiling tenferro-cpu-basic v0.8.0
+   Compiling strided-nn v0.9.0
+   Compiling strided-kernel v0.9.0
+   Compiling tenferro-cpu-fused v0.8.0
+   Compiling tenferro-internal-cpu-kernels v0.8.0
+   Compiling tcontract-exec v0.9.0
+   Compiling tcontract v0.9.0
+   Compiling tlinalg v0.8.0
+   Compiling cpueinsum v0.9.0
+   Compiling tenferro-cpu v0.8.1
+   Compiling tenferro-gpu v0.8.0
+   Compiling tenferro-einsum v0.8.0
+   Compiling tenferro-ad v0.8.0
+   Compiling tenferro-ext v0.1.0 (/tmp/mvmc-583-budget/gpu/tenferro-ext)
+   Compiling tenferro-linalg v0.8.0
+   Compiling mvmc-gpu v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-gpu)
+   Compiling mvmc-cli v0.0.0 (/tmp/mvmc-583-budget/crates/mvmc-cli)
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 2m 31s
+────────────
+ Nextest run ID 2803746c-d8fc-4775-830c-5563b7cc40a0 with nextest profile: default
+    Starting 34 tests across 8 binaries (1 test skipped)
+        PASS [   4.346s] ( 1/34) mvmc-gpu-cuda::interval_parity interval_qp_tiles_and_batch_download_match_cpu_rebuild
+        PASS [   6.550s] ( 2/34) mvmc-gpu-cuda::interval_parity interval_shared_tape_matches_julia_gpu
+        PASS [   0.432s] ( 3/34) mvmc-gpu-cuda::interval_parity interval_walker_upload_download_roundtrip
+        PASS [  59.718s] ( 4/34) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_b_matches_c_order
+        PASS [   1.823s] ( 5/34) mvmc-gpu-cuda::measurement_gate cuda_measurement_stage_matches_calc_m_all
+        PASS [   1.793s] ( 6/34) mvmc-gpu-cuda::measurement_gate cuda_resident_measurement_matches_c_order
+        PASS [   0.015s] ( 7/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cpu_preserves_layout_and_status
+        PASS [   2.860s] ( 8/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cuda_preserves_layout_status_and_residency
+        PASS [   0.293s] ( 9/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_cuda_supports_an_empty_batch
+        PASS [   0.012s] (10/34) mvmc-gpu-cuda::pfaffian_extension_gate shared_extension_rejects_invalid_shape_and_dtype
+        PASS [   1.790s] (11/34) mvmc-gpu-cuda::pfaffian_gate cuda_large_batch_agrees_with_rayon_reference
+        PASS [  10.196s] (12/34) mvmc-gpu-cuda::pfaffian_gate cuda_matches_pfapack_complex
+        PASS [   9.851s] (13/34) mvmc-gpu-cuda::pfaffian_gate cuda_matches_pfapack_real
+        PASS [   5.999s] (14/34) mvmc-gpu-cuda::pfaffian_gate cuda_owned_stage_can_be_recreated_after_use_and_drop
+        PASS [   1.817s] (15/34) mvmc-gpu-cuda::pfaffian_gate cuda_pfaffian_passes_the_validation_harness_replay
+        PASS [   3.164s] (16/34) mvmc-gpu-cuda::pfaffian_gate cuda_reports_zero_pivot_and_non_finite_planes
+        PASS [   1.733s] (17/34) mvmc-gpu-cuda::pfaffian_gate cuda_tensor_native_and_extension_backends_agree_with_the_kernel
+        PASS [   5.165s] (18/34) mvmc-gpu-cuda::sampler_gate device_sampler_exchange_matches_cpu_sampler
+        PASS [  10.297s] (19/34) mvmc-gpu-cuda::sampler_gate device_sampler_hopping_matches_cpu_sampler
+        PASS [  15.699s] (20/34) mvmc-gpu-cuda::sampler_gate device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker
+        PASS [   0.487s] (21/34) mvmc-gpu-cuda::sampler_gate pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses
+        PASS [   0.482s] (22/34) mvmc-gpu-cuda::sampler_gate raw_buffers_reject_another_runtime_on_the_same_device
+        PASS [   1.320s] (23/34) mvmc-gpu-cuda::sr_device_gate device_cg_operator_matches_c_order
+        PASS [   0.545s] (24/34) mvmc-gpu-cuda::sr_device_gate device_cg_operator_with_imaginary_samples_matches_c_order
+        PASS [   0.691s] (25/34) mvmc-gpu-cuda::sr_device_gate device_cg_solve_matches_c_order_and_is_repeatable
+        PASS [   0.546s] (26/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_is_bitwise_repeatable
+        PASS [   2.687s] (27/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_matches_c_order
+        PASS [   0.507s] (28/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_reports_non_positive_definite_like_host
+        PASS [   0.502s] (29/34) mvmc-gpu-cuda::sr_device_gate device_direct_sr_reports_singular_zero_gram
+        PASS [   2.086s] (30/34) mvmc-gpu-cuda::sr_device_gate resident_stage_backend_fused_steps_match_the_c_order_stage_backend
+        SLOW [> 60.000s] (─────) mvmc-gpu-cuda::sr_routing_gate complex_direct_sr_stays_on_the_per_stage_path
+        PASS [  61.199s] (31/34) mvmc-gpu-cuda::sr_routing_gate complex_direct_sr_stays_on_the_per_stage_path
+        PASS [   3.343s] (32/34) mvmc-gpu-cuda::sr_routing_gate resident_cg_sr_run_is_routed_and_repeatable
+        PASS [   3.779s] (33/34) mvmc-gpu-cuda::sr_routing_gate resident_direct_sr_run_matches_c_order
+        PASS [   0.306s] (34/34) mvmc-gpu-cuda::transfer_gate transfer_helper_is_correct_and_orders_streams
+────────────
+     Summary [ 222.040s] 34 tests run: 34 passed (1 slow), 1 skipped

@@ -1,0 +1,13 @@
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 5.69s
+────────────
+ Nextest run ID 73fde17d-4655-4353-a38a-49bef887a00c with nextest profile: default
+    Starting 6 tests across 1 binary (8 tests skipped)
+        PASS [  10.292s] (1/6) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_general_operators
+        PASS [  10.277s] (2/6) mvmc-gpu-cuda opt::tests::resident_opt_matches_julia_l128_stages
+        PASS [  10.212s] (3/6) mvmc-gpu-cuda opt::tests::resident_opt_pipeline
+        PASS [   1.078s] (4/6) mvmc-gpu-cuda opt::tests::resident_opt_rejects_failed_sr
+        PASS [  19.757s] (5/6) mvmc-gpu-cuda opt::tests::resident_opt_repeats_twenty_steps
+        PASS [  10.138s] (6/6) mvmc-gpu-cuda opt::tests::resident_opt_single_walker_has_zero_sr_update
+────────────
+     Summary [  61.756s] 6 tests run: 6 passed, 8 skipped

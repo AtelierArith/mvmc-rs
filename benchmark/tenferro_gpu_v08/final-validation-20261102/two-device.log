@@ -1,0 +1,8 @@
+   Compiling mvmc-gpu-cuda v0.0.0 (/tmp/mvmc-583-budget/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 2.53s
+────────────
+ Nextest run ID 33bc638b-8a5e-4099-a3eb-1906a0527b31 with nextest profile: default
+    Starting 1 test across 1 binary (6 tests skipped)
+        PASS [   0.831s] (1/1) mvmc-gpu-cuda::resident_interval device_rng_rejects_a_different_device_context
+────────────
+     Summary [   0.831s] 1 test run: 1 passed, 6 skipped

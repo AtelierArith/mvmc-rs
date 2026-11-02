@@ -1,0 +1,3 @@
+6672d22cd49ff385cff7efc949dc28c6f223e3314dd3724dd2360f714f3d10b2  gpu/mvmc-gpu-cuda/tests/fixtures/opt_julia.md
+7d7c249bba161e6098732adce20138e53c099db7da8e59c1cbdce6fc46536724  gpu/mvmc-gpu-cuda/tests/fixtures/opt_julia_l128.txt
+6beeca4f8ac4098431da2472e506db654b20b953ac19e389a09427f023c03a04  gpu/mvmc-gpu-cuda/tests/fixtures/opt_julia_operators.txt
