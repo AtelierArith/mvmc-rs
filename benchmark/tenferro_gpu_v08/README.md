@@ -50,3 +50,22 @@ cargo build --release --locked --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --ex
 CUDA_VISIBLE_DEVICES=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 RAYON_NUM_THREADS=1 \
   /usr/bin/time -v gpu/mvmc-gpu-cuda/target/release/examples/bench_shared_pfaffian
 ```
+
+## Instrumented phase and resource comparison
+
+For a separate run, the minimal [before](phase-before.patch) and [after](phase-after.patch) instrumentation patches add the same wall timers around model parsing, runtime/state preparation, initialization, the complete optimization loop, and result extraction. Both patches record every call, including warmup. The instrumentation is not part of the production executable. The following medians are from the five timed calls after warmup with the same configuration, environment and alternating order as above. The host ran `nvidia-smi --query-compute-apps=timestamp,pid,used_memory --format=csv,noheader,nounits -lms 200` during this experiment, which adds monitoring overhead and can miss short-lived memory peaks. The two worker contexts are both kept alive; reported memory is per process, not a combined total. Process CPU time is read from Linux `/proc/PID/stat` at 100 Hz and covers only the worker process. First-call compilation is excluded. `run` combines sampling, measurements and SR, so it does not identify their individual costs.
+
+| Measure | Before | After |
+|---|---:|---:|
+| Model parsing | 0.052013 s | 0.052361 s |
+| Runtime/state preparation | 0.007088 s | 0.006786 s |
+| Initialization | 0.165865 s | 0.168248 s |
+| Optimization loop | 4.625977 s | 4.606662 s |
+| Result extraction | 0.000132 s | 0.000036 s |
+| Whole call, wall | 4.872235 s | 4.850856 s |
+| Whole call, process CPU | 4.87 s | 4.86 s |
+| Maximum sampled process GPU memory | 1,494 MiB | 1,494 MiB |
+
+These medians are independently calculated and do not sum exactly. `run` remains the dominant measured phase; these coarse measurements do not identify a bottleneck or establish a performance improvement. Energy sequences, final parameters and raw-exec transfer/synchronization counters matched in this instrumented run as well. The exact sampled values and instrumented binary hashes are in the [summary](results/rtx3060-phase-summary.json), [before log](results/rtx3060-phase-before.txt), [after log](results/rtx3060-phase-after.txt), and [GPU samples](results/rtx3060-memory-samples.txt). The before/after worker PIDs in the memory log were 2393564 and 2393580 respectively.
+
+To reproduce, apply `phase-before.patch` to a fresh checkout of `5f5a490e…` and `phase-after.patch` to a fresh checkout of `d5d131b9…` with `git apply`, build `resident_opt_worker` separately in each, and run the comparison command above on those two instrumented binaries. Run the `nvidia-smi` command in a separate terminal, record which PID belongs to each binary, and stop it after the comparison. Use the same library path and idle-machine precautions as the uninstrumented run.

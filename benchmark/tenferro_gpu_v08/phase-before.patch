@@ -1,0 +1,30 @@
+diff --git a/gpu/mvmc-gpu-cuda/src/opt.rs b/gpu/mvmc-gpu-cuda/src/opt.rs
+index 40a2d23f..521ac3c2 100644
+--- a/gpu/mvmc-gpu-cuda/src/opt.rs
++++ b/gpu/mvmc-gpu-cuda/src/opt.rs
+@@ -102,12 +102,24 @@ pub fn run_gpu_para_opt_from_namelist(
+     path: impl AsRef<Path>,
+     config: OptConfig,
+ ) -> Result<OptResult, String> {
++    let phase_start = std::time::Instant::now();
+     let model = Model::prepare(path.as_ref(), &config)?;
++    let model_s = phase_start.elapsed().as_secs_f64();
++    let phase_start = std::time::Instant::now();
+     let mut backend = runtime(config.device)?;
+     let mut state = backend.with_backend_session(|s| State::prepare(s, model, &config))?;
++    let prepare_s = phase_start.elapsed().as_secs_f64();
++    let phase_start = std::time::Instant::now();
+     backend.with_backend_session(|s| state.initialize(s))?;
++    let initialize_s = phase_start.elapsed().as_secs_f64();
++    let phase_start = std::time::Instant::now();
+     backend.with_backend_session(|s| state.run(s))?;
+-    backend.with_backend_session(|s| state.result(s))
++    let run_s = phase_start.elapsed().as_secs_f64();
++    let phase_start = std::time::Instant::now();
++    let result = backend.with_backend_session(|s| state.result(s));
++    let result_s = phase_start.elapsed().as_secs_f64();
++    eprintln!("PHASE model={model_s:.9} prepare={prepare_s:.9} initialize={initialize_s:.9} run={run_s:.9} result={result_s:.9}");
++    result
+ }
+ 
+ struct Buffers {

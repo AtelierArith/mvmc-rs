@@ -37,9 +37,17 @@ def await_line(name, marker):
             return
 
 def run(name, rep):
+    # Linux process CPU time covers this worker only, not the other idle worker.
+    def cpu_seconds():
+        stat = Path(f"/proc/{workers[name].pid}/stat").read_text()
+        fields = stat[stat.rfind(")") + 2:].split()
+        return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+    cpu_before = cpu_seconds()
     workers[name].stdin.write(f"{rep}\n")
     workers[name].stdin.flush()
     await_line(name, f"DONE {rep}")
+    samples[name][-1]["cpu_seconds"] = cpu_seconds() - cpu_before
 
 def receipt(path):
     words = path.read_text().split()
