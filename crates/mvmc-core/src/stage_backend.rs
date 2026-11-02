@@ -261,33 +261,38 @@ impl PfaffianStages for COrderPfaffian {
         // windows retain input order, including failed/non-finite planes.
         let mut inv = x.to_vec();
         let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
-        crate::threading::for_each_chunk_pair_mut(
+        crate::threading::qp_update(
+            &mut results,
             &mut inv,
             plane_len,
-            &mut results,
-            1,
+            plane_len,
+            0,
+            planes,
             crate::pfaffian::pfaffian_qp_cost_ns(n),
-            |_, a, result_slot| {
-                let mut pivots = vec![PivotIndex1Based(0); n];
+            || (vec![PivotIndex1Based(0); n], Vec::new(), Vec::new()),
+            |(pivots, vt, work), _, result_slot, a| {
                 let result = {
                     let mut view = SqMat::new(&mut *a, n);
-                    dsktf2(&mut view, &mut pivots).map(|_| utu2pfa_real(&view, &pivots))
+                    dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
                 };
                 match result {
                     Err(info) => {
                         a.fill(0.0);
-                        result_slot[0] = (0.0, PlaneOutcome::ZeroPivot { row: info });
+                        *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
                     }
                     Ok(value) => {
-                        let mut vt = vec![0.0; n.saturating_sub(1)];
-                        let mut work = vec![0.0; n * n];
+                        // One private scratch set per static block, reused across
+                        // its planes. utu2inv resets its full matrix workspace;
+                        // failed/non-finite planes cannot leak into the next one.
+                        vt.resize(n.saturating_sub(1), 0.0);
+                        work.resize(n * n, 0.0);
                         {
                             let mut view = SqMat::new(&mut *a, n);
-                            let mut m_work = SqMat::new(&mut work, n);
-                            utu2inv_real(&mut view, &pivots, &mut vt, &mut m_work);
+                            let mut m_work = SqMat::new(work, n);
+                            utu2inv_real(&mut view, pivots, vt, &mut m_work);
                         }
                         // `a` now holds X^-1 (X * invM = I) for the matrix as given
-                        result_slot[0] = (
+                        *result_slot = (
                             value,
                             if value.is_finite() {
                                 PlaneOutcome::Ok
