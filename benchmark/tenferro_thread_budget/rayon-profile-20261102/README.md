@@ -80,3 +80,48 @@ A separate alternating experiment compared two builds with **both profiling sett
 | PhysCal | 4 | 3.030 s | 2.417 s |
 
 All 4 Opt and 80 PhysCal formatted numeric output files per worker setting matched to printed precision across the six measured runs. The unusually large four-worker PhysCal spread and only three repetitions preclude attributing the difference to this change; these data do not demonstrate a speedup. Full RNG and decision parity is not established by this output check.
+
+## Exploratory Rayon waiting CPU accounting
+
+On the same Xeon/Linux dev container, an independent process repeatedly invoked an empty broadcast for 3 seconds per condition, with one or four Rayon threads. It slept for a *requested* 0, 20, 60 or 1000 microseconds between calls. Each condition was measured three times in fixed order, using CPUs 0–3. The test used `/proc/self/stat` and `/proc/thread-self/stat` user plus system CPU ticks at 100 Hz; `other` is process CPU time minus the calling test thread's CPU time. For inside-pool calls, the caller is itself a Rayon worker; for outside calls, all Rayon workers are counted in `other`. Test-harness and read overhead are also included. Thus this is CPU accounting for the entire repeated workload, including broadcasts and dispatch, **not isolated idle-spin or wake-up time**. Sleep durations are subject to OS scheduling and are not directly measured; calls per second are reported to expose the effective rate.
+
+| Threads | Caller | Requested sleep | Other CPU cores, median | Calls/s, median |
+|---:|---|---:|---:|---:|
+| 1 | outside | 0 µs | 1.000 | 290579 |
+| 1 | inside | 0 µs | 0.003 | 5067555 |
+| 4 | outside | 20 µs | 2.000 | 10834 |
+| 4 | inside | 20 µs | 1.547 | 12311 |
+| 4 | outside | 60 µs | 1.700 | 6749 |
+| 4 | inside | 60 µs | 1.687 | 7921 |
+| 4 | outside | 1000 µs | 0.380 | 827 |
+| 4 | inside | 1000 µs | 0.250 | 846 |
+
+Three-second tick-quantized samples and nonrandomized condition order limit precision. Empty broadcasts and sleeping callers do not reproduce actual kernel work or the measured application gap distributions. The nonzero CPU use at 1 ms suggests further idle/wake investigation but cannot attribute those cycles to spinning. The full [raw data, summary, analysis and command](idle/) include all 16 conditions and three repetitions. The test source is `crates/mvmc-core/tests/rayon_idle_probe_581.rs`. With Rust, Rayon, `jq` and Linux `/proc` available, run on CPUs 0–3 with `taskset -c 0-3 benchmark/tenferro_thread_budget/rayon-profile-20261102/idle/run.sh > idle.log 2>&1`, then `uv run --no-project python benchmark/tenferro_thread_budget/rayon-profile-20261102/idle/analyze.py idle.log`. Keep builds and unrelated workloads off the measurement CPUs during timing. Hardware, image, versions and isolation limitations are as documented above.
+
+The measured source was parent `f915bca5af135372cbc3fa0cc74367a9c09c25a5` plus the new probe source (subsequently rustfmt-formatted without semantic changes). The measured test executable SHA-256 was `3ea7d54a283e55c34e45141b1a2ea018b0b8f08de9e3c724d6b9b81ff2a28b9a`. The probe is Linux-only because it uses `/proc`; it is ignored during normal test runs.
+
+## Four-worker work-gate sweep
+
+A separate same-binary experiment varied `MVMC_RS_INNER_MIN_WORK_NS` at 20000, 40000, 80000 and 160000 ns for L32 Opt, L32 PhysCal and L64 Opt. This setting is an estimated serial-work gate, not a measured actual duration, and applies to both hot and cold regions in this sweep. Each condition had one warmup and three timed runs; the four gate values were alternated in forward and reverse order between repetitions. All used four Rayon/inner workers, OpenBLAS/OMP one thread, tenferro SR, default Engine wait settings, fixed seeds and the inputs/window/sample settings described above. The same collector-capable release binary was used throughout with both profiling settings unset; its SHA-256 is `5ee7c581f626932bb88a73cf02f77667e8314f74843f768182f376c8654359cf` and its source is main `176774af8e28bb6e12f37884ef1b25b816c6af53` plus `gap/collector.patch`. CPUs 0–3 were used; CLI startup and output are included, Docker startup is excluded. The host was not isolated or frequency controlled; load was not recorded.
+
+| Workload | Gate 20 µs | Gate 40 µs | Gate 80 µs | Gate 160 µs |
+|---|---:|---:|---:|---:|
+| L32 Opt | 2.091 s | 2.226 s | 2.793 s | 2.708 s |
+| L32 PhysCal | 2.885 s | 2.426 s | 3.436 s | 2.881 s |
+| L64 Opt | 5.539 s | 5.590 s | 11.552 s | 10.678 s |
+
+Values are wall-time medians of three, not phase timings. L32 PhysCal had substantial run-to-run variation (e.g. 40 µs: 2.390, 3.054, 2.426 s); the apparent choice between 20 and 40 µs is therefore not established. L64 Opt was slower in every 80/160 µs sample than every 20/40 µs sample on this host, so keeping a candidate at or below 40 µs deserves further profiling. Do not generalize the optimum or alter defaults from this three-sample sweep. Across the 12 measured runs for each workload, all finite non-timing formatted values in 4 Opt or 80 PhysCal files matched at printed precision; this alone does not compare full RNG states or decisions. Per-run wall/user/system samples, input hashes, logs, numerical output and analysis are in [gates](gates/).
+
+Reproduce by preparing the inputs and binary as described above, adjusting paths and CPU masks in `gates/run.sh`, and running it with a fresh output directory. Then `uv run --no-project python gates/analyze.py /tmp/mvmc-581-gates` recomputes the summary. The saved `raw.tar.gz` can instead be extracted into an empty directory and passed to the analyzer. These measurements do not cover single-worker regressions or L64 PhysCal; keep those as follow-up requirements.
+
+A subsequent one-inner-worker negative control used the same binary, inputs, CPU mask and other settings, with gates 20 and 160 µs. Each received one warmup and three alternating measured runs. Its median wall times were respectively 2.457/2.459 s for L32 Opt, 2.204/2.165 s for L32 PhysCal and 11.852/11.725 s for L64 Opt. L64 20 µs samples were 13.262, 11.809 and 11.852 s; the observed differences do not establish a gate effect. Rayon capacity remained four and the tenferro thread setting was unset, so “one worker” refers specifically to the mvmc inner-worker setting, not a claim that the process had only one thread or core of CPU use. All finite non-timing formatted output values matched at printed precision across the six measured runs per workload. [gates-serial](gates-serial/) contains the corresponding raw data, CPU times, input hashes, analysis and exact command; adjust the fixed paths and use a fresh output directory. The control was run after the four-worker sequence, so cross-table elapsed times are not a matched scaling measurement.
+
+A separate matched one/four inner-worker comparison used the same binary and inputs, explicitly set a 40000 ns gate, and alternated worker counts in one sequence per workload, one warmup and three measured runs each. Rayon capacity was four, OpenBLAS/OMP one thread, tenferro thread count unset; the one-worker label does not imply a single-threaded process. Wall time includes CLI startup/output but not Docker startup. No host-load sampling, frequency control or host isolation was performed.
+
+| Workload | 1 worker wall | 4 workers wall | 1 worker user/sys CPU | 4 workers user/sys CPU |
+|---|---:|---:|---:|---:|
+| L32 Opt | 2.470 s | 2.087 s | 2.895/0.069 s | 4.799/0.699 s |
+| L32 PhysCal | 2.245 s | 2.451 s | 2.223/0.035 s | 5.590/1.175 s |
+| L64 Opt | 11.554 s | 5.413 s | 12.433/0.104 s | 17.505/2.576 s |
+
+Each cell is the median of its respective three values; independently selected CPU medians need not correspond to the median-wall run. L32 PhysCal four-worker wall samples were 2.451, 2.279 and 3.054 s, so this short sample shows no reliable parallel speedup. The finite formatted non-timing outputs matched across the six measured runs at printed precision: four files per Opt workload and 80 for PhysCal. No full RNG or decision trace was captured in these timed runs. [scaling](scaling/) preserves individual wall/user/system values, outputs, hashes, exact script and analysis. Reproduce after preparing the same inputs/binary, adjusting the fixed host paths, CPU masks and volume in `scaling/run.sh` and using a fresh output directory; analyze with `uv run --no-project python scaling/analyze.py /tmp/mvmc-581-scaling`. Extract `scaling/raw.tar.gz` to reanalyze the saved runs. These are not C-versus-Rust timings or L128 results.
