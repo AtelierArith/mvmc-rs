@@ -25,6 +25,8 @@ mod c_complex;
 mod c_complex_gnu;
 pub mod c_timer;
 pub mod counter;
+#[cfg(test)]
+mod cpu_placement;
 mod cpu_worker_budget;
 pub mod engine_resource;
 pub mod initial_params;

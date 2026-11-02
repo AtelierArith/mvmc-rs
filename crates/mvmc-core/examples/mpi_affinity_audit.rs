@@ -1,5 +1,10 @@
 //! Report node-local MPI rank affinity and overlaps without changing placement.
+//! Optional `--plan=N` prints disjoint N-CPU candidate masks; it does not apply them
+//! or account for cgroup quotas, physical-core topology or other process threads.
 //! Linux reads `/proc/self/status`; other platforms report affinity as unavailable.
+
+#[path = "../src/cpu_placement.rs"]
+mod cpu_placement;
 
 use std::collections::BTreeSet;
 
@@ -100,6 +105,32 @@ fn main() {
                         ranks[i], ranks[j]
                     ),
                 }
+            }
+        }
+        if let Some(argument) = std::env::args().nth(1) {
+            let request = argument
+                .strip_prefix("--plan=")
+                .and_then(|v| v.parse::<usize>().ok());
+            match (request, sets.into_iter().collect::<Option<Vec<_>>>()) {
+                (Some(count), Some(masks)) => {
+                    match cpu_placement::plan(&masks, &vec![count; masks.len()]) {
+                        Ok(assigned) => {
+                            for (rank, cpus) in ranks.iter().zip(assigned) {
+                                println!(
+                                    "world_rank={rank} planned_cpus={}",
+                                    cpus.iter()
+                                        .map(usize::to_string)
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                );
+                            }
+                        }
+                        Err(error) => println!("plan_error={error}"),
+                    }
+                }
+                _ => println!(
+                    "plan_error=requires --plan=POSITIVE_CPUS and available affinity masks"
+                ),
             }
         }
     }
