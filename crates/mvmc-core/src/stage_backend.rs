@@ -675,12 +675,64 @@ impl MeasurementStages for UnsupportedMeasurement {
     }
 }
 
+type CpuEngineHandle = std::sync::Arc<Mutex<Box<dyn tenferro_runtime::ExecutionEngine + Send>>>;
+
+// Count stage handles and solve leases separately from the stage mutex. A solve lease may
+// span MPI collectives, but it never carries the stage mutex across those collectives.
+// Concurrent walkers share the team until the last lease ends.
+struct ScopedCpuTeam {
+    engine: CpuEngineHandle,
+    leases: Mutex<usize>,
+    settings: crate::sr_backend::CpuEngineSettings,
+}
+
+impl ScopedCpuTeam {
+    fn acquire(&self) -> Result<(), StageError> {
+        let mut leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
+        if *leases == 0 {
+            let fresh = crate::sr_backend::cpu_engine_with_settings(self.settings)?;
+            let replacement = std::mem::replace(
+                &mut *fresh.lock().unwrap_or_else(|e| e.into_inner()),
+                Box::new(tenferro_cpu::CpuEngine::serial()),
+            );
+            let old = std::mem::replace(
+                &mut *self.engine.lock().unwrap_or_else(|e| e.into_inner()),
+                replacement,
+            );
+            drop(old);
+        }
+        *leases += 1;
+        Ok(())
+    }
+
+    fn release(&self) {
+        let mut leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
+        *leases -= 1;
+        if *leases == 0 {
+            let old = std::mem::replace(
+                &mut *self.engine.lock().unwrap_or_else(|e| e.into_inner()),
+                Box::new(tenferro_cpu::CpuEngine::serial()),
+            );
+            drop(old);
+        }
+    }
+}
+
+pub(crate) struct CpuTeamLease(std::sync::Arc<ScopedCpuTeam>);
+
+impl Drop for CpuTeamLease {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
 /// The single backend object: one implementation of every stage trait.
 pub struct StageBackend<'a> {
     label: String,
     sr: Box<dyn SrStages + 'a>,
     pfaffian: Box<dyn PfaffianStages + 'a>,
     measurement: Box<dyn MeasurementStages + 'a>,
+    transient_cpu: Option<std::sync::Arc<ScopedCpuTeam>>,
 }
 
 impl<'a> StageBackend<'a> {
@@ -696,6 +748,7 @@ impl<'a> StageBackend<'a> {
             label: label.to_string(),
             sr,
             pfaffian,
+            transient_cpu: None,
             measurement: Box::new(UnsupportedMeasurement::new(
                 label,
                 "this backend provides no measurement stage",
@@ -718,10 +771,15 @@ impl<'a> StageBackend<'a> {
     /// measurement stage (local energy + Slater derivative) through tensor contractions;
     /// the Pfaffian stage is unsupported by tenferro 0.8.
     pub fn tenferro_cpu() -> Result<StageBackend<'static>, StageError> {
+        Self::tenferro_cpu_with_transient(false)
+    }
+
+    fn tenferro_cpu_with_transient(transient: bool) -> Result<StageBackend<'static>, StageError> {
         let ctx =
             tenferro_ad::EagerRuntime::new().map_err(|e| StageError::Failed(e.to_string()))?;
-        let engine = crate::sr_backend::cpu_engine()?;
-        Ok(StageBackend::new(
+        let settings = crate::sr_backend::cpu_engine_settings()?;
+        let engine = crate::sr_backend::cpu_engine_with_settings(settings)?;
+        let mut backend = StageBackend::new(
             "tenferro-cpu",
             Box::new(TenferroSr::with_runtime(
                 ctx.clone(),
@@ -733,10 +791,23 @@ impl<'a> StageBackend<'a> {
         )
         .with_measurement(Box::new(TenferroMeasurement::with_runtime(
             ctx,
-            engine,
+            engine.clone(),
             crate::sr_backend::Placement::Host,
             "tenferro-measurement native".to_string(),
-        ))))
+        )));
+        if transient {
+            let old = std::mem::replace(
+                &mut *engine.lock().unwrap_or_else(|e| e.into_inner()),
+                Box::new(tenferro_cpu::CpuEngine::serial()),
+            );
+            drop(old);
+            backend.transient_cpu = Some(std::sync::Arc::new(ScopedCpuTeam {
+                engine,
+                leases: Mutex::new(0),
+                settings,
+            }));
+        }
+        Ok(backend)
     }
 
     /// Replace the Pfaffian stage (for example by the batched CUDA kernel), relabelled.
@@ -921,12 +992,31 @@ type Shared = &'static Mutex<StageBackend<'static>>;
 /// CUDA context is expensive; eager calls cost tens of microseconds).
 static SHARED: Mutex<Vec<(StageBackendKind, Shared)>> = Mutex::new(Vec::new());
 
+fn scoped_cpu_team() -> Result<bool, StageError> {
+    const VARIABLE: &str = "MVMC_RS_TENFERRO_TEAM_LIFETIME";
+    match std::env::var(VARIABLE) {
+        Ok(value) if value == "held" => Ok(false),
+        Ok(value) if value == "stage" => Ok(true),
+        Ok(_) => Err(StageError::Failed(format!(
+            "{VARIABLE} must be held or stage"
+        ))),
+        Err(std::env::VarError::NotPresent) => Ok(false),
+        Err(error) => Err(StageError::Failed(format!("{VARIABLE}: {error}"))),
+    }
+}
+
 fn shared(kind: StageBackendKind) -> Result<Shared, StageError> {
     let mut registry = SHARED.lock().unwrap_or_else(|e| e.into_inner());
     if let Some((_, backend)) = registry.iter().find(|(k, _)| *k == kind) {
         return Ok(backend);
     }
-    let backend: Shared = Box::leak(Box::new(Mutex::new(open_stage_backend(kind)?)));
+    let instance = if kind == StageBackendKind::TenferroCpu {
+        let transient = scoped_cpu_team()?;
+        StageBackend::tenferro_cpu_with_transient(transient)?
+    } else {
+        open_stage_backend(kind)?
+    };
+    let backend: Shared = Box::leak(Box::new(Mutex::new(instance)));
     registry.push((kind, backend));
     Ok(backend)
 }
@@ -965,26 +1055,34 @@ pub fn selected_resident_direct() -> bool {
     }
 }
 
-/// Handle to the selected backend for one SR solve or one stage call.
-pub enum StageHandle {
-    /// C-order backend owned by the caller (cheap, holds scratch vectors).
+enum StageStorage {
     Owned(StageBackend<'static>),
-    /// Process-wide shared backend, locked while the handle lives.
     Shared(MutexGuard<'static, StageBackend<'static>>),
+}
+
+/// Handle to the selected backend for one SR solve or one stage call.
+pub struct StageHandle {
+    storage: StageStorage,
+    // Keep the acquired team independent of later replacement of the stage object.
+    _team: Option<CpuTeamLease>,
 }
 
 impl StageHandle {
     /// The backend object.
     pub fn backend(&mut self) -> &mut StageBackend<'static> {
-        match self {
-            Self::Owned(b) => b,
-            Self::Shared(b) => b,
+        match &mut self.storage {
+            StageStorage::Owned(b) => b,
+            StageStorage::Shared(b) => b,
         }
     }
 
     /// Shorthand for `backend().sr()`.
     pub fn sr(&mut self) -> &mut dyn SrStages {
         self.backend().sr()
+    }
+
+    pub(crate) fn is_owned(&self) -> bool {
+        matches!(self.storage, StageStorage::Owned(_))
     }
 }
 
@@ -996,12 +1094,42 @@ pub fn acquire() -> StageHandle {
 /// Acquire a backend of an explicit kind (shared instance for non-C-order kinds).
 pub fn acquire_kind(kind: StageBackendKind) -> StageHandle {
     match kind {
-        StageBackendKind::COrder => StageHandle::Owned(StageBackend::c_order()),
+        StageBackendKind::COrder => StageHandle {
+            storage: StageStorage::Owned(StageBackend::c_order()),
+            _team: None,
+        },
         kind => match shared(kind) {
-            Ok(m) => StageHandle::Shared(m.lock().unwrap_or_else(|e| e.into_inner())),
+            Ok(m) => {
+                let backend = m.lock().unwrap_or_else(|e| e.into_inner());
+                let team_lease = if let Some(team) = &backend.transient_cpu {
+                    team.acquire()
+                        .unwrap_or_else(|e| panic!("{SR_BACKEND_VARIABLE}: {e}"));
+                    Some(CpuTeamLease(team.clone()))
+                } else {
+                    None
+                };
+                StageHandle {
+                    storage: StageStorage::Shared(backend),
+                    _team: team_lease,
+                }
+            }
             Err(e) => panic!("{SR_BACKEND_VARIABLE}: {e}"),
         },
     }
+}
+
+// The returned guard owns only a team lease, not a stage mutex guard.
+pub(crate) fn retain_cpu_team(kind: StageBackendKind) -> Result<Option<CpuTeamLease>, StageError> {
+    if kind != StageBackendKind::TenferroCpu {
+        return Ok(None);
+    }
+    let stage = shared(kind)?;
+    let stage = stage.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(team) = &stage.transient_cpu else {
+        return Ok(None);
+    };
+    team.acquire()?;
+    Ok(Some(CpuTeamLease(team.clone())))
 }
 
 /// Fresh operand version for the constant-operand cache.
@@ -1022,4 +1150,163 @@ pub fn tenferro_stats() -> Option<TenferroStats> {
         .sr()
         .stats();
     stats
+}
+
+#[cfg(test)]
+mod transient_probe_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_team_lifetime_is_rejected() {
+        if std::env::var("MVMC_TEAM_INVALID_CHILD").as_deref() != Ok("1") {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "stage_backend::transient_probe_tests::invalid_team_lifetime_is_rejected",
+                ])
+                .env("MVMC_TEAM_INVALID_CHILD", "1")
+                .env("MVMC_RS_TENFERRO_TEAM_LIFETIME", "invalid")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let error = match shared(StageBackendKind::TenferroCpu) {
+            Ok(_) => panic!("invalid team lifetime accepted"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("MVMC_RS_TENFERRO_TEAM_LIFETIME"));
+    }
+
+    fn threads(backend: &mut StageBackend<'_>) -> usize {
+        let mut engine = backend
+            .transient_cpu
+            .as_ref()
+            .unwrap()
+            .engine
+            .lock()
+            .unwrap();
+        tenferro_cpu::with_cpu_engine(&mut **engine, |cpu| cpu.num_threads()).unwrap()
+    }
+
+    #[test]
+    fn transient_stage_releases_and_reacquires_team() {
+        if std::env::var("MVMC_TRANSIENT_TEST_CHILD").as_deref() != Ok("1") {
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "stage_backend::transient_probe_tests::transient_stage_releases_and_reacquires_team",
+                ])
+                .env("MVMC_TRANSIENT_TEST_CHILD", "1")
+                .env("MVMC_RS_TENFERRO_TEAM_LIFETIME", "stage")
+                .env("MVMC_RS_TENFERRO_THREADS", "2")
+                .spawn()
+                .unwrap();
+            let start = std::time::Instant::now();
+            loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    assert!(status.success());
+                    break;
+                }
+                if start.elapsed() >= std::time::Duration::from_secs(30) {
+                    child.kill().unwrap();
+                    child.wait().unwrap();
+                    panic!("concurrent team leases did not complete");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            return;
+        }
+        assert_eq!(
+            std::env::var("MVMC_RS_TENFERRO_TEAM_LIFETIME").as_deref(),
+            Ok("stage")
+        );
+        assert_eq!(
+            std::env::var("MVMC_RS_TENFERRO_THREADS").as_deref(),
+            Ok("2")
+        );
+        assert!(StageBackend::tenferro_cpu()
+            .unwrap()
+            .transient_cpu
+            .is_none());
+        let registered = shared(StageBackendKind::TenferroCpu).unwrap();
+        assert_eq!(threads(&mut registered.lock().unwrap()), 1);
+        // Reacquisition uses the validated startup settings, not later environment changes.
+        std::env::set_var("MVMC_RS_TENFERRO_THREADS", "1");
+        let lease = retain_cpu_team(StageBackendKind::TenferroCpu)
+            .unwrap()
+            .unwrap();
+        let second_lease = retain_cpu_team(StageBackendKind::TenferroCpu)
+            .unwrap()
+            .unwrap();
+        assert_eq!(threads(&mut registered.lock().unwrap()), 2);
+        {
+            let mut handle = acquire_kind(StageBackendKind::TenferroCpu);
+            assert_eq!(threads(handle.backend()), 2);
+        }
+        assert_eq!(threads(&mut registered.lock().unwrap()), 2);
+        drop(lease);
+        assert_eq!(threads(&mut registered.lock().unwrap()), 2);
+        drop(second_lease);
+        assert_eq!(threads(&mut registered.lock().unwrap()), 1);
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    for _ in 0..8 {
+                        let lease = retain_cpu_team(StageBackendKind::TenferroCpu)
+                            .unwrap()
+                            .unwrap();
+                        barrier.wait();
+                        let mut handle = acquire_kind(StageBackendKind::TenferroCpu);
+                        assert_eq!(threads(handle.backend()), 2);
+                        drop(handle);
+                        barrier.wait();
+                        drop(lease);
+                    }
+                });
+            }
+        });
+        assert_eq!(threads(&mut registered.lock().unwrap()), 1);
+        for _ in 0..2 {
+            let mut handle = acquire_kind(StageBackendKind::TenferroCpu);
+            assert_eq!(threads(handle.backend()), 2);
+            drop(handle);
+            assert_eq!(threads(&mut registered.lock().unwrap()), 1);
+        }
+        let samples = crate::sr_backend::CgSamples {
+            real: &[1.0, 2.0, 3.0, 4.0],
+            imag: &[],
+            components: 2,
+            samples: 2,
+            version: 42,
+        };
+        for _ in 0..3 {
+            let mut handle = acquire_kind(StageBackendKind::TenferroCpu);
+            let mut z = [0.0; 2];
+            handle
+                .sr()
+                .cg_local_product(&samples, &[5.0, 6.0], &mut z)
+                .unwrap();
+            assert!((z[0] - 134.0).abs() < 1e-12);
+            assert!((z[1] - 190.0).abs() < 1e-12);
+        }
+        let stats = tenferro_stats().unwrap();
+        assert_eq!(stats.cg_products, 3);
+        assert_eq!(stats.cg_uploads, 1);
+        let panic = std::panic::catch_unwind(|| {
+            let _handle = acquire_kind(StageBackendKind::TenferroCpu);
+            panic!("exercise cleanup");
+        });
+        assert!(panic.is_err());
+        assert_eq!(
+            threads(&mut registered.lock().unwrap_or_else(|e| e.into_inner())),
+            1
+        );
+        let mut handle = acquire_kind(StageBackendKind::TenferroCpu);
+        assert_eq!(threads(handle.backend()), 2);
+        let mut original = std::mem::replace(handle.backend(), StageBackend::c_order());
+        drop(handle);
+        assert_eq!(threads(&mut original), 1);
+    }
 }

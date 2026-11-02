@@ -347,6 +347,7 @@ impl SampledSrOperator {
         // matrices. Shared backends are acquired for each product so collective waits
         // cannot block other walkers from accessing the same stage.
         let kind = crate::stage_backend::selected_stage_backend();
+        let _team = crate::stage_backend::retain_cpu_team(kind).map_err(|e| e.to_string())?;
         let mut backend = crate::stage_backend::acquire_kind(kind);
         // Issue #452: a resident backend runs the whole loop on the device, with the sample
         // matrices uploaded once. The host loop below stays the path for every other backend,
@@ -379,7 +380,7 @@ impl SampledSrOperator {
                 direction: Vec::new(),
             });
         }
-        if matches!(backend, crate::stage_backend::StageHandle::Owned(_)) {
+        if backend.is_owned() {
             return self.solve_with_stages(
                 backend.sr(),
                 gradient,
@@ -575,7 +576,7 @@ impl SampledSrOperator {
         let kind = crate::stage_backend::selected_stage_backend();
         let mut backend = crate::stage_backend::acquire_kind(kind);
         let version = crate::stage_backend::next_operand_version();
-        if matches!(backend, crate::stage_backend::StageHandle::Owned(_)) {
+        if backend.is_owned() {
             return self.apply_with_product(
                 &mut |samples, x, z| backend.sr().cg_local_product(samples, x, z),
                 version,
