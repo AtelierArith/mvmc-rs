@@ -46,3 +46,27 @@ uv run --no-project python benchmark/tenferro_wait_policy/idle-probe.py \
 ```
 
 The input-creation script also executes a warmup and three non-alternating measurements for each condition; those preliminary values are not used in the table. The `/proc` probe requires Linux and `taskset`; adjust its CPU set as needed.
+
+## Four ranks on four CPUs
+
+The same binary, inputs, warmups and alternating conditions were repeated on CPUs 0–3 with four ranks and `MVMC_RS_INNER_THREADS=1` per rank. Each rank still requests 1 or 4 tenferro threads, so the 4-thread cases can oversubscribe the allocation. Scope, BLAS/Rayon settings and three-repetition limitations are unchanged.
+
+| Workload | tenferro threads/rank | Policy | Wall samples (s) | Median (s) |
+|---|---:|---|---|---:|
+| Opt | 1 | default | 2.821, 2.768, 2.770 | 2.770 |
+| Opt | 1 | 0 polls | 3.386, 2.763, 2.762 | 2.763 |
+| Opt | 4 | default | 3.518, 3.614, 3.339 | 3.518 |
+| Opt | 4 | 0 polls | 2.856, 2.790, 2.784 | 2.790 |
+| PhysCal | 1 | default | 2.579, 2.731, 2.574 | 2.579 |
+| PhysCal | 1 | 0 polls | 2.688, 2.636, 2.584 | 2.636 |
+| PhysCal | 4 | default | 2.604, 2.633, 2.636 | 2.633 |
+| PhysCal | 4 | 0 polls | 2.603, 2.759, 2.574 | 2.603 |
+
+Spin 0 reduced Opt wall time in this particular oversubscribed case; PhysCal was similar. With only three repetitions and a short negative-control outlier, these results do not establish a universal policy or explain the first-order cause. Four Opt and 80 PhysCal files' finite formatted numeric values had maximum absolute difference 0 across all measured conditions, excluding time files. [Raw timings, input hashes and output summary](results/4cpu/).
+
+```sh
+MVMC_BENCH_CPUSET=0-3 MVMC_BENCH_INNER_THREADS=1 \
+  benchmark/tenferro_wait_policy/mpi-l32-alternating.sh \
+  DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/wait-input/inputs /tmp/wait-4cpu
+uv run --no-project python benchmark/tenferro_wait_policy/analyze-alternating.py /tmp/wait-4cpu > /tmp/wait-4cpu-summary.json
+```

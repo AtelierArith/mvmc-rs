@@ -9,6 +9,8 @@ image=$1
 volume=$2
 inputs=$(cd "$3" && pwd)
 out=$4
+cpu_set=${MVMC_BENCH_CPUSET:-0-15}
+inner_threads=${MVMC_BENCH_INNER_THREADS:-4}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 if [[ -e "$out/results" ]]; then
@@ -16,6 +18,7 @@ if [[ -e "$out/results" ]]; then
     exit 2
 fi
 mkdir "$out/results"
+printf 'cpuset=%s\ninner_threads=%s\n' "$cpu_set" "$inner_threads" > "$out/config.env"
 sha256sum "$inputs"/{opt,phys}/* > "$out/input-sha256.txt"
 for mode in opt phys; do
     for repetition in 0 1 2 3; do
@@ -25,10 +28,10 @@ for mode in opt phys; do
             threads=${config#*:}
             wait_env=()
             if [[ $policy == zero ]]; then wait_env=(-e MVMC_RS_TENFERRO_SPIN_POLLS=0); fi
-            docker run --rm --platform=linux/amd64 --cpuset-cpus=0-15 --shm-size=1g \
+            docker run --rm --platform=linux/amd64 --cpuset-cpus="$cpu_set" --shm-size=1g \
                 -v "$inputs:/input:ro" -v "$out/results:/results" -v "$volume:/target" \
                 -w "/input/$mode" \
-                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MVMC_RS_INNER_THREADS=4 \
+                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MVMC_RS_INNER_THREADS="$inner_threads" \
                 -e RAYON_NUM_THREADS=4 -e MVMC_RS_TENFERRO_THREADS="$threads" \
                 "${wait_env[@]}" \
                 -e MVMC_RS_SR_BACKEND=tenferro -e "BENCH_MODE=$mode" \
