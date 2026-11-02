@@ -759,6 +759,16 @@ fn cpu_thread_count(
     }
 }
 
+fn cpu_spin_polls(value: Option<&str>) -> Result<Option<u32>, StageError> {
+    value
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|_| err("MVMC_RS_TENFERRO_SPIN_POLLS must be a nonnegative integer"))
+        })
+        .transpose()
+}
+
 #[cfg(test)]
 mod cpu_thread_count_tests {
     use super::cpu_thread_count;
@@ -776,6 +786,18 @@ mod cpu_thread_count_tests {
         for value in ["0", "", "-1", "invalid"] {
             assert!(cpu_thread_count(Some(value), Some("4"), 8).is_err());
             assert!(cpu_thread_count(None, Some(value), 8).is_err());
+        }
+    }
+
+    #[test]
+    fn spin_budget_accepts_zero_and_rejects_invalid_values() {
+        use super::cpu_spin_polls;
+
+        assert_eq!(cpu_spin_polls(None).unwrap(), None);
+        assert_eq!(cpu_spin_polls(Some("0")).unwrap(), Some(0));
+        assert_eq!(cpu_spin_polls(Some("4096")).unwrap(), Some(4096));
+        for value in ["", "-1", "invalid", "4294967296"] {
+            assert!(cpu_spin_polls(Some(value)).is_err());
         }
     }
 }
@@ -801,15 +823,16 @@ pub(crate) fn cpu_engine(
         1
     };
     let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available)?;
+    let spin = read("MVMC_RS_TENFERRO_SPIN_POLLS")?;
+    let spin = cpu_spin_polls(spin.as_deref())?;
     let engine = if threads == 1 {
         CpuEngine::serial()
     } else {
-        CpuEngine::new(
-            tenferro_cpu::Pool::builder()
-                .threads(threads)
-                .build()
-                .map_err(err)?,
-        )
+        let mut builder = tenferro_cpu::Pool::builder().threads(threads);
+        if let Some(polls) = spin {
+            builder = builder.spin_polls(polls);
+        }
+        CpuEngine::new(builder.build().map_err(err)?)
     };
     Ok(Arc::new(std::sync::Mutex::new(Box::new(engine))))
 }
