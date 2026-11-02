@@ -53,6 +53,10 @@ required-features = ["mpi"]
 name = "mpi_physcal_benchmark"
 required-features = ["mpi"]
 
+[[example]]
+name = "mpi_affinity_audit"
+required-features = ["mpi"]
+
 # Production Pfaffian/inverse and SR kernels use the BLAS/LAPACK backend,
 # matching the pure Julia implementation's LinearAlgebra calls. Scalar
 # Pfaffian references remain available in the standalone pfapack crate.
