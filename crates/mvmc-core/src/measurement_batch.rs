@@ -181,6 +181,12 @@ pub fn selected_measurement_pfaffian() -> MeasurementPfaffian {
 pub fn validate_measurement_pfaffian() -> Result<MeasurementPfaffian, String> {
     let source = try_selected_measurement_pfaffian()?;
     if let MeasurementPfaffian::Stage(kind) = source {
+        if kind == StageBackendKind::TenferroCpu {
+            return Err(format!(
+                "{MEASURE_PF_VARIABLE}: unsupported: {}",
+                crate::stage_backend::TENFERRO_PFAFFIAN_UNAVAILABLE
+            ));
+        }
         crate::stage_backend::preflight_stage_backend(kind, MEASURE_PF_VARIABLE)?;
     }
     Ok(source)

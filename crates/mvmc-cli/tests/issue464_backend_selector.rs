@@ -149,3 +149,52 @@ fn invalid_measurement_pfaffian_selector_is_a_usage_error_before_io() {
     assert!(!out.exists());
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn unsupported_tenferro_pfaffian_is_rejected_before_opt_or_physcal_io() {
+    let (root, inputs) = setup("measure-tenferro-unavailable");
+    for (mode, alias) in [("opt", "tenferro"), ("phys", "tenferro-cpu")] {
+        let out = root.join(format!("out-{mode}"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+        command
+            .arg(inputs.join("namelist.def"))
+            .arg("--out-dir")
+            .arg(&out)
+            .env("MVMC_RS_MEASURE_PF_BACKEND", alias)
+            .env("MVMC_RS_SR_BACKEND", "tenferro")
+            .env("MVMC_RS_TENFERRO_THREADS", "1")
+            .env_remove("MVMC_RS_MEASURE_BACKEND")
+            .env("OPENBLAS_NUM_THREADS", "1");
+        if mode == "phys" {
+            // The nonexistent parameter file proves the selector is checked before input I/O.
+            command
+                .arg("--physcal")
+                .arg(root.join("missing-parameters.dat"));
+        } else {
+            command.args(["--nsteps", "1", "--nsmp", "1"]);
+        }
+        let output = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{mode}: {stderr}");
+        assert!(stderr.starts_with("error: "), "{mode}: {stderr}");
+        assert!(
+            stderr.contains("MVMC_RS_MEASURE_PF_BACKEND"),
+            "{mode}: {stderr}"
+        );
+        assert!(
+            stderr.contains("no skew-symmetric factorization or Pfaffian"),
+            "{mode}: {stderr}"
+        );
+        assert!(!stderr.contains("panicked"), "{mode}: {stderr}");
+        assert!(!out.exists(), "{mode}: output created before preflight");
+    }
+    let supported_out = root.join("out-supported");
+    let supported = run_env(&inputs, &supported_out, None, Some("c-order"));
+    assert!(
+        supported.status.success(),
+        "C-order measurement remains available: {}",
+        String::from_utf8_lossy(&supported.stderr)
+    );
+    assert!(supported_out.join("zqp_opt.dat").exists());
+    let _ = fs::remove_dir_all(root);
+}

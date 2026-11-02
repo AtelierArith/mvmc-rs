@@ -478,7 +478,7 @@ pub fn run_cli() {
     // in the agreement, so all ranks stop together.
     {
         #[cfg(feature = "mpi")]
-        if let Some(context) = mpi_world.as_ref() {
+        let control_error = mpi_world.as_ref().and_then(|context| {
             let backend = std::env::var(mvmc_core::stage_backend::SR_BACKEND_VARIABLE).ok();
             let measure = std::env::var(mvmc_core::measurement_batch::MEASURE_PF_VARIABLE).ok();
             let consumer =
@@ -487,10 +487,15 @@ pub fn run_cli() {
             let value = format!(
                 "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?};sampler={sampler:?}"
             );
-            agree_controls(&value, context).unwrap_or_else(|error| {
-                eprintln!("error: {error}");
-                process::exit(1);
-            });
+            agree_controls(&value, context).err()
+        });
+        #[cfg(feature = "mpi")]
+        if let Some(error) = control_error {
+            eprintln!("error: {error}");
+            // All ranks have agreed to fail. Finalize MPI before process::exit, which otherwise
+            // skips destructors and can make the launcher report a false success.
+            drop(mpi_world);
+            process::exit(1);
         }
         let checked = mvmc_core::stage_backend::validate_selected_stage_backend()
             .and_then(|_| mvmc_core::measurement_batch::validate_measurement_pfaffian())
@@ -504,6 +509,9 @@ pub fn run_cli() {
         };
         if let Err(message) = checked {
             eprintln!("error: {message}");
+            // `checked` was collectively agreed, so all ranks can finalize before exiting.
+            #[cfg(feature = "mpi")]
+            drop(mpi_world);
             process::exit(2);
         }
     }
