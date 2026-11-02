@@ -253,41 +253,53 @@ impl PfaffianStages for COrderPfaffian {
                 n * n * planes
             )));
         }
-        let mut pf = Vec::with_capacity(planes);
-        let mut inv = Vec::with_capacity(x.len());
-        let mut outcome = Vec::with_capacity(planes);
-        for plane in x.chunks(n * n.max(1)).take(planes) {
-            let mut a = plane.to_vec();
-            let mut pivots = vec![PivotIndex1Based(0); n];
-            let result = {
-                let mut view = SqMat::new(&mut a, n);
-                dsktf2(&mut view, &mut pivots).map(|_| utu2pfa_real(&view, &pivots))
-            };
-            match result {
-                Err(info) => {
-                    pf.push(0.0);
-                    inv.extend(std::iter::repeat_n(0.0, n * n));
-                    outcome.push(PlaneOutcome::ZeroPivot { row: info });
-                }
-                Ok(value) => {
-                    let mut vt = vec![0.0; n.saturating_sub(1)];
-                    let mut work = vec![0.0; n * n];
-                    {
-                        let mut view = SqMat::new(&mut a, n);
-                        let mut m_work = SqMat::new(&mut work, n);
-                        utu2inv_real(&mut view, &pivots, &mut vt, &mut m_work);
+        let plane_len = n * n.max(1);
+        assert_ne!(plane_len, 0, "chunk size must be non-zero");
+        // Each plane has its own factorization, inverse and status. Keep the
+        // scalar PfaPack sequence, but distribute independent planes across the
+        // same bounded inner pool used by calc_m_all (#586). The disjoint output
+        // windows retain input order, including failed/non-finite planes.
+        let mut inv = x.to_vec();
+        let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
+        crate::threading::for_each_chunk_pair_mut(
+            &mut inv,
+            plane_len,
+            &mut results,
+            1,
+            crate::pfaffian::pfaffian_qp_cost_ns(n),
+            |_, a, result_slot| {
+                let mut pivots = vec![PivotIndex1Based(0); n];
+                let result = {
+                    let mut view = SqMat::new(&mut *a, n);
+                    dsktf2(&mut view, &mut pivots).map(|_| utu2pfa_real(&view, &pivots))
+                };
+                match result {
+                    Err(info) => {
+                        a.fill(0.0);
+                        result_slot[0] = (0.0, PlaneOutcome::ZeroPivot { row: info });
                     }
-                    // `a` now holds X^-1 (X * invM = I) for the matrix as given
-                    pf.push(value);
-                    inv.extend_from_slice(&a);
-                    outcome.push(if value.is_finite() {
-                        PlaneOutcome::Ok
-                    } else {
-                        PlaneOutcome::NonFinite
-                    });
+                    Ok(value) => {
+                        let mut vt = vec![0.0; n.saturating_sub(1)];
+                        let mut work = vec![0.0; n * n];
+                        {
+                            let mut view = SqMat::new(&mut *a, n);
+                            let mut m_work = SqMat::new(&mut work, n);
+                            utu2inv_real(&mut view, &pivots, &mut vt, &mut m_work);
+                        }
+                        // `a` now holds X^-1 (X * invM = I) for the matrix as given
+                        result_slot[0] = (
+                            value,
+                            if value.is_finite() {
+                                PlaneOutcome::Ok
+                            } else {
+                                PlaneOutcome::NonFinite
+                            },
+                        );
+                    }
                 }
-            }
-        }
+            },
+        );
+        let (pf, outcome) = results.into_iter().unzip();
         Ok(PfInvBatch { pf, inv, outcome })
     }
 }
