@@ -1,0 +1,34 @@
+diff --git a/crates/mvmc-core/src/stage_backend.rs b/crates/mvmc-core/src/stage_backend.rs
+index 25f1dae3..97ddaab1 100644
+--- a/crates/mvmc-core/src/stage_backend.rs
++++ b/crates/mvmc-core/src/stage_backend.rs
+@@ -1294,0 +1295,13 @@ mod transient_probe_tests {
++        let before_bounded = PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed);
++        crate::threading::install(|| {
++            crate::threading::with_qp_region_team(2, usize::MAX, || {
++                assert_eq!(spindle::max_num_threads(), 2);
++                crate::threading::for_each_mut(&mut values, 1, |i, value| *value = i + 3);
++            });
++        });
++        assert_eq!(
++            PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed),
++            before_bounded,
++            "a bounded saved-sample team must not enter the separate CPU Engine team"
++        );
++        assert!(values.iter().enumerate().all(|(i, value)| *value == i + 3));
+diff --git a/crates/mvmc-core/src/threading.rs b/crates/mvmc-core/src/threading.rs
+index 3edc92bf..f334c4d6 100644
+--- a/crates/mvmc-core/src/threading.rs
++++ b/crates/mvmc-core/src/threading.rs
+@@ -614,0 +615,6 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
++    // A bounded saved-sample team already owns this region. Do not enter a
++    // second pool while that team is active, even for the experimental path.
++    if REGION_TEAM.with(std::cell::Cell::get) {
++        spindle::for_each_raw(blocks, run);
++        return;
++    }
+@@ -622,4 +627,0 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
+-    if REGION_TEAM.with(std::cell::Cell::get) {
+-        spindle::for_each_raw(blocks, run);
+-        return;
+-    }

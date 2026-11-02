@@ -1,0 +1,104 @@
+diff --git a/crates/mvmc-core/src/stage_backend.rs b/crates/mvmc-core/src/stage_backend.rs
+index 97ddaab1..4aa56f17 100644
+--- a/crates/mvmc-core/src/stage_backend.rs
++++ b/crates/mvmc-core/src/stage_backend.rs
+@@ -1028 +1028,7 @@ pub fn probe_cpu_snapshot() -> (usize, usize, usize) {
+-pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -> bool {
++pub(crate) enum ProbeCpuDispatch {
++    Complete,
++    Unavailable,
++    Busy,
++}
++
++pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -> ProbeCpuDispatch {
+@@ -1034 +1040 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-        return false;
++        return ProbeCpuDispatch::Unavailable;
+@@ -1036,2 +1042,5 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-    let Ok(mut engine) = engine.try_lock() else {
+-        return false;
++    let mut engine = match engine.try_lock() {
++        Ok(engine) => engine,
++        Err(std::sync::TryLockError::WouldBlock | std::sync::TryLockError::Poisoned(_)) => {
++            return ProbeCpuDispatch::Busy;
++        }
+@@ -1041 +1050 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-            return false;
++            return ProbeCpuDispatch::Unavailable;
+@@ -1044 +1053 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-            return false;
++            return ProbeCpuDispatch::Busy;
+@@ -1064 +1073 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-        true
++        ProbeCpuDispatch::Complete
+@@ -1066 +1075 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
+-    .unwrap_or(false)
++    .unwrap_or(ProbeCpuDispatch::Unavailable)
+@@ -1265,0 +1275,14 @@ mod transient_probe_tests {
++        assert!(matches!(
++            try_probe_cpu_blocks(4, |_| panic!("unavailable team cannot execute")),
++            ProbeCpuDispatch::Unavailable
++        ));
++        let mut initial = [0usize; 32];
++        let rayon_entries = std::sync::atomic::AtomicUsize::new(0);
++        crate::threading::for_each_mut(&mut initial, 1, |i, value| {
++            if rayon::current_thread_index().is_some() {
++                rayon_entries.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++            }
++            *value = i + 1;
++        });
++        assert!(rayon_entries.load(std::sync::atomic::Ordering::Relaxed) > 0);
++        assert!(initial.iter().enumerate().all(|(i, value)| *value == i + 1));
+@@ -1276,7 +1299,10 @@ mod transient_probe_tests {
+-        assert!(try_probe_cpu_blocks(4, |_| {
+-            participants
+-                .lock()
+-                .unwrap()
+-                .insert(std::thread::current().id());
+-            std::thread::sleep(std::time::Duration::from_millis(2));
+-        }));
++        assert!(matches!(
++            try_probe_cpu_blocks(4, |_| {
++                participants
++                    .lock()
++                    .unwrap()
++                    .insert(std::thread::current().id());
++                std::thread::sleep(std::time::Duration::from_millis(2));
++            }),
++            ProbeCpuDispatch::Complete
++        ));
+@@ -1310,3 +1336,4 @@ mod transient_probe_tests {
+-        assert!(!try_probe_cpu_blocks(4, |_| panic!(
+-            "busy engine must fall back"
+-        )));
++        assert!(matches!(
++            try_probe_cpu_blocks(4, |_| panic!("busy engine must fall back")),
++            ProbeCpuDispatch::Busy
++        ));
+@@ -1314 +1341,5 @@ mod transient_probe_tests {
+-        crate::threading::for_each_mut(&mut values, 1, |i, value| *value = i * 2);
++        let caller = std::thread::current().id();
++        crate::threading::for_each_mut(&mut values, 1, |i, value| {
++            assert_eq!(std::thread::current().id(), caller);
++            *value = i * 2;
++        });
+diff --git a/crates/mvmc-core/src/threading.rs b/crates/mvmc-core/src/threading.rs
+index f334c4d6..3ef99fc7 100644
+--- a/crates/mvmc-core/src/threading.rs
++++ b/crates/mvmc-core/src/threading.rs
+@@ -624 +623,0 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
+-        && crate::stage_backend::try_probe_cpu_blocks(blocks, run)
+@@ -626 +625,12 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
+-        return;
++        match crate::stage_backend::try_probe_cpu_blocks(blocks, run) {
++            crate::stage_backend::ProbeCpuDispatch::Complete => return,
++            crate::stage_backend::ProbeCpuDispatch::Busy => {
++                // Do not start a competing pool while the held Engine is in
++                // use. Fixed blocks still run exactly once on this caller.
++                for block in 0..blocks {
++                    run(block);
++                }
++                return;
++            }
++            crate::stage_backend::ProbeCpuDispatch::Unavailable => {}
++        }

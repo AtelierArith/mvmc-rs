@@ -681,9 +681,28 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
         let _block = BlockScope(IN_BLOCK.with(|flag| flag.replace(true)));
         body(block);
     };
+    // A bounded saved-sample team already owns this region. Do not enter a
+    // second pool while that team is active, even for the experimental path.
     if REGION_TEAM.with(std::cell::Cell::get) {
         spindle::for_each_raw(blocks, run);
         return;
+    }
+    static PROBE_SHARED_TEAM: OnceLock<bool> = OnceLock::new();
+    if *PROBE_SHARED_TEAM
+        .get_or_init(|| std::env::var("MVMC_EXPERIMENT_SHARED_CPU_TEAM").as_deref() == Ok("1"))
+    {
+        match crate::stage_backend::try_probe_cpu_blocks(blocks, run) {
+            crate::stage_backend::ProbeCpuDispatch::Complete => return,
+            crate::stage_backend::ProbeCpuDispatch::Busy => {
+                // Do not start a competing pool while the held Engine is in
+                // use. Fixed blocks still run exactly once on this caller.
+                for block in 0..blocks {
+                    run(block);
+                }
+                return;
+            }
+            crate::stage_backend::ProbeCpuDispatch::Unavailable => {}
+        }
     }
     if pool.current_thread_index().is_some() {
         // Hoisted driver: the caller is itself a pool worker and takes part as a block.

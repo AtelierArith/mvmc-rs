@@ -1,0 +1,181 @@
+diff --git a/crates/mvmc-cli/src/main.rs b/crates/mvmc-cli/src/main.rs
+index e1ad2572..cdccff4f 100644
+--- a/crates/mvmc-cli/src/main.rs
++++ b/crates/mvmc-cli/src/main.rs
+@@ -20,0 +21,4 @@ fn main() {
++    if std::env::var("MVMC_EXPERIMENT_SHARED_CPU_TEAM_PROFILE").as_deref() == Ok("1") {
++        let (attempts, successes, participants) = mvmc_core::stage_backend::probe_cpu_snapshot();
++        eprintln!("shared-team-probe: attempts={attempts} successes={successes} participants={participants}");
++    }
+diff --git a/crates/mvmc-core/src/stage_backend.rs b/crates/mvmc-core/src/stage_backend.rs
+index 59eb11fc..25f1dae3 100644
+--- a/crates/mvmc-core/src/stage_backend.rs
++++ b/crates/mvmc-core/src/stage_backend.rs
+@@ -735,0 +736 @@ pub struct StageBackend<'a> {
++    probe_cpu: Option<CpuEngineHandle>,
+@@ -751,0 +753 @@ impl<'a> StageBackend<'a> {
++            probe_cpu: None,
+@@ -797,0 +800,3 @@ impl<'a> StageBackend<'a> {
++        if !transient {
++            backend.probe_cpu = Some(engine.clone());
++        }
+@@ -993,0 +999,69 @@ static SHARED: Mutex<Vec<(StageBackendKind, Shared)>> = Mutex::new(Vec::new());
++static PROBE_CPU_ENGINE: std::sync::OnceLock<CpuEngineHandle> = std::sync::OnceLock::new();
++#[cfg(test)]
++static PROBE_CPU_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
++static PROBE_ATTEMPTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
++static PROBE_SUCCESSES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
++static PROBE_PARTICIPANTS: std::sync::OnceLock<
++    Mutex<std::collections::HashSet<std::thread::ThreadId>>,
++> = std::sync::OnceLock::new();
++
++fn probe_profile() -> bool {
++    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++    *ENABLED.get_or_init(|| {
++        std::env::var("MVMC_EXPERIMENT_SHARED_CPU_TEAM_PROFILE").as_deref() == Ok("1")
++    })
++}
++
++#[doc(hidden)]
++pub fn probe_cpu_snapshot() -> (usize, usize, usize) {
++    use std::sync::atomic::Ordering;
++    let participants = PROBE_PARTICIPANTS
++        .get()
++        .map_or(0, |ids| ids.lock().unwrap().len());
++    (
++        PROBE_ATTEMPTS.load(Ordering::Relaxed),
++        PROBE_SUCCESSES.load(Ordering::Relaxed),
++        participants,
++    )
++}
++
++pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -> bool {
++    let profile = probe_profile();
++    if profile {
++        PROBE_ATTEMPTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++    }
++    let Some(engine) = PROBE_CPU_ENGINE.get() else {
++        return false;
++    };
++    let Ok(mut engine) = engine.try_lock() else {
++        return false;
++    };
++    tenferro_cpu::with_cpu_engine(&mut **engine, |cpu| {
++        if !cpu.has_team() {
++            return false;
++        }
++        let Ok(mut exec) = cpu.exec() else {
++            return false;
++        };
++        exec.token()
++            .for_ranges(blocks, std::num::NonZeroUsize::MIN, |range| {
++                if profile {
++                    PROBE_PARTICIPANTS
++                        .get_or_init(|| Mutex::new(std::collections::HashSet::new()))
++                        .lock()
++                        .unwrap()
++                        .insert(std::thread::current().id());
++                }
++                for block in range {
++                    body(block);
++                }
++            });
++        #[cfg(test)]
++        PROBE_CPU_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        if profile {
++            PROBE_SUCCESSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        }
++        true
++    })
++    .unwrap_or(false)
++}
+@@ -1018,0 +1093,3 @@ fn shared(kind: StageBackendKind) -> Result<Shared, StageError> {
++    if let Some(engine) = &instance.probe_cpu {
++        let _ = PROBE_CPU_ENGINE.set(engine.clone());
++    }
+@@ -1159,0 +1237,73 @@ mod transient_probe_tests {
++    fn shared_cpu_team_probe_dispatches_fixed_blocks_and_falls_back_when_busy() {
++        if std::env::var("MVMC_SHARED_TEAM_TEST_CHILD").as_deref() != Ok("1") {
++            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
++                .args([
++                    "--exact",
++                    "stage_backend::transient_probe_tests::shared_cpu_team_probe_dispatches_fixed_blocks_and_falls_back_when_busy",
++                ])
++                .env("MVMC_SHARED_TEAM_TEST_CHILD", "1")
++                .env("MVMC_EXPERIMENT_SHARED_CPU_TEAM", "1")
++                .env("MVMC_RS_TENFERRO_TEAM_LIFETIME", "held")
++                .env("MVMC_RS_TENFERRO_THREADS", "4")
++                .env("MVMC_RS_INNER_THREADS", "4")
++                .env("MVMC_RS_INNER_THRESHOLD", "1")
++                .spawn()
++                .unwrap();
++            let start = std::time::Instant::now();
++            loop {
++                if let Some(status) = child.try_wait().unwrap() {
++                    assert!(status.success());
++                    return;
++                }
++                if start.elapsed() >= std::time::Duration::from_secs(30) {
++                    child.kill().unwrap();
++                    child.wait().unwrap();
++                    panic!("shared team probe did not complete");
++                }
++                std::thread::sleep(std::time::Duration::from_millis(10));
++            }
++        }
++        shared(StageBackendKind::TenferroCpu).unwrap();
++        let mut values = [0usize; 64];
++        let before = PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed);
++        crate::threading::for_each_mut(&mut values, 1, |i, value| *value = i + 1);
++        assert_eq!(
++            PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed),
++            before + 1
++        );
++        assert!(values.iter().enumerate().all(|(i, value)| *value == i + 1));
++        let participants = Mutex::new(std::collections::HashSet::new());
++        assert!(try_probe_cpu_blocks(4, |_| {
++            participants
++                .lock()
++                .unwrap()
++                .insert(std::thread::current().id());
++            std::thread::sleep(std::time::Duration::from_millis(2));
++        }));
++        assert!(participants.lock().unwrap().len() >= 2);
++        let before_nested = PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed);
++        crate::threading::for_each_mut(&mut values, 1, |i, value| {
++            let mut nested = [0usize; 4];
++            crate::threading::for_each_mut(&mut nested, 1, |j, entry| *entry = i + j);
++            assert_eq!(nested, [i, i + 1, i + 2, i + 3]);
++            *value = i;
++        });
++        assert_eq!(
++            PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed),
++            before_nested + 1
++        );
++        let engine = PROBE_CPU_ENGINE.get().unwrap();
++        let _busy = engine.lock().unwrap();
++        assert!(!try_probe_cpu_blocks(4, |_| panic!(
++            "busy engine must fall back"
++        )));
++        let before_busy = PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed);
++        crate::threading::for_each_mut(&mut values, 1, |i, value| *value = i * 2);
++        assert_eq!(
++            PROBE_CPU_CALLS.load(std::sync::atomic::Ordering::Relaxed),
++            before_busy
++        );
++        assert!(values.iter().enumerate().all(|(i, value)| *value == i * 2));
++    }
++
++    #[test]
+diff --git a/crates/mvmc-core/src/threading.rs b/crates/mvmc-core/src/threading.rs
+index 55ea59a4..3edc92bf 100644
+--- a/crates/mvmc-core/src/threading.rs
++++ b/crates/mvmc-core/src/threading.rs
+@@ -614,0 +615,7 @@ fn fork(blocks: usize, body: impl Fn(usize) + Sync) {
++    static PROBE_SHARED_TEAM: OnceLock<bool> = OnceLock::new();
++    if *PROBE_SHARED_TEAM
++        .get_or_init(|| std::env::var("MVMC_EXPERIMENT_SHARED_CPU_TEAM").as_deref() == Ok("1"))
++        && crate::stage_backend::try_probe_cpu_blocks(blocks, run)
++    {
++        return;
++    }

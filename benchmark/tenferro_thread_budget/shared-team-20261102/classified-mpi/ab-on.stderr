@@ -1,0 +1,7 @@
+
+thread 'mvmc-inner-0' (101) panicked at crates/mvmc-core/tests/threaded_issue182.rs:609:52:
+issue182 lifecycle probe
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+issue182 owned outputs: /tmp/mvmc-issue182-99-0
+reviewed CG declared parameters=102 mapped parameters=966; independent schemas both checked
+shared team probe attempts=593026, successes=591392, busy=0, unavailable=1634, participants=4

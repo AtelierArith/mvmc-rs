@@ -1,0 +1,190 @@
+{
+  "opt": {
+    "1": {
+      "files_compared": 4,
+      "max_abs_from_first": 0.0,
+      "timings": {
+        "before": {
+          "samples": [
+            {
+              "wall": 2.496,
+              "user": 2.921,
+              "system": 0.083
+            },
+            {
+              "wall": 2.388,
+              "user": 2.825,
+              "system": 0.073
+            },
+            {
+              "wall": 2.469,
+              "user": 2.913,
+              "system": 0.073
+            }
+          ],
+          "wall_median": 2.469
+        },
+        "after": {
+          "samples": [
+            {
+              "wall": 2.428,
+              "user": 2.867,
+              "system": 0.073
+            },
+            {
+              "wall": 2.459,
+              "user": 2.907,
+              "system": 0.071
+            },
+            {
+              "wall": 2.429,
+              "user": 2.87,
+              "system": 0.066
+            }
+          ],
+          "wall_median": 2.429
+        }
+      }
+    },
+    "4": {
+      "files_compared": 4,
+      "max_abs_from_first": 0.0,
+      "timings": {
+        "before": {
+          "samples": [
+            {
+              "wall": 2.12,
+              "user": 4.768,
+              "system": 0.749
+            },
+            {
+              "wall": 2.072,
+              "user": 4.675,
+              "system": 0.637
+            },
+            {
+              "wall": 1.962,
+              "user": 4.391,
+              "system": 0.655
+            }
+          ],
+          "wall_median": 2.072
+        },
+        "after": {
+          "samples": [
+            {
+              "wall": 1.535,
+              "user": 5.814,
+              "system": 0.101
+            },
+            {
+              "wall": 1.551,
+              "user": 5.886,
+              "system": 0.102
+            },
+            {
+              "wall": 1.584,
+              "user": 6.017,
+              "system": 0.085
+            }
+          ],
+          "wall_median": 1.551
+        }
+      }
+    }
+  },
+  "phys": {
+    "1": {
+      "files_compared": 80,
+      "max_abs_from_first": 0.0,
+      "timings": {
+        "before": {
+          "samples": [
+            {
+              "wall": 2.144,
+              "user": 2.125,
+              "system": 0.03
+            },
+            {
+              "wall": 2.133,
+              "user": 2.111,
+              "system": 0.037
+            },
+            {
+              "wall": 2.151,
+              "user": 2.132,
+              "system": 0.029
+            }
+          ],
+          "wall_median": 2.144
+        },
+        "after": {
+          "samples": [
+            {
+              "wall": 2.176,
+              "user": 2.155,
+              "system": 0.034
+            },
+            {
+              "wall": 2.209,
+              "user": 2.192,
+              "system": 0.031
+            },
+            {
+              "wall": 2.138,
+              "user": 2.117,
+              "system": 0.034
+            }
+          ],
+          "wall_median": 2.176
+        }
+      }
+    },
+    "4": {
+      "files_compared": 80,
+      "max_abs_from_first": 0.0,
+      "timings": {
+        "before": {
+          "samples": [
+            {
+              "wall": 2.678,
+              "user": 5.914,
+              "system": 1.272
+            },
+            {
+              "wall": 2.419,
+              "user": 5.588,
+              "system": 1.189
+            },
+            {
+              "wall": 2.679,
+              "user": 5.988,
+              "system": 1.211
+            }
+          ],
+          "wall_median": 2.678
+        },
+        "after": {
+          "samples": [
+            {
+              "wall": 1.541,
+              "user": 5.959,
+              "system": 0.046
+            },
+            {
+              "wall": 1.636,
+              "user": 6.312,
+              "system": 0.053
+            },
+            {
+              "wall": 1.546,
+              "user": 5.974,
+              "system": 0.052
+            }
+          ],
+          "wall_median": 1.546
+        }
+      }
+    }
+  }
+}

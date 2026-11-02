@@ -1,0 +1,4 @@
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 3.36s
+4fc4e90284d80f4b323152d11c7166a06c6d8e94e2291f98a705717703ba9004  /results/off.events
+4fc4e90284d80f4b323152d11c7166a06c6d8e94e2291f98a705717703ba9004  /results/on.events

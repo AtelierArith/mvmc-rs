@@ -255,6 +255,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。プール外から発行される領域ではデフォルトは `120*w/(w-1)`(4 で 160、2 で 240)。プール内のドライバーでは、この変数を設定しない限り `n_size` ゲートはありません |
 | `MVMC_RS_INNER_PROFILE` | `threading::dispatch_profile` | `1` にすると、CLI が実行後に stderr へ内部カーネルの各呼び出し箇所(逐次・プール)の呼び出し数・項目数・時間を出力します |
 | `MVMC_RS_INNER_GAP_PROFILE` | `threading::dispatch_gap_profile` | `1` にすると、同じスレッド上の最上位の非空カーネルスコープ間の経過時間を、次のスコープの hot/cold 別に集計して出力します。入れ子のスコープは除き、呼出し元とワーカーを合算します。計測負荷を含み、ワーカーの待機時間そのものではありません。 |
+| `MVMC_EXPERIMENT_SHARED_CPU_TEAM` | 実験的な CPU スレッド処理 | `1` のとき、利用可能な tenferro CPU Engine の保持チームで固定ブロックを実行します。Engine が使用中なら呼出し元で逐次実行し、チームが利用不能なら Rayon に戻ります。全体のスレッド数を制限する機能ではなく、チーム寿命が `stage` の場合は適用されません。詳細は `benchmark/tenferro_thread_budget/shared-team-20261102/README.md` を参照してください。 |
 | `MVMC_RS_MPI_RANK`, `MVMC_RS_MPI_SIZE`, `OMPI_COMM_WORLD_*`, `PMI_*`, `PMIX_*` | `LaunchContext::from_env` | ランチャーの検出([8.4](#84-mpiとグループ実行)) |
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |
 | `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS(`mvmc-rs` は読み取りません) | BLAS のスレッド設定 |
