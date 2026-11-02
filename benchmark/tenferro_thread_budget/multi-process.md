@@ -123,3 +123,5 @@ MVMC_BENCH_CPUSET=0-15 MVMC_BENCH_INNER_THREADS=4 \
 For a read-only node-local rank-affinity and overlap diagnostic, see [affinity-audit.md](affinity-audit.md). Its masks do not describe CPU quotas or individual worker placement.
 
 A matched comparison of shared and disjoint rank affinity on 16 CPUs is in [mpi-placement.md](mpi-placement.md). It does not establish a general automatic resource policy.
+
+A static per-process cap was evaluated and rejected because of a standalone SR Gram regression; see [local-cap-experiment.md](local-cap-experiment.md).
