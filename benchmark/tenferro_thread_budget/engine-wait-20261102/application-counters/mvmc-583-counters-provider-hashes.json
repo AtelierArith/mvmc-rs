@@ -1,0 +1,10 @@
+{
+  "src/contraction.rs": {
+    "upstream": "d8c772ac7a71b4c21ba177504220eed55ea9a230c8c4108e10a9236281c5898f",
+    "diagnostic": "9a188421e1dace1a46bc7c2f425535352c660b321804f559bc69d33a98f34737"
+  },
+  "src/engine.rs": {
+    "upstream": "858187448ca82bf9d87e81e3ed46dfeb9459e2bfc0af1ac722160129c441e3d2",
+    "diagnostic": "13f6c105c6511b50b100bc3f75a9d2ff63996a4c51f2f7744cf678f31fe82451"
+  }
+}
