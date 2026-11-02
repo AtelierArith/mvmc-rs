@@ -481,6 +481,68 @@ fn walkers_match_native_c_ungrouped_cells_four_ranks() {
     assert!(checked >= 15, "{checked}");
 }
 
+#[test]
+fn tenferro_cg_multiwalker_oracles_complete_without_shared_stage_deadlock() {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    // Exercise the existing complete C-reference and RNG checks in separate
+    // processes so a lock regression has a bounded failure instead of hanging
+    // the entire test suite. These tests include both direct and CG cells.
+    for name in [
+        "walkers_match_native_c_ungrouped_cells_two_ranks",
+        "walkers_match_native_c_ungrouped_cells_four_ranks",
+        "cg_apply_multiwalker_shared_stage_matches_sum",
+    ] {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", name])
+            .env("MVMC_RS_SR_BACKEND", "tenferro")
+            .env("MVMC_RS_TENFERRO_THREADS", "1")
+            .env("RAYON_NUM_THREADS", "4")
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let start = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "{name} failed: {status}");
+                break;
+            }
+            if start.elapsed() >= Duration::from_secs(30) {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("{name} timed out while using the shared tenferro stage");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+#[test]
+fn cg_apply_multiwalker_shared_stage_matches_sum() {
+    for size in [2, 4] {
+        let comm = ThreadComm::new(size);
+        std::thread::scope(|scope| {
+            for rank in 0..size {
+                let reducer = ThreadReducer::new(comm.clone(), rank, 0);
+                scope.spawn(move || {
+                    let mut op = mvmc_core::sr_cg::SampledSrOperator::new(2, 1, false);
+                    op.real_samples.copy_from_slice(&[(rank + 1) as f64, 0.0]);
+                    let mut x = if rank == 0 { [2.0, 3.0] } else { [0.0; 2] };
+                    let mut out = [0.0; 2];
+                    op.apply_with_reducer(&mut out, &mut x, 1.0, 0.0, &reducer)
+                        .unwrap();
+                    let sum_squares: usize = (1..=size).map(|i| i * i).sum();
+                    assert!((out[0] - 2.0 * sum_squares as f64).abs() < 1e-12);
+                    assert_eq!(out[1], 0.0);
+                });
+            }
+        });
+    }
+}
+
 /// Two walkers equal the two groups of the 4-rank, `NSplitSize = 2` C run (chains with seeds 0
 /// and 1; the intra-group split only changes the reduction order).
 #[test]
