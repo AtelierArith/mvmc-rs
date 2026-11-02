@@ -1,0 +1,282 @@
+[
+  {
+    "callers": 1,
+    "gap_us": 0,
+    "spin": "default",
+    "samples": [
+      {
+        "wall": 0.008,
+        "user": 0.016,
+        "sys": 0.004,
+        "lock_ns_per_call": 73.499,
+        "dispatch_ns_per_call": 2997.807
+      },
+      {
+        "wall": 0.007,
+        "user": 0.011,
+        "sys": 0.007,
+        "lock_ns_per_call": 63.435,
+        "dispatch_ns_per_call": 2922.819
+      },
+      {
+        "wall": 0.007,
+        "user": 0.014,
+        "sys": 0.004,
+        "lock_ns_per_call": 110.482,
+        "dispatch_ns_per_call": 3005.953
+      }
+    ],
+    "medians": {
+      "wall": 0.007,
+      "user": 0.014,
+      "sys": 0.004,
+      "lock_ns_per_call": 73.499,
+      "dispatch_ns_per_call": 2997.807
+    }
+  },
+  {
+    "callers": 1,
+    "gap_us": 0,
+    "spin": "0",
+    "samples": [
+      {
+        "wall": 0.008,
+        "user": 0.007,
+        "sys": 0.013,
+        "lock_ns_per_call": 94.379,
+        "dispatch_ns_per_call": 3525.876
+      },
+      {
+        "wall": 0.009,
+        "user": 0.011,
+        "sys": 0.013,
+        "lock_ns_per_call": 91.144,
+        "dispatch_ns_per_call": 4209.942
+      },
+      {
+        "wall": 0.008,
+        "user": 0.01,
+        "sys": 0.011,
+        "lock_ns_per_call": 73.57,
+        "dispatch_ns_per_call": 3664.282
+      }
+    ],
+    "medians": {
+      "wall": 0.008,
+      "user": 0.01,
+      "sys": 0.013,
+      "lock_ns_per_call": 91.144,
+      "dispatch_ns_per_call": 3664.282
+    }
+  },
+  {
+    "callers": 1,
+    "gap_us": 60,
+    "spin": "default",
+    "samples": [
+      {
+        "wall": 0.126,
+        "user": 0.365,
+        "sys": 0.012,
+        "lock_ns_per_call": 43.148,
+        "dispatch_ns_per_call": 3126.153
+      },
+      {
+        "wall": 0.12,
+        "user": 0.353,
+        "sys": 0.006,
+        "lock_ns_per_call": 49.838,
+        "dispatch_ns_per_call": 2940.026
+      },
+      {
+        "wall": 0.121,
+        "user": 0.347,
+        "sys": 0.015,
+        "lock_ns_per_call": 110.701,
+        "dispatch_ns_per_call": 3032.826
+      }
+    ],
+    "medians": {
+      "wall": 0.121,
+      "user": 0.353,
+      "sys": 0.012,
+      "lock_ns_per_call": 49.838,
+      "dispatch_ns_per_call": 3032.826
+    }
+  },
+  {
+    "callers": 1,
+    "gap_us": 60,
+    "spin": "0",
+    "samples": [
+      {
+        "wall": 0.135,
+        "user": 0.053,
+        "sys": 0.058,
+        "lock_ns_per_call": 46.211,
+        "dispatch_ns_per_call": 16571.603
+      },
+      {
+        "wall": 0.138,
+        "user": 0.057,
+        "sys": 0.061,
+        "lock_ns_per_call": 205.306,
+        "dispatch_ns_per_call": 17666.15
+      },
+      {
+        "wall": 0.137,
+        "user": 0.053,
+        "sys": 0.057,
+        "lock_ns_per_call": 55.325,
+        "dispatch_ns_per_call": 17916.57
+      }
+    ],
+    "medians": {
+      "wall": 0.137,
+      "user": 0.053,
+      "sys": 0.058,
+      "lock_ns_per_call": 55.325,
+      "dispatch_ns_per_call": 17666.15
+    }
+  },
+  {
+    "callers": 4,
+    "gap_us": 0,
+    "spin": "default",
+    "samples": [
+      {
+        "wall": 0.017,
+        "user": 0.056,
+        "sys": 0.004,
+        "lock_ns_per_call": 1101.6815,
+        "dispatch_ns_per_call": 3119.2625
+      },
+      {
+        "wall": 0.022,
+        "user": 0.065,
+        "sys": 0.009,
+        "lock_ns_per_call": 6731.1865,
+        "dispatch_ns_per_call": 4185.2735
+      },
+      {
+        "wall": 0.092,
+        "user": 0.258,
+        "sys": 0.004,
+        "lock_ns_per_call": 59901.14575,
+        "dispatch_ns_per_call": 21337.315
+      }
+    ],
+    "medians": {
+      "wall": 0.022,
+      "user": 0.065,
+      "sys": 0.004,
+      "lock_ns_per_call": 6731.1865,
+      "dispatch_ns_per_call": 4185.2735
+    }
+  },
+  {
+    "callers": 4,
+    "gap_us": 0,
+    "spin": "0",
+    "samples": [
+      {
+        "wall": 0.038,
+        "user": 0.055,
+        "sys": 0.073,
+        "lock_ns_per_call": 17920.846,
+        "dispatch_ns_per_call": 6094.9295
+      },
+      {
+        "wall": 0.036,
+        "user": 0.057,
+        "sys": 0.062,
+        "lock_ns_per_call": 15727.89525,
+        "dispatch_ns_per_call": 5906.67975
+      },
+      {
+        "wall": 0.033,
+        "user": 0.052,
+        "sys": 0.053,
+        "lock_ns_per_call": 12222.071,
+        "dispatch_ns_per_call": 5729.13475
+      }
+    ],
+    "medians": {
+      "wall": 0.036,
+      "user": 0.055,
+      "sys": 0.062,
+      "lock_ns_per_call": 15727.89525,
+      "dispatch_ns_per_call": 5906.67975
+    }
+  },
+  {
+    "callers": 4,
+    "gap_us": 60,
+    "spin": "default",
+    "samples": [
+      {
+        "wall": 0.124,
+        "user": 0.384,
+        "sys": 0.006,
+        "lock_ns_per_call": 44.812,
+        "dispatch_ns_per_call": 2966.8405
+      },
+      {
+        "wall": 0.124,
+        "user": 0.372,
+        "sys": 0.018,
+        "lock_ns_per_call": 47.754,
+        "dispatch_ns_per_call": 2977.032
+      },
+      {
+        "wall": 0.123,
+        "user": 0.377,
+        "sys": 0.011,
+        "lock_ns_per_call": 44.8815,
+        "dispatch_ns_per_call": 2856.4785
+      }
+    ],
+    "medians": {
+      "wall": 0.124,
+      "user": 0.377,
+      "sys": 0.011,
+      "lock_ns_per_call": 44.8815,
+      "dispatch_ns_per_call": 2966.8405
+    }
+  },
+  {
+    "callers": 4,
+    "gap_us": 60,
+    "spin": "0",
+    "samples": [
+      {
+        "wall": 0.14,
+        "user": 0.123,
+        "sys": 0.151,
+        "lock_ns_per_call": 14480.36725,
+        "dispatch_ns_per_call": 11728.4805
+      },
+      {
+        "wall": 0.134,
+        "user": 0.093,
+        "sys": 0.124,
+        "lock_ns_per_call": 12313.7845,
+        "dispatch_ns_per_call": 8579.21225
+      },
+      {
+        "wall": 0.134,
+        "user": 0.086,
+        "sys": 0.132,
+        "lock_ns_per_call": 11883.9585,
+        "dispatch_ns_per_call": 8655.82825
+      }
+    ],
+    "medians": {
+      "wall": 0.134,
+      "user": 0.093,
+      "sys": 0.132,
+      "lock_ns_per_call": 12313.7845,
+      "dispatch_ns_per_call": 8655.82825
+    }
+  }
+]
