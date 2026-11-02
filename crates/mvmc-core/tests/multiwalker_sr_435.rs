@@ -483,7 +483,7 @@ fn walkers_match_native_c_ungrouped_cells_four_ranks() {
 
 #[test]
 fn tenferro_cg_multiwalker_oracles_complete_without_shared_stage_deadlock() {
-    use std::process::{Command, Stdio};
+    use std::process::Command;
     use std::time::{Duration, Instant};
 
     // Exercise the existing complete C-reference and RNG checks in separate
@@ -500,8 +500,6 @@ fn tenferro_cg_multiwalker_oracles_complete_without_shared_stage_deadlock() {
             .env("MVMC_RS_TENFERRO_THREADS", "1")
             .env("RAYON_NUM_THREADS", "4")
             .env("OPENBLAS_NUM_THREADS", "1")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
             .spawn()
             .unwrap();
         let start = Instant::now();
