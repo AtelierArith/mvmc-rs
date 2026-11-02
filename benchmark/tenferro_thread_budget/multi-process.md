@@ -119,3 +119,5 @@ MVMC_BENCH_CPUSET=0-15 MVMC_BENCH_INNER_THREADS=4 \
   uv run --no-project python benchmark/tenferro_thread_budget/observe-linux.py \
   DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/mpi-l32-hybrid/inputs /tmp/observe-hybrid-4 4
 ```
+
+For a read-only node-local rank-affinity and overlap diagnostic, see [affinity-audit.md](affinity-audit.md). Its masks do not describe CPU quotas or individual worker placement.
