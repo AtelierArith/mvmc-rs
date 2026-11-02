@@ -249,6 +249,8 @@ Failures are agreed collectively, so a failing rank makes all ranks stop rather 
 
 | Variable | Read by | Effect |
 |----------|---------|--------|
+| `MVMC_RS_CUDA_KERNEL_CACHE` | CUDA kernel setup | PTX cache directory; defaults to `$XDG_CACHE_HOME/mvmc-rs/ptx-v1`, otherwise `$HOME/.cache/mvmc-rs/ptx-v1`. `off` or empty disables it. Exact source, compile options and NVRTC identity must match. Invalid/unavailable entries recompile; numerical state and RNG are never cached. |
+| `MVMC_RS_CUDA_INIT_PROFILE` | same | When set, print context setup and PTX hit/miss/compilation/loading diagnostics on stderr. Keep diagnostic runs separate from speed measurements. |
 | `MVMC_NSTEPS` | CLI, examples | same as `--nsteps` (the flag takes precedence) |
 | `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | any value other than `0` enables the C-compatible section timers; writes `zvo_CalcTimer.dat` ([9.5](09-output-files.md#95-timers)) |
 | `MVMC_TIMER` | same | deprecated alias; if set without `MVMC_C_TIMER` a warning recommends `MVMC_C_TIMER=1` |

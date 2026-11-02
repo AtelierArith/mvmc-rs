@@ -10,6 +10,7 @@ pub mod bench;
 pub mod device_sampler;
 pub mod interval;
 pub mod interval_engine;
+mod kernel_cache;
 pub mod measurement;
 pub mod opt;
 pub mod pfaffian;
@@ -28,7 +29,7 @@ use mvmc_core::backend::{register_cuda_provider, CudaProvider, DeviceReport};
 use tenferro_gpu::cuda::cuda_devices;
 
 /// Version string of the tenferro crates this provider is built against.
-pub const TENFERRO_VERSION: &str = "0.7.1";
+pub const TENFERRO_VERSION: &str = "0.8.0";
 
 struct Provider;
 

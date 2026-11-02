@@ -1,0 +1,23 @@
+{
+  "one": {
+    "values": 256,
+    "max_abs": 1.4921397450962104e-13
+  },
+  "two": {
+    "values": 768,
+    "max_abs": 2.5579538487363607e-13
+  },
+  "energy": {
+    "rust": 102.72950887694306,
+    "julia": 102.72950887694073,
+    "abs_difference": 2.3305801732931286e-12
+  },
+  "initial_divergence": {
+    "SFMT_first_word": 2884474187,
+    "XORWOW_first_word": 3704967289,
+    "cpu_first_site": 75,
+    "julia_first_site": 1,
+    "first_differing_configuration_index": 0,
+    "scope": "before burn-in/proposals; CPU single-chain SFMT vs first Julia GPU XORWOW walker"
+  }
+}

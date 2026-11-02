@@ -242,6 +242,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 
 | 変数 | 読み取る側 | 効果 |
 |----------|---------|--------|
+| `MVMC_RS_CUDA_KERNEL_CACHE` | CUDA カーネルの準備 | PTX の保存先。未設定時は `$XDG_CACHE_HOME/mvmc-rs/ptx-v1`、なければ `$HOME/.cache/mvmc-rs/ptx-v1`。`off` または空文字で無効。ソース・コンパイル条件・NVRTC バージョンを照合し、破損・利用不能なキャッシュは再コンパイルする。計算状態や乱数は保存しない。 |
+| `MVMC_RS_CUDA_INIT_PROFILE` | 同上 | 設定すると stderr にコンテキスト準備時間と、PTX キャッシュの hit/miss・コンパイル／読み込み時間を出力する。診断用実行と性能計測を区別すること。 |
 | `MVMC_NSTEPS` | CLI, examples | `--nsteps` と同じ(フラグが優先されます) |
 | `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | `0` 以外の任意の値で、C 互換のセクションタイマーが有効になります。`zvo_CalcTimer.dat` を書き出します([9.5](09-output-files.md#95-タイマー)) |
 | `MVMC_TIMER` | 同上 | 非推奨のエイリアス。`MVMC_C_TIMER` なしで設定された場合、警告が `MVMC_C_TIMER=1` を推奨します |

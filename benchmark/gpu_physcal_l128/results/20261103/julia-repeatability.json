@@ -1,0 +1,8 @@
+{
+  "runs": 4,
+  "one_terms": 256,
+  "two_terms": 768,
+  "factored_terms": 0,
+  "max_repeat_green_abs_difference": 0,
+  "scope": "Same Julia implementation/seed repeatability; not a comparison of different RNG trajectories."
+}

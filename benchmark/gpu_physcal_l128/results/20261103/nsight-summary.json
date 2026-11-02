@@ -1,0 +1,450 @@
+{
+  "scope": "One instrumented CLI run. Device busy fraction is the union of kernel intervals / first-to-last kernel span; it is not SM occupancy, and includes no other process. API/device times overlap; do not sum them.",
+  "kernel_count": 72110,
+  "matching_driver_launch_count": 72110,
+  "kernel_window_ns": 3239234531,
+  "kernel_busy_union_ns": 1700399619,
+  "kernel_busy_fraction": 0.524938717072475,
+  "kernels": {
+    "k_assemble": {
+      "calls": 117,
+      "device_ns_sum": 6975111,
+      "grid_sizes": [
+        [
+          8,
+          1,
+          1
+        ]
+      ]
+    },
+    "pfinv_f64": {
+      "calls": 137,
+      "device_ns_sum": 601531225,
+      "grid_sizes": [
+        [
+          8,
+          1,
+          1
+        ],
+        [
+          128,
+          1,
+          1
+        ]
+      ]
+    },
+    "k_commit_recompute": {
+      "calls": 117,
+      "device_ns_sum": 15264702,
+      "grid_sizes": [
+        [
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    "k_propose": {
+      "calls": 41088,
+      "device_ns_sum": 273453287,
+      "grid_sizes": [
+        [
+          8,
+          1,
+          1
+        ]
+      ]
+    },
+    "k_accept": {
+      "calls": 14966,
+      "device_ns_sum": 707826626,
+      "grid_sizes": [
+        [
+          8,
+          1,
+          1
+        ]
+      ]
+    },
+    "k_commit_moves": {
+      "calls": 14966,
+      "device_ns_sum": 29323674,
+      "grid_sizes": [
+        [
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    "km_assemble": {
+      "calls": 20,
+      "device_ns_sum": 1684860,
+      "grid_sizes": [
+        [
+          128,
+          1,
+          1
+        ]
+      ]
+    },
+    "km_ratio_terms": {
+      "calls": 551,
+      "device_ns_sum": 33559944,
+      "grid_sizes": [
+        [
+          64,
+          1,
+          1
+        ],
+        [
+          100,
+          1,
+          1
+        ],
+        [
+          104,
+          1,
+          1
+        ],
+        [
+          108,
+          1,
+          1
+        ],
+        [
+          110,
+          1,
+          1
+        ],
+        [
+          112,
+          1,
+          1
+        ],
+        [
+          114,
+          1,
+          1
+        ],
+        [
+          116,
+          1,
+          1
+        ],
+        [
+          118,
+          1,
+          1
+        ],
+        [
+          120,
+          1,
+          1
+        ],
+        [
+          122,
+          1,
+          1
+        ],
+        [
+          124,
+          1,
+          1
+        ],
+        [
+          126,
+          1,
+          1
+        ],
+        [
+          128,
+          1,
+          1
+        ],
+        [
+          130,
+          1,
+          1
+        ],
+        [
+          132,
+          1,
+          1
+        ],
+        [
+          134,
+          1,
+          1
+        ],
+        [
+          136,
+          1,
+          1
+        ],
+        [
+          138,
+          1,
+          1
+        ],
+        [
+          140,
+          1,
+          1
+        ],
+        [
+          142,
+          1,
+          1
+        ],
+        [
+          144,
+          1,
+          1
+        ],
+        [
+          146,
+          1,
+          1
+        ],
+        [
+          148,
+          1,
+          1
+        ],
+        [
+          152,
+          1,
+          1
+        ]
+      ]
+    },
+    "km_green_two": {
+      "calls": 148,
+      "device_ns_sum": 30780190,
+      "grid_sizes": [
+        [
+          24,
+          1,
+          1
+        ],
+        [
+          25,
+          1,
+          1
+        ],
+        [
+          26,
+          1,
+          1
+        ],
+        [
+          27,
+          1,
+          1
+        ],
+        [
+          28,
+          1,
+          1
+        ],
+        [
+          29,
+          1,
+          1
+        ],
+        [
+          30,
+          1,
+          1
+        ],
+        [
+          31,
+          1,
+          1
+        ],
+        [
+          32,
+          1,
+          1
+        ],
+        [
+          33,
+          1,
+          1
+        ],
+        [
+          34,
+          1,
+          1
+        ],
+        [
+          35,
+          1,
+          1
+        ],
+        [
+          36,
+          1,
+          1
+        ],
+        [
+          37,
+          1,
+          1
+        ],
+        [
+          38,
+          1,
+          1
+        ],
+        [
+          39,
+          1,
+          1
+        ],
+        [
+          40,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "api": [
+    {
+      "name": "cuEventSynchronize",
+      "calls": 41205,
+      "host_ns_sum": 1617335649
+    },
+    {
+      "name": "cuLaunchKernel",
+      "calls": 72110,
+      "host_ns_sum": 388485942
+    },
+    {
+      "name": "cuStreamSynchronize",
+      "calls": 721,
+      "host_ns_sum": 351147934
+    },
+    {
+      "name": "cuMemcpyDtoHAsync_v2",
+      "calls": 41944,
+      "host_ns_sum": 183568193
+    },
+    {
+      "name": "cuMemcpyHtoDAsync_v2",
+      "calls": 44295,
+      "host_ns_sum": 182154189
+    },
+    {
+      "name": "cuEventRecord",
+      "calls": 41322,
+      "host_ns_sum": 80324236
+    },
+    {
+      "name": "cuMemAllocAsync",
+      "calls": 87,
+      "host_ns_sum": 8028207
+    },
+    {
+      "name": "cuModuleLoadData",
+      "calls": 2,
+      "host_ns_sum": 2771120
+    },
+    {
+      "name": "cuMemHostAlloc",
+      "calls": 4,
+      "host_ns_sum": 924984
+    },
+    {
+      "name": "cuMemsetD8Async",
+      "calls": 86,
+      "host_ns_sum": 369562
+    },
+    {
+      "name": "cuStreamCreate",
+      "calls": 10,
+      "host_ns_sum": 214397
+    },
+    {
+      "name": "cuStreamWaitEvent",
+      "calls": 117,
+      "host_ns_sum": 170179
+    },
+    {
+      "name": "cuEventQuery",
+      "calls": 117,
+      "host_ns_sum": 131428
+    },
+    {
+      "name": "cuEventCreate",
+      "calls": 147,
+      "host_ns_sum": 60926
+    },
+    {
+      "name": "cuMemFreeAsync",
+      "calls": 48,
+      "host_ns_sum": 58635
+    },
+    {
+      "name": "cuEventDestroy_v2",
+      "calls": 96,
+      "host_ns_sum": 30289
+    },
+    {
+      "name": "cuMemPoolCreate",
+      "calls": 1,
+      "host_ns_sum": 28206
+    },
+    {
+      "name": "cuInit",
+      "calls": 7,
+      "host_ns_sum": 11038
+    },
+    {
+      "name": "cuMemPoolSetAttribute",
+      "calls": 1,
+      "host_ns_sum": 7523
+    },
+    {
+      "name": "cuCtxSetCurrent",
+      "calls": 3,
+      "host_ns_sum": 2276
+    }
+  ],
+  "copies": [
+    {
+      "kind": "CUDA_MEMCPY_KIND_HTOD",
+      "label": "Host-to-Device",
+      "calls": 44295,
+      "bytes": 11614480,
+      "device_ns_sum": 35603142
+    },
+    {
+      "kind": "CUDA_MEMCPY_KIND_DTOH",
+      "label": "Device-to-Host",
+      "calls": 41944,
+      "bytes": 3199160,
+      "device_ns_sum": 36972955
+    }
+  ],
+  "gpu": [
+    {
+      "id": 1,
+      "name": "NVIDIA GeForce RTX 3060",
+      "uuid": "ed896702-ca5c-93f6-2537-06fffdac4a91",
+      "sm_count": 28,
+      "compute_major": 8,
+      "compute_minor": 6
+    },
+    {
+      "id": 0,
+      "name": "NVIDIA GeForce RTX 3060",
+      "uuid": "a78d5217-eba3-72c2-3d5b-8ae496ebbc2e",
+      "sm_count": 28,
+      "compute_major": 8,
+      "compute_minor": 6
+    }
+  ]
+}

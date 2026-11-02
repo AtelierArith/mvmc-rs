@@ -174,6 +174,9 @@ bench_target=mvmc-586-reproduce-target
 bench_c=/tmp/mvmc-586-reproduce-c
 bench_out=/tmp/mvmc-586-reproduce-final
 bash benchmark/cpu_scaling_l128/build-c-reference.sh "$bench_repo" "$bench_image" "$bench_c"
+# A fresh named volume starts owned by root; the development image runs as vscode.
+docker run --rm --user root -v "$bench_target:/target" "$bench_image" \
+  chown vscode:vscode /target
 docker run --rm -v "$bench_repo:/work" -v "$bench_target:/target" \
   -e CARGO_TARGET_DIR=/target -w /work "$bench_image" \
   bash -lc 'cargo build --locked --release -p mvmc-cli && cargo build --locked --release -p mvmc-core --example cpu_scaling_contract_586'
