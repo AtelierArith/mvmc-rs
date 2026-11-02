@@ -1,0 +1,957 @@
+{
+  "ticks_per_second": 100,
+  "results": {
+    "1": {
+      "0": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010151,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010084,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010118,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.01014,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.0101,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050116,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050154,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050149,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.05009,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050136,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100153,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.10014,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100113,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100149,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100149,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500151,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500134,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500166,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500146,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.50014,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000123,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.00014,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000159,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000138,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        }
+      },
+      "1": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010075,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010083,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010073,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010066,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010073,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050139,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050138,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050129,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050138,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050117,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100143,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100116,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100126,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100082,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100138,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500095,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500139,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500125,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500142,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.50012,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000147,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000143,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000122,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000158,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000083,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 2,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        }
+      }
+    },
+    "4": {
+      "0": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010146,
+              "other_ticks": 0,
+              "other_ns": 19776,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010068,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010134,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010133,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010066,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.05013,
+              "other_ticks": 0,
+              "other_ns": 19776,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050136,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050145,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050142,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050143,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100128,
+              "other_ticks": 0,
+              "other_ns": 19776,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100131,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100143,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500135,
+              "other_ticks": 0,
+              "other_ns": 19776,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500109,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500114,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000146,
+              "other_ticks": 0,
+              "other_ns": 19776,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000133,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000109,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000133,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000134,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        }
+      },
+      "1": {
+        "10": {
+          "samples": [
+            {
+              "elapsed_s": 0.010067,
+              "other_ticks": 0,
+              "other_ns": 43086,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010066,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010148,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010124,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.010137,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "50": {
+          "samples": [
+            {
+              "elapsed_s": 0.050136,
+              "other_ticks": 0,
+              "other_ns": 43086,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050108,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050132,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050132,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.050136,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "100": {
+          "samples": [
+            {
+              "elapsed_s": 0.100116,
+              "other_ticks": 0,
+              "other_ns": 43086,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100122,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100098,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100132,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.100138,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "500": {
+          "samples": [
+            {
+              "elapsed_s": 0.500138,
+              "other_ticks": 0,
+              "other_ns": 43086,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500125,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.50014,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500128,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 0.500134,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        },
+        "1000": {
+          "samples": [
+            {
+              "elapsed_s": 1.000148,
+              "other_ticks": 0,
+              "other_ns": 43086,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000147,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000159,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000125,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            },
+            {
+              "elapsed_s": 1.000136,
+              "other_ticks": 0,
+              "other_ns": 0,
+              "baseline_threads": 5,
+              "added": 0,
+              "missing": 0
+            }
+          ],
+          "median_other_cpu_ns": 0,
+          "max_added": 0,
+          "max_missing": 0
+        }
+      }
+    }
+  }
+}

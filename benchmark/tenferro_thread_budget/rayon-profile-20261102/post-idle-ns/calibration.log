@@ -1,0 +1,12 @@
+    Checking mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `dev` profile [unoptimized] target(s) in 0.31s
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 0.56s
+  Executable tests/rayon_idle_probe_581.rs (/target/test-fast/deps/rayon_idle_probe_581-db4458d3d5262432)
+
+running 1 test
+test schedstat_busy_positive_control ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.02s
+
+positive_control_cpu_ns=19278793
