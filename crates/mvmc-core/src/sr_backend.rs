@@ -741,16 +741,66 @@ pub(crate) struct EagerTransfer {
     pub(crate) placement: Placement,
 }
 
+/// Select a per-engine budget independently from the Rayon pool when requested.
+fn cpu_thread_count(
+    tenferro: Option<&str>,
+    rayon: Option<&str>,
+    available: usize,
+) -> Result<usize, StageError> {
+    let selected = tenferro
+        .map(|value| ("MVMC_RS_TENFERRO_THREADS", value))
+        .or_else(|| rayon.map(|value| ("RAYON_NUM_THREADS", value)));
+    match selected {
+        Some((name, value)) => value
+            .parse::<std::num::NonZeroUsize>()
+            .map(std::num::NonZeroUsize::get)
+            .map_err(|_| err(format!("{name} must be a positive integer"))),
+        None => Ok(available),
+    }
+}
+
+#[cfg(test)]
+mod cpu_thread_count_tests {
+    use super::cpu_thread_count;
+
+    #[test]
+    fn explicit_tenferro_budget_takes_precedence_over_rayon() {
+        assert_eq!(cpu_thread_count(Some("1"), Some("4"), 8).unwrap(), 1);
+        assert_eq!(cpu_thread_count(Some("3"), Some("invalid"), 8).unwrap(), 3);
+        assert_eq!(cpu_thread_count(None, Some("4"), 8).unwrap(), 4);
+        assert_eq!(cpu_thread_count(None, None, 8).unwrap(), 8);
+    }
+
+    #[test]
+    fn selected_budget_must_be_a_positive_integer() {
+        for value in ["0", "", "-1", "invalid"] {
+            assert!(cpu_thread_count(Some(value), Some("4"), 8).is_err());
+            assert!(cpu_thread_count(None, Some(value), 8).is_err());
+        }
+    }
+}
+
 /// Share one caller-owned CPU engine between stages using the configured thread budget.
 pub(crate) fn cpu_engine(
 ) -> Result<Arc<std::sync::Mutex<Box<dyn ExecutionEngine + Send>>>, StageError> {
-    let threads = match std::env::var("RAYON_NUM_THREADS") {
-        Ok(value) => value.parse::<usize>().map_err(err)?,
-        Err(std::env::VarError::NotPresent) => {
-            std::thread::available_parallelism().map_err(err)?.get()
-        }
-        Err(error) => return Err(err(error)),
+    let read = |name| match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(err(error)),
     };
+    let tenferro = read("MVMC_RS_TENFERRO_THREADS")?;
+    // A valid explicit tenferro budget does not depend on the Rayon setting.
+    let rayon = if tenferro.is_none() {
+        read("RAYON_NUM_THREADS")?
+    } else {
+        None
+    };
+    let available = if tenferro.is_none() && rayon.is_none() {
+        std::thread::available_parallelism().map_err(err)?.get()
+    } else {
+        1
+    };
+    let threads = cpu_thread_count(tenferro.as_deref(), rayon.as_deref(), available)?;
     let engine = if threads == 1 {
         CpuEngine::serial()
     } else {
