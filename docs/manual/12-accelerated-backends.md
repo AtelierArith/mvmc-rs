@@ -58,7 +58,7 @@ MVMC_RS_TENFERRO_WORKER_BUDGET=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 mpirun -n 4 target/release/mvmc namelist.def
 ```
 
-All ranks must use the same placement setting. Impossible assignments or inconsistent controls stop collectively before input/output. Affinity is applied to the MPI calling thread before mvmc worker creation; future threads inherit it. Existing MPI/BLAS threads are unaffected. This option does not inspect cgroup CPU quotas, distinguish SMT siblings, or cap externally created threads. Set BLAS threads separately. The library guard restores the calling thread's original affinity on drop; explicit `restore()` reports restoration errors. No performance benefit is established by this option alone.
+All ranks must use the same placement setting. Impossible assignments or inconsistent controls stop collectively before input/output. Affinity is applied to the MPI calling thread and every existing mvmc inner Rayon worker; future threads inherit their creator's mask. Existing MPI/BLAS threads are unaffected. This option does not inspect cgroup CPU quotas, distinguish SMT siblings, or cap externally created threads. Set BLAS threads separately. The library guard restores the original caller and inner-worker affinities on drop; explicit `restore()` reports restoration errors. No performance benefit is established by this option alone.
 
 ### The `gpu-cuda` feature and the standalone workspace
 

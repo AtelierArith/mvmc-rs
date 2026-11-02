@@ -56,3 +56,44 @@ each shared-memory communicator so CPU ids on different nodes may overlap;
 multi-node execution was not exercised. Application-failure rollback after an
 OS affinity syscall failure was not fault-injected. Existing MPI/BLAS threads,
 cgroup quotas and SMT topology remain outside this option's scope.
+
+## Existing hoisted Rayon worker repair
+
+The original candidate restricted only the calling MPI thread. The stock
+`mvmc` creates its inner Rayon pool before entering the CLI, so the earlier
+CLI numeric checks did **not** establish affinity of its existing workers.
+The final repair broadcasts restriction/restoration to all existing mvmc
+inner workers. OS-thread-owned guards remain in worker-local storage; tokens
+coordinate nested restoration and partial-application rollback. Existing
+MPI/BLAS/external pools are still outside this mechanism.
+
+`existing-pool-evidence.tar.gz` records a new 20-launch MPI integration matrix
+with two inner workers created **before** MPI initialization, matching the
+stock CLI's hoisted execution. It directly checks every existing worker's mask
+after assignment and after restoration, alongside inherited-thread and
+node-local nonoverlap checks, initial asymmetric planning failure and recovery.
+All launches passed. An isolated two-worker unit test additionally checks
+nested guards, unwind, and a real worker-specific subset rejection with
+rollback of successful peers. Normal workspace test-fast: 1642 passed,
+66 skipped; normal/MPI Clippy passed.
+
+The 12 negative, 12 serial-budget positive and 16 parallel-configuration CLI
+launches were repeated using the repaired binary. Every launcher completed
+with its expected status. Finite numeric outputs again had maximum absolute
+difference 0 (`existing-pool-*-summary.json`). The corresponding local scripts
+preserve exact commands. `compare-positive.py` and `compare-parallel.py` accept
+the extracted positive/parallel output roots to reproduce the comparisons.
+The older archives remain evidence of the earlier candidate and must not be
+used to claim that it fixed the pre-existing workers.
+
+`worker-failure-evidence.tar.gz` adds 20 further launches with
+`MVMC_PLACEMENT_WORKER_FAILURE=1`. Each first obtains/restores a valid assignment,
+then narrows a **non-initializing worker** on the final rank so that its actual
+mask rejects the planned CPU subset. The calling worker's mask is unchanged,
+so this reaches application failure rather than a planning error. All ranks
+must return an error, preserve the pre-attempt masks (including the deliberate
+narrowing), then restore the test constraint and complete a valid assignment.
+Every launch passed, including shared/disjoint/partially overlapping masks,
+1/2 CPU requests where feasible, 2/4 ranks and optional initial bad request.
+This exercises collective partial-application rollback and subsequent recovery;
+it does not inject a failing kernel syscall after validation.

@@ -52,7 +52,7 @@ MVMC_RS_TENFERRO_WORKER_BUDGET=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 mpirun -n 4 target/release/mvmc namelist.def
 ```
 
-割当設定は全ランクで揃えてください。割当不能や設定の不一致は入出力前に全ランクでエラーになります。mvmc ワーカーを生成する前に MPI 呼び出しスレッドの affinity を変更し、その後の生成スレッドに継承させます。既存の MPI・BLAS スレッドには適用しません。cgroup の CPU quota、SMT の物理コア共有、外部生成スレッドの上限は扱わないため、BLAS のスレッド数も別途設定してください。ライブラリの guard は破棄時に元の affinity に戻し、明示的な `restore()` では復元エラーを確認できます。この設定だけで高速化を保証するものではありません。
+割当設定は全ランクで揃えてください。割当不能や設定の不一致は入出力前に全ランクでエラーになります。MPI 呼び出しスレッドと既存の mvmc 内部 Rayon ワーカーの affinity を変更し、その後の生成スレッドに継承させます。既存の MPI・BLAS スレッドには適用しません。cgroup の CPU quota、SMT の物理コア共有、外部生成スレッドの上限は扱わないため、BLAS のスレッド数も別途設定してください。ライブラリの guard は破棄時に呼び出しスレッドと内部ワーカーを元の affinity に戻し、明示的な `restore()` では復元エラーを確認できます。この設定だけで高速化を保証するものではありません。
 
 ### `gpu-cuda` feature と単体ワークスペース
 
