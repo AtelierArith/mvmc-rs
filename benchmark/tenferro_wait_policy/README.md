@@ -70,3 +70,21 @@ MVMC_BENCH_CPUSET=0-3 MVMC_BENCH_INNER_THREADS=1 \
   DEVELOPMENT_IMAGE TARGET_VOLUME /tmp/wait-input/inputs /tmp/wait-4cpu
 uv run --no-project python benchmark/tenferro_wait_policy/analyze-alternating.py /tmp/wait-4cpu > /tmp/wait-4cpu-summary.json
 ```
+
+## Live MPI protocol with zero polls
+
+With `MVMC_RS_TENFERRO_SPIN_POLLS=0`, the existing ignored `negative_clock_and_asymmetric_runner_failures` protocol gate passed on MPICH 4.2.0 for 2 and 4 actual ranks, with tenferro threads 1 and 4 per rank, Rayon=4, mVMC inner threads=1 and BLAS/OMP=1. Each gate has a 120-second timeout and validates collective failure agreement; it is not a performance benchmark. [Raw logs](results/mpi-protocol/).
+
+```sh
+# Build inside the matching development container with its target volume:
+cargo test -p mvmc-core --features mpi --lib --profile test-fast --no-run
+for ranks in 2 4; do
+  for threads in 1 4; do
+    MVMC_RS_SR_BACKEND=tenferro MVMC_RS_INNER_THREADS=1 RAYON_NUM_THREADS=4 \
+      MVMC_RS_TENFERRO_THREADS=$threads MVMC_RS_TENFERRO_SPIN_POLLS=0 \
+      OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+      timeout --kill-after=5s 120s mpirun -n "$ranks" /path/to/mvmc_core_test_binary \
+      --ignored --exact run::mpi_runtime_tests::negative_clock_and_asymmetric_runner_failures --nocapture
+  done
+done
+```
