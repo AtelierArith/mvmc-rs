@@ -39,3 +39,13 @@ MVMC_RS_SR_BACKEND=tenferro MVMC_RS_INNER_THREADS=1 RAYON_NUM_THREADS=4 \
 ```
 
 Repeat with `-n 2`, `MVMC_RS_TENFERRO_THREADS=4`, and the `c-order` backend for the complete matrix. The container needs sufficient shared memory (the recorded run used `--shm-size=1g`).
+
+## Single-walker CG smoke timing after the lock fix
+
+As a coarse regression check, the existing `cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy` test was executed with `OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1` in separate `test-fast` worktrees, once as warmup then five measured repetitions alternating execution order. Before was `718932f2…` (the source merged as `1c34ad2c…`), after was `068ffc45…`; the latter includes the CPU budget and shared-lock changes. `/usr/bin/time` covered the complete `cargo nextest` command including test selection and process startup, not the CG kernel alone. Median wall times were 0.64 s before (0.64, 0.65, 0.60, 0.59, 0.64 s) and 0.62 s after (0.69, 0.65, 0.62, 0.60, 0.59 s). No affinity or frequency pinning was applied; these coarse, short runs cannot rule out smaller performance regressions. [Full output](results/cg-single-walker.txt).
+
+```sh
+OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 /usr/bin/time -f 'wall=%e user=%U system=%S' \
+  cargo nextest run -p mvmc-core --cargo-profile test-fast \
+  -E 'test(cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy)' --retries 0
+```

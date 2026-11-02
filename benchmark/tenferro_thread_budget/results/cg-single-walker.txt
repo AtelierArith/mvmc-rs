@@ -1,0 +1,122 @@
+### before repetition 0 (warmup)
+   Compiling mvmc-core v0.0.0 (/tmp/mvmc-570/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 0.61s
+────────────
+ Nextest run ID af07a26b-1a68-45bf-b97b-3c69ec1c296c with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.139s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.142s] 1 test run: 1 passed, 997 skipped
+wall=1.32 user=2.31 system=1.92
+
+### after repetition 0 (warmup)
+   Compiling mvmc-core v0.0.0 (/tmp/mvmc-585/crates/mvmc-core)
+    Finished `test-fast` profile [optimized] target(s) in 16.68s
+────────────
+ Nextest run ID d50693f7-05e5-4394-acfe-33466b4740c5 with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.138s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.140s] 1 test run: 1 passed, 1001 skipped
+wall=17.37 user=330.42 system=50.58
+
+### before repetition 1
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID cde04da9-69be-4ea1-b7a5-1825614dc26c with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.103s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.105s] 1 test run: 1 passed, 997 skipped
+wall=0.64 user=1.18 system=1.14
+
+### after repetition 1
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID 4f23da3f-0a8b-4c8f-a659-a64260fbbf87 with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.137s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.139s] 1 test run: 1 passed, 1001 skipped
+wall=0.69 user=1.26 system=1.16
+
+### before repetition 2
+    Finished `test-fast` profile [optimized] target(s) in 0.12s
+────────────
+ Nextest run ID ba3545df-2f4a-4362-af81-19c37513b7ae with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.104s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.106s] 1 test run: 1 passed, 997 skipped
+wall=0.65 user=1.14 system=1.10
+
+### after repetition 2
+    Finished `test-fast` profile [optimized] target(s) in 0.13s
+────────────
+ Nextest run ID 4a48a198-08fe-4995-8107-6c5f0644266f with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.102s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.103s] 1 test run: 1 passed, 1001 skipped
+wall=0.65 user=1.16 system=1.08
+
+### before repetition 3
+    Finished `test-fast` profile [optimized] target(s) in 0.10s
+────────────
+ Nextest run ID 6cae76a6-411d-435b-a163-6f411580a203 with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.104s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.106s] 1 test run: 1 passed, 997 skipped
+wall=0.60 user=1.10 system=1.08
+
+### after repetition 3
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID a4fae402-a741-4b9c-8c9b-b8044da80686 with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.103s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.105s] 1 test run: 1 passed, 1001 skipped
+wall=0.62 user=1.14 system=1.02
+
+### before repetition 4
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID bf6d793d-5317-457b-bdb1-c4546fe75c01 with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.102s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.103s] 1 test run: 1 passed, 997 skipped
+wall=0.59 user=1.11 system=1.05
+
+### after repetition 4
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID ad830a89-0e91-49e7-bc36-150322cddb16 with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.104s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.105s] 1 test run: 1 passed, 1001 skipped
+wall=0.60 user=1.12 system=1.05
+
+### before repetition 5
+    Finished `test-fast` profile [optimized] target(s) in 0.16s
+────────────
+ Nextest run ID ebd28b1d-cac7-4905-9a0d-baed80163670 with nextest profile: default
+    Starting 1 test across 122 binaries (997 tests skipped)
+        PASS [   0.101s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.103s] 1 test run: 1 passed, 997 skipped
+wall=0.64 user=1.12 system=1.09
+
+### after repetition 5
+    Finished `test-fast` profile [optimized] target(s) in 0.11s
+────────────
+ Nextest run ID 8e37b0ba-21ce-4551-a6d3-9b7246effa94 with nextest profile: default
+    Starting 1 test across 122 binaries (1001 tests skipped)
+        PASS [   0.102s] (1/1) mvmc-core::sr_backend_421 cg_run_with_tenferro_keeps_structure_and_the_pre_update_energy
+────────────
+     Summary [   0.104s] 1 test run: 1 passed, 1001 skipped
+wall=0.59 user=1.11 system=1.05
+
