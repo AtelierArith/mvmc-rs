@@ -215,3 +215,22 @@ fn cuda_pfaffian_passes_the_validation_harness_replay() {
         .any(|u| u.starts_with("pfaffian_inverse")));
     assert_eq!(rep.defects, 0);
 }
+
+#[test]
+#[ignore = "optional CUDA gate: needs a device (MVMC_RS_CUDA_GATE=1 to require it)"]
+fn cuda_owned_stage_can_be_recreated_after_use_and_drop() {
+    let Some(_) = engine() else { return };
+    for _ in 0..2 {
+        let mut stage = mvmc_gpu_cuda::stages::cuda_stage_backend(0).unwrap();
+        let output = stage
+            .pfaffian()
+            .pfaffian_inverse_batch(&[0.0, -2.0, 2.0, 0.0], 2, 1)
+            .unwrap();
+        assert!((output.pf[0] - 2.0).abs() < 1e-12);
+        assert!(matches!(
+            output.outcome[0],
+            mvmc_core::stage_backend::PlaneOutcome::Ok
+        ));
+        drop(stage);
+    }
+}
