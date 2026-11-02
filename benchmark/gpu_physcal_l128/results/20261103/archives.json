@@ -1,0 +1,20 @@
+[
+  {
+    "archive": "measurements.tar.gz",
+    "sha256": "52655e79d3c25db42579679239942e4be2d78885647a718f6922c4ffe1e296e6",
+    "bytes": 1277356,
+    "files": 1124
+  },
+  {
+    "archive": "nsight-report.tar.gz",
+    "sha256": "cde2185a6ea2ce819809f65c505eabfe84fa1a547f5a2f5a6bcf09226a44a65e",
+    "bytes": 12389424,
+    "files": 29
+  },
+  {
+    "archive": "nsight-stream.tar.gz",
+    "sha256": "75795f6d2cac3ae48183d3a52e1ca9025f528e417e5678300b9b5e2f8152857c",
+    "bytes": 43305277,
+    "files": 1
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "source_revision": "cf17b0be51e991209875e54b18f86fccb9d078c4",
+  "source_record": "/tmp/mvmc-586-contract-20261103/phys-before-t1-r0/contract.json",
+  "source_sha256": "cb5880fee92c643cb48a20004f179684be885343f9172ecc1114d0e67b83128a",
+  "field": "exact",
+  "scope": "Previously captured Rust C-order reference, not a new complete C executable RNG oracle."
+}

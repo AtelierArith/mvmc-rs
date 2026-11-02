@@ -1,0 +1,204 @@
+{
+  "reference": "/tmp/mvmc-586-final-c-order-20261103/phys-rust-t1-r1/output",
+  "finite_bound": "1e-11 + 1e-11 max(abs(x),abs(y))",
+  "rows": [
+    {
+      "run": "cache-cold/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-cold/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-cold/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-cold/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-disabled/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-disabled/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-disabled/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-disabled/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-hit/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-hit/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-hit/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "cache-hit/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-api-gpu-files/rep0",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-api-gpu-files/rep1",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-api-gpu-files/rep2",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-api-gpu-files/rep3",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-cold/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-cold/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-cold/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-cold/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-disabled/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-disabled/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-disabled/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-disabled/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-hit/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-hit/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-hit/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "final-hit/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "gpu-before/rep0/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "gpu-before/rep1/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "gpu-before/rep2/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "gpu-before/rep3/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    },
+    {
+      "run": "nsight-probe/output",
+      "computed_numeric_values": 2054,
+      "exact_integer_indices": 7168,
+      "max_absolute_difference": 3.637978807091713e-12
+    }
+  ]
+}

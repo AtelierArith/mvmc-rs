@@ -1,0 +1,58 @@
+[
+  {
+    "kind": "cpu",
+    "rep": 0,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "cpu",
+    "rep": 1,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "cpu",
+    "rep": 2,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "cpu",
+    "rep": 3,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "gpu",
+    "rep": 0,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "gpu",
+    "rep": 1,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "gpu",
+    "rep": 2,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  },
+  {
+    "kind": "gpu",
+    "rep": 3,
+    "decisions": 41088,
+    "words": 206174,
+    "all_exact_fields_match": true
+  }
+]
