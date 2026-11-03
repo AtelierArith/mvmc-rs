@@ -105,14 +105,31 @@ pub fn set_measurement_batch_size_override(size: Option<usize>) {
 
 /// Batch size for a chain with `n_samples` saved configurations.
 pub fn resolve_batch_size(n_samples: usize) -> usize {
-    let explicit = match OVERRIDE.load(std::sync::atomic::Ordering::SeqCst) {
+    explicit_batch_size()
+        .unwrap_or(DEFAULT_BATCH)
+        .min(n_samples.max(1))
+}
+
+fn explicit_batch_size() -> Option<usize> {
+    match OVERRIDE.load(std::sync::atomic::Ordering::SeqCst) {
         0 => std::env::var("MVMC_RS_MEASURE_BATCH")
             .ok()
             .and_then(|v| v.trim().parse::<usize>().ok())
             .filter(|&v| v > 0),
         v => Some(v),
-    };
-    explicit.unwrap_or(DEFAULT_BATCH).min(n_samples.max(1))
+    }
+}
+
+/// Host C-order stages need enough independent planes to occupy the workers,
+/// but do not pay the device transfer cost for which DEFAULT_BATCH was chosen.
+/// Keep at least two samples to amortize dispatch, bounded by the existing
+/// batch ceiling. Explicit environment/test overrides retain priority.
+pub(crate) fn resolve_c_order_host_batch_size(n_samples: usize, n_qp: usize) -> usize {
+    let workers = crate::threading::inner_thread_config().threads;
+    let default = workers.div_ceil(n_qp.max(1)).clamp(2, DEFAULT_BATCH);
+    explicit_batch_size()
+        .unwrap_or(default)
+        .min(n_samples.max(1))
 }
 
 /// Where stage A gets its Pfaffian/inverse tables.
@@ -761,6 +778,8 @@ mod tests {
     fn batch_size_is_clamped_to_sample_count() {
         assert_eq!(resolve_batch_size(0), 1);
         assert!(resolve_batch_size(2) <= 2);
+        assert_eq!(resolve_c_order_host_batch_size(0, 8), 1);
+        assert!(resolve_c_order_host_batch_size(2, 8) <= 2);
     }
 
     use crate::stage_backend::{COrderPfaffian, PfInvBatch};

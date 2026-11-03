@@ -97,6 +97,25 @@ pub trait SamplerStages: Send {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct COrderSampler;
 
+fn sample_c_order_with_workers<const TIMED: bool>(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timer: &mut CTimer<TIMED>,
+    reducer: &dyn Reducer,
+) -> Result<SampleStats, StageError> {
+    let result = if let Some(shared) = reducer.host_thread_safe() {
+        let width = state.slater_matrix.pf_m_real.len();
+        let cost = crate::pfaffian::pfaffian_qp_cost_ns(state.slater_matrix.inv_m_real.n_size());
+        crate::threading::with_qp_region_team(width, cost, || {
+            vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, shared)
+        })
+    } else {
+        vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, reducer)
+    };
+    result.map_err(|error| StageError::Failed(error.to_string()))
+}
+
 impl SamplerStages for COrderSampler {
     fn label(&self) -> String {
         "c-order".to_string()
@@ -117,15 +136,13 @@ impl SamplerStages for COrderSampler {
         if timing.enabled() {
             let mut timer = CTimer::<true>::new();
             timer.diagnostics = timing.diagnostics();
-            let result =
-                vmc_make_sample_real_with_reducer_timed(data, state, rng, &mut timer, reducer);
+            let result = sample_c_order_with_workers(data, state, rng, &mut timer, reducer);
             timing.merge_elapsed(&timer.elapsed_ns);
-            result.map_err(|error| StageError::Failed(error.to_string()))
+            result
         } else {
             let mut timer = CTimer::<false>::new();
             timer.diagnostics = timing.diagnostics();
-            vmc_make_sample_real_with_reducer_timed(data, state, rng, &mut timer, reducer)
-                .map_err(|error| StageError::Failed(error.to_string()))
+            sample_c_order_with_workers(data, state, rng, &mut timer, reducer)
         }
     }
 }
