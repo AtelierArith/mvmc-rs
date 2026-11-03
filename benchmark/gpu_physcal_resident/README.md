@@ -1,7 +1,7 @@
 # Resident GPU PhysCal on L128 (#636)
 
-The explicit resident PhysCal API measures **0.571 s**, versus **0.744 s** for
-Julia GPU on the same RTX 3060. The existing single-SFMT API measures 2.523 s.
+The explicit resident PhysCal API measures **0.554 s**, versus **0.717 s** for
+Julia GPU on the same RTX 3060. The existing single-SFMT API measures 2.488 s.
 The new API and `mvmc-cuda resident-physcal` use Julia-compatible XORWOW walker
 ensembles; the ordinary CLI and single-SFMT API retain their original contract.
 
@@ -16,33 +16,37 @@ Each process runs once for warmup, then three measured calls. Calls include
 parsing, fresh state initialization, sampling, observables and final host means.
 Startup/JIT, repetition zero, explicit Julia GC and serialization are excluded;
 Rust's API includes its internal state teardown. The implementations run
-sequentially, without overlapping this investigation's builds/tests.
+sequentially.
 
 | Warm public API | Measured calls (seconds) | Median |
 |---|---|---:|
-| Rust, legacy single SFMT | 2.523458, 2.523449, 2.521307 | 2.523449 s |
-| Rust, resident XORWOW | 0.570727, 0.566890, 0.575283 | 0.570727 s |
-| Julia, XORWOW | 0.743596, 0.754713, 0.736691 | 0.743596 s |
+| Rust, legacy single SFMT | 2.496164, 2.487675, 2.487960 | 2.487960 s |
+| Rust, resident XORWOW | 0.552157, 0.553533, 0.554715 | 0.553533 s |
+| Julia, XORWOW | 0.722295, 0.717060, 0.712242 | 0.717060 s |
 
-Rust resident is about 1.30 times faster than Julia in this cohort. The 4.42
+Rust resident is about 1.30 times faster than Julia in this cohort. The 4.49
 legacy/resident wall ratio includes a sampling-contract change: legacy uses
 one SFMT chain and 41,088 proposals; the resident implementations use 320
 XORWOW walkers and 81,920 proposals (128 warmup + 128 interval per walker).
 This is not a matched-kernel speedup or an SFMT trajectory-preservation claim.
 
-Runtime source: Rust `7955a882debb8d22af2e97dd2a927b13f84e95c7`; legacy binary
+Runtime source: Rust `03b339986770c2f07c38f8a7acc405e19ba55382`; legacy binary
 `67b0a2c8d418876d8a40e4d35a9cb341567590e9`, hash-verified against #635's
-retained executable. Later commits add CLI export/profiler support and evidence;
-they do not change the measured resident numerical/sampling code. Julia source
+retained executable. The final runtime commit preserves C PhysCal input-file
+priority. The original `7955a882` cohort (0.570727 s) is retained in
+`performance.tar.gz`; the latest cohort is in `final-performance.tar.gz`. All
+4,100 resident values agree numerically between these cohorts (observed difference
+zero), and their no-`In*` inputs are byte-identical. Julia source
 `611031147f1bad9704c55084f6817feeba481b13`, Juliaup `+1.13` resolving to
 **1.13.3**, byte-identical GPU manifest SHA-256
 `86c69ea3a0c04c2b6af6f48a3f36ec2a08fa2bc564ac4845f5799e53244fc573`.
 
 Linux x86_64, Xeon E5-2699 v3, Rust 1.99.0, physical GPU 0 RTX 3060 12 GiB,
 UUID `GPU-a78d5217-eba3-72c2-3d5b-8ae496ebbc2e`, driver 580.178.04.
-All cases use CPU17 and one host/BLAS thread. CPU benchmarks ran concurrently
-on other physical cores, as permitted by the owner; frequency/host isolation
-is not claimed. Per-case timestamps and host load are retained.
+All cases use CPU17 and one host/BLAS thread on a shared host; frequency/host
+isolation is not claimed. Per-case timestamps and host load are retained.
+A 4.66 s Clippy check on CPUs 16/34/35 overlapped Julia setup, before its warmup
+and measured calls. The earlier cohort overlapped separate CPU benchmarks.
 Rust reports NVRTC 12.8/cuBLAS 12.8.4/cuSOLVER 11.7.3; Julia uses CUDA runtime
 13.4.0/cuBLAS 13.8.0/cuSOLVER 12.3.4. Native/Julia linked libraries are recorded
 separately, including Julia's ILP64 OpenBLAS.
@@ -93,11 +97,16 @@ fixed-state energy and all Green families (including product-side terms), and
 that supplying a tape consumes no resident XORWOW words. The first numerical
 difference is in factorization: maximum Pfaffian relative difference `5.446e-13`.
 Fixed-state mean differences are at most `3.411e-13`. No tolerance was increased.
-Twenty-window repeatability, transfer invariants, resident Opt regressions and
+Twenty-window repeatability with 128 proposals per window (crossing the periodic
+rebuild boundary), transfer invariants, resident Opt regressions and
 legacy CUDA sampler/measurement/SR routing checks are recorded in validation.
 Input parsing retains C's canonical one-body list when `TwoBodyGEx` enables
 the indirect reader; this can differ from Julia GPU's raw one-body list and
-has a focused regression. The L128 timing input has no `TwoBodyGEx` entries.
+has a focused regression. Fixed parameters load before explicit `In*.def`
+overlays, preserving C PhysCal priority even though Julia GPU loads them in the
+opposite order. A Gutzwiller/orbital collision regression verifies this and
+retention of other fixed coefficients. The timing input has neither `In*` nor
+`TwoBodyGEx` entries, so these C input rules do not change this comparison.
 
 ## Reproduction and CLI
 

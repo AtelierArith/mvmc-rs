@@ -1,14 +1,14 @@
 # Validation for resident GPU PhysCal (#636)
 
-Linux x86_64 / RTX 3060, Rust 1.99.0. Runtime source `7955a882`; later commits
-only add the explicit CLI, profiler binding, metadata, and reader-order tests/docs.
-The API's numerical and sampling code is unchanged. See metadata/archives for
+Linux x86_64 / RTX 3060, Rust 1.99.0. Latest runtime source `03b33998`. It restores C fixed-file → `In*.def` priority;
+the no-`In*` L128 numerical/sampling contract is unchanged from `7955a882`. See metadata/archives for
 exact sources, binary/input hashes, actual library paths and all outputs.
 
 | Check | Result |
 |---|---|
 | CUDA library tests, including resident Opt and 20-window PhysCal | 20 passed |
-| Final C canonical-reader output-order regression | 1 passed |
+| Latest focused PhysCal checks (including C priority and 20 ×128-hop windows) | 5 passed |
+| Unique CUDA library cases covered across both runs | 22 passed |
 | CLI preflight + legacy sampler/measurement/SR integration gates | 10 passed |
 | Benchmark orchestration | 7 passed |
 | Standalone all-target Clippy with warnings denied | Passed |
@@ -35,6 +35,16 @@ not substituted for the full 320-walker performance table. The CLI's 8.54 s is
 one process-wall verification with setup/NVRTC/output/exit included, not a warm
 API observation. Root-workspace CI provides the final Linux/macOS CPU checks;
 CUDA numerical gates here were run on Linux/NVIDIA hardware.
+The final-source full cohort repeats all 12 timing rows and compares all 4,100
+resident values with both independent Julia and the earlier Rust cohort; the
+previous Rust cohort has observed numerical difference zero. Input bytes match,
+there are no `In*` entries, and the independent initialization/parameter fixture
+passes unchanged. The original performance/Nsight archives remain untouched.
+
+The first new overlay test used an incomplete four-coefficient Gutzwiller file
+and correctly failed input validation. Completing the fixture to its declared
+width produced five focused passes; both logs are retained. Latest all-target
+Clippy also passes without warnings.
 
 ## Re-run checks
 
