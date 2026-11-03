@@ -1,0 +1,38 @@
+[
+  {
+    "workload": "opt",
+    "threads": 1,
+    "medians": {
+      "C": 0.699,
+      "Julia": 0.639174006,
+      "Rust": 0.558
+    }
+  },
+  {
+    "workload": "opt",
+    "threads": 4,
+    "medians": {
+      "C": 0.376,
+      "Julia": 0.598244468,
+      "Rust": 0.33
+    }
+  },
+  {
+    "workload": "phys",
+    "threads": 1,
+    "medians": {
+      "C": 0.419,
+      "Julia": 0.411665078,
+      "Rust": 0.315
+    }
+  },
+  {
+    "workload": "phys",
+    "threads": 4,
+    "medians": {
+      "C": 0.25,
+      "Julia": 0.505792382,
+      "Rust": 0.239
+    }
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "archive": "cpu.tar.gz",
+    "files": 482,
+    "sha256": "ec89b82808b26f1a16d127d37aa904f525bb15d776d09b09012cf52a07843ef8"
+  },
+  {
+    "archive": "gpu.tar.gz",
+    "files": 57,
+    "sha256": "1347edd7c5a4fb02576913fb3155de9dc59ff11bc272008ffda5e93856054ba2"
+  }
+]

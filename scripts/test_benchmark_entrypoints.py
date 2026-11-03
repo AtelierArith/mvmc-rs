@@ -23,6 +23,7 @@ class BenchmarkEntrypoints(unittest.TestCase):
                                         cwd=tmp, capture_output=True, text=True, check=True)
                 self.assertIn('uv run --no-project python', result.stdout)
                 self.assertIn('steps=20; samples=320', result.stdout)
+                self.assertIn('CPU C reference' if mode == 'cpu' else 'Rust CUDA examples', result.stdout)
                 self.assertFalse(out.exists())
 
     def test_gpu_selection_preserves_visible_set_and_remaps_by_uuid(self):

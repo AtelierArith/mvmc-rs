@@ -308,6 +308,7 @@ def main():
         p.error('--image and --threads are CPU options')
     if args.mode == 'gpu':
         args.image = None
+        args.threads = [1]
     if args.mode == 'cpu' and args.device is not None:
         p.error('--device is a GPU option')
     if len(set(args.workloads)) != len(args.workloads):
@@ -317,8 +318,9 @@ def main():
     print(f'Benchmark {args.mode}: L128 Opt/PhysCal; steps={args.steps}; samples={args.samples}; '
           f'threads={args.threads if args.mode=="cpu" else 1}; warmup=1; reps={args.reps}\nOutput: {out}', flush=True)
     if args.dry_run:
+        executables = 'Rust and CPU C reference' if args.mode == 'cpu' else 'Rust CUDA examples'
         print('Plan: initialize pinned submodules; instantiate/build Julia 1.13.1 reference; '
-              'build Rust and CPU C reference; run sequential measurements; write report.md and raw evidence.\n'
+              f'build {executables}; run sequential measurements; write report.md and raw evidence.\n'
               'Every Python command uses uv run --no-project python. GPU uses one selected NVIDIA device.')
         return
     if sys.platform != 'linux':
@@ -331,7 +333,7 @@ def main():
     cpus = physical_cpus()
     if args.mode == 'cpu' and max(args.threads) > len(cpus):
         p.error(f'{len(cpus)} allowed physical cores; select --threads explicitly')
-    lock_path = Path(os.environ.get('TMPDIR', '/tmp')) / f'mvmc-benchmark-{os.getuid()}.lock'
+    lock_path = Path('/tmp') / f'mvmc-benchmark-{os.getuid()}.lock'
     with lock_path.open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

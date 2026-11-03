@@ -1,0 +1,58 @@
+[
+  {
+    "workload": "opt",
+    "kind": "Rust GPU",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 7.175778895
+  },
+  {
+    "workload": "opt",
+    "kind": "Rust GPU",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.169314361
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia GPU",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 93.279406259
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia GPU",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.28214219
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust GPU",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 3.538587817
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust GPU",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.204680167
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia GPU",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 85.639290192
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia GPU",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.206006681
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "workload": "opt",
+    "threads": 1,
+    "medians": {
+      "Julia GPU": 0.28214219,
+      "Rust GPU": 0.169314361
+    }
+  },
+  {
+    "workload": "phys",
+    "threads": 1,
+    "medians": {
+      "Julia GPU": 0.206006681,
+      "Rust GPU": 0.204680167
+    }
+  }
+]
