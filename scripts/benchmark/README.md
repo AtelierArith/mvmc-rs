@@ -25,7 +25,7 @@ are keyed by source and image ID and verify the executable hash before reuse.
 
 ## Prerequisites
 
-- Linux, Rust/Cargo, `uv`, Juliaup with **Julia 1.13.1**, `git`, `taskset`, and the
+- Linux, Rust/Cargo, `uv`, Juliaup with **Julia 1.13**, `git`, `taskset`, and the
   ordinary native BLAS/LAPACK/compiler dependencies in `docs/DEVELOPMENT.md`.
   No Python dependencies need installation outside `uv`.
 - CPU: a running Docker daemon. An existing mvmc-rs Dev Container image is

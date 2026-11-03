@@ -41,15 +41,23 @@ commits and dirty state without changing either checkout. To reproduce the
 original source versions, run this script against those checkouts; later code
 is a new comparison under the same workload and settings.
 
-Upstream Julia PR #83 incorporated the prescribed `Manifest-v1.13.toml`,
-and the pinned reference now uses upstream `main` containing merged GPU
-optimization PR #84 (`1642d30e824ba0f270654042438987e6f2c7342e`). The lock
+Upstream Julia PR #83 incorporated the prescribed `Manifest-v1.13.toml`.
+The current reference is upstream `main` commit
+`73140156ce813efb8b528516b4a9b5640247f23b`, containing GPU optimization PR #84
+and [CPU threading PR #93](https://github.com/tmisawa/Julia-mVMC/pull/93).
+New shared CPU/GPU benchmark runs use Juliaup `+1.13` and record the resolved
+version; the reference update was checked with Julia 1.13.3. Historical results
+retain their original source/version identifiers. The lock
 alongside this README remains byte-identical to that file and was first
 introduced at reference commit
 `c0788c34a6a5753c611633a97cd1ea233203320c`, exactly as used in the original
 measurement. Its local package paths resolve against the pinned Julia checkout.
 SHA-256:
 `09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc`.
+
+The [CPU L128 report](https://github.com/tmisawa/Julia-mVMC/blob/73140156ce813efb8b528516b4a9b5640247f23b/benchmark/cpu_l128/results/20261103/report.md)
+retains the separate 2026-11-03 threading measurements and RNG/output checks.
+Updating this pin does not regenerate or reverify historical fixtures or timings.
 
 The script temporarily copies this lock into the Julia project and removes it
 on exit. An existing identical lock is preserved; a differing lock causes an

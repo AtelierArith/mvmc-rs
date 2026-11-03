@@ -1,4 +1,4 @@
-"""One-command, shared-input CPU/GPU benchmarks (Linux, Julia 1.13.1)."""
+"""One-command, shared-input CPU/GPU benchmarks (Linux, Julia 1.13)."""
 import argparse
 import fcntl
 import hashlib
@@ -138,7 +138,7 @@ def julia_run(mode, workload, n, args, out, env, cpus):
     case_env = dict(env, JULIA_NUM_THREADS=str(n))
     project = JULIA if mode == 'cpu' else JULIA / 'test/gpu'
     dest = out / f'julia-{workload}-t{n}'
-    text = command(['taskset', '-c', ','.join(map(str, cpus[:n])), 'julia', '+1.13.1',
+    text = command(['taskset', '-c', ','.join(map(str, cpus[:n])), 'julia', '+1.13',
                     '--startup-file=no', f'--threads={n}', f'--project={project}',
                     TOOLS / 'julia.jl', mode, workload, out / 'inputs' / workload,
                     dest, args.steps, args.samples, args.reps], out / f'julia-{workload}-t{n}.log', case_env)
@@ -152,7 +152,7 @@ def cuda_library_environment(env, out):
     if override:
         search = override.split(':') + search
     else:
-        depots = command(['julia', '+1.13.1', '--startup-file=no', '-e',
+        depots = command(['julia', '+1.13', '--startup-file=no', '-e',
                           'foreach(println,DEPOT_PATH)'], out / 'julia-depots.txt', env).splitlines()
         for depot in depots:
             for library in ('libnvrtc.so.12', 'libcublas.so.12', 'libcusolver.so.11', 'libcurand.so.10'):
@@ -319,7 +319,7 @@ def main():
           f'threads={args.threads if args.mode=="cpu" else 1}; warmup=1; reps={args.reps}\nOutput: {out}', flush=True)
     if args.dry_run:
         executables = 'Rust and CPU C reference' if args.mode == 'cpu' else 'Rust CUDA examples'
-        print('Plan: initialize pinned submodules; instantiate/build Julia 1.13.1 reference; '
+        print('Plan: initialize pinned submodules; instantiate/build Julia 1.13 reference; '
               f'build {executables}; run sequential measurements; write report.md and raw evidence.\n'
               'Every Python command uses uv run --no-project python. GPU uses one selected NVIDIA device.')
         return
@@ -345,7 +345,7 @@ def main():
         command(['git', 'submodule', 'update', '--init', '--recursive', 'extern/Julia-mVMC'] +
                 (['extern/mVMC-1.3.0'] if args.mode == 'cpu' else []), out / 'submodules.log', env)
         project = JULIA if args.mode == 'cpu' else JULIA / 'test/gpu'
-        command(['julia', '+1.13.1', '--startup-file=no', '--threads=1', f'--project={project}',
+        command(['julia', '+1.13', '--startup-file=no', '--threads=1', f'--project={project}',
                  TOOLS / 'prepare_julia.jl'], out / 'julia-prepare.log', dict(env, JULIA_NUM_THREADS='1'))
         locked = project / 'Manifest-v1.13.toml'
         expected_lock = command(['git', '-C', JULIA, 'show', 'HEAD:' + str(locked.relative_to(JULIA))], env=env)
