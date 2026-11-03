@@ -1,0 +1,83 @@
+{
+  "rust_source": "2fc1fa9f761bd283c8728437f0f7eaaf32d10734",
+  "rust_status": "",
+  "julia_source": "611031147f1bad9704c55084f6817feeba481b13",
+  "rust_binary": "/tmp/mvmc-628-target/release/mvmc",
+  "rust_binary_sha256": "4bfd1535b9ffd80d21fff961951d8726db7b1e2540a1c98c4eba1f8768d6423f",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1",
+  "julia": "julia version 1.13.1",
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  36\nOn-line CPU(s) list:                     0-35\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Xeon(R) CPU E5-2699 v3 @ 2.30GHz\nCPU family:                              6\nModel:                                   63\nThread(s) per core:                      2\nCore(s) per socket:                      18\nSocket(s):                               1\nStepping:                                2\nCPU(s) scaling MHz:                      44%\nCPU max MHz:                             3600.0000\nCPU min MHz:                             1200.0000\nBogoMIPS:                                4598.28\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm cpuid_fault epb pti intel_ppin ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts vnmi md_clear flush_l1d ibpb_exit_to_user\nVirtualization:                          VT-x\nL1d cache:                               576 KiB (18 instances)\nL1i cache:                               576 KiB (18 instances)\nL2 cache:                                4.5 MiB (18 instances)\nL3 cache:                                45 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-35\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             KVM: Mitigation: VMX disabled\nVulnerability L1tf:                      Mitigation; PTE Inversion; VMX conditional cache flushes, SMT vulnerable\nVulnerability Mds:                       Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Meltdown:                  Mitigation; PTI\nVulnerability Mmio stale data:           Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP conditional; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+  "ldd_rust": "linux-vdso.so.1 (0x00007ffdf5ffa000)\n\tlibopenblas.so.0 => /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007a221cc20000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007a222175d000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007a2221674000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007a221ca00000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007a22217a1000)\n\tlibgfortran.so.5 => /lib/x86_64-linux-gnu/libgfortran.so.5 (0x00007a221c600000)",
+  "scope": "Rust CLI launch-to-exit; Julia in-process public API, GC and first invocation excluded. Each condition warmup1+measured3. Sequential. No CPU affinity/frequency isolation, matching original Lanczos procedure.",
+  "load_before": [
+    4.68212890625,
+    3.6005859375,
+    1.62451171875
+  ],
+  "inputs": {
+    "phys_lanczos": {
+      "coulombinter.def": "ca9bed2fca709f648f203da1c7a53d02d51b7495fddf7f71c84010eba80e8ea5",
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "exchange.def": "11fd56ca2701d6758fb353b77bc7d52644b19f2fe1c5c3be38798119c98c1dd6",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "hund.def": "4e494817b26db8891019811e2fa8c0db24f0db8a3f8488efa572fe28ebcef4b4",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "d5c81798e3ed2fb42a86478499fae9cc4fda16c72d0247ee14f0990685360294",
+      "namelist.def": "b89dee7ea7523ac3a01aca39129932ee1752ca1a10de3b1b76976516ec5e45b5",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "pairhop.def": "4d2338d072caaabbe657cd23b7e123063e4857a90612ceaa18fc29df8c73f44c",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6",
+      "zqp_opt.dat": "bc60804a5c6384785178d3db4ca8761a47a10165642f95dda4a5c02170d5aac9"
+    },
+    "phys_interall_lanczos1": {
+      "coulombinter.def": "ca9bed2fca709f648f203da1c7a53d02d51b7495fddf7f71c84010eba80e8ea5",
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "exchange.def": "11fd56ca2701d6758fb353b77bc7d52644b19f2fe1c5c3be38798119c98c1dd6",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "hund.def": "4e494817b26db8891019811e2fa8c0db24f0db8a3f8488efa572fe28ebcef4b4",
+      "interall.def": "8549598fab398689bbeb9e05490acbd8a506422361dc8617ac7f7be85eb97ff8",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "d5c81798e3ed2fb42a86478499fae9cc4fda16c72d0247ee14f0990685360294",
+      "namelist.def": "f897545e0ecd1e9ee461c74dd15f4bfceca321169f5198042953cf30ddb60cb0",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "pairhop.def": "4d2338d072caaabbe657cd23b7e123063e4857a90612ceaa18fc29df8c73f44c",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6",
+      "zqp_opt.dat": "bc60804a5c6384785178d3db4ca8761a47a10165642f95dda4a5c02170d5aac9"
+    },
+    "phys_interall_lanczos2": {
+      "coulombinter.def": "ca9bed2fca709f648f203da1c7a53d02d51b7495fddf7f71c84010eba80e8ea5",
+      "coulombintra.def": "2dee432769f18fdceede4942ac0d975e8ce5de8a39e482fed9aabd3caec698ae",
+      "exchange.def": "11fd56ca2701d6758fb353b77bc7d52644b19f2fe1c5c3be38798119c98c1dd6",
+      "greenone.def": "b30dd7042523b98a4d4627acbfc312efeb11bdcea30c7d1e363cc275e33f5c1a",
+      "greentwo.def": "691a473126df3c13e933921c9576acbbac0ca72480aeefb2448eb50936b9518b",
+      "greentwoex.def": "1b38b8a9f66906f6a8ee6019fffce5317153330779758120c5ca55d49c98f8c7",
+      "gutzwilleridx.def": "ab689fc16e245bae343961a9a424398adaf5ddeef667911e4a4306f0c4834528",
+      "hund.def": "4e494817b26db8891019811e2fa8c0db24f0db8a3f8488efa572fe28ebcef4b4",
+      "interall.def": "8549598fab398689bbeb9e05490acbd8a506422361dc8617ac7f7be85eb97ff8",
+      "jastrowidx.def": "2feb386bcb243aa4b1cee3d3309c87b120757484756041b8ec5df9a637115956",
+      "locspn.def": "d27306ba8703a1431ebc33846f98fecf5a812133b98adbeb0b6af61041fbaee2",
+      "modpara.def": "8fe974879be1a87324a16c675c363d9d894d214b73ee887e5a163b18c2896bce",
+      "namelist.def": "f897545e0ecd1e9ee461c74dd15f4bfceca321169f5198042953cf30ddb60cb0",
+      "orbitalidx.def": "c2a1a275bfab65ff94a19e1ed6f9a630c02a0e1eb4ee80cd0787e166b5997ff6",
+      "pairhop.def": "4d2338d072caaabbe657cd23b7e123063e4857a90612ceaa18fc29df8c73f44c",
+      "qptransidx.def": "c996af9119a1f2e5cec513dc08476050a5bdd60e02f42409f0ffd3d4a05d992d",
+      "trans.def": "0f0ffb4737bdf45ecde7190df564f5c475c48538c0353804dbe534dbc9f7fec6",
+      "zqp_opt.dat": "bc60804a5c6384785178d3db4ca8761a47a10165642f95dda4a5c02170d5aac9"
+    }
+  },
+  "load_after": [
+    2.9912109375,
+    3.43017578125,
+    2.931640625
+  ]
+}

@@ -1,0 +1,146 @@
+[
+  {
+    "threads": 1,
+    "case": "phys_interall_lanczos1",
+    "impl": "julia",
+    "median": 112.181418579
+  },
+  {
+    "threads": 1,
+    "case": "phys_interall_lanczos1",
+    "impl": "rust",
+    "median": 62.81282044807449
+  },
+  {
+    "threads": 1,
+    "case": "phys_interall_lanczos2",
+    "impl": "julia",
+    "median": 166.002205604
+  },
+  {
+    "threads": 1,
+    "case": "phys_interall_lanczos2",
+    "impl": "rust",
+    "median": 85.37106352695264
+  },
+  {
+    "threads": 1,
+    "case": "phys_lanczos",
+    "impl": "julia",
+    "median": 57.009801996
+  },
+  {
+    "threads": 1,
+    "case": "phys_lanczos",
+    "impl": "rust",
+    "median": 32.64364286605269
+  },
+  {
+    "threads": 4,
+    "case": "phys_interall_lanczos1",
+    "impl": "julia",
+    "median": 117.08644456
+  },
+  {
+    "threads": 4,
+    "case": "phys_interall_lanczos1",
+    "impl": "rust",
+    "median": 73.29368086101022
+  },
+  {
+    "threads": 4,
+    "case": "phys_interall_lanczos2",
+    "impl": "julia",
+    "median": 171.592718902
+  },
+  {
+    "threads": 4,
+    "case": "phys_interall_lanczos2",
+    "impl": "rust",
+    "median": 96.92924166691955
+  },
+  {
+    "threads": 4,
+    "case": "phys_lanczos",
+    "impl": "julia",
+    "median": 57.928447944
+  },
+  {
+    "threads": 4,
+    "case": "phys_lanczos",
+    "impl": "rust",
+    "median": 40.8947701290017
+  },
+  {
+    "threads": 8,
+    "case": "phys_interall_lanczos1",
+    "impl": "julia",
+    "median": 114.418816535
+  },
+  {
+    "threads": 8,
+    "case": "phys_interall_lanczos1",
+    "impl": "rust",
+    "median": 77.39724733598996
+  },
+  {
+    "threads": 8,
+    "case": "phys_interall_lanczos2",
+    "impl": "julia",
+    "median": 172.114331663
+  },
+  {
+    "threads": 8,
+    "case": "phys_interall_lanczos2",
+    "impl": "rust",
+    "median": 101.33677966101095
+  },
+  {
+    "threads": 8,
+    "case": "phys_lanczos",
+    "impl": "julia",
+    "median": 58.914645455
+  },
+  {
+    "threads": 8,
+    "case": "phys_lanczos",
+    "impl": "rust",
+    "median": 45.42076514905784
+  },
+  {
+    "threads": 16,
+    "case": "phys_interall_lanczos1",
+    "impl": "julia",
+    "median": 117.567850965
+  },
+  {
+    "threads": 16,
+    "case": "phys_interall_lanczos1",
+    "impl": "rust",
+    "median": 79.18810626596678
+  },
+  {
+    "threads": 16,
+    "case": "phys_interall_lanczos2",
+    "impl": "julia",
+    "median": 174.021709735
+  },
+  {
+    "threads": 16,
+    "case": "phys_interall_lanczos2",
+    "impl": "rust",
+    "median": 114.62402268499136
+  },
+  {
+    "threads": 16,
+    "case": "phys_lanczos",
+    "impl": "julia",
+    "median": 59.883471769
+  },
+  {
+    "threads": 16,
+    "case": "phys_lanczos",
+    "impl": "rust",
+    "median": 47.280168817029335
+  }
+]
