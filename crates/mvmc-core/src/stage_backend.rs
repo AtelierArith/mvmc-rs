@@ -115,6 +115,15 @@ pub struct PfInvBatch {
     pub outcome: Vec<PlaneOutcome>,
 }
 
+/// Per-plane results when inverses overwrite caller-owned matrix storage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PfBatch {
+    /// Pfaffian per plane, in input order.
+    pub pf: Vec<f64>,
+    /// Numerical outcome per plane, in input order.
+    pub outcome: Vec<PlaneOutcome>,
+}
+
 /// Device-resident measurement stage A request (issue #518 milestone 2, `stage_a_pfaffian`).
 ///
 /// The caller lists the batch slots it needs tables for by their electron sites; the backend
@@ -168,6 +177,18 @@ pub trait PfaffianStages: Send {
         n: usize,
         planes: usize,
     ) -> Result<PfInvBatch, StageError>;
+
+    /// Optionally replace each input plane by its inverse, avoiding a full
+    /// batch allocation/copy. `None` must leave `x` unchanged; the caller then
+    /// uses this same provider's ordinary batch method, never another backend.
+    fn pfaffian_inverse_batch_in_place(
+        &mut self,
+        _x: &mut [f64],
+        _n: usize,
+        _planes: usize,
+    ) -> Result<Option<PfBatch>, StageError> {
+        Ok(None)
+    }
 
     /// Whether this backend provides the device-resident stage A protocol
     /// ([`Self::stage_a_resident`]). The C-order oracle and every host-only backend leave the
@@ -256,6 +277,23 @@ impl PfaffianStages for COrderPfaffian {
         n: usize,
         planes: usize,
     ) -> Result<PfInvBatch, StageError> {
+        let mut inv = x.to_vec();
+        let out = self
+            .pfaffian_inverse_batch_in_place(&mut inv, n, planes)?
+            .expect("C-order implements the in-place batch method");
+        Ok(PfInvBatch {
+            pf: out.pf,
+            inv,
+            outcome: out.outcome,
+        })
+    }
+
+    fn pfaffian_inverse_batch_in_place(
+        &mut self,
+        x: &mut [f64],
+        n: usize,
+        planes: usize,
+    ) -> Result<Option<PfBatch>, StageError> {
         if x.len() != n * n * planes {
             return Err(StageError::Failed(format!(
                 "buffer length {} != n*n*planes = {}",
@@ -269,11 +307,10 @@ impl PfaffianStages for COrderPfaffian {
         // scalar PfaPack sequence, but distribute independent planes across the
         // same bounded inner pool used by calc_m_all (#586). The disjoint output
         // windows retain input order, including failed/non-finite planes.
-        let mut inv = x.to_vec();
         let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
         crate::threading::qp_update(
             &mut results,
-            &mut inv,
+            x,
             plane_len,
             plane_len,
             0,
@@ -318,7 +355,7 @@ impl PfaffianStages for COrderPfaffian {
             },
         );
         let (pf, outcome) = results.into_iter().unzip();
-        Ok(PfInvBatch { pf, inv, outcome })
+        Ok(Some(PfBatch { pf, outcome }))
     }
 }
 

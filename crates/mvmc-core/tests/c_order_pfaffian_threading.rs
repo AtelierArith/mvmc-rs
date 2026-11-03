@@ -1,5 +1,5 @@
 //! #586: independent batched planes retain scalar arithmetic and status ordering.
-use mvmc_core::stage_backend::{COrderPfaffian, PfaffianStages, PlaneOutcome};
+use mvmc_core::stage_backend::{COrderPfaffian, PfInvBatch, PfaffianStages, PlaneOutcome};
 use mvmc_core::threading;
 use std::process::Command;
 
@@ -59,10 +59,23 @@ fn c_order_plane_child() {
     input[3 * N * N..4 * N * N].fill(f64::NAN);
     threading::install(|| {
         let observer = threading::start_observation();
-        for _ in 0..2 {
-            let output = COrderPfaffian
-                .pfaffian_inverse_batch(&input, N, PLANES)
-                .unwrap();
+        for in_place in [false, true] {
+            let output = if in_place {
+                let mut inv = input.clone();
+                let out = COrderPfaffian
+                    .pfaffian_inverse_batch_in_place(&mut inv, N, PLANES)
+                    .unwrap()
+                    .expect("C-order supports caller-owned storage");
+                PfInvBatch {
+                    pf: out.pf,
+                    inv,
+                    outcome: out.outcome,
+                }
+            } else {
+                COrderPfaffian
+                    .pfaffian_inverse_batch(&input, N, PLANES)
+                    .unwrap()
+            };
             assert_eq!(output.pf.len(), PLANES);
             assert_eq!(output.inv.len(), input.len());
             assert_eq!(output.outcome.len(), PLANES);
@@ -312,10 +325,12 @@ fn check_plane_preparation() {
             "inactive/invalid inverse tables remain untouched",
         );
     }
+    // Nine assembled planes plus three published planes in each of two
+    // successful slots; skipped/failed slots have no publication jobs.
     if threading::inner_thread_config().threads > 1 {
-        assert_eq!(observed.parallel_entry_items, 9, "{observed:?}");
+        assert_eq!(observed.parallel_entry_items, 15, "{observed:?}");
         assert!(observed.distinct_workers >= 2, "{observed:?}");
     } else {
-        assert_eq!(observed.serial_entry_items, 9, "{observed:?}");
+        assert_eq!(observed.serial_entry_items, 15, "{observed:?}");
     }
 }

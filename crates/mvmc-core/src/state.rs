@@ -377,6 +377,14 @@ impl<T: TensorScalar> InvMColMajor<T> {
         self.raw_mut()
     }
 
+    /// Fully overwrite every matrix plane without reading stale host values.
+    /// Pad slots may remain untouched, as with `qp_matrix_slice_mut`. Mark the
+    /// table valid only after the synchronous writer returns successfully.
+    pub(crate) fn overwrite_matrices(&mut self, write: impl FnOnce(&mut [T])) {
+        write(self.raw_mut());
+        self.mark_valid();
+    }
+
     /// Borrow one QP plane as a contiguous column-major slice of length
     /// `n_size * n_size` (the pad slot is dropped).
     pub fn qp_matrix_slice(&self, qp: usize) -> &[T] {
@@ -1451,6 +1459,28 @@ mod tests {
         assert_eq!(a.pad_slot(1), 99.0);
         assert_eq!(a.qp_matrix_slice(0).len(), n_size * n_size);
         assert_eq!(a.qp_matrix_slice(1).len(), n_size * n_size);
+    }
+
+    #[test]
+    fn full_matrix_overwrite_validates_only_after_success() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+        let mut table = InvMColMajor::<f64>::zeros(2, 1);
+        table.mark_stale("test: device owner");
+        assert!(catch_unwind(AssertUnwindSafe(|| {
+            table.overwrite_matrices(|storage| {
+                storage[0] = 7.0;
+                panic!("incomplete matrix publication");
+            });
+        }))
+        .is_err());
+        assert!(table.is_stale());
+        assert!(catch_unwind(AssertUnwindSafe(|| {
+            let _ = table.as_slice();
+        }))
+        .is_err());
+        table.overwrite_matrices(|storage| storage.fill(0.0));
+        assert!(!table.is_stale());
+        assert_eq!(table.as_slice().len(), 10);
     }
 
     #[test]

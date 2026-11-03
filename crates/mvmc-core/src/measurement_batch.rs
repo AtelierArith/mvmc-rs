@@ -85,6 +85,8 @@ use crate::stage_backend::{PfaffianStages, PlaneOutcome, StageBackendKind, Stage
 use crate::state::{InvMColMajor, SlaterElmFlat};
 
 /// Default number of samples per batch (see the module docs on memory).
+/// Pure C-order host stages instead use a smaller worker/QP-based default;
+/// explicit `MVMC_RS_MEASURE_BATCH` and test overrides take priority in both.
 ///
 /// Issue #519 follow-up: with the pinned/async stage-A transfers and no redundant per-call
 /// host copies, the fixed per-call cost (worker round trip, device allocation, two stream
@@ -387,7 +389,18 @@ pub fn stage_a_pfaffian(
             };
         },
     );
-    let result = backend.pfaffian_inverse_batch(&x, n, planes);
+    let (result, in_place) = match backend.pfaffian_inverse_batch_in_place(&mut x, n, planes) {
+        Ok(Some(out)) => (
+            Ok(crate::stage_backend::PfInvBatch {
+                pf: out.pf,
+                inv: std::mem::take(&mut x),
+                outcome: out.outcome,
+            }),
+            true,
+        ),
+        Ok(None) => (backend.pfaffian_inverse_batch(&x, n, planes), false),
+        Err(error) => (Err(error), false),
+    };
     batch.stage_x = x;
     let out = result?;
     for (a, &slot) in active.iter().enumerate() {
@@ -400,20 +413,27 @@ pub fn stage_a_pfaffian(
             continue;
         }
         let set = &mut batch.real[slot];
-        for qp in 0..n_qp {
-            let p = a * n_qp + qp;
-            // mVMC invM = -X^-1 (`M_DSCAL(&nsq, &minus_one, invM, &one)`).
-            for (dst, &v) in set
-                .inv
-                .qp_matrix_slice_mut(qp)
-                .iter_mut()
-                .zip(&out.inv[p * nn..(p + 1) * nn])
-            {
-                *dst = -v;
-            }
-            set.pf[qp] = out.pf[p];
-        }
+        set.inv.overwrite_matrices(|inverse_storage| {
+            crate::threading::for_each_chunk_pair_mut(
+                inverse_storage,
+                nn + 1,
+                &mut set.pf,
+                1,
+                crate::threading::scaled_cost_ns(n, nn),
+                |qp, inverse, pf| {
+                    let p = a * n_qp + qp;
+                    // mVMC invM = -X^-1; leave each plane's pad slot untouched.
+                    for (dst, &v) in inverse[..nn].iter_mut().zip(&out.inv[p * nn..(p + 1) * nn]) {
+                        *dst = -v;
+                    }
+                    pf[0] = out.pf[p];
+                },
+            )
+        });
         batch.status[slot] = SlotStatus::Ready;
+    }
+    if in_place {
+        batch.stage_x = out.inv;
     }
     Ok(())
 }
