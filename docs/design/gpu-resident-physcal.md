@@ -24,6 +24,22 @@ Each window advances all walkers, measures energy and all requested one-body,
 direct two-body and product-side Green functions, then adds the ensemble mean.
 The returned arrays follow parsed input order and are averaged over windows.
 
+The existing CUDA binary exposes an explicit subcommand:
+
+```bash
+cargo build --locked --release --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --bin mvmc-cuda
+CUDA_VISIBLE_DEVICES=0 gpu/mvmc-gpu-cuda/target/release/mvmc-cuda \
+  resident-physcal namelist.def zqp_opt.dat new-output
+```
+
+This uses the sampling lengths and seed from the input. `new-output` must not
+exist. `energy.dat`, `green_one.dat`, `green_two.dat` and `green_two_ex.dat`
+contain one FP64 mean per line, in input order; `sampling.txt` records the seed,
+walker/window counts and RNG. These are ensemble means rather than the ordinary
+CLI's full C-format moment/parameter files. Omitting the subcommand selects the
+usual CLI and its original sampling/output contract. Process startup and file
+output belong to CLI wall time; the warmed API benchmark excludes both.
+
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
 spin-conserving operators, hopping-only sampling, no local spins/RBM/DH/OptTrans,
 `NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly.
