@@ -46,6 +46,44 @@ fn physcal_operator_validation_precedes_cuda_allocation() {
 }
 
 #[test]
+fn physcal_one_body_output_retains_c_indirect_reader_contract() {
+    use mvmc_expert_parsers::types::{GreenOneTerm, GreenTwoExTerm, Spin::Up};
+    let mut model = Model::prepare_physcal(
+        &input(),
+        &OptConfig::default(),
+        config().opt_para.as_deref(),
+    )
+    .unwrap();
+    let term = GreenOneTerm {
+        site1: 0,
+        site2: 1,
+        spin1: Up,
+        spin2: Up,
+    };
+    model.data.green_one_terms = vec![term, term];
+    model.data.green_two_terms.clear();
+    model.data.green_two_ex_terms = vec![GreenTwoExTerm {
+        site1: 0,
+        site2: 1,
+        spin1: Up,
+        spin2: Up,
+        site3: 0,
+        site4: 1,
+        spin3: Up,
+        spin4: Up,
+    }];
+    // C's independent duplicate-reader fixture expects one canonical row,
+    // rather than Julia GPU's two raw OneBodyG rows. Keep shared input semantics.
+    model.data.canonicalize_green_two_ex();
+    assert_eq!(model.data.green_one_terms, vec![term]);
+    let operators = Operators::prepare(&model).unwrap();
+    assert_eq!(
+        (operators.n_one, operators.n_two, operators.n_ex),
+        (1, 0, 1)
+    );
+}
+
+#[test]
 #[ignore = "requires CUDA; 20-window repeatability and transfer/synchronization contract"]
 fn resident_physcal_repeats_and_keeps_sampling_resident() {
     let cfg = config();

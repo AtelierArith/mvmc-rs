@@ -5,7 +5,7 @@
 fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
     let usage = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR";
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
-        println!("{usage}\nOutputs: energy.dat, green_one.dat, green_two.dat, green_two_ex.dat (ensemble means in input order).");
+        println!("{usage}\nOutputs: energy.dat, green_one.dat, green_two.dat, green_two_ex.dat (ensemble means in parsed operator order).");
         return Ok(());
     }
     if args.len() != 3 {

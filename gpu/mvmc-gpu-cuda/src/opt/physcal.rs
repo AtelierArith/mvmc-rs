@@ -25,7 +25,8 @@ pub struct PhysCalConfig {
     pub opt_para: Option<PathBuf>,
 }
 
-/// Ensemble means in input operator order, averaged over all measurement windows.
+/// Ensemble means in parsed operator order, averaged over measurement windows.
+/// With TwoBodyGEx, the shared parser supplies C's canonical one-body list.
 #[derive(Debug)]
 pub struct PhysCalResult {
     pub energy: f64,

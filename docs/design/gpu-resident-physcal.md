@@ -22,7 +22,11 @@ Omitted settings follow `NVMCSample`, `NDataQtySmp`, `NVMCWarmUp` and
 `NVMCInterval`; the last two use the same site-count conversion as Julia GPU.
 Each window advances all walkers, measures energy and all requested one-body,
 direct two-body and product-side Green functions, then adds the ensemble mean.
-The returned arrays follow parsed input order and are averaged over windows.
+The returned arrays follow the shared Rust parser's operator order and are
+averaged over windows. With `TwoBodyGEx`, one-body output uses that parser's
+C-compatible canonical list (deduplication plus missing constituents), which
+can differ from Julia GPU's raw one-body list. Direct/product-side outputs
+retain their parsed order.
 
 The existing CUDA binary exposes an explicit subcommand:
 
@@ -34,14 +38,14 @@ CUDA_VISIBLE_DEVICES=0 gpu/mvmc-gpu-cuda/target/release/mvmc-cuda \
 
 This uses the sampling lengths and seed from the input. `new-output` must not
 exist. `energy.dat`, `green_one.dat`, `green_two.dat` and `green_two_ex.dat`
-contain one FP64 mean per line, in input order; `sampling.txt` records the seed,
+contain one FP64 mean per line in the parsed order above; `sampling.txt` records the seed,
 walker/window counts and RNG. These are ensemble means rather than the ordinary
 CLI's full C-format moment/parameter files. Omitting the subcommand selects the
 usual CLI and its original sampling/output contract. Process startup and file
 output belong to CLI wall time; the warmed API benchmark excludes both.
 
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
-spin-conserving operators, hopping-only sampling, no local spins/RBM/DH/OptTrans,
+operators whose individual pairs conserve spin, hopping-only sampling, no local spins/RBM/DH/OptTrans,
 `NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly.
 The ordinary CPU/CLI PhysCal and legacy single-SFMT CUDA path retain their
 existing contracts. The new public API is selected by `benchmark_gpu.sh`.
