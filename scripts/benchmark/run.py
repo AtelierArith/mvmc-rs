@@ -166,15 +166,24 @@ def cuda_library_environment(env, out):
     return result
 
 
+def select_gpu(query, explicit, visible):
+    devices = [[field.strip() for field in line.split(',')] for line in query.splitlines()]
+    selectors = [explicit] if explicit is not None else (visible.split(',') if visible is not None else None)
+    if selectors is not None:
+        selectors = [value.strip() for value in selectors]
+        if not selectors or any(not value or value == '-1' or ',' in value for value in selectors):
+            raise ValueError('No single usable GPU selector; use --device INDEX or GPU-UUID')
+        devices = [row for row in devices if any(row[0] == value or row[1].startswith(value) for value in selectors)]
+    if not devices:
+        raise ValueError('No selected NVIDIA GPU is available; use --device INDEX or GPU-UUID')
+    # Preserve the visible set, selecting one physical device by UUID before remapping to ordinal 0.
+    return min(devices, key=lambda row: int(row[-1].split()[0]))[1]
+
+
 def gpu_measure(args, out, build, env, cpus):
     query = command(['nvidia-smi', '--query-gpu=index,uuid,name,driver_version,memory.used',
                      '--format=csv,noheader'], out / 'gpus.txt', env)
-    device = args.device or env.get('CUDA_VISIBLE_DEVICES')
-    if device is None:
-        devices = [line.split(',') for line in query.splitlines()]
-        device = min(devices, key=lambda row: int(row[-1].strip().split()[0]))[0].strip()
-    if ',' in device or not device:
-        raise ValueError('Select one GPU with --device INDEX or --device GPU-UUID')
+    device = select_gpu(query, args.device, env.get('CUDA_VISIBLE_DEVICES'))
     gpu_env = dict(env, CUDA_VISIBLE_DEVICES=device, MVMC_RS_SAMPLER_BACKEND='cuda',
                    MVMC_RS_SR_BACKEND='cuda', MVMC_RS_MEASURE_BACKEND='cuda',
                    MVMC_RS_MEASURE_PF_BACKEND='cuda', MVMC_RS_INNER_THREADS='1',

@@ -25,6 +25,16 @@ class BenchmarkEntrypoints(unittest.TestCase):
                 self.assertIn('steps=20; samples=320', result.stdout)
                 self.assertFalse(out.exists())
 
+    def test_gpu_selection_preserves_visible_set_and_remaps_by_uuid(self):
+        query = '0, GPU-aaa, RTX 3060, 580, 15 MiB\n1, GPU-bbb, RTX 3060, 580, 160 MiB\n'
+        self.assertEqual(bench.select_gpu(query, None, '0,1'), 'GPU-aaa')
+        self.assertEqual(bench.select_gpu(query, None, '1'), 'GPU-bbb')
+        self.assertEqual(bench.select_gpu(query, '1', '0'), 'GPU-bbb')
+        self.assertEqual(bench.select_gpu(query, None, 'GPU-bbb'), 'GPU-bbb')
+        for visible in ('', '-1', '2', 'GPU-unknown'):
+            with self.assertRaises(ValueError):
+                bench.select_gpu(query, None, visible)
+
     def test_inherited_selectors_cannot_change_benchmark_work(self):
         with patch.dict(os.environ, {'MVMC_RS_MEASURE_BACKEND': 'cuda',
                                     'MVMC_RS_INNER_THRESHOLD': '999999',

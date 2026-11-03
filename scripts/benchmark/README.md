@@ -66,9 +66,9 @@ full-workload performance figures.** `--threads`, `--reps`, `--workloads opt phy
 `--build-dir` and `--output` can narrow/reproduce a run. Output directories must
 be fresh; failure retains partial outputs/logs. `--dry-run` writes nothing.
 
-GPU selection uses `--device` first, then a single existing
-`CUDA_VISIBLE_DEVICES`, otherwise the device with least memory allocated at
-selection time. Both implementations receive the same visible physical device
+GPU selection uses `--device` first, then the visible set from
+`CUDA_VISIBLE_DEVICES`, otherwise all devices. Within the allowed set it picks
+the device with least memory allocated at selection time and records its UUID. Both implementations receive the same visible physical device
 and use visible ordinal 0. This observation is not an exclusive device lock.
 
 ## Timing and sampling contracts
