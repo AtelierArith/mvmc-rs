@@ -115,7 +115,6 @@ impl Model {
                 return Err("initial parameter file could not be loaded".into());
             }
         }
-        read_input_parameters(&mut data, path)?;
         if let Some(opt_para) = opt_para {
             let loaded = mvmc_core::read_opt_para_file(&mut data, opt_para)?;
             if loaded
@@ -126,6 +125,9 @@ impl Model {
                 return Err("incomplete optimized parameter file".into());
             }
         }
+        // C PhysCal loads fixed parameters before applying explicit In*.def overlays.
+        // Opt has no fixed parameter file, so its existing initialization order is unchanged.
+        read_input_parameters(&mut data, path)?;
         mvmc_core::sync::sync_modified_parameter_local(&mut data, !physcal);
         mvmc_core::qp::init_qp_weight(&mut data);
         if physcal {

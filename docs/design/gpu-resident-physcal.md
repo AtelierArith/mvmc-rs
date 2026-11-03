@@ -26,7 +26,9 @@ The returned arrays follow the shared Rust parser's operator order and are
 averaged over windows. With `TwoBodyGEx`, one-body output uses that parser's
 C-compatible canonical list (deduplication plus missing constituents), which
 can differ from Julia GPU's raw one-body list. Direct/product-side outputs
-retain their parsed order.
+retain their parsed order. Fixed parameters are loaded before `In*.def` overlays,
+so explicit overlays take precedence as in C PhysCal. This input rule is retained
+even though Julia GPU currently loads those files in the opposite order.
 
 The existing CUDA binary exposes an explicit subcommand:
 

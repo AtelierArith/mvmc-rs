@@ -10,8 +10,8 @@ fn config() -> PhysCalConfig {
     PhysCalConfig {
         walkers: Some(8),
         nsamples: Some(20),
-        warmup: Some(2),
-        interval: Some(2),
+        warmup: Some(128),
+        interval: Some(128),
         seed: Some(79),
         opt_para: Some(input().with_file_name("zqp_opt.dat")),
         ..Default::default()
@@ -43,6 +43,77 @@ fn physcal_operator_validation_precedes_cuda_allocation() {
     assert!(Operators::prepare(&model)
         .unwrap_err()
         .contains("spin-conserving"));
+}
+
+#[test]
+fn physcal_explicit_input_parameters_override_fixed_parameters() {
+    use std::fs;
+    let baseline = Model::prepare_physcal(
+        &input(),
+        &OptConfig::default(),
+        config().opt_para.as_deref(),
+    )
+    .unwrap();
+    let dir = std::env::temp_dir().join(format!("mvmc-physcal-overlay-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    for entry in fs::read_dir(input().parent().unwrap()).unwrap() {
+        let source = entry.unwrap().path();
+        if source.is_file() {
+            fs::copy(&source, dir.join(source.file_name().unwrap())).unwrap();
+        }
+    }
+    let namelist = dir.join("namelist.def");
+    let mut content = fs::read_to_string(&namelist).unwrap();
+    content.push_str("\nInGutzwiller gutz-input.def\nInOrbital orbital-input.def\n");
+    fs::write(&namelist, content).unwrap();
+    fs::write(
+        dir.join("gutz-input.def"),
+        "===\nNGutzwillerIdx 4\nComplexType 0\n===\n===\n0 0.625 0\n1 0.75 0\n2 0.875 0\n3 1 0\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("orbital-input.def"),
+        "===\nNOrbitalIdx 1\nComplexType 0\n===\n===\n0 0.875 0\n",
+    )
+    .unwrap();
+    let overlaid = Model::prepare_physcal(
+        &namelist,
+        &OptConfig::default(),
+        Some(&dir.join("zqp_opt.dat")),
+    )
+    .unwrap();
+    // Explicit constants verify C's fixed-file -> In*.def precedence. The
+    // other coefficients must retain the supplied fixed-file values.
+    for (&actual, expected) in overlaid.parameters[..4]
+        .iter()
+        .zip([0.625, 0.75, 0.875, 1.0])
+    {
+        close(actual, expected);
+    }
+    close(overlaid.parameters[overlaid.ng + overlaid.nj], 0.875);
+    for (index, (&actual, &fixed)) in overlaid
+        .parameters
+        .iter()
+        .zip(&baseline.parameters)
+        .enumerate()
+    {
+        if index >= overlaid.ng && index != overlaid.ng + overlaid.nj {
+            close(actual, fixed);
+        }
+    }
+    // Removing the overlays recovers every no-In coefficient used by the
+    // recorded L128 benchmark; no parameter reinitialization is introduced.
+    fs::write(&namelist, fs::read_to_string(input()).unwrap()).unwrap();
+    let restored = Model::prepare_physcal(
+        &namelist,
+        &OptConfig::default(),
+        Some(&dir.join("zqp_opt.dat")),
+    )
+    .unwrap();
+    for (&actual, &fixed) in restored.parameters.iter().zip(&baseline.parameters) {
+        close(actual, fixed);
+    }
+    fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
