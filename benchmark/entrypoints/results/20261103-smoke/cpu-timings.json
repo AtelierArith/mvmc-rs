@@ -1,0 +1,170 @@
+[
+  {
+    "workload": "opt",
+    "kind": "Rust",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 0.607
+  },
+  {
+    "workload": "opt",
+    "kind": "C",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 0.714
+  },
+  {
+    "workload": "opt",
+    "kind": "C",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.699
+  },
+  {
+    "workload": "opt",
+    "kind": "Rust",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.558
+  },
+  {
+    "workload": "opt",
+    "kind": "Rust",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 0.336
+  },
+  {
+    "workload": "opt",
+    "kind": "C",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 0.364
+  },
+  {
+    "workload": "opt",
+    "kind": "C",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.376
+  },
+  {
+    "workload": "opt",
+    "kind": "Rust",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.33
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 0.317
+  },
+  {
+    "workload": "phys",
+    "kind": "C",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 0.419
+  },
+  {
+    "workload": "phys",
+    "kind": "C",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.419
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.315
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 0.21
+  },
+  {
+    "workload": "phys",
+    "kind": "C",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 0.237
+  },
+  {
+    "workload": "phys",
+    "kind": "C",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.25
+  },
+  {
+    "workload": "phys",
+    "kind": "Rust",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.239
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 43.180700035
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.639174006
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 43.592031136
+  },
+  {
+    "workload": "opt",
+    "kind": "Julia",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.598244468
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia",
+    "threads": 1,
+    "rep": 0,
+    "seconds": 42.263394825
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia",
+    "threads": 1,
+    "rep": 1,
+    "seconds": 0.411665078
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia",
+    "threads": 4,
+    "rep": 0,
+    "seconds": 42.441219048
+  },
+  {
+    "workload": "phys",
+    "kind": "Julia",
+    "threads": 4,
+    "rep": 1,
+    "seconds": 0.505792382
+  }
+]

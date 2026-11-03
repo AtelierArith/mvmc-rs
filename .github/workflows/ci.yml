@@ -65,6 +65,9 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: false
+      - name: Check one-command benchmark orchestration
+        if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
+        run: uv run --no-project python scripts/test_benchmark_entrypoints.py
       - name: Check real optional gate failure reporting
         if: matrix.platform.cache == 'linux-x86_64' && matrix.configuration.cache == 'default'
         run: |

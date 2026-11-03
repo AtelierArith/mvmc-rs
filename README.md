@@ -98,6 +98,19 @@ Fixed-parameter PhysCal was verified against the committed C-mVMC reference fixt
 
 Both implementations also agree with the C reference within the Julia integration-test tolerances (1e-10 for one-body, 1e-9 for direct/factored two-body). The Rust-vs-Julia differences are at machine-epsilon level and do not indicate a defect in either implementation.
 
+### One-command CPU / GPU benchmark
+
+```bash
+bash scripts/benchmark_cpu.sh
+bash scripts/benchmark_gpu.sh
+```
+
+Run shared Hubbard L128 optimization and fixed-parameter PhysCal inputs. CPU
+compares C, Julia and Rust at 1/4/8/16 threads; GPU compares Julia and Rust.
+Build/preparation, warmup, repetitions and Markdown result tables are included.
+Use `--smoke` for a short check or `--help` for output/device options. Python runs
+through `uv run`. See [prerequisites, timing scope and sampling differences](scripts/benchmark/README.md).
+
 ### PhysCal benchmark
 
 Use `xtask bench-physcal` to compare Rust (`mvmc-cli --physcal`) and Julia (`run_phys_cal_from_namelist`) on the same fixed-parameter PhysCal fixtures:

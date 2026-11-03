@@ -25,6 +25,7 @@ fn main() {
         ..Default::default()
     };
     std::fs::create_dir_all(&output).unwrap();
+    println!("CUDA versions: {:?}", mvmc_gpu_cuda::versions::query());
     println!("config={config:?}\nREADY");
     std::io::stdout().flush().unwrap();
     for line in std::io::stdin().lock().lines() {

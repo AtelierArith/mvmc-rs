@@ -64,3 +64,14 @@ Rust 関数との対応を示します。後半の章は利用リファレンス
 - C 実装: `extern/mVMC-1.3.0/src/mVMC/`。
 - Julia ドキュメント(構成のみ): `extern/Julia-mVMC/docs/src/en/*.md`。
 - Rust ワークスペース: `crates/`。
+
+## CPU・GPU ベンチマーク
+
+```bash
+bash scripts/benchmark_cpu.sh
+bash scripts/benchmark_gpu.sh
+```
+
+共通の Hubbard L=128 入力で、最適化と固定パラメータ PhysCal（Lanczos なし）を計測します。CPU は C・Julia・Rust の 1・4・8・16 スレッド、GPU は Julia・Rust が対象です。必要なビルドと準備、ウォームアップ、反復計測、結果の表出力まで実行します。Python は `uv run` を使います。
+
+短い動作確認は `--smoke`、計測せずに設定を見る場合は `--dry-run` を指定してください。[必要環境・オプション・計時範囲とサンプリングの違い](../../../scripts/benchmark/README.md)を参照してください。CPU と GPU は入力を共通化していますが、GPU の walker や乱数契約の違いがあるため、時間の比を同一カーネルの加速率とは扱いません。
