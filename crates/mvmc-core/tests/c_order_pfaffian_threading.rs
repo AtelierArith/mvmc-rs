@@ -110,6 +110,7 @@ fn c_order_plane_child() {
             assert_eq!(observed.serial_qp_items, 2 * PLANES);
         }
         check_plane_preparation();
+        check_scratch_reuse_across_sizes_and_failures();
         let mut stage = COrderPfaffian;
         let empty = stage.pfaffian_inverse_batch(&[], N, 0).unwrap();
         assert!(empty.pf.is_empty() && empty.inv.is_empty() && empty.outcome.is_empty());
@@ -117,6 +118,73 @@ fn c_order_plane_child() {
             .pfaffian_inverse_batch(&input[..input.len() - 1], N, PLANES)
             .is_err());
     });
+}
+
+fn check_scratch_reuse_across_sizes_and_failures() {
+    let mut stage = COrderPfaffian;
+    for (turn, n) in [6, 2, 8, 4, 6].into_iter().enumerate() {
+        let valid = turn % 3;
+        let nonfinite = (turn + 1) % 3;
+        let singular = (turn + 2) % 3;
+        let mut input = vec![0.0; 3 * n * n];
+        let mut inverse = vec![0.0; n * n];
+        let mut pf = 1.0;
+        let u: Vec<_> = (0..n).map(|i| (i + 1) as f64 / 64.0).collect();
+        let det_s = 1.0 + u.iter().sum::<f64>();
+        let mut w = vec![0.0; n];
+        let mut z = vec![0.0; n];
+        // Independent dense congruence A=S*D*S^T, S=I+u*1^T. D has skew
+        // 2x2 blocks. Pf(A)=det(S)*Pf(D), det(S)=1+sum(u), and
+        // A^-1_ij=D^-1_ij+((D^-1*u)_j-(D^-1*u)_i)/det(S).
+        // Small binary-exact u keeps the congruence well conditioned. Dense
+        // inputs avoid the full-factorization zero-column status of sparse D.
+        // Rotating the healthy plane puts successful work after both failure
+        // kinds on the same static workers while retained scratch changes size.
+        for k in 0..n / 2 {
+            let (i, j) = (2 * k, 2 * k + 1);
+            let value = (k + 2) as f64;
+            input[valid * n * n + i + j * n] = value;
+            input[valid * n * n + j + i * n] = -value;
+            inverse[i + j * n] = -1.0 / value;
+            inverse[j + i * n] = 1.0 / value;
+            w[i] = value;
+            w[j] = -value;
+            z[i] = -u[j] / value;
+            z[j] = u[i] / value;
+            pf *= value;
+        }
+        pf *= det_s;
+        for j in 0..n {
+            for i in 0..n {
+                input[valid * n * n + i + j * n] += w[i] * u[j] - u[i] * w[j];
+                inverse[i + j * n] += (z[j] - z[i]) / det_s;
+            }
+        }
+        input[nonfinite * n * n..(nonfinite + 1) * n * n].fill(f64::NAN);
+        let result = stage.pfaffian_inverse_batch(&input, n, 3).unwrap();
+        assert_eq!(result.outcome[valid], PlaneOutcome::Ok);
+        assert_eq!(result.outcome[nonfinite], PlaneOutcome::NonFinite);
+        assert_eq!(
+            result.outcome[singular],
+            PlaneOutcome::ZeroPivot { row: n - 1 }
+        );
+        numerical::assert_values_close(
+            [result.pf[valid]],
+            [pf],
+            128.0 * f64::EPSILON,
+            128.0 * f64::EPSILON,
+            "analytic congruence Pfaffian after scratch resize/failure",
+        );
+        numerical::assert_values_close(
+            result.inv[valid * n * n..(valid + 1) * n * n]
+                .iter()
+                .copied(),
+            inverse.iter().copied(),
+            128.0 * f64::EPSILON,
+            128.0 * f64::EPSILON,
+            "analytic congruence inverse after scratch resize/failure",
+        );
+    }
 }
 
 #[derive(Default)]

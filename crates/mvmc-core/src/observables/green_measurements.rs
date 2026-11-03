@@ -216,7 +216,34 @@ pub(crate) fn collect_green_values(
     evaluate: impl Fn(usize) -> Complex64 + Send + Sync,
 ) -> Vec<Complex64> {
     let mut values = vec![Complex64::new(0.0, 0.0); len];
-    if allow_parallel {
+    if allow_parallel && crate::threading::inner_parallel_work(len, cost_ns) {
+        // C schedules these nonuniform operators dynamically. Interleave the
+        // logical indices across fixed blocks so a long run of cheap density
+        // operators cannot leave the heavy two-hop work on just a few workers.
+        // Each cell still has one producer and is published at its original
+        // index; no kernel reduction or aggregate addition is reordered.
+        let workers = crate::threading::inner_worker_count(len).min(len).max(1);
+        let block_len = len.div_ceil(workers);
+        let blocks = len.div_ceil(block_len);
+        let _scope = crate::threading::profile_scope(true, len);
+        let observed =
+            crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, true);
+        let produced = crate::threading::static_blocks(len, |start, _end| {
+            let first = start / block_len;
+            (first..len)
+                .step_by(blocks)
+                .map(|i| {
+                    let _entry = observed.enter_item();
+                    (i, evaluate(i))
+                })
+                .collect::<Vec<_>>()
+        });
+        for block in produced {
+            for (i, value) in block {
+                values[i] = value;
+            }
+        }
+    } else if allow_parallel {
         crate::threading::for_each_mut(&mut values, cost_ns, |i, value| *value = evaluate(i));
     } else {
         let observed =
@@ -457,6 +484,15 @@ mod tests {
         let snapshot = observer.finish();
         assert_eq!(snapshot.serial_entry_items, 33);
         assert_eq!(snapshot.parallel_entry_items, 0);
+        for len in [0, 1, 31, 32, 33] {
+            let indexed = collect_green_values(len, 100_000, true, |i| {
+                Complex64::new(i as f64, -(i as f64))
+            });
+            for (i, value) in indexed.iter().enumerate() {
+                assert!((value.re - i as f64).abs() <= f64::EPSILON);
+                assert!((value.im + i as f64).abs() <= f64::EPSILON);
+            }
+        }
         println!("GREEN_INDEX_CHILD_PASS workers={workers} threshold={configured}");
     }
 

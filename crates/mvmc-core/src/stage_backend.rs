@@ -231,6 +231,16 @@ pub fn centered(o: &[f64], ns: usize, np: usize, e: &[f64], w: &[f64]) -> (Vec<f
 #[derive(Debug, Default, Clone, Copy)]
 pub struct COrderPfaffian;
 
+type COrderPlaneScratch = (Vec<PivotIndex1Based>, Vec<f64>, Vec<f64>);
+thread_local! {
+    // Each worker retains only its pivots and inversion scratch. dsktf2 resets
+    // pivots and utu2inv resets its full workspace before reading it, so failed
+    // planes and changes of matrix size cannot supply numerical input later.
+    static C_ORDER_PLANE_SCRATCH: std::cell::RefCell<COrderPlaneScratch> = const {
+        std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new()))
+    };
+}
+
 impl PfaffianStages for COrderPfaffian {
     fn label(&self) -> String {
         "c-order-cpu".to_string()
@@ -269,39 +279,42 @@ impl PfaffianStages for COrderPfaffian {
             0,
             planes,
             crate::pfaffian::pfaffian_qp_cost_ns(n),
-            || (vec![PivotIndex1Based(0); n], Vec::new(), Vec::new()),
-            |(pivots, vt, work), _, result_slot, a| {
-                let result = {
-                    let mut view = SqMat::new(&mut *a, n);
-                    dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
-                };
-                match result {
-                    Err(info) => {
-                        a.fill(0.0);
-                        *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
-                    }
-                    Ok(value) => {
-                        // One private scratch set per static block, reused across
-                        // its planes. utu2inv resets its full matrix workspace;
-                        // failed/non-finite planes cannot leak into the next one.
-                        vt.resize(n.saturating_sub(1), 0.0);
-                        work.resize(n * n, 0.0);
-                        {
-                            let mut view = SqMat::new(&mut *a, n);
-                            let mut m_work = SqMat::new(work, n);
-                            utu2inv_real(&mut view, pivots, vt, &mut m_work);
+            || (),
+            |_, _, result_slot, a| {
+                C_ORDER_PLANE_SCRATCH.with_borrow_mut(|(pivots, vt, work)| {
+                    pivots.resize(n, PivotIndex1Based(0));
+                    let result = {
+                        let mut view = SqMat::new(&mut *a, n);
+                        dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
+                    };
+                    match result {
+                        Err(info) => {
+                            a.fill(0.0);
+                            *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
                         }
-                        // `a` now holds X^-1 (X * invM = I) for the matrix as given
-                        *result_slot = (
-                            value,
-                            if value.is_finite() {
-                                PlaneOutcome::Ok
-                            } else {
-                                PlaneOutcome::NonFinite
-                            },
-                        );
+                        Ok(value) => {
+                            // Worker-local scratch is reused across batches.
+                            // utu2inv resets its full matrix workspace;
+                            // failed/non-finite planes cannot leak into the next one.
+                            vt.resize(n.saturating_sub(1), 0.0);
+                            work.resize(n * n, 0.0);
+                            {
+                                let mut view = SqMat::new(&mut *a, n);
+                                let mut m_work = SqMat::new(work, n);
+                                utu2inv_real(&mut view, pivots, vt, &mut m_work);
+                            }
+                            // `a` now holds X^-1 (X * invM = I) for the matrix as given
+                            *result_slot = (
+                                value,
+                                if value.is_finite() {
+                                    PlaneOutcome::Ok
+                                } else {
+                                    PlaneOutcome::NonFinite
+                                },
+                            );
+                        }
                     }
-                }
+                })
             },
         );
         let (pf, outcome) = results.into_iter().unzip();
