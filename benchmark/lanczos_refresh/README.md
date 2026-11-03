@@ -75,5 +75,5 @@ The upstream benchmark README separately documents a pre-existing Julia/C
 discrepancy for the ordinary real InterAll fixtures used here. Passing upstream
 integration fixtures does not establish agreement for every input in this sweep.
 The full refreshed workload retains an InterAll Julia/Rust QQQQ difference of
-0.4573802746838851; the updated Julia outputs agree with the historical Julia
-outputs within 3.46e-13. The speed refresh does not resolve that existing discrepancy.
+0.4573802746838851; the first measured 1-thread Julia outputs agree with the corresponding historical
+Julia outputs within 3.46e-13. The speed refresh does not resolve that existing discrepancy.
