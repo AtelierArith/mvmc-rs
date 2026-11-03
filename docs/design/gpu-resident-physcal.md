@@ -1,0 +1,50 @@
+# Resident GPU PhysCal
+
+`mvmc_gpu_cuda::physcal::run_gpu_phys_cal_from_namelist` computes fixed-parameter
+ensemble means on CUDA, using the Julia GPU initialization and sampling contract.
+
+```rust,ignore
+use mvmc_gpu_cuda::physcal::{run_gpu_phys_cal_from_namelist, PhysCalConfig};
+let result = run_gpu_phys_cal_from_namelist("namelist.def", PhysCalConfig {
+    opt_para: Some("zqp_opt.dat".into()),
+    walkers: Some(320),
+    nsamples: Some(1),
+    warmup: Some(128),
+    interval: Some(128),
+    seed: Some(79),
+    ..Default::default()
+})?;
+println!("{}", result.energy);
+```
+
+The explicit `warmup` and `interval` lengths count proposals per walker.
+Omitted settings follow `NVMCSample`, `NDataQtySmp`, `NVMCWarmUp` and
+`NVMCInterval`; the last two use the same site-count conversion as Julia GPU.
+Each window advances all walkers, measures energy and all requested one-body,
+direct two-body and product-side Green functions, then adds the ensemble mean.
+The returned arrays follow parsed input order and are averaged over windows.
+
+Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
+spin-conserving operators, hopping-only sampling, no local spins/RBM/DH/OptTrans,
+`NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly.
+The ordinary CPU/CLI PhysCal and legacy single-SFMT CUDA path retain their
+existing contracts. The new public API is selected by `benchmark_gpu.sh`.
+
+The model and initialization are shared with resident GPU Opt; PhysCal omits
+the sparse derivative basis and SR matrix/solver storage. Julia PhysCal uses
+immediate inverse updates, whereas Opt opts into delayed updates. That
+distinction is preserved. One ensemble owns its cuRAND XORWOW generator,
+configurations, inverse/Pfaffian caches and observable accumulators on device.
+No complete host optimizer state is constructed for a walker. Sampling and
+measurement run in one stream scope without explicit intermediate uploads,
+downloads or host decisions. Setup downloads initialization status, and the
+final result downloads one status word and the observable means.
+
+Numerical authority for this explicit GPU path is Julia-mVMC
+`611031147f1bad9704c55084f6817feeba481b13`, with the pinned GPU manifest and
+Juliaup `+1.13`. CPU/C-order execution remains C-authoritative. See the
+[independent fixture provenance](../../gpu/mvmc-gpu-cuda/tests/fixtures/physcal_julia.md)
+for numerical bounds, exact RNG/discrete checks and optional regeneration.
+Transfer counters cover explicit raw-execution operations; they do not count
+every operation inside native CUDA libraries. The benchmark report records the
+full warmed API boundary, which includes Rust's internal state teardown.
