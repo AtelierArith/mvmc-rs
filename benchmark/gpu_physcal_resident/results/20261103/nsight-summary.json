@@ -1,0 +1,271 @@
+{
+  "scope": "One warmed resident PhysCal public API, captured after repetition zero. Device busy fraction is the union of kernel intervals / first-to-last kernel span; it is not SM occupancy, and includes no other process. API/device times overlap; do not sum them.",
+  "kernel_count": 33,
+  "matching_driver_launch_count": 29,
+  "matching_runtime_launch_count": 4,
+  "kernel_window_ns": 524911747,
+  "kernel_busy_union_ns": 523468040,
+  "kernel_busy_fraction": 0.997249619563191,
+  "kernels": {
+    "generate_seed_pseudo": {
+      "calls": 1,
+      "device_ns_sum": 161503,
+      "grid_sizes": [
+        [
+          64,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_slater": {
+      "calls": 1,
+      "device_ns_sum": 24256,
+      "grid_sizes": [
+        [
+          512,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_fill": {
+      "calls": 1,
+      "device_ns_sum": 1952,
+      "grid_sizes": [
+        [
+          2,
+          1,
+          1
+        ]
+      ]
+    },
+    "gen_sequenced": {
+      "calls": 3,
+      "device_ns_sum": 12736,
+      "grid_sizes": [
+        [
+          64,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_initial": {
+      "calls": 1,
+      "device_ns_sum": 257503,
+      "grid_sizes": [
+        [
+          3,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_counts": {
+      "calls": 2,
+      "device_ns_sum": 345278,
+      "grid_sizes": [
+        [
+          320,
+          1,
+          1
+        ]
+      ]
+    },
+    "interval_resident_factor": {
+      "calls": 5,
+      "device_ns_sum": 154676657,
+      "grid_sizes": [
+        [
+          2560,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_initial_commit": {
+      "calls": 1,
+      "device_ns_sum": 2048471,
+      "grid_sizes": [
+        [
+          320,
+          1,
+          1
+        ]
+      ]
+    },
+    "interval_resident_hop": {
+      "calls": 4,
+      "device_ns_sum": 333331062,
+      "grid_sizes": [
+        [
+          320,
+          1,
+          1
+        ]
+      ]
+    },
+    "interval_paired_factor": {
+      "calls": 4,
+      "device_ns_sum": 43680,
+      "grid_sizes": [
+        [
+          2560,
+          1,
+          1
+        ]
+      ]
+    },
+    "interval_paired_fallback": {
+      "calls": 4,
+      "device_ns_sum": 8096,
+      "grid_sizes": [
+        [
+          3,
+          1,
+          1
+        ]
+      ]
+    },
+    "interval_resident_commit": {
+      "calls": 4,
+      "device_ns_sum": 7679,
+      "grid_sizes": [
+        [
+          320,
+          1,
+          1
+        ]
+      ]
+    },
+    "opt_energy_terms": {
+      "calls": 1,
+      "device_ns_sum": 32365552,
+      "grid_sizes": [
+        [
+          66560,
+          1,
+          1
+        ]
+      ]
+    },
+    "physcal_reduce": {
+      "calls": 1,
+      "device_ns_sum": 183615,
+      "grid_sizes": [
+        [
+          1025,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "api": [
+    {
+      "name": "cuStreamSynchronize",
+      "calls": 11,
+      "host_ns_sum": 366224992
+    },
+    {
+      "name": "cuMemcpyDtoHAsync_v2",
+      "calls": 3,
+      "host_ns_sum": 157119467
+    },
+    {
+      "name": "cuMemFree_v2",
+      "calls": 63,
+      "host_ns_sum": 12103568
+    },
+    {
+      "name": "cuMemAlloc_v2",
+      "calls": 63,
+      "host_ns_sum": 2036815
+    },
+    {
+      "name": "cuMemcpyHtoDAsync_v2",
+      "calls": 26,
+      "host_ns_sum": 1705758
+    },
+    {
+      "name": "cudaDeviceSynchronize_v3020",
+      "calls": 1,
+      "host_ns_sum": 158774
+    },
+    {
+      "name": "cuLaunchKernel",
+      "calls": 29,
+      "host_ns_sum": 155277
+    },
+    {
+      "name": "cuMemsetD8Async",
+      "calls": 10,
+      "host_ns_sum": 101926
+    },
+    {
+      "name": "cudaLaunchKernel_v7000",
+      "calls": 4,
+      "host_ns_sum": 51490
+    },
+    {
+      "name": "cuDevicePrimaryCtxRelease_v2",
+      "calls": 65,
+      "host_ns_sum": 11192
+    },
+    {
+      "name": "cuCtxSetCurrent",
+      "calls": 18,
+      "host_ns_sum": 9105
+    },
+    {
+      "name": "cudaMalloc_v3020",
+      "calls": 1,
+      "host_ns_sum": 7515
+    },
+    {
+      "name": "cudaFree_v3020",
+      "calls": 5,
+      "host_ns_sum": 7194
+    },
+    {
+      "name": "cuCtxSynchronize",
+      "calls": 1,
+      "host_ns_sum": 4876
+    }
+  ],
+  "copies": [
+    {
+      "kind": "CUDA_MEMCPY_KIND_HTOD",
+      "label": "Host-to-Device",
+      "calls": 26,
+      "bytes": 6942308,
+      "device_ns_sum": 598779
+    },
+    {
+      "kind": "CUDA_MEMCPY_KIND_DTOH",
+      "label": "Device-to-Host",
+      "calls": 3,
+      "bytes": 8208,
+      "device_ns_sum": 4448
+    }
+  ],
+  "gpu": [
+    {
+      "id": 1,
+      "name": "NVIDIA GeForce RTX 3060",
+      "uuid": "ed896702-ca5c-93f6-2537-06fffdac4a91",
+      "sm_count": 28,
+      "compute_major": 8,
+      "compute_minor": 6
+    },
+    {
+      "id": 0,
+      "name": "NVIDIA GeForce RTX 3060",
+      "uuid": "a78d5217-eba3-72c2-3d5b-8ae496ebbc2e",
+      "sm_count": 28,
+      "compute_major": 8,
+      "compute_minor": 6
+    }
+  ]
+}

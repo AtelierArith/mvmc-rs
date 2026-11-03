@@ -1,0 +1,53 @@
+{
+  "source": "7955a882debb8d22af2e97dd2a927b13f84e95c7",
+  "status": "",
+  "legacy_source": "67b0a2c8d418876d8a40e4d35a9cb341567590e9",
+  "julia_source": "611031147f1bad9704c55084f6817feeba481b13",
+  "julia_lock_sha256": "86c69ea3a0c04c2b6af6f48a3f36ec2a08fa2bc564ac4845f5799e53244fc573",
+  "binary_sha256": {
+    "legacy": "5269e04847f359a3a8ddcc706dc1cd1fe4fea66924ed6aab8abc6ff8ee8109af",
+    "resident": "0f9a251a3a6526ff2834ed01acc90731b20fc5ddc3dfbff231af45abbef75e31"
+  },
+  "input_sha256": {
+    "greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+    "greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+    "gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+    "namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+    "qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+    "coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+    "zqp_opt.dat": "9130219b4af78438bee2f30171833e7a8f86a01ff11e23276af439652230fd90",
+    "locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+    "modpara.def": "ff23a26a37a173d664216e4b21ff1b57ceb3a0ccfe1288ecbae28d958b086782",
+    "trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da",
+    "jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+    "StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+    "orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697"
+  },
+  "uname": [
+    "Linux",
+    "witch",
+    "6.8.0-147-generic",
+    "#147-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep 24 11:33:16 UTC 2026",
+    "x86_64"
+  ],
+  "cpu": 17,
+  "gpu_selector": "0",
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "0",
+    "JULIA_PROJECT": "@.",
+    "LD_LIBRARY_PATH": "/home/terasaki/.julia/artifacts/6b0fef1d16bb8733a19f60c6efec768f99e5f90d/lib:/home/terasaki/.julia/artifacts/369f5472daa95aec77a8de76aa620f1b8f13293f/lib",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "JULIA_NUM_GC_THREADS": "1",
+    "MVMC_C_TIMER": "1",
+    "MVMC_BLAS_PROVIDER": "openblas",
+    "MVMC_RS_SR_BACKEND": "c-order",
+    "MVMC_RS_MEASURE_PF_BACKEND": "c-order",
+    "JULIA_MVMC_INNER_THREADS": "1",
+    "JULIA_MVMC_PFAPACK_THREADS": "1",
+    "MVMC_RS_INNER_THREADS": "1",
+    "MVMC_BENCH_REPS": "3",
+    "JULIA_NUM_THREADS": "1"
+  },
+  "scope": "Warm public APIs including parse/init/sample/observables/host results; startup, rep0, explicit Julia GC and serialization excluded. Rust internal state teardown included."
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "kind": "Rust single SFMT",
+    "rep": 0,
+    "seconds": 2.839328952
+  },
+  {
+    "kind": "Rust single SFMT",
+    "rep": 1,
+    "seconds": 2.523458338
+  },
+  {
+    "kind": "Rust single SFMT",
+    "rep": 2,
+    "seconds": 2.523448947
+  },
+  {
+    "kind": "Rust single SFMT",
+    "rep": 3,
+    "seconds": 2.521307016
+  },
+  {
+    "kind": "Rust resident XORWOW",
+    "rep": 0,
+    "seconds": 15.420982143
+  },
+  {
+    "kind": "Rust resident XORWOW",
+    "rep": 1,
+    "seconds": 0.570726783
+  },
+  {
+    "kind": "Rust resident XORWOW",
+    "rep": 2,
+    "seconds": 0.566890071
+  },
+  {
+    "kind": "Rust resident XORWOW",
+    "rep": 3,
+    "seconds": 0.575282538
+  },
+  {
+    "kind": "Julia XORWOW",
+    "rep": 0,
+    "seconds": 106.938318817
+  },
+  {
+    "kind": "Julia XORWOW",
+    "rep": 1,
+    "seconds": 0.743595945
+  },
+  {
+    "kind": "Julia XORWOW",
+    "rep": 2,
+    "seconds": 0.754712832
+  },
+  {
+    "kind": "Julia XORWOW",
+    "rep": 3,
+    "seconds": 0.736691289
+  }
+]

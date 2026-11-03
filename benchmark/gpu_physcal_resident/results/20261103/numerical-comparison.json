@@ -1,0 +1,82 @@
+[
+  {
+    "rep": 0,
+    "name": "energy",
+    "max_abs": 5.680078629666241e-11
+  },
+  {
+    "rep": 0,
+    "name": "one",
+    "max_abs": 5.4087186118767505e-12
+  },
+  {
+    "rep": 0,
+    "name": "two",
+    "max_abs": 5.755066562196376e-12
+  },
+  {
+    "rep": 0,
+    "name": "two_ex",
+    "max_abs": 0.0
+  },
+  {
+    "rep": 1,
+    "name": "energy",
+    "max_abs": 5.680078629666241e-11
+  },
+  {
+    "rep": 1,
+    "name": "one",
+    "max_abs": 5.4087186118767505e-12
+  },
+  {
+    "rep": 1,
+    "name": "two",
+    "max_abs": 5.755066562196376e-12
+  },
+  {
+    "rep": 1,
+    "name": "two_ex",
+    "max_abs": 0.0
+  },
+  {
+    "rep": 2,
+    "name": "energy",
+    "max_abs": 5.680078629666241e-11
+  },
+  {
+    "rep": 2,
+    "name": "one",
+    "max_abs": 5.4087186118767505e-12
+  },
+  {
+    "rep": 2,
+    "name": "two",
+    "max_abs": 5.755066562196376e-12
+  },
+  {
+    "rep": 2,
+    "name": "two_ex",
+    "max_abs": 0.0
+  },
+  {
+    "rep": 3,
+    "name": "energy",
+    "max_abs": 5.680078629666241e-11
+  },
+  {
+    "rep": 3,
+    "name": "one",
+    "max_abs": 5.4087186118767505e-12
+  },
+  {
+    "rep": 3,
+    "name": "two",
+    "max_abs": 5.755066562196376e-12
+  },
+  {
+    "rep": 3,
+    "name": "two_ex",
+    "max_abs": 0.0
+  }
+]
