@@ -1,0 +1,8 @@
+{
+  "julia_blas": "Julia=1.13.1 BLAS=LBTConfig([ILP64] libopenblas64_.so)\nBLAS_PATH=/home/terasaki/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libopenblas64_.so\nBLAS_SHA256=4ee5ad9dcc4082b918d3e5bfc434b5a74fb43025f102447eb16a7f04ba21a12b\nOpenBLAS_config=OpenBLAS 0.3.30  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=512\n",
+  "rust_blas": "OpenBLAS 0.3.26 NO_LAPACKE DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64",
+  "manifest_sha256": "09ebd06dab244510094b99fe7c6efa2fe7a3d22221d1336b951123a5a6e8befc",
+  "manifest_unchanged": true,
+  "runtime_source": "835cbad931e9303a465ee6845e96755dfe5031a1",
+  "upstream_reference": "611031147f1bad9704c55084f6817feeba481b13"
+}

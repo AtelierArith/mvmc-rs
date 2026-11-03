@@ -34,13 +34,16 @@ for case in ['phys_lanczos', 'phys_interall_lanczos1', 'phys_interall_lanczos2']
     for impl in ['rust', 'julia']:
         reference[impl] = read(a.results / '1threads' / case / (f'{impl}-1/output' if impl == 'rust' else f'{impl}-1'))
         for n in [1,4,8,16]:
+            thread_path = a.results / f'{n}threads' / case / f'{impl}-1'
+            thread_reference = read(thread_path / 'output' if impl == 'rust' else thread_path)
             for rep in range(4):
                 path = a.results / f'{n}threads' / case / f'{impl}-{rep}'
                 arrays = read(path / 'output' if impl == 'rust' else path)
                 differences = compare(arrays, reference[impl])
+                fixed_thread_differences = compare(arrays, thread_reference)
                 # Same-implementation repeatability; this is not an oracle for cross-language correctness.
                 assert max(differences.values()) <= 1e-11, (case, impl, n, rep, differences)
-                results.append(dict(case=case, impl=impl, threads=n, rep=rep, files=len(arrays), repeat_max_abs=differences))
+                results.append(dict(case=case, impl=impl, threads=n, rep=rep, files=len(arrays), repeat_max_abs=differences, fixed_thread_repeat_max_abs=fixed_thread_differences))
         if a.historical:
             old = read(a.historical / '1threads/outputs' / case / f'{impl}-1')
             results.append(dict(case=case, impl=impl, historical_max_abs=compare(reference[impl], old)))
