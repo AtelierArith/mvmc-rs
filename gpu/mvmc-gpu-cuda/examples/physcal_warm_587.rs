@@ -13,8 +13,12 @@ fn main() {
     let output = PathBuf::from(&args[3]);
     std::fs::create_dir(&output).expect("fresh output directory");
     mvmc_gpu_cuda::install();
+    println!("CUDA versions: {:?}", mvmc_gpu_cuda::versions::query());
     threading::install(|| {
-        for rep in 0..4 {
+        let reps: usize = std::env::var("MVMC_BENCH_REPS")
+            .map(|value| value.parse().expect("MVMC_BENCH_REPS must be an integer"))
+            .unwrap_or(3);
+        for rep in 0..=reps {
             let contract = args
                 .get(4)
                 .is_some_and(|mode| mode == "--contract" || mode == "--initial-contract");

@@ -17,7 +17,10 @@ p.add_argument('--workloads',choices=['opt','phys'],nargs='+',default=['opt','ph
 p.add_argument('--reps',type=int,default=3)
 p.add_argument('--container-name',default='mvmc-586-baseline')
 p.add_argument('--batch-size',type=int)
+p.add_argument('--cpu-ids',type=int,nargs='+',help='ordered physical CPU IDs; first N used at N threads')
 a=p.parse_args()
+if a.cpu_ids is not None and (len(a.cpu_ids) < max(a.threads) or len(set(a.cpu_ids)) != len(a.cpu_ids) or any(cpu not in os.sched_getaffinity(0) for cpu in a.cpu_ids)):
+    p.error('--cpu-ids must contain enough distinct CPUs from the allowed affinity')
 if a.reps < 1 or any(n < 1 for n in a.threads) or (a.batch_size is not None and a.batch_size < 1):
     p.error('thread counts, measured repetitions and batch size must be positive')
 def run(cmd,**kw): return subprocess.run(cmd,check=True,text=True,capture_output=True,**kw).stdout
@@ -61,7 +64,7 @@ try:
                         env['MVMC_RS_MEASURE_BATCH']=str(a.batch_size)
                     launch=['docker','exec','-w',f'/out/{label}']
                     for k,v in env.items(): launch+=['-e',f'{k}={v}']
-                    launch += [name,'bash','-lc',shell,'bench',f'0-{n-1}',*cmd]
+                    launch += [name,'bash','-lc',shell,'bench',(','.join(map(str,a.cpu_ids[:n])) if a.cpu_ids else f'0-{n-1}'),*cmd]
                     start=time.perf_counter(); result=subprocess.run(launch,text=True,capture_output=True); elapsed=time.perf_counter()-start
                     (dest/'launcher.stdout').write_text(result.stdout); (dest/'launcher.stderr').write_text(result.stderr)
                     if result.returncode: raise RuntimeError(f'{label}: exit {result.returncode}')
