@@ -3664,9 +3664,21 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             }
         }
     };
-    if !all_complex && !use_fsz && stage_kind.is_none() {
+    let host_pfaffian =
+        stage_kind.is_none() || stage_kind == Some(crate::stage_backend::StageBackendKind::COrder);
+    let host_consumer = measure_stage.is_none()
+        || measure_stage == Some(crate::stage_backend::StageBackendKind::COrder);
+    if !all_complex && !use_fsz && host_pfaffian && host_consumer {
+        // Batched stage A owns sample/QP planes, not just a single sample's
+        // QP width. Retain its workers for the following host consumers too.
+        // Device/tenferro consumers keep their own execution lifecycle.
+        let work_width = if stage_kind.is_some() {
+            n_qp_full.saturating_mul(batch_size)
+        } else {
+            n_qp_full
+        };
         crate::threading::with_qp_region_team(
-            n_qp_full,
+            work_width,
             crate::pfaffian::pfaffian_qp_cost_ns(n_size),
             calculate_samples,
         );
