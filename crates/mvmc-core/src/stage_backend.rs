@@ -115,6 +115,15 @@ pub struct PfInvBatch {
     pub outcome: Vec<PlaneOutcome>,
 }
 
+/// Per-plane results when inverses overwrite caller-owned matrix storage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PfBatch {
+    /// Pfaffian per plane, in input order.
+    pub pf: Vec<f64>,
+    /// Numerical outcome per plane, in input order.
+    pub outcome: Vec<PlaneOutcome>,
+}
+
 /// Device-resident measurement stage A request (issue #518 milestone 2, `stage_a_pfaffian`).
 ///
 /// The caller lists the batch slots it needs tables for by their electron sites; the backend
@@ -168,6 +177,18 @@ pub trait PfaffianStages: Send {
         n: usize,
         planes: usize,
     ) -> Result<PfInvBatch, StageError>;
+
+    /// Optionally replace each input plane by its inverse, avoiding a full
+    /// batch allocation/copy. `None` must leave `x` unchanged; the caller then
+    /// uses this same provider's ordinary batch method, never another backend.
+    fn pfaffian_inverse_batch_in_place(
+        &mut self,
+        _x: &mut [f64],
+        _n: usize,
+        _planes: usize,
+    ) -> Result<Option<PfBatch>, StageError> {
+        Ok(None)
+    }
 
     /// Whether this backend provides the device-resident stage A protocol
     /// ([`Self::stage_a_resident`]). The C-order oracle and every host-only backend leave the
@@ -231,6 +252,16 @@ pub fn centered(o: &[f64], ns: usize, np: usize, e: &[f64], w: &[f64]) -> (Vec<f
 #[derive(Debug, Default, Clone, Copy)]
 pub struct COrderPfaffian;
 
+type COrderPlaneScratch = (Vec<PivotIndex1Based>, Vec<f64>, Vec<f64>);
+thread_local! {
+    // Each worker retains only its pivots and inversion scratch. dsktf2 resets
+    // pivots and utu2inv resets its full workspace before reading it, so failed
+    // planes and changes of matrix size cannot supply numerical input later.
+    static C_ORDER_PLANE_SCRATCH: std::cell::RefCell<COrderPlaneScratch> = const {
+        std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new()))
+    };
+}
+
 impl PfaffianStages for COrderPfaffian {
     fn label(&self) -> String {
         "c-order-cpu".to_string()
@@ -246,6 +277,23 @@ impl PfaffianStages for COrderPfaffian {
         n: usize,
         planes: usize,
     ) -> Result<PfInvBatch, StageError> {
+        let mut inv = x.to_vec();
+        let out = self
+            .pfaffian_inverse_batch_in_place(&mut inv, n, planes)?
+            .expect("C-order implements the in-place batch method");
+        Ok(PfInvBatch {
+            pf: out.pf,
+            inv,
+            outcome: out.outcome,
+        })
+    }
+
+    fn pfaffian_inverse_batch_in_place(
+        &mut self,
+        x: &mut [f64],
+        n: usize,
+        planes: usize,
+    ) -> Result<Option<PfBatch>, StageError> {
         if x.len() != n * n * planes {
             return Err(StageError::Failed(format!(
                 "buffer length {} != n*n*planes = {}",
@@ -259,53 +307,55 @@ impl PfaffianStages for COrderPfaffian {
         // scalar PfaPack sequence, but distribute independent planes across the
         // same bounded inner pool used by calc_m_all (#586). The disjoint output
         // windows retain input order, including failed/non-finite planes.
-        let mut inv = x.to_vec();
         let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
         crate::threading::qp_update(
             &mut results,
-            &mut inv,
+            x,
             plane_len,
             plane_len,
             0,
             planes,
             crate::pfaffian::pfaffian_qp_cost_ns(n),
-            || (vec![PivotIndex1Based(0); n], Vec::new(), Vec::new()),
-            |(pivots, vt, work), _, result_slot, a| {
-                let result = {
-                    let mut view = SqMat::new(&mut *a, n);
-                    dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
-                };
-                match result {
-                    Err(info) => {
-                        a.fill(0.0);
-                        *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
-                    }
-                    Ok(value) => {
-                        // One private scratch set per static block, reused across
-                        // its planes. utu2inv resets its full matrix workspace;
-                        // failed/non-finite planes cannot leak into the next one.
-                        vt.resize(n.saturating_sub(1), 0.0);
-                        work.resize(n * n, 0.0);
-                        {
-                            let mut view = SqMat::new(&mut *a, n);
-                            let mut m_work = SqMat::new(work, n);
-                            utu2inv_real(&mut view, pivots, vt, &mut m_work);
+            || (),
+            |_, _, result_slot, a| {
+                C_ORDER_PLANE_SCRATCH.with_borrow_mut(|(pivots, vt, work)| {
+                    pivots.resize(n, PivotIndex1Based(0));
+                    let result = {
+                        let mut view = SqMat::new(&mut *a, n);
+                        dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
+                    };
+                    match result {
+                        Err(info) => {
+                            a.fill(0.0);
+                            *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
                         }
-                        // `a` now holds X^-1 (X * invM = I) for the matrix as given
-                        *result_slot = (
-                            value,
-                            if value.is_finite() {
-                                PlaneOutcome::Ok
-                            } else {
-                                PlaneOutcome::NonFinite
-                            },
-                        );
+                        Ok(value) => {
+                            // Worker-local scratch is reused across batches.
+                            // utu2inv resets its full matrix workspace;
+                            // failed/non-finite planes cannot leak into the next one.
+                            vt.resize(n.saturating_sub(1), 0.0);
+                            work.resize(n * n, 0.0);
+                            {
+                                let mut view = SqMat::new(&mut *a, n);
+                                let mut m_work = SqMat::new(work, n);
+                                utu2inv_real(&mut view, pivots, vt, &mut m_work);
+                            }
+                            // `a` now holds X^-1 (X * invM = I) for the matrix as given
+                            *result_slot = (
+                                value,
+                                if value.is_finite() {
+                                    PlaneOutcome::Ok
+                                } else {
+                                    PlaneOutcome::NonFinite
+                                },
+                            );
+                        }
                     }
-                }
+                })
             },
         );
         let (pf, outcome) = results.into_iter().unzip();
-        Ok(PfInvBatch { pf, inv, outcome })
+        Ok(Some(PfBatch { pf, outcome }))
     }
 }
 

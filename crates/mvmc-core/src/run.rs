@@ -2983,8 +2983,6 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     // keeps the C order. Batch size 1 is the former serial loop. See `measurement_batch`.
     let mut batch = std::mem::take(&mut state.measurement_batch);
     let samples: Vec<usize> = measurement_range.collect();
-    let batch_size = crate::measurement_batch::resolve_batch_size(samples.len());
-    batch.configure(n_size, n_qp_full, batch_size, all_complex);
     // Stage A source (issue #422/#437): C-order `calc_m_all_*` per sample by default, or one
     // batched `PfaffianStages` call of the selected stage backend (real, non-FSZ only).
     let stage_kind = match crate::measurement_batch::selected_measurement_pfaffian() {
@@ -3018,6 +3016,15 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             }
         }
     };
+    let batch_size = if stage_kind == Some(crate::stage_backend::StageBackendKind::COrder)
+        && (measure_stage.is_none()
+            || measure_stage == Some(crate::stage_backend::StageBackendKind::COrder))
+    {
+        crate::measurement_batch::resolve_c_order_host_batch_size(samples.len(), n_qp_full)
+    } else {
+        crate::measurement_batch::resolve_batch_size(samples.len())
+    };
+    batch.configure(n_size, n_qp_full, batch_size, all_complex);
     let slater_offset_stage_b = 2 * (1 + n_proj + if use_fsz { 0 } else { n_rbm });
     let slater_len_stage_b = if measure_stage.is_some()
         && data.modpara.vmc_calc_mode == 0
@@ -3664,9 +3671,21 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
             }
         }
     };
-    if !all_complex && !use_fsz && stage_kind.is_none() {
+    let host_pfaffian =
+        stage_kind.is_none() || stage_kind == Some(crate::stage_backend::StageBackendKind::COrder);
+    let host_consumer = measure_stage.is_none()
+        || measure_stage == Some(crate::stage_backend::StageBackendKind::COrder);
+    if !all_complex && !use_fsz && host_pfaffian && host_consumer {
+        // Batched stage A owns sample/QP planes, not just a single sample's
+        // QP width. Retain its workers for the following host consumers too.
+        // Device/tenferro consumers keep their own execution lifecycle.
+        let work_width = if stage_kind.is_some() {
+            n_qp_full.saturating_mul(batch_size)
+        } else {
+            n_qp_full
+        };
         crate::threading::with_qp_region_team(
-            n_qp_full,
+            work_width,
             crate::pfaffian::pfaffian_qp_cost_ns(n_size),
             calculate_samples,
         );

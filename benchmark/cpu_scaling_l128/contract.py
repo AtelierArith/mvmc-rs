@@ -6,12 +6,15 @@ p.add_argument('--out',type=Path,required=True)
 p.add_argument('--inputs',type=Path,required=True)
 p.add_argument('--image',required=True)
 p.add_argument('--before-volume',required=True)
-p.add_argument('--after-volume',required=True)
+after=p.add_mutually_exclusive_group(required=True)
+after.add_argument('--after-volume')
+after.add_argument('--after-dir',type=Path,help='bind a native Cargo target directory instead of a named volume')
 p.add_argument('--reference',type=Path,help='reuse previously captured before records on the same environment')
 a=p.parse_args(); out=a.out.resolve(); out.mkdir()
 def run(cmd): return subprocess.run(cmd,check=True,capture_output=True,text=True).stdout
 name='mvmc-586-contract'
-run(['docker','run','-d','--name',name,'--shm-size=1g','-v',f'{out}:/out','-v',f'{a.inputs.resolve()}:/inputs:ro','-v',f'{a.before_volume}:/before:ro','-v',f'{a.after_volume}:/after:ro',a.image,'sleep','infinity'])
+after_target=str(a.after_dir.resolve()) if a.after_dir else a.after_volume
+run(['docker','run','-d','--name',name,'--shm-size=1g','-v',f'{out}:/out','-v',f'{a.inputs.resolve()}:/inputs:ro','-v',f'{a.before_volume}:/before:ro','-v',f'{after_target}:/after:ro',a.image,'sleep','infinity'])
 checks=[]
 try:
     hashes=run(['docker','exec',name,'sha256sum','/before/release/examples/cpu_scaling_contract_586','/after/release/examples/cpu_scaling_contract_586'])

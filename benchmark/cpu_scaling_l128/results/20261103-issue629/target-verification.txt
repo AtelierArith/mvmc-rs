@@ -1,0 +1,35 @@
+[
+  {
+    "mode": "opt",
+    "threads": 8,
+    "c": 19.565,
+    "rust": 17.66,
+    "c_over_rust": 1.1078708946772367,
+    "meets_target": true
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "c": 21.817,
+    "rust": 16.417,
+    "c_over_rust": 1.3289273314247425,
+    "meets_target": true
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "c": 1.261,
+    "rust": 1.026,
+    "c_over_rust": 1.229044834307992,
+    "meets_target": true
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "c": 1.291,
+    "rust": 0.961,
+    "c_over_rust": 1.3433922996878251,
+    "meets_target": true
+  }
+]
+56 C/Rust file pairs passed; max absolute difference 6.8685039877891541e-09; max fraction of bound 0.187911

@@ -3,8 +3,8 @@
 //! The per-region helpers (`for_each_*`, `qp_fill*`, `qp_update`, `collect_terms`,
 //! `static_blocks`) partition the items into fixed blocks with one producer per output
 //! element. Ordinary regions use Rayon's broadcast (issue #479). The normal-real
-//! saved-sample calculation can reuse a bounded Spindle team when QP width is smaller
-//! than the pool; its scheduling preserves the same blocks and per-element arithmetic.
+//! saved-sample calculation can reuse a bounded Spindle team across its regions;
+//! its scheduling preserves the same blocks and per-element arithmetic.
 //! [`install`]/`install_inner` keep `par_iter` for the few regions that use it directly.
 
 use std::cell::RefCell;
@@ -677,17 +677,20 @@ pub(crate) fn with_qp_region_team<R: Send>(
     operation: impl FnOnce() -> R + Send,
 ) -> R {
     let threads = inner_thread_config().threads;
+    let width = qp_count.min(threads);
     if !hoisted()
-        || qp_count < 2
-        || qp_count >= threads
+        || width < 2
         || REGION_TEAM.with(std::cell::Cell::get)
-        || !inner_parallel_work_cold(qp_count, cost_ns)
+        || !inner_parallel_work_cold(width, cost_ns)
     {
         return operation();
     }
-    // The QP width supplies the budget; no physical-core or host-specific cap.
+    // The work width supplies the budget, capped by the configured pool. The
+    // admitted real host consumers use fork rather than nested Rayon iterators.
+    // Keep the same pool workers through successive small regions, including
+    // when a batched stage has enough work for the whole pool.
     // All workers return before the caller reaches sampling/MPI/SR work.
-    spindle::with_lock(qp_count, || {
+    spindle::with_lock(width, || {
         let _team = RegionTeamScope(REGION_TEAM.with(|flag| flag.replace(true)));
         operation()
     })
@@ -1305,10 +1308,7 @@ mod tests {
             let mut entries = vec![usize::MAX; 33];
             let workers = std::sync::Mutex::new(std::collections::BTreeSet::new());
             with_qp_region_team(qp_count, 100_000, || {
-                assert_eq!(
-                    REGION_TEAM.with(std::cell::Cell::get),
-                    (2..16).contains(&qp_count)
-                );
+                assert_eq!(REGION_TEAM.with(std::cell::Cell::get), qp_count >= 2);
                 for_each_mut(&mut entries, 1, |index, value| {
                     workers
                         .lock()
@@ -1319,12 +1319,13 @@ mod tests {
                     assert_eq!(nested, [index * 7, index * 7 + 1, index * 7 + 2]);
                     *value = index * 11;
                 });
-                if (2..16).contains(&qp_count) {
+                if qp_count >= 2 {
                     // Spindle starts workers lazily: the budget caps the team,
                     // but does not promise a simultaneous gang for a Barrier.
-                    assert_eq!(spindle::max_num_threads(), qp_count);
-                    assert!((1..=qp_count).contains(&spindle::current_num_threads()));
-                    assert!(workers.lock().unwrap().len() <= qp_count);
+                    let width = qp_count.min(16);
+                    assert_eq!(spindle::max_num_threads(), width);
+                    assert!((1..=width).contains(&spindle::current_num_threads()));
+                    assert!(workers.lock().unwrap().len() <= width);
                     with_qp_region_team(qp_count, 1, || {
                         assert!(REGION_TEAM.with(std::cell::Cell::get));
                     });
@@ -1341,23 +1342,25 @@ mod tests {
                     ownership(qp_count);
                 }
             }
-            assert!(std::panic::catch_unwind(|| {
-                with_qp_region_team(8, 100_000, || panic!("scope cleanup probe"))
-            })
-            .is_err());
-            assert!(!REGION_TEAM.with(std::cell::Cell::get));
-            assert!(std::panic::catch_unwind(|| {
-                with_qp_region_team(8, 100_000, || {
-                    fork(8, |index| {
-                        if index == 3 {
-                            panic!("block cleanup probe");
-                        }
+            for width in [8, 16] {
+                assert!(std::panic::catch_unwind(|| {
+                    with_qp_region_team(width, 100_000, || panic!("scope cleanup probe"))
+                })
+                .is_err());
+                assert!(!REGION_TEAM.with(std::cell::Cell::get));
+                assert!(std::panic::catch_unwind(|| {
+                    with_qp_region_team(width, 100_000, || {
+                        fork(width, |index| {
+                            if index == width / 2 {
+                                panic!("block cleanup probe");
+                            }
+                        })
                     })
                 })
-            })
-            .is_err());
-            assert!(!REGION_TEAM.with(std::cell::Cell::get));
-            ownership(8);
+                .is_err());
+                assert!(!REGION_TEAM.with(std::cell::Cell::get));
+                ownership(width);
+            }
             // Public Rayon work may use every worker after the bounded region,
             // including after its root or an item panics.
             let barrier = Barrier::new(16);

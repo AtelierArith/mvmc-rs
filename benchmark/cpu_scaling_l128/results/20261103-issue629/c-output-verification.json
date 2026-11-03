@@ -1,0 +1,562 @@
+[
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 1.7826096154749393e-09,
+    "max_fraction_of_bound": 0.01345738701219282
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 1.7826096154749393e-09,
+    "max_fraction_of_bound": 0.1278847882087535
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 7.876224117353559e-10,
+    "max_fraction_of_bound": 0.12240060884684284
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 3.1650415621697903e-09,
+    "max_fraction_of_bound": 0.03193842211708351
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 3.1650415621697903e-09,
+    "max_fraction_of_bound": 0.18325578092338357
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 3.1650415621697903e-09,
+    "max_fraction_of_bound": 0.15608755835101223
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 3.5579432733356953e-09,
+    "max_fraction_of_bound": 0.03590319175920422
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 3.5579432733356953e-09,
+    "max_fraction_of_bound": 0.1479079305336234
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 3.5579432733356953e-09,
+    "max_fraction_of_bound": 0.12486149360839782
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 5.838955985382199e-09,
+    "max_fraction_of_bound": 0.058920882181516136
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 5.838955985382199e-09,
+    "max_fraction_of_bound": 0.14924567105274017
+  },
+  {
+    "mode": "opt",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 5.838955985382199e-09,
+    "max_fraction_of_bound": 0.1297401883828771
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 1.064108801074326e-09,
+    "max_fraction_of_bound": 0.01822559116624758
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 1.064108801074326e-09,
+    "max_fraction_of_bound": 0.1083004071693918
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 3.1468516681343317e-10,
+    "max_fraction_of_bound": 0.07634052107164316
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 3.0759110813960433e-09,
+    "max_fraction_of_bound": 0.031039006781602426
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 3.0759110813960433e-09,
+    "max_fraction_of_bound": 0.16401649124079729
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 3.0759110813960433e-09,
+    "max_fraction_of_bound": 0.1616535829218334
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 1.1350493878126144e-09,
+    "max_fraction_of_bound": 0.008568785199600325
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 1.1350493878126144e-09,
+    "max_fraction_of_bound": 0.1595258042816335
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 7.09405867382884e-11,
+    "max_fraction_of_bound": 0.09881108338744637
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out.dat",
+    "fields": 120,
+    "max_absolute_difference": 6.868503987789154e-09,
+    "max_fraction_of_bound": 0.06931004707707318
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var.dat",
+    "fields": 46440,
+    "max_absolute_difference": 6.868503987789154e-09,
+    "max_fraction_of_bound": 0.1879108339500759
+  },
+  {
+    "mode": "opt",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zqp_opt.dat",
+    "rust_file": "zqp_opt.dat",
+    "fields": 1548,
+    "max_absolute_difference": 6.868503987789154e-09,
+    "max_fraction_of_bound": 0.14427127159453057
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 0,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 1,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 2,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 8,
+    "rep": 3,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 0,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 1,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 2,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_out_001.dat",
+    "rust_file": "zvo_out_001.dat",
+    "fields": 6,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_var_001.dat",
+    "rust_file": "zvo_var_001.dat",
+    "fields": 2322,
+    "max_absolute_difference": 3.637978807091713e-12,
+    "max_fraction_of_bound": 2.6291148777095925e-05
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_cisajs_001.dat",
+    "rust_file": "zvo_cisajs_001.dat",
+    "fields": 1536,
+    "max_absolute_difference": 6.231126725708691e-15,
+    "max_fraction_of_bound": 0.0005723770088325834
+  },
+  {
+    "mode": "phys",
+    "threads": 16,
+    "rep": 3,
+    "c_file": "zvo_cisajscktalt_001.dat",
+    "rust_file": "zvo_cisajscktalt_001.dat",
+    "fields": 7680,
+    "max_absolute_difference": 2.0175701387348255e-14,
+    "max_fraction_of_bound": 0.002008624684229938
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "archive": "paired.tar.gz",
+    "sha256": "96d84b0fdf15139f8d4895a4c1d960a3a5ec301bff00f88604d5e0ba760eca43",
+    "files": 786
+  },
+  {
+    "archive": "baseline.tar.gz",
+    "sha256": "dbc17178632fdb8a5db85fa6a1bb817818bd6f70a949b70a993e213b22fa1d52",
+    "files": 784
+  },
+  {
+    "archive": "contract.tar.gz",
+    "sha256": "8100a3adebc25c422fe59c4fd08fe4883ebc28f8b640dc8ad3fcdf4ed3af6af6",
+    "files": 86
+  }
+]

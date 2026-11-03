@@ -18,6 +18,13 @@ use num_complex::Complex64;
 /// All-reduce trait. The single-process implementation is a no-op;
 /// the MPI implementation (Phase 7) will call `MPI_Allreduce(MPI_SUM)`.
 pub trait Reducer {
+    /// Borrow this same reducer with a shared-thread guarantee for scoped host
+    /// execution. Opt in only when callbacks are safe on host workers. MPI and
+    /// other thread-affine reducers retain the default and their caller path.
+    fn host_thread_safe(&self) -> Option<&(dyn Reducer + Sync)> {
+        None
+    }
+
     /// Broadcast an SR-CG vector with MPI_DOUBLE on the global communicator.
     /// A multi-rank implementation must not silently use the serial no-op.
     fn broadcast_f64(&self, _root: usize, _buf: &mut [f64]) -> Result<(), String> {
@@ -178,6 +185,10 @@ impl ReducerAsDyn for dyn Reducer {
 pub struct SingleProcessReducer;
 
 impl Reducer for SingleProcessReducer {
+    fn host_thread_safe(&self) -> Option<&(dyn Reducer + Sync)> {
+        Some(self)
+    }
+
     fn allreduce_sum_f64(&self, _buf: &mut [f64]) {}
     fn allreduce_sum_c64(&self, _buf: &mut [Complex64]) {}
     fn allreduce_sum_i64(&self, _buf: &mut [i64]) {}
@@ -204,5 +215,6 @@ mod tests {
         assert_eq!(ints, before_ints);
         assert_eq!(reducer.world_size(), 1);
         assert_eq!(reducer.rank(), 0);
+        assert!(reducer.host_thread_safe().is_some());
     }
 }
