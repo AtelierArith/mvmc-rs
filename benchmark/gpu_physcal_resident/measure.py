@@ -47,7 +47,8 @@ def main():
 
     def run(name, cmd, case_env=env, stdin=None):
         commands.append(dict(name=name, command=list(map(str, cmd)), stdin=stdin,
-                             load_before=os.getloadavg(), start_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())))
+                             load_before=os.getloadavg(), start_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                             environment={k:v for k,v in case_env.items() if k.startswith(('MVMC_', 'JULIA_', 'CUDA_', 'OPENBLAS_', 'OMP_', 'LD_LIBRARY_PATH'))}))
         with (out / f'{name}.log').open('w') as log:
             subprocess.run(list(map(str, cmd)), cwd=ROOT, env=case_env, text=True,
                            input=stdin, stdout=log, stderr=subprocess.STDOUT, check=True)
