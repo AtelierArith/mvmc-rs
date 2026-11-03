@@ -1,5 +1,9 @@
 # Hubbard L128 CPU scaling (#586)
 
+Follow-up: [#629 fresh paired 8/16-thread comparison](results/20261103-issue629/report.md)
+meets C/Rust >= 1.1 for both Opt and PhysCal. The tables below retain the
+historical #586 measurements and their separate source/timing conditions.
+
 This report compares C mVMC and Rust on the shared-input 20-step optimization
 and fixed-parameter PhysCal workloads. It distinguishes the explicit batched
 `MVMC_RS_MEASURE_PF_BACKEND=c-order` route from the default `calc-m-all` route.
