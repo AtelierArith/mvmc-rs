@@ -6,7 +6,14 @@ use tenferro_ext::raw_exec::raw_exec_counters;
 
 fn profiler(start: bool) {
     // Optional developer-only Nsight capture range; absent in speed runs.
+    // Raw scopes restore the caller's context, which can be null here. The
+    // driver profiler API requires the retained primary context to be current.
     unsafe {
+        use cudarc::driver::result::{ctx, device, primary_ctx};
+        let previous = ctx::get_current().unwrap();
+        let device = device::get(0).unwrap();
+        let primary = primary_ctx::retain(device).unwrap();
+        ctx::set_current(primary).unwrap();
         let library = libloading::Library::new("libcuda.so.1").unwrap();
         let symbol = if start {
             b"cuProfilerStart\0".as_slice()
@@ -14,7 +21,10 @@ fn profiler(start: bool) {
             b"cuProfilerStop\0".as_slice()
         };
         let call: libloading::Symbol<unsafe extern "C" fn() -> i32> = library.get(symbol).unwrap();
-        assert_eq!(call(), 0, "CUDA profiler API");
+        let status = call();
+        ctx::set_current(previous.unwrap_or(std::ptr::null_mut())).unwrap();
+        primary_ctx::release(device).unwrap();
+        assert_eq!(status, 0, "CUDA profiler API");
     }
 }
 
