@@ -361,7 +361,12 @@ __device__ __forceinline__ void interval_hop_impl(
         else
           interval_hop_update(invq, tab, q, rs, n, n2, msa, v1, v2, v3,
                                     group_tid, group_threads, active);
-        if (active && group_tid == 0) pf_w[q] = pfnew[q];
+        // Publish the Pfaffian with the pivot that updated this inverse. The
+        // immediate path follows C UpdateMAll (PfM *= -vec1[msa]); the queue
+        // pivots with the proposal ratio itself (Julia). Mixing the column
+        // contraction pivot with the row-dot proposal ratio leaves an
+        // unrecoverable error after a near-singular plane (#656).
+        if (active && group_tid == 0) pf_w[q] = queue ? pfnew[q] : pf_w[q] * -v1[msa];
       }
       __syncthreads();
       if (queue) {

@@ -4,8 +4,9 @@
 # Builds the standalone `gpu/mvmc-gpu-cuda` workspace and runs its CUDA-only (ignored) tests:
 # the resident Opt/PhysCal library tests (Julia fixtures, 20-step repeatability, transfer and
 # synchronization contracts), the resident interval sampler tests and the interval kernel gates.
-# Throughput benchmarks (`interval_bench`, the L128 sampling benchmark) and the two-device
-# context test are not part of the gate.
+# The L128 sampling benchmark runs for its exact decisions and conditioned Pfaffian bounds
+# (#656). The throughput-only `interval_bench` and the two-device context test are not part
+# of the gate.
 #
 # Usage:
 #   scripts/run_cuda_gate.sh [native|docker] [extra cargo-test args]
@@ -33,7 +34,7 @@ fi
 out="${MVMC_RS_CUDA_GATE_OUT:-$root/gpu/mvmc-gpu-cuda/results/cuda-gate.log}"
 mkdir -p "$(dirname "$out")"
 
-skips='--skip device_rng_rejects_a_different_device_context --skip resident_l128_sampling_transfer_benchmark'
+skips='--skip device_rng_rejects_a_different_device_context'
 inner="nvidia-smi -L && cd gpu/mvmc-gpu-cuda && cargo test --profile test --locked --lib --bins --test interval_gate --test interval_parity --test resident_interval -- --include-ignored --test-threads=1 $skips"
 
 case "$mode" in
