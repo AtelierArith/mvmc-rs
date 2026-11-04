@@ -184,9 +184,7 @@ def gpu_measure(args, out, build, env, cpus):
     query = command(['nvidia-smi', '--query-gpu=index,uuid,name,driver_version,memory.used',
                      '--format=csv,noheader'], out / 'gpus.txt', env)
     device = select_gpu(query, args.device, env.get('CUDA_VISIBLE_DEVICES'))
-    gpu_env = dict(env, CUDA_VISIBLE_DEVICES=device, MVMC_RS_SAMPLER_BACKEND='cuda',
-                   MVMC_RS_SR_BACKEND='cuda', MVMC_RS_MEASURE_BACKEND='cuda',
-                   MVMC_RS_MEASURE_PF_BACKEND='cuda', MVMC_RS_INNER_THREADS='1',
+    gpu_env = dict(env, CUDA_VISIBLE_DEVICES=device, MVMC_RS_INNER_THREADS='1',
                    RAYON_NUM_THREADS='1', MVMC_BENCH_REPS=str(args.reps))
     rust_env = cuda_library_environment(gpu_env, out)
     target = build / 'gpu'

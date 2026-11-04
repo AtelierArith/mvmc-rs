@@ -1,5 +1,11 @@
 # Function-level GPU/CPU suite (issue #450)
 
+> **Historical record (#643).** The legacy C-order GPU `StageBackend` route measured here
+> (`MVMC_RS_*_BACKEND=cuda`, `mvmc-cuda` as a CPU-runner wrapper, and the examples and
+> harness scripts named below) was removed in #643. The recorded results are kept unchanged as
+> historical evidence; the commands below no longer run. Current GPU work uses the
+> device-resident Opt/PhysCal runners, measured with `scripts/benchmark_gpu.sh`.
+
 A portable suite that first checks the **numerics** of every GPU (and tenferro/CPU) function
 against the C-order CPU oracle, and only then records timings. Run it on any CUDA machine
 (for example an A100) and send back one archive.

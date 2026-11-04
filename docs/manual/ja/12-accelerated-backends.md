@@ -63,7 +63,7 @@ mpirun -n 4 target/release/mvmc namelist.def
 CUDA の依存ツリー(`cuda` 付きの `tenferro-gpu`、cudarc、パッチ済みの `lru`)は単体ワークスペース `gpu/mvmc-gpu-cuda`(独自の `[workspace]` と `Cargo.lock` を持ち、ルートのワークスペースから除外)にあります(設計 10.1、10.2)。ルートのロックファイルに入れないのは意図的です。オプション依存として `tenferro-gpu` を追加すると、ロックファイルと、すべてのデフォルトビルドの監査対象が約 2000 行増えました。利用者への影響:
 
 - GPU 関連は **`gpu/mvmc-gpu-cuda` からビルド**します(`cd gpu/mvmc-gpu-cuda && cargo ...`)。ルートで `cargo build --features gpu-cuda` としても CUDA にはリンクされません。
-- プロバイダーは、CUDA を使いたいプログラムが `mvmc_gpu_cuda::install()`(`gpu/mvmc-gpu-cuda/src/lib.rs:69`)を呼んで登録します。標準の `mvmc` バイナリはこれを呼ばないため、そこで `MVMC_RS_SR_BACKEND=cuda` を指定すると使用法エラーで拒否されます([12.4](#124-バックエンドの選択))。**CUDA 対応のコマンドは `mvmc-cuda` です**: 単体ワークスペースの薄いバイナリ(`gpu/mvmc-gpu-cuda/src/bin/mvmc-cuda.rs`)で、`install()` を呼んだ後、変更のない `mvmc` ドライバ(`mvmc_cli::run_cli`)を実行します。したがってオプションは [8.1](08-running.md#81-mvmcコマンド) とまったく同じです(`mpi` feature は転送しません)。`gpu/mvmc-gpu-cuda` からビルドして実行します: `cargo build --release --bin mvmc-cuda`、続けて `MVMC_RS_SR_BACKEND=cuda target/release/mvmc-cuda namelist.def`。docker では `scripts/run_cuda_gate.sh` のイメージとマウントを使います。
+- **CUDA 用のコマンドは `mvmc-cuda` です**(`gpu/mvmc-gpu-cuda/src/bin/mvmc-cuda.rs`)。#643 以降はデバイス常駐のサブコマンド(`mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR`)だけを実行し、CPU の `mvmc` ドライバのラッパーではなくなりました。従来の `MVMC_RS_*_BACKEND=cuda` 経路は削除されています。`gpu/mvmc-gpu-cuda` で `cargo build --release --bin mvmc-cuda` としてビルドします。docker では `scripts/run_cuda_gate.sh` のイメージとマウントを使います。
 - CUDA 実行の要件: CUDA ドライバ(`libcuda`)と、実行時に cuBLAS、cuSOLVER、NVRTC の CUDA ツールキットライブラリ(`dlopen` で読み込まれ、*ビルド*にはツールキット不要)。issue #417 の tenferro 調査では CUDA 12.6.2 が下限(完全な機能には 12.8)とされ、測定は 12.9 ツールキットで行われました。tenferro のリンクはホステッドランナーのディスクを使い切ることがあるため、単体ワークスペースは `debug = 0` にしています。
 
 ### CUDA ゲート(native または docker)

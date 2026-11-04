@@ -1,15 +1,14 @@
-//! `mvmc-cuda`: the normal `mvmc` command line with the CUDA provider registered (issue #464),
-//! so `MVMC_RS_SR_BACKEND=cuda[:N]` works. `resident-physcal` explicitly selects
-//! the Julia-compatible GPU ensemble and exports its averaged observables.
+//! `mvmc-cuda`: command line for the device-resident GPU runners. `resident-physcal` runs the
+//! Julia-compatible GPU ensemble PhysCal and exports its averaged observables. The CPU C-order
+//! runner is the `mvmc` binary of `mvmc-cli`.
 
 fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
-    let usage = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR";
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
-        println!("{usage}\nOutputs: energy.dat, green_one.dat, green_two.dat, green_two_ex.dat (ensemble means in parsed operator order).");
+        println!("{USAGE}\nOutputs: energy.dat, green_one.dat, green_two.dat, green_two_ex.dat (ensemble means in parsed operator order).");
         return Ok(());
     }
     if args.len() != 3 {
-        return Err(usage.into());
+        return Err(USAGE.into());
     }
     let output = std::path::PathBuf::from(&args[2]);
     if output.exists() {
@@ -50,28 +49,42 @@ fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
     Ok(())
 }
 
-fn main() {
-    mvmc_gpu_cuda::install();
-    let args: Vec<_> = std::env::args_os().skip(1).collect();
-    if args.first().is_some_and(|arg| arg == "resident-physcal") {
-        if let Err(error) = resident_physcal(&args[1..]) {
-            eprintln!("error: {error}");
-            std::process::exit(1);
+const USAGE: &str = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR";
+
+/// Dispatch one subcommand; only the resident GPU subcommands exist.
+fn run(args: &[std::ffi::OsString]) -> Result<(), String> {
+    match args.first() {
+        Some(arg) if arg == "resident-physcal" => resident_physcal(&args[1..]),
+        Some(arg) if arg == "--help" || arg == "-h" => {
+            println!("{USAGE}");
+            Ok(())
         }
-        return;
+        Some(arg) => Err(format!(
+            "unknown subcommand {}\n{USAGE}",
+            arg.to_string_lossy()
+        )),
+        None => Err(USAGE.into()),
     }
-    if args
-        .first()
-        .is_some_and(|arg| arg == "--help" || arg == "-h")
-    {
-        eprintln!("GPU extension: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR\n");
+}
+
+fn main() {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if let Err(error) = run(&args) {
+        eprintln!("error: {error}");
+        std::process::exit(1);
     }
-    mvmc_cli::run_cli();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_cpu_runner_invocation_and_unknown_subcommands() {
+        assert!(run(&[]).unwrap_err().contains("resident-physcal"));
+        let error = run(&["namelist.def".into()]).unwrap_err();
+        assert!(error.contains("unknown subcommand namelist.def"));
+    }
 
     #[test]
     fn resident_physcal_requires_explicit_paths_before_cuda() {

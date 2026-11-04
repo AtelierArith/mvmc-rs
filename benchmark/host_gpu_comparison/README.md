@@ -1,5 +1,11 @@
 # Host E2E comparison: Rust MPI16 (Dev Container) vs Julia GPU vs Rust GPU
 
+> **Historical record (#643).** The legacy C-order GPU `StageBackend` route measured here
+> (`MVMC_RS_*_BACKEND=cuda`, `mvmc-cuda` as a CPU-runner wrapper, and the examples and
+> harness scripts named below) was removed in #643. The recorded results are kept unchanged as
+> historical evidence; the commands below no longer run. Current GPU work uses the
+> device-resident Opt/PhysCal runners, measured with `scripts/benchmark_gpu.sh`.
+
 Reproducible whole-runner timing for the Hubbard-chain E2E workload
 (variational optimization + PhysCal) on the Linux x86_64 host with an
 NVIDIA A100. Issue: [#544](https://github.com/AtelierArith/mvmc-rs/issues/544).
