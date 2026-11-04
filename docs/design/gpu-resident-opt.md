@@ -91,7 +91,9 @@ complex/general orbitals and grouped execution return errors. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
 spin-conserving InterAll. Individual QP matrices must remain nonsingular;
 singular-sector cofactor fallback remains under #560. Failed state reconstruction
-or SR is reported.
+or SR is reported. The per-family
+[support matrix](gpu-resident-model-support.md) (#572) lists each rejected family,
+its rejection site, CPU and Julia GPU status and the planned milestone order.
 Nonfinite proposal overlaps are rejected before updating the configuration,
 inverse, Pfaffian or cached overlap (#564); finite overlaps retain log-space
 acceptance for extreme ratios and zero uniform draws.

@@ -48,7 +48,9 @@ output belong to CLI wall time; the warmed API benchmark excludes both.
 
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
 operators whose individual pairs conserve spin, hopping-only sampling, no local spins/RBM/DH/OptTrans,
-`NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly.
+`NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly,
+before any device allocation; see the
+[support matrix](gpu-resident-model-support.md) (#572).
 The ordinary CPU/CLI PhysCal and legacy single-SFMT CUDA path retain their
 existing contracts. The new public API is selected by `benchmark_gpu.sh`.
 

@@ -26,6 +26,7 @@ This chapter describes the optional accelerated implementations of the tensor-sh
 | Device-resident sampler | `crates/mvmc-core/src/device_sampler.rs` and `gpu/mvmc-gpu-cuda/src/device_sampler.rs` (#434) | lock-step multi-walker real-mode sampler, state resident on the GPU | no: validated foundation, parked ([12.8](#128-known-limits)) |
 | Pinned/async transfer helper | `gpu/mvmc-gpu-cuda/src/transfer.rs` (#432) | pinned memory pool, asynchronous copies, event ordering | used by the device sampler and the device-resident SR |
 | Device-resident SR | `gpu/mvmc-gpu-cuda/src/sr_device.rs`, `stages.rs` (#447) | Gram, S/g, Cholesky and the CG loop on the device (real parameters) | **yes** with `MVMC_RS_SR_BACKEND=cuda[:N]` (real direct SR with `NStore != 0`, real and complex CG; single process, [12.4](#124-selecting-a-backend)) |
+| Resident GPU Opt and PhysCal | `gpu/mvmc-gpu-cuda/src/opt.rs`, `opt/physcal.rs` (#560, #637) | ensemble Opt and fixed-parameter PhysCal following the Julia GPU contract, with RNG, walkers and SR resident on the device; real normal orbitals with Gutzwiller/Jastrow only (per-family support: [`docs/design/gpu-resident-model-support.md`](../design/gpu-resident-model-support.md), #572) | no: library API and the `mvmc-cuda resident-physcal` subcommand |
 
 ## 12.3 Building and running
 
