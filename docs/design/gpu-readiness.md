@@ -7,10 +7,16 @@ records 7.688 s Rust versus 5.144 s Julia, with zero explicit intermediate
 host/device copies in the optimization loop. The inventory below records the
 earlier C-order migration plan and its measurements.
 
+2026-11-04 update (#643): the legacy C-order GPU `StageBackend` route (`gpu-cuda` feature,
+CUDA provider, `MVMC_RS_*_BACKEND=cuda`, the CUDA sampler/measurement/SR stages) was removed.
+GPU work uses only the resident Opt/PhysCal runners. The tenferro CPU stages
+(`MVMC_RS_SR_BACKEND=tenferro`, `MVMC_RS_MEASURE_BACKEND=tenferro`) and the sections that
+describe them stay current; the remaining CUDA text is historical.
+
 Status: design and inventory (issue #417, related to #185, #360, #361). No production
-code changes in #417. The `gpu-cuda` build path and optional gate landed with issue #420
-(section 10); the validation harness of #424 is described in `docs/NUMERICAL_COMPARISONS.md`
-("Accelerated-backend validation"). Measurements were taken on `origin/main` at `dfa9515f`.
+code changes in #417. The validation harness of #424 is described in
+`docs/NUMERICAL_COMPARISONS.md` ("Accelerated-backend validation"). Measurements were taken
+on `origin/main` at `dfa9515f`.
 
 The goal is to let the tensor-shaped part of mvmc-rs move to a GPU backend later without
 rewriting the physics code. This document inventories the operations, records what
@@ -572,10 +578,9 @@ cuBLAS/cuSOLVER versions and the tenferro version.
 
 ### 5.7 Build, features and CI
 
-* Cargo feature `gpu-cuda` (mvmc-core, mvmc-cli) marks that a CUDA provider may be
-  registered; it adds no dependency. The CUDA dependency tree lives in the standalone
-  workspace `gpu/mvmc-gpu-cuda` (decision and measurements in section 10). Off by default; no
-  default-feature or lock-file change.
+* The CUDA dependency tree lives in the standalone workspace `gpu/mvmc-gpu-cuda` (own lock
+  file, excluded from the root workspace), so default builds and `Cargo.lock` never see it.
+  The former `gpu-cuda` marker feature was removed in #643.
 * The accelerated implementation is also compilable with the tenferro **CPU** backend
   (feature-independent module), so most of it is tested in normal CI.
 * GPU execution is an optional gate like `.github/workflows/optional-gates.yml` (manual or
@@ -641,99 +646,13 @@ Ordered by expected benefit; phase dependencies in parentheses.
   check that Cargo resolves a single `tenferro-runtime` and that the `lru` advisories stay
   closed (issue #192).
 
-## 10. `gpu-cuda` build and optional gate (issue #420)
+## 10. CPU validation harness and multi-chain runner
 
-Status: implemented and run on hardware (2x RTX 3060, Linux x86_64).
-
-### 10.1 Decision: standalone opt-in workspace, not an optional dependency
-
-An optional `tenferro-gpu` dependency in `mvmc-core` was tried first. Cargo records optional
-dependencies in `Cargo.lock`, and `tenferro-gpu/cuda` adds about 2000 lines (cubecl, cudarc,
-`lru` 0.12 and others), changing the lock file and the audit surface of every default build.
-The acceptance criterion forbids that, so:
-
-* `mvmc-core` gains the always-compiled module `backend` (CPU always available, `BackendKind`,
-  `DeviceReport`, `device_report`, the gate decision `cuda_gate_decision`) and the feature
-  `gpu-cuda = []` (forwarded by `mvmc-cli`) that enables the `CudaProvider` registry. Without
-  the feature (or without a registered provider) `BackendKind::Cuda` is an error: no silent CPU
-  fallback. `cargo check -p mvmc-cli --features gpu-cuda` needs no CUDA toolkit.
-* `gpu/mvmc-gpu-cuda` (own `[workspace]`, own `Cargo.lock`, excluded from the root workspace
-  like `benchmark/pfapack_compare`) holds the `tenferro-gpu` dependency, registers the
-  provider, queries versions and holds the gate. `Cargo.lock` of the root is unchanged.
-  The cost is that `cargo build --features gpu-cuda` at the root does not by itself link CUDA;
-  GPU work is built from `gpu/mvmc-gpu-cuda` (downstream crates such as the batched
-  Pfaffian can depend on it the same way).
-
-### 10.2 `lru` and the patches
-
-`tenferro-gpu` 0.7.1 requires `lru ^0.12` (optional, enabled by its `cuda` feature), the same
-vulnerable range as the four crates patched for #192. The issue is real: without a patch the
-GPU lock would contain `lru` 0.12.5. `third_party/tenferro-gpu` is a fifth snapshot with only
-the `lru` requirement raised to `0.18.5` (see `third_party/README.md`), and the standalone
-workspace repeats all five patches. Verified in `gpu/mvmc-gpu-cuda/Cargo.lock`: one `lru`
-(0.18.5) and one `tenferro-runtime` (0.7.1), and it compiles unmodified against lru 0.18.
-Remove the snapshot with the other four when upstream tenferro publishes an advisory-safe
-release (upstream tenferro #1958).
-
-Version trap from the `tenferro-decision-rs` survey: crates.io 0.7.1 and the source revision
-pinned there differ in the `with_backend_session` signature (tenferro #1971). This repository
-and the GPU workspace both use crates.io 0.7.1, so `tenferro-gpu` is pinned consistently.
-
-### 10.3 Gate and report
-
-* `scripts/run_cuda_gate.sh [native|docker]` runs the ignored test
-  `gpu/mvmc-gpu-cuda/tests/cuda_gate.rs` with `MVMC_RS_CUDA_GATE=1`. `docker` uses an NVIDIA
-  CUDA toolkit image with `--gpus all` (default `tenferro-benchmark-cuda:full-verify-20260822`,
-  CUDA 12.9.2; override with `MVMC_RS_CUDA_IMAGE`) and the host rustup/cargo.
-* `MVMC_RS_CUDA_GATE=1` and no device: hard failure. Unset and no device:
-  `cuda-gate: ExplicitSkip: skipped, no device (...)`, not a pass. Both were exercised in a
-  container without `--gpus`.
-* The report records device, compute capability, memory, driver (NVML), CUDA driver API,
-  NVRTC, cuBLAS, cuSOLVER and tenferro versions (`DeviceReport`; unavailable entries print
-  `unavailable`). tenferro does not expose these, so versions are read by `dlopen`; no toolkit
-  is needed at build time.
-* CI: `optional-gates.yml` input `cuda_gate` dispatches job `cuda-gate` on a self-hosted
-  runner (`[self-hosted, linux, x64, gpu]`, placeholder labels). It is outside the bounded
-  ledger like `mpi-explicit`: NotRun when not selected, fails closed without a device. Hosted
-  runners have no GPU, so the default and `plan`/`bounded` paths are unaffected.
-* Linking tenferro can exhaust hosted-runner disk (tenferro-decision-rs): the GPU workspace
-  sets `debug = 0`.
-* Behaviour follows the survey: unsupported op or dtype is a backend error, never a CPU
-  fallback; stages are timed separately with `synchronize` inside the timed compute region.
-
-### 10.4 Measured
-
-RTX 3060, driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, cuBLAS 12.9.2, cuSOLVER
-11.7.5, tenferro 0.7.1, Linux x86_64, 36 host threads.
-
-Median of 7 runs after one warm-up, milliseconds, through tenferro `EagerRuntime` on both
-backends (the CPU column is tenferro's faer CPU backend, not the BLAS/LAPACK path of
-`mvmc-core`). Upload/download are pageable-host transfers. FP64 on this consumer GPU runs at
-about 1/64 of FP32. Tolerances are relative max-norm vs tenferro CPU: dot 1e-11, Cholesky
-(lower triangle, diagonally dominant input) 1e-10; the largest observed errors were 5.2e-15
-and 8.9e-16, so the margins are large and set from the scale `n * eps`, not tuned. Single-run
-shared-host numbers; CPU times in particular are noisy.
-
-| op | dtype | n | CPU compute | CUDA upload | CUDA compute | CUDA download | CPU/CUDA compute |
-|---|---|---|---|---|---|---|---|
-| dot | f64 | 256 | 9.5 | 0.83 | 0.37 | 0.25 | 25x |
-| dot | c64 | 256 | 7.6 | 1.46 | 0.83 | 0.41 | 9.1x |
-| cholesky | f64 | 256 | 65.6 | 0.55 | 1.57 | 0.30 | 42x |
-| cholesky | c64 | 256 | 30.5 | 0.72 | 1.48 | 0.34 | 21x |
-| dot | f64 | 1024 | 20.3 | 31.7 | 13.7 | 6.8 | 1.5x |
-| dot | c64 | 1024 | 45.9 | 59.9 | 38.1 | 13.5 | 1.2x |
-| cholesky | f64 | 1024 | 315.5 | 6.2 | 5.5 | 2.1 | 57x |
-| cholesky | c64 | 1024 | 168.2 | 37.4 | 16.0 | 7.5 | 10x |
-| dot | f64 | 2048 | 93.6 | 156.2 | 96.5 | 25.2 | 0.97x |
-| dot | c64 | 2048 | 223.7 | 348.4 | 300.6 | 44.9 | 0.74x |
-| cholesky | f64 | 2048 | 347.1 | 77.8 | 26.2 | 24.3 | 13x |
-| cholesky | c64 | 2048 | 417.3 | 157.7 | 79.6 | 45.8 | 5.2x |
-
-Reading: the FP64 GEMM at n >= 1024 is at parity with the 36-thread CPU (FP64 throughput of
-the card), Cholesky is faster at n >= 256, and for these sizes upload costs as much as
-compute, so device residency across stages (section 5) is required for any benefit. At
-n = 64 the CPU wins (Cholesky 0.27 ms vs 0.60 ms on the device). The CPU path remains the
-reference; this is a feasibility measurement, not a speed-up claim for mvmc.
+The `gpu-cuda` feature, the CUDA provider and the legacy CUDA gate of issue #420 were removed
+in #643. The standalone `gpu/mvmc-gpu-cuda` workspace now holds only the device-resident
+Opt/PhysCal runners ([gpu-resident-opt.md](gpu-resident-opt.md),
+[gpu-resident-physcal.md](gpu-resident-physcal.md)); `scripts/run_cuda_gate.sh` runs their
+CUDA tests.
 
 ### 10.5 Validation harness (issue #424)
 
@@ -787,7 +706,7 @@ in `docs/NUMERICAL_COMPARISONS.md`.
 
 RTX 3060, driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, tenferro 0.7.1, Linux x86_64;
 median of 30 after 5 warm-ups, pageable host memory, each step synchronized
-(`cuda_gate_roundtrip_floor`, `scripts/run_cuda_gate.sh docker`).
+(historical: the former `cuda_gate_roundtrip_floor` test, removed in #643).
 
 | bytes | upload ms | upload GB/s | add+sync ms | download ms | download GB/s | total ms |
 |---|---|---|---|---|---|---|
@@ -845,136 +764,6 @@ these are upper bounds on the cost of the runner itself, not a property of it.
 | 8 | 3197.6 | 399.7 | 0.56 |
 | 16 | 5761.5 | 360.1 | 0.31 |
 | 32 | 15427.9 | 482.1 | 0.12 |
-
-### 10.7 Host-device transfer diagnosis and the in-repo pinned/async helper (issue #432)
-
-Measured in the standalone workspace (`gpu/mvmc-gpu-cuda`, ignored gate test
-`transfer_microbenchmark_report`, `scripts/run_cuda_gate.sh docker`): RTX 3060 (sm_86, PCIe 4.0
-x16, 28 SMs), driver 580.178.04, CUDA driver API 13.0, toolkit 12.9, cuBLAS 12.9.2, cuSOLVER
-11.7.5, tenferro 0.7.1 (CubeCL CUDA), cudarc 0.19, Linux x86_64, single process, host
-otherwise lightly loaded (load average about 2). **GPU copy engines: `asyncEngineCount = 2`**
-(host-to-device and device-to-host copies can run concurrently with each other and with a
-kernel), `concurrentKernels = 1`. Medians over 5 to 60 repetitions (fewer for large sizes);
-three runs of the sweep agreed to within a few percent except where noted.
-
-#### Per-call time and bandwidth versus size
-
-(1) cudarc pinned memcpy, (2) cudarc pageable memcpy, (3) tenferro `upload_tensor` /
-`download_tensor` (`CudaBackend` runtime, F64 vector, synchronized). Sizes of the planes
-`[n, n, NQP = 8, B]` of #423: n = 16, B = 8: 131 KB; n = 32, B = 64: 4.2 MB; n = 64, B = 64:
-16.8 MB; n = 128, B = 64: 67 MB. Per-walker vectors are 4 KB to 1 MB.
-
-| bytes | pageable up ms (GB/s) | pageable down ms (GB/s) | pinned WC up ms (GB/s) | pinned cached up ms (GB/s) | pinned down ms (GB/s) | pinned up enqueue ms | tenferro up ms (GB/s) | tenferro down ms (GB/s) |
-|---|---|---|---|---|---|---|---|---|
-| 8 | 0.0056 (0.00) | 0.0068 (0.00) | 0.0092 (0.00) | 0.0061 (0.00) | 0.0071 (0.00) | 0.0038 | 0.0214 (0.00) | 0.0264 (0.00) |
-| 512 | 0.0073 (0.07) | 0.0075 (0.07) | 0.0153 (0.03) | 0.0065 (0.08) | 0.0072 (0.07) | 0.0099 | 0.0227 (0.02) | 0.0269 (0.02) |
-| 4096 | 0.0088 (0.47) | 0.0083 (0.50) | 0.0521 (0.08) | 0.0071 (0.58) | 0.0075 (0.54) | 0.0466 | 0.0316 (0.13) | 0.0278 (0.15) |
-| 32768 | 0.0184 (1.78) | 0.0141 (2.33) | 0.0104 (3.14) | 0.0092 (3.57) | 0.0096 (3.40) | 0.0035 | 0.0389 (0.84) | 0.0295 (1.11) |
-| 131072 | 0.0397 (3.30) | 0.0331 (3.96) | 0.0193 (6.79) | 0.0170 (7.70) | 0.0173 (7.58) | 0.0036 | 0.0864 (1.52) | 0.0468 (2.80) |
-| 1048576 | 0.2339 (4.48) | 0.2217 (4.73) | 0.0947 (11.07) | 0.0916 (11.44) | 0.0885 (11.85) | 0.0043 | 0.6585 (1.59) | 0.2117 (4.95) |
-| 4194304 | 0.6848 (6.13) | 0.5812 (7.22) | 0.3486 (12.03) | 0.3442 (12.18) | 0.3338 (12.56) | 0.0043 | 5.8194 (0.72) | 4.2021 (1.00) |
-| 16777216 | 2.4114 (6.96) | 2.1493 (7.81) | 1.3626 (12.31) | 1.3571 (12.36) | 1.3171 (12.74) | 0.0043 | 18.4228 (0.91) | 5.0354 (3.33) |
-| 67108864 | 8.6923 (7.72) | 6.6501 (10.09) | 5.4070 (12.41) | 5.3975 (12.43) | 5.0960 (13.17) | 0.0065 | 130.0937 (0.52) | 49.2461 (1.36) |
-| 268435456 | 34.4588 (7.79) | 22.2363 (12.07) | 21.5796 (12.44) | 21.5610 (12.45) | 20.3493 (13.19) | 0.0064 | 509.0499 (0.53) | 187.1178 (1.43) |
-
-"pinned WC" is write-combined pinned memory (cudarc's default `alloc_pinned`), "pinned cached"
-ordinary pinned memory; the download column is cached pinned memory; "enqueue" is the host time
-of one pinned copy call that does not wait.
-
-#### Cause of the slow tenferro transfers
-
-* The PCIe link and the driver are not the limit: pageable cudarc copies reach 7 to 8 GB/s
-  up and 8 to 12 GB/s down for 16 to 256 MB, pinned 12.4 to 13.2 GB/s (about the practical
-  PCIe 4.0 x16 limit).
-* tenferro 0.7.1 reaches only 0.5 to 1.7 GB/s up and 1.0 to 5 GB/s down (the 0.5 and 0.8 GB/s
-  of the #423 report): 1.5 to 15 times slower than plain pageable cudarc at 1 MB and larger
-  (15x up and 8x down at 256 MB), and its per-call fixed cost is 19 to 26 us against 5 to 9 us
-  for cudarc (about 3.5 times).
-* Missing pinned memory is therefore not the main cause: pageable cudarc is already faster than
-  tenferro by the factors above. The code path (`upload_tensor`: CubeCL `create_from_slice`;
-  `download_tensor`: `rt.synchronize()`, CubeCL `read_one`, then a second host copy
-  `T::from_bytes(..).to_vec()`; `third_party/tenferro-gpu/src/cubecl/memory.rs`) adds a device
-  synchronization, CubeCL staging and extra host copies. Instrumenting the sources with timers
-  attributes the cost (256 MB, after warm-up): an upload spends 181 ms in
-  `slice.to_vec()` (`t4a-cubecl-runtime` `client.rs:296`) and 381 ms in a second
-  `data.to_vec()` (`client.rs:232`) against 96 ms for the actual pageable host-to-device copy
-  (87 % redundant host copies; 68 % at 16 MB); a download spends 20.5 ms in `read_one` and
-  162 ms in `from_bytes(..).to_vec()` (`memory.rs:222`; 82 %, 61 % at 16 MB). Above 100 MB the
-  CubeCL host pool is bypassed for `vec![0; n]` (`t4a-cubecl-cuda` `command.rs:162`). The
-  copies run at 0.7 to 1.4 GB/s because every call writes into new, page-faulting memory. Full
-  analysis with file:line references and the minimal example are in
-  `docs/design/tenferro-transfer-request-draft.md`.
-* Write-combined memory is a trap for small copies: a 4 KB host-to-device copy takes 51 us from
-  write-combined pinned memory against 7 us from cached pinned memory (reproduced in every run),
-  and 11 us for 32 KB; the bandwidth is the same for 1 MB and larger. `PinnedKind::for_upload`
-  therefore uses cached pinned memory below 32 KB.
-* For small per-step transfers (up to 64 KB, the walker configuration and pf/energy vectors)
-  pageable cudarc is within 2 to 3 us of pinned; pinned memory pays for large copies
-  (16 MB: 1.8x up and 1.6x down; 256 MB: 1.6x up and 1.1x down) and, more importantly,
-  makes the copy asynchronous with respect to the host: enqueueing a 16 MB pinned copy takes
-  about 4 us while the pageable call blocks the host for 2.3 ms.
-
-#### Overlap with a concurrent kernel
-
-copy size 16777216 bytes, kernel calibrated to 1.368 ms
-
-| scenario | copy ms | kernel ms | both ms | overlap |
-|---|---|---|---|---|
-| pinned host-to-device + kernel | 1.365 | 1.368 | 1.371 | 1.00 |
-| pinned device-to-host + kernel | 1.279 | 1.369 | 1.370 | 1.00 |
-| pinned both directions + kernel | 1.762 | 1.368 | 1.767 | 1.00 |
-| pageable host-to-device (on a second stream) + kernel | 1.458 | 1.370 | 1.464 | 1.00 |
-| pageable device-to-host (on a second stream) + kernel | 1.368 | 1.369 | 1.375 | 1.00 |
-
-(copy and kernel on different streams; overlap = (copy + kernel - both) / min(copy, kernel),
-1.00 = the shorter one is completely hidden.) Pinned copies hide completely behind a kernel and
-both directions run concurrently with it (two copy engines); pageable cudarc copies on a
-separate stream also overlap on the device, but block the calling host thread for their whole
-duration, so only pinned copies free the host to decide the next step while the device works.
-
-#### Ping-pong of two walker groups
-
-Group A and group B on two streams: while the device runs group A's kernel and copies, the host
-decides group B (a busy wait standing for the Metropolis decision and SFMT draws), then they
-swap. Baselines run the same 2 x steps cycles on one stream with a full wait every step, with
-pageable synchronous copies ("current practice") and with pinned asynchronous copies.
-
-| in bytes | out bytes | kernel ms | host us | steps/group | serial pageable ms | serial pinned ms | ping-pong ms | speedup vs pageable | speedup vs pinned serial |
-|---|---|---|---|---|---|---|---|---|---|
-| 4096 | 4096 | 0.05 | 20 | 400 | 66.1 | 68.4 | 41.6 | 1.59x | 1.64x |
-| 4096 | 65536 | 0.30 | 100 | 200 | 170.1 | 169.8 | 120.0 | 1.42x | 1.41x |
-| 4096 | 65536 | 1.00 | 300 | 200 | 530.2 | 529.4 | 399.5 | 1.33x | 1.33x |
-| 65536 | 1048576 | 1.00 | 200 | 100 | 277.7 | 262.1 | 199.9 | 1.39x | 1.31x |
-
-Reading: two groups hide 25 to 40 % of the per-step time (the ideal for two groups when host
-and device time are equal is 2x); the benefit comes from the pipeline, not from pinning alone
-(the two serial baselines are equal within noise because the host decision dominates). The gain
-grows with the number of groups in flight; #434 should use more than two streams or groups when
-the host decision time is shorter than the device time.
-
-#### Decision and helper
-
-tenferro's transfer path is the bottleneck, not PCIe and not pinned memory. The hot transfers of
-the device-resident sampler (#434) should therefore bypass `upload_tensor` / `download_tensor`:
-`gpu/mvmc-gpu-cuda/src/transfer.rs` provides
-
-* `PinnedBuf` / `PinnedPool` (cached or write-combined pinned memory, size-class reuse; pinned
-  allocation costs about a millisecond and must not happen per step),
-* `TransferStream::{upload_async, download_async}` returning a `Pending` that borrows the host
-  buffer until the copy completed (the borrow checker prevents touching a buffer the device may
-  still use; dropping a `Pending` waits) and `record` / `wait_event` / `wait_pending` for
-  device-side cross-stream dependencies (no device-wide synchronize),
-* `unsafe upload_raw` / `download_raw` for device memory owned by another allocator (for
-  example a tenferro raw session address; not exercised by the gate),
-* `disable_event_tracking`: cudarc's implicit event tracking must be off so the safe wrappers do
-  not add hidden synchronization; the helper orders everything with explicit events.
-
-The gate test `transfer_helper_is_correct_and_orders_streams` checks data integrity, pool reuse
-and event ordering on the device. Large plane uploads should still be avoided altogether by
-building the planes on the device (#425, #426): even at pinned speed 67 MB takes 5.4 ms.
-
-An upstream request draft with these numbers is in
-`docs/design/tenferro-transfer-request-draft.md` (not filed; filing needs approval).
 
 ### 10.8 Multi-walker optimization with C-compatible reductions (issue #435)
 
@@ -1037,8 +826,10 @@ Validation (`crates/mvmc-core/tests/multiwalker_sr_435.rs`, no MPI, C or Julia n
 
 ## 11. Batched Pfaffian and inverse (issue #423)
 
-Status: implemented, validated and benchmarked on hardware (2x RTX 3060). Not wired into the
-production sampler (that needs #422 and #425). Related to #417 and #420.
+Status: the CPU backends of `crates/mvmc-gpu` are current. The CUDA engine, its gate and its
+benchmark (11.3, the former 11.4 and 11.7) belonged to the legacy route removed in #643; the
+kernel source `pfaffian_batched.cu` is now compiled only into the resident interval module.
+Related to #417 and #420.
 
 ### 11.1 API and layout
 
@@ -1055,13 +846,11 @@ fallback: an unavailable backend is a typed `Error`.
 | `CpuPfapack`, `CpuPfapackRayon` | `crates/mvmc-gpu` (main workspace, normal CI) | pfapack per plane (`dsktf2`/`zsktf2`, `utu2pfa`, `utu2inv`), one workspace per task; bit-identical to calling pfapack |
 | `TenferroExtension` | `crates/mvmc-gpu` | the same per-plane kernel as a tenferro `ExtensionOp` (`define_extension_runtime!`, `execute_reads`, zero-copy `as_slice` input, per-`(dtype, n)` workspace in the runtime's `ExtensionCacheStore`) run in a tenferro `Runtime` on `CpuBackend`; bit-identical to pfapack |
 | `TenferroNative` | `crates/mvmc-gpu` | batched Parlett-Reid / LTL^T written with tenferro tensors only (11.5) |
-| `Engine(&CudaEngine)` | `gpu/mvmc-gpu-cuda` (`pfaffian.rs`, `pfaffian_batched.cu`) | one CUDA thread block per plane, NVRTC kernel launched through tenferro's raw session |
 
-`mvmc-gpu` has no CUDA dependency; the CUDA engine implements its `BatchedEngine` trait and
-plugs in through `Backend::Engine`. The root `Cargo.lock` gains only the `mvmc-gpu` package
-entry (no new external dependency). `gpu/mvmc-gpu-cuda` (own lock, #420 layout) depends on
-`mvmc-gpu`, reuses the #420 gate decision (`cuda_gate_decision`, `CUDA_GATE_VARIABLE`) and the
-device report, and is exercised by `scripts/run_cuda_gate.sh`.
+`mvmc-gpu` has no CUDA dependency; an external engine plugs in through its `BatchedEngine`
+trait and `Backend::Engine`. The root `Cargo.lock` gains only the `mvmc-gpu` package entry (no
+new external dependency). `gpu/mvmc-gpu-cuda` uses `mvmc-gpu` only as the CPU reference of its
+resident interval tests (the former `Engine(&CudaEngine)` backend was removed in #643).
 
 ### 11.2 CUDA kernel design
 
@@ -1099,8 +888,7 @@ read-only. There are no pinned or asynchronous transfers (rates in 11.4).
 
 ### 11.3 Accuracy
 
-Gate `gpu/mvmc-gpu-cuda/tests/pfaffian_gate.rs` (`MVMC_RS_CUDA_GATE=1
-scripts/run_cuda_gate.sh docker`; 32 random planes per size, NQP = 8, B = 4; RTX 3060), GPU
+Historical (gate removed in #643): `gpu/mvmc-gpu-cuda/tests/pfaffian_gate.rs` (32 random planes per size, NQP = 8, B = 4; RTX 3060), GPU
 against `CpuPfapack`. `observed/allowed` is the worst of the inverse and Pfaffian relative errors
 divided by `16 * n * eps * cond_F(A)` (`cond_F = |A|_F |A^-1|_F` of that plane), the standard
 forward-error scale of a backward-stable inverse. The kernel uses pfapack's pivot rule and, with
@@ -1137,98 +925,6 @@ Normal CI (no GPU) covers: CPU batched and `ExtensionOp` bit-identical to pfapac
 complex, `n = 2..32`); `Pf^2 = det`, `A A^-1 = I` and skew structure of every CPU backend; the
 tensor-native backend against pfapack (real Pfaffian bit-identical, inverse relative error
 `7e-18..1.4e-15`, complex `2e-16..6e-15`); statuses; shape errors.
-
-### 11.4 Benchmark
-
-Environment: Intel Xeon E5-2699 v3 (36 hardware threads, shared host: load average 4.6 at the start and 18.8 at the end because other jobs were running), 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, benchmark on device 0), NVIDIA driver 580.178.04, CUDA driver API 13.0, container CUDA toolkit 12.9.2 (nvcc 12.9.86, NVRTC 12.9; image `tenferro-benchmark-cuda:full-verify-20260822`), rustc 1.98.0 (container), tenferro 0.7.1, Linux x86_64. Medians of up to 7 runs after one warm-up (stop after 12 s, at least 3 runs), times in milliseconds, NQP = 8, planes = 8 B. CPU rows run `pfapack` with its default scalar features (no BLAS, no SIMD). CSV: `benchmark/gpu_pfaffian/results/pfaffian_batched.csv`; reproduce with `scripts/run_pfaffian_bench.sh docker`.
-
-`CUDA total` is the call as a caller sees it (upload, allocation, kernel, download, host glue).
-Tensor-native and `ExtensionOp` are skipped when a single run would take minutes (`-`). The host
-was shared with other jobs while measuring, so CPU rows, rayon in particular, carry noise: a few
-single-thread outliers are visible (for example f64 `n = 32, B = 8`, c64 `n = 64, B = 1` and
-`B = 8`), and the CPU rows use scalar pfapack (the production `calc_m_all` uses the BLAS-backed
-path measured at 135 us per `n = 64` plane on an unloaded host in section 3.2, about half of the
-267 us per plane of the one-thread row here), so speedups against the production CPU path are
-roughly 2x lower than the ratios below. Times in milliseconds.
-
-| dtype | n | B | planes | pfapack 1T | pfapack rayon | tenferro native | tenferro ExtOp | CUDA total | CUDA kernel | up / alloc / down | f32 kernel | kernel vs 1T | kernel vs rayon | total vs 1T | total vs rayon | f64/f32 kernel |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| f64 | 16 | 1 | 8 | 0.05 | 0.13 | 20.82 | 8.93 | 0.38 | 0.13 | 0.05 / 0.05 / 0.14 | 0.08 | 0.4x | 1.0x | 0.1x | 0.3x | 1.6x |
-| f64 | 16 | 8 | 64 | 0.77 | 0.33 | 34.07 | 8.30 | 0.55 | 0.14 | 0.14 / 0.05 / 0.20 | 0.10 | 5.5x | 2.3x | 1.4x | 0.6x | 1.4x |
-| f64 | 16 | 64 | 512 | 5.68 | 2.71 | 172 | 11.68 | 1.93 | 0.41 | 0.72 / 0.06 / 0.47 | 0.15 | 13.8x | 6.6x | 2.9x | 1.4x | 2.7x |
-| f64 | 16 | 512 | 4096 | 22.25 | 13.16 | 566 | 57.99 | 40.71 | 2.61 | 20.37 / 2.59 / 13.14 | 0.62 | 8.5x | 5.0x | 0.5x | 0.3x | 4.2x |
-| f64 | 16 | 4096 | 32768 | 239 | 129 | - | 325 | 295 | 20.21 | 137 / 9.44 / 82.28 | 4.35 | 11.8x | 6.4x | 0.8x | 0.4x | 4.6x |
-| f64 | 32 | 1 | 8 | 0.42 | 0.39 | 55.34 | 16.84 | 0.62 | 0.33 | 0.10 / 0.04 / 0.15 | 0.21 | 1.3x | 1.2x | 0.7x | 0.6x | 1.5x |
-| f64 | 32 | 8 | 64 | 3.42 | 3.91 | 342 | 21.39 | 0.98 | 0.36 | 0.28 / 0.03 / 0.23 | 0.21 | 9.4x | 10.8x | 3.5x | 4.0x | 1.7x |
-| f64 | 32 | 64 | 512 | 27.39 | 6.37 | 1877 | 52.04 | 7.48 | 1.87 | 2.70 / 0.05 / 1.73 | 0.59 | 14.7x | 3.4x | 3.7x | 0.9x | 3.2x |
-| f64 | 32 | 512 | 4096 | 266 | 82.71 | - | 351 | 152 | 11.43 | 70.88 / 5.57 / 41.68 | 3.23 | 23.3x | 7.2x | 1.7x | 0.5x | 3.5x |
-| f64 | 32 | 4096 | 32768 | 2046 | 532 | - | 2422 | 1130 | 83.91 | 526 / 31.81 / 313 | 24.36 | 24.4x | 6.3x | 1.8x | 0.5x | 3.4x |
-| f64 | 64 | 1 | 8 | 2.09 | 0.53 | 98.09 | 17.49 | 1.53 | 0.99 | 0.20 / 0.04 / 0.22 | 0.61 | 2.1x | 0.5x | 1.4x | 0.3x | 1.6x |
-| f64 | 64 | 8 | 64 | 16.70 | 2.52 | 568 | 32.41 | 4.23 | 1.54 | 1.25 / 0.05 / 0.89 | 0.79 | 10.8x | 1.6x | 4.0x | 0.6x | 1.9x |
-| f64 | 64 | 64 | 512 | 179 | 17.79 | - | 216 | 69.47 | 9.45 | 30.46 / 7.12 / 18.97 | 6.31 | 19.0x | 1.9x | 2.6x | 0.3x | 1.5x |
-| f64 | 64 | 512 | 4096 | 1156 | 226 | - | 1450 | 577 | 62.27 | 258 / 20.56 / 151 | 40.03 | 18.6x | 3.6x | 2.0x | 0.4x | 1.6x |
-| f64 | 64 | 4096 | 32768 | 8750 | 1348 | - | - | 4557 | 486 | 2049 / 64.89 / 1295 | 304 | 18.0x | 2.8x | 1.9x | 0.3x | 1.6x |
-| f64 | 128 | 1 | 8 | 8.97 | 3.61 | 642 | 25.73 | 6.13 | 4.01 | 0.98 / 0.06 / 0.71 | 2.10 | 2.2x | 0.9x | 1.5x | 0.6x | 1.9x |
-| f64 | 128 | 8 | 64 | 90.28 | 15.22 | - | 108 | 39.77 | 10.43 | 19.91 / 0.05 / 7.35 | 4.56 | 8.7x | 1.5x | 2.3x | 0.4x | 2.3x |
-| f64 | 128 | 64 | 512 | 708 | 187 | - | 818 | 339 | 75.32 | 133 / 10.54 / 77.13 | 39.78 | 9.4x | 2.5x | 2.1x | 0.6x | 1.9x |
-| f64 | 128 | 512 | 4096 | 5397 | 1202 | - | - | 2643 | 580 | 1034 / 39.23 / 631 | 276 | 9.3x | 2.1x | 2.0x | 0.5x | 2.1x |
-| f64 | 128 | 4096 | 32768 | 42805 | 8801 | - | - | 22801 | 4631 | 9359 / 386 / 5264 | 2180 | 9.2x | 1.9x | 1.9x | 0.4x | 2.1x |
-| c64 | 16 | 1 | 8 | 0.10 | 0.16 | 20.85 | 8.58 | 0.37 | 0.17 | 0.05 / 0.03 / 0.10 | 0.09 | 0.6x | 0.9x | 0.3x | 0.4x | 2.0x |
-| c64 | 16 | 8 | 64 | 0.72 | 0.31 | 43.07 | 8.77 | 0.90 | 0.24 | 0.27 / 0.06 / 0.25 | 0.11 | 3.0x | 1.3x | 0.8x | 0.3x | 2.2x |
-| c64 | 16 | 64 | 512 | 7.33 | 3.07 | 192 | 14.33 | 3.86 | 1.09 | 1.36 / 0.05 / 0.87 | 0.20 | 6.7x | 2.8x | 1.9x | 0.8x | 5.6x |
-| c64 | 16 | 512 | 4096 | 48.68 | 17.31 | 1047 | 99.71 | 98.39 | 7.84 | 47.45 / 6.62 / 30.68 | 0.98 | 6.2x | 2.2x | 0.5x | 0.2x | 8.0x |
-| c64 | 16 | 4096 | 32768 | 368 | 175 | - | 547 | 602 | 57.82 | 273 / 20.85 / 160 | 6.84 | 6.4x | 3.0x | 0.6x | 0.3x | 8.4x |
-| c64 | 32 | 1 | 8 | 0.96 | 0.32 | 43.92 | 16.19 | 1.02 | 0.60 | 0.11 / 0.03 / 0.27 | 0.27 | 1.6x | 0.5x | 0.9x | 0.3x | 2.2x |
-| c64 | 32 | 8 | 64 | 7.79 | 2.11 | 217 | 22.89 | 2.98 | 0.93 | 0.95 / 0.07 / 0.64 | 0.32 | 8.4x | 2.3x | 2.6x | 0.7x | 2.9x |
-| c64 | 32 | 64 | 512 | 75.68 | 12.02 | 989 | 82.74 | 37.50 | 5.36 | 21.30 / 0.06 / 8.47 | 1.09 | 14.1x | 2.2x | 2.0x | 0.3x | 4.9x |
-| c64 | 32 | 512 | 4096 | 579 | 145 | - | 685 | 295 | 39.20 | 129 / 10.65 / 74.71 | 6.32 | 14.8x | 3.7x | 2.0x | 0.5x | 6.2x |
-| c64 | 32 | 4096 | 32768 | 4372 | 736 | - | 5096 | 3168 | 302 | 1179 / 59.42 / 884 | 48.65 | 14.5x | 2.4x | 1.4x | 0.2x | 6.2x |
-| c64 | 64 | 1 | 8 | 24.98 | 5.98 | 554 | 39.75 | 3.07 | 2.31 | 0.34 / 0.04 / 0.29 | 0.88 | 10.8x | 2.6x | 8.1x | 1.9x | 2.6x |
-| c64 | 64 | 8 | 64 | 163 | 9.32 | 3024 | 59.00 | 11.05 | 5.41 | 2.64 / 0.06 / 1.74 | 1.31 | 30.2x | 1.7x | 14.8x | 0.8x | 4.1x |
-| c64 | 64 | 64 | 512 | 381 | 88.08 | - | 413 | 194 | 34.91 | 79.74 / 5.57 / 46.88 | 9.96 | 10.9x | 2.5x | 2.0x | 0.5x | 3.5x |
-| c64 | 64 | 512 | 4096 | 3095 | 468 | - | 3379 | 1490 | 244 | 626 / 30.73 / 374 | 68.48 | 12.7x | 1.9x | 2.1x | 0.3x | 3.6x |
-| c64 | 64 | 4096 | 32768 | 24328 | 2677 | - | - | 11115 | 1928 | 4576 / 198 / 2767 | 548 | 12.6x | 1.4x | 2.2x | 0.2x | 3.5x |
-| c64 | 128 | 1 | 8 | 31.10 | 7.24 | 1137 | 46.84 | 15.71 | 13.26 | 1.20 / 0.04 / 0.77 | 1.51 | 2.3x | 0.5x | 2.0x | 0.5x | 8.8x |
-| c64 | 128 | 8 | 64 | 256 | 29.12 | - | 334 | 97.73 | 36.84 | 32.71 / 3.87 / 20.88 | 3.01 | 7.0x | 0.8x | 2.6x | 0.3x | 12.3x |
-| c64 | 128 | 64 | 512 | 2088 | 337 | - | 2417 | 728 | 215 | 257 / 21.14 / 150 | 17.86 | 9.7x | 1.6x | 2.9x | 0.5x | 12.1x |
-| c64 | 128 | 512 | 4096 | 16670 | 2278 | - | - | 5795 | 1666 | 2063 / 96.95 / 1238 | 134 | 10.0x | 1.4x | 2.9x | 0.4x | 12.4x |
-| c64 | 128 | 4096 | 32768 | skipped (> 4 GiB of planes) | | | | | | | | | | | | |
-
-
-What the table says (FP64 / C64, the physics path):
-
-* **Kernel only, data resident on the device** (the design of #422/#426, where planes are built
-  and consumed on the device): for `B >= 8` the kernel is 5.5 to 14x (f64 `n = 16`), 9 to 24x
-  (`n = 32`), 11 to 19x (`n = 64`) and 9x (`n = 128`) faster than one pfapack thread (c64: 3 to
-  7x, 8 to 15x, 11 to 30x, 7 to 10x), and 0.8 to 11x faster than all 36 threads (at least 1.3x
-  except c64 `n = 128, B = 8`; f64 `n = 32`: 3.4 to 11x, `n = 64`: 1.6 to 3.6x, `n = 128`: 1.5 to
-  2.5x). At `B = 1` (8 planes) the launch is not worth it: 0.4x of one thread at `n = 16`, 1.3x
-  at `n = 32`.
-* **Including upload and download** (an offload-only design): 1.4 to 4x faster than one thread
-  for `n >= 32` and `B >= 8` (15x on one noisy c64 row), but slower than all 36 threads in almost
-  every cell (0.2 to 0.9x); the GPU wins only in a few small cells (f64 `n = 16, B = 64` 1.4x,
-  f64 `n = 32, B = 8` 4.0x against a noisy rayon row, c64 `n = 64, B = 1` 1.9x). For `n = 16`
-  with `B >= 512` the transfers take 10 to 13x the kernel and the GPU is slower than even one
-  thread. The cause is the transfer path: tenferro's `upload_bytes` / `download_tensor` move
-  pageable memory at about 0.5 GB/s up (1.07 GB in 2.05 s, f64 `n = 64, B = 4096`) and 0.8 GB/s
-  down, far below PCIe 3.0 x16 (about 12 GB/s). The conclusion: do not offload the Pfaffian
-  plane by plane through host memory; it pays when the planes are built and consumed on the
-  device (or with pinned asynchronous transfers, which tenferro 0.7.1 does not offer).
-* **Crossover (data resident):** the GPU beats one thread from 64 planes (`B = 8`) at every
-  `n` (already at 8 planes for `n >= 32`), and beats 36 threads by 2x or more for `n <= 32`
-  from `B = 8`, by 1.5 to 3.6x for `n = 64` and `n = 128`.
-* **FP64 penalty:** FP64 runs at 1/64 of FP32 on this card, but the single-precision kernel
-  (timing only) is only 1.4 to 4.6x faster for f64 and 2 to 12.4x for c64: the kernel is limited
-  by global-memory traffic and its serial phases (argmax reduction, `n - 1` dependent LTL steps,
-  the column recurrences of the tridiagonal solve), not by FLOPs. The ratio grows with the
-  arithmetic per byte (c64 `n = 128`: 12x). A data-centre GPU (FP64 at 1/2 of FP32) would be
-  close to the f32 column; on this card the f64 kernel is already 9 to 24x faster than one core.
-* **Production scale:** the Hubbard inputs have `n = 16..64` and 8 QP planes per sample; 64
-  batch elements (512 planes) take 0.41 / 1.87 / 9.45 ms on the kernel (f64, `n = 16 / 32 / 64`)
-  against 5.7 / 27 / 179 ms for one thread (14 to 19x). The 58 to 61 % of wall time spent in
-  `CalculateMAll` and the recalculation (section 3.2) could therefore shrink by an order of
-  magnitude if the planes stay on the device, before adding the transfers and the rest of the
-  sampler (Amdahl bounds of section 6).
 
 ### 11.5 tenferro-native CPU reference and its gaps
 
@@ -1296,8 +992,7 @@ batched backend (section 14; `into_stage_backend()` composes it with the C-order
 (`CpuPfapack`, rayon, `ExtensionOp`, tensor-native) run the teacher-forced replay with the flip
 detector in normal CI (`crates/mvmc-gpu/tests/accel_harness.rs`: 0 flips, 0 defects, Pfaffian
 bit-identical for pfapack/`ExtensionOp`, inverse max abs 5.7e-14 for tensor-native, minimum
-decision margin 5.1e-3); the CUDA kernel runs the same replay in the gate
-(`pfaffian_gate.rs`, `cuda_pfaffian_passes_the_validation_harness_replay`).
+decision margin 5.1e-3).
 
 Sign convention: the harness oracle returns the true inverse `X^-1` (`X * inv = I`), and so does
 `pfaffian_inverse_batched` (`utu2inv` output, no flip), so the mapping to the harness is the
@@ -1305,15 +1000,6 @@ identity (`inv_convention_matches_the_oracle` checks it bitwise against `COrderP
 `invM` is the negative: `calc_m_all_real` / C `CalculateMAll` end with
 `M_DSCAL(&nsq, &minus_one, invM, &one)`, hence `invM = -inv` while `pf` is unchanged.
 A production integration must apply that flip when storing into the sampler tables.
-
-### 11.7 Reproduce
-
-```sh
-cargo nextest run -p mvmc-gpu --cargo-profile test-fast        # CPU, ExtensionOp, tensor-native
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # GPU gate incl. pfaffian_gate
-scripts/run_pfaffian_bench.sh docker                           # benchmark, writes the CSV
-```
-
 
 ## 12. SR pathfinder through tenferro (issue #421)
 
@@ -1327,9 +1013,8 @@ parity oracle. This also starts the stage-level backend trait of section 5.2.
   inline code moved behind the trait without changing an operation (default outputs are
   byte-identical, checked by the full fixture suite). `TenferroSr` uses tenferro eager ops:
   `dot_general` (Gram, CG, outer product), elementwise `sub`/`mul` (S and g assembly),
-  `cholesky` plus two `triangular_solve` (solve). It is generic over the eager runtime and the
-  placement (`Placement::Host` / `Placement::Device`); `gpu/mvmc-gpu-cuda` builds it on the CUDA
-  runtime (`sr_bench`, gate test `cuda_gate_sr_stages_match_c_order`).
+  `cholesky` plus two `triangular_solve` (solve) on the tenferro CPU runtime. (The device
+  placement and its CUDA gate were removed in #643.)
 * Hook points: `finalize_oo_store[_real]` (Gram), `sr.rs` (S/g and solve, real and complex
   layouts), `sr_cg.rs` (`SampledSrOperator`: one backend handle and one operand version per
   solve). The MPI reduction, the sequential dots and the mean/diagonal corrections of the CG
@@ -1378,7 +1063,7 @@ SYRK (half the flops), and every stage pays eager tensor upload and download (ab
 speed-up; the benefit is the device run below. `TENFERRO_PROFILE_EAGER_OP_AGG=1` only reports
 `nary_op` sections, so the per-op costs above were measured directly.
 
-CUDA (2x RTX 3060, FP64 at 1/64 of FP32 rate, driver 580.178.04, CUDA 13.0 driver API, NVRTC
+Historical CUDA measurement of the removed device placement (2x RTX 3060, FP64 at 1/64 of FP32 rate, driver 580.178.04, CUDA 13.0 driver API, NVRTC
 12.9, cuBLAS 12.9.2, cuSOLVER 11.7.5, tenferro 0.7.1; `scripts/run_cuda_gate.sh docker`, median of
 3 after 1 warm-up, host-to-host ms per stage including upload, synchronized compute and
 download; the machine has 36 CPU threads that the C-order and tenferro-CPU columns may use):
@@ -1397,344 +1082,9 @@ next step is device residency of `OO`/`S` across stages rather than faster singl
 
 ## 13. Device-resident lock-step multi-walker sampler (issue #434)
 
-Status: implemented for the real (`f64`) normal-mode sampler with hopping and exchange updates
-(Hubbard chain and Heisenberg chain), validated on the RTX 3060 and benchmarked end to end.
-Complex and FSZ modes, the measurement stage and MPI QP splitting are not covered. Related to
-#417, #422, #423, #425, #432.
-
-### 13.1 Design
-
-The sampler loop `vmc_make_sample_real` is not rewritten. Its five Pfaffian operations sit behind
-the trait `RealPfStage` (`crates/mvmc-core/src/sampling/stage.rs`): the ratios of a proposed
-one- or two-electron move, the rank-one and rank-two inverse updates of an accepted move, and the
-periodic recomputation (`CalculateMAll`). `CpuStage` runs the existing flat kernels in place (the
-production path, same arithmetic, monomorphized, no dispatch cost). Everything else stays in the
-unchanged host code, in this order: update-type draw, candidate generation, projection counters,
-`log_proj_ratio`, the Metropolis weight and its SFMT draw, configuration bookkeeping. Draw order
-and count are therefore the serial sampler's by construction.
-
-`crates/mvmc-core/src/device_sampler.rs` runs `W` walkers in lock-step: one host thread per
-walker (each owns its `SamplingWalker`: data, state, SFMT stream seeded `RndSeed + w`, the C group
-seed of #425) executes the sampler with a `WalkerStage`, which turns the five operations into
-requests to a `DeviceService` owned by the calling thread:
-
-| sampler step | request | host-device traffic |
-| --- | --- | --- |
-| initial tables | `Begin` (slow lane) | configuration `[n]`, initial Pfaffians `[NQP]`; the Slater table once per distinct wavefunction |
-| proposal ratios | `Hop` / `Exchange` (blocking) | move: slot, site (and a second slot for exchange); back: `NQP` ratios |
-| accepted move | `Accept` (not blocking) | the walker index (the device remembers the pending move) |
-| `CalculateMAll` | `Recompute` (slow lane) | configuration; back: `NQP` Pfaffians |
-
-A **round** fires when every live walker is parked either on a proposal or on a slow-lane
-request (pending or in flight): the fast lane applies the round's accepted moves, runs all
-proposals and returns the ratios. Slow-lane requests (begin, recompute) run asynchronously on up
-to 8 slow lanes so that their latency (a batched Pfaffian/inverse is hundreds of microseconds to
-milliseconds) does not stall the other walkers' proposals. Walkers that reject a candidate on
-the host (`continue` in the sampler) simply reach their next request later. Results never depend
-on which walkers share a round, nor on thread timing: a walker has at most one blocking request
-outstanding, and its accept precedes its next request. Replies are delivered through a wake tree
-(a futex wake of hundreds of walkers from the single service thread costs more than a device
-round), walkers spin for 50 us when they do not outnumber the cores and park otherwise.
-
-The CUDA service (`gpu/mvmc-gpu-cuda/src/device_sampler.rs`, kernels in `sampler_kernels.cu`)
-keeps resident per walker: the inverses `[NQP][n*n]` in **mVMC's convention `invM = -X^-1`**, the
-Pfaffians, the accepted configuration and the pending move; the Slater table is resident once per
-distinct wavefunction (walkers share it when their parameters are bit-equal). What crosses the
-link per round is the request ints (one pinned upload) and the `NQP`-vectors of the proposals
-(one pinned download); Slater planes are assembled on the device from the configuration.
-
-* `k_propose`: one block per (proposal, QP). The rank-one ratio `-pf * sum_j invM[msa,j] S[rsa,rs_j]`
-  and the exchange ratio (`two_ratio_real::<false>`, including the Julia `@turbo` reduction tree with
-  explicit `fma`) are the CPU formulas. The products of each serial sum are formed in parallel and
-  summed in index order by one thread, so the rounding equals the CPU's.
-* `k_accept`: rank-one (`update_one_real`) and rank-two (`update_two_real`) inverse updates in the
-  CPU operation order, one block per (accepted walker, QP), then `k_commit_moves`.
-* `k_assemble` + `pfinv_f64` (the #423 kernel) + `k_commit_recompute`: the planes of
-  `assemble_inv_m_real` (`-S[rs_i][rs_j]`), the batched Pfaffian/inverse, and the commit with the
-  sign flip of `calc_m_all_real` (`invM = -inv`). On a failed plane the resident tables are left
-  unchanged and the host sees the failure like `calc_m_all_real(..).is_err()`.
-* NVRTC runs with `--fmad=false` (explicit `fma()` reproduces Rust's `mul_add`).
-
-**Sign convention.** `pfaffian_inverse_batched` (#423) returns the true inverse `X^-1`, the
-convention of the #424 harness oracle. mVMC's `invM` is its negative (`M_DSCAL(-1)` at the end of
-`CalculateMAll`/`calc_m_all_real`). The device stores `invM` so that the ratio and update kernels
-are the CPU formulas verbatim; the flip is applied in `k_commit_recompute`.
-
-**Transfers.** The host-device copies sit behind `TransferPath` (`PinnedTransfer`: the pool and
-asynchronous copies of #432; `PageableTransfer`: the cudarc baseline). Compute and copies go
-through cudarc on the service's own streams, bypassing tenferro's `upload`/`download` as the
-#432 measurements recommend; the resident buffers are therefore owned by one allocator. The gate
-test `pinned_helper_raw_copies_work_on_tenferro_raw_session_addresses` validates the `*_raw`
-helpers of #432 against device addresses owned by a tenferro raw session (a `DeviceBytes`
-workspace uploaded and downloaded through `upload_raw`/`download_raw` while tenferro launches
-the kernel). The sampler keeps its own seam `RealPfStage` (it needs the finer per-step operations, which
-the batched `PfaffianStages::pfaffian_inverse_batch` of the unified `StageBackend` cannot
-express); the only other backend interface it touches is `PfaffianStages` through
-`mvmc_gpu::stages::BatchedStages` (section 14).
-
-**Wavefunction sharing.** The benchmark and the gate build all walkers on the wavefunction
-(parameters) of walker 0 with independent chains, the physically relevant multi-walker case.
-Walkers with different parameters (the `init_parameter` random initialization of the no-file path
-differs per seed) get one resident Slater table each; the service supports both.
-
-**Final accepts (issue #465).** A walker's last accepted move reaches the service as a message
-right before its `Done` and is normally applied by the next round. When the last walkers finish
-there is no next round, so `run_lockstep_real` flushes the pending accepts with a final
-proposal-free round; without it the resident inverse and Pfaffian stayed one move behind the
-walker's configuration (decisions, RNG and configuration were unaffected, since they never read
-the table afterwards). `HostService::download_walker` and the gate
-`device_sampler_shared_wavefunction_tables_match_cpu_for_every_walker` check the resident tables
-of every walker, with walkers sharing one wavefunction, right after the run.
-
-**Stale host tables (issue #454).** The device holds the current inverses, so after a device run
-the host `inv_m_real` is out of date. This is tracked explicitly: `run_lockstep_real` calls
-`InvMColMajor::mark_stale` on each walker's `inv_m_real` when the run ends. Every read of a stale
-plane (`as_slice`, `get`, `qp_matrix_slice`, `pad_slot`, plane views) and every incremental update
-(`as_mut_slice`, `set`) panics with "stale inverse table read" naming the reason; the
-full-overwrite writer `qp_matrix_slice_mut`, which every `calc_m_all_*` recompute uses, validates
-the plane again, so the next `vmc_make_sample_real` call (which recomputes all planes first)
-restores a valid table. A table never marked stale carries no tracking cost beyond an `Option`
-check and the default CPU path is unchanged. The host Pfaffian buffer `pf_m_real` needs no flag:
-the stage keeps it current (hop and recompute copies as before, and since #454 the exchange accept
-copies the proposed Pfaffians too, matching the CPU in-place update). Audit of the readers: the
-sampler, measurement, Lanczos, SR derivative and output stages all run after a `calc_m_all_*`
-recompute on the CPU path; none is reached from `run_lockstep_real` today, and a future reader
-that skipped the recompute now fails loudly. A caller that needs the device tables downloads them
-(`download_walker` in the test API).
-
-### 13.2 Validation
-
-Normal CI (`crates/mvmc-core/tests/device_sampler.rs`, no GPU): the `HostService` (the same flat
-CPU kernels behind the same request protocol, per-walker resident tables) driven through the
-lock-step runner equals the plain CPU sampler for `W = 1` and `W = 3`, Hubbard hopping (L = 16) and
-Heisenberg exchange: sampler statistics, every recorded Metropolis `(weight, draw)` pair, the
-final SFMT state (all 624 words and the position), the consumed word count, the working and saved
-configurations, bit for bit. A teacher-forced run reports 0 flips, 0 draw mismatches and a
-maximum weight difference of exactly 0; a negative test forces one reference decision to
-disagree and the detector reports the flip and classifies it as a defect.
-
-GPU gate (`gpu/mvmc-gpu-cuda/tests/sampler_gate.rs`, `MVMC_RS_CUDA_GATE=1
-scripts/run_cuda_gate.sh docker`, RTX 3060): per case the CPU sampler runs once and records its
-decisions; then (a) a teacher-forced run on the device with both transfer paths follows the CPU
-decisions and reports flips, defects (a flip whose margin `|w_cpu - u|` exceeds the weight
-difference or the `1e-12 + 1e-10 w` bound), draw mismatches, the weight difference and the
-smallest margin; the walker's final RNG state and configuration must equal the CPU's (they do:
-the draws are host draws); (b) a free run decides on the device weights and must reproduce the
-CPU decision sequence, final configuration and RNG state; (c) the resident inverses and Pfaffians
-after the run are compared with the CPU tables.
-
-| case | decisions | flips | defects | max rel. weight diff | min margin | resident invM rel. diff | resident pf rel. diff |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Hubbard L=16, W=4, hopping | 1920 | 0 | 0 | 5.9e-12 | 1.9e-4 | 2.7e-14 | 5.7e-14 |
-| Hubbard L=32, W=3, hopping | 2880 | 0 | 0 | 5.9e-9 | 3.4e-4 | 1.5e-13 | 1.2e-13 |
-| Heisenberg N=6, W=4, exchange | 1200 | 0 | 0 | 3.6e-13 | 6.0e-4 | 7.4e-17 | 0 |
-
-The ratio and update kernels are bit-compatible with the CPU formulas; the weight differences
-come from the recomputation: the device inverse of `pfinv_f64` rounds differently from the
-production PfaPack path (BLAS `trmm`, panel product), and the difference is carried through the
-chain of rank-one updates between recomputations (`2.7e-14` to `1.5e-13` in the final inverse; the
-L=32 weight difference of `5.9e-9` is a relative difference of one tail weight, absolute `9e-10`).
-It is three to five orders of magnitude below the smallest decision margins (`1.9e-4` here, `1.5e-7`
-on the Heisenberg-chain PhysCal fixture of #425), so a flip needs a decision within `1e-9` of its
-draw; the detector reports none and would report any as a defect. The `*_raw` interoperability
-test passes.
-
-### 13.3 Benchmark
-
-Environment: Intel Xeon E5-2699 v3 (36 hardware threads) shared with other jobs (load average
-11 to 36 at the start and end of the runs, see the CSV headers; the numbers below carry that noise,
-two complete campaigns agreed within about +-30 %, the L=64 `W=512` row of the 4-core table flipped
-between 0.95x and 2.1x), 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, device 0), driver 580.178.04,
-CUDA driver API 13.0, container CUDA toolkit 12.9.2 (NVRTC 12.9), rustc 1.98.0, tenferro 0.7.1,
-Linux x86_64. Docker image `tenferro-benchmark-cuda:full-verify-20260822`.
-
-What is timed: one *call* is `vmc_make_sample_real` of every walker, the C `VMCMakeSample` of one
-sample series: `(NVMCWarmUp + NVMCSample) * Nsite` hop attempts per walker (about 3000 per walker
-and call; `NVMCSample` is chosen per size), the initial table construction (the CPU builds
-its tables for the initial configuration in both variants; the device additionally builds its
-resident tables from the configuration: a device `Begin` batch), and the periodic
-recomputations. Hubbard chain, half filling, `Lsub = 4`, `U = 4`, `NSPGaussLeg = 8` (`NQP = 8`),
-real normal mode, hopping updates, inputs `benchmark/hubbard_chain/inputs/hubbard_chain_L{16,32,64,128}`
-(`L128` is new, generated with the Rust StdFace port like `L64`). All `W` walkers share one
-wavefunction and have independent SFMT streams (`RndSeed + w`). Each method builds its own walkers,
-runs one untimed warm-up call (burn-in), then three timed calls (median). Measurement
-(`VMCMainCal`) is not part of the call. Thread creation per call (one thread per walker) and, for the
-device, service construction excluded, Slater-table upload included.
-
-* **CPU 1 thread**: the walkers one after the other on one thread (only for `W <= 64`).
-* **CPU multichain**: one thread per walker with up to all host cores, the #425 execution model
-  (independent walkers, single-threaded inside; BLAS pinned to one thread).
-* **CUDA device-resident**: this design, pinned asynchronous transfers (#432), one host thread per
-  walker, the Pfaffian stages on the GPU.
-
-The 4-core tables run the same program in a container restricted to cores 0-3 (`docker
---cpuset-cpus=0-3`): a GPU attached to a small host, the CPU baselines and all walker threads of the
-device run share exactly those cores. Columns "CUDA / CPU" are wall-time ratios (above 1 the device
-is slower). The CSVs are `benchmark/gpu_device_sampler/results/device_sampler_cores{all,4}.csv`
-(plus `_pageable.csv`); the metadata block (device report, host cores, load average) is in the
-CSV/log header and in `results/device_sampler.md`.
-
-
-**Wall time of one sampling call, 36 host cores (all of them; shared host)**
-
-| L | W | CPU 1 thread | CPU multichain | CUDA device-resident | hops/s CPU multichain | hops/s CUDA | CUDA / CPU-multichain time | CUDA / CPU-1-thread time |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 16 | 1 | 0.010 s | 0.010 s | 0.090 s | 298k | 33k | 8.96x | 9.24x |
-| 16 | 8 | 0.065 s | 0.014 s | 0.142 s | 1.69M | 169k | 10.04x | 2.17x |
-| 16 | 64 | 0.503 s | 0.082 s | 0.932 s | 2.34M | 206k | 11.40x | 1.85x |
-| 16 | 512 | - | 0.644 s | 1.983 s | 2.38M | 773k | 3.08x | - |
-| 32 | 1 | 0.020 s | 0.020 s | 0.106 s | 151k | 28k | 5.40x | 5.24x |
-| 32 | 8 | 0.148 s | 0.024 s | 0.182 s | 1.01M | 131k | 7.72x | 1.23x |
-| 32 | 64 | 1.079 s | 0.077 s | 0.852 s | 2.46M | 224k | 11.00x | 0.79x |
-| 32 | 512 | - | 0.577 s | 2.142 s | 2.64M | 711k | 3.71x | - |
-| 64 | 1 | 0.050 s | 0.052 s | 0.119 s | 56k | 25k | 2.28x | 2.36x |
-| 64 | 8 | 0.438 s | 0.058 s | 0.206 s | 404k | 114k | 3.54x | 0.47x |
-| 64 | 64 | 4.564 s | 0.249 s | 0.914 s | 757k | 206k | 3.67x | 0.20x |
-| 64 | 512 | - | 1.725 s | 4.070 s | 874k | 370k | 2.36x | - |
-| 128 | 1 | 0.127 s | 0.117 s | 0.135 s | 25k | 22k | 1.15x | 1.07x |
-| 128 | 8 | 1.006 s | 0.160 s | 0.301 s | 147k | 78k | 1.88x | 0.30x |
-| 128 | 64 | 8.092 s | 0.756 s | 2.750 s | 249k | 69k | 3.64x | 0.34x |
-| 128 | 512 | - | 4.941 s | 10.119 s | 305k | 149k | 2.05x | - |
-
-**Anatomy of the device run, 36 host cores (all of them; shared host)**
-
-| L | W | wall | passes | ms/pass | service thread: wait for walkers / round / reply | in round: stage / upload / launch / device wait | slow batches |
-|---|---:|---:|---:|---:|---|---|---:|
-| 16 | 1 | 0.090 s | 2911 | 0.031 | 14.6 / 66.0 / 0.9 ms | 0.9 / 15.2 / 27.9 / 20.7 ms | 63 |
-| 16 | 8 | 0.142 s | 3031 | 0.047 | 11.6 / 109.7 / 12.0 ms | 2.8 / 20.4 / 49.5 / 35.1 ms | 479 |
-| 16 | 64 | 0.932 s | 2917 | 0.319 | 371.5 / 391.3 / 101.7 ms | 24.0 / 91.1 / 157.4 / 108.3 ms | 2210 |
-| 16 | 512 | 1.983 s | 2921 | 0.679 | 866.4 / 487.5 / 289.1 ms | 59.6 / 91.1 / 130.2 / 188.9 ms | 2892 |
-| 32 | 1 | 0.106 s | 2720 | 0.039 | 17.9 / 76.4 / 1.1 ms | 0.9 / 15.4 / 28.2 / 30.8 ms | 32 |
-| 32 | 8 | 0.182 s | 2860 | 0.064 | 19.5 / 134.2 / 21.3 ms | 2.7 / 19.9 / 45.7 / 64.1 ms | 225 |
-| 32 | 64 | 0.852 s | 2749 | 0.310 | 215.8 / 355.3 / 77.7 ms | 17.5 / 60.2 / 106.8 / 163.9 ms | 1343 |
-| 32 | 512 | 2.142 s | 2723 | 0.787 | 640.9 / 780.9 / 235.1 ms | 50.1 / 80.9 / 118.8 / 514.7 ms | 2654 |
-| 64 | 1 | 0.119 s | 2382 | 0.050 | 21.3 / 84.5 / 2.6 ms | 0.9 / 15.1 / 27.8 / 39.4 ms | 14 |
-| 64 | 8 | 0.206 s | 2538 | 0.081 | 25.2 / 145.0 / 27.1 ms | 2.5 / 17.2 / 38.8 / 84.9 ms | 100 |
-| 64 | 64 | 0.914 s | 2426 | 0.377 | 183.1 / 507.7 / 68.9 ms | 14.4 / 48.3 / 85.0 / 354.4 ms | 677 |
-| 64 | 512 | 4.070 s | 2400 | 1.696 | 766.6 / 2313.8 / 264.1 ms | 50.1 / 73.7 / 114.2 / 2061.2 ms | 2074 |
-| 128 | 1 | 0.135 s | 1797 | 0.075 | 26.2 / 82.4 / 1.8 ms | 0.7 / 10.8 / 19.1 / 51.0 ms | 5 |
-| 128 | 8 | 0.301 s | 2015 | 0.150 | 42.9 / 207.2 / 23.9 ms | 2.0 / 14.6 / 32.8 / 156.5 ms | 36 |
-| 128 | 64 | 2.750 s | 1824 | 1.508 | 1212.5 / 1025.9 / 114.0 ms | 17.6 / 69.8 / 110.7 / 820.6 ms | 262 |
-| 128 | 512 | 10.119 s | 1810 | 5.591 | 1571.0 / 6430.9 / 200.2 ms | 47.2 / 69.6 / 103.2 / 6199.8 ms | 934 |
-
-**Transfer path (pinned async vs pageable), 36 host cores (all of them; shared host)**
-
-| L | W | pinned async | pageable | pageable / pinned |
-|---|---:|---:|---:|---:|
-| 16 | 8 | 0.142 s | 0.466 s | 3.29x |
-| 16 | 64 | 0.932 s | 0.981 s | 1.05x |
-| 64 | 8 | 0.206 s | 0.319 s | 1.55x |
-| 64 | 64 | 0.914 s | 1.500 s | 1.64x |
-
-**Wall time of one sampling call, 4 host cores (docker --cpuset-cpus=0-3)**
-
-| L | W | CPU 1 thread | CPU multichain | CUDA device-resident | hops/s CPU multichain | hops/s CUDA | CUDA / CPU-multichain time | CUDA / CPU-1-thread time |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 16 | 1 | 0.009 s | 0.009 s | 0.099 s | 317k | 30k | 10.49x | 10.60x |
-| 16 | 8 | 0.072 s | 0.034 s | 0.304 s | 704k | 79k | 8.93x | 4.22x |
-| 16 | 64 | 0.573 s | 0.200 s | 1.079 s | 957k | 177k | 5.39x | 1.88x |
-| 16 | 512 | - | 1.360 s | 5.553 s | 1.13M | 276k | 4.08x | - |
-| 32 | 1 | 0.021 s | 0.020 s | 0.164 s | 146k | 18k | 8.02x | 7.99x |
-| 32 | 8 | 0.161 s | 0.073 s | 0.441 s | 324k | 54k | 6.00x | 2.74x |
-| 32 | 64 | 1.264 s | 0.324 s | 1.056 s | 588k | 180k | 3.26x | 0.84x |
-| 32 | 512 | - | 2.590 s | 5.060 s | 588k | 301k | 1.95x | - |
-| 64 | 1 | 0.051 s | 0.051 s | 0.123 s | 58k | 24k | 2.42x | 2.45x |
-| 64 | 8 | 0.396 s | 0.111 s | 0.286 s | 213k | 82k | 2.59x | 0.72x |
-| 64 | 64 | 3.233 s | 0.873 s | 1.243 s | 216k | 152k | 1.42x | 0.38x |
-| 64 | 512 | - | 6.879 s | 14.496 s | 219k | 104k | 2.11x | - |
-| 128 | 1 | 0.207 s | 0.207 s | 0.261 s | 14k | 11k | 1.26x | 1.26x |
-| 128 | 8 | 1.897 s | 0.729 s | 0.640 s | 32k | 37k | 0.88x | 0.34x |
-| 128 | 64 | 14.905 s | 2.650 s | 2.057 s | 71k | 92k | 0.78x | 0.14x |
-| 128 | 512 | - | 18.188 s | 13.194 s | 83k | 114k | 0.73x | - |
-
-**Anatomy of the device run, 4 host cores (docker --cpuset-cpus=0-3)**
-
-| L | W | wall | passes | ms/pass | service thread: wait for walkers / round / reply | in round: stage / upload / launch / device wait | slow batches |
-|---|---:|---:|---:|---:|---|---|---:|
-| 16 | 1 | 0.099 s | 2911 | 0.034 | 17.3 / 73.3 / 1.2 ms | 1.1 / 18.1 / 34.5 / 17.9 ms | 63 |
-| 16 | 8 | 0.304 s | 2961 | 0.103 | 46.6 / 173.5 / 80.9 ms | 6.3 / 45.5 / 100.9 / 16.3 ms | 475 |
-| 16 | 64 | 1.079 s | 2917 | 0.370 | 461.8 / 320.6 / 173.4 ms | 16.7 / 59.5 / 111.7 / 125.3 ms | 2210 |
-| 16 | 512 | 5.553 s | 2921 | 1.901 | 5339.7 / 708.5 / 937.5 ms | 80.8 / 150.5 / 217.1 / 234.7 ms | 2892 |
-| 32 | 1 | 0.164 s | 2720 | 0.060 | 33.8 / 111.3 / 4.5 ms | 2.2 / 31.9 / 60.3 / 13.9 ms | 32 |
-| 32 | 8 | 0.441 s | 2778 | 0.159 | 116.5 / 184.0 / 120.7 ms | 7.1 / 49.9 / 101.9 / 20.4 ms | 224 |
-| 32 | 64 | 1.056 s | 2729 | 0.387 | 372.1 / 332.8 / 150.8 ms | 15.3 / 50.2 / 90.0 / 171.3 ms | 1358 |
-| 32 | 512 | 5.060 s | 2722 | 1.859 | 2747.7 / 831.0 / 799.9 ms | 54.6 / 86.4 / 126.4 / 543.3 ms | 2655 |
-| 64 | 1 | 0.123 s | 2382 | 0.052 | 20.5 / 83.6 / 2.6 ms | 1.1 / 15.8 / 29.5 / 35.7 ms | 14 |
-| 64 | 8 | 0.286 s | 2490 | 0.115 | 51.5 / 154.3 / 58.7 ms | 3.6 / 25.5 / 52.5 / 70.3 ms | 99 |
-| 64 | 64 | 1.243 s | 2408 | 0.516 | 343.8 / 405.3 / 118.7 ms | 12.2 / 36.1 / 67.0 / 285.2 ms | 688 |
-| 64 | 512 | 14.496 s | 2384 | 6.080 | 9038.5 / 2130.9 / 2315.8 ms | 88.4 / 235.1 / 281.9 / 1498.5 ms | 2078 |
-| 128 | 1 | 0.261 s | 1797 | 0.145 | 113.9 / 112.6 / 12.7 ms | 1.7 / 26.2 / 43.7 / 38.8 ms | 5 |
-| 128 | 8 | 0.640 s | 1879 | 0.340 | 209.7 / 238.8 / 120.6 ms | 5.1 / 39.3 / 70.9 / 120.2 ms | 36 |
-| 128 | 64 | 2.057 s | 1839 | 1.119 | 499.4 / 982.7 / 60.6 ms | 8.9 / 26.0 / 46.1 / 898.6 ms | 265 |
-| 128 | 512 | 13.194 s | 1807 | 7.302 | 2980.5 / 5471.6 / 665.8 ms | 34.0 / 48.7 / 74.6 / 5305.6 ms | 934 |
-
-**Transfer path (pinned async vs pageable), 4 host cores (docker --cpuset-cpus=0-3)**
-
-| L | W | pinned async | pageable | pageable / pinned |
-|---|---:|---:|---:|---:|
-| 16 | 8 | 0.304 s | 0.268 s | 0.88x |
-| 16 | 64 | 1.079 s | 0.913 s | 0.85x |
-| 64 | 8 | 0.286 s | 0.359 s | 1.26x |
-| 64 | 64 | 1.243 s | 1.617 s | 1.30x |
-
-
-### 13.4 What the numbers say
-
-* **The device-resident sampler does not beat the host on this machine.** With all 36 cores the
-  CPU multichain runner is 1.15x (L=128, `W=1`) to 11.4x (L=16, `W=64`) faster, and still 2.1x to 3.7x
-  faster at `W=512`. The device is faster than **one** core for `W >= 8` at `L >= 64` (L=64, `W=64`: 5x;
-  L=128: about 3x) and from `W = 64` at L=32, which is the replacement of a handful of cores, not of 36.
-* **Only a small host changes the picture, and only at n = 128.** With 4 host cores the device wins
-  at L=128 for every `W >= 8`: 1.14x (`W=8`), 1.28x (`W=64`), 1.37x (`W=512`) faster than the
-  4-core CPU runner; at n <= 64 it still loses (1.4x to 10x), with the L=64 `W=512` point at parity
-  in one campaign and 2.1x slower in the other. This is the Amdahl bound of section 3.2: on the Hubbard-chain
-  profile the Pfaffian share of the sampler (`UpdateMAll`, `CalculateNewPfM2`, recomputation) is
-  about 32 % at L=16 and 45 % at L=64, so removing it entirely (infinitely fast device, free
-  transfers) cannot give more than about 1.5x to 1.8x; the rest (candidate generation, projection
-  counters and `log_proj_ratio`, SFMT, the acceptance weight) stays on the host by the RNG-parity
-  contract and costs 3.3 us (L=16), 6.7 us (L=32), 17 us (L=64) and 43 us (L=128) per attempted hop
-  per core (the `CPU 1 thread`, `W=1` rows).
-* **Fixed cost per round.** At `W=1` a round costs 31 us (L=16) to 70 us (L=128): about 1 us of
-  staging, 5 to 7 us of upload enqueue, 10 to 15 us of kernel launches (three to five launches
-  through cudarc), 6 to 25 us of device execution and download. A CPU hop costs 3 to 43 us, so
-  single walkers can never win (the `W=1` column is 9x slower at L=16 and 1.1x at L=128, where a
-  hop is expensive enough to hide the round).
-* **Where the time goes at scale (L=128, `W=512`).** The fast lane's device wait is 61 % of the wall
-  time with 36 cores and 40 % with 4 cores. The `nsys` profile of L=128, `W=64` attributes 64 % of the GPU time to
-  `pfinv_f64` (5.2 ms per batch of 8 planes: the serial LTL^T steps and column loops of a single
-  block per plane, `B=1` of the #423 benchmark), 28 % to `k_accept` (0.32 ms per launch) and 5 % to
-  `k_propose` (53 us). The slow lanes overlap with the fast lane but compete with it for the SMs.
-  The service thread then waits 20 % of the wall time for the walkers' host work and 5 % for
-  reply delivery. The kernels are straightforward ports, not tuned: a shared-memory LTL^T for
-  `n <= 64`, a parallel triangular inverse and a tiled rank-two update are the obvious next steps;
-  none changes the Amdahl bound above.
-* **Host coordination matters.** One thread per walker needs a futex wake per walker per round
-  (hundreds of microseconds at 64 to 512 walkers, hence the wake tree) and degenerates when
-  walkers greatly outnumber the cores (512 walkers on 4 cores took 107 s with timed parking before
-  the plain `park`, 4 to 14 s after). A resumable state machine per walker, driven by a few worker
-  threads, would remove that cost; it duplicates the driver's loop and was not attempted here.
-* **Transfers.** Pinned asynchronous copies make the end-to-end run 1.26x to 1.64x faster than
-  pageable copies at L=64 (`W = 8, 64`, both host configurations) and are equal within noise at
-  L=16 (0.85x to 1.05x; one 3.3x outlier of the 36-core campaign was a noisy run): the effect
-  grows with the bytes per round (the recompute configurations and the proposals' `NQP` ratios are
-  tens of kilobytes).
-* **What would make the device pay.** The remaining host cost per hop, mostly the projection
-  counters and `log_proj_ratio` (Gutzwiller/Jastrow), could move to the device without touching the
-  RNG contract (the SFMT draws stay on the host; only a scalar log ratio would come back), which is
-  the larger lever on hosts with many cores; together with the persistent-kernel or CUDA-graph
-  launch path (the 30 to 70 us round floor) and the tuned kernels it is the follow-up to #434. Complex
-  and FSZ modes use the same protocol with `Complex64` kernels.
-
-
-### 13.5 Reproduce
-
-```sh
-cargo nextest run -p mvmc-core --cargo-profile test-fast -E 'binary(device_sampler)'   # CPU, host service
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker                                    # GPU gate (sampler_gate)
-scripts/run_device_sampler_bench.sh docker                                             # all host cores
-MVMC_RS_SAMPLER_CORES=0-3 MVMC_RS_SAMPLER_BENCH_OUT=$PWD/benchmark/gpu_device_sampler/results/device_sampler_cores4.csv \
-  scripts/run_device_sampler_bench.sh docker                                           # 4 host cores
-```
+Removed in #643 together with the CPU-side lock-step driver (`device_sampler`) and the
+`MVMC_RS_SAMPLER_BACKEND` selector. The historical measurements remain in
+`benchmark/gpu_device_sampler/results/`.
 
 ## 14. Unified stage backend (issue #437)
 
@@ -1753,24 +1103,14 @@ objects that production selects ("validated means deployed").
     single-plane convenience).
 * `mvmc_core::stage_backend::StageBackend<'a>`: the single backend object composing one
   implementation per stage trait (`sr()`, `pfaffian()`, `label()`, `provider()`). Mixed
-  backends are expressed by composition (`with_pfaffian`), for example tenferro SR plus the
-  CUDA Pfaffian kernel.
+  backends are expressed by composition (`with_pfaffian`).
 * Selection, `StageBackendKind`: C-order CPU (default, parity oracle: `COrderSr` +
-  `COrderPfaffian`), tenferro CPU (`TenferroSr` + unsupported Pfaffian) and CUDA
-  (`gpu/mvmc-gpu-cuda`: `TenferroSr` on the device + the batched CUDA kernel). Production reads
-  `MVMC_RS_SR_BACKEND=c-order|tenferro|cuda[:N]`; `acquire()` returns a handle to a
-  process-wide shared instance (non-C-order kinds are built once). CUDA registers through
-  `CudaProvider::open_stage_backend`; without the `gpu-cuda` feature or a provider it is an
-  error.
+  `COrderPfaffian`) and tenferro CPU (`TenferroSr` + unsupported Pfaffian). Production reads
+  `MVMC_RS_SR_BACKEND=c-order|tenferro`; `acquire()` returns a handle to a process-wide shared
+  instance (non-C-order kinds are built once). The CUDA kind was removed in #643; `cuda` is an
+  invalid value like any other.
 * Harness: `accel_validation::{replay, repeatability, bench_stages}` take a `StageBackend`; the
-  oracle is `StageBackend::c_order()`. The CUDA gate opens its backend through
-  `open_stage_backend(StageBackendKind::Cuda(0))`, the same call production uses.
-
-The CUDA Pfaffian slot uses `PersistentCudaEngine` (`gpu/mvmc-gpu-cuda/src/pfaffian.rs`): a worker
-thread keeps one CUDA session and the NVRTC-compiled module alive (`raw::Module` is `!Send`),
-because the harness and production issue many small calls and the per-call `CudaEngine` pays
-context creation plus NVRTC each time (the first unified gate run took 1209 s instead of 35 s
-before this fix).
+  oracle is `StageBackend::c_order()`.
 
 ### 14.2 Where things went
 
@@ -1783,17 +1123,12 @@ before this fix).
 | `TenferroCpuStages`, `gpu::stages::EagerStages` | `TenferroSr` (host or device placement) |
 | `BatchedStages` (`impl AcceleratedStages`) | `BatchedStages` (`impl PfaffianStages`, `into_stage_backend`) |
 
-### 14.3 Adding a stage (batched local energy #426, device-resident sampler #434)
+### 14.3 Adding a stage
 
 Define a stage trait next to its data types (`Unsupported` default), add one slot and one
 accessor to `StageBackend`, implement it for the C-order object first (the oracle), and extend
-the harness replay to compare it. The sampler (#434) should consume `StageBackend` through
-`PfaffianStages::pfaffian_inverse_batch` and a new sampler-stage trait rather than any private
-trait; the production SR path is the model (`stage_backend::acquire`).
-
-Not done here: the measurement and sampler Pfaffian still call `calc_m_all_*` directly (the
-`PfaffianStages` slot is exercised by the harness and gates); wiring it into production is the
-#422/#434 work. SR stages are routed in production since #421.
+the harness replay to compare it; the production SR path is the model
+(`stage_backend::acquire`).
 
 ### 14.4 Measurement stage A through the stage backend (issue #422)
 
@@ -1805,17 +1140,14 @@ assembles the planes of a whole batch in the batched layout `[n, n, NQP * B]` (t
 `calc_m_all_child_real`'s `M_DSCAL(.., -1, ..)`). A failing plane (zero pivot, non-finite
 Pfaffian, all-zero plane, out-of-range site) fails its whole sample like `calc_m_all_real`.
 
-* Selection: `MVMC_RS_MEASURE_PF_BACKEND=calc-m-all|c-order|tenferro|cuda[:N]` (default
+* Selection: `MVMC_RS_MEASURE_PF_BACKEND=calc-m-all|c-order|tenferro` (default
   `calc-m-all`, the unchanged C-order kernels). It is separate from `MVMC_RS_SR_BACKEND`
   because tenferro 0.7.1 has SR stages but no Pfaffian: a backend without the stage, or a
   complex/FSZ mode, is a hard error, never a fallback.
 * Validation: `c-order` through the stage is the same PfaPack sequence and is byte-identical to
   the default for batch sizes 1, 3 and all samples (optimization with DH/Gutzwiller/Jastrow and
   PhysCal with Green and Lanczos; `measurement_batch_422.rs`); the table values equal
-  `calc_m_all_real` (unit test). The CUDA kernel is validated by
-  `measurement_gate.rs` (PhysCal on two Hubbard fixtures, 964 numeric tokens each, worst relative
-  difference 1.8e-12 against bound `abs 1e-11 / rel 1e-9`; the sampler and RNG do not depend on
-  the measurement backend).
+  `calc_m_all_real` (unit test).
 * Not done: complex/FSZ Pfaffian stages, performance tuning of the batched call (correctness
   first).
 
@@ -1823,9 +1155,7 @@ Pfaffian, all-zero plane, out-of-range site) fails its whole sample like `calc_m
 
 `measurement_backend::TenferroMeasurement` implements
 [`MeasurementStages`](crate::stage_backend::MeasurementStages) (the #519 seam) with tenferro
-eager ops on one `EagerRuntime`, so the same object runs with the CPU runtime
-(`Placement::Host`, the milestone gate) and the CUDA runtime (`Placement::Device`, wired into
-`gpu/mvmc-gpu-cuda::stages`).
+eager ops on one CPU `EagerRuntime` (the CUDA placement was removed in #643).
 
 * Formulation: the local energy keeps the C `CalHamiltonian1` fast path — the diagonal terms
   and the per-term projection ratios stay host scalar code — and evaluates the per-term `new_ip`
@@ -1842,1118 +1172,16 @@ eager ops on one `EagerRuntime`, so the same object runs with the CPU runtime
   stage against `COrderMeasurement` on a real L=16 Hubbard sample: the local energy matches to
   6.8e-16 relative deviation and the 128-component Slater derivative to 8.9e-16 absolute
   deviation against the bound `abs 1e-13 / rel 1e-13`, plus an end-to-end two-step optimization
-  against the C-order consumer (bound `abs 1e-11 / rel 1e-8`). The A100 stage-B gate
-  (`gpu/mvmc-gpu-cuda/tests/measurement_gate.rs`, `MVMC_RS_CUDA_GATE=1`) compares the CUDA
-  placement on the L=6 Hubbard fixture: PhysCal 964 numeric tokens with worst deviations
-  1.37e-12 absolute / 7.5e-13 relative, and the optimization run (local energy + Slater
-  derivative) 277 tokens with 1.49e-13 absolute / 2.6e-13 relative, against bound
-  `abs 1e-11 / rel 1e-11`.
-* Not done: RBM/two-body Green terms and complex/FSZ stage B; the device placement uploads the
-  gathered ratio operands and downloads the reduced derivative blocks per sample (resident
-  variants are the follow-up).
-
-## 15. Device-resident SR pipeline for large NPara (issue #447)
-
-Status: implemented for real parameters (direct Cholesky and CG), validated and benchmarked on the
-RTX 3060. Related to #417, #421, #432, #437. Complex parameters need the same stages with
-`Complex64` (a second sample matrix in the CG product already works; the complex Gram and
-Hermitian Cholesky are not implemented).
-
-### 15.1 Design
-
-`gpu/mvmc-gpu-cuda/src/sr_device.rs` (`DeviceSr`) keeps the SR step on the device between stages.
-Only per-step inputs and small outputs cross PCIe:
-
-| stage | where it runs | crosses PCIe |
-| --- | --- | --- |
-| sample matrix `O` (`[n, samples]`, or the active-component matrix of CG) | resident | once per step, `8 n samples` bytes, pinned write-combined staging in 32 MiB chunks, two buffers so that the host copy overlaps the transfer (#432) |
-| Gram `G = O O^T` | cuBLAS `dsyrk` (upper) | nothing |
-| S and g assembly with the active-component map, diagonal shift `1 + DSROptStaDel` | kernels `k_assemble_s`/`k_assemble_g`, bitwise the formulas of `COrderSr::assemble_s_g` (`--fmad=false`), reading the upper triangle of `G` | `HO` (`n`) and the map in, nothing out |
-| solve | cuSOLVER `dpotrf('U')` + `dpotrs('U')`, the `DPOSV` of C `stcopt_dposv.c`; `info != 0` or a nonfinite solution is `SrDeviceError::SolveFailed` (the host's `Err(())`) | `x` (`NPara` doubles) and two ints out |
-| CG | the loop of `SampledSrOperator::solve` ported statement for statement: threshold `tol^2 n^2` left to right, 20-iteration explicit residual refresh, the `beta * delta` recurrence, breakdown exit; the product is two cuBLAS `dgemv` per sample matrix plus a combine kernel (`z = w*y - (mean.x) mean + shift*diag*x`); `daxpy`/`dscal` for the updates | gradient, mean, diagonal in; solution out; three scalars per iteration (`ddot`, host pointer mode) are the only syncs |
-
-There is no CPU fallback: every failure is a typed `SrDeviceError`. S and G never leave the
-device in a production step (`download_gram`/`download_s_g` exist for the gate). Device memory
-is `8 (n^2 + n_active^2 + n samples)` bytes (direct) or `8 n samples` (CG); a 10^4 x 10^4 step
-needs 2.4 GB of the 12 GB.
-
-**Opt-in and the unified backend (#437).** The fused step is two new composite stages of
-`SrStages` (`mvmc_core::sr_backend`): `direct_step(&DirectStepInput) -> x` (Gram, S/g assembly,
-shift, Cholesky) and `cg_step(&CgStepInput) -> solution` (the CG loop). The C-order backend
-implements them as the production composition (`direct_step`'s default composes the backend's own
-`gram_real`/`assemble_s_g`/`cholesky_solve`; `cg_step` is `SampledSrOperator::solve_with_stages`,
-the production loop, now parameterized over the stage object), so `StageBackend::c_order()` is
-the oracle of the device step through the same trait. `ResidentCudaSr` (`gpu/mvmc-gpu-cuda/src/
-stages.rs`) delegates every per-stage method to the tenferro CUDA stages and overrides the two
-composite stages with `DeviceSr`; `cuda_resident_stage_backend(ordinal)` builds the opt-in
-`StageBackend`. The default `MVMC_RS_SR_BACKEND=cuda` backend, the C-order path and the production
-call sites were unchanged by #447: production `sr.rs`/`sr_cg.rs` did not yet route to the composite
-stages (their S/g assembly consumed the host `OO` array produced earlier by
-`finalize_oo_store_real`, which the resident path deliberately never materializes on the host).
-Issue #452 routed them; see section 15.6.
-
-### 15.2 Validation against C order (`tests/sr_device_gate.rs`, `MVMC_RS_CUDA_GATE=1`)
-
-Bounds are derived, not tuned:
-
-* **Gram** (step-1 operand): per entry `|G_dev - G_host| <= 2 k eps (|O||O|^T)_ij` with `k` the
-  sample count (two different summation orders of `k` products, `gamma_k` each). Observed worst
-  ratio observed/bound: `9.8e-3` (n=17), `4.8e-2` (n=129), `6.2e-2` (n=400), `2.4e-2` (n=600).
-* **S and g assembly**: bit-identical to the host formula applied to the device's own Gram.
-* **Direct solution**: relative error `|dx|/|x| <= 4 n eps kappa(S)` with `kappa` estimated on the
-  host (power and inverse iteration through the C-order Cholesky), and the device residual
-  `|S x - g|/|g| <= 1e-9`. Observed: `7e-15 / 4.5e-12` (n=17, kappa 3e2), `4.7e-14 / 7.7e-11`
-  (n=129), `2.4e-13 / 4.0e-10` (n=400), `2.6e-14 / 2.3e-10` (n=600); residuals `5e-15..9e-14`.
-* **Failure semantics**: an indefinite `S` (negative shift) fails on the host (`Err(())`) and on the
-  device (`SolveFailed { info > 0 }`); the pipeline stays usable afterwards.
-* **CG operator product** (step-1 operand of the CG path): per entry
-  `|z_dev - z_host| <= 4 (k + m) eps scale_i`, `scale_i` the sum of the absolute terms of the
-  product; observed worst ratio `5.8e-4`, `2.5e-5`, `5.3e-6` (24 to 1125 components, 50 to 1500
-  samples).
-* **CG solutions and #358.** On a well-conditioned problem (shift 0.5, 3000 samples) the device
-  and host iteration counts are equal (29) and the solutions differ by `2.9e-15` (relative). On an
-  ill-conditioned problem (120 components, 130 samples, shift `1e-4`, tolerance 0, the regime of
-  the #358 analysis where the squared residual cancels to 1e-16) the solutions differ by
-  `1.8e-16, 3.4e-16, 7.3e-16, 2.0e-15` after 1, 2, 4, 8 iterations and by `6.7e-4` after 119
-  iterations: the amplification of last-bit differences by the cancellation, exactly the effect the
-  C-order Rust path shows against the instrumented C run. As in #358 the policy for long ill-conditioned solves is
-  repeatability: the gate asserts that the device trajectory is bitwise repeatable and finite, and
-  compares against the host only where the amplification has not set in (up to 2 iterations at
-  `1e-8`, observed `3e-16`).
-
-Through the `StageBackend` object: `direct_step` agrees with `StageBackend::c_order()` at `1.4e-13` (bound `2.3e-10`, kappa 9.7e2) and `cg_step` has equal iteration counts (27) and `4e-16` difference. Also gated: bitwise repeatability of the direct solve (re-upload and re-solve give identical
-bits) and the CG operator with an imaginary sample matrix (`1e-15` of the largest entry).
-No numerical discrepancy was found: every difference above is within its derived bound, the
-only large difference (`6.7e-4`) is the CG amplification of #358 and is not a defect of either
-side. Limits of the validation: the operands are synthetic (real-store structure, controlled
-conditioning), not a sampled run of the optimizer, and there is one device (RTX 3060).
-
-The C-order CPU path stays the default and the oracle; the device path never changes it.
-
-### 15.3 Benchmark
-
-Environment: Intel Xeon E5-2699 v3 (36 hardware threads) **shared with other jobs (load average
-17 to 20 during the run)**, so the CPU all-core columns are, if anything, pessimistic for the CPU
-and the 1-thread column is mildly affected; 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, device 0),
-driver 580.178.04, CUDA driver API 13.0, container CUDA toolkit 12.9.2 (cuBLAS 12.9.2, cuSOLVER
-11.7.5, NVRTC 12.9), OpenBLAS 0.3.x (system, `libopenblas.so.0`), rustc 1.98.0. Medians of 3 runs
-after one warm-up (one run at the two largest direct sizes). A step is what the host does today
-with the C-order path (`COrderSr::gram_real` + `assemble_s_g` + `cholesky_solve`, or 50 iterations
-of `SampledSrOperator::solve`, tolerance 0) with `openblas_set_num_threads(1)` and `(36)`, against
-`DeviceSr`. **GPU end-to-end** includes the per-step upload of the sample matrix through pinned
-staging; **GPU resident** has the matrix already on the device (what a device-side O store would
-give). Synthetic problems with the structure of the real store (row 0 constant, normalized by
-`1/sqrt(samples)`, latent-factor covariance), `NPara+1` rows, all components active. CSV and
-metadata: `benchmark/gpu_sr_device/results/`.
-
-**Direct SR step (Gram + S/g + Cholesky solve), milliseconds**
-
-| NPara+1 | samples | CPU 1 thread | CPU all cores | GPU end-to-end | GPU resident | e2e vs 1 thread | e2e vs all cores | resident vs all cores | GPU phases: upload / Gram / assemble / solve (ms) |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1000 | 1000 | 60.4 | 29.1 | 21.2 | 19.7 | 2.9x | 1.4x | 1.5x | 1.5 / 10.7 / 0.1 / 8.8 |
-| 1000 | 10000 | 403 | 74.0 | 120 | 108 | 3.4x | 0.6x | 0.7x | 11.9 / 99.5 / 0.1 / 8.3 |
-| 3000 | 3000 | 1384 | 452 | 254 | 242 | 5.5x | 1.8x | 1.9x | 11.4 / 165 / 0.7 / 76.6 |
-| 3000 | 10000 | 3270 | 709 | 658 | 626 | 5.0x | 1.1x | 1.1x | 31.9 / 548 / 0.7 / 76.6 |
-| 5000 | 5000 | 5020 | 1156 | 1063 | 1038 | 4.7x | 1.1x | 1.1x | 25.6 / 741 / 2.1 / 294 |
-| 10000 | 1000 | 13030 | 4164 | 2667 | 2656 | 4.9x | 1.6x | 1.6x | 10.9 / 564 / 17.3 / 2075 |
-| 10000 | 10000 | 34404 | 9000 | 7815 | 7710 | 4.4x | 1.2x | 1.2x | 106 / 5609 / 17.1 / 2083 |
-
-**CG SR step (50 CG iterations), milliseconds**
-
-| NPara+1 | samples | CPU 1 thread | CPU all cores | GPU end-to-end | GPU resident | e2e vs 1 thread | e2e vs all cores | resident vs all cores | GPU phases: upload / Gram / assemble / solve (ms) |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1000 | 1000 | 31.2 | 13.7 | 12.2 | 10.2 | 2.5x | 1.1x | 1.3x | 1.9 / - / - / 10.1 |
-| 1000 | 10000 | 856 | 292 | 42.7 | 30.8 | 20.0x | 6.8x | 9.5x | 11.9 / - / - / 30.5 |
-| 3000 | 3000 | 760 | 247 | 43.3 | 28.9 | 17.6x | 5.7x | 8.5x | 11.2 / - / - / 28.8 |
-| 3000 | 10000 | 2498 | 939 | 115 | 83.5 | 21.7x | 8.1x | 11.2x | 31.8 / - / - / 83.4 |
-| 5000 | 5000 | 1973 | 715 | 94.5 | 69.2 | 20.9x | 7.6x | 10.3x | 25.4 / - / - / 68.9 |
-| 10000 | 1000 | 729 | 200 | 49.3 | 33.7 | 14.8x | 4.1x | 5.9x | 15.6 / - / - / 33.4 |
-| 10000 | 10000 | 8476 | 2754 | 382 | 275 | 22.2x | 7.2x | 10.0x | 107 / - / - / 274 |
-
-
-### 15.4 When to opt in
-
-* **CG (`NSRCG = 1`): opt in whenever `NPara * samples >= 3e6`** (for example 1000 x 10000 or
-  3000 x 3000): 8.5x to 11x faster than all 36 cores resident, 5.7x to 8.1x end to end (upload
-  included), 15x to 22x faster than one thread end to end (at 10^4 x 10^4: 0.38 s against 8.5 s for one thread
-  and 2.75 s for 36 cores, 50 iterations). The product is memory-bandwidth bound (a 10^4 x 10^4 operand is 800 MB, read twice
-  per iteration at about 300 GB/s of the card's 360), so FP64 throughput (1/64 of FP32 on this
-  card) does not matter, and the per-step upload (0.1 s for 800 MB) is small against the
-  iterations. Below `NPara * samples ~ 1e6` the 10 launches and 3 syncs per iteration make the
-  device no faster than the CPU (1000 x 1000: 1.1x).
-* **Direct SR (`NSRCG = 0`): the device is a clear win only against one core** (4.4x to 5.5x
-  end to end for `NPara >= 3000`); against all 36 cores it is 1.1x to 1.8x faster at
-  `NPara >= 3000` with `samples <= NPara` and at `NPara = 10^4`, and 0.6x (slower) at
-  1000 x 10000. The Gram product (`NPara^2 * samples` FP64 flops, 1.6e2 GFLOP/s measured on the
-  card, close to its FP64 peak) and the Cholesky (`NPara^3/3`) are compute bound, and a 36-core
-  host has comparable FP64 throughput. Opt in for direct SR when the host has few cores (the
-  36-core host is the strongest case for the CPU; a host with a few cores loses in proportion,
-  the one-thread column is the bound), or when the O store is produced on the device. **Use CG on the device for large problems** if the physics allows
-  it: it is both the larger win and the smaller memory footprint.
-* **Memory:** direct needs `8 (n^2 + n_active^2 + n samples)` bytes (2.4 GB at 10^4 x 10^4, the
-  largest that fits twice on a 12 GB card is about 1.5 x 10^4 x 10^4); CG needs `8 n samples`.
-* **Not accelerated:** the O-store production (sampler and measurement, still on the host), the
-  weight-average/MPI reductions (CG over several ranks needs the cross-rank reduction between the
-  local product and the corrections, which the resident loop does not do; single-process runs
-  only) and complex parameters.
-
-### 15.5 Reproduce
-
-```sh
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh docker            # gates, including sr_device_gate
-scripts/run_sr_device_bench.sh docker                          # benchmark, writes the CSV
-```
-
-### 15.6 Production routing (issue #452)
-
-`MVMC_RS_SR_BACKEND=cuda[:N]` (through `mvmc-cuda`, #464) now runs the resident steps in a normal
-optimizer run. The provider opens `cuda_resident_stage_backend`; `SrStages` gained the resident
-stage contract, all with defaults that leave host backends unchanged:
-
-| trait item | meaning |
-| --- | --- |
-| `resident_direct()`, `resident_cg()` | the backend keeps the direct step / the CG loop on the device (default `false`) |
-| `direct_begin(store, n, samples) -> GramSummary` | upload the `[n, samples]` store (once per step), `G = O O^T` on the device, return `diag(G)` and `G[:, 0]` (`O(n)`) |
-| `direct_assemble(DirectSolveInput { ho, map, offset, sta_del, step_dt, gram_scale })` | `S`, `g` on the device; every Gram entry is multiplied by `gram_scale = 1 / wc` before use (the kernels use `scale * G` per read, exact for 1.0) |
-| `direct_download_s_g(nmap)` | diagnostics only (SR observer capture) |
-| `direct_factor_solve(nmap) -> x` | Cholesky factor and solve, `info != 0` or a nonfinite `x` is `StageError::Failed` (the host's `Err(())`) |
-| `cg_step(CgStepInput)` | the whole CG loop (real or complex samples) |
-| `resident_counters()` | call counters for tests and metadata |
-
-**Direct SR.** `run.rs` (`accumulate_observables_local`) asks `sr::resident_direct_real_applies`
-(`NSRCG = 0`, `NStore != 0`, real parameters, `NVMCSample > 0`, a one-process reducer, selected
-backend reports `resident_direct`). If so it skips `finalize_oo_store_real`, so the host `OO` is
-never formed, and sets `VmcOptimizationState::sr_oo_deferred` (set after `SrMeasurement::finish`,
-which swaps the buffers back). `weight_average_sr_opt_real` then leaves the (zero) host `OO`
-alone, and `sr.rs::stochastic_opt_real_resident` runs the step: `direct_begin` on the store,
-`s_diag = G_pp / wc - (G_p0 / wc)^2` from the summary (the same expression and operation order as
-`collect_active_real` on the normalized `OO`; the redundancy cut selection is shared code,
-`select_active_real`), `direct_assemble` with `HO` (already normalized by the host) and
-`gram_scale`, `direct_factor_solve`, then the same `_SRinfo` row and parameter update as the host
-path. The normalization guard of `weight_average_sr_opt_real` (`|wc| < 1e-15`: no scaling) is
-mirrored (`gram_scale = 1`). An SR observer, if installed, gets `S` and `g` downloaded between
-assembly and factorization (its normalized `oo_real` is empty for a deferred step: the host `OO`
-does not exist).
-
-**CG.** `SampledSrOperator::solve_with_reducer` calls `cg_step` when the backend is
-`resident_cg`, the reducer has one rank and no CG observer is installed; the returned
-`CgSolution` has empty `residual`/`direction` (they are diagnostics of the host loop).
-
-**What stays on the per-stage path of the selected backend** (never a CPU fallback): complex
-direct SR, several ranks or grouped sampling, `NStore = 0`, CG with an observer.
-
-**Validation.** `crates/mvmc-core/tests/sr_resident_routing_452.rs` (CI, no GPU): a host model of
-the resident contract with C-order arithmetic, registered with `register_stage_backend`; the
-optimizer run (direct real, complex direct, CG real and complex) must be byte-identical to the
-C-order run, the Gram stage must never be asked for a host `OO`, and the store is handed over once
-per SR step. `gpu/mvmc-gpu-cuda/tests/sr_routing_gate.rs` (GPU gate, in `scripts/run_cuda_gate.sh`):
-real sampled runs on the CUDA backend against C order with the SR observer: step-1 `S`, `g` and
-solution within bounds derived from `k`, `a_i = sqrt(OO_ii)` and `kappa`, resident counters,
-bitwise repeatability, and bounded multi-step trajectories (observed numbers in manual 12.4).
-
-## 16. A100 FP64 evaluation and the decision to move VMC optimization and PhysCal to the GPU (issues #475, #485)
-
-Status: decided (2026-10-11). This closes the FP64-strong evaluation that #434/#426 deferred to
-("revisit on A100/H100"), and fixes the direction: **run as much of the variational optimization
-(SR/`StochasticOpt`) and PhysCal measurement on the device as possible**, validating every stage
-against the C-order CPU oracle.
-
-### 16.1 The A100 full run
-
-The `#450` function suite ran in `--docker --full --gpu 0` on an NVIDIA A100 80GB PCIe (AMD EPYC
-7713P, 64 cores, driver 580.126.09, CUDA driver API 13.0 / toolkit 12.9.1, tenferro 0.7.1,
-rustc 1.99.0, git `081c7314`). Archive: `bench-out/results-primerose-20261011-051749.tar.gz`
-(kept as `bench-out/a100-full-64core-20261011.tar.gz`).
-
-| verdict | count |
-| --- | ---: |
-| PASS | 270 |
-| FAIL | 0 |
-| ERROR | 0 |
-| NotAvailable | 1 (`sr_resident`, #447 hook absent) |
-| SKIPPED | 15 (memory cap / too slow on one core) |
-
-Overall **PASS**. Notable correctness points: `sampler_resident_inverse` (the settled-download
-defect #465 seen on the RTX 3060) now PASSes at L = 16..64, so the resident inverse and the
-batched `#423` kernel are correct on the A100 with FP64; `sampler_teacher_forced` and
-`sampler_free_run_vs_cpu` are bit-identical to the CPU trajectory (RNG state, draw counts,
-configuration). Every CUDA Pfaffian row and SR row is within its forward-error bound and the
-invariants (`A inv = I`, skew `inv`, `Pf^2 = det`) hold.
-
-### 16.2 Timings at the 64-core baseline (why it is not the right comparison)
-
-Against the **64-core** host the GPU still loses the sampler (`0.21x`–`0.96x`) and most Pfaffian
-points, exactly as the RTX 3060 did, but the cause is now unambiguous:
-
-* The Pfaffian **kernel alone is 3–5x faster than all 64 cores** (f64 n=256 B=8: kernel 267 us vs
-  1.02 ms all cores; c64 n=256 B=8: 530 us vs 2.74 ms), yet the **host-device transfers are 1.1–9.3x
-  the kernel time** at these small matrices, so the total only wins for small `n` with large `B`
-  (f64 n=16 B=64: 3.8x; break-even B>=8–64). The bottleneck is PCIe, not compute.
-* SR `gram` and `cg_matvec` are already YES (3.9x / 3.8x at NPara=2000); the other SR stages are
-  transfer-bound per call.
-* The sampler's host-side RNG-parity work and the 31–70 us lock-step round floor dominate, and the
-  CPU baseline is 64 cores — not a production host.
-
-### 16.3 CPU baseline policy: 1 thread and 4 threads
-
-The suite now reports CPU baselines of **single-thread and 4-thread** only
-(`MVMC_BENCH_CPU_CORES`, default 4), not "all cores". The 64-core benchmark machine is not the
-deployment target and it hides the GPU advantage; production nodes are small. `run_all.sh` sets
-`RAYON_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` to the baseline for the Pfaffian and SR
-passes and exports `MVMC_BENCH_CPU_CORES` for the sampler's multichain row; the archive records
-`cpu_baseline_cores`. The section 13.4 four-core experiment already showed the device-resident
-sampler beating a 4-core host at L=128 for W>=8 (1.14–1.37x) and a single core by 3–5x at
-W>=8, L>=64; the A100 kernel numbers above make that margin larger.
-
-### 16.4 Decision
-
-Proceed with the device-side work. The parked sampler work (#434, #426) is **resumed**, now with
-the explicit end goal of running the whole VMC optimization and PhysCal on the device:
-
-1. **#434 follow-ups** (sampler): projection factors / `log_proj_ratio` on the device (RNG stays on
-   the host), shared-memory LTL^T kernel for n<=64, parallel triangular inverse, tiled rank-two
-   update, CUDA Graphs or a persistent kernel to cut the round floor, and state-machine walkers.
-2. **#426**: batched local-energy ratio tables, a device Slater derivative and the device `O`
-   store, replacing `LocEnergyCal` + `ReturnSlaterElmDiff` (6–10 % of wall time) with GEMM tables
-   plus gathers.
-3. **SR / variational optimization**: extend the already-shipped resident SR routing (#447, #452)
-   so `StochasticOpt` and `calculate S and g` / `DPOSV` stay device-resident for the production
-   sizes (large `NPara`), where section 16.2 shows the GPU already wins.
-4. **PhysCal / measurement**: route `CalculateMAll` (43–45 %), `LocEnergyCal`, `ReturnSlaterElmDiff`
-   and `CalculateGreenFunc` through the stage backend so a measurement sweep runs on the device.
-
-Each item keeps the C-order CPU path as the parity reference and is validated with the #424
-harness (teacher-forced replay, flip detector, exact RNG). Follow-ups: #517 (sampler / #434),
-#518 (batched local energy / #426), #519 (device-resident variational optimization and PhysCal).
-
-### 16.5 Milestone 1: measurement stage contract (issue #519)
-
-The first #519 milestone adds a host/device-agnostic measurement stage. `stage_backend.rs` gains
-the `MeasurementStages` trait (`label`, `provider`, `measure_sample` -> `MeasurementOutput
-{ local_energy, slater_diff }`) with a default `StageError::Unsupported`, a `COrderMeasurement`
-oracle that calls the production `calculate_local_energy` / `slater_elm_diff` kernels operation for
-operation, and one more slot on `StageBackend` (`with_measurement`, `measurement()`).
-`run.rs` stage B routes the **real, non-FSZ** local energy and Slater derivative through the
-selected backend (bytes identical to the inline calls); complex and FSZ modes keep the inline
-calls. Selection is `MVMC_RS_MEASURE_BACKEND=c-order|tenferro|cuda[:N]` (default `c-order`),
-validated in the CLI preflight and in the MPI agreement check; a selected backend that reports the
-stage unsupported is a hard error, never a CPU fallback. Tests:
-`crates/mvmc-core/tests/measurement_stage_519.rs` (byte identity and the unsupported hard error).
-
-The milestone-1 contract passes the runner's working state, so the batched device kernel of #518
-(and a flat device-facing layout) is a later milestone; a device backend answers `Unsupported`
-until then. The complex/FSZ measurement and the Green functions remain host-only.
-
-### 16.6 Milestone 1: production sampler routing (issue #517)
-
-The first #517 milestone routes the **production** `VMCMakeSample` of the optimization and
-PhysCal loops through the device-resident lock-step sampler of #434. `mvmc-core/src/sampler_backend.rs`
-adds the `SamplerStages` trait (`label`, `provider`,
-`sample_real(data, state, rng, timing, reducer) -> SampleStats`), a `COrderSampler` oracle that is
-the unchanged inline driver (run against a fresh internal `CTimer` and merged through the
-`MeasurementTiming` bridge, so the `zvo_CalcTimer.dat` report is preserved), and selection
-`MVMC_RS_SAMPLER_BACKEND=c-order|cuda[:N]` (default `c-order`) with the same override/preflight
-pattern as `stage_backend`. The CUDA slot is provided by `gpu/mvmc-gpu-cuda` through the
-registered `CudaProvider`; the `mvmc-cuda` binary exposes it to production. `run.rs` resolves the
-selector once per run, hard-errors for complex/FSZ (never a silent C-order fallback) and for a
-multi-process reducer (the device chain is the serial chain), and acquires the backend once per
-run.
-
-`run_lockstep_real_one` runs the production chain in lock-step with the **walker on the calling
-thread** and the service loop on a scoped thread (the multi-walker runner keeps its walker
-threads); no state, RNG or `ExpertModeData` is moved or copied, and the reducer needs no `Sync`.
-The CUDA service is reused across sample series: `prepare` drops the previous run's Slater copies
-and reuses the resident buffers when the geometry and walker count match. Complex/FSZ never reach
-the stage.
-
-Validation. `crates/mvmc-core/tests/sampler_backend_517.rs` registers a `HostService`-backed stage
-as the `cuda` kind and requires the production optimization (Hubbard L=4) and PhysCal (Hubbard
-L=64) runs to be byte-identical to C order (SFMT state, draw count, saved chain, counters, output
-files) and the selector/mode/reducer/device-less errors; the L=64 PhysCal case guards the BLAS
-interaction below. `gpu/mvmc-gpu-cuda/tests/sampler_production_gate.rs` repeats the exactness
-check on the A100 with the real `CudaSamplerService`.
-
-The milestone found one numerical host interaction: the device runner pins OpenBLAS to one thread
-(`serial_blas::initialize`, the deterministic-serial policy of #524), while the C-order PhysCal
-entry point left whatever threading was active, so selecting the CUDA sampler changed the host
-`CalculateMAll` last bits. `vmc_phys_cal_in_place_with_options_timed` now pins BLAS at its start,
-exactly like `vmc_para_opt_timed`; both backends then produce byte-identical PhysCal output.
-
-A100 results (3 timed rounds, medians, `MVMC_C_TIMER=1`, byte-identical outputs; details in
-`bench-out/issue517/m1/REPORT.md`): Opt L=448 sampling 25.6 s -> 18.5 s (1.39x; All 1.19x) and
-PhysCal L=448 sampling 41.1 s -> 30.0 s (1.37x; All 1.17x); at L=64 the device loses (Opt sampling
-7.4 s -> 41.3 s, PhysCal 3.2 s -> 17.2 s) because the single-walker round floor dominates at
-n=128.
-
-### 16.7 Roofline of the slow-lane recompute and the >=20x verdict (issue #517)
-
-The >=20x direction of #517 was checked against the FP64 roofline before promising a number.
-Instrumentation: `LockstepStats.begins` and the bench detail counters
-(`recomputes/begins/accepts/proposals`) plus `gpu/mvmc-gpu-cuda/examples/bench_recompute_roofline.rs`,
-which times the `pfinv_f64` kernel alone.
-
-Per recompute item (one slow-lane batch, NQP=8 planes; exact op counts of `pfinv_plane`,
-`k_assemble`, `k_commit_recompute`): **312.9 MFLOP at L=256**, **1677.6 MFLOP at L=448**. The
-production chain (NVMCSample=64, seed 1) recomputes every `L+1` accepted moves, i.e. **~27 items
-per call** at both sizes. Ideal floors at the 9.7 TFLOPS FP64 ALU peak: `T_min` = 0.88 ms (L=256)
-and 4.70 ms (L=448) per call - 0.05-0.1% of the CPU baseline, so the **flop roofline does not
-block >=20x**.
-
-What does block it today is the kernel rate: `pfinv_f64` saturates at **0.211-0.215 TFLOP/s =
-2.2% of the FP64 peak** (46x off the ideal flop time; the factorization is latency-bound), i.e.
-1.48 ms per item at L=256 and 7.79 ms at L=448 when saturated. Device vs a 4-core host
-(`bench_device_sampler`, `taskset -c 0-3`): L=256 W=1/8/64 = 1.04x / 1.23x / 2.18x; L=448 =
-1.60x / 2.31x / 5.33x.
-
-Amdahl with the measurement side on the host (`MVMC_C_TIMER=1`, production sampling call):
-collapsing the sampling to the recompute floor caps the end-to-end at **2.2-2.7x** while
-`CalculateMAll` + `LocEnergyCal` stay on the CPU. Verdict:
-
-- the FP64 flop roofline leaves >=20x open, but only if the **measurement and local energy also
-  become device-resident** (otherwise the cap is 2.2-2.7x);
-- with the current kernel the recompute alone caps the end-to-end at ~13x (L=256) and ~10-26x
-  (L=448, range from host load); a **>=1.6-2x faster `pfinv` (shared-memory LTL^T for n<=64,
-  parallel triangular inverse, tiled rank-2) is required** before >=20x is defensible;
-- the remaining host-side work (candidate generation, projection counters, `log_proj_ratio`,
-  acceptance) must shrink by batching/persistence.
-
-A device-side SFMT port was prototyped and validated bitwise against the C/Rust generators (seeds
-1/42/11272, 10^4-10^6 words, state and cursor), but per the user decision it is **not adopted**;
-the RNG stays on the host.
-
-### 16.8 Kernel roofline after the `pfinv_f64` rewrite (issue #517)
-
-`gpu/mvmc-gpu-cuda/src/pfaffian_batched.cu` (`pfinv_f64`) was rewritten on the branch
-`perf/issue517-pfinv-kernel`. The generic `pfinv_plane<T>` template still serves the f32/c64
-variants and the small real batches unchanged; the real-double path (`n >= 64`, even) is now
-specialized per phase, and the launch geometry is shared by the measurement launcher, the
-device-sampler service and the roofline bench (`pfaffian::launch_geometry`).
-
-What changed:
-
-- **phase 1** stages `x = A[:,k0]`, `y = A[:,kk]`, `t1 = alpha*y`, `t2 = alpha*x` in shared
-  memory once per step (4n doubles), scales column `k0` in the same pass, and applies the
-  strict-upper rank-2 update with one `double2` load/store per two elements with warp-cyclic
-  columns. The pivot search reduces with `__shfl_down_sync` plus one shared-memory round. Every
-  per-element formula is unchanged, so this phase is bit-identical to the generic path.
-- **phase 3(b)** (unit-upper-triangular inverse) keeps its exact C operation order: splitting
-  each dot product into four partial sums was measured and gave no gain (the phase is
-  memory-bound), so it was not kept.
-- **phase 3(d)** computes `M^T C` as a register-tiled GEMM restricted to the upper triangle of
-  the pre-permutation index space and writes the transposed entry as its exact negative:
-  `n^3/6` multiplies instead of `n^3`, 64x64 macro tiles, two `double2` loads per 4-wide k block
-  and the original `k = 0,1,2,...` accumulation order. For `n` a multiple of 64 this is
-  bit-identical on the computed half and exactly skew-symmetric on the mirrored half.
-- The `pfinv_f64` entry point carries `__launch_bounds__(256, 2)` and uses 256 threads for
-  `n >= 128` (measured fastest); the `n < 64` and odd-`n` cases stay on the generic path.
-
-Measured on the A100 (kernel-only, median of 5, `bench_recompute_roofline`; the roofline FP64
-peak is 9.7 TFLOP/s):
-
-| n | planes | before ms | after ms | speedup | before TFLOP/s | after TFLOP/s | after % peak |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 256 | 512 | 105.9 | 53.5 | 1.98x | 0.188 | 0.373 | 3.8% |
-| 256 | 2048 | 378.8 | 192.5 | 1.97x | 0.211 | 0.415 | 4.3% |
-| 448 | 512 | 527.9 | 306.3 | 1.72x | 0.203 | 0.350 | 3.6% |
-| 448 | 2048 | 1996.4 | 1161.7 | 1.72x | 0.215 | 0.369 | 3.8% |
-
-The saturated rate moves from 2.2% to ~4% of the FP64 peak (0.21 -> 0.42 TFLOP/s at n=256). The
-remaining gap to the flop floor is phase 1's `O(n^3/6)` element-wise rank-2 sweep and phase 3(b)'s
-triangular inverse, which are now memory/latency-bound; blocking (panels) both is the next step
-if the end-to-end >=20x target needs more. The restructured phases 1 and 3(b) keep the exact C
-operation order; phase 3(d) is bit-identical on the computed (upper) half and mirrors the other
-half exactly.
-
-Numerics: `tests/pfaffian_gate.rs` (6/6 pass) and the `pfaffian` function suite (99 rows, 0
-FAIL/ERROR) both stay inside the unchanged `16 n eps cond(A)` bound; the worst observed ratio is
-`8.5e-4` of the bound at n=16 (generic path), `4.0e-5` at n=64 and `5.0e-5` at n=256 for the fast
-path. Raw logs and the before/after CSVs: `bench-out/issue517-pfinv/`.
-
-## 16.9 Milestone 2: device-resident measurement (issue #518)
-
-Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
-measurement (`CalculateMAll` + `LocEnergyCal`/`ReturnSlaterElmDiff`) now keeps the Slater table,
-the per-sample inverse/Pfaffian tables and the determinant-ratio arithmetic on the device
-across a series; `c-order` remains the default and the oracle.
-
-### 16.9.1 What became resident
-
-`gpu/mvmc-gpu-cuda/src/measurement.rs` (kernels `measurement_kernels.cu`) owns one
-`ResidentDevice` per CUDA device; the stage A adapter (`ResidentStageA`, `PfaffianStages`) and
-the stage B wrapper (`ResidentMeasurementStage`, `MeasurementStages`) share it through an
-`Arc<Mutex<..>>`, so the two slots of one `StageBackend` address the same tables:
-
-| item | where it lives | when it moves |
-| --- | --- | --- |
-| Slater table `S` | device | once per content version (`SlaterElmFlat::version`, a process-global monotone counter; excluded from `Debug`/`PartialEq`) |
-| assembled skew planes + `pfinv_f64` | device | never (assembled from `S` and the electron sites on the device) |
-| inverse planes (`invM = -X^-1`) + Pfaffians | device | Pfaffians (one `NQP` vector + status per plane) download once per batch; inverse planes download only when the host needs them (PhysCal Green/Lanczos, or a host stage B) |
-| sample electron sites | upload | the sample's own changed rows (KiB) |
-| local-energy ratio table | device (`km_ratio_terms`) | outputs only (`terms` doubles per sample) |
-| Slater derivative | device (`km_slater_rows`/`km_slater_fold`) | outputs only (`n_slater` doubles per sample) |
-| O store / SR assembly / IP | host | unchanged (the resident direct SR of #452 uploads the store once per step) |
-
-Seam (issue #519 contract extended, `crates/mvmc-core/src/stage_backend.rs`):
-`PfaffianStages::resident_stage_a`/`stage_a_resident` (assemble+factorize a batch, keep the
-tables) and `MeasurementStages::resident_measurement`/`resident_prepare`/`resident_stats`,
-with `MeasurementInput::sample`/`batch_slot` as the residency key. The host orchestration
-(term classification, projection ratios, the term-ordered energy fold, the final `*1/ip`
-normalization) stays in `mvmc-core` (`measurement_backend::resident_measure_sample`); the CUDA
-crate implements only the device operations (`ResidentMeasurementOps`). Selection is unchanged:
-`MVMC_RS_MEASURE_PF_BACKEND=cuda` + `MVMC_RS_MEASURE_BACKEND=cuda`; either selector alone still
-works (stage A with a host stage B downloads the tables; stage B without the resident stage A
-uses the eager milestone-1 path). Slots whose host inverse table is intentionally not downloaded
-are marked stale (#454), so any host read fails loudly. Complex/FSZ/RBM/two-body inputs are a
-hard `Unsupported`, and a multi-rank reducer is a hard error naming
-`MVMC_RS_MEASURE_BACKEND`, never a silent fallback.
-
-Host/device transfers are pageable cudarc copies on the device's default stream; the tables are
-allocated once per geometry and grow-only. Per device the service holds about
-`(3 * slots * NQP * n^2 * 8)` bytes of stage buffers: at L=448, `B=16` that is ~615 MB plus the
-51 MB Slater table.
-
-### 16.9.2 Numerical deviations
-
-The kernels use the C operation order (assembly, `pfinv_f64` with `--fmad=false`, sequential
-`msj`/`qp` transfer folds, the exact `SlaterElmDiff` block coefficients). The Slater derivative
-re-associates the per-row scatter into a deterministic per-`(trans, msi)` orbital list (no
-atomics), bounded by the reordering error of a few sums. Measured against the C-order run with
-the same sampler (issue #518 selection test, A100):
-
-| case | quantity (worst) | deviation | scale |
-| --- | --- | --- | --- |
-| L=6 gate, PhysCal `hubbard_chain_real` | 964 numeric tokens | 1.45e-13 abs / 7.9e-14 rel (bound `1e-11/1e-11`) | — |
-| L=6 gate, Opt 2 steps | 277 tokens | 9.24e-14 abs / 5.35e-13 rel | — |
-| L=64, Opt 1 step | whole outputs | 9.1e-13 abs on 4205.15 | 2.2e-16 rel |
-| L=448, Opt 3 steps | whole outputs | 3.0e-9 abs on 206171.15 (`zqp_opt`) | 1.45e-14 rel |
-| L=448, PhysCal 5 samples | Green/energy outputs | 2.3e-10 abs on 207867.90 | 1.1e-15 rel |
-
-`zvo_SRinfo.dat` is identical in the same-sampler comparisons, and a second resident run of the
-same input is bitwise identical (deterministic kernels; gate assertion). An earlier defect found
-during development is worth recording: the first CSR implementation inverted the translation map
-by site only, silently dropping one of the two spin slots that share a site (up/down). It showed
-up as a 15 % parameter difference in a mixed-sampler L=64 comparison; the fix keeps one slot per
-spin block and the same-sampler deviation dropped to 2.2e-16 relative. Validation:
-`crates/mvmc-core/tests/measurement_resident_518.rs` (host mock of the seam, byte-identical
-optimization, stale contract, hard error), `gpu/mvmc-gpu-cuda/tests/measurement_gate.rs`
-(`cuda_resident_measurement_matches_c_order`, PhysCal + Opt + counters + repeatability).
-
-### 16.9.3 Measured (A100 80GB, `bench-out/issue518/m2`)
-
-NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, CUDA toolkit 12.9, 64 host
-threads (shared host, `load1` 2-8 during the runs), `MVMC_C_TIMER=1`, medians of 3 timed rounds
-after one warm-up, same `mvmc-cuda` binary for all rows. `cuda_resident` is
-`MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda`.
-Section seconds.
-
-Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order (1 BLAS thread) | 42.53 | 26.29 | 14.14 | 1.237 |
-| cuda sampler | 32.19 | 14.44 | 15.42 | 1.252 |
-| **cuda sampler + resident measurement** | **16.99** | 14.60 | **1.084** | **0.152** |
-| c-order (4 BLAS threads) | 42.26 | 26.41 | 13.54 | 1.284 |
-
-PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order (1 BLAS thread) | 73.32 | 40.78 | 23.05 | 1.258 |
-| cuda sampler | 56.33 | 23.59 | 23.24 | 1.243 |
-| **cuda sampler + resident measurement** | **37.49** | 23.63 | **5.260** | **0.210** |
-| c-order (4 BLAS threads) | 72.47 | 41.03 | 21.84 | 1.250 |
-
-The measurement section moves by **13.0x** (`CalculateMAll` Opt), **4.4x** (PhysCal: the inverse
-planes are downloaded for the host Green functions) and **8.1x/6.0x** (`LocEnergyCal`), and the
-whole device `All` by **2.50x** (Opt) and **1.96x** (PhysCal) against the 1-thread CPU. Energies
-are identical to printed precision; same-sampler output comparisons are the table above.
-
-### 16.9.4 The 4-thread CPU baseline and the remaining >=20x gap
-
-`MVMC_RS_BLAS_THREADS` (default **1**, the deterministic serial parity policy; non-default values
-are a benchmark-only policy and change BLAS summation order) is read by
-`crates/mvmc-core/src/serial_blas.rs`. It does **not** move this benchmark: the L=448
-`CalculateMAll` is dominated by the scalar PfaPack factorization. With 4 threads `DPOSV` halves
-(0.048 -> 0.024 s) and `CalculateMAll` moves 4-5 % (14.14 -> 13.54 s), so the 4-thread CPU `All`
-is 42.26 s (Opt) / 72.47 s (PhysCal) - within 1 % of the 1-thread baseline. The honest gap:
-
-* Opt L=448: 16.99 s vs 42.26 s -> **2.49x** end to end (sampling is 14.60 s = 86 % of the
-  device `All`; the measurement is 1.24 s = 7 %).
-* PhysCal L=448: 37.49 s vs 72.47 s -> **1.93x** (sampling 23.63 s = 63 %; the measurement still
-  spends 5.3 s on the per-batch inverse downloads the host Green functions require).
-
-The measurement no longer caps the end-to-end at 2.2-2.7x (section 16.7); the cap is now the
-sampler: the production chain still pays the host candidate generation / projection counters /
-`log_proj_ratio` and the lock-step round floor, and at L=448 the recompute kernel is the
-sampler's dominant device phase (16.8). The next lever for >=20x is the #517 sampler path
-(projection/`log_proj_ratio` on the device, projections of the recompute phases, CUDA-graph or
-persistent launch), not the measurement. PhysCal additionally needs the Green functions on the
-device before the inverse download disappears.
-
-## 16.10 Milestone 3: the per-hop cost of the production sampler (issue #517)
-
-Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
-lock-step sampler is **1.85x faster** in its sampling section (`VMCMakeSample`: Opt L=448
-14.61 s -> 7.88 s) and the whole device run goes from 16.88 s to 10.06 s (Opt) and 37.57 s to
-26.37 s (PhysCal), **byte-identical** to the C-order sampler on the same measurement backend.
-
-### 16.10.1 Profile first: where the 4.9 s/step went
-
-Instrumentation (this issue):
-
-* `MVMC_C_TIMER=1` now reports the walker's sampler sections for the device path too
-  (`run_lockstep_real_one_timed`; the C-order sections 30/31/32/60-63/34/35), so a device run
-  has the same `zvo_CalcTimer.dat` breakdown as the CPU run.
-* `MVMC_RS_SAMPLER_PROFILE=1` prints the per-call lock-step statistics (`passes`, `proposals`,
-  `accepts`, `recomputes`, `recv_s`, `round_s`, `deliver_s`) and the service's per-call phase
-  deltas (`stage_s`, `upload_s`, `launch_s`, `wait_s`, `slow_wait_s`, and the CUDA-event device
-  times `dev_accept_s`, `dev_propose_s`, `dev_slow_s`).
-* `gpu/mvmc-gpu-cuda/examples/bench_sampler_kernels.rs` times the three fast-lane kernels
-  (`k_accept`, `k_commit_moves`, `k_propose`) and a full round (pinned upload + accept + commit +
-  propose + pinned download) on an idle device, and checks variant kernels for bit-identical
-  inverses.
-
-Opt L=448, 3 SR steps, `NVMCSample=64`, warm-up 10, one sample series = ~33 000 proposals /
-12 100 accepts / 26 recomputes. Host sections of the first series (seconds, share of
-`VMCMakeSample` = 5.94 s):
-
-| item | where | seconds | share |
-| --- | --- | ---: | ---: |
-| `CalculateNewPfM2 [61]` (the lock-step round trip, blocking) | host+device | 4.294 | 72 % |
-| `recal PfM and InvM [34]` (26 recomputes) | device | 0.798 | 13 % |
-| `makeInitialSample [30]` (initial sample + CPU tables + device `Begin`) | host | 0.490 | 8 % |
-| `UpdateProjCnt [60]` | host | 0.144 | 2 % |
-| candidate generation `[31]` + `log_ip [62]` + accept send `[63]` | host | 0.047 | 1 % |
-| everything else (protocol, copies, loop) | host | 0.17 | 3 % |
-
-The blocked time of section 61 decomposes with the service counters and the kernel bench:
-
-| device phase | per call | per series | share of the series |
-| --- | ---: | ---: | ---: |
-| `k_accept` (rank-two inverse update, 8 planes) | **219 us per accepted move** | 2.73 s | 46 % |
-| `k_propose` (ratio, 8 planes) | 11.2 us per proposal | 0.37 s | 6 % |
-| `k_commit_moves` | 5.1 us per accept | 0.06 s | 1 % |
-| pfinv recompute (8 planes) | **27.4 ms per item** | 0.82 s | 14 % |
-| service host (stage + upload + launch + download) | 23 us per round | ~0.78 s | 13 % |
-| walker protocol (send, park/wake, reply copies) | ~10 us per round | ~0.33 s | 6 % |
-| walker host work (candidate, counters, log ip) | ~5 us per hop | 0.19 s | 3 % |
-
-`k_accept` was the dominant single cost: 226 us of device time per accepted move (36.5 % of the
-proposals), because the flat `e = base + u * nt` loop computes `i = e / n`, `j = e % n` with a
-runtime divisor and touches the plane with a poor access pattern; with one module per (walker,
-QP) it runs on 8 of 108 SMs.
-
-### 16.10.2 What was changed
-
-1. **`k_accept` row loop** (`sampler_kernels.cu`): both branches (one-electron rank-two update and
-   two-electron block update) walk the plane row by row, one warp per row group, consecutive lanes
-   along the row. No integer division, fully coalesced loads and stores; every element's
-   expression is unchanged, so the update is bit-identical (the vectors it consumes are produced
-   by the same per-index ascending sums). The launch uses 512 threads instead of 256. Measured
-   (8 planes, n=448): 219.1 us -> 116.7 us (row loop, 256 threads) -> **77.8 us** (row loop, 512
-   threads) = **2.8x**; n=256: 74.8 us -> 31.7 us (2.4x).
-2. **`pfinv_f64_wide`** (`pfaffian_batched.cu`, `pfaffian::launch_geometry_wide`): a second entry
-   point of the #531 recompute kernel with relaxed launch bounds (`__launch_bounds__(1024, 1)`,
-   1024 threads per block) for the real-double fast path at `n >= 256`. Phase 1 of the
-   factorization is latency-bound when only a few planes are in flight, so the sampler's
-   single-walker recompute (8 planes = 8 SMs) and small measurement batches run faster; the same
-   math and the same per-element order, one block per plane. Measured per item (8 planes):
-   n=256 5.96 -> 5.11 ms (1.17x), n=448 27.4 -> 21.8 ms (1.26x), n=448/64 planes 55.0 -> 40.1 ms
-   (1.37x); n=128 and below keep the 256-thread geometry (1.09x faster there).
-3. **Production walker spin** (`sampler_stages.rs`): the single production chain spins 200 us for
-   its reply (was 50 us), which removes a park/unpark pair per hop: `deliver_s` 0.033 -> 0.008 s
-   per series.
-4. **Service receive spin** (`device_sampler.rs`, `RECV_SPIN` = 20 us): the service loop spins for
-   the next request before blocking in the channel receive. With one walker the next request
-   follows its reply within a few microseconds, so the blocking receive paid a futex wake on
-   every hop; several walkers never reach the spin.
-5. **Reused staging buffers** (`device_sampler.rs`): the request ints and their f64 bit image are
-   held in the service and refilled per round instead of allocated (one round per hop).
-6. **Timing passthrough and profile print** (items above): the device path reports the sampler
-   sections; the profile events are pooled (one `cuEventCreate` per round was ~9 % of the run
-   while profiling).
-
-Together, items 3-5 move section 61 (`CalculateNewPfM2`) from 59.1 us to 53.3 us per hop and
-`VMCMakeSample` for the first series from 3.44 s to 3.05 s (a further 1.13x).
-
-Levers that were **not** taken, with the reason:
-
-* **Speculative multi-hop batches** (prepare several hops per device exchange): impossible for the
-  production single chain without breaking the RNG contract. A hop's candidate is drawn from the
-  *empty-site* lists of the configuration that results from the previous decision, and the number
-  of SFMT draws per hop depends on whether the candidate is valid (the driver `continue`s on a
-  rejected candidate), so neither the candidate values nor the stream positions of hop `N+1` are
-  known before hop `N` is decided. Batching proposals stays valid for the independent-walker
-  runner (#434), not for one C chain.
-* **Device-side decision loop** (the only way to remove the per-hop round trip): the SFMT stream
-  stays on the host by the user decision of 16.7, and the projection ratio (`log_proj_ratio` over
-  the Gutzwiller/Jastrow counters) and the Metropolis draw are host-side by contract.
-* **Persistent/command-ring kernel**: one host kick per hop cannot serve many hops for the same
-  reason; CUDA graphs could only remove the per-kernel launch cost (~5 us of ~100 us per hop),
-  and the round trip per hop stays.
-
-### 16.10.3 Measured (A100 80GB, `bench-out/issue517/hops`)
-
-NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads
-(shared host: `load1` 1.8-5.1 during the timed Opt rounds, 1.4-3.1 during the PhysCal timed
-rounds), `MVMC_C_TIMER=1`, medians of 3 timed rounds after one warm-up, the same `mvmc-cuda`
-binary per row (`mvmc-cuda-base` = `main` at `a8ec667e`, `mvmc-cuda-opt` = this milestone).
-`cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda
-MVMC_RS_MEASURE_PF_BACKEND=cuda`. Section seconds.
-
-Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order (1 BLAS thread) | 39.99 | 23.82 | 13.94 | 1.226 |
-| c-order (4 BLAS threads) | 39.61 | 24.10 | 13.21 | 1.289 |
-| device sampler (before, `main`) | 16.88 | 14.61 | 1.084 | 0.143 |
-| **device sampler (after)** | **10.06** | **7.88** | 1.008 | 0.142 |
-
-PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order (1 BLAS thread) | 72.69 | 39.82 | 23.20 | 1.237 |
-| c-order (4 BLAS threads) | 71.33 | 39.92 | 21.75 | 1.240 |
-| device sampler (before, `main`) | 37.57 | 23.52 | 5.27 | 0.209 |
-| **device sampler (after)** | **26.37** | **12.70** | 5.04 | 0.208 |
-
-Readings:
-
-* the sampling section moves by **1.85x** (Opt 14.61 -> 7.88 s; PhysCal 23.52 -> 12.70 s) and the
-  whole device run by **1.68x** (Opt) / **1.42x** (PhysCal);
-* per hop the device chain drops from 179 us to 92 us (Opt step 1, 33 152 proposals); the C-order
-  single thread needs 266 us per hop for the same series;
-* the per-series device budget after the change (Opt step 2, 29 120 proposals): `k_accept` 31.2 us
-  per hop (0.909 s, 29 %), `k_propose` 11.1 (0.32 s, 10 %), recompute 20.5 (0.60 s, 19 %),
-  service host + protocol ~16 (0.47 s, 15 %), copies ~5, walker host work ~5;
-* `CalculateMAll` and `LocEnergyCal` are the (already resident) #518 measurement and move only
-  through `pfinv_f64_wide` in small batches (5.27 -> 5.04 s PhysCal, 1.084 -> 1.008 s Opt);
-  PhysCal still downloads the inverse planes for the host Green functions.
-
-### 16.10.4 Exactness
-
-The sampling contract is RNG state, draw order and count, saved configurations, counters and
-energy. Two checks, both with the *same measurement backend* on both sides (the #518
-measurement is tolerance-based, not byte-exact):
-
-* In-process (A100 gates, `MVMC_RS_CUDA_GATE=1`): `sampler_production_gate` (Opt L=16, PhysCal
-  L=64, production entries) passes; `sampler_gate` (teacher-forced replay, free run, resident
-  inverse) 4/4; `measurement_gate` 7/7; `pfaffian_gate` 6/6; `cuda_gate` 4/4; `transfer_gate`
-  3/3; `sr_device_gate` 3/3; `sr_routing_gate` 2/2.
-* Whole output directories at L=448 with all sampler/measurement backends on the device except
-  the sampler under test (`c-order` vs `cuda`): Opt 3 steps 7/7 files and PhysCal 5 samples 20/20
-  files **byte-identical** (`cmp`, timers and `zvo_time*` excluded).
-* Kernel-level: `bench_sampler_kernels` compares the resident inverse and Pfaffians after one
-  accepted move for the row-loop variant against the previous kernel: 0.0 difference for the
-  hop branch, identical bit checksums for the two-electron branch (both `n = 256` and `448`);
-  the one- and two-electron update expressions are unchanged, only the element-to-thread mapping
-  moves.
-* The all-resident vs all-c-order comparison (different measurement backends) is unchanged from
-  #518: worst 6.8e-9 absolute / 3.2e-14 relative (Opt), 2.3e-10 / 1.1e-15 (PhysCal).
-
-### 16.10.5 Distance to >=20x and the next lever
-
-Against the 4-thread CPU baseline: Opt 39.61/10.06 = **3.94x**, PhysCal 71.33/26.37 = **2.71x**
-(against 1 thread: 3.97x / 2.76x). The remaining device budget per hop is 31 us for the accept
-kernel, 21 us for the recompute, 11 us for the proposal and ~21 us of service host + protocol +
-copies. 20x would need the whole per-hop cost near 5 us, i.e. a device-side decision loop, which
-the RNG-on-host decision excludes, and the accept kernel at the 8-SM L2 bandwidth limit (a plane
-is 1.6 MB; 8 planes read+write 38 MB per accepted move, at most ~65 GB/s per SM).
-
-The next levers, in the order the profile supports them:
-
-1. **`k_accept` parallelism.** The 2.8x came from the access pattern; the kernel is now at the
-   per-SM memory throughput of the 8 SMs it occupies. Splitting the plane over more blocks needs
-   the `v1 = -invM^T v3` vector and the full inverse row set in every update block, and a first
-   two-phase attempt (vector phase + split update phase, `bench_sampler_kernels` variants
-   `k_accept_vec`/`k_accept_upd`) was *slower* at these sizes (121 us vs 78 us) because the
-   per-block setup dominates; a shared-memory/tiled formulation with the vectors staged once per
-   plane is the way to beat it without changing the order.
-2. **The recompute's intra-plane parallelism.** `pfinv_f64` is one block per plane with 448 serial
-   LTL^T steps; at 8 planes the A100 runs it at 0.6 % of the FP64 peak (0.2 % of the saturated
-   per-plane rate of a 512-plane batch). A cooperative-grid or panel-blocked factorization with
-   grid sync per step is the only way to use more than 8 SMs for one walker's recompute; it must
-   keep pfapack's pivot rule and per-element order (the #531 constraint).
-3. **Round-trip protocol.** ~16 us per hop of service host work + walker protocol remain (two Vec
-   allocations and a reply copy per hop, the mpsc/mutex reply path, cudarc's per-launch argument
-   packing). A single-walker fast path (shared reply cell, preallocated staging, one kernel
-   argument block) is worth ~10 us per hop; a CUDA graph for the fixed part of the round could
-   remove a few more.
-
-Honest summary: the sampler is now ~2.9x faster than one C-order CPU thread per hop (92 us vs
-266 us at L=448) and the whole resident run 4.0x/2.7x faster than the 4-thread CPU. The >=20x
-end-to-end target is not reachable for a single chain on this design; it needs either the
-device-side RNG/decision loop (excluded) or an order-of-magnitude change in the per-hop device
-work (items 1-2) plus the PhysCal Green functions on the device.
-
-Reproduce:
-
-```sh
-# profile attribution
-env MVMC_C_TIMER=1 MVMC_RS_SAMPLER_PROFILE=1 MVMC_RS_SAMPLER_BACKEND=cuda \
-  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
-  mvmc-cuda <opt_L448>/namelist.def --nsteps 3 --nsmp 3 --out-dir /tmp/out
-# kernel latencies and variant bit checks
-cd gpu/mvmc-gpu-cuda && cargo run --release --example bench_sampler_kernels
-# recompute roofline (narrow vs wide)
-MVMC_PFINV_N=448 MVMC_PFINV_PLANES=8,64 cargo run --release --example bench_recompute_roofline
-MVMC_PFINV_WIDE=1 MVMC_PFINV_NT=1024 MVMC_PFINV_N=448 MVMC_PFINV_PLANES=8,64 \
-  cargo run --release --example bench_recompute_roofline
-# production comparison (one binary, sampler backend is the only difference)
-bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 "cuda|<bin>|<cuda env>" ...
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
-```
-
-## 16.11 Milestone 4: the single-walker round protocol and the accept-kernel roofline (issue #517)
-
-Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The production
-single chain now drives the device service **on the walker's own thread** (no channel, reply slot
-or wake per hop), which moves the whole Opt run from 10.08 s to 9.81 s and `VMCMakeSample` from
-7.89 s to 7.63 s at L=448, **byte-identical** to the C-order sampler on the same measurement
-backend. The accepted-move kernel was profiled and a faster ILP formulation measured; the result
-and why it is not integrated are recorded below.
-
-### 16.11.1 Changes
-
-1. **Inline single-walker stage** (`crates/mvmc-core/src/device_sampler.rs`). The channel runner
-   of #537 pays a channel send, a reply-slot lock/unlock pair and a wake for every hop, plus a
-   second `Vec` copy of the proposal reply. With one walker there is nothing to batch across
-   walkers, so `InlineStage` (`run_lockstep_real_one_inline`) calls `DeviceService::round`
-   directly on the walker's thread and reuses its request/response buffers. The request order is
-   the channel stage's: an accepted move is deferred and applied in the round of the next
-   blocking operation (or in a trailing flush, issue #465), so the device sees the same batches.
-   Production routes `CudaSamplerStages::sample_real` through it, and `run_lockstep_real_one`
-   (used by the host-model CI test `sampler_backend_517`) now exercises the same code.
-2. **CUDA-graph fast lane** (opt-in, `MVMC_RS_SAMPLER_GRAPH=1`,
-   `gpu/mvmc-gpu-cuda/src/device_sampler.rs`). The three fixed single-walker bodies
-   `(na, np) = (0,1), (1,1), (1,0)` are captured once per `prepare` and replayed with one
-   `cuGraphLaunch` instead of cudarc's per-launch argument packing. Measured on the A100 it is
-   **1.5 %** of `VMCMakeSample` (7.62 -> 7.61 s median) because the host launch cost is already
-   hidden behind the accepted-move kernel, so it is left **off by default**.
-3. **Accepted-move kernel roofline** (`gpu/mvmc-gpu-cuda/examples/bench_sampler_kernels.rs`).
-   See 16.11.4.
-
-### 16.11.2 Accepted-move kernel roofline (16.11.4 detail)
-
-The #537 note assumed the accepted-move kernel was at the 8-SM L2-bandwidth limit (38 MB per
-accepted move). The kernel bench shows otherwise: with one accepted move (8 planes, one block per
-SM) the kernel is **latency-bound**, not bandwidth-bound. At n = 448, `k_accept` (512 threads) is
-77.8 us; 32 planes (`items = 4`) run at 160.8 us, i.e. 4x the work in 2x the time and roughly
-half of the ~1 TB/s aggregate L2 rate the wider launch reaches. The plane is 1.6 MB and one
-block per SM means 25 % occupancy.
-
-| 8 planes, n = 448, nt = 512 | device us |
-| --- | ---: |
-| `k_accept` (current production, vector + update fused) | 77.8 |
-| vector phase alone (column sweep, `k_accept_vec` split 1) | 81.9 |
-| update phase alone (row split 8 / 16) | 21.5 / 17.4 |
-| vector phase with 2 adjacent columns per thread, `double2` (`k_accept_vec_ilp`) | **37.9** |
-| fused vector-ILP + update (`k_accept_ilp`, `k_accept_ilps`, `k_accept_ilpn`) | 81-117 (regress) |
-| two-kernel split: ILP vector + row-split update | **63.5-68.6** |
-
-Readings:
-
-* The vector phase dominates and is a 448-thread serial-accumulation chain per column: two
-  independent accumulators per thread (`double2` on adjacent columns, exact ascending-j order per
-  column) cut it from 81.9 us to **37.9 us**, and the bit check against the production kernel is
-  0.0 (inverse and Pfaffians identical).
-* **The shared-memory tiling of the plan cannot reduce the traffic.** The rank-two update must
-  read each plane element once and write it once (2/3 of the traffic), and the vector phase reads
-  the whole plane once (1/3). Reusing the plane between the two phases needs all n^2 doubles
-  resident — 1.6 MB per plane, ten times the 164 KB per-SM shared memory. Column panels with a
-  grid-sync chained accumulator would preserve the exact rounding but need sequential grid syncs
-  and still read the plane twice. The premise of the plan ("stage the plane once and reuse it")
-  is not implementable bit-exactly at this size.
-* A **fused** kernel with the ILP vector phase regresses (81-117 us vs 77.8 us) even with
-  `__launch_bounds__`, an 8x unroll and an `__noinline__` update: ptxas schedules the combined
-  body worse than the two phases compiled apart. The **two-kernel split** does work
-  (63.5 us at row-split 16, 1.22x, bit-exact), but it needs a second launch, a `[planes][n]`
-  scratch and a host-side hop/exchange branch (the update kernel is branch-specific), for ~5 us
-  per hop. It is recorded as a measured ceiling, not integrated.
-* The recompute (`pfinv_f64_wide`, one block per plane, 448 serial LTL^T steps) is unchanged;
-  intra-plane parallelism there still needs a cooperative-grid panel factorization and was not
-  attempted.
-
-### 16.11.3 Measured (A100 80GB, `bench-out/issue517/round2`)
-
-NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads,
-shared host (`load1` 1.7-5.0 during the timed Opt rounds; the PhysCal rerun hit an external load
-spike and only the device rows are representative), `MVMC_C_TIMER=1`, medians of 3 timed rounds
-after one warm-up, the same `mvmc-cuda` binary per row (`mvmc-cuda-base` = `main` at 75f1af97,
-`mvmc-cuda-opt` = this milestone). `cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda
-MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda`. Section seconds.
-
-This campaign isolates the sampler by keeping the #518 resident device measurement on **both**
-sides of each pair (the `CalculateMAll` row is ~1 s / ~5.4 s, i.e. the device value), so the
-`c-order` rows below are a *sampler-only* comparison, not the pure CPU baseline.
-
-Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`), sampler c-order vs cuda, resident measurement on
-both sides:
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order sampler (1 BLAS thread) | 26.74 | 24.54 | 1.008 | 0.143 |
-| c-order sampler (4 BLAS threads) | 26.96 | 24.81 | 1.008 | 0.144 |
-| device sampler (before, `main`) | 10.08 | 7.89 | 1.008 | 0.143 |
-| **device sampler (after)** | **9.81** | **7.63** | 1.008 | 0.142 |
-
-PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`), same pairing:
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| c-order sampler (1 BLAS thread) | 60.24 | 44.97 | 5.489 | 0.236 |
-| c-order sampler (4 BLAS threads) | 62.51 | 47.45 | 5.503 | 0.239 |
-| device sampler (before, `main`) | 27.75 | 12.93 | 5.406 | 0.228 |
-| **device sampler (after)** | **27.25** | **12.46** | 5.367 | 0.227 |
-
-Readings: the sampling section moves by **1.03x** (Opt `VMCMakeSample` 7.89 -> 7.63 s,
-PhysCal 12.93 -> 12.46 s) and the whole device run by **1.03x** (Opt 10.08 -> 9.81 s, PhysCal
-27.75 -> 27.25 s); per hop the device chain drops by ~2.5 us. The sampler-only speedup against
-the same-measurement c-order row is 26.96/9.81 = **2.75x** (Opt) and 62.51/27.25 = **2.29x**
-(PhysCal); the `c-order` rows are not the pipeline baseline because their measurement is already
-the device one.
-
-**Pure CPU baseline** (`bench-out/issue517/round2/{opt,phys}_pure_cpu`, c-order sampler **and**
-c-order measurement, same host immediately after the campaign):
-
-| case | CPU 1 thread | CPU 4 threads | device (all cuda) | vs 1 thread | vs 4 threads |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Opt L=448 `All` | 45.28 | 45.66 | 10.02 | **4.52x** | **4.56x** |
-| Opt `VMCMakeSample` | 27.30 | 28.85 | 7.75 | 3.52x | 3.72x |
-| PhysCal L=448 `All` | 82.69 | 81.37 | 27.77 | **2.98x** | **2.93x** |
-| PhysCal `VMCMakeSample` | 46.46 | 46.50 | 12.61 | 3.68x | 3.69x |
-
-The 4-thread BLAS policy barely moves the CPU time (the workload is scalar-PfaPack-bound inside
-the measurement and the sampler is single-walker), which is why the 1- and 4-thread columns are
-close on this host.
-
-### 16.11.4 Exactness
-
-Two checks, both with the *same measurement backend* on both sides (the #518 measurement is
-tolerance-based, not byte-exact):
-
-* In-process (A100 gates, `MVMC_RS_CUDA_GATE=1`): `sampler_production_gate` 2/2,
-  `sampler_gate` 4/4, `measurement_gate` 3/3, `pfaffian_gate` 6/6, `cuda_gate` 4/4,
-  `transfer_gate` 2/2, `sr_device_gate` 7/7, `sr_routing_gate` 3/3 — 31/31 pass.
-* Host-model CI (`cargo nextest run -p mvmc-core --cargo-profile test-fast`): the inline stage
-  reproduces the C-order run exactly for Opt and PhysCal (`production_optimization_host_model_equals_c_order`,
-  `production_physcal_host_model_equals_c_order`); the full `mvmc-core` suite is **947/947**.
-* Whole output directories at L=448 with all sampler/measurement backends on the device except
-  the sampler under test (`c-order` vs `cuda`): Opt 3 steps **7/7 files** byte-identical for all
-  three timed rounds, and PhysCal 5 samples **20/20 files** byte-identical for all three timed
-  rounds; the opt-in CUDA-graph path reproduces the same 7/7 Opt files.
-* Kernel-level (`bench_sampler_kernels`): the ILP vector phase and the ILP+split variants give
-  0.0 inverse difference and identical Pfaffians after one accepted move; the two-electron branch
-  checksum is unchanged.
-
-### 16.11.5 Distance to >=20x and the next lever
-
-Against the **pure 4-thread CPU baseline** (c-order sampler and measurement): Opt 45.66/10.02 =
-**4.56x**, PhysCal 81.37/27.77 = **2.93x** (1 thread: 4.52x / 2.98x). The sampler-only comparison
-with the measurement equalized is 2.75x / 2.29x. The remaining device budget per hop (Opt) is
-~31 us accept (1/3 of hops), 11 us proposal, 20 us recompute (amortized), and ~11 us of service
-host + protocol. The two measured levers — the two-kernel ILP accept (~5 us/hop) and the CUDA
-graph (hidden) — are each well under 10 %, and none of them approaches the 20x target: 20x would
-need the whole per-hop cost near ~8 us on this host, i.e. a device-side decision loop, which the
-RNG-on-host contract excludes (16.10.5). The honest next levers remain the recompute's
-intra-plane parallelism and the PhysCal Green functions on the device.
-
-Reproduce:
-
-```sh
-# profile attribution
-env MVMC_C_TIMER=1 MVMC_RS_SAMPLER_PROFILE=1 MVMC_RS_SAMPLER_BACKEND=cuda \
-  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
-  mvmc-cuda <opt_L448>/namelist.def --nsteps 3 --nsmp 3 --out-dir /tmp/out
-# kernel latencies and the ILP/split bit checks
-cd gpu/mvmc-gpu-cuda && cargo run --release --example bench_sampler_kernels
-# production comparison (one binary, sampler backend is the only difference)
-bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 "corder1|<bin>|..." ...
-bench-out/issue517/m1/harness/run_physcal.sh <phys_L448> <out> 3 "corder1|<bin>|..." ...
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
-```
-
-## 16.12 Milestone 5: PhysCal Green functions on the device and the recompute ceiling (issue #517)
-
-Status: implemented and validated on the A100 (real, non-FSZ, Opt and PhysCal). The PhysCal
-Green consumer now runs on the device from the resident inverse planes (`km_green_two`, the
-rank-2 `calculate_new_pf_m_two2` bilinear) and the sweep no longer downloads the inverse planes
-when the sampler is also device-resident. The whole PhysCal run moves from 27.77 s to **15.60 s**
-(median of 3 rounds), **byte-identical** to the C-order sampler on the same measurement backend.
-The recompute's intra-plane parallelism (lever 2) is analysed and **not taken**; the exact-order
-ceiling is recorded below.
-
-### 16.12.1 Profile first: the PhysCal wall is the host Green consumer
-
-`MVMC_MAINCAL_DIAG=1` on PhysCal L=448 splits `VMCMainCal [4]` (13.6 s) into
-`CalculateMAll [40]` 5.21 s, `LocEnergyCal [41]` 0.22 s and the diagnostic section `946` 8.02 s
-(the Rust runner folds the Green consumer and the energy accumulation into 946; C's
-`CalculateGreenFunc [42]` is not separately instrumented there). Zeroing the term sets of a
-scratch input isolates the contributors:
-
-| variant (PhysCal L=448) | All [0] | CalculateMAll [40] | section 946 |
-| --- | ---: | ---: | ---: |
-| full input | 27.09 | 5.21 | 8.02 |
-| `greentwo.def` emptied (2688 terms removed) | 18.83 | 5.19 | 0.44 |
-| `greenone.def` emptied (896 terms removed) | 25.75 | 5.19 | 7.30 |
-
-The two-body direct Green (`greentwo.def`, `two_hop_bilinear_real` = `b^T M a`, O(n^2) per term
-per QP) is ~7.6 s of the 8.02 s; `CalculateMAll` is independent of the term sets (either the
-batched Pfaffian/inverse or the per-batch inverse download). `MVMC_RS_MEASURE_BATCH` is 16, so
-PhysCal downloads `slots * n_qp * n^2 * 8` bytes per batch.
-
-### 16.12.2 What was changed
-
-1. **Device Green stage** (`crates/mvmc-core/src/{stage_backend.rs,measurement_backend.rs}`,
-   `gpu/mvmc-gpu-cuda/src/{measurement.rs,measurement_kernels.cu}`). A new
-   [`GreenOutput`](crates/mvmc-core/src/stage_backend.rs) contract
-   (`MeasurementStages::resident_green`/`measure_green`,
-   `ResidentMeasurementOps::green_two`) is the device seam, mirroring the existing resident local
-   energy. The host classifies every `green_one_terms`/`green_two_terms` entry with the exact
-   branch structure of `green_func1_impl`/`green_func2_impl` (density/zero shortcuts, the
-   coincident-index cases and the two sequential projection updates), computes each projection
-   ratio on the host, and defers only the Pfaffian reduction (`ratio = sum_msj invM[msa,msj]
-   Slater[...]`, or the rank-2 `invM[ma,mb](b[ma] + b^T M a) + p_a q_b - p_b q_a`) to the device.
-   `km_ratio_terms` already implements the one-body reduction; `km_green_two` is the new
-   one-block-per-job kernel (shared-memory gather of the two destination Slater rows, one
-   deterministic block reduction of `p_a,p_b,q_a,q_b,bma`, thread 0 folds the QPs in order). The
-   host then folds `proj_ratio * new_ip / ip` in term order, exactly as `ordinary_green_values`.
-   The default C-order stage returns `None` and keeps the host consumer byte-identical.
-2. **No inverse download in a fully device-resident PhysCal sweep** (`run.rs`). With the device
-   Green functions the host no longer needs the inverse planes. `download_tables` now skips the
-   PhysCal download when the measurement provides the device Green stage, `NLanczosMode == 0`
-   (Lanczos still reads the host tables) and the sampler is not C order (`SamplerBackendKind::
-   COrder` keeps its own host inverse); the C-order sampler row of the byte-identity comparison
-   therefore still downloads, and both rows produce identical output.
-3. **Tests**: a host mock of the new seam (`crates/mvmc-core/tests/measurement_resident_518.rs`,
-   `resident_green_measurement_matches_c_order_physcal`) evaluates the deferred reductions with
-   the exact host routines and reproduces the C-order PhysCal output **bitwise** (worst
-   0.0e0 over 964 tokens); the CUDA `measurement_gate::cuda_resident_measurement_matches_c_order`
-   exercises the kernel.
-
-Levers that were **not** taken, with the reason:
-
-* **Recompute intra-plane parallelism (`pfinv_f64_wide`).** Phase 1 is `n-1` serial LTL^T steps;
-  every step's pivot search and rank-2 update read the matrix produced by the previous step, so
-  splitting one plane over several blocks needs a grid-wide sync per step (447 syncs at n=448)
-  or a panel factorization with the same dependency. The per-element formula
-  `(A_ij + x_i t1_j) - y_i t2_j`, `alpha = 1/A[kk,k0]`, the swap sequence and the first-index
-  argmax comparator *are* order-preserving under a grid-synced split, so an exact-order variant
-  is conceivable in principle — it is **not** an inexact tradeoff we declined. It was not taken
-  because (a) cudarc 0.19 exposes no cooperative-launch API (the prototype would need raw driver
-  calls with NVRTC relocatable device code), and (b) the measured ceiling is small: the
-  recompute is ~20 us/hop amortized, ~0.6 s of the 7.62 s Opt sampling series (the eight-plane
-  recompute is latency-bound at 8 SMs, but the production measurement batches of 128 planes
-  already saturate the device, so any cooperative variant must be sampler-only). No inexact
-  factorization was substituted for the sampler. See 16.12.4.
-* **Fusing the two device Green launches per sample.** The Green kernels are now 0.67 s of the
-  PhysCal wall; a per-sample job batch would only shave the two launches.
-
-### 16.12.3 Measured (A100 80GB, `bench-out/issue517/round3/bench`)
-
-NVIDIA A100 80GB PCIe, driver 580.126.09, CUDA driver API 13.0, toolkit 12.9, 64 host threads,
-shared host (`load1` 1.4-3.4 during the timed PhysCal rounds, 1.6-3.4 during the timed Opt
-rounds), `MVMC_C_TIMER=1`, medians of 3 timed rounds after one warm-up, one `mvmc-cuda` binary
-for every row. `cpu1` = all C-order with `MVMC_RS_BLAS_THREADS=1`, `cpu4` = `=4`; `corder` =
-C-order sampler + device measurement with the device Green functions (downloads the inverse
-planes); `cuda` = `MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda
-MVMC_RS_MEASURE_PF_BACKEND=cuda` (no inverse download). Section seconds.
-
-Opt L=448 (`NSROptItrStep=3`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| cpu1 (1 BLAS thread) | 41.49 | 25.37 | 13.82 | 1.25 |
-| cpu4 (4 BLAS threads) | 42.04 | 26.03 | 13.57 | 1.26 |
-| corder (device measurement, device Green) | 26.33 | 24.13 | 1.008 | 0.145 |
-| **cuda (all device)** | **9.806** | **7.617** | 1.008 | 0.143 |
-
-PhysCal L=448 (`NDataQtySmp=5`, `NVMCSample=64`):
-
-| config | All [0] | VMCMakeSample [3] | CalculateMAll [40] | LocEnergyCal [41] |
-| --- | ---: | ---: | ---: | ---: |
-| cpu1 (1 BLAS thread) | 73.44 | 40.76 | 23.21 | 1.22 |
-| cpu4 (4 BLAS threads) | 74.24 | 42.10 | 22.19 | 1.25 |
-| corder (downloads inverse planes) | 46.71 | 39.96 | 5.12 | 0.202 |
-| **cuda (no inverse download)** | **15.60** | **12.27** | **1.68** | 0.199 |
-
-Readings:
-
-* the device Green path moves the PhysCal Green section from 8.02 s to **0.67 s** (12x) and, with
-  the download skipped, `CalculateMAll` from 5.42 s (main) to **1.68 s** (3.2x); the whole device
-  PhysCal run is **1.78x** faster than the #537/#540 device run (27.77 s -> 15.60 s);
-* against the **pure CPU baseline**: Opt 42.04/9.806 = **4.29x** (4 threads) and 41.49/9.806 =
-  **4.23x** (1 thread); PhysCal 74.24/15.60 = **4.76x** (4 threads) and 73.44/15.60 = **4.71x**
-  (1 thread), up from 2.93x/2.98x in 16.10;
-* the Opt path is unchanged (no inverse download, no Green terms), 9.81 s as in 16.11;
-* `corder` isolates the download: with a C-order sampler the inverse planes still download and
-  `CalculateMAll` is 5.12 s; the `cuda` row (same binary, same measurement, device sampler)
-  skips it and measures 1.68 s.
-
-### 16.12.4 Exactness
-
-* **Sampling** (Opt and PhysCal, L=448): `c-order` sampler + device measurement vs all-device,
-  same measurement backend, whole output directories **byte-identical** for all 3 timed rounds —
-  Opt 7/7 files, PhysCal 20/20 files (`cmp`, timers and `zvo_time*` excluded). The no-download
-  `cuda` row is byte-identical to the downloading `corder` row, so keeping the inverse planes
-  resident does not change a single output byte.
-* **Measurement deviation against C order** (the device Green functions, all-device vs all
-  C-order, same C-order sampler): worst absolute **2.33e-10** (`zvo_out_001.dat`, the energy) and
-  worst relative **6.20e-10** on a near-zero direct two-body value
-  (`zvo_cisajscktalt_002.dat`, 1.44e-5 absolute error ~9.0e-14); no token with `|v| > 1e-6` has a
-  relative deviation above 1e-6. The absolute bound is the same 2.3e-10 as the #518 measurement
-  alone (`docs/NUMERICAL_COMPARISONS.md` policy): the first divergence is the block-tree
-  summation order of `b^T M a` (the device block reduction vs the host's `k`-ordered row sums),
-  bounded by `n * eps * sum |M_ij a_j|` per row; the largest relative deviations sit on
-  cancellation-dominated Green entries and match the absolute scale.
-* **In-process gates** (`MVMC_RS_CUDA_GATE=1`, `--test-threads=1`): `measurement_gate` 3/3,
-  `sampler_production_gate` 2/2, `sampler_gate` 4/4, `pfaffian_gate` 6/6, `cuda_gate` 4/4,
-  `transfer_gate` 2/2, `sr_device_gate` 7/7, `sr_routing_gate` 3/3 — 31/31 pass. The host mock
-  reproduces the C-order PhysCal output bitwise; the CUDA resident PhysCal gate measures worst
-  1.45e-13 absolute / 7.9e-14 relative on the L=6 fixture.
-
-### 16.12.5 Distance to >=20x and the next lever
-
-Against the **pure 4-thread CPU baseline**: Opt **4.29x**, PhysCal **4.76x** (1 thread: 4.23x /
-4.71x). The PhysCal gap is now small (the device run is sampling-bound): `VMCMakeSample` 12.27 s
-of the 15.60 s, and within it the Opt per-hop budget of 16.10 still applies (~31 us accept,
-11 us propose, 20 us recompute, ~11 us service+protocol, ~8 us copies). 20x would need the whole
-per-hop cost near 8 us, i.e. the device-side decision loop the RNG-on-host contract excludes.
-
-The remaining measured levers, in the order the profile supports them:
-
-1. **The recompute's intra-plane parallelism** (16.12.2): a cooperative-grid, exact-order panel
-   factorization is conceivable but needs raw cooperative-launch support and is sampler-only;
-   its ceiling is ~6 % of `VMCMakeSample` (0.6 s of 7.62 s), so it is recorded as a future
-   lever rather than taken.
-2. **Green kernel batching**: the device Green launches are 0.67 s per PhysCal sweep; batching
-   the one-body and two-body jobs of all samples of a chunk into one launch is worth a few
-   tenths of a second.
-3. **`CalculateMAll` at 1.68 s** is now the device batched Pfaffian (`pfinv_f64_wide`) plus the
-   Pfaffian download; the same intra-plane ceiling applies.
-
-Honest summary: the PhysCal Green consumer is fully on the device and the two largest measured
-levers are taken; the >=20x single-chain target still requires the device-side decision loop
-(16.10.5) and is not reachable on this design.
-
-Reproduce:
-
-```sh
-# profile attribution (section 946 is the folded Green + energy accumulation)
-env MVMC_C_TIMER=1 MVMC_MAINCAL_DIAG=1 MVMC_RS_SAMPLER_BACKEND=cuda \
-  MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda \
-  mvmc-cuda <phys_L448>/namelist.def --out-dir /tmp/phys
-# production comparison (one binary; corder downloads the inverse, cuda keeps it resident)
-bench-out/issue517/m1/harness/run_opt.sh <opt_L448> <out> 3 3 3 \
-  "cpu1|<bin>|MVMC_RS_BLAS_THREADS=1" "cpu4|<bin>|MVMC_RS_BLAS_THREADS=4" \
-  "corder|<bin>|MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda" \
-  "cuda|<bin>|MVMC_RS_SAMPLER_BACKEND=cuda MVMC_RS_MEASURE_BACKEND=cuda MVMC_RS_MEASURE_PF_BACKEND=cuda"
-bench-out/issue517/m1/harness/run_physcal.sh <phys_L448> <out> 3 "..." "..." "..." "..."
-MVMC_RS_CUDA_GATE=1 scripts/run_cuda_gate.sh native
-```
+  against the C-order consumer (bound `abs 1e-11 / rel 1e-8`).
+* Not done: RBM/two-body Green terms and complex/FSZ stage B.
+
+## 15. Legacy C-order GPU stage route (issues #447, #452, #475, #517, #518, #519)
+
+The device-resident SR pipeline, the CUDA production sampler, the device-resident
+measurement and the A100 evaluation milestones of these issues ran the C-order/SFMT
+`StageBackend` route (`MVMC_RS_*_BACKEND=cuda`). That route was unmaintained after #640 and
+was removed in #643; the resident Opt/PhysCal runners under the Julia GPU contract replace
+it. The recorded measurements remain in the dated `benchmark/*/results/` directories.
 
 ## 9. Japanese summary / 日本語要約
 

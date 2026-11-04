@@ -27,7 +27,7 @@ Rust 関数との対応を示します。後半の章は利用リファレンス
 | 9 | [出力ファイル](09-output-files.md) | Rust が書き出すすべてのファイル、その列、どのランクが書き出すか |
 | 10 | [チュートリアル](10-tutorial.md) | Hubbard 鎖の最適化に続く物理量計算の完全な例(実際の出力つき) |
 | 11 | [互換性と差異](11-compatibility.md) | C および Julia との差異、数値比較の方針、未解決の観測事項 |
-| 12 | [アクセラレータ(GPU)バックエンド](12-accelerated-backends.md) | オプションの tenferro/CUDA バックエンド: 何があるか、ビルドと実行(native、docker、`gpu-cuda`)、`MVMC_RS_SR_BACKEND`、検証と許容誤差、マルチウォーカー実行、既知の制限、#450 のベンチマークスイート |
+| 12 | [アクセラレータ(GPU)バックエンド](12-accelerated-backends.md) | オプションの tenferro CPU ステージと常駐 GPU Opt/PhysCal ランナー: 何があるか、ビルドと実行(単体 GPU ワークスペース、CUDA ゲート)、`MVMC_RS_SR_BACKEND`、検証と許容誤差、マルチウォーカー実行、既知の制限 |
 | A | [付録: 引用の検証方法](appendix-checks.md) | 引用チェッカー、観測出力の出所、未検証の事項 |
 
 ## 「実装」ボックスの読み方

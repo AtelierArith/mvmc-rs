@@ -125,9 +125,9 @@ its zero-copy residency must not regress.
    more derivative blocks. It has no Julia GPU reference, and C-order RBM is
    the physics reference.
 4. **CG SR for Opt (`NSRCG=1`).** It has no Julia GPU reference. C defines the
-   algorithm. Device CG kernels exist on the legacy stage route
-   (`sr_device.rs`). Removing that route (#643) may delete them, so reuse
-   must be decided under #643.
+   algorithm. The device CG kernels of the legacy stage route
+   (`gpu/mvmc-gpu-cuda/src/sr_device.rs`, `sr_kernels.cu`) were removed in #643;
+   commit `cffc3dc5` still holds them as a starting point.
 5. **OptTrans.** QP weights become optimized parameters, which changes the
    sparse basis and SR layout. It has no Julia GPU reference.
 6. **Complex normal orbitals / complex parameters.** Complex sampling

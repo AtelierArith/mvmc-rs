@@ -242,16 +242,14 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 
 | 変数 | 読み取る側 | 効果 |
 |----------|---------|--------|
-| `MVMC_RS_CUDA_KERNEL_CACHE` | CUDA カーネルの準備 | PTX の保存先。未設定時は `$XDG_CACHE_HOME/mvmc-rs/ptx-v1`、なければ `$HOME/.cache/mvmc-rs/ptx-v1`。`off` または空文字で無効。ソース・コンパイル条件・NVRTC バージョンを照合し、破損・利用不能なキャッシュは再コンパイルする。計算状態や乱数は保存しない。 |
-| `MVMC_RS_CUDA_INIT_PROFILE` | 同上 | 設定すると stderr にコンテキスト準備時間と、PTX キャッシュの hit/miss・コンパイル／読み込み時間を出力する。診断用実行と性能計測を区別すること。 |
 | `MVMC_NSTEPS` | CLI, examples | `--nsteps` と同じ(フラグが優先されます) |
 | `MVMC_C_TIMER` | CLI/core (`TimerEnv`, `crates/mvmc-core/src/c_timer.rs:174`) | `0` 以外の任意の値で、C 互換のセクションタイマーが有効になります。`zvo_CalcTimer.dat` を書き出します([9.5](09-output-files.md#95-タイマー)) |
 | `MVMC_TIMER` | 同上 | 非推奨のエイリアス。`MVMC_C_TIMER` なしで設定された場合、警告が `MVMC_C_TIMER=1` を推奨します |
 | `MVMC_CALHAM1_DIAG`, `MVMC_SLATER_DIAG`, `MVMC_MAINCAL_DIAG`, `MVMC_WEIGHTAVG_DIAG` | 同上 | 対応する診断タイマー群を有効にします(ID は 966 まで)。いずれかを設定するとメインタイマーも有効になり、`zvo_CalcTimerDiag.dat` を書き出します |
 | `MVMC_RS_INNER_THREADS` | `inner_thread_config` (`crates/mvmc-core/src/threading.rs:260`) | 独立な内部作業項目に対するワーカースレッド数。デフォルトは 1(逐次)。不正な値や 0 は 1 にフォールバックします。プロセスごとに一度だけ読み取られます。 |
 | `MVMC_RS_MEASURE_BATCH` | `measurement_batch::resolve_batch_size` | 測定バッチあたりのサンプル数(B サンプル分のテーブルを作ってから、サンプルごとの処理を順番に実行)。デフォルトは 4。出力バイトは値に依存しません。 |
-| `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)、`tenferro`、`cuda[:N]`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。`cuda` には `gpu/mvmc-gpu-cuda` の `mvmc-cuda` バイナリが必要です(CUDA プロバイダーを登録してから、この同じ CLI を実行します)。標準の `mvmc` は拒否します。セレクタは起動時に IO の前に一度だけ検証され、不正な値や利用できないバックエンドは `error: MVMC_RS_SR_BACKEND: ...` を出力して終了ステータス 2(MPI では集団で)で終了し、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
-| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | 測定で使う Pfaffian／逆行列テーブルの生成元。`calc-m-all`(デフォルト、C 順序カーネル)、または `c-order`／`cuda[:N]`(バッチごとに 1 回の `PfaffianStages` 呼び出し。実数かつ非 FSZ のみ)。`c-order` は各行列内の C 順序カーネルの計算順序を保ち、作業量の条件を満たすサンプル×QP の独立した行列を既存の内部スレッドプールへ分配します(`MVMC_RS_INNER_THREADS`)。`tenferro` は 0.8 にこの分解がないため現在は未対応で、起動時に拒否します。不正な値や利用できないバックエンドは入出力前に `error: MVMC_RS_MEASURE_PF_BACKEND: ...` を出してステータス 2 で終了し、フォールバックしません。 |
+| `MVMC_RS_SR_BACKEND` | `stage_backend::validate_selected_stage_backend` | `c-order`(デフォルト、BLAS/LAPACK の基準実装)または `tenferro`。オプトインのバックエンドは SR の各段(Gram 積、S/g 構築、Cholesky 求解、CG 積)を CPU 上の tenferro の `dot_general`/`cholesky`/`triangular_solve` で実行し、明示的な許容誤差で検証されます(バイト一致ではありません)。削除された `cuda[:N]`(#643)は不正な値です。セレクタは起動時に IO の前に一度だけ検証され、不正な値や利用できないバックエンドは `error: MVMC_RS_SR_BACKEND: ...` を出力して終了ステータス 2(MPI では集団で)で終了し、フォールバックはしません。[第 12 章](12-accelerated-backends.md#124-バックエンドの選択)を参照。 |
+| `MVMC_RS_MEASURE_PF_BACKEND` | `measurement_batch::selected_measurement_pfaffian` | 測定で使う Pfaffian／逆行列テーブルの生成元。`calc-m-all`(デフォルト、C 順序カーネル)、または `c-order`(バッチごとに 1 回の `PfaffianStages` 呼び出し。実数かつ非 FSZ のみ)。`c-order` は各行列内の C 順序カーネルの計算順序を保ち、作業量の条件を満たすサンプル×QP の独立した行列を既存の内部スレッドプールへ分配します(`MVMC_RS_INNER_THREADS`)。`tenferro` は 0.8 にこの分解がないため現在は未対応で、起動時に拒否します。不正な値や利用できないバックエンドは入出力前に `error: MVMC_RS_MEASURE_PF_BACKEND: ...` を出してステータス 2 で終了し、フォールバックしません。 |
 | `MVMC_RS_INNER_THRESHOLD` | 同上 | 正の値を設定すると単純な項目数ゲートになり、領域の項目数がこの値以上のときにワーカープールを使用します(ワーカー不変性テストが小さな入力でプール実行を強制するために使用)。未設定・空・不正な値・0 の場合は以下の自動ゲートが使われます(報告される `threshold` は 32 のまま) |
 | `MVMC_RS_INNER_MIN_WORK_NS` | 同上 | 自動ゲート: 1 領域の推定逐次作業量の最小値(ナノ秒)。デフォルトは 100000(ドライバーがプール内のときはサンプラーループの領域に 40000、その他に 40000。この変数を設定するとどこでもその値) |
 | `MVMC_RS_INNER_MIN_SIZE` | 同上 | 自動ゲート: 行列サイズに比例する領域に対する電子行列の最小次元 `n_size`(電子数)。プール外から発行される領域ではデフォルトは `120*w/(w-1)`(4 で 160、2 で 240)。プール内のドライバーでは、この変数を設定しない限り `n_size` ゲートはありません |
@@ -263,7 +261,7 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 | `JULIA_MVMC_ROOT`, `JULIA_MVMC_EXAMPLE_STEPS`, `MVMC_OUT_DIR` | `cargo run --example ...` プログラムのみ | `extern/Julia-mVMC` の入力の場所、ステップ数、出力ルート(デフォルトは `output/<model>/`) |
 | `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, ... | OpenBLAS(`mvmc-rs` は読み取りません) | BLAS のスレッド設定 |
 
-GPU 関連ツールは、`mvmc` のオプションではない変数も使います: `MVMC_RS_CUDA_GATE`(`1`/`require` で、CUDA デバイスがないことがゲートのハードな失敗になる)、`MVMC_RS_CUDA_IMAGE`(`scripts/run_cuda_gate.sh` の docker イメージ)、`MVMC_RS_CUDA_GATE_OUT` とその仲間(レポートのパス)、`MVMC_RS_SAMPLER_CORES`(デバイスサンプラのベンチマークで使うホストコア)。[12.3](12-accelerated-backends.md#123-ビルドと実行)を参照。
+GPU ゲートは、`mvmc` のオプションではない変数も使います: `MVMC_RS_CUDA_IMAGE`(`scripts/run_cuda_gate.sh` の docker イメージ)、`MVMC_RS_CUDA_GATE_OUT`(ゲートのログのパス)。[12.3](12-accelerated-backends.md#123-ビルドと実行)を参照。
 
 元の issue で言及された Julia 固有のデバッグダンプ `MVMC_DEBUG_*` は Rust には実装されて**いません**。`MVMC_RS_PHASE`,
 `MVMC_RS_CTEST_*`, `MVMC_RS_THREADED_*`, `MVMC_CG_DIAGNOSTICS`, `MVMC_GREEN_INDEX_CHILD` などの変数はテストコードにのみ現れ、ユーザー向けオプションではありません。

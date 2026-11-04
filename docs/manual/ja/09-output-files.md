@@ -251,12 +251,9 @@ Fortran 版との違い(Fortran 側の挙動は欠陥またはコンパイラの
 
 ## 9.10 高速化バックエンド用ツールのファイル
 
-高速化 SR バックエンド(`MVMC_RS_SR_BACKEND=tenferro`、[第 12 章](12-accelerated-backends.md))での通常の実行は、デフォルトと**同じファイル集合を同じ形式で**書き出します。SR に依存する値の下位の桁だけが異なりえます([12.4](12-accelerated-backends.md#124-バックエンドの選択))。マルチウォーカーランナー(`run_para_opt_multichain`、ライブラリ API)は、同等な MPI 実行の出力ルートと同じく、ウォーカー 0 のみが出力ファイルを書きます([12.7](12-accelerated-backends.md#127-マルチウォーカー実行))。GPU のゲートとベンチマークは独自のレポートを書き、`mvmc` がそれらを読み戻すことはありません。
+高速化 SR バックエンド(`MVMC_RS_SR_BACKEND=tenferro`、[第 12 章](12-accelerated-backends.md))での通常の実行は、デフォルトと**同じファイル集合を同じ形式で**書き出します。SR に依存する値の下位の桁だけが異なりえます([12.4](12-accelerated-backends.md#124-バックエンドの選択))。マルチウォーカーランナー(`run_para_opt_multichain`、ライブラリ API)は、同等な MPI 実行の出力ルートと同じく、ウォーカー 0 のみが出力ファイルを書きます([12.7](12-accelerated-backends.md#127-マルチウォーカー実行))。GPU のゲートとベンチマークは独自のレポートを書き、`mvmc` がそれらを読み戻すことはありません(削除された従来の GPU 経路の日付付き `benchmark/*/results/` ディレクトリは履歴の記録です)。
 
 | ファイル | 書き出すもの | 内容 |
 |------|-----------|---------|
-| `gpu/mvmc-gpu-cuda/results/cuda-gate.md`、`cuda-validation.md`、`cuda-roundtrip.md`、`cuda-transfer.md` | `scripts/run_cuda_gate.sh`(パスは `MVMC_RS_CUDA_GATE_OUT` とその仲間で変更可能)。このディレクトリはバージョン管理の対象外 | デバイスレポート(デバイス、compute capability、メモリ、ドライバ、CUDA ドライバ API、NVRTC、cuBLAS、cuSOLVER、tenferro のバージョン)、マイクロベンチマーク、検証ハーネスのレポート、ホスト-デバイス往復の下限、転送の掃引 |
-| `benchmark/gpu_pfaffian/results/pfaffian_batched.csv`(と `.md`) | `scripts/run_pfaffian_bench.sh` | バッチ Pfaffian/逆行列の時間(CPU と tenferro、CUDA の比較) |
-| `benchmark/gpu_device_sampler/results/device_sampler*.csv`(と `.md`) | `scripts/run_device_sampler_bench.sh` | デバイス常駐サンプラと CPU マルチチェーンランナーの比較 |
-| `benchmark/gpu_sr_device/results/sr_device.csv`(と `.md`) | `scripts/run_sr_device_bench.sh` | デバイス常駐 SR ステップ |
-| `results-<host>-<date>.tar.gz` | issue #450 のスイート(`scripts/bench/run_all.sh` が書き出す、[12.9](12-accelerated-backends.md#129-ベンチマークと検証スイート450)) | 関数ファミリーごとの CSV、Markdown レポート、ログ、メタデータ |
+| `gpu/mvmc-gpu-cuda/results/cuda-gate.log` | `scripts/run_cuda_gate.sh`(パスは `MVMC_RS_CUDA_GATE_OUT` で変更可能)。このディレクトリはバージョン管理の対象外 | 常駐 GPU Opt/PhysCal とインターバルのテストのログ |
+| 指定した出力ディレクトリの `report.md`、`timings.json` とメタデータ | `scripts/benchmark_gpu.sh` | 常駐 Rust Opt/PhysCal と Julia GPU の時間([12.3](12-accelerated-backends.md#エンドツーエンドの-gpu-ベンチマーク)) |

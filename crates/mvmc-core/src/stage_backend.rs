@@ -14,11 +14,9 @@
 //!
 //! A [`StageBackend`] is the single object that composes one implementation of every stage
 //! trait. It is what production code acquires ([`acquire`]), what the validation harness of
-//! `accel_validation` drives, and what the GPU gates construct, so *validated means deployed*:
-//! the harness exercises the very objects (`COrderSr`, `TenferroSr`, the batched Pfaffian
-//! engines) that production selects. A future stage (batched local energy, #426; the
-//! device-resident sampler, #434) is added as one more stage trait and one more slot of
-//! [`StageBackend`]; existing implementations answer [`StageError::Unsupported`] until they
+//! `accel_validation` drives, so *validated means deployed*: the harness exercises the very
+//! objects (`COrderSr`, `TenferroSr`, the batched Pfaffian engines) that production selects.
+//! A future stage is added as one more stage trait and one more slot of [`StageBackend`]; existing implementations answer [`StageError::Unsupported`] until they
 //! provide it, never a silent CPU result.
 //!
 //! # Selection
@@ -694,7 +692,7 @@ impl<'a> StageBackend<'a> {
         Ok(backend)
     }
 
-    /// Replace the Pfaffian stage (for example by the batched CUDA kernel), relabelled.
+    /// Replace the Pfaffian stage (for example by a batched engine), relabelled.
     pub fn with_pfaffian(mut self, label: &str, pfaffian: Box<dyn PfaffianStages + 'a>) -> Self {
         self.label = label.to_string();
         self.pfaffian = pfaffian;
@@ -860,7 +858,7 @@ pub fn open_stage_backend(kind: StageBackendKind) -> Result<StageBackend<'static
 type Shared = &'static Mutex<StageBackend<'static>>;
 
 /// Backends other than C order are built once per process and shared (a tenferro runtime or a
-/// CUDA context is expensive; eager calls cost tens of microseconds).
+/// CPU Engine is expensive; eager calls cost tens of microseconds).
 static SHARED: Mutex<Vec<(StageBackendKind, Shared)>> = Mutex::new(Vec::new());
 static PROBE_CPU_ENGINE: std::sync::OnceLock<CpuEngineHandle> = std::sync::OnceLock::new();
 #[cfg(test)]

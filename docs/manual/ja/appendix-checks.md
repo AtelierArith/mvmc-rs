@@ -45,4 +45,4 @@ uv run --no-project scripts/check_manual_citations.py --c-root extern/mVMC-1.3.0
 - FSZ/一般軌道、複素波動関数、RBM、OptTrans(`-o`)、`InterAll`、局在スピン、0 以外の `NExUpdatePath`、および 5 ステップのデモンストレーションを超える `NSRCG = 1` を用いた実行。
 - C または Julia との数値の整合性に関するすべての実行。チュートリアルはリファレンスとの比較を一切行っていません。
 - C mVMC の日本語マニュアル `extern/mVMC-1.3.0/doc/ja` は読んでいません。言い換えの元はすべて英語マニュアル(`doc/en`)です。
-- [第 12 章](12-accelerated-backends.md): CUDA ゲート、CUDA カーネル、GPU やデバイス常駐の数値は、このマニュアルのためには**実行していません**。`docs/design/gpu-readiness.md` と `docs/NUMERICAL_COMPARISONS.md` からの転記です。ここで再現したのは、**(観測)** と記した CPU 側の記述(標準の `mvmc` バイナリでの `hubbard_chain_L16` に対する `tenferro` と `cuda` の選択)のみです。issue #450 のベンチマークスイートはまだ存在しませんでした。
+- [第 12 章](12-accelerated-backends.md): CUDA ゲート、CUDA カーネル、GPU やデバイス常駐の数値は、このマニュアルのためには**実行していません**。`docs/design/gpu-readiness.md` と `docs/NUMERICAL_COMPARISONS.md` からの転記です。ここで再現したのは、**(観測)** と記した CPU 側の記述(標準の `mvmc` バイナリでの `hubbard_chain_L16` に対する `tenferro` の選択)のみです。元の章が説明していた従来の CUDA ステージ経路は #643 で削除しました。
