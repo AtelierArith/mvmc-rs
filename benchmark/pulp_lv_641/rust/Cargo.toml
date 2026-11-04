@@ -1,0 +1,22 @@
+[workspace]
+
+[package]
+name = "pulp_lv_641"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Issue #641: scalar / hand AVX2 / pulp kernel microbenchmark for the L128 hot kernels"
+
+[dependencies]
+# The workspace declares pulp with `default-features = false, features = ["std"]`, which
+# compiles pulp without its `x86-v3` backend (Arch::new() is then always Scalar on x86_64).
+# This crate enables pulp's default features (x86-v3 = AVX2+FMA); the workspace
+# configuration is reproduced by dispatching to `pulp::Scalar` directly (`pulp-scalar`).
+pulp = { version = "=0.22.2" }
+pfapack = { path = "../../../crates/pfapack" }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"
+debug = 1

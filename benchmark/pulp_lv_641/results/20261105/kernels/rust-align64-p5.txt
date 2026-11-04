@@ -1,0 +1,52 @@
+n=128 rounds=15
+pulp::Arch::new() = V3(V3 { sse: Sse, sse2: Sse2, fxsr: Fxsr, sse3: Sse3, ssse3: Ssse3, sse4_1: Sse4_1, sse4_2: Sse4_2, popcnt: Popcnt, avx: Avx, avx2: Avx2, bmi1: Bmi1, bmi2: Bmi2, fma: Fma, lzcnt: Lzcnt })  (x86-v3 feature enabled in this crate)
+cpu: avx2=true fma=true avx512f=false
+setup	pulp::Arch::new	ns_per_call=0.47
+setup	is_x86_feature_detected(avx2)	ns_per_call=0.43
+check	K1 initial inverse residual max|M X - I| = 2.169e-14
+check	K1 scalar	steps=64	residual=7.575e-12	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0	pf_rel_vs_scalar=0.000e0
+check	K1 avx2	steps=64	residual=7.575e-12	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0	pf_rel_vs_scalar=0.000e0
+check	K1 pulp-scalar	steps=64	residual=7.575e-12	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0	pf_rel_vs_scalar=0.000e0
+check	K1 pulp-v3	steps=64	residual=7.575e-12	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0	pf_rel_vs_scalar=0.000e0
+check	K1 pulp-v3-fma	steps=64	residual=7.050e-12	bits_differ_vs_scalar=16384/16384	max_rel_vs_scalar=3.318e-12	pf_rel_vs_scalar=3.438e-12
+check	K1 scalar	max_rel_vs_fresh_inverse=1.725e-12
+check	K1 avx2	max_rel_vs_fresh_inverse=1.725e-12
+check	K1 pulp-scalar	max_rel_vs_fresh_inverse=1.725e-12
+check	K1 pulp-v3	max_rel_vs_fresh_inverse=1.725e-12
+check	K1 pulp-v3-fma	max_rel_vs_fresh_inverse=1.630e-12
+## K1 update_one_real (copy+kernel)
+K1 update_one_real (copy+kernel)	copy-only	median_ns=6754.2	min_ns=6742.6	rounds=15
+K1 update_one_real (copy+kernel)	scalar	median_ns=17714.3	min_ns=17636.0	rounds=15
+K1 update_one_real (copy+kernel)	avx2	median_ns=13402.1	min_ns=13334.6	rounds=15
+K1 update_one_real (copy+kernel)	pulp-scalar	median_ns=16943.2	min_ns=16875.1	rounds=15
+K1 update_one_real (copy+kernel)	pulp-v3	median_ns=13429.4	min_ns=13390.3	rounds=15
+K1 update_one_real (copy+kernel)	pulp-v3-fma	median_ns=14567.9	min_ns=14489.7	rounds=15
+K1 update_one_real (copy+kernel)	pulp-v3+Arch::new/call	median_ns=13939.5	min_ns=13886.8	rounds=15
+check	K2 avx2	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0
+check	K2 avx2-scalar-tail	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0
+check	K2 pulp-scalar	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0
+check	K2 pulp-v3	bits_differ_vs_scalar=0/16384	max_rel_vs_scalar=0.000e0
+check	K2 pulp-v3-fma	bits_differ_vs_scalar=1040/16384	max_rel_vs_scalar=3.179e-16
+## K2 dsktf2 rank-2 sweep (copy+kernel)
+K2 dsktf2 rank-2 sweep (copy+kernel)	copy-only	median_ns=5264.5	min_ns=5250.4	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	scalar	median_ns=84927.5	min_ns=84482.7	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	avx2	median_ns=62981.2	min_ns=62596.2	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	avx2-scalar-tail	median_ns=64438.1	min_ns=63795.6	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-scalar	median_ns=86648.8	min_ns=86271.7	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-v3	median_ns=67456.5	min_ns=66577.1	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-v3-fma	median_ns=60856.6	min_ns=60497.1	rounds=15
+check	K3 avx2-rows	bitwise_equal=true	rel=0.000e0
+check	K3 pulp-v3-fma	bitwise_equal=false	rel=1.883e-16
+## K3 two_hop_bilinear
+K3 two_hop_bilinear	scalar	median_ns=4233.2	min_ns=4192.1	rounds=15
+K3 two_hop_bilinear	avx2-rows(exact,new)	median_ns=4148.9	min_ns=4129.1	rounds=15
+K3 two_hop_bilinear	pulp-scalar-fma	median_ns=7159.1	min_ns=7122.8	rounds=15
+K3 two_hop_bilinear	pulp-v3-fma	median_ns=3294.8	min_ns=3287.2	rounds=15
+check	K4 avx2	bits_differ_vs_scalar=0/16384
+check	K4 pulp-scalar	bits_differ_vs_scalar=0/16384
+check	K4 pulp-v3	bits_differ_vs_scalar=0/16384
+## K4 solve_sktd
+K4 solve_sktd	scalar	median_ns=56647.5	min_ns=56396.3	rounds=15
+K4 solve_sktd	avx2	median_ns=35667.3	min_ns=35580.6	rounds=15
+K4 solve_sktd	pulp-scalar	median_ns=100141.1	min_ns=99932.8	rounds=15
+K4 solve_sktd	pulp-v3	median_ns=136123.5	min_ns=135473.8	rounds=15
