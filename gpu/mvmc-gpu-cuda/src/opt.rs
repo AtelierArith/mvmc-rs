@@ -5,6 +5,8 @@
 //! Only initialization status and final parameters/energy history are downloaded.
 
 #[cfg(test)]
+mod dh_tests;
+#[cfg(test)]
 mod localspin_tests;
 mod model;
 pub mod physcal;
@@ -29,6 +31,8 @@ const SOURCE: &str = concat!(
     include_str!("resident_status.cuh"),
     "\n",
     include_str!("resident_dense.cuh"),
+    "\n",
+    include_str!("resident_dh.cuh"),
     "\n",
     include_str!("opt/kernels.cu")
 );
@@ -113,8 +117,8 @@ pub struct OptResult {
     pub walkers: usize,
 }
 
-/// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including local
-/// spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
+/// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4
+/// factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
     config: OptConfig,
@@ -271,7 +275,7 @@ impl State {
             nsite: model.ns,
             nqp: model.nq,
             ngutz: model.ng,
-            nproj: model.ng + model.nj,
+            nproj: model.nproj,
         };
         if geom.shared_bytes() > 48 * 1024 {
             return Err("GPU sampler shared-memory capacity exceeded".into());
@@ -292,6 +296,7 @@ impl State {
             IntervalSampler::prepare_for_rebuild(backend, geom, &host, warmup.max(interval))?;
         let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
         resident.set_moves(backend, &model.localspins, model.exchange)?;
+        resident.set_doublon_holon(backend, &model.dh, model.n2, model.n4)?;
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
             let np = model.np;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
@@ -407,6 +412,9 @@ impl State {
                     i(m.nq),
                     i(m.ng),
                     i(m.nj),
+                    self.resident.dh_ptr(exec)?,
+                    i(m.n2),
+                    i(m.n4),
                 ],
             )
         }
@@ -602,9 +610,67 @@ impl State {
                     i(terms),
                     i(s.geom.walkers),
                     p(&self.resident.error)?,
+                    self.resident.dh_ptr(exec)?,
+                    i(m.n2),
+                    i(m.n4),
                 ],
             )
         }
+    }
+
+    /// Hamiltonian or Green operator values of all-valid walkers, then the
+    /// full-Pfaffian fallback for walkers with an invalid plane.
+    pub(crate) fn energy_terms(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+        values: &DeviceBuffer,
+        operators: &DeviceBuffer,
+        terms: usize,
+    ) -> tenferro_tensor::Result<()> {
+        let b = &self.buffers;
+        let m = &self.model;
+        let s = &self.resident.sampler;
+        let w = s.geom.walkers;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // SAFETY: `values` holds walkers*terms FP64 slots and `operators`
+        // 7*terms i32 codes; every resident table is sized by the model.
+        unsafe {
+            exec.launch(
+                module.function("opt_energy_terms")?,
+                ((terms * w).div_ceil(8) as u32, 1, 1),
+                256,
+                0,
+                &[
+                    p(values)?,
+                    p(operators)?,
+                    p(&s.ele)?,
+                    p(&s.occ)?,
+                    p(&b.lookup)?,
+                    p(&b.overlaps)?,
+                    p(&s.gutz)?,
+                    p(&s.jast)?,
+                    p(&b.parameters)?,
+                    p(&s.slater)?,
+                    p(&s.weights)?,
+                    p(&s.inv)?,
+                    p(&s.pf)?,
+                    i(m.ns),
+                    i(m.ne),
+                    i(m.nq),
+                    i(m.ng),
+                    i(m.nj),
+                    i(terms),
+                    i(w),
+                    p(&self.resident.error)?,
+                    p(&self.resident.valid)?,
+                    self.resident.dh_ptr(exec)?,
+                    i(m.n2),
+                    i(m.n4),
+                ],
+            )?;
+        }
+        self.energy_fallback(exec, module, values, operators, terms)
     }
 
     fn observe(&self, exec: &RawExec<'_, '_>, module: &RawModule) -> tenferro_tensor::Result<()> {
@@ -633,7 +699,7 @@ impl State {
                     p(&s.weights)?,
                     p(&b.overlaps)?,
                     i(m.np),
-                    i(m.ng + m.nj),
+                    i(m.nproj),
                     i(m.ns),
                     i(m.ne),
                     i(m.nq),
@@ -644,37 +710,7 @@ impl State {
             )?;
             let terms = m.energies.len();
             if terms > 0 {
-                exec.launch(
-                    module.function("opt_energy_terms")?,
-                    ((terms * w).div_ceil(8) as u32, 1, 1),
-                    256,
-                    0,
-                    &[
-                        p(&b.values)?,
-                        p(&b.operators)?,
-                        p(&s.ele)?,
-                        p(&s.occ)?,
-                        p(&b.lookup)?,
-                        p(&b.overlaps)?,
-                        p(&s.gutz)?,
-                        p(&s.jast)?,
-                        p(&b.parameters)?,
-                        p(&s.slater)?,
-                        p(&s.weights)?,
-                        p(&s.inv)?,
-                        p(&s.pf)?,
-                        i(m.ns),
-                        i(m.ne),
-                        i(m.nq),
-                        i(m.ng),
-                        i(m.nj),
-                        i(terms),
-                        i(w),
-                        p(&self.resident.error)?,
-                        p(&self.resident.valid)?,
-                    ],
-                )?;
-                self.energy_fallback(exec, module, &b.values, &b.operators, terms)?;
+                self.energy_terms(exec, module, &b.values, &b.operators, terms)?;
             }
             exec.launch(
                 module.function("opt_energy")?,
@@ -822,8 +858,13 @@ impl State {
                     p(&b.parameters)?,
                     p(&s.params)?,
                     i(np),
-                    i(m.ng + m.nj),
+                    i(m.ng),
+                    i(m.nj),
+                    i(m.n2),
+                    i(m.n4),
                     Arg::I(i32::from(m.shift)),
+                    Arg::I(i32::from(m.shift_dh2)),
+                    Arg::I(i32::from(m.shift_dh4)),
                     p(&self.resident.error)?,
                 ],
             )?;

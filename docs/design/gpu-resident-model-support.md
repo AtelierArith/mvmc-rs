@@ -41,7 +41,7 @@ the host, with no device context or allocation. The order is:
 2. The PhysCal Lanczos check, at `model.rs:63-66`.
 3. A single resident-scope predicate, at `model.rs:81-94`. It returns
    `"resident GPU requires real normal orbitals, NExUpdatePath<=2, no
-   RBM/DH/OptTrans, NSRCG=0 (Opt) and serial execution"`.
+   RBM/OptTrans, NSRCG=0 (Opt) and serial execution"`.
 4. Model construction checks in `from_data_with_derivatives`: real/finite
    parameters `:155`, projection layout `:165`, complex QP weights `:184`,
    operator spin conservation `:343`/`:360`.
@@ -71,7 +71,7 @@ Abbreviations: **S** supported, **R** rejected before device allocation,
 | Green functions (OneBodyG, TwoBodyG, TwoBodyGEx) | n/a | **S** for spin-conserving pairs; **R** `physcal.rs:101`, `:107`, `:121` | S | **S** for spin-conserving pairs (`ext/cuda_observables.jl:48`) | Julia GPU, except the C-canonical TwoBodyGEx one-body list (see `gpu-resident-physcal.md`) | `physcal_julia_l128.txt`; `physcal/tests.rs:29` (host-only rejection) | Output is ensemble means, not C-format files |
 | QP: `NSPGaussLeg`, `NSPStot`, `NMPTrans`, `TransSym` | **S**, `nq = NSPGaussLeg·\|NMPTrans\|` (`model.rs:170-178`); a negative `NMPTrans` is normalized to its absolute value as in Julia GPU (`model.rs:69-76`, `ext/cuda_runners.jl:29`) | **S** | S (C `qp.c:50-80`; anti-periodic sign from `readdef.c:742-747`) | **S** (`cuda_state.jl:98`) | Julia GPU | Only `NSPGaussLeg=8`, `NSPStot=0`, `\|NMPTrans\|=1` (L64/L128) have resident fixtures | **Gap:** no resident fixture for `NSPStot≠0`, `NMPTrans>1` or `NSPGaussLeg=1`. A complex `ParaQPTrans` weight is **R** at `model.rs:184`, while Julia GPU takes the real part without warning (`cuda_state.jl:70`, `:102`). Rust is deliberately stricter |
 | `OptTrans` (variational QP, `NQPOptTrans>1`) | **R** `model.rs:89` | **R** `model.rs:89` | S (`crates/mvmc-core/tests/opttrans.rs`, `tests/fixtures/opttrans/`) | **R**: "CUDA variational OptTrans is not supported" (`ext/cuda_state.jl:43`); Julia CPU only | No Julia GPU. Physics from C-order (C `qp.c` `UpdateQPWeight`) | `tests/fixtures/opttrans/run_opt_real` (rejection test); a resident fixture would be new | QP weights become optimized parameters, which changes the SR layout |
-| Doublon-holon DH2 / DH4 | **R** `model.rs:90-91` (defensive layout check `:164-165`) | **R** | S (`dh2_runtime.rs`, `dh4_runtime.rs`, `tests/fixtures/dh2`, `dh4`) | **R** (`ext/cuda_state.jl:41-42`, `:48-49`); Julia CPU only | No Julia GPU. C-order projection (`projection.c`) for counters, ratios and derivatives | `tests/fixtures/dh2/production_real`, `dh4/production_dh4_real` (rejection test) | Slater part is unchanged |
+| Doublon-holon DH2 / DH4 | **S** (#665) | **S** (#665) | S (`dh2_runtime.rs`, `dh4_runtime.rs`, `tests/fixtures/dh2`, `dh4`) | **R** (`ext/cuda_state.jl:41-42`, `:48-49`); Julia CPU only | No Julia GPU. Rust CPU C-order (`projection.c`, `parameter.c`) for counters, ratios, derivatives, energies, Green functions and the DH gauge; the sampler keeps the Julia GPU tape contract | `tests/fixtures/dh2/production_real`, `dh4/production_dh4_real`, `gpu/mvmc-gpu-cuda/tests/fixtures/dh/` (L16 doped with exchanges, L128 with the delayed queue); tests `opt::dh_tests`, `opt::physcal::dh_tests`; provenance in its `README.md` | DH counters are recomputed over every (table, center) item per proposal and operator, `O((n2+n4) Nsite)` |
 | RBM (Charge/Spin/General layers) | **R** `model.rs:88` | **R** | S (`rbm_production.rs`, `rbm_vs_julia.rs`, `c_rbm_*.rs`) | **R**: "CUDA RBM is not supported" (`ext/cuda_state.jl:40`); Julia CPU only | No Julia GPU. C-order (`rbm.c`) | Baseline + `ChargeRBM_PhysLayer` (`scope_tests.rs`) | Needs hidden-unit theta caches on the device |
 | SpinJastrow / other generalized Jastrow | n/a | n/a | **R** for every runner (`crates/mvmc-core/src/validation.rs:118-119`); not a C 1.3.0 keyword | n/a | n/a | n/a | Out of scope |
 | Complex normal orbitals or parameters | **R** `model.rs:92` (also `:155`, `:184`) | **R** | S | **R**: "CUDA runner requires real parameters" (`ext/cuda_state.jl:39`, `:108`); Julia CPU only | No Julia GPU. C-order complex paths | Baseline with orbital `ComplexType 1` (`scope_tests.rs`) | Needs complex Pfaffian/inverse sampling, complex SR (Hermitian Cholesky) and complex derivatives |
@@ -115,7 +115,7 @@ its zero-copy residency must not regress.
      exchange.
    - A large local-spin Julia GPU fixture has to be generated, because Julia
      GPU has stage-level coverage only (`parity.jl` 6-site).
-2. **DH2/DH4 (extra real projection terms).** No Julia GPU reference exists.
+2. **Done in #665 — DH2/DH4 (extra real projection terms).** No Julia GPU reference exists.
    The Slater, Pfaffian and sampler kernels are unchanged, so the work is
    limited to projection counters, log-ratios and derivative columns. These
    can be checked deterministically against the C-order projection

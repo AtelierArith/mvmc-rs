@@ -109,8 +109,8 @@ extern "C" __global__ void opt_slater(double* slater, const double* params,
 extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
     int* counts, const int* gutz, const int* jast, const double* params,
     const double* pf, const double* weights, double* overlaps, double* logs,
-    int ns, int ne, int nq, int ng, int nj) {
-  int w=blockIdx.x, tid=threadIdx.x, n=2*ne, nproj=ng+nj;
+    int ns, int ne, int nq, int ng, int nj, const int* dh, int n2, int n4) {
+  int w=blockIdx.x, tid=threadIdx.x, n=2*ne, nproj=ng+nj+6*n2+10*n4;
   int* o=occ+w*2*ns; int* map=lookup+w*2*ns; int* cnt=counts+w*nproj;
   for (int r=tid;r<2*ns;r+=blockDim.x) { o[r]=0; map[r]=-1; }
   for (int p=tid;p<nproj;p+=blockDim.x) cnt[p]=0;
@@ -122,6 +122,14 @@ extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
     if (nj) for (int s=r+1;s<ns;++s) {
       int p=jast[r*ns+s];
       if (p>=0) atomicAdd(cnt+ng+p,(o[r]+o[r+ns]-1)*(o[s]+o[s+ns]-1));
+    }
+  }
+  // C MakeProjCnt DH2/DH4 counters (integers, so atomic order is irrelevant).
+  if (n2+n4) {
+    const ResidentOcc occupation{o,ns};
+    for (int k=tid;k<(n2+n4)*ns;k+=blockDim.x) {
+      int p=resident_dh_index(occupation,dh,n2,n4,ns,ng+nj,k);
+      if (p>=0) atomicAdd(cnt+p,1);
     }
   }
   __syncthreads();
@@ -171,7 +179,8 @@ __device__ int opt_site(const int* e,int i,int a,int k,int da,int dk) {
 // Correlation difference for at most two moves. Merge coincident sites first;
 // include each touched/untouched and touched/touched Jastrow pair exactly once.
 __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
-    const double* params,const int* op,int ns,int ng,int nj,int lane) {
+    const double* params,const int* op,int ns,int ng,int nj,int lane,
+    const int* dh,int n2,int n4) {
   int sites[4]={op[0],op[1],op[3],op[4]}, spins[4]={op[2],op[2],op[5],op[5]};
   int change[4]={1,-1,op[6]==2?1:0,op[6]==2?-1:0};
   int s[4],du[4],dd[4],count=0;
@@ -198,6 +207,12 @@ __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
     int lo=s[i]<s[j]?s[i]:s[j],hi=s[i]<s[j]?s[j]:s[i],p=jast[lo*ns+hi];
     int a=occ[s[i]]+occ[s[i]+ns]-1,b=occ[s[j]]+occ[s[j]+ns]-1;
     if(p>=0) result+=params[ng+p]*((a+du[i]+dd[i])*(b+du[j]+dd[j])-a*b);
+  }
+  // C UpdateProjCnt recounts DH2/DH4 for the moved configuration.
+  if(n2+n4) {
+    const ResidentOcc before{occ,ns};
+    const ResidentOccMoved after{occ,ns,count,s,du,dd};
+    result+=resident_dh_delta(before,after,dh,n2,n4,ns,ng+nj,params,lane,32);
   }
   return opt_warp_sum(result);
 }
@@ -242,7 +257,7 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
     const int* gutz,const int* jast,const double* params,const double* slater,
     const double* weights,const double* inv,const double* pf,
     int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
-    const int* valid) {
+    const int* valid,const int* dh,int n2dh,int n4dh) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if(index>=terms*batch || *error) return;
@@ -252,7 +267,7 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
   int a,k,da,dk;
   int resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
   if(resolved) {if(!lane) values[index]=resolved>0?1:0;return;}
-  double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane),newip=0;
+  double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane,dh,n2dh,n4dh),newip=0;
   for(int q=0;q<nq;++q) {
     const double* S=slater+(size_t)q*n2*n2;
     const double* M=inv+((size_t)w*nq+q)*n*n;
@@ -291,7 +306,8 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
     const int* cfg,const int* occ,const int* lookup,const double* overlaps,
     const int* gutz,const int* jast,const double* params,const double* slater,
     const double* weights,const int* valid,double* fac,
-    int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error) {
+    int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
+    const int* dh,int n2dh,int n4dh) {
   int w=blockIdx.x,tid=threadIdx.x,n=2*ne,n2=2*ns;
   if(w>=batch || *error || opt_all_valid(valid,w,nq)) return;
   extern __shared__ char fallback_mem[];
@@ -316,7 +332,7 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
       continue;
     }
     if(tid<32) {
-      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid);
+      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid,dh,n2dh,n4dh);
       if(!tid) s_delta=d;
     }
     for(int i=tid;i<n;i+=blockDim.x)
@@ -429,13 +445,38 @@ extern "C" __global__ void opt_update(double* params,const double* update,
   }
 }
 
+// C SyncModifiedParameter (parameter.c:134-176): shiftDH2/shiftDH4 move each
+// d/h generator's mean into the Gutzwiller factors, then shiftGJ. The flags
+// follow C SetFlagShift; the Rust C-order sync_modified_parameter matches.
 extern "C" __global__ void opt_gauge(double* params,double* projection,
-    int np,int nproj,int shift,const int* error) {
+    int np,int ng,int nj,int n2,int n4,int shift,int shift2,int shift4,const int* error) {
   if(threadIdx.x || blockIdx.x || *error) return;
+  const int gj=ng+nj,nproj=gj+6*n2+10*n4;
+  double g=0;
+  if(shift2) for(int x=0;x<2*n2;++x) {
+    double* d=params+gj+x;
+    double mean=__dadd_rn(__dadd_rn(d[0],d[2*n2]),d[4*n2])/3.0;
+    for(int b=0;b<3;++b) d[2*b*n2]=__dsub_rn(d[2*b*n2],mean);
+    g=__dadd_rn(g,mean);
+  }
+  if(shift4) {
+    double g4=0;
+    for(int x=0;x<2*n4;++x) {
+      double* d=params+gj+6*n2+x;
+      double mean=d[0];
+      for(int b=1;b<5;++b) mean=__dadd_rn(mean,d[2*b*n4]);
+      mean/=5.0;
+      for(int b=0;b<5;++b) d[2*b*n4]=__dsub_rn(d[2*b*n4],mean);
+      g4=__dadd_rn(g4,mean);
+    }
+    g=__dadd_rn(g,g4);
+  }
+  if(g!=0) for(int p=0;p<ng;++p) params[p]=__dadd_rn(params[p],g);
   double average=0,largest=0;
-  if(shift) {for(int p=0;p<nproj;++p) average=__dadd_rn(average,params[p]);average/=nproj;}
+  if(shift) {for(int p=0;p<gj;++p) average=__dadd_rn(average,params[p]);average/=gj;}
   for(int p=nproj;p<np;++p) largest=fmax(largest,fabs(params[p]));
   double scale=largest>0?4.0/largest:1.0;
-  for(int p=0;p<nproj;++p) {params[p]=__dsub_rn(params[p],average);projection[p]=params[p];}
+  for(int p=0;p<gj;++p) params[p]=__dsub_rn(params[p],average);
+  for(int p=0;p<nproj;++p) projection[p]=params[p];
   for(int p=nproj;p<np;++p) params[p]=__dmul_rn(params[p],scale);
 }
