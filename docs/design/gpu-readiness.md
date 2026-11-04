@@ -215,9 +215,9 @@ Upstream is a pre-1.0 research platform whose README states APIs may change acro
 ### 4.1 Crates and local state
 
 * This workspace depends on `tenferro-tensor`, `tenferro-cpu` (`cpu-faer`) and
-  `tenferro-einsum` (root `Cargo.toml:53-55`) and carries local lru-bump patches of
-  `tenferro-ad`, `-cpu`, `-einsum`, `-runtime` in `third_party/` (issue #192;
-  `third_party/README.md`).
+  `tenferro-einsum` (root `Cargo.toml:53-55`). At the time of writing it carried local
+  lru-bump patches of `tenferro-ad`, `-cpu`, `-einsum`, `-runtime` (issue #192); those
+  snapshots were removed in #644.
 * Not in this workspace and not in `Cargo.lock`: `tenferro-gpu` (CUDA/WebGPU/ROCm substrate),
   `tenferro-linalg` (`cholesky`, `solve`, `lu`, `inv`, `det`, ...), `tenferro-fft`,
   `tenferro-xla`. `tenferro-einsum` and `tenferro-ad` expose `cuda`, `webgpu`, `rocm`
@@ -369,8 +369,9 @@ Ordered by value to mvmc-rs.
    in one op, and `I64` operands for `gather`/`scatter` on CUDA (currently F32/F64/I32/Bool/
    C32/C64 operands only; `I64` operands not implemented).
 8. **Complex `exp`/`log` on CUDA** (low priority; mvmc keeps these on the host).
-9. **Publish tenferro with `lru >= 0.18.5`** (open upstream issue #1958) so that the local
-   `third_party/` patches (issue #192) can be removed before adding `tenferro-gpu`.
+9. **Publish tenferro with `lru >= 0.18.5`** (upstream issue #1958) so that the local
+   lru patches (issue #192) can be removed before adding `tenferro-gpu`. Done: registry
+   tenferro resolves `lru 0.18.5` and the snapshots were removed in #644.
 
 ## 5. Design
 
@@ -622,8 +623,8 @@ Ordered by expected benefit; phase dependencies in parentheses.
    (phase 1; lowest risk, first to land, small benefit on the benchmark).
 6. Accelerated-backend validation harness: teacher-forced replay and decision-margin
    reporting, and the corresponding section in `docs/NUMERICAL_COMPARISONS.md`.
-7. `gpu-cuda` feature and optional CUDA gate, including the `third_party/` lru patch
-   interplay with `tenferro-gpu`.
+7. `gpu-cuda` feature and optional CUDA gate, including the (since removed, #644) lru
+   patch interplay with `tenferro-gpu`.
 
 (Items 1-2, 5-7 are independent enough to start in parallel; the sequence by dependency is
 7, 5, 2, 1, 6, 3, 4. Full problem/acceptance text is in the pull request description.)
@@ -642,9 +643,9 @@ Ordered by expected benefit; phase dependencies in parentheses.
   expressed as per-plane status without failing the batch.
 * The numbers in sections 3 and 5.5 are single-run, one-thread, shared-host measurements;
   device-side costs are estimates until measured on hardware.
-* Mixing the patched `third_party/` tenferro crates with a registry `tenferro-gpu` needs a
-  check that Cargo resolves a single `tenferro-runtime` and that the `lru` advisories stay
-  closed (issue #192).
+* Mixing the (since removed, #644) patched tenferro crates with a registry `tenferro-gpu`
+  needed a check that Cargo resolves a single `tenferro-runtime` and that the `lru`
+  advisories stay closed (issue #192).
 
 ## 10. CPU validation harness and multi-chain runner
 

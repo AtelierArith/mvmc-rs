@@ -296,10 +296,10 @@ impl PfaffianStages for COrderPfaffian {
 }
 
 pub(crate) const TENFERRO_PFAFFIAN_UNAVAILABLE: &str =
-    "tenferro 0.8 has no skew-symmetric factorization or Pfaffian";
+    "tenferro has no skew-symmetric factorization or Pfaffian";
 
 /// A Pfaffian stage that always reports [`StageError::Unsupported`] with the stated reason
-/// (tenferro 0.8 has no skew-symmetric factorization or Pfaffian).
+/// (tenferro has no skew-symmetric factorization or Pfaffian).
 #[derive(Debug, Clone)]
 pub struct UnsupportedPfaffian {
     label: String,
@@ -315,7 +315,7 @@ impl UnsupportedPfaffian {
         }
     }
 
-    /// The tenferro 0.8 gap.
+    /// The tenferro gap (still absent in 0.9).
     pub fn tenferro() -> Self {
         Self::new("none", TENFERRO_PFAFFIAN_UNAVAILABLE)
     }
@@ -648,7 +648,7 @@ impl<'a> StageBackend<'a> {
 
     /// tenferro CPU (`native`): SR stages through eager ops and the real, non-FSZ
     /// measurement stage (local energy + Slater derivative) through tensor contractions;
-    /// the Pfaffian stage is unsupported by tenferro 0.8.
+    /// the Pfaffian stage is unsupported by tenferro.
     pub fn tenferro_cpu() -> Result<StageBackend<'static>, StageError> {
         Self::tenferro_cpu_with_transient(false)
     }
@@ -930,22 +930,26 @@ pub(crate) fn try_probe_cpu_blocks(blocks: usize, body: impl Fn(usize) + Sync) -
         if !cpu.has_team() {
             return ProbeCpuDispatch::Unavailable;
         }
-        let Ok(mut exec) = cpu.exec() else {
+        // `with_exec` runs the blocks as an Engine operation: a panic marks the
+        // Engine broken, and a broken Engine refuses the call without running it.
+        let dispatched = cpu.with_exec(|exec| {
+            exec.token()
+                .for_ranges(blocks, std::num::NonZeroUsize::MIN, |range| {
+                    if profile {
+                        PROBE_PARTICIPANTS
+                            .get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+                            .lock()
+                            .unwrap()
+                            .insert(std::thread::current().id());
+                    }
+                    for block in range {
+                        body(block);
+                    }
+                });
+        });
+        if dispatched.is_err() {
             return ProbeCpuDispatch::Busy;
-        };
-        exec.token()
-            .for_ranges(blocks, std::num::NonZeroUsize::MIN, |range| {
-                if profile {
-                    PROBE_PARTICIPANTS
-                        .get_or_init(|| Mutex::new(std::collections::HashSet::new()))
-                        .lock()
-                        .unwrap()
-                        .insert(std::thread::current().id());
-                }
-                for block in range {
-                    body(block);
-                }
-            });
+        }
         #[cfg(test)]
         PROBE_CPU_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         ProbeCpuDispatch::Complete

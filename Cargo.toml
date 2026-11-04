@@ -16,11 +16,6 @@ members = [
     "xtask",
 ]
 exclude = [
-    "third_party/tenferro-ad",
-    "third_party/tenferro-cpu",
-    "third_party/tenferro-einsum",
-    "third_party/tenferro-runtime",
-    "third_party/tenferro-gpu",
     "gpu/mvmc-gpu-cuda",
     "gpu/tenferro-ext",
 ]
@@ -48,13 +43,13 @@ num-complex = "0.4"
 ndarray = "0.16"
 rand_core = "0.6"
 pulp = { version = "0.22.2", default-features = false, features = ["std"] }
-tenferro-tensor = { version = "0.8.0", default-features = false }
-tenferro-cpu = { version = "0.8.0", default-features = false, features = ["native"] }
-tenferro-einsum = { version = "0.8.0", default-features = false, features = ["native"] }
-tenferro-ad = { version = "0.8.0", default-features = false, features = ["native"] }
+tenferro-tensor = { version = "0.9.0", default-features = false }
+tenferro-cpu = { version = "0.9.0", default-features = false, features = ["native"] }
+tenferro-einsum = { version = "0.9.0", default-features = false, features = ["native"] }
+tenferro-ad = { version = "0.9.0", default-features = false, features = ["native"] }
 # SR pathfinder (#421): cholesky / triangular_solve using the native CPU provider;
 # `autodiff` is required for EagerTensorLinalgExt.
-tenferro-linalg = { version = "0.8.0", default-features = false, features = ["native", "autodiff"] }
+tenferro-linalg = { version = "0.9.0", default-features = false, features = ["native", "autodiff"] }
 
 # --- BLAS / LAPACK plumbing.
 #

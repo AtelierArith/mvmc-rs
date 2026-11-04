@@ -10,7 +10,7 @@ export MVMC_RS_INNER_THRESHOLD=1
 out=$(mktemp -d /tmp/mvmc-issue179-workers.XXXXXX)
 echo "Evidence: $out"
 git -c safe.directory="$PWD" rev-parse HEAD > "$out/head.txt"
-git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
+git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
 timeout --kill-after=10s 600s cargo build --locked --profile test-fast -p mvmc-cli --features mpi > "$out/cli-build.log" 2>&1
 timeout --kill-after=10s 600s cargo test --locked --profile test-fast -p mvmc-core --features mpi --test mpi_issue179_state --no-run --message-format=json > "$out/state-build.json" 2> "$out/state-build.log"
 state_bin=$(jq -r 'select(.reason=="compiler-artifact" and .target.name=="mpi_issue179_state" and .executable!=null) | .executable' "$out/state-build.json")
@@ -48,6 +48,6 @@ while IFS=$'\t' read -r id ranks mode split cg store projection expected status 
 done < "$matrix/matrix.tsv"
 if (( completed != MPI179_SELECTED_CELLS * 3 )); then echo INCOMPLETE_WORKER_MATRIX >&2; bad=1; fi
 sha256sum -c "$out/executables.sha256" > "$out/executable-check.txt" || bad=1
-git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
+git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
 if ! cmp -s "$out/source-sha256.txt" "$out/source-sha256-after.txt"; then echo SOURCE_CHANGED > "$out/source-changed.txt"; bad=1; fi
 exit "$bad"
