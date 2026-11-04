@@ -113,7 +113,7 @@ extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
 extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     const int* lookup, const int* columns, const int* xyz, const double* coeff,
     const double* inv, const double* pf, const double* weights, const double* overlaps,
-    int np, int nproj, int ns, int ne, int nq, int batch, const int* error) {
+    int np, int nproj, int ns, int ne, int nq, int batch, int* error) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if (index>=np*batch || *error) return;
@@ -132,7 +132,11 @@ extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     }
   }
   sum=opt_warp_sum(sum);
-  if (!lane) O[output]=sum;
+  if (!lane) {
+    O[output]=sum;
+    // A nonfinite derivative would otherwise reach SR as a generic solve failure.
+    if (!isfinite(sum)) atomicCAS(error,0,RESIDENT_DERIVATIVES);
+  }
 }
 
 __device__ int opt_site(const int* e,int i,int a,int k,int da,int dk) {
@@ -241,7 +245,7 @@ extern "C" __global__ void opt_energy(double* energies,const double* values,
   double e=0;
   for(int t=0;t<terms;++t) e+=coefficients[t]*values[w*terms+t];
   energies[w]=e;
-  if(!isfinite(e)) atomicCAS(error,0,2);
+  if(!isfinite(e)) atomicCAS(error,0,RESIDENT_ENERGY);
 }
 
 extern "C" __global__ void opt_means(double* mean,const double* O,const double* energy,
@@ -297,12 +301,12 @@ extern "C" __global__ void opt_system(double* gram,double* rhs,const double* ho,
 
 extern "C" __global__ void opt_update(double* params,const double* update,
     const int* info,int* error,int np) {
-  if(info[0] || info[1]) {if(!threadIdx.x && !blockIdx.x) atomicCAS(error,0,3);return;}
+  if(info[0] || info[1]) {if(!threadIdx.x && !blockIdx.x) atomicCAS(error,0,RESIDENT_SR);return;}
   if(*error) return;
   int p=blockIdx.x*blockDim.x+threadIdx.x;
   if(p<np) {
     double value=params[p]+update[p];
-    if(!isfinite(value)) atomicCAS(error,0,4); else params[p]=value;
+    if(!isfinite(value)) atomicCAS(error,0,RESIDENT_PARAMETERS); else params[p]=value;
   }
 }
 

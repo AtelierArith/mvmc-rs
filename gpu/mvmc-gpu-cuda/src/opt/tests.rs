@@ -447,6 +447,99 @@ fn resident_opt_rejects_failed_sr() {
 }
 
 #[test]
+#[ignore = "requires CUDA; a singular QP plane during sampling must not publish (#573)"]
+fn resident_opt_singular_sampling_plane_publishes_nothing() {
+    let config = OptConfig {
+        nsteps: 1,
+        walkers: Some(4),
+        warmup: Some(16),
+        interval: Some(16),
+        seed: Some(79),
+        ..Default::default()
+    };
+    let input = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L16/namelist.def");
+    let model = Model::prepare(&input, &config).unwrap();
+    assert!(
+        model.nq > 1,
+        "needs a nonsingular plane to keep the total nonzero"
+    );
+    let expected = model.parameters.clone();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut state = {
+        let s: &mut CudaEngine = &mut backend;
+        State::prepare(s, model, &config)
+    }
+    .unwrap();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.initialize(s)
+    }
+    .unwrap();
+    // After a valid initialization, zero QP plane 0 of the resident Slater
+    // table. Every proposal then has an exactly zero plane-0 candidate
+    // Pfaffian while the other planes keep the total overlap nonzero, so an
+    // accepted hop must request a rebuild instead of a rank-two update with
+    // -1/0. The rebuild latches the singular plane.
+    let ns = state.model.ns;
+    {
+        let s: &mut CudaEngine = &mut backend;
+        let state = &mut state;
+        with_raw_exec(s, "opt.singular-plane", |exec| unsafe {
+            exec.zero_bytes(exec.ptr(&state.resident.sampler.slater)?, 4 * ns * ns * 8)
+        })
+        .map_err(|e| e.to_string())
+    }
+    .unwrap();
+    let before = raw_exec_counters();
+    {
+        let s: &mut CudaEngine = &mut backend;
+        state.run(s)
+    }
+    .unwrap();
+    let traffic = raw_exec_counters() - before;
+    assert_eq!((traffic.upload_calls, traffic.download_calls), (0, 0));
+    for _ in 0..2 {
+        let before = raw_exec_counters();
+        let error = {
+            let s: &mut CudaEngine = &mut backend;
+            state.result(s)
+        }
+        .unwrap_err();
+        assert!(error.contains("device status 1 (rebuild"), "{error}");
+        let traffic = raw_exec_counters() - before;
+        assert_eq!(
+            (traffic.download_calls, traffic.download_bytes),
+            (1, 4),
+            "failure exposes status only"
+        );
+    }
+    // Diagnostic reads: no inverse/Pfaffian became nonfinite and the SR update
+    // after the failure was not applied.
+    let (parameters, tables) = {
+        let s: &mut CudaEngine = &mut backend;
+        let state = &mut state;
+        with_raw_exec(s, "opt.singular-plane.check", |exec| {
+            let r = &state.resident.sampler;
+            let g = r.geom;
+            let mut parameters = vec![0.; state.model.np];
+            let mut tables = vec![0f64; g.walkers * g.nqp * (g.n * g.n + 1)];
+            let (inv, pf) = tables.split_at_mut(g.walkers * g.nqp * g.n * g.n);
+            unsafe {
+                exec.download(&mut parameters, exec.ptr(&state.buffers.parameters)?)?;
+                exec.download(inv, exec.ptr(&r.inv)?)?;
+                exec.download(pf, exec.ptr(&r.pf)?)?;
+            }
+            Ok((parameters, tables))
+        })
+        .map_err(|e| e.to_string())
+    }
+    .unwrap();
+    assert!(tables.iter().all(|x| x.is_finite()));
+    close("unpublished parameters", &parameters, &expected, 0., 0.);
+}
+
+#[test]
 #[ignore = "requires CUDA; zero covariance must not activate roundoff-only SR rows"]
 fn resident_opt_single_walker_has_zero_sr_update() {
     let config = OptConfig {

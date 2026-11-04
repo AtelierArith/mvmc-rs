@@ -58,12 +58,15 @@ extern "C" __global__ void interval_resident_commit(
     good = 1;
     double ip = 0.0;
     for (int q = 0; q < nqp; ++q) {
-      if (ST[w*nqp+q] != 0) good = 0;
-      ip = __dadd_rn(ip, __dmul_rn(weights[q], PF[w*nqp+q]));
+      const double p = PF[w*nqp+q];
+      // Julia's per-plane validity: no zero pivot and a finite nonzero Pfaffian
+      // (cuda_batched_inverse.jl:68). An underflowed product is singular too.
+      if (ST[w*nqp+q] != 0 || !isfinite(p) || p == 0.0) good = 0;
+      ip = __dadd_rn(ip, __dmul_rn(weights[q], p));
     }
     if (!isfinite(ip) || ip == 0.0) good = 0;
     log_overlap = log(fabs(ip) + 1e-100);
-    if (!good) atomicCAS(error, 0, 1);
+    if (!good) atomicCAS(error, 0, RESIDENT_REBUILD);
   }
   __syncthreads();
   if (!good) return;
@@ -76,4 +79,13 @@ extern "C" __global__ void interval_resident_commit(
     logip[w] = log_overlap;
     aw[w] = 0;
   }
+}
+
+// The host enqueues a bounded number of hop/rebuild rounds without reading
+// flags. A forced rebuild (singular candidate plane) can consume an extra round;
+// a walker that still has unfinished hops must not publish a short interval.
+extern "C" __global__ void interval_resident_complete(
+    const int* hop_off, int hops, int* error, int walkers) {
+  const int w = blockIdx.x * blockDim.x + threadIdx.x;
+  if (w < walkers && hop_off[w] < hops) atomicCAS(error, 0, RESIDENT_SCHEDULE);
 }

@@ -11,8 +11,8 @@ mod scope_tests;
 #[cfg(test)]
 mod tests;
 use crate::interval::{
-    IntervalGeometry, IntervalHost, IntervalSampler, ResidentInterval, INTERVAL_KERNELS,
-    INTERVAL_MODULE,
+    IntervalGeometry, IntervalHost, IntervalSampler, ResidentFailure, ResidentInterval,
+    INTERVAL_KERNELS, INTERVAL_MODULE,
 };
 use model::Model;
 use mvmc_core::InitialDef;
@@ -23,7 +23,11 @@ use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer, Op, RawExec, RawM
 use tenferro_gpu::cuda::{cuda_devices, CudaEngine};
 use tenferro_tensor::Engine;
 
-const SOURCE: &str = include_str!("opt/kernels.cu");
+const SOURCE: &str = concat!(
+    include_str!("resident_status.cuh"),
+    "\n",
+    include_str!("opt/kernels.cu")
+);
 const KERNELS: &[&str] = &[
     "opt_fill",
     "opt_initial",
@@ -507,7 +511,10 @@ impl State {
                 return Ok(());
             }
         }
-        Err("GPU initialization failed after 100 attempts".into())
+        Err(format!(
+            "GPU Opt failed: {}",
+            ResidentFailure::Initialization
+        ))
     }
 
     fn observe(&self, exec: &RawExec<'_, '_>, module: &RawModule) -> tenferro_tensor::Result<()> {
@@ -761,11 +768,8 @@ impl State {
             unsafe {
                 exec.download(&mut error, exec.ptr(&self.resident.error)?)?;
             }
-            if error[0] != 0 {
-                return Err(gpu_error(format!(
-                    "GPU Opt failed (device status {}: 1=rebuild, 2=energy, 3=SR, 4=parameters)",
-                    error[0]
-                )));
+            if let Some(failure) = ResidentFailure::from_status(error[0]) {
+                return Err(gpu_error(format!("GPU Opt failed: {failure}")));
             }
             let mut energies = vec![0.; self.steps];
             let mut parameters = vec![0.; self.model.np];
