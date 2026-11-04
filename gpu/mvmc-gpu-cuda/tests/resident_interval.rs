@@ -317,6 +317,85 @@ impl State {
             params: vec![],
         }
     }
+
+    /// Independent C-order (`calc_m_all_real`) Pfaffians of every walker's
+    /// configuration in `ele`, and each plane's Frobenius condition number
+    /// `||A||_F ||A^-1||_F`, both walker-major `[walkers][nqp]`.
+    fn cpu_reference(&self, ele: &[i32]) -> (Vec<f64>, Vec<f64>) {
+        let g = self.geom;
+        let pool = ThreadedPfaPackWorkspace::new(g.n, 1);
+        let (mut pf, mut kappa) = (vec![], vec![]);
+        for walker in ele.chunks_exact(g.n) {
+            let sites: Vec<i64> = walker.iter().map(|&x| x as i64).collect();
+            let mut inv = InvMColMajor::<f64>::zeros(g.nqp, g.ne);
+            let mut plane_pf = vec![0.; g.nqp];
+            calc_m_all_real(
+                &sites,
+                &self.slater,
+                &mut inv,
+                &mut plane_pf,
+                0,
+                g.nqp,
+                g.nsite,
+                g.ne,
+                &pool,
+            )
+            .unwrap();
+            let rs: Vec<usize> = (0..g.n)
+                .map(|i| walker[i] as usize + if i >= g.ne { g.nsite } else { 0 })
+                .collect();
+            for q in 0..g.nqp {
+                let mut a2 = 0.;
+                for &ri in &rs {
+                    for &rj in &rs {
+                        a2 += self.slater.get(q, ri, rj).powi(2);
+                    }
+                }
+                let i2 = inv.qp_matrix_slice(q).iter().map(|x| x * x).sum::<f64>();
+                kappa.push((a2 * i2).sqrt());
+            }
+            pf.extend(plane_pf);
+        }
+        (pf, kappa)
+    }
+}
+
+/// Pfaffian bound of the L128 interval comparison (#656), relative to
+/// `max(|a|, |b|)`: `C (aw + 1) n eps kappa_F` per walker plane.
+///
+/// Each value is one fresh skew factorization (Parlett-Reid partial pivoting,
+/// relative forward error ~ n eps kappa) times `aw` accepted rank-two ratios,
+/// each read from the propagated inverse with a further ~ n eps kappa relative
+/// error. The legacy sampler (C-order factor, immediate C UpdateMAll) and the
+/// resident sampler (paired Julia factor, four queued Julia updates, FMA) round
+/// differently by design; with identical tapes they make identical decisions.
+/// Measured on W=64 over all 20 steps (kappa_F up to 2e10, aw <= 128), the
+/// largest normalized differences are 2.2 (resident vs legacy), 1.4
+/// (resident vs CPU) and 0.8 (legacy vs CPU); at the final step W=64 gives
+/// 0.73/0.75/0.40 and W=320 gives 5.1/5.5/1.6. kappa_F is that of the final
+/// configuration: an earlier near-singular plane in the same interval also
+/// enlarges the propagated inverse error, so C is a regression envelope for
+/// this fixed input, not a forward-error guarantee. C = 16 leaves a 2.9x
+/// margin. Before the #656 fix the legacy sampler published the row-dot
+/// proposal Pfaffian while pivoting its inverse with the column contraction;
+/// after a near-singular plane that mismatch persisted (W=64 legacy vs CPU
+/// 4222, 1.3e-5 relative), which this bound rejects.
+const L128_PF_CONSTANT: f64 = 16.0;
+
+/// Largest `|a - b| / (max(|a|, |b|) (aw + 1) n eps kappa)` over all planes.
+fn l128_pf_normalized(a: &[f64], b: &[f64], aw: &[i32], kappa: &[f64], n: usize) -> f64 {
+    // A NaN ratio would vanish in the max fold; these planes are all nonsingular.
+    assert!(a.iter().chain(b).all(|v| v.is_finite() && *v != 0.));
+    let nqp = a.len() / aw.len();
+    a.iter()
+        .zip(b)
+        .zip(kappa)
+        .enumerate()
+        .map(|(k, ((a, b), kappa))| {
+            let unit = (aw[k / nqp] + 1) as f64 * n as f64 * f64::EPSILON * kappa;
+            (a - b).abs() / (a.abs().max(b.abs()) * unit)
+        })
+        .fold(0., f64::max)
 }
 
 #[test]
@@ -540,7 +619,7 @@ fn device_rng_rejects_a_different_device_context() {
 }
 
 #[test]
-#[ignore = "requires CUDA; isolated L128 sampling benchmark, not Opt E2E"]
+#[ignore = "requires CUDA; L128 sampling benchmark and Pfaffian check, not Opt E2E"]
 fn resident_l128_sampling_transfer_benchmark() {
     use std::time::Instant;
     let mut backend = backend();
@@ -571,6 +650,7 @@ fn resident_l128_sampling_transfer_benchmark() {
             }
         }
         .unwrap();
+        let mut reference: Option<(Vec<i32>, Vec<f64>, Vec<f64>)> = None;
         for rep in 0..4 {
             let legacy = {
                 let s: &mut CudaEngine = &mut backend;
@@ -652,10 +732,25 @@ fn resident_l128_sampling_transfer_benchmark() {
                 "same seeded tapes/configurations W={walkers} rep={rep}"
             );
             assert_eq!(actual.aw, expected.aw);
-            for (a, b) in actual.pf.iter().zip(&expected.pf) {
+            // Independent CPU refactor of the shared final configurations,
+            // once per walker count (every rep must reach the same ones).
+            let (ele, cpu_pf, kappa) = reference.get_or_insert_with(|| {
+                let (pf, kappa) = state.cpu_reference(&expected.ele);
+                (expected.ele.clone(), pf, kappa)
+            });
+            assert_eq!(&expected.ele, ele, "repeatable configurations rep={rep}");
+            let n = state.geom.n;
+            let pairs = [
+                ("resident vs legacy", &actual.pf, &expected.pf),
+                ("resident vs CPU", &actual.pf, &*cpu_pf),
+                ("legacy vs CPU", &expected.pf, &*cpu_pf),
+            ];
+            for (label, a, b) in pairs {
+                let normalized = l128_pf_normalized(a, b, &actual.aw, kappa, n);
+                eprintln!("L128 W={walkers} rep={rep} {label}: max |dPf|/(|Pf| (aw+1) n eps kappa_F) = {normalized:.3}");
                 assert!(
-                    (a - b).abs() < 1e-11 + 1e-11 * b.abs(),
-                    "Pfaffian {a} vs {b}"
+                    normalized <= L128_PF_CONSTANT,
+                    "{label} W={walkers} rep={rep}: {normalized} > {L128_PF_CONSTANT}"
                 );
             }
             eprintln!("L128 sampling only W={walkers} QP=32 steps={steps} hops={hops} rep={rep} resident seconds={elapsed:.9} {traffic:?}");
