@@ -2,6 +2,7 @@
 
 Resident PhysCal has a separate [independent Julia stage/tape fixture](physcal_julia.md)
 including fixed-parameter observables and product-side Green functions (#636).
+Local spins and exchange proposals have [Julia GPU Opt/PhysCal fixtures](localspin/README.md) (#660).
 
 `interval_parity_j8.txt` is the reference output of the Julia GPU sampler for the
 shared-tape parity test `../interval_parity.rs` (issue #547).

@@ -4,6 +4,8 @@
 //! energy/derivatives, direct SR, and parameter refresh execute on one stream.
 //! Only initialization status and final parameters/energy history are downloaded.
 
+#[cfg(test)]
+mod localspin_tests;
 mod model;
 pub mod physcal;
 #[cfg(test)]
@@ -111,8 +113,8 @@ pub struct OptResult {
     pub walkers: usize,
 }
 
-/// Optimize real normal-orbital Gutzwiller/Jastrow inputs with hopping-only
-/// sampling and direct SR. Unsupported modes fail before allocating CUDA state.
+/// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including local
+/// spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
     config: OptConfig,
@@ -288,7 +290,8 @@ impl State {
         };
         let sampler =
             IntervalSampler::prepare_for_rebuild(backend, geom, &host, warmup.max(interval))?;
-        let resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
+        let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
+        resident.set_moves(backend, &model.localspins, model.exchange)?;
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
             let np = model.np;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
@@ -457,6 +460,7 @@ impl State {
                             p(&b.initial_tape)?,
                             p(&s.rebuild)?,
                             p(&b.candidate)?,
+                            self.resident.localspin_ptr(exec)?,
                             i(m.ns),
                             i(m.ne),
                             i(w),

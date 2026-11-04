@@ -105,6 +105,10 @@ pub struct ResidentInterval {
     /// usable inverse; their walker uses full-Pfaffian fallbacks.
     pub(crate) valid: DeviceBuffer,
     pub(crate) delayed_updates: bool,
+    /// Local-spin mask `[nsite]` (Julia `localspins`); `None` when there are none.
+    pub(crate) localspins: Option<DeviceBuffer>,
+    /// Julia GPU exchange probability (tape word 3).
+    pub(crate) exchange_fraction: f64,
 }
 
 impl ResidentInterval {
@@ -154,9 +158,51 @@ impl ResidentInterval {
                 })?,
                 delayed_updates: true,
                 valid,
+                localspins: None,
+                exchange_fraction: 0.0,
             })
         })
         .map_err(|e| e.to_string())
+    }
+
+    /// Select the Julia GPU proposal mix: local-spin sites (`1` entries of
+    /// `localspins`, one per site) and the exchange probability. Uploads the
+    /// mask once at setup, only when a local spin exists.
+    pub(crate) fn set_moves<B: Engine + ?Sized>(
+        &mut self,
+        backend: &mut B,
+        localspins: &[i32],
+        exchange_fraction: f64,
+    ) -> Result<(), String> {
+        if localspins.len() != self.sampler.geom.nsite
+            || localspins.iter().any(|&x| x != 0 && x != 1)
+            || !(0.0..=1.0).contains(&exchange_fraction)
+        {
+            return Err("invalid resident proposal configuration".into());
+        }
+        self.exchange_fraction = exchange_fraction;
+        self.localspins = if localspins.contains(&1) {
+            Some(
+                with_raw_exec(backend, "mvmc.resident.localspins", |exec| {
+                    let b = exec.alloc_bytes(localspins.len() * 4)?;
+                    // SAFETY: allocated with exactly the mask size.
+                    unsafe { exec.upload(exec.ptr(&b)?, localspins)? };
+                    Ok(b)
+                })
+                .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
+        Ok(())
+    }
+
+    /// Device address of the local-spin mask, or null when there are none.
+    pub(crate) fn localspin_ptr(&self, exec: &RawExec<'_, '_>) -> tenferro_tensor::Result<Arg> {
+        Ok(Arg::P(match &self.localspins {
+            Some(b) => exec.ptr(b)?,
+            None => 0,
+        }))
     }
 
     /// Generate a fresh tape on the device and advance the entire ensemble. No
@@ -264,6 +310,8 @@ impl ResidentInterval {
                         p(&self.valid)?,
                         p(&s.planes)?,
                         p(&s.pfinv_w)?,
+                        self.localspin_ptr(exec)?,
+                        Arg::D(self.exchange_fraction),
                     ],
                 )?;
                 self.enqueue_rebuild(exec, &module)?;

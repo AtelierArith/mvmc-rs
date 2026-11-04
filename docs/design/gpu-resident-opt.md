@@ -85,9 +85,29 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 ## Supported scope and checks
 
 The current runner requires real normal orbitals, conserved spin in each
-operator pair, Gutzwiller/Jastrow projection, ordinary hopping (`NExUpdatePath=0`),
-direct SR (`NSRCG=0`) and serial execution. Local spins, RBM, DH, OptTrans,
-complex/general orbitals and grouped execution return errors. Hamiltonian
+operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
+direct SR (`NSRCG=0`) and serial execution. Local spins are supported (#660).
+RBM, DH, OptTrans, complex/general orbitals, `NExUpdatePath=3` and grouped
+execution return errors.
+
+### Local spins and exchange proposals (#660)
+
+The proposal mix follows Julia GPU (`ext/cuda_runners.jl:52-58`,
+`cuda_sampling_update.jl:215-341`, pin `7314015`): the exchange probability is
+0, 0.5 or 1 for `NExUpdatePath` 0, 1 or 2, decided by tape word 3
+(`u32/2^32 < p`). This GPU contract does not reproduce the C `getUpdateType`
+draw. A hop whose source is a local-spin site is invalid, and the empty
+destination is ranked among the empty sites of that spin without a local spin.
+An exchange picks the opposite-spin partner with word 2 and is valid when both
+sites are singly occupied by opposite spins. Its overlap is recomputed from full
+Pfaffians, its projection ratio is exactly one (no charge or doublon count
+changes), and an accept refactors the walker inside the hop kernel. Any queued
+delayed updates are discarded rather than flushed, as for the #573 refactor.
+Initialization ports `initial_configuration_kernel!`: a label permutation
+assigns local-spin sites in site order, then each spin shuffles the remaining
+sites. A uniform local-spin mask is uploaded once at setup, only when a local
+spin exists; there are no new transfers during sampling. See
+`tests/fixtures/localspin/README.md` for the Julia GPU fixtures and bounds. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
 spin-conserving InterAll. Failed state reconstruction or SR is reported. The per-family
 [support matrix](gpu-resident-model-support.md) (#572) lists each rejected family,

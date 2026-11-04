@@ -22,16 +22,22 @@
 // 5*(w + W*step) + word:
 //   w0 -> source electron slot index: mi = w0 % ne
 //   w1 -> spin sector (top bit): spin = w1 >> 31
-//   w2 -> destination rank among the empty sites of that spin: rj = rank-th empty site
-//         (the Julia `empty_destinations` proposal, the default for nsite >= 64)
-//   w3 -> exchange threshold: exchange = w3/2^32 < exchange_fraction (unused here; the
-//         caller passes exchange_fraction == 0, i.e. Julia's NExUpdatePath == 0)
+//   w2 -> hop: destination rank among the empty sites of that spin without a local spin
+//         (the Julia `empty_destinations` proposal, the default for nsite >= 64);
+//         exchange: opposite-spin partner slot, w2 % ne
+//   w3 -> exchange threshold: exchange = w3/2^32 < exchange_fraction (Julia GPU
+//         0 / 0.5 / 1 for NExUpdatePath 0 / 1 / 2, cuda_runners.jl:52-58)
 //   w4 -> acceptance uniform: u = w4 / 2^32, accept when log(u) < logratio
-//   Every step consumes exactly 5 words and is a valid hop (the destination is chosen from
-//   the empty set), so the tape length is fixed and decision independent.
+//   Every step consumes exactly 5 words, valid or not, so the tape length is fixed and
+//   decision independent.
 //
-// Only the real, non-FSZ, ordinary-hopping normal mode without local spins is handled;
-// the caller rejects anything else (including exchange_fraction > 0) before launching.
+// Local spins and exchanges follow cuda_sampling_update.jl:215-341 and exist only on
+// the resident entry; the legacy entry is hopping-only without local spins. A hop
+// from a local-spin site is invalid. An exchange swaps an electron with an
+// opposite-spin partner when both sites are singly occupied. Its overlap is
+// recomputed from full Pfaffians and an accept refactors the walker, as Julia does.
+// The projection counts (doublons, charges) are unchanged by an exchange.
+// Only the real, non-FSZ normal mode is handled; the caller rejects anything else.
 
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-one ratio for one QP plane: r = -pf_qp * sum_j inv[msa*n+j] * S[rsa][rs[j]].
@@ -152,7 +158,8 @@ __device__ __forceinline__ void interval_hop_impl(
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
     int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr,
-    int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr) {
+    int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr,
+    const int* loc = nullptr) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -172,7 +179,6 @@ __device__ __forceinline__ void interval_hop_impl(
   double* v3 = v2 + n;
 
   const int n2 = 2 * nsite;
-  (void)exchange_fraction;  // hopping-only: the caller passes 0.0 (Julia NExUpdatePath == 0)
   const double* tab = slater;
   int* ele_w = ele + (size_t)w * n;
   int* occ_w = occ + (size_t)w * 2 * nsite;
@@ -196,7 +202,10 @@ __device__ __forceinline__ void interval_hop_impl(
   int* valid_w = recover ? valid + (size_t)w * nqp : nullptr;
   double* fac_w = recover ? fac + (size_t)w * nqp * n * n : nullptr;
   double* work_w = recover ? work + (size_t)w * nqp * n * n : nullptr;
-  __shared__ int s_rank;
+  // Exchanges and local spins need the resident full-Pfaffian/refactor path.
+  const double exchange_p = recover ? exchange_fraction : 0.0;
+  if (!recover) loc = nullptr;
+  __shared__ int s_rank, s_exchange, s_partner;
   if (tid == 0) {
     int all = 1;
     if (recover) for (int q = 0; q < nqp; ++q) all &= valid_w[q] != 0;
@@ -217,24 +226,36 @@ __device__ __forceinline__ void interval_hop_impl(
       const int mi = (int)(t[0] % (unsigned)ne);
       const int spin = (int)(t[1] >> 31);
       const int ri = ele_w[mi + spin * ne];
-      int count = 0;
-      for (int r = 0; r < nsite; ++r) {
-        if (occ_w[r + spin * nsite] == 0) ++count;
-      }
-      int rj = 0;
-      const int valid = count > 0;
-      if (valid) {
-        int rank = (int)(t[2] % (unsigned)count);
+      const int exchange = (double)t[3] / 4294967296.0 < exchange_p;
+      int rj = 0, valid, partner = -1;
+      if (exchange) {
+        // Julia: partner of the other spin; neither site may hold the moved spin's
+        // counterpart (cuda_sampling_update.jl:269-279).
+        partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
+        rj = ele_w[partner];
+        valid = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
+      } else {
+        // empty_hopping_destination: empty sites of this spin without a local spin.
+        int count = 0;
         for (int r = 0; r < nsite; ++r) {
-          if (occ_w[r + spin * nsite] == 0) {
-            if (rank == 0) {
-              rj = r;
-              break;
+          if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) ++count;
+        }
+        valid = count > 0 && (loc == nullptr || loc[ri] == 0);
+        if (count > 0) {
+          int rank = (int)(t[2] % (unsigned)count);
+          for (int r = 0; r < nsite; ++r) {
+            if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) {
+              if (rank == 0) {
+                rj = r;
+                break;
+              }
+              --rank;
             }
-            --rank;
           }
         }
       }
+      s_exchange = exchange;
+      s_partner = partner;
       mvw[0] = valid;
       mvw[1] = mi;
       mvw[2] = spin;
@@ -242,22 +263,31 @@ __device__ __forceinline__ void interval_hop_impl(
       mvw[4] = rj;
     }
     __syncthreads();
+    const int mi = mvw[1], spin = mvw[2], ri = mvw[3], rj = mvw[4];
+    const int exchange = s_exchange, partner = s_partner;
     if (!mvw[0]) {
+      // Invalid proposals are frequent with local spins and exchanges: every
+      // thread must read this step's move before thread 0 writes the next one.
+      __syncthreads();
       ++advanced;
       continue;
     }
-    const int mi = mvw[1], spin = mvw[2], ri = mvw[3], rj = mvw[4];
     if (tid == 0) {
       ele_w[mi + spin * ne] = rj;
       occ_w[ri + spin * nsite] = 0;
       occ_w[rj + spin * nsite] = 1;
+      if (exchange) {
+        ele_w[partner] = ri;
+        occ_w[rj + (1 - spin) * nsite] = 0;
+        occ_w[ri + (1 - spin) * nsite] = 1;
+      }
     }
     __syncthreads();
     const int msa = mi + spin * ne;
     for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= ne ? nsite : 0);
     __syncthreads();
 
-    if (resident && !s_rank) {
+    if (resident && (!s_rank || exchange)) {
       // Julia cooperative_overlap!: every plane from the candidate sites.
       for (int q = 0; q < nqp; ++q) {
         resident_gather(fac_w, rs, n, -1, -1, tab, q, n2);
@@ -294,8 +324,9 @@ __device__ __forceinline__ void interval_hop_impl(
       double ip_new = 0.0;
       for (int q = 0; q < nqp; ++q) ip_new = __dadd_rn(ip_new, __dmul_rn(weights[q], pfnew[q]));
       const double log_new = log(fabs(ip_new) + 1e-100);
-      const double proj =
-          interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
+      // An exchange keeps every site's charge and doublon count.
+      const double proj = exchange ? 0.0
+          : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
       const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
       // Keep log-space decisions for finite overlaps (including u == 0 and
@@ -309,16 +340,22 @@ __device__ __forceinline__ void interval_hop_impl(
       // The resident path refactors in this kernel; the legacy host-driven
       // path returns a rebuild request instead.
       int singular = 0;
-      if (accept && s_rank) {
+      if (accept && s_rank && !exchange) {
         for (int q = 0; q < nqp; ++q) singular |= !isfinite(pfnew[q]) || pfnew[q] == 0.0;
       }
-      mvw[7] = accept && (singular || !s_rank);
+      // Julia refactors after every accepted exchange (cuda_sampling_update.jl:341).
+      mvw[7] = accept && (singular || !s_rank || exchange);
       if (accept) {
         out[0] = log_new;
       } else {
         ele_w[mi + spin * ne] = ri;
         occ_w[ri + spin * nsite] = 1;
         occ_w[rj + spin * nsite] = 0;
+        if (exchange) {
+          ele_w[partner] = rj;
+          occ_w[rj + (1 - spin) * nsite] = 1;
+          occ_w[ri + (1 - spin) * nsite] = 0;
+        }
       }
     }
     __syncthreads();

@@ -11,8 +11,10 @@
 //! launch ([`IntervalSampler::rebuild`]) and relaunches. The recomputation stays on the device,
 //! which is what makes walker batching pay: a single block is latency-bound.
 //!
-//! The kernel's proposal/acceptance contract is in `interval_kernels.cu`. Only the real,
-//! non-FSZ, ordinary-hopping mode without local spins is represented.
+//! The kernel's proposal/acceptance contract is in `interval_kernels.cu`. This legacy
+//! host-driven entry represents only the real, non-FSZ, ordinary-hopping mode without
+//! local spins; local spins and exchanges exist on the resident entry
+//! ([`ResidentInterval`]).
 
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::Engine;
