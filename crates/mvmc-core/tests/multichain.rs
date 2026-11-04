@@ -198,7 +198,6 @@ fn multichain_scaling_report() {
         1,
         5,
         false,
-        None,
     );
     let text = format!(
         "## Multi-chain CPU scaling\n\n```\n{}```\n\nsamples per walker {samples}; scaling \

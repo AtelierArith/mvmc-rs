@@ -172,7 +172,7 @@ fn parse_c_int(option: char, text: &str) -> Result<i64, String> {
     Ok(value)
 }
 
-/// Entry point of the `mvmc` driver (the `mvmc` binary and `mvmc-cuda` both call it). Parses
+/// Entry point of the `mvmc` driver (the `mvmc` binary calls it). Parses
 /// `std::env::args`, runs, and exits the process with the C-compatible status.
 pub fn run_cli() {
     let args: Vec<String> = std::env::args().collect();
@@ -486,10 +486,9 @@ pub fn run_cli() {
             let measure = std::env::var(mvmc_core::measurement_batch::MEASURE_PF_VARIABLE).ok();
             let consumer =
                 std::env::var(mvmc_core::measurement_batch::MEASURE_CONSUMER_VARIABLE).ok();
-            let sampler = std::env::var(mvmc_core::sampler_backend::SAMPLER_BACKEND_VARIABLE).ok();
             let placement = std::env::var_os("MVMC_RS_MPI_CPUS_PER_RANK");
             let value = format!(
-                "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?};sampler={sampler:?};cpu_placement={placement:?}"
+                "sr_backend={backend:?};measure_pf={measure:?};measure_consumer={consumer:?};cpu_placement={placement:?}"
             );
             agree_controls(&value, context).err()
         });
@@ -566,7 +565,6 @@ pub fn run_cli() {
         let checked = mvmc_core::stage_backend::validate_selected_stage_backend()
             .and_then(|_| mvmc_core::measurement_batch::validate_measurement_pfaffian())
             .and_then(|_| mvmc_core::measurement_batch::validate_measurement_consumer())
-            .and_then(|_| mvmc_core::sampler_backend::validate_selected_sampler_backend())
             .map(|_| ());
         #[cfg(feature = "mpi")]
         let checked = match mpi_world.as_ref() {

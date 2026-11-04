@@ -2,8 +2,8 @@
 
 use mvmc_core::accel_validation::{replay, ReplayConfig};
 use mvmc_core::stage_backend::{
-    acquire, open_stage_backend, parse_stage_backend, set_stage_backend_override, COrderPfaffian,
-    PfaffianStages, PlaneOutcome, StageBackend, StageBackendKind, StageError,
+    acquire, parse_stage_backend, set_stage_backend_override, COrderPfaffian, PfaffianStages,
+    PlaneOutcome, StageBackend, StageBackendKind, StageError,
 };
 
 #[test]
@@ -14,16 +14,11 @@ fn selector_values_parse_and_invalid_values_are_errors() {
         parse_stage_backend("tenferro"),
         Ok(StageBackendKind::TenferroCpu)
     );
-    assert_eq!(parse_stage_backend("cuda"), Ok(StageBackendKind::Cuda(0)));
-    assert_eq!(parse_stage_backend("CUDA:3"), Ok(StageBackendKind::Cuda(3)));
-    assert!(parse_stage_backend("cuda:x").is_err());
-    assert!(parse_stage_backend("gpu").is_err());
-}
-
-#[test]
-fn cuda_is_an_error_without_a_registered_provider_never_a_fallback() {
-    let err = open_stage_backend(StageBackendKind::Cuda(0)).unwrap_err();
-    assert!(matches!(err, StageError::Unsupported(_)), "{err}");
+    // The legacy CUDA stage backend was removed (#643): its selector values are invalid.
+    for removed in ["cuda", "CUDA:3", "cuda:x", "gpu"] {
+        let err = parse_stage_backend(removed).unwrap_err();
+        assert!(err.contains("is not one of c-order, tenferro"), "{err}");
+    }
 }
 
 #[test]

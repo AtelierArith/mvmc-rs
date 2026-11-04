@@ -55,7 +55,7 @@
 //! # Stage A through the unified stage backend (issue #422, #437)
 //!
 //! By default stage A calls the C-order kernels (`calc_m_all_*`) per sample. With
-//! `MVMC_RS_MEASURE_PF_BACKEND=c-order|tenferro|cuda[:N]` (or
+//! `MVMC_RS_MEASURE_PF_BACKEND=c-order|tenferro` (or
 //! [`set_measurement_backend_override`]) the real, non-FSZ stage A instead assembles the
 //! skew-symmetric planes of the whole batch (`[n, n, NQP * B]`, the batched layout) and
 //! makes ONE call to `PfaffianStages::pfaffian_inverse_batch` of the selected
@@ -144,7 +144,7 @@ pub enum MeasurementPfaffian {
 }
 
 /// Environment variable selecting the measurement Pfaffian source (`calc-m-all` (default),
-/// `c-order`, `tenferro`, `cuda[:N]`).
+/// `c-order`, `tenferro`).
 pub const MEASURE_PF_VARIABLE: &str = "MVMC_RS_MEASURE_PF_BACKEND";
 
 /// Parse a [`MEASURE_PF_VARIABLE`] value.
@@ -155,7 +155,7 @@ pub fn parse_measurement_pfaffian(value: &str) -> Result<MeasurementPfaffian, St
             .map(MeasurementPfaffian::Stage)
             .map_err(|_| {
                 format!(
-                    "{MEASURE_PF_VARIABLE}={other:?} is not one of calc-m-all, c-order, tenferro, cuda[:N]"
+                    "{MEASURE_PF_VARIABLE}={other:?} is not one of calc-m-all, c-order, tenferro"
                 )
             }),
     }
@@ -223,7 +223,7 @@ pub enum MeasurementConsumer {
 }
 
 /// Environment variable selecting the stage B measurement consumer (`c-order` (default),
-/// `direct`, `tenferro`, `cuda[:N]`).
+/// `direct`, `tenferro`).
 pub const MEASURE_CONSUMER_VARIABLE: &str = "MVMC_RS_MEASURE_BACKEND";
 
 /// Parse a [`MEASURE_CONSUMER_VARIABLE`] value.
@@ -237,7 +237,7 @@ pub fn parse_measurement_consumer(value: &str) -> Result<MeasurementConsumer, St
             .map(MeasurementConsumer::Stage)
             .map_err(|_| {
                 format!(
-                    "{MEASURE_CONSUMER_VARIABLE}={other:?} is not one of direct, c-order, tenferro, cuda[:N]"
+                    "{MEASURE_CONSUMER_VARIABLE}={other:?} is not one of direct, c-order, tenferro"
                 )
             }),
     }
@@ -997,11 +997,9 @@ mod tests {
             parse_measurement_pfaffian("c-order"),
             Ok(MeasurementPfaffian::Stage(StageBackendKind::COrder))
         );
-        assert_eq!(
-            parse_measurement_pfaffian("cuda:1"),
-            Ok(MeasurementPfaffian::Stage(StageBackendKind::Cuda(1)))
-        );
-        assert!(parse_measurement_pfaffian("nope").is_err());
+        for removed in ["nope", "cuda", "cuda:1"] {
+            assert!(parse_measurement_pfaffian(removed).is_err(), "{removed}");
+        }
     }
 
     #[test]
@@ -1023,11 +1021,9 @@ mod tests {
             parse_measurement_consumer("tenferro"),
             Ok(MeasurementConsumer::Stage(StageBackendKind::TenferroCpu))
         );
-        assert_eq!(
-            parse_measurement_consumer("cuda:1"),
-            Ok(MeasurementConsumer::Stage(StageBackendKind::Cuda(1)))
-        );
-        assert!(parse_measurement_consumer("nope").is_err());
+        for removed in ["nope", "cuda", "cuda:1"] {
+            assert!(parse_measurement_consumer(removed).is_err(), "{removed}");
+        }
     }
 
     /// Stage A writes whole planes through the revalidating full-overwrite writer, so a slot

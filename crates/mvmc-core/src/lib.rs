@@ -19,7 +19,6 @@ mod julia_fixture;
 
 pub mod accel_validation;
 pub mod average;
-pub mod backend;
 mod c_complex;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod c_complex_gnu;
@@ -41,7 +40,6 @@ pub mod mpi;
 pub mod multichain;
 pub mod multidef;
 pub use pfapack::julia_complex;
-pub mod device_sampler;
 pub mod observables;
 pub mod output_files;
 pub mod parallel;
@@ -52,7 +50,6 @@ pub mod pfaffian;
 pub mod qp;
 pub mod reducer;
 pub mod run;
-pub mod sampler_backend;
 pub mod sampling;
 mod serial_blas;
 mod slater_derivative;
@@ -93,7 +90,6 @@ pub use run::{
     OptimizationOptions, PhysCalCallback, PhysCalPreparation, PhysCalResult, PhysCalRunOptions,
     RunConfig, RunSummary, StepCallback, FALLBACK_SEED,
 };
-pub use sampler_backend::{SamplerBackendKind, SamplerStages};
 pub use sampling::driver::{vmc_make_sample, vmc_make_sample_real, SampleStats};
 pub use state::{
     ElectronConfiguration, EnergyData, InvMColMajor, OptDataPoint, PfaPackMode, PfaPackWorkspace,

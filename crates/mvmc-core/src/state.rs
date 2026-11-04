@@ -207,7 +207,7 @@ impl<T: TensorScalar + PartialEq> PartialEq for SlaterElmFlat<T> {
 ///
 /// # Staleness (issue #454)
 ///
-/// A device-resident sampler (`device_sampler`) holds the current inverses on the accelerator
+/// A device-resident consumer holds the current inverses on the accelerator
 /// and leaves the host table out of date. [`Self::mark_stale`] records that per QP plane;
 /// every read of a stale plane (`as_slice`, `get`, `qp_matrix_slice`, `pad_slot`, the plane
 /// views) and every incremental update (`as_mut_slice`) **panics** with the reason instead of

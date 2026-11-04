@@ -639,10 +639,6 @@ pub struct BenchMetadata {
     pub cpu: String,
     /// Logical CPUs.
     pub cpu_threads_available: usize,
-    /// GPU description (`none` for CPU runs).
-    pub gpu: String,
-    /// Driver/CUDA/cuBLAS/cuSOLVER versions (`none` for CPU runs).
-    pub gpu_libraries: String,
     /// Operating system and architecture.
     pub os: String,
     /// `rustc --version` used to build this crate.
@@ -689,7 +685,7 @@ fn cpu_model() -> String {
 }
 
 impl BenchMetadata {
-    /// Collect the metadata for a run. `gpu` is the device report for CUDA runs.
+    /// Collect the metadata for a run.
     pub fn collect(
         provider: &str,
         dtype: &str,
@@ -697,29 +693,8 @@ impl BenchMetadata {
         warmups: usize,
         iterations: usize,
         transfers_included: bool,
-        gpu: Option<&crate::backend::DeviceReport>,
     ) -> Self {
         let env = |k: &str| std::env::var(k).unwrap_or_else(|_| "unset".to_string());
-        let (gpu_name, gpu_libs) = match gpu {
-            Some(r) => (
-                format!(
-                    "{} (cc {}, {} bytes)",
-                    r.device.as_deref().unwrap_or("unavailable"),
-                    r.compute_capability.as_deref().unwrap_or("unavailable"),
-                    r.total_memory_bytes
-                        .map_or("unavailable".to_string(), |b| b.to_string())
-                ),
-                format!(
-                    "driver {} cuda-driver-api {} nvrtc {} cublas {} cusolver {}",
-                    r.driver_version.as_deref().unwrap_or("unavailable"),
-                    r.cuda_driver_api.as_deref().unwrap_or("unavailable"),
-                    r.nvrtc_version.as_deref().unwrap_or("unavailable"),
-                    r.cublas_version.as_deref().unwrap_or("unavailable"),
-                    r.cusolver_version.as_deref().unwrap_or("unavailable"),
-                ),
-            ),
-            None => ("none".to_string(), "none".to_string()),
-        };
         let os_release = std::fs::read_to_string("/etc/os-release")
             .ok()
             .and_then(|t| {
@@ -737,8 +712,6 @@ impl BenchMetadata {
                 .unwrap_or_else(|| "unknown".to_string()),
             cpu: cpu_model(),
             cpu_threads_available: std::thread::available_parallelism().map_or(1, |n| n.get()),
-            gpu: gpu_name,
-            gpu_libraries: gpu_libs,
             os: format!(
                 "{os_release} ({}-{})",
                 std::env::consts::OS,
@@ -764,14 +737,12 @@ impl BenchMetadata {
     /// `key=value` lines.
     pub fn render(&self) -> String {
         format!(
-            "revision={}\ncpu={}\ncpu_threads_available={}\ngpu={}\ngpu_libraries={}\nos={}\n\
+            "revision={}\ncpu={}\ncpu_threads_available={}\nos={}\n\
              rustc={}\ntenferro={}\nprovider={}\nthreads={}\ndtype={}\nbatch={}\nwarmups={}\n\
              iterations={}\ntransfers_included={}\n",
             self.revision,
             self.cpu,
             self.cpu_threads_available,
-            self.gpu,
-            self.gpu_libraries,
             self.os,
             self.rustc,
             self.tenferro,
@@ -1029,20 +1000,11 @@ mod tests {
 
     #[test]
     fn metadata_lists_every_required_field() {
-        let m = BenchMetadata::collect(
-            "p",
-            "f64",
-            1,
-            DEFAULT_WARMUPS,
-            DEFAULT_ITERATIONS,
-            true,
-            None,
-        );
+        let m = BenchMetadata::collect("p", "f64", 1, DEFAULT_WARMUPS, DEFAULT_ITERATIONS, true);
         let text = m.render();
         for key in [
             "revision=",
             "cpu=",
-            "gpu=",
             "os=",
             "rustc=",
             "tenferro=",
