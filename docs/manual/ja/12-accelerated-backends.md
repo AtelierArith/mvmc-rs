@@ -78,7 +78,7 @@ MVMC_RS_CUDA_IMAGE=my/cuda:tag scripts/run_cuda_gate.sh docker
 ```
 
 - `docker` コマンドがあれば `docker` がデフォルトです。デフォルトのイメージは `tenferro-benchmark-cuda:full-verify-20260822`(CUDA 12.9.2)で、`MVMC_RS_CUDA_IMAGE` で変更できます。ホストの `~/.rustup` と `~/.cargo` をマウントするため、イメージに Rust ツールチェーンは不要です。スクリプトはコンテナ内で(root として)OpenBLAS/LAPACK をインストールし、その後ユーザー ID に切り替えるので、`target/` のファイルの所有者はホストのままです。Cargo のターゲットは `gpu/mvmc-gpu-cuda/target` に置かれます。
-- **フェイルクローズド。** `MVMC_RS_CUDA_GATE=1`(または `require`)でデバイスがなければハードな失敗です。変数が未設定でデバイスがなければ、テストは `cuda-gate: ExplicitSkip: skipped, no device (...)` を出力し、これは合格では*ありません*(`cuda_gate_decision`、`crates/mvmc-core/src/backend.rs:232`)。スクリプトは常にこの変数を `1` にします。
+- **フェイルクローズド。** `scripts/run_cuda_gate.sh` はテストの前に `nvidia-smi -L` がデバイスを列挙できることを要求します。デバイスがなければハードな失敗で、合格にはなりません。
 - **レポート。** 結果は `gpu/mvmc-gpu-cuda/results/` に書かれます(`cuda-gate.md`、`cuda-validation.md`、`cuda-roundtrip.md`、`cuda-transfer.md`。`MVMC_RS_CUDA_GATE_OUT`、`..._VALIDATION_OUT`、`..._ROUNDTRIP_OUT`、`..._TRANSFER_OUT` で変更可能。このディレクトリはバージョン管理の対象外)。各レポートには、デバイス、compute capability、メモリ、ドライバ(NVML)、CUDA ドライバ API、NVRTC、cuBLAS、cuSOLVER、tenferro のバージョンが記録されます(`DeviceReport`。取得できない項目は `unavailable` と表示)。
 - **CI。** optional-gates ワークフローの入力 `cuda_gate` が、セルフホストランナー(`self-hosted, linux, x64, gpu`。ラベルは仮)でジョブ `cuda-gate` を起動します。これは bounded-family 台帳の外にあり、選択されなければ NotRun、デバイスがなければジョブは失敗します。ホステッドランナーには GPU がないので、デフォルトの CI がこれを実行することはありません([OPTIONAL_GATES_DISPATCH.md](../../OPTIONAL_GATES_DISPATCH.md) の「CUDA gate (#420)」)。
 
