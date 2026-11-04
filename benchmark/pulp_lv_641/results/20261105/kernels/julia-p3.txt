@@ -1,0 +1,22 @@
+n=128 rounds=15 julia=1.13.1 cpu=haswell threads=1
+LoopVectorization=0.12.174 VectorizationBase=0.21.74 register_size=static(32) bytes, pick_vector_width(Float64)=static(4), fma=static(true) avx512f=static(false)
+BLAS: LBTConfig([ILP64] libopenblas64_.so)
+check	K1 simd	steps=64	residual=8.071728141922294e-12
+check	K1 turbo	steps=64	residual=6.570885551916323e-12	bits_differ_vs_simd=16384/16384	max_rel_vs_simd=8.463874801156786e-13
+## K1 update_one_real (copy+kernel)
+K1 update_one_real (copy+kernel)	copy-only	median_ns=4890.3	min_ns=4876.0	rounds=15
+K1 update_one_real (copy+kernel)	julia-simd(mVMC form)	median_ns=13018.1	min_ns=12903.2	rounds=15
+K1 update_one_real (copy+kernel)	julia-turbo	median_ns=12792.1	min_ns=12711.2	rounds=15
+check	K2 turbo	bits_differ_vs_simd=1414/16384	max_rel_vs_simd=6.357193054605562e-16
+## K2 dsktf2 rank-2 sweep (copy+kernel)
+K2 dsktf2 rank-2 sweep (copy+kernel)	copy-only	median_ns=5535.4	min_ns=5510.5	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	julia-simd(PfaPack form)	median_ns=73190.4	min_ns=72566.0	rounds=15
+K2 dsktf2 rank-2 sweep (copy+kernel)	julia-turbo	median_ns=63811.5	min_ns=63499.6	rounds=15
+check	K3 turbo	bitwise_equal=false	rel=3.7655582816345954e-16
+## K3 two_hop_bilinear
+K3 two_hop_bilinear	julia-plain(C order)	median_ns=12091.3	min_ns=12053.2	rounds=15
+K3 two_hop_bilinear	julia-turbo	median_ns=1894.5	min_ns=1883.9	rounds=15
+check	K4 turbo	bits_differ_vs_plain=13263/16384
+## K4 solve_sktd
+K4 solve_sktd	julia-plain(per column)	median_ns=126646.9	min_ns=125979.5	rounds=15
+K4 solve_sktd	julia-turbo(across columns)	median_ns=62513.1	min_ns=62186.9	rounds=15

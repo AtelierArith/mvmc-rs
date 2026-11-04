@@ -1,0 +1,291 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 0a7dcf83..d38b3997 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -838,6 +838,7 @@ dependencies = [
+  "ndarray",
+  "num-complex",
+  "pfapack",
++ "pulp",
+  "rayon",
+  "serde_json",
+  "sfmt19937",
+diff --git a/crates/mvmc-core/Cargo.toml b/crates/mvmc-core/Cargo.toml
+index c3792c58..c0409018 100644
+--- a/crates/mvmc-core/Cargo.toml
++++ b/crates/mvmc-core/Cargo.toml
+@@ -13,6 +13,7 @@ default = []
+ mpi = ["dep:mpi"]
+ 
+ [dependencies]
++pulp = { version = "0.22.2" }
+ sfmt19937 = { workspace = true }
+ pfapack = { workspace = true, features = ["blas-backend"] }
+ mvmc-expert-parsers = { workspace = true }
+diff --git a/crates/mvmc-core/src/sampling/updates.rs b/crates/mvmc-core/src/sampling/updates.rs
+index 9e3abb31..d1db055a 100644
+--- a/crates/mvmc-core/src/sampling/updates.rs
++++ b/crates/mvmc-core/src/sampling/updates.rs
+@@ -1090,6 +1090,18 @@ fn update_one_real(
+     n_size: usize,
+     pf: &mut f64,
+ ) {
++    if n_size >= 16 {
++        pulp::Arch::new().dispatch(K1Pulp::<false> {
++            msa,
++            inv: &mut inv[base..base + n_size * n_size],
++            slt: &slt_vec[..n_size],
++            vec1: &mut vec1[..n_size],
++            vec2: &mut vec2[..n_size],
++            n: n_size,
++            pf,
++        });
++        return;
++    }
+     #[cfg(target_arch = "x86_64")]
+     if n_size >= 16 && std::is_x86_feature_detected!("avx2") {
+         // Runtime detection guards the target feature. The validated slices
+@@ -2056,3 +2068,117 @@ mod tests {
+         }
+     }
+ }
++
++// EXPERIMENT #641 (not for merge): pulp port of update_one_real_avx2.
++use pulp::{Simd, WithSimd};
++
++#[inline(always)]
++unsafe fn ld<S: Simd>(p: *const f64) -> S::f64s {
++    (p as *const S::f64s).read_unaligned()
++}
++#[inline(always)]
++unsafe fn st<S: Simd>(p: *mut f64, v: S::f64s) {
++    (p as *mut S::f64s).write_unaligned(v)
++}
++struct K1Pulp<'a, const FMA: bool> {
++    msa: usize,
++    inv: &'a mut [f64],
++    slt: &'a [f64],
++    vec1: &'a mut [f64],
++    vec2: &'a mut [f64],
++    n: usize,
++    pf: &'a mut f64,
++}
++
++impl<const FMA: bool> WithSimd for K1Pulp<'_, FMA> {
++    type Output = ();
++    #[inline(always)]
++    fn with_simd<S: Simd>(self, simd: S) {
++        let Self { msa, inv, slt, vec1, vec2, n, pf } = self;
++        assert!(inv.len() >= n * n && slt.len() >= n && vec1.len() >= n && vec2.len() >= n);
++        let l = S::F64_LANES;
++        let p = inv.as_mut_ptr();
++        let zero = simd.splat_f64s(0.0);
++        #[inline(always)]
++        fn acc<S: Simd, const FMA: bool>(simd: S, a: S::f64s, x: S::f64s, s: S::f64s) -> S::f64s {
++            if FMA {
++                simd.mul_add_e_f64s(x, s, a)
++            } else {
++                simd.add_f64s(a, simd.mul_f64s(x, s))
++            }
++        }
++        unsafe {
++            let mut i = 0;
++            while i + 4 * l <= n {
++                let (mut a0, mut a1, mut a2, mut a3) = (zero, zero, zero, zero);
++                for j in 0..n {
++                    let s = simd.splat_f64s(*slt.get_unchecked(j));
++                    let c = p.add(j * n + i);
++                    a0 = acc::<S, FMA>(simd, a0, simd.neg_f64s(ld::<S>(c)), s);
++                    a1 = acc::<S, FMA>(simd, a1, simd.neg_f64s(ld::<S>(c.add(l))), s);
++                    a2 = acc::<S, FMA>(simd, a2, simd.neg_f64s(ld::<S>(c.add(2 * l))), s);
++                    a3 = acc::<S, FMA>(simd, a3, simd.neg_f64s(ld::<S>(c.add(3 * l))), s);
++                }
++                let o = vec1.as_mut_ptr().add(i);
++                st::<S>(o, a0);
++                st::<S>(o.add(l), a1);
++                st::<S>(o.add(2 * l), a2);
++                st::<S>(o.add(3 * l), a3);
++                i += 4 * l;
++            }
++            while i + l <= n {
++                let mut a = zero;
++                for j in 0..n {
++                    let s = simd.splat_f64s(*slt.get_unchecked(j));
++                    a = acc::<S, FMA>(simd, a, simd.neg_f64s(ld::<S>(p.add(j * n + i))), s);
++                }
++                st::<S>(vec1.as_mut_ptr().add(i), a);
++                i += l;
++            }
++            for k in i..n {
++                let mut a = 0.0;
++                for j in 0..n {
++                    let x = -*p.add(j * n + k);
++                    a = if FMA { x.mul_add(slt[j], a) } else { a + x * slt[j] };
++                }
++                vec1[k] = a;
++            }
++        }
++        let tmp = vec1[msa];
++        *pf *= -tmp;
++        let inv_vec1_a = -1.0 / tmp;
++        for k in 0..n {
++            vec2[k] = inv[msa * n + k] * inv_vec1_a;
++        }
++        unsafe {
++            let (v1p, v2p) = (vec1.as_ptr(), vec2.as_ptr());
++            for msi in 0..n {
++                let row = p.add(msi * n);
++                let (v1s, v2s) = (*v1p.add(msi), *v2p.add(msi));
++                let (v1i, v2i) = (simd.splat_f64s(v1s), simd.splat_f64s(v2s));
++                let mut j = 0;
++                while j + l <= n {
++                    let x = ld::<S>(row.add(j));
++                    let v1 = ld::<S>(v1p.add(j));
++                    let v2 = ld::<S>(v2p.add(j));
++                    let r = if FMA {
++                        let t = simd.mul_add_e_f64s(simd.neg_f64s(v1), v2i, x);
++                        simd.mul_add_e_f64s(v1i, v2, t)
++                    } else {
++                        simd.add_f64s(x, simd.sub_f64s(simd.mul_f64s(v1i, v2), simd.mul_f64s(v1, v2i)))
++                    };
++                    st::<S>(row.add(j), r);
++                    j += l;
++                }
++                for k in j..n {
++                    *row.add(k) += v1s * *v2p.add(k) - *v1p.add(k) * v2s;
++                }
++                *row.add(msa) -= v2s;
++            }
++        }
++        for k in 0..n {
++            inv[msa * n + k] += vec2[k];
++        }
++    }
++}
++
+diff --git a/crates/pfapack/Cargo.toml b/crates/pfapack/Cargo.toml
+index 8f785daa..36a20f46 100644
+--- a/crates/pfapack/Cargo.toml
++++ b/crates/pfapack/Cargo.toml
+@@ -11,6 +11,7 @@ repository.workspace = true
+ publish = false
+ 
+ [dependencies]
++pulp_exp = { package = "pulp", version = "0.22.2" }
+ num-complex = { workspace = true }
+ pulp = { workspace = true, optional = true }
+ blas = { workspace = true, optional = true }
+diff --git a/crates/pfapack/src/ltl.rs b/crates/pfapack/src/ltl.rs
+index aa9791b4..b2ac3136 100644
+--- a/crates/pfapack/src/ltl.rs
++++ b/crates/pfapack/src/ltl.rs
+@@ -667,6 +667,13 @@ unsafe fn update_upper_rank2_f64_c_order_avx2(
+ fn update_upper_rank2_f64_c_order(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
+     #[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
+     {
++        {
++            check_update_upper_rank2_args(data, lda, kk0, k0);
++            let (w, y, x) = split_update_upper_rank2_cols(data, lda, kk0, k0);
++            pulp_exp::run(w, y, x, lda, kk0, alpha);
++            return;
++        }
++        #[allow(unreachable_code)]
+         if std::arch::is_x86_feature_detected!("avx2") {
+             check_update_upper_rank2_args(data, lda, kk0, k0);
+             let (w, y, x) = split_update_upper_rank2_cols(data, lda, kk0, k0);
+@@ -945,3 +952,95 @@ mod tests {
+         }
+     }
+ }
++
++// EXPERIMENT #641 (not for merge): pulp port of update_upper_rank2_f64_c_order_avx2.
++#[allow(unsafe_code, missing_docs)]
++mod pulp_exp {
++use pulp_exp::{Simd, WithSimd};
++
++#[inline(always)]
++unsafe fn ld<S: Simd>(p: *const f64) -> S::f64s {
++    (p as *const S::f64s).read_unaligned()
++}
++#[inline(always)]
++unsafe fn st<S: Simd>(p: *mut f64, v: S::f64s) {
++    (p as *mut S::f64s).write_unaligned(v)
++}
++struct K2Pulp<'a, const FMA: bool> {
++    w: &'a mut [f64],
++    y: &'a [f64],
++    x: &'a [f64],
++    lda: usize,
++    kk0: usize,
++    alpha: f64,
++}
++
++impl<const FMA: bool> WithSimd for K2Pulp<'_, FMA> {
++    type Output = ();
++    #[inline(always)]
++    fn with_simd<S: Simd>(self, simd: S) {
++        let Self { w, y, x, lda, kk0, alpha } = self;
++        assert!(w.len() >= kk0 * lda && y.len() >= kk0 && x.len() >= kk0);
++        let l = S::F64_LANES;
++        #[inline(always)]
++        fn upd<S: Simd, const FMA: bool>(simd: S, c: S::f64s, xv: S::f64s, yv: S::f64s, t1: S::f64s, t2: S::f64s) -> S::f64s {
++            if FMA {
++                simd.mul_add_e_f64s(simd.neg_f64s(yv), t2, simd.mul_add_e_f64s(xv, t1, c))
++            } else {
++                simd.sub_f64s(simd.add_f64s(c, simd.mul_f64s(xv, t1)), simd.mul_f64s(yv, t2))
++            }
++        }
++        #[inline(always)]
++        fn finish<S: Simd, const FMA: bool>(simd: S, col: &mut [f64], x: &[f64], y: &[f64], mut i: usize, len: usize, t1: S::f64s, t2: S::f64s) {
++            let l = S::F64_LANES;
++            unsafe {
++                while i + l <= len {
++                    let r = upd::<S, FMA>(simd, ld::<S>(col.as_ptr().add(i)), ld::<S>(x.as_ptr().add(i)), ld::<S>(y.as_ptr().add(i)), t1, t2);
++                    st::<S>(col.as_mut_ptr().add(i), r);
++                    i += l;
++                }
++            }
++            if i < len {
++                let c = simd.partial_load_f64s(&col[i..len]);
++                let xv = simd.partial_load_f64s(&x[i..len]);
++                let yv = simd.partial_load_f64s(&y[i..len]);
++                simd.partial_store_f64s(&mut col[i..len], upd::<S, FMA>(simd, c, xv, yv, t1, t2));
++            }
++        }
++        let mut j = 0;
++        while j + 1 < kk0 {
++            let (ta1, ta2) = (simd.splat_f64s(alpha * y[j]), simd.splat_f64s(alpha * x[j]));
++            let (tb1, tb2) = (simd.splat_f64s(alpha * y[j + 1]), simd.splat_f64s(alpha * x[j + 1]));
++            let (ca, cb) = w[j * lda..(j + 2) * lda].split_at_mut(lda);
++            let mut i = 0;
++            unsafe {
++                while i + l <= j {
++                    let xv = ld::<S>(x.as_ptr().add(i));
++                    let yv = ld::<S>(y.as_ptr().add(i));
++                    let ra = upd::<S, FMA>(simd, ld::<S>(ca.as_ptr().add(i)), xv, yv, ta1, ta2);
++                    let rb = upd::<S, FMA>(simd, ld::<S>(cb.as_ptr().add(i)), xv, yv, tb1, tb2);
++                    st::<S>(ca.as_mut_ptr().add(i), ra);
++                    st::<S>(cb.as_mut_ptr().add(i), rb);
++                    i += l;
++                }
++            }
++            finish::<S, FMA>(simd, ca, x, y, i, j, ta1, ta2);
++            ca[j] = 0.0;
++            finish::<S, FMA>(simd, cb, x, y, i, j + 1, tb1, tb2);
++            cb[j + 1] = 0.0;
++            j += 2;
++        }
++        if j < kk0 {
++            let (t1, t2) = (simd.splat_f64s(alpha * y[j]), simd.splat_f64s(alpha * x[j]));
++            let col = &mut w[j * lda..(j + 1) * lda];
++            finish::<S, FMA>(simd, col, x, y, 0, j, t1, t2);
++            col[j] = 0.0;
++        }
++    }
++}
++
++
++pub(super) fn run(w: &mut [f64], y: &[f64], x: &[f64], lda: usize, kk0: usize, alpha: f64) {
++    pulp_exp::Arch::new().dispatch(K2Pulp::<false> { w, y, x, lda, kk0, alpha });
++}
++}
