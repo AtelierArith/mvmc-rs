@@ -1,4 +1,4 @@
-# Standalone, opt-in workspace for the tenferro CUDA backend (issue #420).
+# Standalone, opt-in workspace for the device-resident CUDA GPU Opt/PhysCal (issues #420, #574).
 #
 # Kept outside the root workspace on purpose: enabling tenferro-gpu's `cuda` feature adds
 # ~2000 lines (cubecl, cudarc, ...) to the lock file even as an optional dependency, which
@@ -10,16 +10,14 @@
 [package]
 name = "mvmc-gpu-cuda"
 version = "0.0.0"
-description = "tenferro CUDA backend provider, device report and optional gate for mvmc-rs"
+description = "Device-resident CUDA GPU Opt and PhysCal runners for mvmc-rs"
 license = "GPL-3.0-or-later"
 edition = "2021"
 publish = false
 
 [dependencies]
-mvmc-core = { path = "../../crates/mvmc-core", features = ["gpu-cuda"] }
+mvmc-core = { path = "../../crates/mvmc-core" }
 mvmc-expert-parsers = { path = "../../crates/mvmc-expert-parsers" }
-mvmc-gpu = { path = "../../crates/mvmc-gpu" }
-mvmc-cli = { path = "../../crates/mvmc-cli", features = ["gpu-cuda"] }
 sfmt19937 = { path = "../../crates/sfmt19937" }
 # Versions must match the root workspace (crates.io 0.8.0; the git revisions used by
 # tenferro-decision-rs have a different with_backend_session signature, tenferro #1971).
@@ -28,17 +26,16 @@ tenferro-gpu = { version = "0.8.0", features = ["cuda"] }
 # single-stream raw CUDA execution helper (`with_raw_exec`/`RawExec`) is compiled
 # (issue #547). See gpu/tenferro-ext/README.md.
 tenferro-ext = { path = "../tenferro-ext" }
-tenferro-ad = { version = "0.8.0", features = ["cuda"] }
-tenferro-linalg = { version = "0.8.0", features = ["cuda", "autodiff"] }
 tenferro-tensor = { version = "0.8.0", default-features = false }
-tenferro-runtime = { version = "0.8.0", default-features = false }
-tenferro-internal-ops = { version = "0.8.0", default-features = false }
-tenferro-cpu = { version = "0.8.0", default-features = false, features = ["native"] }
 num-complex = "0.4"
 libloading = "0.8"
-# Same version and features as tenferro-gpu's own cudarc (one copy in the lock): pinned host
-# memory, streams and events for the transfer helper of issue #432.
+# Same version and features as tenferro-gpu's own cudarc (one copy in the lock); the resident
+# PhysCal worker uses its driver API to report the active device context.
 cudarc = { version = "0.19", default-features = false, features = ["driver", "nvrtc", "cublas", "cusolver", "curand", "dynamic-loading", "cuda-12080"] }
+
+[dev-dependencies]
+# CPU batched Pfaffian reference of the resident interval tests.
+mvmc-gpu = { path = "../../crates/mvmc-gpu" }
 
 # Linking tenferro can exhaust hosted-runner disk: keep debuginfo off.
 [profile.dev]

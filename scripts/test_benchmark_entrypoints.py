@@ -37,7 +37,7 @@ class BenchmarkEntrypoints(unittest.TestCase):
                 bench.select_gpu(query, None, visible)
 
     def test_inherited_selectors_cannot_change_benchmark_work(self):
-        with patch.dict(os.environ, {'MVMC_RS_MEASURE_BACKEND': 'cuda',
+        with patch.dict(os.environ, {'MVMC_RS_MEASURE_BACKEND': 'tenferro',
                                     'MVMC_RS_INNER_THRESHOLD': '999999',
                                     'MVMC_RS_INNER_PROFILE': '1',
                                     'JULIA_MVMC_INNER_THREADS': '16'}):
@@ -100,6 +100,8 @@ class BenchmarkEntrypoints(unittest.TestCase):
         self.assertEqual(cmd[-4:], ['16', '1', '128', '128'])
         self.assertEqual(stdin, '0\n1\nquit\n')
         self.assertNotIn('MVMC_RS_CUDA_RNG', env)
+        for selector in ('SAMPLER', 'SR', 'MEASURE', 'MEASURE_PF'):
+            self.assertNotIn(f'MVMC_RS_{selector}_BACKEND', env)
         self.assertIn('XORWOW', metadata['gpu_rng'])
         self.assertEqual(len(rows), 4)
 

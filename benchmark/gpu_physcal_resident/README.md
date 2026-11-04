@@ -1,5 +1,11 @@
 # Resident GPU PhysCal on L128 (#636)
 
+> **Historical record (#643).** The legacy C-order GPU `StageBackend` route measured here
+> (`MVMC_RS_*_BACKEND=cuda`, `mvmc-cuda` as a CPU-runner wrapper, and the examples and
+> harness scripts named below) was removed in #643. The recorded results are kept unchanged as
+> historical evidence; the commands below no longer run. Current GPU work uses the
+> device-resident Opt/PhysCal runners, measured with `scripts/benchmark_gpu.sh`.
+
 The explicit resident PhysCal API measures **0.554 s**, versus **0.717 s** for
 Julia GPU on the same RTX 3060. The existing single-SFMT API measures 2.488 s.
 The new API and `mvmc-cuda resident-physcal` use Julia-compatible XORWOW walker

@@ -638,18 +638,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "mvmc-cli"
-version = "0.0.0"
-dependencies = [
- "mvmc-core",
- "mvmc-expert-parsers",
- "mvmc-stdface",
- "mvmc-uhf",
- "sfmt19937",
- "tracing",
-]
-
-[[package]]
 name = "mvmc-core"
 version = "0.0.0"
 dependencies = [
@@ -703,35 +691,14 @@ version = "0.0.0"
 dependencies = [
  "cudarc",
  "libloading 0.8.9",
- "mvmc-cli",
  "mvmc-core",
  "mvmc-expert-parsers",
  "mvmc-gpu",
  "num-complex",
  "sfmt19937",
- "tenferro-ad",
- "tenferro-cpu",
  "tenferro-ext",
  "tenferro-gpu",
- "tenferro-internal-ops",
- "tenferro-linalg",
- "tenferro-runtime",
  "tenferro-tensor",
-]
-
-[[package]]
-name = "mvmc-stdface"
-version = "0.0.0"
-
-[[package]]
-name = "mvmc-uhf"
-version = "0.0.0"
-dependencies = [
- "blas",
- "lapack",
- "num-complex",
- "sfmt19937",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1459,7 +1426,6 @@ dependencies = [
  "num-complex",
  "num-traits",
  "tenferro-cpu",
- "tenferro-gpu",
  "tenferro-internal-ops",
  "tenferro-runtime",
  "tenferro-tensor",
@@ -1630,8 +1596,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b325a560b14e1e5ddbd02b9409200b9a041cc8c8daf65fa648eff1ccda041914"
 dependencies = [
  "computegraph",
- "cudarc",
- "libloading 0.8.9",
  "num-complex",
  "num-traits",
  "strided-view",
@@ -1639,7 +1603,6 @@ dependencies = [
  "tcontract-exec",
  "tenferro-ad",
  "tenferro-cpu",
- "tenferro-gpu",
  "tenferro-internal-extension-macros",
  "tenferro-internal-ops",
  "tenferro-runtime",
