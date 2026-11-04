@@ -1166,25 +1166,54 @@ unsafe fn update_one_real_avx2(
     pf: &mut f64,
 ) {
     use std::arch::x86_64::*;
-    vec1.fill(0.0);
-    for (column, &slt) in inv.chunks_exact(n).zip(slt_vec) {
-        let s = _mm256_set1_pd(slt);
-        let sign = _mm256_set1_pd(-0.0);
-        let mut i = 0;
-        while i + 4 <= n {
-            // i..i+4 lies within the n-element slices. Toggle the sign before
-            // multiplication, matching the scalar unary minus including zero.
-            let x = _mm256_xor_pd(_mm256_loadu_pd(column.as_ptr().add(i)), sign);
-            let v = _mm256_loadu_pd(vec1.as_ptr().add(i));
-            _mm256_storeu_pd(
-                vec1.as_mut_ptr().add(i),
-                _mm256_add_pd(v, _mm256_mul_pd(x, s)),
-            );
-            i += 4;
+    assert!(inv.len() >= n * n && slt_vec.len() >= n && vec1.len() >= n);
+    // vec1[i] = sum_j -invM[j][i] * slt[j], accumulated from +0.0 in increasing j for
+    // every element, exactly as the column-by-column C loop. Holding a block of
+    // vec1 in registers across all columns (instead of loading and storing vec1
+    // for each column) keeps that per-element order and is bitwise identical.
+    let column0 = inv.as_ptr();
+    let sign = _mm256_set1_pd(-0.0);
+    let mut i = 0;
+    while i + 16 <= n {
+        let (mut a0, mut a1) = (_mm256_setzero_pd(), _mm256_setzero_pd());
+        let (mut a2, mut a3) = (_mm256_setzero_pd(), _mm256_setzero_pd());
+        for (j, &slt) in slt_vec[..n].iter().enumerate() {
+            // Elements i..i+16 of column j lie within the n*n matrix slice.
+            // Toggle the sign before multiplication, matching the scalar
+            // unary minus including zero.
+            let s = _mm256_set1_pd(slt);
+            let c = column0.add(j * n + i);
+            let x0 = _mm256_xor_pd(_mm256_loadu_pd(c), sign);
+            let x1 = _mm256_xor_pd(_mm256_loadu_pd(c.add(4)), sign);
+            let x2 = _mm256_xor_pd(_mm256_loadu_pd(c.add(8)), sign);
+            let x3 = _mm256_xor_pd(_mm256_loadu_pd(c.add(12)), sign);
+            a0 = _mm256_add_pd(a0, _mm256_mul_pd(x0, s));
+            a1 = _mm256_add_pd(a1, _mm256_mul_pd(x1, s));
+            a2 = _mm256_add_pd(a2, _mm256_mul_pd(x2, s));
+            a3 = _mm256_add_pd(a3, _mm256_mul_pd(x3, s));
         }
-        for j in i..n {
-            vec1[j] += -column[j] * slt;
+        let out = vec1.as_mut_ptr().add(i);
+        _mm256_storeu_pd(out, a0);
+        _mm256_storeu_pd(out.add(4), a1);
+        _mm256_storeu_pd(out.add(8), a2);
+        _mm256_storeu_pd(out.add(12), a3);
+        i += 16;
+    }
+    while i + 4 <= n {
+        let mut a = _mm256_setzero_pd();
+        for (j, &slt) in slt_vec[..n].iter().enumerate() {
+            let x = _mm256_xor_pd(_mm256_loadu_pd(column0.add(j * n + i)), sign);
+            a = _mm256_add_pd(a, _mm256_mul_pd(x, _mm256_set1_pd(slt)));
         }
+        _mm256_storeu_pd(vec1.as_mut_ptr().add(i), a);
+        i += 4;
+    }
+    for k in i..n {
+        let mut acc = 0.0;
+        for (column, &slt) in inv.chunks_exact(n).zip(&slt_vec[..n]) {
+            acc += -column[k] * slt;
+        }
+        vec1[k] = acc;
     }
     let tmp = vec1[msa];
     *pf *= -tmp;
@@ -1611,6 +1640,48 @@ mod tests {
                         64.0 * f64::EPSILON,
                         "rank-one indexed reference",
                     );
+                }
+            }
+        }
+    }
+
+    /// The register-blocked first pass (16-, 4- and 1-element tails) keeps the
+    /// per-element C summation order, so it must reproduce the indexed loop exactly,
+    /// including signed zeros. No tolerance: these are the same IEEE operations.
+    #[test]
+    fn register_blocked_rank_one_update_matches_indexed_reference_bitwise() {
+        let mut seed = 11;
+        for n_size in [16, 18, 20, 22, 36, 64, 128] {
+            for msa in [0, n_size / 3, n_size - 1] {
+                let mut base: Vec<f64> = (0..n_size * n_size)
+                    .map(|_| pseudo_random(&mut seed))
+                    .collect();
+                // Exact zeros and negative zeros exercise the sign handling.
+                base[1] = 0.0;
+                base[n_size + 2] = -0.0;
+                let mut slt: Vec<f64> = (0..n_size).map(|_| pseudo_random(&mut seed)).collect();
+                slt[n_size - 1] = 0.0;
+                let (mut expected, mut pf_expected) = (base.clone(), -0.75);
+                reference_update_one_real(msa, &mut expected, &slt, n_size, &mut pf_expected);
+                let (mut actual, mut pf_actual) = (base.clone(), -0.75);
+                let (mut vec1, mut vec2) = (vec![f64::NAN; n_size], vec![f64::NAN; n_size]);
+                update_one_real(
+                    0,
+                    msa,
+                    &mut actual,
+                    &slt,
+                    &mut vec1,
+                    &mut vec2,
+                    n_size,
+                    &mut pf_actual,
+                );
+                assert_eq!(
+                    pf_actual.to_bits(),
+                    pf_expected.to_bits(),
+                    "n={n_size} msa={msa}"
+                );
+                for (k, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.to_bits(), b.to_bits(), "n={n_size} msa={msa} entry {k}");
                 }
             }
         }
