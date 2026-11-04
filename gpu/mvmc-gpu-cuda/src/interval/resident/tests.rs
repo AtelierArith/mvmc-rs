@@ -383,3 +383,279 @@ fn failed_rebuild_is_latched_and_cannot_publish_results() {
     }
     .is_err());
 }
+
+#[test]
+fn status_codes_match_cuda_header() {
+    let header = include_str!("../../resident_status.cuh");
+    let mut seen = 0;
+    for line in header.lines() {
+        let Some((name, rest)) = line.trim().split_once(" = ") else {
+            continue;
+        };
+        let code: i32 = rest.split(',').next().unwrap().trim().parse().unwrap();
+        let expected = match name {
+            "RESIDENT_REBUILD" => ResidentFailure::Rebuild,
+            "RESIDENT_ENERGY" => ResidentFailure::Energy,
+            "RESIDENT_SR" => ResidentFailure::Sr,
+            "RESIDENT_PARAMETERS" => ResidentFailure::Parameters,
+            "RESIDENT_SCHEDULE" => ResidentFailure::Schedule,
+            "RESIDENT_DERIVATIVES" => ResidentFailure::Derivatives,
+            other => panic!("unmapped status {other}"),
+        };
+        assert_eq!(ResidentFailure::from_status(code), Some(expected), "{name}");
+        assert_eq!(expected.code(), Some(code));
+        seen += 1;
+    }
+    assert_eq!(seen, 6);
+    assert_eq!(ResidentFailure::from_status(0), None);
+    assert_eq!(
+        ResidentFailure::from_status(99),
+        Some(ResidentFailure::Unknown(99))
+    );
+    assert!(ResidentFailure::Sr.to_string().contains("device status 3"));
+}
+
+/// Issue #573: an accepted hop whose total overlap is finite and nonzero while
+/// one candidate QP plane Pfaffian is exactly zero must not apply the rank-two
+/// update (it divides by that plane's ratio). It requests a rebuild, which
+/// latches the singular plane. A valid walker in the same ensemble and the
+/// failed walker's earlier queued updates remain finite and independently
+/// correct; the all-singular case is an ordinary rejection.
+#[test]
+#[ignore = "requires CUDA; singular candidate planes against independent CPU factors"]
+fn accepted_hop_with_singular_candidate_plane_latches_rebuild() {
+    use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
+    use tenferro_ext::raw_exec::raw_exec_counters;
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    // n=2: immediate updates; n=128: the four-update queue holds two pending
+    // updates when the singular proposal arrives.
+    for ((n, ns), all_planes) in [(2, 2), (128, 80)]
+        .into_iter()
+        .flat_map(|g| [(g, false), (g, true)])
+    {
+        let (w, nq, ne) = (2, 2, n / 2);
+        let g = IntervalGeometry {
+            walkers: w,
+            n,
+            ne,
+            nsite: ns,
+            nqp: nq,
+            ngutz: 0,
+            nproj: 0,
+        };
+        let mut slater = random_planes::<f64>(2 * ns, nq, 573 + n as u64);
+        // Up-spin site `ne` is empty initially and is the first empty
+        // destination. Zeroing its row/column makes every configuration that
+        // occupies it exactly singular in the selected planes.
+        for q in 0..if all_planes { nq } else { 1 } {
+            for r in 0..2 * ns {
+                slater[q * 4 * ns * ns + ne * 2 * ns + r] = 0.;
+                slater[q * 4 * ns * ns + r * 2 * ns + ne] = 0.;
+            }
+        }
+        let gather = |cfg: &[i32]| {
+            let mut matrices = vec![0.; w * nq * n * n];
+            for walker in 0..w {
+                for q in 0..nq {
+                    for j in 0..n {
+                        for i in 0..n {
+                            let ri = cfg[walker * n + i] as usize + if i >= ne { ns } else { 0 };
+                            let rj = cfg[walker * n + j] as usize + if j >= ne { ns } else { 0 };
+                            matrices[(walker * nq + q) * n * n + i + j * n] =
+                                slater[q * 4 * ns * ns + ri * 2 * ns + rj];
+                        }
+                    }
+                }
+            }
+            matrices
+        };
+        let ele: Vec<_> = (0..w * n).map(|i| (i % ne) as i32).collect();
+        let cpu = pfaffian_inverse_batched(&Backend::CpuPfapack, &gather(&ele), n, nq, w).unwrap();
+        assert!(cpu.pf.iter().all(|p| p.is_finite() && *p != 0.));
+        let inv: Vec<_> = cpu.inv.iter().map(|x| -x).collect();
+        let (gutz, jast) = (vec![-1; ns], vec![-1; ns * ns]);
+        let host = IntervalHost {
+            ele: &ele,
+            inv: &inv,
+            pf: &cpu.pf,
+            slater: &slater,
+            weights: &[1., 0.5],
+            gutz: &gutz,
+            jast: &jast,
+            params: &[],
+        };
+        let hops = 3;
+        let mut resident = {
+            let s: &mut CudaEngine = &mut backend;
+            ResidentInterval::prepare(s, g, &host, hops, 79)
+        }
+        .unwrap();
+        // Walker 0: two down-spin hops, then the up-spin hop to site `ne`.
+        // Walker 1: three down-spin hops. u=0 accepts every finite nonzero total.
+        let mut rng = sfmt19937::Sfmt19937Rng::new(573);
+        let mut tape: Vec<u32> = (0..w * hops * 5).map(|_| rng.gen_rand32()).collect();
+        for hop in 0..hops {
+            for walker in 0..w {
+                let t = &mut tape[5 * (walker + w * hop)..5 * (walker + w * hop) + 5];
+                t[4] = 0;
+                if walker == 0 && hop == 2 {
+                    t[1] &= !(1 << 31);
+                    t[2] = 0;
+                } else {
+                    t[1] |= 1 << 31;
+                }
+            }
+        }
+        // Independent scalar replay of the proposal words.
+        let replay = |cfg: &mut [i32], skip_singular: bool| {
+            for hop in 0..hops {
+                for walker in 0..w {
+                    if skip_singular && walker == 0 && hop == 2 {
+                        continue;
+                    }
+                    let words = &tape[5 * (walker + w * hop)..];
+                    let spin = (words[1] >> 31) as usize;
+                    let c = &mut cfg[walker * n + spin * ne..walker * n + (spin + 1) * ne];
+                    let empty: Vec<_> = (0..ns as i32).filter(|r| !c.contains(r)).collect();
+                    c[words[0] as usize % ne] = empty[words[2] as usize % empty.len()];
+                }
+            }
+        };
+        let mut after = ele.clone();
+        replay(&mut after, false);
+        assert!(after[0..ne].contains(&(ne as i32)));
+        // Tables are those of walker 0 before its singular proposal.
+        let mut tables_cfg = ele.clone();
+        replay(&mut tables_cfg, true);
+        let borrowed = &mut resident;
+        let (cfg, actual_inv, pf, accepted, error) = {
+            let s: &mut CudaEngine = &mut backend;
+            with_raw_exec(s, "singular.plane", |exec| {
+                let r = &borrowed.sampler;
+                unsafe {
+                    exec.upload(exec.ptr(&r.tape)?, &tape)?;
+                }
+                borrowed.enqueue_hops(exec, hops)?;
+                let mut cfg = vec![0i32; w * n];
+                let mut inv = vec![0f64; w * nq * n * n];
+                let mut pf = vec![0f64; w * nq];
+                let mut accepted = vec![0i32; w];
+                let mut error = [0i32];
+                unsafe {
+                    exec.download(&mut cfg, exec.ptr(&r.ele)?)?;
+                    exec.download(&mut inv, exec.ptr(&r.inv)?)?;
+                    exec.download(&mut pf, exec.ptr(&r.pf)?)?;
+                    exec.download(&mut accepted, exec.ptr(&borrowed.total_accepts)?)?;
+                    exec.download(&mut error, exec.ptr(&borrowed.error)?)?;
+                }
+                Ok((cfg, inv, pf, accepted, error[0]))
+            })
+        }
+        .unwrap();
+        let label = format!("n={n} all_planes={all_planes}");
+        assert!(
+            actual_inv.iter().chain(&pf).all(|x| x.is_finite()),
+            "{label}: a nonfinite inverse/Pfaffian was published"
+        );
+        if all_planes {
+            // Zero total overlap: an ordinary rejection, no rebuild request.
+            assert_eq!(error, 0, "{label}");
+            assert_eq!(accepted, vec![2, 3], "{label}");
+            assert_eq!(cfg, tables_cfg, "{label}");
+        } else {
+            assert_eq!(
+                ResidentFailure::from_status(error),
+                Some(ResidentFailure::Rebuild),
+                "{label}"
+            );
+            assert_eq!(accepted, vec![3, 3], "{label}");
+            assert_eq!(cfg, after, "{label}");
+        }
+        let planes = gather(&tables_cfg);
+        let expected = pfaffian_inverse_batched(&Backend::CpuPfapack, &planes, n, nq, w).unwrap();
+        for q in 0..w * nq {
+            let a = &planes[q * n * n..(q + 1) * n * n];
+            let reference = &expected.inv[q * n * n..(q + 1) * n * n];
+            let actual = &actual_inv[q * n * n..(q + 1) * n * n];
+            let norm = |v: &[f64]| v.iter().map(|x| x * x).sum::<f64>().sqrt();
+            // The delayed-update gate's bound for three accumulated moves.
+            let bound = 16. * 3. * n as f64 * f64::EPSILON * norm(a) * norm(reference);
+            let mut residual = 0f64;
+            for j in 0..n {
+                for i in 0..n {
+                    let x = (0..n)
+                        .map(|k| -a[i + k * n] * actual[k + j * n])
+                        .sum::<f64>();
+                    residual = residual.max((x - f64::from(i == j)).abs());
+                }
+            }
+            let pf_error = ((pf[q] - expected.pf[q]) / expected.pf[q]).abs();
+            assert!(
+                residual <= bound && pf_error <= bound,
+                "{label} plane={q} residual={residual:e} pf={pf_error:e} bound={bound:e}"
+            );
+        }
+        if !all_planes {
+            // Failure publishes nothing more: the result boundary reads only the
+            // status word, and later sampling cannot clear the sticky error.
+            for _ in 0..2 {
+                let before = raw_exec_counters();
+                let Err(error) = ({
+                    let s: &mut CudaEngine = &mut backend;
+                    resident.snapshot(s)
+                }) else {
+                    panic!("{label}: a failed ensemble published a snapshot");
+                };
+                let traffic = raw_exec_counters() - before;
+                assert!(error.contains("device status 1"), "{error}");
+                assert_eq!((traffic.download_calls, traffic.download_bytes), (1, 4));
+                let s: &mut CudaEngine = &mut backend;
+                resident.advance(s).unwrap();
+            }
+        }
+    }
+}
+
+/// A walker left with unfinished hops after the enqueued rounds (possible
+/// after forced rebuilds) is a typed schedule failure, never a short interval.
+#[test]
+#[ignore = "requires CUDA"]
+fn unfinished_schedule_latches_typed_status() {
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let status = {
+        let s: &mut CudaEngine = &mut backend;
+        with_raw_exec(s, "schedule.status", |exec| {
+            let module = exec.module(INTERVAL_MODULE, INTERVAL_KERNELS)?;
+            let hop_off = exec.alloc_bytes(3 * 4)?;
+            let error = exec.alloc_bytes(4)?;
+            let mut out = [0i32; 2];
+            unsafe {
+                exec.zero_bytes(exec.ptr(&error)?, 4)?;
+                for (slot, last) in [(0, 5i32), (1, 4)] {
+                    exec.upload(exec.ptr(&hop_off)?, &[5i32, 5, last])?;
+                    exec.launch(
+                        module.function("interval_resident_complete")?,
+                        (1, 1, 1),
+                        128,
+                        0,
+                        &[
+                            Arg::P(exec.ptr(&hop_off)?),
+                            Arg::I(5),
+                            Arg::P(exec.ptr(&error)?),
+                            Arg::I(3),
+                        ],
+                    )?;
+                    let mut word = [0i32];
+                    exec.download(&mut word, exec.ptr(&error)?)?;
+                    out[slot] = word[0];
+                }
+            }
+            Ok(out)
+        })
+    }
+    .unwrap();
+    assert_eq!(
+        status.map(ResidentFailure::from_status),
+        [None, Some(ResidentFailure::Schedule)]
+    );
+}

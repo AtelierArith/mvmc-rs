@@ -140,7 +140,8 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
 //
 // Returns (per walker, written by thread 0):
 //   hops_done[W]   hops actually advanced (< max_hops when a rebuild was requested)
-//   rebuild[W]     1 when `aw` passed `nsite` (host must recompute before continuing)
+//   rebuild[W]     1 when `aw` passed `nsite`, or an accepted move has a zero/nonfinite
+//                  candidate plane Pfaffian (host must recompute before continuing)
 //
 // Shared memory: aligned n ints, nqp+1 doubles, reusable ratio/update scratch, 8 ints.
 // ---------------------------------------------------------------------------------------------
@@ -277,6 +278,15 @@ __device__ __forceinline__ void interval_hop_impl(
       // extreme ratios), but never publish an overflowed weighted sum (#564).
       const int accept = isfinite(ip_new) && ip_new != 0.0 && log(u) < logratio;
       mvw[5] = accept;
+      // A finite nonzero total can hide a candidate plane whose Pfaffian is 0 or
+      // nonfinite. Its rank-two update divides by that plane's ratio, so the
+      // accept instead requests an immediate walker rebuild (Julia
+      // cuda_sampling_update.jl:343-371). The rebuild latches a singular plane.
+      int singular = 0;
+      if (accept) {
+        for (int q = 0; q < nqp; ++q) singular |= !isfinite(pfnew[q]) || pfnew[q] == 0.0;
+      }
+      mvw[7] = singular;
       if (accept) {
         out[0] = log_new;
       } else {
@@ -286,7 +296,16 @@ __device__ __forceinline__ void interval_hop_impl(
       }
     }
     __syncthreads();
-    if (mvw[5]) {
+    if (mvw[5] && mvw[7]) {
+      // No inverse/Pfaffian update; the rebuild refactors the accepted configuration.
+      if (tid == 0) {
+        log_old = out[0];
+        ++accepted;
+        ++window;
+        mvw[6] = 1;
+      }
+      __syncthreads();
+    } else if (mvw[5]) {
       for (int base = 0; base < nqp; base += qp_groups) {
         const int q = base + group;
         const bool active = q < nqp;

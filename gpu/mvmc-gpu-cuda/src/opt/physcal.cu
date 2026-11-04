@@ -27,7 +27,7 @@ extern "C" __global__ void physcal_reduce(double* means, const double* values,
       int k=energy_terms+greens+2*(row-greens-1);
       value=v[k]*v[k+1];
     }
-    if (!isfinite(value)) atomicCAS(error,0,2);
+    if (!isfinite(value)) atomicCAS(error,0,RESIDENT_ENERGY);
     sum+=value;
   }
   sum=physcal_warp_sum(sum);

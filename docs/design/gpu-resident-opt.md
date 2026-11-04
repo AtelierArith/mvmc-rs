@@ -90,10 +90,23 @@ direct SR (`NSRCG=0`) and serial execution. Local spins, RBM, DH, OptTrans,
 complex/general orbitals and grouped execution return errors. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
 spin-conserving InterAll. Individual QP matrices must remain nonsingular;
-singular-sector cofactor fallback remains under #560. Failed state reconstruction
-or SR is reported. The per-family
+the per-plane recovery of the Julia GPU reference is tracked by #573. Until
+then, an accepted hop whose total overlap is finite and nonzero but whose
+candidate Pfaffian in some plane is zero or nonfinite applies no rank-two
+update. It requests an immediate walker rebuild, as Julia does
+(`cuda_sampling_update.jl:343-371`). The rebuild treats a plane with a zero
+pivot or a zero/nonfinite Pfaffian as singular and records the failure. No
+infinite inverse is ever used by ratios, energies or derivatives. Failed state
+reconstruction or SR is reported. The per-family
 [support matrix](gpu-resident-model-support.md) (#572) lists each rejected family,
 its rejection site, CPU and Julia GPU status and the planned milestone order.
+
+Failures latch one sticky device status word; the first failing stage is kept
+(`src/resident_status.cuh`, `ResidentFailure`): 1 rebuild, 2 energy/observable,
+3 SR solve, 4 parameter update, 5 schedule, 6 derivatives. Initialization
+reports its retry limit separately. A schedule failure means a walker still had
+hops left after the enqueued rounds, which forced rebuilds can cause. On failure,
+the result boundary downloads only the status word.
 Nonfinite proposal overlaps are rejected before updating the configuration,
 inverse, Pfaffian or cached overlap (#564); finite overlaps retain log-space
 acceptance for extreme ratios and zero uniform draws.

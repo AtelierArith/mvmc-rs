@@ -10,6 +10,82 @@ use tenferro_tensor::Engine;
 #[cfg(test)]
 mod tests;
 
+/// Stage that latched the sticky resident device status word (#573), or the
+/// host-side initialization retry limit. The first failing stage wins; every
+/// later resident kernel observes the word and publishes nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResidentFailure {
+    /// Configuration initialization did not find finite nonzero planes/overlaps.
+    Initialization,
+    /// A walker rebuild produced a singular/nonfinite QP plane or overlap.
+    Rebuild,
+    /// Nonfinite local energy or PhysCal observable.
+    Energy,
+    /// The SR Cholesky solve failed.
+    Sr,
+    /// The SR parameter update was nonfinite.
+    Parameters,
+    /// A walker did not finish its scheduled hops within the enqueued rounds.
+    Schedule,
+    /// A log-derivative was nonfinite.
+    Derivatives,
+    /// A status word outside `resident_status.cuh`.
+    Unknown(i32),
+}
+
+impl ResidentFailure {
+    /// Decode the device word; `None` means success. Values match `resident_status.cuh`.
+    pub fn from_status(code: i32) -> Option<Self> {
+        Some(match code {
+            0 => return None,
+            1 => Self::Rebuild,
+            2 => Self::Energy,
+            3 => Self::Sr,
+            4 => Self::Parameters,
+            5 => Self::Schedule,
+            6 => Self::Derivatives,
+            other => Self::Unknown(other),
+        })
+    }
+
+    /// Device status word, or `None` for the host-side initialization stage.
+    pub fn code(self) -> Option<i32> {
+        match self {
+            Self::Initialization => None,
+            Self::Rebuild => Some(1),
+            Self::Energy => Some(2),
+            Self::Sr => Some(3),
+            Self::Parameters => Some(4),
+            Self::Schedule => Some(5),
+            Self::Derivatives => Some(6),
+            Self::Unknown(code) => Some(code),
+        }
+    }
+}
+
+impl std::fmt::Display for ResidentFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stage = match self {
+            Self::Initialization => {
+                "initialization: no finite nonzero QP planes after 100 attempts"
+            }
+            Self::Rebuild => "rebuild: singular/nonfinite QP plane or zero overlap",
+            Self::Energy => "energy: nonfinite local energy or observable",
+            Self::Sr => "SR: Cholesky solve failed",
+            Self::Parameters => "parameters: nonfinite update",
+            Self::Schedule => "schedule: unfinished hops after the enqueued rounds",
+            Self::Derivatives => "derivatives: nonfinite log-derivative",
+            Self::Unknown(_) => "unknown stage",
+        };
+        match self.code() {
+            Some(code) => write!(f, "device status {code} ({stage})"),
+            None => write!(f, "{stage}"),
+        }
+    }
+}
+
+impl std::error::Error for ResidentFailure {}
+
 /// Resident sampling state owned by one Opt run, independent of other runs on the
 /// same device. A call to `advance` generates the Julia GPU tape and completes all
 /// hops, including rebuilds, with zero explicit H2D/D2H copies. It ends with the
@@ -182,6 +258,13 @@ impl ResidentInterval {
                 )?;
                 self.enqueue_rebuild(exec, &module)?;
             }
+            exec.launch(
+                module.function("interval_resident_complete")?,
+                (g.walkers.div_ceil(128) as u32, 1, 1),
+                128,
+                0,
+                &[p(&s.hop_off)?, i(hops), p(&self.error)?, i(g.walkers)],
+            )?;
         }
         Ok(())
     }
@@ -288,19 +371,25 @@ impl ResidentInterval {
 
     /// One four-byte read at an explicit observation boundary. Error is sticky;
     /// a failed ensemble cannot silently resume and publish partial results.
-    pub fn check_status<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
+    pub fn status<B: Engine + ?Sized>(
+        &mut self,
+        backend: &mut B,
+    ) -> Result<Option<ResidentFailure>, String> {
         let mut error = [0i32];
         with_raw_exec(backend, "mvmc.resident.status", |exec| {
             // SAFETY: one i32 status word.
             unsafe { exec.download(&mut error, exec.ptr(&self.error)?) }
         })
         .map_err(|e| e.to_string())?;
-        if error[0] != 0 {
-            return Err(
-                "resident interval rebuild has a singular/nonfinite plane or zero overlap".into(),
-            );
+        Ok(ResidentFailure::from_status(error[0]))
+    }
+
+    /// [`Self::status`] as a hard error for result boundaries.
+    pub fn check_status<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
+        match self.status(backend)? {
+            Some(failure) => Err(format!("resident interval failed: {failure}")),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     /// Explicit diagnostic/result boundary; ordinary sampling keeps these resident.

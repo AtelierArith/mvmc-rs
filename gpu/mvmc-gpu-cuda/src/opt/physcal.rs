@@ -9,7 +9,11 @@ use std::path::PathBuf;
 #[cfg(test)]
 mod tests;
 
-const PHYS_SOURCE: &str = include_str!("physcal.cu");
+const PHYS_SOURCE: &str = concat!(
+    include_str!("../resident_status.cuh"),
+    "\n",
+    include_str!("physcal.cu")
+);
 const PHYS_KERNELS: &[&str] = &["physcal_reduce"];
 
 /// Sampling lengths count proposals per walker; omitted lengths follow modpara.
@@ -272,16 +276,19 @@ impl Measurement {
             let mut error = [0i32];
             let mut means = vec![0.0f64; self.operators.rows()];
             // SAFETY: allocations have these exact lengths, execution has
-            // completed before the public API returns host observations.
+            // completed before the public API returns host observations. A
+            // failed run exposes only the status word.
             unsafe {
                 exec.download(&mut error, exec.ptr(&state.resident.error)?)?;
+            }
+            if let Some(failure) = ResidentFailure::from_status(error[0]) {
+                return Err(gpu_error(format!("GPU PhysCal failed: {failure}")));
+            }
+            unsafe {
                 exec.download(&mut means, exec.ptr(&self.means)?)?;
             }
-            if error[0] != 0 || means.iter().any(|x| !x.is_finite()) {
-                return Err(gpu_error(format!(
-                    "GPU PhysCal failed (device status {})",
-                    error[0]
-                )));
+            if means.iter().any(|x| !x.is_finite()) {
+                return Err(gpu_error("GPU PhysCal produced nonfinite means"));
             }
             for mean in &mut means {
                 *mean /= state.steps as f64;

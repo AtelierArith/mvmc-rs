@@ -18,11 +18,13 @@ use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::Engine;
 
 mod resident;
-pub use resident::ResidentInterval;
+pub use resident::{ResidentFailure, ResidentInterval};
 
 /// The NVRTC module: the batched Pfaffian (`pfinv_f64`), the interval kernel and the rebuild
 /// helpers, compiled once per process/thread.
 pub const INTERVAL_MODULE: &str = concat!(
+    include_str!("resident_status.cuh"),
+    "\n",
     include_str!("pfaffian_batched.cu"),
     "\n",
     include_str!("interval_delayed.cu"),
@@ -47,6 +49,7 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_resident_commit",
     "interval_paired_factor",
     "interval_paired_fallback",
+    "interval_resident_complete",
 ];
 
 /// Geometry shared by every interval call of one series.
