@@ -1138,16 +1138,16 @@ pub(crate) fn assemble_inv_m_real_plane(
             for (&rsi, out) in cols.iter().zip(plane.chunks_exact_mut(n_size)) {
                 let start = (qp * n_site2 + rsi) * n_site2;
                 let row = &slater[start..start + n_site2];
-                let mut out4 = out.chunks_exact_mut(4);
-                let mut cols4 = cols.chunks_exact(4);
-                for (o, c) in (&mut out4).zip(&mut cols4) {
+                let (out4, out_tail) = out.as_chunks_mut::<4>();
+                let (cols4, cols_tail) = cols.as_chunks::<4>();
+                for (o, c) in out4.iter_mut().zip(cols4) {
                     for k in 0..4 {
                         let v = -row[c[k]];
                         o[k] = v;
                         acc[k] = acc[k].max(v * v);
                     }
                 }
-                for (o, &rsj) in out4.into_remainder().iter_mut().zip(cols4.remainder()) {
+                for (o, &rsj) in out_tail.iter_mut().zip(cols_tail) {
                     let v = -row[rsj];
                     *o = v;
                     acc[0] = acc[0].max(v * v);
