@@ -80,10 +80,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             &[("modpara.def", "2Sz            0", "2Sz            2")],
         ),
         (
-            "exchange-path",
-            &[("modpara.def", "NExUpdatePath  0", "NExUpdatePath  1")],
-        ),
-        (
             "nsplit",
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
         ),
@@ -113,20 +109,15 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
         .map(|(tag, e)| (tag.to_string(), edited(tag, e), true))
         .collect();
     // Fixture inputs whose only resident-unsupported feature is the named
-    // family (real six-site chains), except: the local-spin Heisenberg chain,
-    // which C requires to use NExUpdatePath=2 (readdef.c:621-628); the FSZ
-    // Hubbard chain (OrbitalParallel selects general orbitals, complex
-    // orbital coefficients); and the FSZ Kondo chain (NExUpdatePath=3).
+    // family (real six-site chains), except: the FSZ Hubbard chain
+    // (OrbitalParallel selects general orbitals, complex orbital
+    // coefficients); and the FSZ Kondo chain (NExUpdatePath=3).
     for (tag, rel) in [
         ("dh2", "tests/fixtures/dh2/production_real/namelist.def"),
         ("dh4", "tests/fixtures/dh4/production_dh4_real/namelist.def"),
         (
             "opttrans",
             "tests/fixtures/opttrans/run_opt_real/namelist.def",
-        ),
-        (
-            "local-spin",
-            "tests/fixtures/original_heisenberg_parser_184/namelist.def",
         ),
         (
             "fsz-general-orbital",
@@ -185,6 +176,74 @@ fn resident_physcal_ignores_nsrcg_while_opt_rejects_it() {
         (base.np, base.nq, base.energies.len())
     );
     fs::remove_dir_all(input.parent().unwrap()).unwrap();
+}
+
+/// #660: local spins and NExUpdatePath 1/2 follow Julia GPU
+/// (`cuda_state.jl:47`, `cuda_runners.jl:52-58`, `get_loc_spn_array`).
+#[test]
+fn resident_scope_accepts_local_spins_and_exchange() {
+    let exchange = edited(
+        "exchange-path",
+        &[("modpara.def", "NExUpdatePath  0", "NExUpdatePath  1")],
+    );
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    for (input, probability, nlocal, ne) in [
+        (exchange.clone(), 0.5, 0, 3),
+        (
+            repo("tests/fixtures/original_heisenberg_parser_184/namelist.def"),
+            1.0,
+            16,
+            8,
+        ),
+        (
+            local("tests/fixtures/localspin/heisenberg_chain_L64/namelist.def"),
+            1.0,
+            64,
+            32,
+        ),
+        (
+            local("tests/fixtures/localspin/kondo_chain_L64/namelist.def"),
+            0.5,
+            64,
+            64,
+        ),
+    ] {
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            assert_eq!(model.exchange, probability, "{input:?}");
+            assert_eq!(model.ne, ne, "{input:?}");
+            assert_eq!(model.localspins.len(), model.ns);
+            assert_eq!(model.localspins.iter().filter(|&&x| x == 1).count(), nlocal);
+        }
+    }
+    let kondo = Model::prepare(
+        &local("tests/fixtures/localspin/kondo_chain_L64/namelist.def"),
+        &cfg(),
+    )
+    .unwrap();
+    assert!(kondo.localspins[..64].iter().all(|&x| x == 0));
+    assert!(kondo.localspins[64..].iter().all(|&x| x == 1));
+    fs::remove_dir_all(exchange.parent().unwrap()).unwrap();
+}
+
+/// Julia `initial_gpu_state`: `nlocal <= 2Ne <= 2Nsite - nlocal`
+/// (`cuda_initial_sampling.jl:87`), checked on the host before CUDA.
+#[test]
+fn resident_scope_rejects_infeasible_local_spin_filling() {
+    let model = Model::prepare(&baseline(), &cfg()).unwrap();
+    let mut data = model.data.clone();
+    // Six local spins cannot all be singly occupied by 2Ne = 4 electrons.
+    data.modpara.nelec = 2;
+    data.locspin_terms = (0..6)
+        .map(|site| mvmc_expert_parsers::types::LocSpinTerm {
+            site,
+            spin_value: 1,
+        })
+        .collect();
+    let error = Model::from_data(data, 79).map(|_| ()).unwrap_err();
+    assert!(error.contains("infeasible local-spin filling"), "{error}");
 }
 
 #[test]

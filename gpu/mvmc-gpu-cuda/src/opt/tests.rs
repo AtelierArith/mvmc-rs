@@ -6,7 +6,7 @@ fn l128_input() -> std::path::PathBuf {
         .join("../../benchmark/hubbard_chain/inputs/hubbard_chain_L128/namelist.def")
 }
 
-fn close(name: &str, actual: &[f64], expected: &[f64], atol: f64, rtol: f64) {
+pub(super) fn close(name: &str, actual: &[f64], expected: &[f64], atol: f64, rtol: f64) {
     assert_eq!(actual.len(), expected.len(), "{name} length");
     for (i, (&a, &b)) in actual.iter().zip(expected).enumerate() {
         assert!(
@@ -246,65 +246,7 @@ fn assert_julia_stages(model: Model, config: OptConfig, fixture_text: &str) {
         }
     }
     .unwrap();
-    // Independently reconstruct the mathematical SR system on CPU and measure
-    // its normalized solve residual, rather than checking library success alone.
-    let np = state.model.np;
-    let w = energy.len();
-    let mean: Vec<f64> = (0..np)
-        .map(|p| (0..w).map(|b| derivatives[b * np + p]).sum::<f64>() / w as f64)
-        .collect();
-    let covariance = |i: usize, j: usize| {
-        (0..w)
-            .map(|b| derivatives[b * np + i] * derivatives[b * np + j])
-            .sum::<f64>()
-            / w as f64
-            - mean[i] * mean[j]
-    };
-    let variance: Vec<_> = (0..np).map(|p| covariance(p, p)).collect();
-    let mp = &state.model.data.modpara;
-    let cutoff = variance.iter().map(|v| v.abs()).fold(0f64, f64::max) * mp.dsr_opt_red_cut;
-    let active: Vec<_> = (0..np)
-        .map(|p| state.model.flags[p] != 0 && variance[p] > cutoff)
-        .collect();
-    let mean_e = energy.iter().sum::<f64>() / w as f64;
-    let mut residual = 0f64;
-    let mut norm_a = 0f64;
-    let mut norm_b = 0f64;
-    for row in 0..np {
-        let rhs = if active[row] {
-            -2. * mp.dsr_opt_step_dt
-                * ((0..w)
-                    .map(|b| derivatives[b * np + row] * energy[b])
-                    .sum::<f64>()
-                    / w as f64
-                    - mean_e * mean[row])
-        } else {
-            0.
-        };
-        let mut value = 0.;
-        let mut row_norm = 0.;
-        for col in 0..np {
-            let a = if active[row] && active[col] {
-                covariance(row, col)
-                    * if row == col {
-                        1. + mp.dsr_opt_sta_del
-                    } else {
-                        1.
-                    }
-            } else if row == col {
-                1.
-            } else {
-                0.
-            };
-            value += a * update[col];
-            row_norm += a.abs();
-        }
-        residual = residual.max((value - rhs).abs());
-        norm_a = norm_a.max(row_norm);
-        norm_b = norm_b.max(rhs.abs());
-    }
-    let relative =
-        residual / (norm_a * update.iter().map(|v| v.abs()).fold(0f64, f64::max) + norm_b);
+    let relative = sr_backward_error(&state.model, &derivatives, &energy, &update);
     assert!(relative < 1e-11, "SR backward error {relative:e}");
     println!("independent Julia stages passed; SR backward error={relative:e}");
 }
@@ -1013,4 +955,70 @@ fn resident_opt_pipeline() {
         "resident run={seconds:.9}s traffic={traffic:?} energies={:?}",
         result.energies
     );
+}
+
+/// Independently reconstruct the mathematical SR system on CPU and return its
+/// normalized solve backward error, rather than checking library success alone.
+pub(super) fn sr_backward_error(
+    model: &Model,
+    derivatives: &[f64],
+    energy: &[f64],
+    update: &[f64],
+) -> f64 {
+    let np = model.np;
+    let w = energy.len();
+    let mean: Vec<f64> = (0..np)
+        .map(|p| (0..w).map(|b| derivatives[b * np + p]).sum::<f64>() / w as f64)
+        .collect();
+    let covariance = |i: usize, j: usize| {
+        (0..w)
+            .map(|b| derivatives[b * np + i] * derivatives[b * np + j])
+            .sum::<f64>()
+            / w as f64
+            - mean[i] * mean[j]
+    };
+    let variance: Vec<_> = (0..np).map(|p| covariance(p, p)).collect();
+    let mp = &model.data.modpara;
+    let cutoff = variance.iter().map(|v| v.abs()).fold(0f64, f64::max) * mp.dsr_opt_red_cut;
+    let active: Vec<_> = (0..np)
+        .map(|p| model.flags[p] != 0 && variance[p] > cutoff)
+        .collect();
+    let mean_e = energy.iter().sum::<f64>() / w as f64;
+    let mut residual = 0f64;
+    let mut norm_a = 0f64;
+    let mut norm_b = 0f64;
+    for row in 0..np {
+        let rhs = if active[row] {
+            -2. * mp.dsr_opt_step_dt
+                * ((0..w)
+                    .map(|b| derivatives[b * np + row] * energy[b])
+                    .sum::<f64>()
+                    / w as f64
+                    - mean_e * mean[row])
+        } else {
+            0.
+        };
+        let mut value = 0.;
+        let mut row_norm = 0.;
+        for col in 0..np {
+            let a = if active[row] && active[col] {
+                covariance(row, col)
+                    * if row == col {
+                        1. + mp.dsr_opt_sta_del
+                    } else {
+                        1.
+                    }
+            } else if row == col {
+                1.
+            } else {
+                0.
+            };
+            value += a * update[col];
+            row_norm += a.abs();
+        }
+        residual = residual.max((value - rhs).abs());
+        norm_a = norm_a.max(row_norm);
+        norm_b = norm_b.max(rhs.abs());
+    }
+    residual / (norm_a * update.iter().map(|v| v.abs()).fold(0f64, f64::max) + norm_b)
 }

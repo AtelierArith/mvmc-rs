@@ -7,6 +7,8 @@ use super::*;
 use std::path::PathBuf;
 
 #[cfg(test)]
+mod localspin_tests;
+#[cfg(test)]
 mod tests;
 
 const PHYS_SOURCE: &str = concat!(

@@ -36,6 +36,10 @@ pub(super) struct Model {
     /// Julia GPUOperator layout: (dest1,src1,spin1,dest2,src2,spin2,pairs).
     pub operators: Vec<i32>,
     pub energies: Vec<f64>,
+    /// Julia `get_loc_spn_array`: 1 for a local-spin site (`spin_value == 1`).
+    pub localspins: Vec<i32>,
+    /// Julia GPU exchange probability: 0 / 0.5 / 1 for NExUpdatePath 0 / 1 / 2.
+    pub exchange: f64,
 }
 
 impl Model {
@@ -78,21 +82,21 @@ impl Model {
             data.modpara.nelec = (data.modpara.nlocspin + data.modpara.ncond) / 2;
         }
         let m = &data.modpara;
+        // Julia GPU accepts NExUpdatePath 0..2 with local spins
+        // (`cuda_state.jl:47`); path 3 needs general orbitals.
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
-            || m.nex_update_path != 0
+            || !(0..=2).contains(&m.nex_update_path)
             // Julia GPU PhysCal accepts and ignores NSRCG (`cuda_runners.jl:27`).
             || (!physcal && m.nsrcg != 0)
             || m.nsplit_size != 1
-            || m.nlocspin != 0
-            || data.locspin_terms.iter().any(|s| s.spin_value != 0)
             || data.count_rbm_parameters() != 0
             || !data.opt_trans.is_empty()
             || !data.doublon_holon_2site_indices.is_empty()
             || !data.doublon_holon_4site_indices.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU requires real normal orbitals, hopping-only sampling, no local spins/RBM/DH/OptTrans, NSRCG=0 and serial execution".into());
+            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no RBM/DH/OptTrans, NSRCG=0 (Opt) and serial execution".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -150,6 +154,20 @@ impl Model {
         let (ns, ne) = (data.modpara.nsite as usize, data.modpara.nelec as usize);
         if ne == 0 || ne > ns || 2 * ne > crate::pfaffian::MAX_N {
             return Err("unsupported electron geometry".into());
+        }
+        let exchange = match data.modpara.nex_update_path {
+            0 => 0.0,
+            1 => 0.5,
+            2 => 1.0,
+            _ => return Err("resident GPU requires NExUpdatePath in 0:2".into()),
+        };
+        let mut loc = vec![0i64; ns];
+        mvmc_core::sampling::init_loc_spn(&mut loc, &data);
+        let localspins: Vec<i32> = loc.iter().map(|&x| x as i32).collect();
+        let nlocal = localspins.iter().filter(|&&x| x == 1).count();
+        // Julia initial_gpu_state (`cuda_initial_sampling.jl:87`).
+        if nlocal > 2 * ne || 2 * ne > 2 * ns - nlocal {
+            return Err("infeasible local-spin filling".into());
         }
         let packed = mvmc_core::pack_parameters(&data).map_err(|e| e.to_string())?;
         if packed.iter().any(|p| p.im != 0.0 || !p.re.is_finite()) {
@@ -392,6 +410,8 @@ impl Model {
             coefficients,
             operators,
             energies,
+            localspins,
+            exchange,
         })
     }
 }

@@ -19,23 +19,46 @@ __device__ int opt_bounded(const unsigned int* tape, int& cursor, int length, in
   good=0; return 0;
 }
 
+// Julia initial_configuration_kernel! (cuda_initial_sampling.jl:13-80). A
+// uniform permutation of electron labels assigns the local-spin sites in site
+// order; each spin then shuffles the nonlocal sites (cumulatively) and fills
+// its unassigned labels in order. `loc` is null when there are no local spins,
+// which consumes the same words in the same order.
 extern "C" __global__ void opt_initial(int* cfg, int* scratch, const unsigned int* tape,
-    const int* pending, int* candidate, int ns, int ne, int batch) {
+    const int* pending, int* candidate, const int* loc, int ns, int ne, int batch) {
   int w=blockIdx.x*blockDim.x+threadIdx.x;
   if (w>=batch || !pending[w]) return;
   int n=2*ne, words=n+2*ns+16, cursor=0, good=1;
   int* e=cfg+w*n; int* s=scratch+w*(n+ns);
   const unsigned int* t=tape+w*words;
-  for (int a=0;a<n;++a) s[a]=a;
+  for (int a=0;a<n;++a) { e[a]=-1; s[a]=a; }
   for (int k=n;k>=2;--k) {
     int j=opt_bounded(t,cursor,words,k,good), v=s[k-1]; s[k-1]=s[j]; s[j]=v;
   }
-  for (int r=0;r<ns;++r) s[n+r]=r;
+  int nlocal=0, nonlocal=0;
+  for (int r=0;r<ns;++r) {
+    if (loc!=nullptr && loc[r]==1) {
+      // The host checks nlocal <= 2Ne; keep every address valid regardless.
+      if (nlocal<n) e[s[nlocal]]=r; else good=0;
+      ++nlocal;
+    } else {
+      s[n+nonlocal++]=r;
+    }
+  }
   for (int spin=0;spin<2;++spin) {
-    for (int k=ns;k>=2;--k) {
+    int unused=0;
+    for (int a=0;a<ne;++a) unused+=e[spin*ne+a]==-1;
+    if (unused>nonlocal) good=0;
+    for (int k=nonlocal;k>=2;--k) {
       int j=opt_bounded(t,cursor,words,k,good), v=s[n+k-1]; s[n+k-1]=s[n+j]; s[n+j]=v;
     }
-    for (int a=0;a<ne;++a) e[spin*ne+a]=s[n+a];
+    int next=0;
+    for (int a=0;a<ne;++a) {
+      if (e[spin*ne+a]==-1) {
+        if (next<nonlocal) e[spin*ne+a]=s[n+next];
+        ++next;
+      }
+    }
   }
   if (!good) for (int a=0;a<n;++a) e[a]=a%ne;
   candidate[w]=good;
