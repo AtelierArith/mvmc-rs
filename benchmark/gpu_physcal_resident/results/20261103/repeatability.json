@@ -1,0 +1,14 @@
+{
+  "resident": {
+    "compared_values": 4100,
+    "max_abs_difference": 0.0,
+    "absolute_tolerance": 1e-12,
+    "relative_tolerance": 1e-12
+  },
+  "julia": {
+    "compared_values": 4100,
+    "max_abs_difference": 0.0,
+    "absolute_tolerance": 1e-12,
+    "relative_tolerance": 1e-12
+  }
+}

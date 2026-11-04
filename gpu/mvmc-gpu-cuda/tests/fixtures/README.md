@@ -1,5 +1,8 @@
 # Interval sampler / Julia GPU shared-tape parity fixture
 
+Resident PhysCal has a separate [independent Julia stage/tape fixture](physcal_julia.md)
+including fixed-parameter observables and product-side Green functions (#636).
+
 `interval_parity_j8.txt` is the reference output of the Julia GPU sampler for the
 shared-tape parity test `../interval_parity.rs` (issue #547).
 
