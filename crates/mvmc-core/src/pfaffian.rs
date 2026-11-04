@@ -315,11 +315,15 @@ where
     let outcome: Result<(), CalcMAllError> = results.into_iter().collect();
     if outcome.is_ok() {
         pf_m[qp_start..qp_end].copy_from_slice(&pf_stage);
-        for (j, plane) in staging[..count * plane_len].chunks(plane_len).enumerate() {
-            inv_m
-                .qp_matrix_slice_mut(qp_start + j)
-                .copy_from_slice(plane);
-        }
+        // Publish with the compute partition, so each worker copies the planes it just
+        // produced (still in its cache) and the next per-QP region finds them there.
+        let stride = plane_len + 1;
+        let table = &mut inv_m.as_mut_slice()[qp_start * stride..];
+        let table_len = (count * stride).min(table.len());
+        let staged = &staging[..count * plane_len];
+        crate::threading::par_chunks_mut(&mut table[..table_len], stride, |j, window| {
+            window[..plane_len].copy_from_slice(&staged[j * plane_len..(j + 1) * plane_len]);
+        });
     }
     stage.set(staging);
     outcome
