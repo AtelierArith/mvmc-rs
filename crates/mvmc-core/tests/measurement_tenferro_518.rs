@@ -155,8 +155,6 @@ fn measure_both(
             ele_cfg: &sample.ele_cfg,
             ele_num: &sample.ele_num,
             ele_proj_cnt: &[],
-            sample: 0,
-            batch_slot: 0,
         };
         c_order
             .measure_sample(&mut input, slater_len, &mut timing)
@@ -172,8 +170,6 @@ fn measure_both(
             ele_cfg: &sample.ele_cfg,
             ele_num: &sample.ele_num,
             ele_proj_cnt: &[],
-            sample: 0,
-            batch_slot: 0,
         };
         tenferro
             .measure_sample(&mut input, slater_len, &mut timing)
@@ -270,8 +266,6 @@ fn tenferro_measurement_reports_unsupported_modes() {
             ele_cfg: &sample.ele_cfg,
             ele_num: &sample.ele_num,
             ele_proj_cnt: &[],
-            sample: 0,
-            batch_slot: 0,
         };
         stage
             .measure_sample(&mut input, slater_len, &mut timing)
@@ -302,8 +296,6 @@ fn tenferro_measurement_reports_unsupported_modes() {
             ele_cfg: &sample.ele_cfg,
             ele_num: &sample.ele_num,
             ele_proj_cnt: &[],
-            sample: 0,
-            batch_slot: 0,
         };
         stage
             .measure_sample(&mut input, slater_len, &mut timing)
@@ -330,8 +322,6 @@ fn tenferro_measurement_reports_unsupported_modes() {
             ele_cfg: &sample.ele_cfg,
             ele_num: &sample.ele_num,
             ele_proj_cnt: &[],
-            sample: 0,
-            batch_slot: 0,
         };
         stage
             .measure_sample(&mut input, slater_len, &mut timing)

@@ -170,13 +170,6 @@ impl Drop for CaptureGuard {
     }
 }
 
-/// Whether a capture is active on this thread (the resident SR step downloads `S` and `g` for
-/// the observer only in that case).
-#[inline]
-pub(super) fn is_enabled() -> bool {
-    ENABLED.with(Cell::get)
-}
-
 /// Internal observation route; disabled capture does not inspect buffers.
 #[inline]
 pub(crate) fn normalized(
@@ -216,8 +209,7 @@ pub(crate) fn normalized(
             } else {
                 Vec::new()
             },
-            // A deferred Gram (issue #452) was never materialized on the host.
-            oo_real: if all_complex || state.sr_oo_deferred() {
+            oo_real: if all_complex {
                 Vec::new()
             } else {
                 state.sr_opt.sr_opt_oo_real.clone()

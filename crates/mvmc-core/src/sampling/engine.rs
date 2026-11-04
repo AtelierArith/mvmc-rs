@@ -86,9 +86,8 @@ pub struct BlockCtx<'a, G: SamplingRng, R: Reducer + ?Sized> {
 /// One per-walker sampling engine: the per-block iteration seam of the real sampler.
 pub trait SamplingEngine {
     /// Optionally initialize the real Pfaffian/inverse tables before the first proposal.
-    /// Return `true` only when the tables are ready (the host inverse may be marked stale
-    /// when it stays on a device). `false` retains the ordinary C real setup. A device
-    /// engine may use the reducer to batch this operation across independent walkers.
+    /// Return `true` only when the tables are ready. `false` retains the ordinary C real
+    /// setup.
     /// This stage never draws random words or changes the configuration.
     fn initialize_real<R: Reducer + ?Sized>(
         &mut self,

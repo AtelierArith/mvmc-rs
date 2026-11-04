@@ -22,10 +22,6 @@
 //!
 //! The CPU engine uses tenferro's `native` provider. The `blas` provider is not selected
 //! or validated by this workspace.
-//! [`TenferroSr::with_runtime`] accepts any eager runtime, so the standalone
-//! `gpu/mvmc-gpu-cuda` crate runs the identical stages on a CUDA device
-//! ([`Placement::Device`] uploads and downloads explicitly; tenferro never transfers
-//! implicitly).
 //!
 //! # Complex Gram sample order
 //!
@@ -44,7 +40,7 @@ use num_complex::Complex64;
 use tenferro_ad::{EagerRuntime, EagerTensor};
 use tenferro_cpu::CpuEngine;
 use tenferro_linalg::EagerSessionLinalgExt;
-use tenferro_tensor::{DotGeneralConfig, Tensor, TensorRead};
+use tenferro_tensor::{DotGeneralConfig, Tensor};
 
 use crate::stage_backend::{centered, SrSg, StageError};
 
@@ -126,46 +122,6 @@ pub struct DirectStepInput<'a> {
     pub sta_del: f64,
     /// Step size `DSROptStepDt`.
     pub step_dt: f64,
-}
-
-/// Call counters of a resident SR backend (tests and the benchmark metadata).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ResidentCounters {
-    /// Resident direct steps begun ([`SrStages::direct_begin`]).
-    pub direct_steps: u64,
-    /// Store uploads (one per direct step).
-    pub store_uploads: u64,
-    /// `f64` values uploaded as O store.
-    pub store_values: u64,
-    /// Resident CG solves ([`SrStages::cg_step`]).
-    pub cg_solves: u64,
-}
-
-/// Diagonal and first column of the Gram matrix `G = O O^T` of an uploaded store (unscaled):
-/// all that the host needs to select the active components (issue #452).
-#[derive(Debug, Clone, PartialEq)]
-pub struct GramSummary {
-    /// `G[i, i]`, length `n`.
-    pub diag: Vec<f64>,
-    /// `G[i, 0]` (the mean of component `i` before the `1 / wc` normalization), length `n`.
-    pub col0: Vec<f64>,
-}
-
-/// Inputs of the assembly phase of the resident direct SR step ([`SrStages::direct_assemble`]).
-pub struct DirectSolveInput<'a> {
-    /// `HO` vector (length `n`), already normalized by the host.
-    pub ho: &'a [f64],
-    /// Active components in S order.
-    pub map: &'a [usize],
-    /// Index offset of the first parameter (1 for real parameters).
-    pub offset: usize,
-    /// Diagonal regularization `DSROptStaDel`.
-    pub sta_del: f64,
-    /// Step size `DSROptStepDt`.
-    pub step_dt: f64,
-    /// Factor applied to every Gram entry before it is used (`1 / wc`, the weight
-    /// normalization `weight_average_sr_opt_real` applies to the host `OO`).
-    pub gram_scale: f64,
 }
 
 /// Inputs of one CG SR solve (single process).
@@ -300,8 +256,7 @@ pub trait SrStages: Send {
 
     /// Fused direct SR step: Gram `O O^T`, S/g assembly with the active map and the diagonal
     /// shift, Cholesky solve; returns `x`. Composed from this backend's own stages by default
-    /// (for [`COrderSr`] that is the production sequence and the parity oracle); a resident
-    /// backend overrides it to keep `G`, `S` and the factor on the device (issue #447).
+    /// (for [`COrderSr`] that is the production sequence and the parity oracle).
     fn direct_step(&mut self, input: &DirectStepInput<'_>) -> Result<Vec<f64>, StageError> {
         let (n, nm) = (input.n, input.map.len());
         let mut gram = vec![0.0; n * n];
@@ -327,64 +282,8 @@ pub trait SrStages: Send {
         Ok(g)
     }
 
-    /// Call counters of a resident backend (`None` for host backends).
-    fn resident_counters(&self) -> Option<ResidentCounters> {
-        None
-    }
-
-    /// True when [`Self::direct_begin`] / [`Self::direct_assemble`] keep the Gram matrix, `S` and the
-    /// factor on the device. Production (`sr.rs`) then never materializes the host `OO` and
-    /// uploads the O store once per step (issue #452). The default is `false`.
-    fn resident_direct(&self) -> bool {
-        false
-    }
-
-    /// True when [`Self::cg_step`] runs the whole CG loop on the device. Production
-    /// (`SampledSrOperator::solve_with_reducer`) then calls it once per solve (issue #452).
-    fn resident_cg(&self) -> bool {
-        false
-    }
-
-    /// Phase 1 of the resident direct step: upload the `[n, samples]` store (the once-per-step
-    /// input) and form the Gram matrix on the device; returns its diagonal and first column.
-    fn direct_begin(
-        &mut self,
-        _store: &[f64],
-        _n: usize,
-        _samples: usize,
-    ) -> Result<GramSummary, StageError> {
-        Err(StageError::Unsupported(
-            "this SR backend provides no resident direct step".to_string(),
-        ))
-    }
-
-    /// Phase 2: S/g assembly (Gram entries scaled by `gram_scale`, diagonal shift) on the Gram
-    /// matrix of the last [`Self::direct_begin`]; `S` and `g` stay on the device.
-    fn direct_assemble(&mut self, _input: &DirectSolveInput<'_>) -> Result<(), StageError> {
-        Err(StageError::Unsupported(
-            "this SR backend provides no resident direct step".to_string(),
-        ))
-    }
-
-    /// The assembled `S` (full symmetric `nmap x nmap`, diagonal shifted) and `g` after
-    /// [`Self::direct_assemble`], for diagnostics only (an SR observer); the production step
-    /// never copies `S` to the host.
-    fn direct_download_s_g(&mut self, _nmap: usize) -> Result<(Vec<f64>, Vec<f64>), StageError> {
-        Err(StageError::Unsupported(
-            "this SR backend provides no resident direct step".to_string(),
-        ))
-    }
-
-    /// Phase 3: Cholesky factorization and solve of the resident `S x = g`; returns `x`.
-    /// A nonzero factor/solve `info` or a nonfinite solution is [`StageError::Failed`].
-    fn direct_factor_solve(&mut self, _nmap: usize) -> Result<Vec<f64>, StageError> {
-        Err(StageError::Unsupported(
-            "this SR backend provides no resident direct step".to_string(),
-        ))
-    }
-
     /// CG SR solve on the sampled operator (single process). Implemented by [`cg_step_with`] for
-    /// the host backends; a resident backend keeps the sample matrix on the device (issue #447).
+    /// the host backends.
     fn cg_step(&mut self, _input: &CgStepInput<'_>) -> Result<CgStepResult, StageError> {
         Err(StageError::Unsupported(
             "this SR backend provides no CG step".to_string(),
@@ -703,15 +602,6 @@ impl SrStages for COrderSr {
 // tenferro implementation (opt-in)
 // ---------------------------------------------------------------------------------------
 
-/// Where the eager runtime keeps its tensors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Placement {
-    /// Host memory (`CpuEngine`): tensors are created directly.
-    Host,
-    /// Device memory (CUDA): explicit upload and download, never implicit transfers.
-    Device,
-}
-
 /// Cached constant CG operand (`[components, samples (+ samples)]`), keyed by version.
 struct CgOperand {
     version: u64,
@@ -730,14 +620,12 @@ pub struct TenferroStats {
     pub cg_uploads: u64,
 }
 
-/// Explicit host/runtime tensor transfer for one tenferro eager runtime (issue #421; shared
-/// with the measurement stage of issue #518). [`Placement`] decides whether the runtime's
-/// tensors are host memory or device memory; tenferro never transfers implicitly, so device
-/// placement always uploads on creation and downloads on read.
+/// Host tensor access for one tenferro CPU eager runtime (issue #421; shared with the
+/// measurement stage of issue #518). The runtime's tensors are host memory, so tensors are
+/// created and read directly.
 pub(crate) struct EagerTransfer {
     pub(crate) ctx: Arc<EagerRuntime>,
     pub(crate) engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
-    pub(crate) placement: Placement,
 }
 
 /// Select a per-engine budget independently from the Rayon pool when requested.
@@ -899,13 +787,8 @@ impl EagerTransfer {
     pub(crate) fn new(
         ctx: Arc<EagerRuntime>,
         engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
-        placement: Placement,
     ) -> Self {
-        Self {
-            ctx,
-            engine,
-            placement,
-        }
+        Self { ctx, engine }
     }
 
     pub(crate) fn run<T>(
@@ -918,14 +801,8 @@ impl EagerTransfer {
 
     pub(crate) fn upload(&self, host: Tensor) -> Result<EagerTensor, StageError> {
         let mut engine = self.engine.lock().map_err(err)?;
-        let tensor = match self.placement {
-            Placement::Host => host,
-            Placement::Device => engine
-                .upload_host_tensor(TensorRead::from_tensor(&host))
-                .map_err(err)?,
-        };
         self.ctx
-            .with_eager_session(&mut ***engine, |session| session.constant_from(tensor))
+            .with_eager_session(&mut ***engine, |session| session.constant_from(host))
             .map_err(err)
     }
 
@@ -940,13 +817,7 @@ impl EagerTransfer {
 
     pub(crate) fn download(&self, t: &EagerTensor) -> Result<Tensor, StageError> {
         let mut engine = self.engine.lock().map_err(err)?;
-        let dev = t.to_tensor(&mut ***engine).map_err(err)?;
-        match self.placement {
-            Placement::Host => Ok(dev),
-            Placement::Device => engine
-                .download_to_host(TensorRead::from_tensor(&dev))
-                .map_err(err),
-        }
+        t.to_tensor(&mut ***engine).map_err(err)
     }
 
     pub(crate) fn download_f64(&self, t: &EagerTensor) -> Result<Vec<f64>, StageError> {
@@ -970,7 +841,6 @@ impl std::fmt::Debug for TenferroSr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TenferroSr")
             .field("label", &self.label)
-            .field("placement", &self.io.placement)
             .field("stats", &self.stats)
             .finish()
     }
@@ -983,20 +853,18 @@ impl TenferroSr {
         Ok(Self::with_runtime(
             ctx,
             cpu_engine()?,
-            Placement::Host,
             "tenferro native".to_string(),
         ))
     }
 
-    /// Any eager runtime (for example CUDA, built by `gpu/mvmc-gpu-cuda`).
+    /// A CPU eager runtime on a shared engine.
     pub fn with_runtime(
         ctx: Arc<EagerRuntime>,
         engine: Arc<std::sync::Mutex<crate::engine_resource::EngineResource>>,
-        placement: Placement,
         label: String,
     ) -> Self {
         Self {
-            io: EagerTransfer::new(ctx, engine, placement),
+            io: EagerTransfer::new(ctx, engine),
             label,
             cg: None,
             stats: TenferroStats::default(),
@@ -1044,12 +912,7 @@ impl SrStages for TenferroSr {
     }
 
     fn provider(&self) -> String {
-        match self.io.placement {
-            Placement::Host => "tenferro-ad EagerRuntime + CpuEngine (native)".to_string(),
-            Placement::Device => {
-                "tenferro-ad EagerRuntime + tenferro-gpu CudaEngine (cuBLAS/cuSOLVER)".to_string()
-            }
-        }
+        "tenferro-ad EagerRuntime + CpuEngine (native)".to_string()
     }
 
     fn stats(&self) -> Option<TenferroStats> {

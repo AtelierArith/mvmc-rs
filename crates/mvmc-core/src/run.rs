@@ -2939,9 +2939,8 @@ fn accumulate_observables<const TIMED: bool, R: Reducer + ?Sized>(
     // scope. Samples are processed in their original order into the uniquely
     // owned rank-local buffers, just as in C VMCMainCal. A second cache would
     // duplicate the clear and copy the completed aggregates back into zeros.
-    let deferred = accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
+    accumulate_observables_local(data, state, all_complex, use_fsz, timer, reducer);
     crate::sr_accumulator::publish_measurement_in_place(&mut state.sr_opt);
-    state.sr_oo_deferred = data.modpara.vmc_calc_mode != 1 && deferred;
 }
 
 fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
@@ -2951,7 +2950,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     use_fsz: bool,
     timer: &mut CTimer<TIMED>,
     reducer: &R,
-) -> bool {
+) {
     let diag = timer.diagnostics.maincal && !use_fsz;
     timer.start_diag(940, diag);
     timer.start_diag(941, diag);
@@ -3040,69 +3039,6 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     } else {
         0
     };
-    // Issue #518 milestone 2: device residency of the measurement. The stage A backend and the
-    // stage B backend share one device state (the CUDA provider), so when both are device
-    // backends the inverse planes stay on the device and only the Pfaffians, the sample's own
-    // electron rows and the small outputs cross the link. Host consumers of the inverse table
-    // (PhysCal Green functions, Lanczos) still need the per-batch download.
-    let measure_resident = match measure_stage {
-        Some(kind) => {
-            let mut handle = crate::stage_backend::acquire_kind(kind);
-            handle.backend().measurement().resident_measurement()
-        }
-        None => false,
-    };
-    let pf_resident = match stage_kind {
-        Some(kind) => {
-            let mut handle = crate::stage_backend::acquire_kind(kind);
-            handle.backend().pfaffian().resident_stage_a()
-        }
-        None => false,
-    };
-    // Issue #517 milestone 5: a device measurement backend can evaluate the PhysCal Green
-    // functions from the resident inverse planes, so the host Green consumer is skipped.
-    let green_resident = match measure_stage {
-        Some(kind) => {
-            let mut handle = crate::stage_backend::acquire_kind(kind);
-            handle.backend().measurement().resident_green()
-        }
-        None => false,
-    };
-    if pf_resident || measure_resident {
-        // A device chain is one process: the MPI QP split and the grouped sample partition have
-        // no device implementation. Hard error, never a silent host execution (issue #518).
-        assert!(
-            reducer.world_size() == 1 && reducer.reduction_size() == 1,
-            "{}: the device-resident measurement supports a single-process chain \
-             (world/reduction size 1)",
-            crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
-        );
-    }
-    // Issue #517 milestone 5: with the device Green functions the PhysCal sweep no longer needs
-    // the host inverse planes. A device sampler keeps its own inverse resident, so a fully
-    // device-resident PhysCal sweep can keep the inverse planes resident too; a C-order sampler
-    // (and the byte-identity comparison run) still downloads them.
-    let sampler_host_inverse = true;
-    let device_green_host_free =
-        green_resident && data.modpara.lanczos_mode == 0 && !sampler_host_inverse;
-    let download_tables = !(pf_resident && measure_resident)
-        || (data.modpara.vmc_calc_mode != 0 && !device_green_host_free)
-        || data.modpara.lanczos_mode > 0;
-    if measure_resident {
-        if let Some(kind) = measure_stage {
-            let mut handle = crate::stage_backend::acquire_kind(kind);
-            handle
-                .backend()
-                .measurement()
-                .resident_prepare(data, state)
-                .unwrap_or_else(|error| {
-                    panic!(
-                        "{}: resident measurement preparation failed: {error}",
-                        crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
-                    )
-                });
-        }
-    }
     let mut calculate_samples = || {
         for chunk in samples.chunks(batch_size) {
             if let Some(kind) = stage_kind {
@@ -3132,7 +3068,6 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                     n_site,
                     n_elec,
                     n_qp_full,
-                    download_tables,
                 )
                 .unwrap_or_else(|e| {
                     panic!(
@@ -3347,8 +3282,6 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         ele_cfg: &ele_cfg,
                         ele_num: &ele_num,
                         ele_proj_cnt: &ele_proj_cnt,
-                        sample,
-                        batch_slot: slot,
                     };
                     let out = handle
                         .backend()
@@ -3430,54 +3363,15 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                         timer,
                     );
                 } else if state.phys_quantities.is_some() {
-                    // Issue #517 milestone 5: a device measurement backend evaluates the Green
-                    // functions from the resident inverse planes; the default C-order stage
-                    // returns `None` and keeps the host consumer byte-identical.
-                    let green = if green_resident {
-                        let handle = measure_handle
-                            .as_mut()
-                            .expect("green_resident requires a measurement stage handle");
-                        let mut green_input = crate::stage_backend::MeasurementInput {
-                            data,
-                            state,
-                            ip,
-                            ele_idx,
-                            ele_cfg: &ele_cfg,
-                            ele_num: &ele_num,
-                            ele_proj_cnt: &ele_proj_cnt,
-                            sample,
-                            batch_slot: slot,
-                        };
-                        handle
-                            .backend()
-                            .measurement()
-                            .measure_green(
-                                &mut green_input,
-                                data.green_one_terms.len(),
-                                data.green_two_terms.len(),
-                                timer,
-                            )
-                            .unwrap_or_else(|error| {
-                                panic!(
-                                    "{}: device Green measurement failed: {error}",
-                                    crate::measurement_batch::MEASURE_CONSUMER_VARIABLE
-                                )
-                            })
-                    } else {
-                        None
-                    };
-                    let (one_body, direct) = match green {
-                        Some(green) => (green.one, green.direct),
-                        None => crate::observables::ordinary_green_values(
-                            data,
-                            state,
-                            ip,
-                            ele_idx,
-                            &ele_cfg,
-                            &ele_num,
-                            &ele_proj_cnt,
-                        ),
-                    };
+                    let (one_body, direct) = crate::observables::ordinary_green_values(
+                        data,
+                        state,
+                        ip,
+                        ele_idx,
+                        &ele_cfg,
+                        &ele_num,
+                        &ele_proj_cnt,
+                    );
                     let lanczos_green = if data.modpara.lanczos_mode > 1 {
                         Some(crate::observables::calculate_lanczos_green(
                             e,
@@ -3700,26 +3594,13 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     observe_physcal_green(data, state, use_fsz);
     normalize_physcal_green(state, use_fsz, all_complex);
     // C finalizes the stored OO only for NVMCCalMode==0 (`vmccal.c:309`).
-    let mut oo_deferred = false;
     if use_store && data.modpara.vmc_calc_mode == 0 {
         timer.start(45);
         let options = crate::observables::StoreFinalization {
             sample_start: 0,
             diagonal_only: data.modpara.nsrcg != 0,
         };
-        if !all_complex
-            && crate::sr::resident_direct_real_applies(
-                data,
-                n_vmc_sample,
-                sr_opt_size,
-                use_store,
-                reducer,
-            )
-        {
-            // Issue #452: the resident SR step forms the Gram on the device from the O store;
-            // the host never materializes `OO` for this step.
-            oo_deferred = true;
-        } else if all_complex {
+        if all_complex {
             crate::observables::finalize_oo_store(
                 &mut state.sr_opt.sr_opt_oo,
                 &state.sr_opt.sr_opt_o_store,
@@ -3738,7 +3619,6 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
         }
         timer.stop(45);
     }
-    oo_deferred
 }
 
 /// Exchange batch slot `slot` with the working inverse/Pfaffian tables of the active mode.
