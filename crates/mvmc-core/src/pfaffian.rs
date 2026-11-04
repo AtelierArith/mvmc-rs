@@ -317,7 +317,9 @@ where
         pf_m[qp_start..qp_end].copy_from_slice(&pf_stage);
         // Publish with the compute partition, so each worker copies the planes it just
         // produced (still in its cache) and the next per-QP region finds them there.
-        let stride = plane_len + 1;
+        // `InvMColMajor` stores each `n_size^2` plane followed by one pad slot.
+        let stride = inv_m.n_size() * inv_m.n_size() + 1;
+        debug_assert_eq!(plane_len + 1, stride);
         let table = &mut inv_m.as_mut_slice()[qp_start * stride..];
         let table_len = (count * stride).min(table.len());
         let staged = &staging[..count * plane_len];
