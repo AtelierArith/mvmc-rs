@@ -620,7 +620,9 @@ pub struct ParaOptMultiChainConfig {
 pub struct ParaOptWalker {
     /// Walker index (MPI rank in the equivalent ungrouped C run).
     pub walker: usize,
-    /// Run summary (the reduced optimization output; identical on every walker).
+    /// Run summary. Only walker 0 (the output root) reads the output files back; the other
+    /// walkers return metadata with empty rows and `final_energy_per_site = NaN`, as the
+    /// non-output ranks of the Julia/MPI run.
     pub summary: RunSummary,
     /// Final sampler/SR state of this walker (`SROptO` is walker-local, as in C).
     pub state: VmcOptimizationState,
@@ -631,7 +633,11 @@ pub struct ParaOptWalker {
 /// Run the optimization on `cfg.walkers` walkers with C-compatible cross-walker reductions.
 ///
 /// `W = 1` is the serial optimization. All walkers must run concurrently (they synchronize in
-/// every reduction), so one thread per walker is used. If any walker fails, every walker
+/// every reduction), so one thread per walker is used; a bounded worker pool would deadlock in
+/// the collectives. Each walker keeps BLAS single-threaded, but more than OpenBLAS's
+/// `MAX_THREADS` distinct walker threads make OpenBLAS print `precompiled NUM_THREADS exceeded`
+/// and allocate auxiliary thread metadata; this is a warning, not a failure (issue #642: 320
+/// walkers on OpenBLAS 0.3.26 `MAX_THREADS=64` completed repeatedly). If any walker fails, every walker
 /// reports the failure through the collective failure agreement of the optimizer (no
 /// deadlock); the first failing walker's error is returned.
 ///
