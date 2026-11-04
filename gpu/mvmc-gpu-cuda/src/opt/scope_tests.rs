@@ -84,10 +84,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             &[("modpara.def", "NExUpdatePath  0", "NExUpdatePath  1")],
         ),
         (
-            "sr-cg",
-            &[("modpara.def", "NSRCG          0", "NSRCG          1")],
-        ),
-        (
             "nsplit",
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
         ),
@@ -164,6 +160,31 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             fs::remove_dir_all(input.parent().unwrap()).unwrap();
         }
     }
+}
+
+/// Julia GPU PhysCal accepts and ignores `NSRCG` (`ext/cuda_runners.jl:27`):
+/// PhysCal never runs SR. Resident Opt keeps rejecting it (direct SR only).
+#[test]
+fn resident_physcal_ignores_nsrcg_while_opt_rejects_it() {
+    let input = edited(
+        "sr-cg",
+        &[("modpara.def", "NSRCG          0", "NSRCG          1")],
+    );
+    let data = parse(&input);
+    mvmc_core::validation::validate_para_opt(&data).unwrap();
+    mvmc_core::validation::validate_phys_cal(&data).unwrap();
+    let error = Model::prepare(&input, &cfg()).map(|_| ()).unwrap_err();
+    assert!(error.contains(SCOPE), "Opt: {error}");
+    let phys = Model::prepare_physcal(&input, &cfg(), None).unwrap();
+    let base = Model::prepare_physcal(&baseline(), &cfg(), None).unwrap();
+    assert_eq!(phys.data.modpara.nsrcg, 1);
+    // NSRCG changes nothing that PhysCal uploads.
+    assert_eq!(phys.parameters, base.parameters);
+    assert_eq!(
+        (phys.np, phys.nq, phys.energies.len()),
+        (base.np, base.nq, base.energies.len())
+    );
+    fs::remove_dir_all(input.parent().unwrap()).unwrap();
 }
 
 #[test]
