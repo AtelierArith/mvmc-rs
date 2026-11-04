@@ -1131,17 +1131,29 @@ pub(crate) fn assemble_inv_m_real_plane(
             let cols = &cols[..n_size];
             // Largest squared entry of the plane (the all-zero check), accumulated
             // in the plane's column-major order like `frobenius_norm_sqr_real`.
-            let mut max_abs2 = 0.0_f64;
+            // A maximum does not depend on the visiting order (`f64::max` skips NaN
+            // and `v * v` is never -0), so four running maxima give the same value
+            // without one serial max dependency per entry.
+            let mut acc = [0.0_f64; 4];
             for (&rsi, out) in cols.iter().zip(plane.chunks_exact_mut(n_size)) {
                 let start = (qp * n_site2 + rsi) * n_site2;
                 let row = &slater[start..start + n_site2];
-                for (o, &rsj) in out.iter_mut().zip(cols) {
+                let (out4, out_tail) = out.as_chunks_mut::<4>();
+                let (cols4, cols_tail) = cols.as_chunks::<4>();
+                for (o, c) in out4.iter_mut().zip(cols4) {
+                    for k in 0..4 {
+                        let v = -row[c[k]];
+                        o[k] = v;
+                        acc[k] = acc[k].max(v * v);
+                    }
+                }
+                for (o, &rsj) in out_tail.iter_mut().zip(cols_tail) {
                     let v = -row[rsj];
                     *o = v;
-                    max_abs2 = max_abs2.max(v * v);
+                    acc[0] = acc[0].max(v * v);
                 }
             }
-            return Ok(Some(max_abs2));
+            return Ok(Some(acc[0].max(acc[1]).max(acc[2].max(acc[3]))));
         }
     }
     for msi in 0..n_size {
@@ -1484,7 +1496,7 @@ mod tests {
             seed ^= seed << 17;
             (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
         };
-        for (n_site, ne) in [(4usize, 2usize), (6, 3), (8, 4), (16, 8)] {
+        for (n_site, ne) in [(4usize, 2usize), (6, 3), (8, 4), (12, 7), (16, 8)] {
             let n_qp = 3;
             let n_size = 2 * ne;
             let n_site2 = 2 * n_site;

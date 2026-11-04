@@ -306,10 +306,20 @@ fn fill_lower_from_upper_skew<T>(a: &mut [T], n: usize)
 where
     T: Copy + core::ops::Neg<Output = T> + PfafOne + BlasScalar,
 {
-    for j in 0..n {
-        a[j * n + j] = T::pfaf_zero();
-        for i in (j + 1)..n {
-            a[j * n + i] = -a[i * n + j];
+    // A(i, j) = -A(j, i) for i > j and a zero diagonal. Each strict-lower entry
+    // depends only on its own upper mirror, so a column block is filled row by row:
+    // the source upper entries of a row are adjacent in one cache line instead of
+    // being read with stride `n` per column. Values are the same negations.
+    const BLOCK: usize = 8;
+    for j0 in (0..n).step_by(BLOCK) {
+        let j1 = (j0 + BLOCK).min(n);
+        for j in j0..j1 {
+            a[j * n + j] = T::pfaf_zero();
+        }
+        for i in (j0 + 1)..n {
+            for j in j0..j1.min(i) {
+                a[j * n + i] = -a[i * n + j];
+            }
         }
     }
 }
@@ -494,12 +504,29 @@ fn utu2inv_generic<T>(
         }
     }
 
-    // Step 8: row permutation by iPiv (forward direction, sequential)
-    let a_data = a.as_mut_slice();
-    for (i, pivot) in pivots.iter().enumerate().take(n) {
-        let target = (pivot.0 as usize) - 1;
-        if target != i {
-            for col in a_data.chunks_exact_mut(n) {
+    // Step 8: row permutation by iPiv (forward direction, sequential).
+    // Each column receives the same row swaps in the same order as C's row-wise
+    // `swap(n, &A(i,0), ldA, ...)` loop; columns are independent, so applying the
+    // whole sequence per contiguous column moves identical values without
+    // touching every column once per pivot.
+    permute_rows_forward(a.as_mut_slice(), n, pivots);
+}
+
+/// Apply the forward row interchanges `i <-> pivots[i] - 1` (in increasing `i`)
+/// to every column of a column-major `n`-row matrix.
+fn permute_rows_forward<T>(data: &mut [T], n: usize, pivots: &[PivotIndex1Based]) {
+    let pivots = &pivots[..n];
+    if pivots
+        .iter()
+        .enumerate()
+        .all(|(i, pivot)| pivot.0 as usize - 1 == i)
+    {
+        return;
+    }
+    for col in data.chunks_exact_mut(n) {
+        for (i, pivot) in pivots.iter().enumerate() {
+            let target = (pivot.0 as usize) - 1;
+            if target != i {
                 col.swap(i, target);
             }
         }
@@ -518,10 +545,29 @@ fn swap_columns<T>(data: &mut [T], n: usize, x: usize, y: usize) {
 /// column-major `b` -> `c`. Four columns advance together: the columns are
 /// independent, so their serial division chains overlap. Every entry is produced by
 /// the same sequence of operations as [`solve_sktd_direct`] with `x / y`.
+#[cfg_attr(
+    all(feature = "blas-backend", target_arch = "x86_64"),
+    allow(unsafe_code)
+)]
 pub(crate) fn solve_sktd_c_real_f64(vt: &[f64], b: &[f64], c: &mut [f64], n: usize) {
     debug_assert!(n >= 2 && b.len() >= n * n && c.len() >= n * n && vt.len() >= n - 1);
-    let mut b_groups = b[..n * n].chunks_exact(4 * n);
-    let mut c_groups = c[..n * n].chunks_exact_mut(4 * n);
+    #[allow(unused_mut)]
+    let mut done = 0;
+    #[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
+    if n >= 8 && n.is_multiple_of(2) && std::arch::is_x86_feature_detected!("avx2") {
+        done = n / 8 * 8;
+        assert!(b.len() >= n * n && c.len() >= n * n && vt.len() >= n - 1);
+        // SAFETY: AVX2 was detected at runtime; the slices hold n columns of n
+        // entries and `done <= n` columns are read from `b` and written to `c`.
+        unsafe { solve_sktd_c_real_f64_avx2(vt, b, c, n, done) };
+    }
+    solve_sktd_c_real_f64_columns(vt, &b[done * n..n * n], &mut c[done * n..n * n], n);
+}
+
+/// Scalar body of [`solve_sktd_c_real_f64`] over the whole columns in `b`/`c`.
+fn solve_sktd_c_real_f64_columns(vt: &[f64], b: &[f64], c: &mut [f64], n: usize) {
+    let mut b_groups = b.chunks_exact(4 * n);
+    let mut c_groups = c.chunks_exact_mut(4 * n);
     for (bg, cg) in (&mut b_groups).zip(&mut c_groups) {
         let (b0, br) = bg.split_at(n);
         let (b1, br) = br.split_at(n);
@@ -564,6 +610,64 @@ pub(crate) fn solve_sktd_c_real_f64(vt: &[f64], b: &[f64], c: &mut [f64], n: usi
         cc[n - 2] = bc[n - 1] / vt[n - 2];
         for i in (1..n - 2).rev().step_by(2) {
             cc[i - 1] = (bc[i] + cc[i + 1] * vt[i]) / vt[i - 1];
+        }
+    }
+}
+
+/// AVX2 form of [`solve_sktd_c_real_f64`] for the first `cols` (a multiple of
+/// eight) columns: two four-column vectors advance together. Lanes are columns, so
+/// every entry sees the same IEEE subtract/add, multiply and division as the
+/// scalar recurrence (no FMA, no reciprocal); vector division is correctly rounded.
+#[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+#[allow(unsafe_code)]
+unsafe fn solve_sktd_c_real_f64_avx2(vt: &[f64], b: &[f64], c: &mut [f64], n: usize, cols: usize) {
+    use core::arch::x86_64::*;
+    debug_assert!(n >= 8 && n.is_multiple_of(2) && cols.is_multiple_of(8) && cols <= n);
+    let bp = b.as_ptr();
+    let cp = c.as_mut_ptr();
+    // Row `i` of columns j..j+4 (stride n); all indices are below n*n.
+    let load = |j: usize, i: usize| {
+        _mm256_set_pd(
+            *bp.add((j + 3) * n + i),
+            *bp.add((j + 2) * n + i),
+            *bp.add((j + 1) * n + i),
+            *bp.add(j * n + i),
+        )
+    };
+    let store = |j: usize, i: usize, v: __m256d| {
+        let mut lanes = [0.0f64; 4];
+        _mm256_storeu_pd(lanes.as_mut_ptr(), v);
+        for (w, lane) in lanes.into_iter().enumerate() {
+            *cp.add((j + w) * n + i) = lane;
+        }
+    };
+    for j in (0..cols).step_by(8) {
+        let d0 = _mm256_set1_pd(-vt[0]);
+        let mut pa = _mm256_div_pd(load(j, 0), d0);
+        let mut pb = _mm256_div_pd(load(j + 4, 0), d0);
+        store(j, 1, pa);
+        store(j + 4, 1, pb);
+        for i in (2..n).step_by(2) {
+            let v = _mm256_set1_pd(vt[i - 1]);
+            let d = _mm256_set1_pd(-vt[i]);
+            pa = _mm256_div_pd(_mm256_sub_pd(load(j, i), _mm256_mul_pd(pa, v)), d);
+            pb = _mm256_div_pd(_mm256_sub_pd(load(j + 4, i), _mm256_mul_pd(pb, v)), d);
+            store(j, i + 1, pa);
+            store(j + 4, i + 1, pb);
+        }
+        let dn = _mm256_set1_pd(vt[n - 2]);
+        pa = _mm256_div_pd(load(j, n - 1), dn);
+        pb = _mm256_div_pd(load(j + 4, n - 1), dn);
+        store(j, n - 2, pa);
+        store(j + 4, n - 2, pb);
+        for i in (1..n - 2).rev().step_by(2) {
+            let v = _mm256_set1_pd(vt[i]);
+            let d = _mm256_set1_pd(vt[i - 1]);
+            pa = _mm256_div_pd(_mm256_add_pd(load(j, i), _mm256_mul_pd(pa, v)), d);
+            pb = _mm256_div_pd(_mm256_add_pd(load(j + 4, i), _mm256_mul_pd(pb, v)), d);
+            store(j, i - 1, pa);
+            store(j + 4, i - 1, pb);
         }
     }
 }
@@ -689,7 +793,7 @@ mod tests {
     fn real_c_order_tridiagonal_solve_matches_direct_reference_bitwise() {
         // Four-column interleaving, remainder columns and the generic slice
         // default must reproduce the per-entry `x / y` reference exactly.
-        for n in [2usize, 4, 6, 8, 10, 14, 16, 18, 32, 34] {
+        for n in [2usize, 4, 6, 8, 10, 14, 16, 18, 20, 24, 32, 34, 128] {
             let b_buf = random_skew_real(n, 99 + n as u64);
             let vt: Vec<f64> = random_skew_real(n, 7 + n as u64)[n..2 * n - 1].to_vec();
             let mut b_ref = b_buf.clone();
@@ -717,6 +821,62 @@ mod tests {
             for i in 0..n * n {
                 assert_eq!(got[i].to_bits(), want[i].to_bits(), "n={n} entry {i}");
                 assert_eq!(generic[i].to_bits(), want[i].to_bits(), "n={n} entry {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn column_wise_row_permutation_matches_c_row_swaps() {
+        // C applies `swap(n, &A(i,0), ldA, &A(iPiv[i]-1,0), ldA)` for increasing i.
+        // Repeated, chained and identity pivots must move exactly the same values.
+        for n in [1usize, 2, 5, 8, 17, 64] {
+            let base: Vec<f64> = (0..n * n).map(|k| k as f64 - 0.5).collect();
+            let pivots: Vec<PivotIndex1Based> = (0..n)
+                .map(|i| {
+                    let target = match i % 4 {
+                        0 => (i + 3).min(n - 1),
+                        1 => i,
+                        2 => i / 2,
+                        _ => n - 1,
+                    };
+                    PivotIndex1Based(target as u32 + 1)
+                })
+                .collect();
+            let mut want = base.clone();
+            for (i, pivot) in pivots.iter().enumerate() {
+                let target = pivot.0 as usize - 1;
+                if target != i {
+                    for j in 0..n {
+                        want.swap(j * n + i, j * n + target);
+                    }
+                }
+            }
+            let mut got = base.clone();
+            permute_rows_forward(&mut got, n, &pivots);
+            assert_eq!(got, want, "n={n}");
+            let identity: Vec<PivotIndex1Based> =
+                (0..n).map(|i| PivotIndex1Based(i as u32 + 1)).collect();
+            let mut same = base.clone();
+            permute_rows_forward(&mut same, n, &identity);
+            assert_eq!(same, base, "n={n} identity");
+        }
+    }
+
+    #[test]
+    fn blocked_skew_lower_fill_matches_columnwise_reference() {
+        for n in [1usize, 2, 7, 8, 9, 16, 23, 64] {
+            let base: Vec<f64> = (0..n * n).map(|k| (k as f64).sin()).collect();
+            let mut want = base.clone();
+            for j in 0..n {
+                want[j * n + j] = 0.0;
+                for i in (j + 1)..n {
+                    want[j * n + i] = -want[i * n + j];
+                }
+            }
+            let mut got = base.clone();
+            fill_lower_from_upper_skew::<f64>(&mut got, n);
+            for k in 0..n * n {
+                assert_eq!(got[k].to_bits(), want[k].to_bits(), "n={n} entry {k}");
             }
         }
     }
