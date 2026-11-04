@@ -26,6 +26,7 @@
 | デバイス常駐サンプラ | `crates/mvmc-core/src/device_sampler.rs` と `gpu/mvmc-gpu-cuda/src/device_sampler.rs`(#434) | 状態を GPU 上に常駐させるロックステップのマルチウォーカー実数モードサンプラ | いいえ: 検証済みの基盤、保留中([12.8](#128-既知の制限)) |
 | ピン留め/非同期転送ヘルパ | `gpu/mvmc-gpu-cuda/src/transfer.rs`(#432) | ピン留めメモリプール、非同期コピー、イベントによる順序付け | デバイスサンプラとデバイス常駐 SR が使用 |
 | デバイス常駐 SR | `gpu/mvmc-gpu-cuda/src/sr_device.rs`、`stages.rs`(#447) | Gram、S/g、Cholesky、CG ループをデバイス上で実行(実数パラメータ) | **はい**(`MVMC_RS_SR_BACKEND=cuda[:N]`): 実数の直接 SR(`NStore != 0`)と実数・複素の CG。単一プロセス([12.4](#124-バックエンドの選択)) |
+| 常駐 GPU Opt と PhysCal | `gpu/mvmc-gpu-cuda/src/opt.rs`、`opt/physcal.rs`(#560、#637) | Julia GPU の契約に従うアンサンブル Opt と固定パラメータ PhysCal。RNG、ウォーカー、SR をデバイスに常駐させる。対応は Gutzwiller/Jastrow 付きの実数通常軌道のみ(ファミリーごとの対応表: [`docs/design/gpu-resident-model-support.md`](../../design/gpu-resident-model-support.md)、#572) | いいえ: ライブラリ API と `mvmc-cuda resident-physcal` サブコマンド |
 
 ## 12.3 ビルドと実行
 
