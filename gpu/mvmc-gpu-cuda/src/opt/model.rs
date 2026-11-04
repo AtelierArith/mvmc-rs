@@ -81,7 +81,8 @@ impl Model {
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || m.nex_update_path != 0
-            || m.nsrcg != 0
+            // Julia GPU PhysCal accepts and ignores NSRCG (`cuda_runners.jl:27`).
+            || (!physcal && m.nsrcg != 0)
             || m.nsplit_size != 1
             || m.nlocspin != 0
             || data.locspin_terms.iter().any(|s| s.spin_value != 0)
