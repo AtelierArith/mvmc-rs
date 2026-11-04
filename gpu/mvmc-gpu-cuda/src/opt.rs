@@ -26,6 +26,8 @@ use tenferro_tensor::Engine;
 const SOURCE: &str = concat!(
     include_str!("resident_status.cuh"),
     "\n",
+    include_str!("resident_dense.cuh"),
+    "\n",
     include_str!("opt/kernels.cu")
 );
 const KERNELS: &[&str] = &[
@@ -36,6 +38,8 @@ const KERNELS: &[&str] = &[
     "opt_counts",
     "opt_derivatives",
     "opt_energy_terms",
+    "opt_energy_fallback",
+    "opt_cofactors",
     "opt_energy",
     "opt_means",
     "opt_variance",
@@ -517,6 +521,88 @@ impl State {
         ))
     }
 
+    /// Dynamic shared bytes of the dense single-block fallbacks: n sites, 2n doubles.
+    fn dense_shared(&self) -> u32 {
+        let n = 2 * self.model.ne;
+        (((n + 1) & !1) * 4 + 2 * n * 8) as u32
+    }
+
+    /// Exact minor cofactors for invalid planes; every valid plane returns.
+    fn cofactors(&self, exec: &RawExec<'_, '_>, module: &RawModule) -> tenferro_tensor::Result<()> {
+        let m = &self.model;
+        let s = &self.resident.sampler;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // SAFETY: per-plane scratch `planes` and the inverse table are sized
+        // walkers*nq*n*n; one stream orders this before the derivatives.
+        unsafe {
+            exec.launch(
+                module.function("opt_cofactors")?,
+                ((s.geom.walkers * m.nq) as u32, 1, 1),
+                256,
+                self.dense_shared(),
+                &[
+                    p(&s.inv)?,
+                    p(&self.resident.valid)?,
+                    p(&s.ele)?,
+                    p(&s.slater)?,
+                    p(&s.planes)?,
+                    i(m.ns),
+                    i(m.ne),
+                    i(m.nq),
+                    i(s.geom.walkers),
+                    p(&self.resident.error)?,
+                ],
+            )
+        }
+    }
+
+    /// Full-Pfaffian terms for walkers with an invalid plane, after `opt_energy_terms`.
+    pub(crate) fn energy_fallback(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+        values: &DeviceBuffer,
+        operators: &DeviceBuffer,
+        terms: usize,
+    ) -> tenferro_tensor::Result<()> {
+        let b = &self.buffers;
+        let m = &self.model;
+        let s = &self.resident.sampler;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // SAFETY: as opt_energy_terms, plus per-walker `planes` scratch.
+        unsafe {
+            exec.launch(
+                module.function("opt_energy_fallback")?,
+                (s.geom.walkers as u32, 1, 1),
+                256,
+                self.dense_shared(),
+                &[
+                    p(values)?,
+                    p(operators)?,
+                    p(&s.ele)?,
+                    p(&s.occ)?,
+                    p(&b.lookup)?,
+                    p(&b.overlaps)?,
+                    p(&s.gutz)?,
+                    p(&s.jast)?,
+                    p(&b.parameters)?,
+                    p(&s.slater)?,
+                    p(&s.weights)?,
+                    p(&self.resident.valid)?,
+                    p(&s.planes)?,
+                    i(m.ns),
+                    i(m.ne),
+                    i(m.nq),
+                    i(m.ng),
+                    i(m.nj),
+                    i(terms),
+                    i(s.geom.walkers),
+                    p(&self.resident.error)?,
+                ],
+            )
+        }
+    }
+
     fn observe(&self, exec: &RawExec<'_, '_>, module: &RawModule) -> tenferro_tensor::Result<()> {
         self.counts(exec, module)?;
         let b = &self.buffers;
@@ -524,6 +610,7 @@ impl State {
         let s = &self.resident.sampler;
         let w = s.geom.walkers;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        self.cofactors(exec, module)?;
         unsafe {
             exec.launch(
                 module.function("opt_derivatives")?,
@@ -548,6 +635,7 @@ impl State {
                     i(m.nq),
                     i(w),
                     p(&self.resident.error)?,
+                    p(&self.resident.valid)?,
                 ],
             )?;
             let terms = m.energies.len();
@@ -579,8 +667,10 @@ impl State {
                         i(terms),
                         i(w),
                         p(&self.resident.error)?,
+                        p(&self.resident.valid)?,
                     ],
                 )?;
+                self.energy_fallback(exec, module, &b.values, &b.operators, terms)?;
             }
             exec.launch(
                 module.function("opt_energy")?,

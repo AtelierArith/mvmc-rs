@@ -25,6 +25,8 @@ pub use resident::{ResidentFailure, ResidentInterval};
 pub const INTERVAL_MODULE: &str = concat!(
     include_str!("resident_status.cuh"),
     "\n",
+    include_str!("resident_dense.cuh"),
+    "\n",
     include_str!("pfaffian_batched.cu"),
     "\n",
     include_str!("interval_delayed.cu"),

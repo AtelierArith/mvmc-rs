@@ -354,3 +354,85 @@ fn resident_physcal_matches_julia_observables_and_tape() {
     })
     .unwrap();
 }
+
+/// #573: a walker with an invalid QP plane evaluates every PhysCal operator
+/// (Hamiltonian, one-body, two-body and two-pair TwoBodyGEx overlays) with full
+/// Pfaffians of the moved configuration. Flagging nonsingular planes invalid
+/// must reproduce the inverse-path observables.
+#[test]
+#[ignore = "requires CUDA; full-Pfaffian PhysCal fallback against the inverse path"]
+fn resident_physcal_fallback_matches_inverse_path() {
+    use mvmc_expert_parsers::types::{GreenTwoExTerm, Spin::*};
+    let sampling = OptConfig {
+        walkers: Some(2),
+        nsteps: 1,
+        warmup: Some(0),
+        interval: Some(0),
+        seed: Some(79),
+        ..Default::default()
+    };
+    with_runtime(0, |backend| {
+        let mut model = Model::prepare_physcal(&input(), &sampling, config().opt_para.as_deref())?;
+        for (a, b, s, c, d, t) in [
+            (0, 1, Up, 0, 2, Up),
+            (0, 1, Down, 0, 1, Down),
+            (0, 0, Up, 0, 0, Down),
+            (3, 1, Up, 2, 5, Down),
+        ] {
+            model.data.green_two_ex_terms.push(GreenTwoExTerm {
+                site1: a,
+                site2: b,
+                spin1: s,
+                spin2: s,
+                site3: c,
+                site4: d,
+                spin3: t,
+                spin4: t,
+            });
+        }
+        let nq = model.nq;
+        let operators = Operators::prepare(&model)?;
+        let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
+        state.initialize(backend)?;
+        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let mut observed = vec![];
+        for flagged in [false, true] {
+            with_raw_exec(backend, "physcal.fallback.observe", |exec| {
+                let rows = measurement.operators.rows();
+                unsafe {
+                    exec.zero_bytes(exec.ptr(&measurement.means)?, rows * 8)?;
+                    if flagged {
+                        let mut mask = vec![1i32; 2 * nq];
+                        mask[nq + 1] = 0;
+                        exec.upload(exec.ptr(&state.resident.valid)?, &mask)?;
+                    }
+                }
+                measurement.observe(exec, &state)
+            })
+            .map_err(|e| e.to_string())?;
+            let result = measurement.result(backend, &state)?;
+            observed.push(
+                std::iter::once(result.energy)
+                    .chain(result.green_one)
+                    .chain(result.green_two)
+                    .chain(result.green_two_ex)
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let scale = observed[0].iter().fold(0f64, |m, x| m.max(x.abs()));
+        let mut worst = 0f64;
+        for (a, b) in observed[1].iter().zip(&observed[0]) {
+            assert!(a.is_finite());
+            worst = worst.max((a - b).abs() / scale);
+        }
+        // n=128 Pfaffians versus inverse ratios of the same planes; 1e-10 of
+        // the observable scale matches the existing PhysCal Julia-stage bound.
+        assert!(worst <= 1e-10, "max fallback deviation {worst:e}");
+        println!(
+            "PhysCal fallback: max deviation {worst:e} over {} rows",
+            observed[0].len()
+        );
+        Ok(())
+    })
+    .unwrap();
+}

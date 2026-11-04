@@ -226,8 +226,10 @@ impl Measurement {
                         i(terms),
                         i(w),
                         p(&state.resident.error)?,
+                        p(&state.resident.valid)?,
                     ],
                 )?;
+                state.energy_fallback(exec, &module, &self.values, &self.ops, terms)?;
             }
             let reduce = exec.module(PHYS_SOURCE, PHYS_KERNELS)?;
             exec.launch(

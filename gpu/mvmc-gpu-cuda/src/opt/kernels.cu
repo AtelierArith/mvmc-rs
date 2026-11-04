@@ -113,7 +113,7 @@ extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
 extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     const int* lookup, const int* columns, const int* xyz, const double* coeff,
     const double* inv, const double* pf, const double* weights, const double* overlaps,
-    int np, int nproj, int ns, int ne, int nq, int batch, int* error) {
+    int np, int nproj, int ns, int ne, int nq, int batch, int* error, const int* valid) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if (index>=np*batch || *error) return;
@@ -125,7 +125,9 @@ extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     size_t coordinate=(size_t)3*k;
     int i=lookup[w*2*ns+xyz[coordinate+1]], j=lookup[w*2*ns+xyz[coordinate]], q=xyz[coordinate+2];
     if (i>=0 && i<j) {
-      double cofactor=pf[w*nq+q]*inv[((size_t)w*nq+q)*n*n+j*n+i];
+      // An invalid plane stores its exact minor cofactor here (opt_cofactors).
+      double stored=inv[((size_t)w*nq+q)*n*n+j*n+i];
+      double cofactor=valid[w*nq+q] ? pf[w*nq+q]*stored : stored;
       double sensitivity=isfinite(reciprocal) && fabs(reciprocal)>=2.2250738585072014e-308
           ? -weights[q]*cofactor*reciprocal : -weights[q]*cofactor/overlaps[w];
       sum += coeff[k]*sensitivity;
@@ -177,37 +179,56 @@ __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
   return opt_warp_sum(result);
 }
 
-// A warp owns each Hamiltonian term. Electron labels encode operator signs;
-// applying the right pair then the left avoids a mutable per-term configuration.
-extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
-    const int* cfg,const int* occ,const int* lookup,const double* overlaps,
-    const int* gutz,const int* jast,const double* params,const double* slater,
-    const double* weights,const double* inv,const double* pf,
-    int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error) {
-  int lane=threadIdx.x%32;
-  unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
-  if(index>=terms*batch || *error) return;
-  int t=index%terms,w=index/terms,n=2*ne,n2=2*ns;
-  const int* op=ops+(size_t)7*t; const int* map=lookup+w*n2; const int* e=cfg+w*n;
-  int k=-1,a=-1;
+// Resolve one operator against a walker's labels: -1 gives value 0, 1 gives
+// value 1, 0 leaves moved slots a (to da) and optionally k (to dk). Electron
+// labels encode operator signs; applying the right pair then the left avoids a
+// mutable per-term configuration.
+__device__ int opt_resolve(const int* op,const int* map,const int* e,int ne,int ns,
+    int& a,int& k,int& da,int& dk) {
+  k=-1;a=-1;da=op[0];dk=op[3];
   if(op[6]==2) {
     k=map[op[4]+op[5]*ns];
-    if(k<0 || (op[3]!=op[4] && map[op[3]+op[5]*ns]>=0)) {if(!lane) values[index]=0;return;}
+    if(k<0 || (op[3]!=op[4] && map[op[3]+op[5]*ns]>=0)) return -1;
   }
   // The right operation may have changed the source/destination of the left.
   for(int i=op[2]*ne;i<(op[2]+1)*ne;++i) {
     int r=i==k?op[3]:e[i];
     if(r==op[1]) a=i;
-    if(op[0]!=op[1] && r==op[0]) {if(!lane) values[index]=0;return;}
+    if(op[0]!=op[1] && r==op[0]) return -1;
   }
-  if(a<0) {if(!lane) values[index]=0;return;}
-  int da=op[0],dk=op[3];
+  if(a<0) return -1;
   // Ignore unchanged electron slots; the left pair wins if labels coincide.
   if(k==a) k=-1;
   if(k>=0 && dk==e[k]) k=-1;
   if(da==e[a]) a=-1;
-  if(a<0 && k<0) {if(!lane) values[index]=1;return;}
+  if(a<0 && k<0) return 1;
   if(a<0) {a=k;da=dk;k=-1;}
+  return 0;
+}
+
+__device__ int opt_all_valid(const int* valid,int w,int nq) {
+  int all=1;
+  for(int q=0;q<nq;++q) all&=valid[w*nq+q]!=0;
+  return all;
+}
+
+// A warp owns each Hamiltonian term. Walkers with an invalid QP plane are
+// evaluated by opt_energy_fallback instead.
+extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
+    const int* cfg,const int* occ,const int* lookup,const double* overlaps,
+    const int* gutz,const int* jast,const double* params,const double* slater,
+    const double* weights,const double* inv,const double* pf,
+    int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
+    const int* valid) {
+  int lane=threadIdx.x%32;
+  unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
+  if(index>=terms*batch || *error) return;
+  int t=index%terms,w=index/terms,n=2*ne,n2=2*ns;
+  if(!opt_all_valid(valid,w,nq)) return;
+  const int* op=ops+(size_t)7*t; const int* map=lookup+w*n2; const int* e=cfg+w*n;
+  int a,k,da,dk;
+  int resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
+  if(resolved) {if(!lane) values[index]=resolved>0?1:0;return;}
   double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane),newip=0;
   for(int q=0;q<nq;++q) {
     const double* S=slater+(size_t)q*n2*n2;
@@ -236,6 +257,81 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
     newip+=weights[q]*(ratio*pf[w*nq+q]);
   }
   if(!lane) values[index]=exp(delta)*newip/overlaps[w];
+}
+
+// Julia observable_kernel!(fallback_only=true) with updated_overlap!: one
+// block per walker that has an invalid plane evaluates every term with full
+// Pfaffians of the moved configuration (cuda_observables.jl:109-122,283-295).
+// All-valid walkers return immediately. `fac` is per-walker nq*n*n scratch.
+// Dynamic shared memory: n ints of moved sites (rounded to even), 2n doubles.
+extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
+    const int* cfg,const int* occ,const int* lookup,const double* overlaps,
+    const int* gutz,const int* jast,const double* params,const double* slater,
+    const double* weights,const int* valid,double* fac,
+    int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error) {
+  int w=blockIdx.x,tid=threadIdx.x,n=2*ne,n2=2*ns;
+  if(w>=batch || *error || opt_all_valid(valid,w,nq)) return;
+  extern __shared__ char fallback_mem[];
+  int* rs=reinterpret_cast<int*>(fallback_mem);
+  double* vec=reinterpret_cast<double*>(rs+((n+1)&~1));
+  __shared__ int s_resolved,s_a,s_k,s_da,s_dk;
+  __shared__ double s_delta,s_ip;
+  double* A=fac+(size_t)w*nq*n*n;
+  const int* map=lookup+w*n2; const int* e=cfg+w*n;
+  for(int t=0;t<terms;++t) {
+    const int* op=ops+(size_t)7*t;
+    if(!tid) {
+      int a,k,da,dk;
+      s_resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
+      s_a=a;s_k=k;s_da=da;s_dk=dk;s_ip=0;
+    }
+    __syncthreads();
+    const int resolved=s_resolved;
+    if(resolved) {
+      if(!tid) values[(size_t)w*terms+t]=resolved>0?1:0;
+      __syncthreads();
+      continue;
+    }
+    if(tid<32) {
+      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid);
+      if(!tid) s_delta=d;
+    }
+    for(int i=tid;i<n;i+=blockDim.x)
+      rs[i]=opt_site(e,i,s_a,s_k,s_da,s_dk)+(i>=ne?ns:0);
+    __syncthreads();
+    for(int q=0;q<nq;++q) {
+      resident_gather(A,rs,n,-1,-1,slater,q,n2);
+      const double p=resident_block_pfaffian(A,n,vec,vec+n);
+      if(!tid) s_ip+=weights[q]*p;
+    }
+    if(!tid) values[(size_t)w*terms+t]=exp(s_delta)*s_ip/overlaps[w];
+    __syncthreads();
+  }
+}
+
+// Exact cofactors of an invalid plane (Julia cuda_sr.jl:154-187):
+// dPf(A)/dA(i,j) = (-1)^(i+j+1) Pf(A without rows/columns i,j) for 0-based
+// i<j. They are stored where opt_derivatives otherwise reads the inverse
+// entry, which no all-valid path reads for an invalid plane. One block per
+// (walker, QP); valid planes return. `fac` is per-plane n*n scratch.
+// Dynamic shared memory: n ints of sites (rounded to even), then 2n doubles.
+extern "C" __global__ void opt_cofactors(double* inv,const int* valid,const int* cfg,
+    const double* slater,double* fac,int ns,int ne,int nq,int batch,const int* error) {
+  int plane=blockIdx.x,w=plane/nq,q=plane%nq,n=2*ne,n2=2*ns;
+  if(w>=batch || *error || valid[plane]) return;
+  extern __shared__ char cofactor_mem[];
+  int* rs=reinterpret_cast<int*>(cofactor_mem);
+  double* vec=reinterpret_cast<double*>(rs+((n+1)&~1));
+  for(int i=threadIdx.x;i<n;i+=blockDim.x) rs[i]=cfg[w*n+i]+(i>=ne?ns:0);
+  __syncthreads();
+  double* A=fac+(size_t)plane*n*n;
+  double* C=inv+(size_t)plane*n*n;
+  for(int j=1;j<n;++j) for(int i=0;i<j;++i) {
+    const int m=resident_gather(A,rs,n,i,j,slater,q,n2);
+    const double p=m?resident_block_pfaffian(A,m,vec,vec+m):1.0;
+    if(!threadIdx.x) C[j*n+i]=((i+j+1)&1)?-p:p;
+    __syncthreads();
+  }
 }
 
 extern "C" __global__ void opt_energy(double* energies,const double* values,

@@ -101,6 +101,9 @@ pub struct ResidentInterval {
     total_accepts: DeviceBuffer,
     fallback: DeviceBuffer,
     delayed: DeviceBuffer,
+    /// Per-(walker, QP) validity, i32 0/1 (#573). Invalid planes carry no
+    /// usable inverse; their walker uses full-Pfaffian fallbacks.
+    pub(crate) valid: DeviceBuffer,
     pub(crate) delayed_updates: bool,
 }
 
@@ -128,10 +131,13 @@ impl ResidentInterval {
             let rng = DeviceRng::new(exec, seed)?;
             let error = exec.alloc_bytes(4)?;
             let total_accepts = exec.alloc_bytes(geom.walkers * 4)?;
+            // Setup tables are validated (or later initialized) as all valid.
+            let valid = exec.alloc_bytes(geom.walkers * geom.nqp * 4)?;
             // SAFETY: newly allocated buffers have exactly these sizes.
             unsafe {
                 exec.zero_bytes(exec.ptr(&error)?, 4)?;
                 exec.zero_bytes(exec.ptr(&total_accepts)?, geom.walkers * 4)?;
+                exec.upload(exec.ptr(&valid)?, &vec![1i32; geom.walkers * geom.nqp])?;
             }
             Ok(Self {
                 sampler,
@@ -147,6 +153,7 @@ impl ResidentInterval {
                     1
                 })?,
                 delayed_updates: true,
+                valid,
             })
         })
         .map_err(|e| e.to_string())
@@ -254,6 +261,9 @@ impl ResidentInterval {
                         p(&self.delayed)?,
                         p(&s.pfinv_out)?,
                         Arg::I(i32::from(self.delayed_updates)),
+                        p(&self.valid)?,
+                        p(&s.planes)?,
+                        p(&s.pfinv_w)?,
                     ],
                 )?;
                 self.enqueue_rebuild(exec, &module)?;
@@ -361,6 +371,7 @@ impl ResidentInterval {
                     p(&s.pf)?,
                     p(&s.logip)?,
                     p(&s.aw)?,
+                    p(&self.valid)?,
                     i(g.n),
                     i(g.nqp),
                 ],
