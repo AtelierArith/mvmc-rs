@@ -74,9 +74,7 @@
 //! All measurement modes use the batched pipeline: real, complex, FSZ real/complex, with
 //! Doublon-Holon, RBM, OptTrans, PhysCal Green functions and Lanczos. Stage B is per-sample
 //! (local energy, Green functions and the Slater derivative consume mutable shared state); the
-//! real, non-FSZ stage B of issues #519/#518 runs through the selected [`MeasurementStages`],
-//! and a device backend can keep the tables of stage A resident (`stage_a_resident`) so that
-//! stage B needs no per-sample table transfer.
+//! real, non-FSZ stage B of issues #519/#518 runs through the selected `MeasurementStages`.
 
 use num_complex::Complex64;
 use tenferro_tensor::TensorScalar;

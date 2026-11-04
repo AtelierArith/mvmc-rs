@@ -250,15 +250,15 @@ Evidence and the C run: `tests/fixtures/issue347_varbin/PROVENANCE.md`.
 
 ## Accelerated-backend validation (#424)
 
-An accelerated implementation of a tensor-shaped stage (tenferro on CPU or CUDA, a batched
+An accelerated implementation of a tensor-shaped stage (tenferro on the CPU, a batched
 Pfaffian kernel) changes summation order. It is validated against the C-order CPU path stage by
 stage, never against long Monte Carlo averages, and never bitwise. The harness is
 `mvmc_core::accel_validation` (module docs describe the model); the backend is the production `StageBackend` object (issue #437: stage traits `SrStages` and
 `PfaffianStages` composed into one object, the same one `stage_backend::acquire` returns). The
 C-order oracle is `StageBackend::c_order()` (the production PfaPack sequence and scalar loops).
-Variants: tenferro CPU runs in normal CI; the CUDA variant (`open_stage_backend(Cuda(0))`)
-runs in the optional gate (`scripts/run_cuda_gate.sh`, see `docs/design/gpu-readiness.md`
-section 10). A stage a backend does not implement reports `Unsupported` and is listed as not
+Variants: tenferro CPU runs in normal CI (the legacy CUDA stage variant was removed in #643;
+the resident GPU runners follow the Julia GPU contract and are validated against Julia
+fixtures, see `docs/design/gpu-resident-opt.md`). A stage a backend does not implement reports `Unsupported` and is listed as not
 compared; it is never replaced by the CPU result. Today tenferro 0.7.1 provides `S` and `g`
 through `dot_general` but no Pfaffian, so the Pfaffian stages are exercised against `COrderPfaffian`
 and against deliberately perturbed backends that prove the detector works; the batched

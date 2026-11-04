@@ -51,8 +51,8 @@ operators whose individual pairs conserve spin, hopping-only sampling, no local 
 `NSRCG=0`, `NSplitSize=1`, and no Lanczos. Unsupported modes fail explicitly,
 before any device allocation; see the
 [support matrix](gpu-resident-model-support.md) (#572).
-The ordinary CPU/CLI PhysCal and legacy single-SFMT CUDA path retain their
-existing contracts. The new public API is selected by `benchmark_gpu.sh`.
+The ordinary CPU/CLI PhysCal retains its existing contract; the legacy
+single-SFMT CUDA path was removed in #643. The new public API is selected by `benchmark_gpu.sh`.
 
 The model and initialization are shared with resident GPU Opt; PhysCal omits
 the sparse derivative basis and SR matrix/solver storage. Julia PhysCal uses
