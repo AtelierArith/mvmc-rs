@@ -1,4 +1,4 @@
-"""One-command, shared-input CPU/GPU benchmarks (Linux, Julia 1.13)."""
+"""One-command, shared-input CPU/GPU benchmarks (Linux, Juliaup 1.13)."""
 import argparse
 import fcntl
 import hashlib
@@ -187,31 +187,32 @@ def gpu_measure(args, out, build, env, cpus):
     gpu_env = dict(env, CUDA_VISIBLE_DEVICES=device, MVMC_RS_SAMPLER_BACKEND='cuda',
                    MVMC_RS_SR_BACKEND='cuda', MVMC_RS_MEASURE_BACKEND='cuda',
                    MVMC_RS_MEASURE_PF_BACKEND='cuda', MVMC_RS_INNER_THREADS='1',
-                   RAYON_NUM_THREADS='1', MVMC_RS_CUDA_RNG='sfmt', MVMC_BENCH_REPS=str(args.reps))
+                   RAYON_NUM_THREADS='1', MVMC_BENCH_REPS=str(args.reps))
     rust_env = cuda_library_environment(gpu_env, out)
     target = build / 'gpu'
     command(['cargo', 'build', '--locked', '--release', '--manifest-path',
              ROOT / 'gpu/mvmc-gpu-cuda/Cargo.toml', '--example', 'resident_opt_worker',
-             '--example', 'physcal_warm_587'], out / 'rust-build.log', dict(rust_env, CARGO_TARGET_DIR=str(target)))
+             '--example', 'resident_physcal_worker'], out / 'rust-build.log', dict(rust_env, CARGO_TARGET_DIR=str(target)))
     rows = []
     for workload in args.workloads:
-        binary = target / 'release/examples' / ('resident_opt_worker' if workload == 'opt' else 'physcal_warm_587')
+        binary = target / 'release/examples' / ('resident_opt_worker' if workload == 'opt' else 'resident_physcal_worker')
         dest = out / f'rust-{workload}'
         if workload == 'opt':
             cmd = [binary, out / 'inputs/opt/namelist.def', dest, args.samples, args.steps, 128, 128]
-            stdin = ''.join(f'{rep}\n' for rep in range(args.reps + 1)) + 'quit\n'
         else:
-            cmd = [binary, out / 'inputs/phys/namelist.def', out / 'inputs/phys/zqp_opt.dat', dest, '--no-output']
-            stdin = None
+            cmd = [binary, out / 'inputs/phys/namelist.def', out / 'inputs/phys/zqp_opt.dat',
+                   dest, args.samples, 1, 128, 128]
+        stdin = ''.join(f'{rep}\n' for rep in range(args.reps + 1)) + 'quit\n'
         text = command(['taskset', '-c', cpus[0], *cmd], out / f'rust-{workload}.log', rust_env, stdin)
         rust_rows = parse_times(text, args.reps)
         julia_rows = julia_run('gpu', workload, 1, args, out, gpu_env, cpus)
         for kind, times in [('Rust GPU', rust_rows), ('Julia GPU', julia_rows)]:
             rows += [dict(workload=workload, kind=kind, threads=1, **r) for r in times]
         (out / 'timings.json').write_text(json.dumps(rows, indent=2) + '\n')
-    return rows, dict(device=device, cuda_library_path=rust_env['LD_LIBRARY_PATH'],
+    return rows, dict(device=device, gpu_rng='cuRAND XORWOW resident ensemble',
+                      cuda_library_path=rust_env['LD_LIBRARY_PATH'],
                       binary_sha256={name: sha(target / 'release/examples' / name)
-                                     for name in ('resident_opt_worker', 'physcal_warm_587')},
+                                     for name in ('resident_opt_worker', 'resident_physcal_worker')},
                       rust_environment={k:v for k,v in rust_env.items()
                                         if k.startswith(('MVMC_', 'CUDA_VISIBLE', 'RAYON_'))})
 
@@ -260,9 +261,9 @@ def write_report(args, out, rows):
              'CPU: C/Rust process wall (C includes mpirun, Docker launch excluded); '
              'Julia warm API including input/output, JIT and explicit GC excluded. '
              'GPU: both warm public APIs; setup/JIT/rep0/explicit GC/serialization excluded.', '',
-             'CPU uses c-order PF/SR, physical cores, BLAS=1. GPU Opt uses the resident '
-             'ensemble; GPU PhysCal Rust uses a single SFMT chain while Julia uses XORWOW '
-             'walkers (different trajectories/proposal counts). Common definitions and '
+             'CPU uses c-order PF/SR, physical cores, BLAS=1. GPU Opt and PhysCal use '
+             'resident XORWOW ensembles with 128 warmup and 128 interval proposals per '
+             'walker. CPU uses a single SFMT chain. Common definitions and '
              'fixed parameters do not imply identical sampling work or kernel speedup.', '']
     for workload in args.workloads:
         lines += [f'## {workload}', '']
@@ -355,6 +356,7 @@ def main():
         metadata = dict(args={k: str(v) for k, v in vars(args).items()}, source=command(['git','rev-parse','HEAD'], env=env).strip(),
                         status=command(['git','status','--short'], env=env), physical_cpu_ids=cpus,
                         rust_version=command(['rustc','-Vv'], env=env),
+                        julia_version=command(['julia','+1.13','--startup-file=no','--version'], env=env).strip(),
                         julia_source=command(['git','-C',JULIA,'rev-parse','HEAD'], env=env).strip(),
                         julia_lock_sha256=sha(project / 'Manifest-v1.13.toml'),
                         input_sha256={str(f.relative_to(out)):sha(f) for f in (out/'inputs').rglob('*') if f.is_file()},

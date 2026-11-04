@@ -5,6 +5,7 @@
 //! Only initialization status and final parameters/energy history are downloaded.
 
 mod model;
+pub mod physcal;
 #[cfg(test)]
 mod tests;
 use crate::interval::{
@@ -183,6 +184,15 @@ impl State {
         model: Model,
         config: &OptConfig,
     ) -> Result<Self, String> {
+        Self::prepare_with_derivatives(backend, model, config, true)
+    }
+
+    fn prepare_with_derivatives<B: Engine + ?Sized>(
+        backend: &mut B,
+        model: Model,
+        config: &OptConfig,
+        derivatives: bool,
+    ) -> Result<Self, String> {
         let mp = &model.data.modpara;
         let convert =
             |n: i64| usize::try_from(n).map_err(|_| "negative sampling length".to_string());
@@ -217,7 +227,7 @@ impl State {
             .iter()
             .any(|&n| n > i32::MAX as usize)
         {
-            return Err("invalid GPU Opt dimensions".into());
+            return Err("invalid resident GPU sampling dimensions".into());
         }
         let n = 2 * model.ne;
         // Kernel indexing is i32 within a walker; allocations use checked usize.
@@ -236,7 +246,7 @@ impl State {
                 .filter(|&v| v <= i32::MAX as usize)
                 .is_none()
             {
-                return Err("GPU Opt index capacity exceeded".into());
+                return Err("resident GPU index capacity exceeded".into());
             }
         }
         w.checked_mul(model.nq)
@@ -272,9 +282,14 @@ impl State {
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
             let np = model.np;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
-            let gram = alloc(np * np, 8)?;
+            let sr_np = if derivatives { np } else { 0 };
+            let gram = alloc(sr_np * sr_np, 8)?;
             // SAFETY: this is the allocated square FP64 matrix on this context.
-            let workspace_len = unsafe { exec.dpotrf_workspace(exec.ptr(&gram)?, np)? };
+            let workspace_len = if derivatives {
+                unsafe { exec.dpotrf_workspace(exec.ptr(&gram)?, np)? }
+            } else {
+                0
+            };
             Ok(Buffers {
                 parameters: upload(exec, &model.parameters)?,
                 flags: upload(exec, &model.flags)?,
@@ -294,15 +309,15 @@ impl State {
                 counts: alloc(w * geom.nproj, 4)?,
                 overlaps: alloc(w, 8)?,
                 logs: alloc(w, 8)?,
-                derivatives: alloc(w * np, 8)?,
+                derivatives: alloc(w * sr_np, 8)?,
                 values: alloc(w * model.energies.len(), 8)?,
                 local_energy: alloc(w, 8)?,
-                mean: alloc(np + 1, 8)?,
+                mean: alloc(sr_np + 1, 8)?,
                 gram,
-                ho: alloc(np, 8)?,
-                variance: alloc(np, 8)?,
+                ho: alloc(sr_np, 8)?,
+                variance: alloc(sr_np, 8)?,
                 cutoff: alloc(1, 8)?,
-                rhs: alloc(np, 8)?,
+                rhs: alloc(sr_np, 8)?,
                 info: alloc(2, 4)?,
                 workspace: alloc(workspace_len, 8)?,
                 workspace_len,

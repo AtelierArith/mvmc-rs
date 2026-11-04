@@ -1,0 +1,38 @@
+[
+  {
+    "rep": 0,
+    "upload_calls": 26,
+    "upload_bytes": 6942308,
+    "download_calls": 3,
+    "download_bytes": 8208,
+    "synchronizations": 11,
+    "scopes": 8
+  },
+  {
+    "rep": 1,
+    "upload_calls": 26,
+    "upload_bytes": 6942308,
+    "download_calls": 3,
+    "download_bytes": 8208,
+    "synchronizations": 11,
+    "scopes": 8
+  },
+  {
+    "rep": 2,
+    "upload_calls": 26,
+    "upload_bytes": 6942308,
+    "download_calls": 3,
+    "download_bytes": 8208,
+    "synchronizations": 11,
+    "scopes": 8
+  },
+  {
+    "rep": 3,
+    "upload_calls": 26,
+    "upload_bytes": 6942308,
+    "download_calls": 3,
+    "download_bytes": 8208,
+    "synchronizations": 11,
+    "scopes": 8
+  }
+]

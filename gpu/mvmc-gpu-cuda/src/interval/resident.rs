@@ -25,6 +25,7 @@ pub struct ResidentInterval {
     total_accepts: DeviceBuffer,
     fallback: DeviceBuffer,
     delayed: DeviceBuffer,
+    pub(crate) delayed_updates: bool,
 }
 
 impl ResidentInterval {
@@ -69,6 +70,7 @@ impl ResidentInterval {
                 } else {
                     1
                 })?,
+                delayed_updates: true,
             })
         })
         .map_err(|e| e.to_string())
@@ -175,6 +177,7 @@ impl ResidentInterval {
                         p(&self.error)?,
                         p(&self.delayed)?,
                         p(&s.pfinv_out)?,
+                        Arg::I(i32::from(self.delayed_updates)),
                     ],
                 )?;
                 self.enqueue_rebuild(exec, &module)?;

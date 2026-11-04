@@ -1,0 +1,27 @@
+[
+  {
+    "archive": "performance.tar.gz",
+    "files": 55,
+    "sha256": "7d6dec2864fa614ecb18457032de6aefeff5ad44c936944c7f15269868acf456"
+  },
+  {
+    "archive": "nsight.tar.gz",
+    "files": 13,
+    "sha256": "37f4fe2a5e43f09dac54ad72c9ed673da7e8d4f59dcc9f6d91c792bd41e4d2c9"
+  },
+  {
+    "archive": "entrypoint-smoke.tar.gz",
+    "files": 49,
+    "sha256": "26c0c7b78a16550e0807726685ddc2c797ac6d5aefd0ac384ced1c42a9dedf3a"
+  },
+  {
+    "archive": "validation.tar.gz",
+    "files": 26,
+    "sha256": "e48587f5e71738b51d0270e395dc8aaa4ebf85711947e370ebd629712f2fb4c2"
+  },
+  {
+    "archive": "final-performance.tar.gz",
+    "files": 54,
+    "sha256": "4594a8a505f687c112463404c7abdb8cc53f213f9adb3a782b00590edadeba83"
+  }
+]

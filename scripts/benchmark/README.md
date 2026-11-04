@@ -25,7 +25,7 @@ are keyed by source and image ID and verify the executable hash before reuse.
 
 ## Prerequisites
 
-- Linux, Rust/Cargo, `uv`, Juliaup with **Julia 1.13**, `git`, `taskset`, and the
+- Linux, Rust/Cargo, `uv`, Juliaup with the **Julia 1.13 channel**, `git`, `taskset`, and the
   ordinary native BLAS/LAPACK/compiler dependencies in `docs/DEVELOPMENT.md`.
   No Python dependencies need installation outside `uv`.
 - CPU: a running Docker daemon. An existing mvmc-rs Dev Container image is
@@ -84,12 +84,15 @@ and use visible ordinal 0. This observation is not an exclusive device lock.
   zero, explicit Julia GC and post-timing serialization. Rust Opt's public API
   lifetime includes its internal result/state teardown. CUDA completion is
   included by the Rust API's host-result contract and explicit Julia synchronize.
-- Opt uses the dedicated resident ensemble (320 walkers in the full case) on
-  GPU. CPU runs one chain with 320 samples. PhysCal Rust GPU retains the single
-  SFMT chain with `(1+320)*128 = 41,088` configured proposals, whereas Julia GPU
-  uses 320 XORWOW walkers and `320*(128+128) = 81,920` proposals. Identical input
+- Opt and PhysCal use dedicated resident XORWOW ensembles (320 walkers in the
+  full case) on GPU, with `320*(128+128) = 81,920` configured PhysCal proposals.
+  The explicit resident PhysCal API replaces the legacy single-SFMT-chain
+  benchmark here; the ordinary CLI and legacy API keep their original contract.
+  CPU runs one SFMT chain with 320 samples and 41,088 PhysCal proposals. Identical input
   files/parameters **do not imply equal RNG trajectories or sampling work**.
   CPU and GPU wall ratios must not be called matched kernel speedups.
+- Julia is launched with `+1.13`; its resolved version is recorded in metadata.
+  The pinned `Manifest-v1.13.toml` is preserved byte-for-byte.
 - Fixed parameters are copied unchanged and SHA-256 checked against
   `9130219b4af78438bee2f30171833e7a8f86a01ff11e23276af439652230fd90`.
 

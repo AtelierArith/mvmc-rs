@@ -40,9 +40,33 @@ pub(super) struct Model {
 
 impl Model {
     pub fn prepare(path: &Path, config: &OptConfig) -> Result<Self, String> {
+        Self::prepare_input(path, config, false, None)
+    }
+
+    pub fn prepare_physcal(
+        path: &Path,
+        config: &OptConfig,
+        opt_para: Option<&Path>,
+    ) -> Result<Self, String> {
+        Self::prepare_input(path, config, true, opt_para)
+    }
+
+    fn prepare_input(
+        path: &Path,
+        config: &OptConfig,
+        physcal: bool,
+        opt_para: Option<&Path>,
+    ) -> Result<Self, String> {
         let mut data =
             mvmc_expert_parsers::parse_expert_mode_files(path).map_err(|e| e.to_string())?;
-        mvmc_core::validation::validate_para_opt(&data)?;
+        if physcal {
+            mvmc_core::validation::validate_phys_cal(&data)?;
+            if data.modpara.lanczos_mode != 0 {
+                return Err("resident GPU PhysCal requires NLanczosMode=0".into());
+            }
+        } else {
+            mvmc_core::validation::validate_para_opt(&data)?;
+        }
         // Match Julia's GPU setup: normalize translations before model construction.
         data.modpara.nmp_trans = data
             .modpara
@@ -67,7 +91,7 @@ impl Model {
             || !data.doublon_holon_4site_indices.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU Opt requires real normal orbitals, hopping-only sampling, no local spins/RBM/DH/OptTrans, NSRCG=0 and serial execution (#560)".into());
+            return Err("resident GPU requires real normal orbitals, hopping-only sampling, no local spins/RBM/DH/OptTrans, NSRCG=0 and serial execution".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -91,20 +115,44 @@ impl Model {
                 return Err("initial parameter file could not be loaded".into());
             }
         }
+        if let Some(opt_para) = opt_para {
+            let loaded = mvmc_core::read_opt_para_file(&mut data, opt_para)?;
+            if loaded
+                != mvmc_core::pack_parameters(&data)
+                    .map_err(|e| e.to_string())?
+                    .len()
+            {
+                return Err("incomplete optimized parameter file".into());
+            }
+        }
+        // C PhysCal loads fixed parameters before applying explicit In*.def overlays.
+        // Opt has no fixed parameter file, so its existing initialization order is unchanged.
         read_input_parameters(&mut data, path)?;
-        mvmc_core::sync::sync_modified_parameter_local(&mut data, true);
+        mvmc_core::sync::sync_modified_parameter_local(&mut data, !physcal);
         mvmc_core::qp::init_qp_weight(&mut data);
-        Self::from_data(data, seed as u64)
+        if physcal {
+            Self::from_data_with_derivatives(data, seed as u64, false)
+        } else {
+            Self::from_data(data, seed as u64)
+        }
     }
 
-    pub fn from_data(mut data: ExpertModeData, seed: u64) -> Result<Self, String> {
+    pub fn from_data(data: ExpertModeData, seed: u64) -> Result<Self, String> {
+        Self::from_data_with_derivatives(data, seed, true)
+    }
+
+    fn from_data_with_derivatives(
+        mut data: ExpertModeData,
+        seed: u64,
+        derivatives: bool,
+    ) -> Result<Self, String> {
         let (ns, ne) = (data.modpara.nsite as usize, data.modpara.nelec as usize);
         if ne == 0 || ne > ns || 2 * ne > crate::pfaffian::MAX_N {
             return Err("unsupported electron geometry".into());
         }
         let packed = mvmc_core::pack_parameters(&data).map_err(|e| e.to_string())?;
         if packed.iter().any(|p| p.im != 0.0 || !p.re.is_finite()) {
-            return Err("GPU Opt parameters must be finite and real".into());
+            return Err("resident GPU parameters must be finite and real".into());
         }
         let parameters: Vec<_> = packed.iter().map(|p| p.re).collect();
         let np = parameters.len();
@@ -194,7 +242,7 @@ impl Model {
             (1, 0) => -a * ss[q] - b * cc[q],
             _ => (a - b) * cs[q],
         };
-        for q in 0..nq {
+        for q in 0..if derivatives { nq } else { 0 } {
             for rs in 0..2 {
                 for ri in 0..ns {
                     for colspin in 0..2 {

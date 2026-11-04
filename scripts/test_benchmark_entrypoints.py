@@ -77,6 +77,32 @@ class BenchmarkEntrypoints(unittest.TestCase):
                 bench.write_report(args, Path(tmp), rows)
             self.assertFalse((Path(tmp) / 'report.md').exists())
 
+    def test_gpu_physcal_uses_declared_resident_walker_work(self):
+        import argparse
+        args = argparse.Namespace(device='0', samples=16, steps=2, reps=1, workloads=['phys'])
+        commands = []
+        def command(cmd, log=None, env=None, stdin=None):
+            commands.append((list(map(str, cmd)), stdin, env))
+            if cmd[0] == 'nvidia-smi':
+                return '0, GPU-aaa, RTX 3060, 580, 15 MiB\n'
+            return 'BENCH rep=0 seconds=2\nBENCH rep=1 seconds=1\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.object(bench, 'command', side_effect=command), \
+                 patch.object(bench, 'cuda_library_environment', side_effect=lambda env, out: dict(env, LD_LIBRARY_PATH='/cuda12')), \
+                 patch.object(bench, 'julia_run', return_value=[dict(rep=0, seconds=2.), dict(rep=1, seconds=1.)]), \
+                 patch.object(bench, 'sha', return_value='binary-hash'):
+                rows, metadata = bench.gpu_measure(args, root, root/'build', {}, [8])
+        runs = [(cmd, stdin, env) for cmd, stdin, env in commands if cmd[0] == 'taskset']
+        self.assertEqual(len(runs), 1)
+        cmd, stdin, env = runs[0]
+        self.assertTrue(cmd[3].endswith('/resident_physcal_worker'))
+        self.assertEqual(cmd[-4:], ['16', '1', '128', '128'])
+        self.assertEqual(stdin, '0\n1\nquit\n')
+        self.assertNotIn('MVMC_RS_CUDA_RNG', env)
+        self.assertIn('XORWOW', metadata['gpu_rng'])
+        self.assertEqual(len(rows), 4)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,29 @@
+{
+  "reference_source": "7955a882debb8d22af2e97dd2a927b13f84e95c7",
+  "current_source": "03b339986770c2f07c38f8a7acc405e19ba55382",
+  "input_bytes_equal": true,
+  "In_overlays": false,
+  "parameter_contract": "same fixed opt_para bytes; moving absent In overlays is a no-op; independent parameter fixture passes unchanged",
+  "comparisons": [
+    {
+      "rep": 0,
+      "values": 1025,
+      "max_abs_difference": 0.0
+    },
+    {
+      "rep": 1,
+      "values": 1025,
+      "max_abs_difference": 0.0
+    },
+    {
+      "rep": 2,
+      "values": 1025,
+      "max_abs_difference": 0.0
+    },
+    {
+      "rep": 3,
+      "values": 1025,
+      "max_abs_difference": 0.0
+    }
+  ]
+}
