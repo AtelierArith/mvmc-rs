@@ -554,7 +554,7 @@ pub(crate) fn solve_sktd_c_real_f64(vt: &[f64], b: &[f64], c: &mut [f64], n: usi
     #[allow(unused_mut)]
     let mut done = 0;
     #[cfg(all(feature = "blas-backend", target_arch = "x86_64"))]
-    if n >= 8 && n % 2 == 0 && std::arch::is_x86_feature_detected!("avx2") {
+    if n >= 8 && n.is_multiple_of(2) && std::arch::is_x86_feature_detected!("avx2") {
         done = n / 8 * 8;
         assert!(b.len() >= n * n && c.len() >= n * n && vt.len() >= n - 1);
         // SAFETY: AVX2 was detected at runtime; the slices hold n columns of n
@@ -623,7 +623,7 @@ fn solve_sktd_c_real_f64_columns(vt: &[f64], b: &[f64], c: &mut [f64], n: usize)
 #[allow(unsafe_code)]
 unsafe fn solve_sktd_c_real_f64_avx2(vt: &[f64], b: &[f64], c: &mut [f64], n: usize, cols: usize) {
     use core::arch::x86_64::*;
-    debug_assert!(n >= 8 && n % 2 == 0 && cols % 8 == 0 && cols <= n);
+    debug_assert!(n >= 8 && n.is_multiple_of(2) && cols.is_multiple_of(8) && cols <= n);
     let bp = b.as_ptr();
     let cp = c.as_mut_ptr();
     // Row `i` of columns j..j+4 (stride n); all indices are below n*n.
