@@ -922,7 +922,7 @@ mod tests {
     }
 
     #[test]
-    fn tenferro_cpu_sr_matches_oracle_and_pfaffian_is_unsupported() {
+    fn tenferro_cpu_sr_and_pfaffian_match_the_oracle() {
         let rep = replay(
             &mut StageBackend::tenferro_cpu().unwrap(),
             &ReplayConfig::default(),
@@ -930,11 +930,16 @@ mod tests {
         .unwrap();
         assert!(rep.violations().is_empty(), "{:?}", rep.violations());
         assert!(rep.s.compared > 0 && rep.g.compared > 0);
-        assert_eq!(rep.pf.compared, 0);
-        assert!(rep
-            .unsupported
-            .iter()
-            .any(|u| u.starts_with("pfaffian_inverse")));
+        // Issue #613: the Pfaffian stage is the PfaPack extension in a tenferro program.
+        assert!(rep.pf.compared > 0 && rep.inv.compared > 0);
+        assert!(
+            !rep.unsupported
+                .iter()
+                .any(|u| u.starts_with("pfaffian_inverse")),
+            "{:?}",
+            rep.unsupported
+        );
+        assert_eq!(rep.flips, 0);
         // reordered summation: deviation is tiny but the comparison used the bounds, not bits
         assert!(rep.s.max_rel < 1e-12);
     }
@@ -1027,8 +1032,20 @@ mod tests {
             steps: 20,
             ..ReplayConfig::default()
         };
-        let (pf, sr) = bench_stages(&mut StageBackend::tenferro_cpu().unwrap(), &cfg, 1, 3);
+        let mut backend = StageBackend::c_order().with_pfaffian(
+            "no-pfaffian",
+            Box::new(crate::stage_backend::UnsupportedPfaffian::new(
+                "none",
+                "test backend without a Pfaffian",
+            )),
+        );
+        let (pf, sr) = bench_stages(&mut backend, &cfg, 1, 3);
         assert!(pf.is_none());
         assert!(sr.is_some());
+        let (pf, _) = bench_stages(&mut StageBackend::tenferro_cpu().unwrap(), &cfg, 1, 3);
+        assert!(
+            pf.is_some(),
+            "issue #613: tenferro provides the Pfaffian stage"
+        );
     }
 }

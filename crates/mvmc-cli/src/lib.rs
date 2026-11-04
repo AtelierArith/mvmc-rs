@@ -733,6 +733,39 @@ pub fn run_cli() {
             process::exit(1);
         });
     }
+    // The stage-backend measurement Pfaffian (`c-order`, `tenferro`) supports only real, non-FSZ
+    // inputs (issue #613). Reject other modes here, after every rank agreed on the mode and the
+    // selector and before any output, instead of panicking in the first measurement.
+    let measure_mode = match mvmc_core::measurement_batch::try_selected_measurement_pfaffian() {
+        Ok(mvmc_core::measurement_batch::MeasurementPfaffian::Stage(_))
+            if inferred_mode != "real" =>
+        {
+            Err(format!(
+                "{}: the stage-backend measurement Pfaffian supports only real, non-FSZ \
+                 calculations; the input files declare a {inferred_mode} calculation \
+                 (unset the variable to use the C-order calc-m-all tables)",
+                mvmc_core::measurement_batch::MEASURE_PF_VARIABLE
+            ))
+        }
+        _ => Ok(()),
+    };
+    #[cfg(feature = "mpi")]
+    let measure_mode = match mpi_context {
+        Some(context) => agree_result(measure_mode, context, "measurement Pfaffian mode"),
+        None => measure_mode,
+    };
+    if let Err(error) = measure_mode {
+        eprintln!("error: {error}");
+        // Collectively agreed: finalize MPI before exiting (see the backend preflight above).
+        #[cfg(all(feature = "mpi", target_os = "linux"))]
+        drop(cpu_placement);
+        #[cfg(feature = "mpi")]
+        {
+            drop(mpi_group);
+            drop(mpi_world);
+        }
+        process::exit(2);
+    }
     #[cfg(feature = "mpi")]
     let output_root = mpi_context.is_none_or(|context| context.is_root());
     #[cfg(not(feature = "mpi"))]

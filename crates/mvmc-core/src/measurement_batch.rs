@@ -66,8 +66,10 @@
 //! non-finite Pfaffian, all-zero plane, out-of-range site) fail the whole sample exactly as a
 //! failing `calc_m_all_real` does. `c-order` through the stage trait uses the same PfaPack
 //! sequence as `calc_m_all_real` and is byte-identical to it (tested); other backends are
-//! validated with bounds. A backend that does not provide the stage (tenferro 0.7.1 has no
-//! Pfaffian) or a complex/FSZ mode is a hard error, never a silent fallback.
+//! validated with bounds. `tenferro` runs the batch as a prepared tenferro program of the PfaPack
+//! extension operation ([`crate::tenferro_pfaffian`], issue #613). A backend that does not
+//! provide the stage or a complex/FSZ mode is a hard error, never a silent fallback (the CLI
+//! rejects a complex/FSZ input with a stage selector before any output).
 //!
 //! # Coverage
 //!
@@ -198,12 +200,6 @@ pub fn selected_measurement_pfaffian() -> MeasurementPfaffian {
 pub fn validate_measurement_pfaffian() -> Result<MeasurementPfaffian, String> {
     let source = try_selected_measurement_pfaffian()?;
     if let MeasurementPfaffian::Stage(kind) = source {
-        if kind == StageBackendKind::TenferroCpu {
-            return Err(format!(
-                "{MEASURE_PF_VARIABLE}: unsupported: {}",
-                crate::stage_backend::TENFERRO_PFAFFIAN_UNAVAILABLE
-            ));
-        }
         crate::stage_backend::preflight_stage_backend(kind, MEASURE_PF_VARIABLE)?;
     }
     Ok(source)
@@ -878,7 +874,10 @@ mod tests {
         }
         let mut unsupported = setup(n_site, n_elec, n_qp, &configs);
         let err = stage_a_pfaffian(
-            &mut crate::stage_backend::UnsupportedPfaffian::tenferro(),
+            &mut crate::stage_backend::UnsupportedPfaffian::new(
+                "none",
+                "test backend without a Pfaffian",
+            ),
             &slater,
             &mut unsupported,
             &[0],

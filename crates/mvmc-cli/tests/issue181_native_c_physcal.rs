@@ -137,6 +137,18 @@ fn run(name: &str, check_numbers: bool) {
 /// (set `MVMC_RS_MPIEXEC` to select the launcher). The native-C reference is the same
 /// for every thread count; for ranks it is the C run with the same rank count.
 fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
+    run_with_env(name, check_numbers, threads, ranks, &[]);
+}
+
+/// [`run_with`] with extra environment variables for every Rust run (for example a backend
+/// selector); the native-C references and bounds are unchanged.
+fn run_with_env(
+    name: &str,
+    check_numbers: bool,
+    threads: usize,
+    ranks: usize,
+    envs: &[(&str, &str)],
+) {
     let sc = scenario(name);
     assert!(
         matches!(sc.mode.as_str(), "real" | "cmp" | "fsz"),
@@ -194,7 +206,8 @@ fn run_with(name: &str, check_numbers: bool, threads: usize, ranks: usize) {
             .args(["--seed", "1", "--mode", declared, "--out-dir"])
             .arg(&out)
             .env("OMP_NUM_THREADS", "1")
-            .env("OPENBLAS_NUM_THREADS", "1");
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .envs(envs.iter().copied());
         if sc.opt_trans {
             command.arg("--opt-trans");
         }
@@ -448,6 +461,36 @@ native_threaded! {
     fsz_dh_opttrans_workers4_match_native_c => ("fsz_dh24_opttrans_physcal", 4),
 }
 
+/// Issue #613: the tenferro measurement Pfaffian (`MVMC_RS_MEASURE_PF_BACKEND=tenferro`, a
+/// prepared tenferro program of the PfaPack extension operation) against the same native-C
+/// references, bounds and exact RNG/state checks as the default C-order `calc-m-all` tables.
+/// The stage supports real, non-FSZ inputs, so these are the real scenarios. Its executor runs
+/// the C-order PfaPack sequence, so the native-C bounds above (justified by the C-to-Rust
+/// first-divergence analysis) apply unchanged; no bound is widened.
+const TENFERRO_PF: &[(&str, &str)] = &[
+    ("MVMC_RS_MEASURE_PF_BACKEND", "tenferro"),
+    ("MVMC_RS_TENFERRO_THREADS", "1"),
+];
+
+macro_rules! native_tenferro_pf {
+    ($($test:ident => ($name:literal, $threads:literal)),* $(,)?) => {$(
+        #[test]
+        fn $test() {
+            run_with_env($name, true, $threads, 1, TENFERRO_PF);
+        }
+    )*};
+}
+
+native_tenferro_pf! {
+    heisenberg_real_tenferro_pfaffian_matches_native_c => ("heisenberg_chain_real", 1),
+    hubbard_lanczos2_tenferro_pfaffian_matches_native_c => ("hubbard_chain_real", 1),
+    hubbard_dh_tenferro_pfaffian_matches_native_c => ("hubbard_chain_dh_real", 1),
+    kondo_tenferro_pfaffian_matches_native_c => ("kondo_chain_real", 1),
+    all_terms_lanczos2_tenferro_pfaffian_matches_native_c => ("all_terms_lanczos2_real", 1),
+    hubbard_lanczos2_tenferro_pfaffian_workers4_match_native_c => ("hubbard_chain_real", 4),
+    kondo_tenferro_pfaffian_workers2_match_native_c => ("kondo_chain_real", 2),
+}
+
 /// Optional MPI gate: needs `--features mpi`, an MPI launcher (`MVMC_RS_MPIEXEC`, default
 /// `mpiexec`) and `MVMC_RS_NATIVE_C_MPI=1`. Selecting the ignored tests without the gate
 /// fails instead of passing silently.
@@ -487,4 +530,20 @@ native_mpi! {
     hubbard_lanczos2_four_ranks_match_native_c => ("hubbard_chain_real_mpi4", 4),
     hubbard_dh_opttrans_four_ranks_match_native_c => ("hubbard_chain_dh_opttrans_mpi4", 4),
     kondo_four_ranks_match_native_c => ("kondo_chain_real_mpi4", 4),
+}
+
+macro_rules! native_mpi_tenferro_pf {
+    ($($test:ident => ($name:literal, $ranks:literal)),* $(,)?) => {$(
+        #[test]
+        #[ignore = "optional MPI gate: --features mpi, MVMC_RS_NATIVE_C_MPI=1, MPI launcher"]
+        fn $test() {
+            require_mpi_gate();
+            run_with_env($name, true, 1, $ranks, TENFERRO_PF);
+        }
+    )*};
+}
+
+native_mpi_tenferro_pf! {
+    hubbard_lanczos2_tenferro_pfaffian_two_ranks_match_native_c => ("hubbard_chain_real_mpi2", 2),
+    kondo_tenferro_pfaffian_four_ranks_match_native_c => ("kondo_chain_real_mpi4", 4),
 }

@@ -61,6 +61,7 @@ pub mod sr_cg;
 pub mod stage_backend;
 pub mod state;
 pub mod sync;
+pub mod tenferro_pfaffian;
 pub mod threading;
 pub mod validation;
 
