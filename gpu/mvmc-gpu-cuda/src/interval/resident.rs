@@ -109,6 +109,11 @@ pub struct ResidentInterval {
     pub(crate) localspins: Option<DeviceBuffer>,
     /// Julia GPU exchange probability (tape word 3).
     pub(crate) exchange_fraction: f64,
+    /// Doublon-holon neighbor tables (DH2 `[n2][nsite][2]`, then DH4
+    /// `[n4][nsite][4]`); `None` without DH factors (#665).
+    pub(crate) dh: Option<DeviceBuffer>,
+    /// DH2 and DH4 table counts.
+    pub(crate) dh_tables: (usize, usize),
 }
 
 impl ResidentInterval {
@@ -160,6 +165,8 @@ impl ResidentInterval {
                 valid,
                 localspins: None,
                 exchange_fraction: 0.0,
+                dh: None,
+                dh_tables: (0, 0),
             })
         })
         .map_err(|e| e.to_string())
@@ -195,6 +202,48 @@ impl ResidentInterval {
             None
         };
         Ok(())
+    }
+
+    /// Upload the doublon-holon neighbor tables once at setup (C `projection.c`
+    /// counters). The last `6*n2 + 10*n4` projection parameters are the DH
+    /// block. Without tables the sampler keeps its Gutzwiller/Jastrow path.
+    pub(crate) fn set_doublon_holon<B: Engine + ?Sized>(
+        &mut self,
+        backend: &mut B,
+        tables: &[i32],
+        n2: usize,
+        n4: usize,
+    ) -> Result<(), String> {
+        let g = self.sampler.geom;
+        if Some(tables.len()) != (2 * n2 + 4 * n4).checked_mul(g.nsite)
+            || 6 * n2 + 10 * n4 > g.nproj - g.ngutz
+            || tables.iter().any(|&r| r < 0 || r as usize >= g.nsite)
+        {
+            return Err("invalid resident doublon-holon tables".into());
+        }
+        self.dh_tables = (n2, n4);
+        self.dh = if tables.is_empty() {
+            None
+        } else {
+            Some(
+                with_raw_exec(backend, "mvmc.resident.dh", |exec| {
+                    let b = exec.alloc_bytes(tables.len() * 4)?;
+                    // SAFETY: allocated with exactly the table size.
+                    unsafe { exec.upload(exec.ptr(&b)?, tables)? };
+                    Ok(b)
+                })
+                .map_err(|e| e.to_string())?,
+            )
+        };
+        Ok(())
+    }
+
+    /// Device address of the DH tables, or null when there are none.
+    pub(crate) fn dh_ptr(&self, exec: &RawExec<'_, '_>) -> tenferro_tensor::Result<Arg> {
+        Ok(Arg::P(match &self.dh {
+            Some(b) => exec.ptr(b)?,
+            None => 0,
+        }))
     }
 
     /// Device address of the local-spin mask, or null when there are none.
@@ -312,6 +361,9 @@ impl ResidentInterval {
                         p(&s.pfinv_w)?,
                         self.localspin_ptr(exec)?,
                         Arg::D(self.exchange_fraction),
+                        self.dh_ptr(exec)?,
+                        i(self.dh_tables.0),
+                        i(self.dh_tables.1),
                     ],
                 )?;
                 self.enqueue_rebuild(exec, &module)?;

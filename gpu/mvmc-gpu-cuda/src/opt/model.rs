@@ -15,10 +15,20 @@ pub(super) struct Model {
     pub nq: usize,
     pub ng: usize,
     pub nj: usize,
+    /// DH2 / DH4 table counts (C NDoublonHolon2siteIdx / NDoublonHolon4siteIdx).
+    pub n2: usize,
+    pub n4: usize,
+    /// All projection parameters: `ng + nj + 6*n2 + 10*n4`.
+    pub nproj: usize,
     pub np: usize,
     pub parameters: Vec<f64>,
     pub flags: Vec<i32>,
+    /// C SetFlagShift: FlagShiftGJ, FlagShiftDH2, FlagShiftDH4.
     pub shift: bool,
+    pub shift_dh2: bool,
+    pub shift_dh4: bool,
+    /// DH2 neighbors `[n2][nsite][2]`, then DH4 neighbors `[n4][nsite][4]`.
+    pub dh: Vec<i32>,
     pub gutz: Vec<i32>,
     pub jast: Vec<i32>,
     pub weights: Vec<f64>,
@@ -83,7 +93,8 @@ impl Model {
         }
         let m = &data.modpara;
         // Julia GPU accepts NExUpdatePath 0..2 with local spins
-        // (`cuda_state.jl:47`); path 3 needs general orbitals.
+        // (`cuda_state.jl:47`); path 3 needs general orbitals. DH2/DH4 follow
+        // the C counters (#665); Julia GPU has no DH support.
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || !(0..=2).contains(&m.nex_update_path)
@@ -92,11 +103,9 @@ impl Model {
             || m.nsplit_size != 1
             || data.count_rbm_parameters() != 0
             || !data.opt_trans.is_empty()
-            || !data.doublon_holon_2site_indices.is_empty()
-            || !data.doublon_holon_4site_indices.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no RBM/DH/OptTrans, NSRCG=0 (Opt) and serial execution".into());
+            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no RBM/OptTrans, NSRCG=0 (Opt) and serial execution".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -179,14 +188,61 @@ impl Model {
             return Err("invalid parameter count".into());
         }
         let layout = data.projection_layout();
-        let (ng, nj) = (layout.n_gutzwiller, layout.n_jastrow);
-        if layout.n_proj != ng + nj {
-            return Err("resident GPU projection supports Gutzwiller/Jastrow (#560)".into());
+        let (ng, nj, n2, n4) = (
+            layout.n_gutzwiller,
+            layout.n_jastrow,
+            layout.n_dh2,
+            layout.n_dh4,
+        );
+        let nproj = ng + nj + 6 * n2 + 10 * n4;
+        if layout.n_proj != nproj
+            || layout.dh2_offset != ng + nj
+            || layout.dh4_offset != ng + nj + 6 * n2
+            || nproj > np
+        {
+            return Err("resident GPU projection supports Gutzwiller/Jastrow/DH2/DH4".into());
         }
         let flags: Vec<i32> = (0..np)
             .map(|p| i32::from(data.optimization_flags.get(2 * p).copied().unwrap_or(1) != 0))
             .collect();
         let shift = ng > 0 && nj > 0 && flags[..ng + nj].iter().all(|&f| f != 0);
+        // C SetFlagShift (parameter.c:255-310), as the C-order sync applies it:
+        // DH shifts need every Gutzwiller and every DH component optimized.
+        let all = |range: std::ops::Range<usize>| flags[range].iter().all(|&f| f != 0);
+        let gutz_free = ng > 0 && all(0..ng);
+        let shift_dh2 = gutz_free && n2 > 0 && all(ng + nj..ng + nj + 6 * n2);
+        let shift_dh4 = gutz_free && n4 > 0 && all(ng + nj + 6 * n2..nproj);
+        let mut dh = Vec::with_capacity((2 * n2 + 4 * n4) * ns);
+        let site = |r: i64| {
+            i32::try_from(r)
+                .ok()
+                .filter(|&r| r >= 0 && (r as usize) < ns)
+                .ok_or_else(|| "DH neighbor site out of bounds".to_string())
+        };
+        let rows2 = data
+            .doublon_holon_2site_indices
+            .get(..n2)
+            .ok_or("DH2 tables missing")?;
+        let rows4 = data
+            .doublon_holon_4site_indices
+            .get(..n4)
+            .ok_or("DH4 tables missing")?;
+        for table in rows2 {
+            if table.neighbors.len() != ns {
+                return Err("DH2 table must list every center site".into());
+            }
+            for &r in table.neighbors.iter().flatten() {
+                dh.push(site(r)?);
+            }
+        }
+        for table in rows4 {
+            if table.neighbors.len() != ns {
+                return Err("DH4 table must list every center site".into());
+            }
+            for &r in table.neighbors.iter().flatten() {
+                dh.push(site(r)?);
+            }
+        }
         data.ensure_orbital_idx_matrix();
         let nsp = data.modpara.nsp_gauss_leg.max(1) as usize;
         let nmp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
@@ -240,8 +296,8 @@ impl Model {
                     if i >= ns || j >= ns || oi[i][j] < 0 || oi[j][i] < 0 {
                         return Err("invalid orbital/translation mapping".into());
                     }
-                    let a = ng + nj + oi[i][j] as usize;
-                    let b = ng + nj + oi[j][i] as usize;
+                    let a = nproj + oi[i][j] as usize;
+                    let b = nproj + oi[j][i] as usize;
                     if a >= np || b >= np {
                         return Err("orbital parameter outside declared layout".into());
                     }
@@ -391,10 +447,16 @@ impl Model {
             nq,
             ng,
             nj,
+            n2,
+            n4,
+            nproj,
             np,
             parameters,
             flags,
             shift,
+            shift_dh2,
+            shift_dh4,
+            dh,
             gutz,
             jast,
             weights: qw,

@@ -113,8 +113,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
     // (OrbitalParallel selects general orbitals, complex orbital
     // coefficients); and the FSZ Kondo chain (NExUpdatePath=3).
     for (tag, rel) in [
-        ("dh2", "tests/fixtures/dh2/production_real/namelist.def"),
-        ("dh4", "tests/fixtures/dh4/production_dh4_real/namelist.def"),
         (
             "opttrans",
             "tests/fixtures/opttrans/run_opt_real/namelist.def",
@@ -294,4 +292,72 @@ fn resident_model_rejects_spin_changing_operators_before_cuda() {
         error.contains("InterAll requires spin-conserving"),
         "{error}"
     );
+}
+
+/// #665: DH2/DH4 follow the C counters. The model keeps the C parameter layout
+/// (Gutzwiller, Jastrow, DH2, DH4, Slater), the neighbor tables in center
+/// order, and C SetFlagShift.
+#[test]
+fn resident_scope_accepts_doublon_holon_factors() {
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    for (input, n2, n4, shifts) in [
+        (
+            repo("tests/fixtures/dh2/production_real/namelist.def"),
+            1,
+            0,
+            (true, false),
+        ),
+        (
+            repo("tests/fixtures/dh4/production_dh4_real/namelist.def"),
+            0,
+            1,
+            (false, true),
+        ),
+        (
+            local("tests/fixtures/dh/hubbard_dh_L16/namelist.def"),
+            2,
+            1,
+            (true, true),
+        ),
+        (
+            local("tests/fixtures/dh/hubbard_dh_L128/namelist.def"),
+            1,
+            1,
+            (true, true),
+        ),
+    ] {
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            let data = &model.data;
+            assert_eq!((model.n2, model.n4), (n2, n4), "{input:?}");
+            assert_eq!(model.nproj, data.projection_layout().n_proj);
+            assert_eq!(model.nproj, model.ng + model.nj + 6 * n2 + 10 * n4);
+            assert_eq!((model.shift_dh2, model.shift_dh4), shifts, "{input:?}");
+            let expected: Vec<i32> = data.doublon_holon_2site_indices[..n2]
+                .iter()
+                .flat_map(|t| t.neighbors.iter().flatten())
+                .chain(
+                    data.doublon_holon_4site_indices[..n4]
+                        .iter()
+                        .flat_map(|t| t.neighbors.iter().flatten()),
+                )
+                .map(|&r| r as i32)
+                .collect();
+            assert_eq!(model.dh, expected);
+            let projection: Vec<f64> = data.projection_parameters().iter().map(|p| p.re).collect();
+            assert_eq!(model.parameters[..model.nproj], projection[..]);
+            // InDH2/InDH4 overlays survive the initial C-order shift.
+            assert!(model.parameters[model.ng + model.nj..model.nproj]
+                .iter()
+                .any(|&p| p != 0.0));
+            // Slater parameter indices start after the DH block.
+            assert!(model
+                .pa
+                .iter()
+                .chain(&model.pb)
+                .all(|&p| p as usize >= model.nproj));
+        }
+    }
 }

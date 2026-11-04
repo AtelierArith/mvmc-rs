@@ -159,7 +159,7 @@ __device__ __forceinline__ void interval_hop_impl(
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
     int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr,
     int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr,
-    const int* loc = nullptr) {
+    const int* loc = nullptr, const int* dh = nullptr, int n2dh = 0, int n4dh = 0) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -320,13 +320,29 @@ __device__ __forceinline__ void interval_hop_impl(
       __syncthreads();
     }
 
+    // Doublon-holon change of a hop (resident only; an exchange keeps every
+    // site's charge, so no DH counter changes). Block-parallel over the DH
+    // items, then a fixed-order warp and warp-partial reduction. The ratio
+    // scratch is free here: the update reuses it only after the decision.
+    double dh_delta = 0.0;
+    if (resident && dh != nullptr && !exchange) {
+      const ResidentOcc after{occ_w, nsite};
+      const ResidentOccBeforeHop before{occ_w, nsite, ri, rj, spin};
+      double part = resident_dh_delta(before, after, dh, n2dh, n4dh, nsite,
+                                      nproj - 6 * n2dh - 10 * n4dh, params, tid, nt);
+      for (int d = 16; d; d >>= 1) part += __shfl_down_sync(0xffffffff, part, d);
+      if ((tid & 31) == 0) scratch[tid >> 5] = part;
+      __syncthreads();
+      if (tid == 0) for (int i = 0; i < nwarp; ++i) dh_delta += scratch[i];
+    }
+
     if (tid == 0) {
       double ip_new = 0.0;
       for (int q = 0; q < nqp; ++q) ip_new = __dadd_rn(ip_new, __dmul_rn(weights[q], pfnew[q]));
       const double log_new = log(fabs(ip_new) + 1e-100);
       // An exchange keeps every site's charge and doublon count.
       const double proj = exchange ? 0.0
-          : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
+          : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj) + dh_delta;
       const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
       // Keep log-space decisions for finite overlaps (including u == 0 and

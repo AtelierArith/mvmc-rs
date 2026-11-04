@@ -7,6 +7,8 @@ use super::*;
 use std::path::PathBuf;
 
 #[cfg(test)]
+mod dh_tests;
+#[cfg(test)]
 mod localspin_tests;
 #[cfg(test)]
 mod tests;
@@ -44,7 +46,7 @@ pub struct PhysCalResult {
     pub nsamples: usize,
 }
 
-/// Run real normal-orbital Gutzwiller/Jastrow PhysCal without Lanczos or SR.
+/// Run real normal-orbital Gutzwiller/Jastrow(/DH2/DH4) PhysCal without Lanczos or SR.
 /// Input parsing, fresh initialization, sampling and final host results belong
 /// to this call. RNG and intermediate configurations/observables stay on CUDA.
 pub fn run_gpu_phys_cal_from_namelist(
@@ -192,47 +194,15 @@ impl Measurement {
         let module = exec.module(SOURCE, KERNELS)?;
         state.counts(exec, &module)?;
         let b = &state.buffers;
-        let m = &state.model;
-        let s = &state.resident.sampler;
-        let w = s.geom.walkers;
+        let w = state.resident.sampler.geom.walkers;
         let terms = self.operators.terms();
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
-        // SAFETY: all dimensions were checked before allocation; the common
-        // operator evaluator reads resident tables and writes disjoint slots.
+        // The common operator evaluator reads resident tables and writes disjoint slots.
+        if terms != 0 {
+            state.energy_terms(exec, &module, &self.values, &self.ops, terms)?;
+        }
+        // SAFETY: all dimensions were checked before allocation.
         unsafe {
-            if terms != 0 {
-                exec.launch(
-                    module.function("opt_energy_terms")?,
-                    ((terms * w).div_ceil(8) as u32, 1, 1),
-                    256,
-                    0,
-                    &[
-                        p(&self.values)?,
-                        p(&self.ops)?,
-                        p(&s.ele)?,
-                        p(&s.occ)?,
-                        p(&b.lookup)?,
-                        p(&b.overlaps)?,
-                        p(&s.gutz)?,
-                        p(&s.jast)?,
-                        p(&b.parameters)?,
-                        p(&s.slater)?,
-                        p(&s.weights)?,
-                        p(&s.inv)?,
-                        p(&s.pf)?,
-                        i(m.ns),
-                        i(m.ne),
-                        i(m.nq),
-                        i(m.ng),
-                        i(m.nj),
-                        i(terms),
-                        i(w),
-                        p(&state.resident.error)?,
-                        p(&state.resident.valid)?,
-                    ],
-                )?;
-                state.energy_fallback(exec, &module, &self.values, &self.ops, terms)?;
-            }
             let reduce = exec.module(PHYS_SOURCE, PHYS_KERNELS)?;
             exec.launch(
                 reduce.function("physcal_reduce")?,

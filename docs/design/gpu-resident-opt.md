@@ -86,9 +86,30 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 
 The current runner requires real normal orbitals, conserved spin in each
 operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
-direct SR (`NSRCG=0`) and serial execution. Local spins are supported (#660).
-RBM, DH, OptTrans, complex/general orbitals, `NExUpdatePath=3` and grouped
-execution return errors.
+direct SR (`NSRCG=0`) and serial execution. Local spins (#660) and DH2/DH4
+doublon-holon factors (#665) are supported. RBM, OptTrans, complex/general
+orbitals, `NExUpdatePath=3` and grouped execution return errors.
+
+### Doublon-holon factors DH2/DH4 (#665)
+
+Julia GPU rejects DH (`ext/cuda_state.jl:41-42`), so this is new functionality
+validated against the Rust CPU C-order path. The sampler keeps the Julia GPU
+tape contract; the physics follows C `projection.c` and `parameter.c`:
+
+- The neighbor tables (DH2 `[n2][Nsite][2]`, then DH4 `[n4][Nsite][4]`) are
+  uploaded once at setup (`src/resident_dh.cuh`). A center contributes only as
+  a holon or doublon, to counter `offset + x + (c/2 + 2*xm)*N` (C `MakeProjCnt`).
+- `opt_counts` adds the DH counters; projection derivatives are the counters.
+- A hop's DH log-weight change is the block-parallel sum over all
+  (table, center) items of `P[after] - P[before]`, reduced in a fixed order and
+  added to the Gutzwiller/Jastrow delta. An exchange changes no DH counter.
+  `opt_delta` adds the same change for one- and two-move operators, so the
+  Hamiltonian, Green functions and the full-Pfaffian fallback include it.
+- `opt_gauge` applies C `SyncModifiedParameter`: `shiftDH2`/`shiftDH4` per
+  d/h generator, the summed shift added to the Gutzwiller factors, then
+  `shiftGJ`, with the flags of C `SetFlagShift`.
+
+See `gpu/mvmc-gpu-cuda/tests/fixtures/dh/README.md` for inputs, bounds and timings.
 
 ### Local spins and exchange proposals (#660)
 
