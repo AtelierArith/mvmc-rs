@@ -151,7 +151,8 @@ __device__ __forceinline__ void interval_hop_impl(
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
-    int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr) {
+    int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr,
+    int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -187,6 +188,21 @@ __device__ __forceinline__ void interval_hop_impl(
   // Julia tape layout [word][walker][step]: 5*(walker + walkers*step) + word.
   const unsigned int* tape_w = tape + (size_t)w * 5;
   const size_t tape_stride = 5 * (size_t)gridDim.x;
+
+  // Per-plane recovery (#573) on the resident path: a walker with an invalid
+  // plane proposes with full Pfaffians and refactors in this kernel on every
+  // accept, as Julia's cached sampler does (cuda_sampling_update.jl:291-371).
+  const bool recover = resident && valid != nullptr;
+  int* valid_w = recover ? valid + (size_t)w * nqp : nullptr;
+  double* fac_w = recover ? fac + (size_t)w * nqp * n * n : nullptr;
+  double* work_w = recover ? work + (size_t)w * nqp * n * n : nullptr;
+  __shared__ int s_rank;
+  if (tid == 0) {
+    int all = 1;
+    if (recover) for (int q = 0; q < nqp; ++q) all &= valid_w[q] != 0;
+    s_rank = all;
+  }
+  __syncthreads();
 
   double log_old = logip[w];
   int window = aw[w];
@@ -241,7 +257,15 @@ __device__ __forceinline__ void interval_hop_impl(
     for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= ne ? nsite : 0);
     __syncthreads();
 
-    {
+    if (resident && !s_rank) {
+      // Julia cooperative_overlap!: every plane from the candidate sites.
+      for (int q = 0; q < nqp; ++q) {
+        resident_gather(fac_w, rs, n, -1, -1, tab, q, n2);
+        const double p = resident_block_pfaffian(fac_w, n, scratch, scratch + n);
+        if (tid == 0) pfnew[q] = p;
+      }
+      __syncthreads();
+    } else {
       const int lane = tid & 31, warp = tid >> 5, nwarp = nt >> 5;
       for (int q = warp; q < nqp; q += nwarp) {
         const double* invq = inv_w + (size_t)q * n * n;
@@ -282,11 +306,13 @@ __device__ __forceinline__ void interval_hop_impl(
       // nonfinite. Its rank-two update divides by that plane's ratio, so the
       // accept instead requests an immediate walker rebuild (Julia
       // cuda_sampling_update.jl:343-371). The rebuild latches a singular plane.
+      // The resident path refactors in this kernel; the legacy host-driven
+      // path returns a rebuild request instead.
       int singular = 0;
-      if (accept) {
+      if (accept && s_rank) {
         for (int q = 0; q < nqp; ++q) singular |= !isfinite(pfnew[q]) || pfnew[q] == 0.0;
       }
-      mvw[7] = singular;
+      mvw[7] = accept && (singular || !s_rank);
       if (accept) {
         out[0] = log_new;
       } else {
@@ -296,7 +322,26 @@ __device__ __forceinline__ void interval_hop_impl(
       }
     }
     __syncthreads();
-    if (mvw[5] && mvw[7]) {
+    if (mvw[5] && mvw[7] && recover) {
+      // Queued updates belong to the replaced inverse; discard, do not flush.
+      pending = 0;
+      const int all = resident_refactor_walker(inv_w, pf_w, valid_w, rs, tab, n, nqp, n2,
+                                               fac_w, work_w, scratch);
+      if (tid == 0) {
+        double ip = 0.0;
+        for (int q = 0; q < nqp; ++q) ip = __dadd_rn(ip, __dmul_rn(weights[q], pf_w[q]));
+        ++accepted;
+        if (!isfinite(ip) || ip == 0.0) {
+          atomicCAS(error, 0, RESIDENT_REBUILD);
+          mvw[6] = 2;
+        } else {
+          log_old = log(fabs(ip) + 1e-100);
+          window = 0;
+        }
+        s_rank = all;
+      }
+      __syncthreads();
+    } else if (mvw[5] && mvw[7]) {
       // No inverse/Pfaffian update; the rebuild refactors the accepted configuration.
       if (tid == 0) {
         log_old = out[0];
@@ -336,7 +381,7 @@ __device__ __forceinline__ void interval_hop_impl(
     }
     ++advanced;
     if (mvw[6]) {
-      need_rebuild = 1;
+      need_rebuild = mvw[6] == 1;  // 2: in-kernel refactor failed and latched
       break;
     }
   }

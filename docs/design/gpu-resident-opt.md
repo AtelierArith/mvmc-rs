@@ -89,24 +89,61 @@ operator pair, Gutzwiller/Jastrow projection, ordinary hopping (`NExUpdatePath=0
 direct SR (`NSRCG=0`) and serial execution. Local spins, RBM, DH, OptTrans,
 complex/general orbitals and grouped execution return errors. Hamiltonian
 support includes Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange and
-spin-conserving InterAll. Individual QP matrices must remain nonsingular;
-the per-plane recovery of the Julia GPU reference is tracked by #573. Until
-then, an accepted hop whose total overlap is finite and nonzero but whose
-candidate Pfaffian in some plane is zero or nonfinite applies no rank-two
-update. It requests an immediate walker rebuild, as Julia does
-(`cuda_sampling_update.jl:343-371`). The rebuild treats a plane with a zero
-pivot or a zero/nonfinite Pfaffian as singular and records the failure. No
-infinite inverse is ever used by ratios, energies or derivatives. Failed state
-reconstruction or SR is reported. The per-family
+spin-conserving InterAll. Failed state reconstruction or SR is reported. The per-family
 [support matrix](gpu-resident-model-support.md) (#572) lists each rejected family,
 its rejection site, CPU and Julia GPU status and the planned milestone order.
+
+### Singular QP planes (#573)
+
+An individual QP plane can be exactly singular while the weighted overlap
+`sum_q w_q Pf_q` is finite and nonzero. The resident path follows the per-plane
+recovery of the accepted Julia GPU reference (Julia-mVMC `7314015`):
+
+- **Validity.** A device mask `valid[w][q]` marks a plane valid when its
+  factorization has no zero pivot and a finite nonzero Pfaffian
+  (`cuda_batched_inverse.jl:68`). The tests are exact; there is no conditioning
+  threshold. An invalid plane publishes `Pf = 0`, and no all-valid path reads its
+  inverse storage. A rebuild publishes a walker whenever its total overlap is
+  finite and nonzero. Initialization still resamples walkers with any invalid
+  plane (`cuda_initial_sampling.jl:118-153`).
+- **Hops.** All-valid walkers use the inverse ratio and rank-two updates.
+  - An accept whose candidate Pfaffian in some plane is zero or nonfinite
+    refactors the walker inside the hop kernel instead of updating
+    (`cuda_sampling_update.jl:343-371`).
+  - A walker with an invalid plane computes every candidate Pfaffian directly
+    and refactors on every accept (`:291-331`).
+  - The refactor uses one block, per-walker scratch in the factorization
+    buffers, a skew Parlett-Reid Pfaffian with partial pivoting, and a
+    Gauss-Jordan inverse published as a mirrored skew pair. Queued delayed
+    updates are discarded, not flushed. The accepted window restarts, so the
+    host's bounded round schedule still holds; a completion check enforces it.
+- **Energy/Green.** `opt_energy_fallback` evaluates every operator of such a
+  walker with full Pfaffians of the moved configuration
+  (`cuda_observables.jl:109-122,283-295`). Opt and PhysCal share it.
+- **Derivatives.** For an invalid plane, `opt_cofactors` stores the exact
+  cofactors `dPf(A)/dA(i,j) = (-1)^(i+j+1) Pf(A without rows/columns i,j)`
+  (0-based `i<j`) where the inverse would otherwise be read
+  (`cuda_sr.jl:154-187`). Valid planes keep `Pf * inverse`.
+- **Failures.** A zero or nonfinite total overlap remains a hard failure and
+  publishes nothing for that walker.
+- **Cost.** Each fallback costs `O(n^3)` per term or per minor on one block,
+  so it is meant only for exceptional walkers. On an RTX 3060, one invalid
+  plane of one L128 walker adds about 5.5 s to an observation. The 8128 minors
+  dominate that time. Walkers without an invalid plane skip the fallbacks after
+  a mask check.
+
+**Divergence from C.** C drops a sample whose `CalculateMAll` fails
+(`vmccal.c:135-138`), and the Rust CPU/C-order path mirrors that
+(`SlotStatus::Failed`). The resident GPU path follows Julia instead: such a
+walker keeps contributing through cofactors and full Pfaffians. This is
+deliberate under the GPU reference policy and does not change the CPU path.
 
 Failures latch one sticky device status word; the first failing stage is kept
 (`src/resident_status.cuh`, `ResidentFailure`): 1 rebuild, 2 energy/observable,
 3 SR solve, 4 parameter update, 5 schedule, 6 derivatives. Initialization
-reports its retry limit separately. A schedule failure means a walker still had
-hops left after the enqueued rounds, which forced rebuilds can cause. On failure,
-the result boundary downloads only the status word.
+reports its retry limit separately. On failure, the result boundary downloads
+only the status word.
+
 Nonfinite proposal overlaps are rejected before updating the configuration,
 inverse, Pfaffian or cached overlap (#564); finite overlaps retain log-space
 acceptance for extreme ratios and zero uniform draws.

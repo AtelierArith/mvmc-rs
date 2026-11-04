@@ -66,7 +66,7 @@ Abbreviations: **S** supported, **R** rejected before device allocation,
 
 | Family / option | Resident Opt | Resident PhysCal | CPU C-order Rust | Julia GPU (pin `7314015`) | Authoritative reference for a GPU implementation | Fixture / invocation | Known restrictions |
 |---|---|---|---|---|---|---|---|
-| Real normal orbitals, Gutzwiller + Jastrow | **S** | **S** | S | **S**: `validate_cuda_data` accepts (`ext/cuda_state.jl:36-51`); projection tables `cuda_state.jl:109-111` | Julia GPU `47452f90` (Opt) / `61103114` (PhysCal) | `gpu/mvmc-gpu-cuda/tests/fixtures/opt_julia_l128.txt`, `opt_julia_operators.txt`, `physcal_julia_l128.txt` (provenance `opt_julia.md`, `physcal_julia.md`); `cargo test --release --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --lib opt:: -- --ignored` on a host with the CUDA libraries | Each QP plane must stay nonsingular; failure is a sticky device status (#573). `2·NElec ≤ 1024` (`model.rs:150-151`, `pfaffian::MAX_N`). Sampler shared memory ≤ 48 KiB (`opt.rs:266`) |
+| Real normal orbitals, Gutzwiller + Jastrow | **S** | **S** | S | **S**: `validate_cuda_data` accepts (`ext/cuda_state.jl:36-51`); projection tables `cuda_state.jl:109-111` | Julia GPU `47452f90` (Opt) / `61103114` (PhysCal) | `gpu/mvmc-gpu-cuda/tests/fixtures/opt_julia_l128.txt`, `opt_julia_operators.txt`, `physcal_julia_l128.txt` (provenance `opt_julia.md`, `physcal_julia.md`); `cargo test --release --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --lib opt:: -- --ignored` on a host with the CUDA libraries | An exactly singular QP plane recovers per plane while the total overlap stays finite and nonzero; a zero or nonfinite total is a sticky typed failure (#573). `2·NElec ≤ 1024` (`model.rs:150-151`, `pfaffian::MAX_N`). Sampler shared memory ≤ 48 KiB (`opt.rs:266`) |
 | Hamiltonian: Transfer, CoulombIntra/Inter, Hund, PairHop, Exchange, InterAll | **S** for real, spin-conserving pairs; **R** spin-flip Transfer `model.rs:343`, spin-changing InterAll `model.rs:360`, complex coefficient `model.rs:92`/`:184` | same as Opt | S, including complex values; spin-changing InterAll only with `2Sz=-1` (`validation.rs` `validate_inter_all`, C `readdef.c:2451`) | **S** for the same subset; rejects complex/spin-flip Transfer and InterAll (`ext/cuda_observables.jl:22-23`, `:38-41`) | Julia GPU | `opt_julia_operators.txt` covers all 324 two-pair overlays on three L64 sites (`opt/tests.rs:40`) | Spin-flip operators belong to the general-orbital family |
 | Green functions (OneBodyG, TwoBodyG, TwoBodyGEx) | n/a | **S** for spin-conserving pairs; **R** `physcal.rs:101`, `:107`, `:121` | S | **S** for spin-conserving pairs (`ext/cuda_observables.jl:48`) | Julia GPU, except the C-canonical TwoBodyGEx one-body list (see `gpu-resident-physcal.md`) | `physcal_julia_l128.txt`; `physcal/tests.rs:29` (host-only rejection) | Output is ensemble means, not C-format files |
 | QP: `NSPGaussLeg`, `NSPStot`, `NMPTrans`, `TransSym` | **S**, `nq = NSPGaussLeg·\|NMPTrans\|` (`model.rs:170-178`); a negative `NMPTrans` is normalized to its absolute value as in Julia GPU (`model.rs:69-76`, `ext/cuda_runners.jl:29`) | **S** | S (C `qp.c:50-80`; anti-periodic sign from `readdef.c:742-747`) | **S** (`cuda_state.jl:98`) | Julia GPU | Only `NSPGaussLeg=8`, `NSPStot=0`, `\|NMPTrans\|=1` (L64/L128) have resident fixtures | **Gap:** no resident fixture for `NSPStot≠0`, `NMPTrans>1` or `NSPGaussLeg=1`. A complex `ParaQPTrans` weight is **R** at `model.rs:184`, while Julia GPU takes the real part without warning (`cuda_state.jl:70`, `:102`). Rust is deliberately stricter |
@@ -82,7 +82,7 @@ Abbreviations: **S** supported, **R** rejected before device allocation,
 | CG SR (`NSRCG≠0`) | **R** `model.rs:84` | **R** `model.rs:84` | S (`sr_cg.rs`, `pfaffian_cg.rs`) | Opt **R** (`ext/cuda_runners.jl:27-28`, `:154`). **PhysCal accepts and ignores `NSRCG`** (`cuda_runners.jl:27`: `physcal \|\| nsrcg == 0`) | Opt: no Julia GPU, numerical algorithm from C (`stcopt_cg.c`). PhysCal: Julia GPU | Baseline `NSRCG 1` (`scope_tests.rs`) | **Gap:** resident PhysCal rejects `NSRCG≠0` even though it never runs SR. Julia GPU accepts it. Relaxing the check only for PhysCal is a one-line, host-only change |
 | Grouped / MPI (`NSplitSize>1`) | **R** `model.rs:85` | **R** | S with an MPI group communicator (`grouped_nsplit_349.rs`) | **R**: "CUDA runner is serial" (`ext/cuda_state.jl:45`) | No Julia GPU | Baseline `NSplitSize 2` (`scope_tests.rs`) | Single-device, single-process design; multi-GPU is a separate design |
 | Lanczos (`NLanczosMode>0`) | n/a (Opt is rejected by the shared validator, `validation.rs:218-221`) | **R** `model.rs:63-66` | S, PhysCal (`lanczos.rs`, `issue181_lanczos_native_c.rs`, `lanczos_transfer_physcal.rs`) | **R**: "CUDA Lanczos is not supported" (`ext/cuda_state.jl:44`) | No Julia GPU. C-order `physcal_lanczos.c` | Baseline `NVMCCalMode 1`, `NLanczosMode 1` (`scope_tests.rs`) | Needs H\|ψ⟩ Green-function accumulation on the device |
-| Singular / near-singular QP planes | runtime failure (sticky device status); nonfinite proposals rejected (#564) | runtime failure | follows C; no resident-specific policy | rejects zero or nonfinite initial overlaps (`ext/cuda_runners.jl:62-63`); a zero or nonfinite candidate Pfaffian forces a refactor (`cuda_sampling_update.jl:342-345`); no cofactor path | #573 | #573 | See the gate below |
+| Singular / near-singular QP planes | **S** per plane (#573): device validity mask, in-kernel refactor on accept, full-Pfaffian proposals/energy, exact-minor derivatives; zero or nonfinite total overlap is a sticky typed failure; nonfinite proposals rejected (#564) | **S** per plane (full-Pfaffian observables) | follows C: a failed `CalculateMAll` drops the sample (`vmccal.c:135-138`) | **S** per plane: validity (`ext/cuda_batched_inverse.jl:68`), forced refactor (`cuda_sampling_update.jl:343-371`), fallback observables (`cuda_observables.jl:109-122`, `:283-295`), minor derivatives (`cuda_sr.jl:154-187`); rejects zero or nonfinite initial overlaps (`cuda_runners.jl:62-63`) | Julia GPU `7314015` (deliberate divergence from C, `gpu-resident-opt.md`) | `interval/resident/tests.rs` and `opt/tests.rs` #573 tests (ports of `nodal_derivatives.jl`, `batched_inverse.jl`, `paired_sampling_inverse.jl`, `cached_sampling.jl`) | Fallbacks cost `O(n^3)` per term or minor on one block; for exceptional walkers only. See the gate below |
 
 ## Recommended milestone order
 
@@ -150,15 +150,16 @@ measured user demand may reorder milestones 2-7.
 
 #573 is a prerequisite gate for every family milestone.
 
-- Today a singular or nonfinite QP plane fails the run with a sticky device
-  status, and nothing is published.
+- #573 adopted the Julia GPU per-plane policy. A singular plane is marked
+  invalid, and its walker uses full-Pfaffian and exact-minor fallbacks. A zero
+  or nonfinite total overlap fails with a typed sticky status
+  (`resident_status.cuh`), and nothing is published.
 - Exchange moves, local spins and spin projection (`NSPGaussLeg>1`) increase
   the chance of reaching an exactly singular rotated plane.
 - FSZ/general orbitals and OptTrans change the plane structure itself.
 
-So no milestone may define its own recovery for singular planes. Each one
-inherits the current hard-failure semantics until #573 accepts a policy. It
-must also state, with a test, how its new update paths propagate the status.
-Milestone 1 should start only after #573 has fixed the zero-pivot and
-status semantics, because its exchange/refactor path is the first new
-consumer of those semantics.
+So no milestone may define its own recovery for singular planes. Each new
+update path must keep the validity mask, send invalid walkers to the
+fallbacks or the in-kernel refactor, and state with a test how it propagates
+the status. The zero-pivot and status semantics that milestone 1 depends on
+are now fixed.

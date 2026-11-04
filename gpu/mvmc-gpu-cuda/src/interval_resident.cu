@@ -7,16 +7,19 @@ extern "C" __global__ void interval_resident_hop(
     const double* slater, const double* weights, const int* gutz, const int* jast,
     const double* params, const unsigned int* tape, int total_hops, int* hop_off,
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj,
-    int* hops_done, int* rebuild, int* accepts, int* total_accepts, const int* error, double* delayed, double* flush, int delayed_updates) {
+    int* hops_done, int* rebuild, int* accepts, int* total_accepts, int* error, double* delayed, double* flush, int delayed_updates,
+    int* valid, double* fac, double* work) {
   if (*error) return;  // block-uniform; previous launch owns the error flag
   if (n == 128) {
     interval_hop_impl<true>(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
       params, tape, total_hops, hop_off, 128, ne, nsite, nqp, qp_groups, ngutz,
-      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 && delayed_updates ? delayed : nullptr, flush);
+      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 && delayed_updates ? delayed : nullptr, flush,
+      valid, fac, work, error);
   } else {
     interval_hop_impl<true>(ele, occ, inv, pf, aw, logip, slater, weights, gutz, jast,
       params, tape, total_hops, hop_off, n, ne, nsite, nqp, qp_groups, ngutz,
-      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 && delayed_updates ? delayed : nullptr, flush);
+      nproj, 0.0, hops_done, rebuild, accepts, n >= 128 && delayed_updates ? delayed : nullptr, flush,
+      valid, fac, work, error);
   }
   // interval_hop_impl publishes accepts from thread 0 of the same block.
   if (threadIdx.x == 0) total_accepts[blockIdx.x] += accepts[blockIdx.x];
@@ -43,28 +46,25 @@ extern "C" __global__ void interval_resident_factor(
   body_f64(A, W, OUT, PF, ST, n);
 }
 
-// Check the entire walker's factorization before publishing anything. The error
-// flag is sticky across steps; subsequent sampling stops until the owner reports
-// the failure. All planes of a failed walker retain their previous tables.
+// Publish a walker whose weighted overlap is finite and nonzero, recording
+// per-plane validity as Julia does (cuda_batched_inverse.jl:68): no zero pivot
+// and a finite nonzero Pfaffian. An invalid plane publishes Pf = 0 from the
+// zero-pivot factor; no all-valid path reads its inverse storage. A zero or
+// nonfinite total latches the sticky error, and every table of that walker
+// retains its previous contents. Later sampling stops until the owner reports.
 extern "C" __global__ void interval_resident_commit(
     const int* rebuild, int* error, const int* ST, const double* OUT,
     const double* PF, const double* weights, double* inv, double* pf,
-    double* logip, int* aw, int n, int nqp) {
+    double* logip, int* aw, int* valid, int n, int nqp) {
   const int w = blockIdx.x;
   if (!rebuild[w]) return;
   __shared__ int good;
   __shared__ double log_overlap;
   if (threadIdx.x == 0) {
-    good = 1;
     double ip = 0.0;
-    for (int q = 0; q < nqp; ++q) {
-      const double p = PF[w*nqp+q];
-      // Julia's per-plane validity: no zero pivot and a finite nonzero Pfaffian
-      // (cuda_batched_inverse.jl:68). An underflowed product is singular too.
-      if (ST[w*nqp+q] != 0 || !isfinite(p) || p == 0.0) good = 0;
-      ip = __dadd_rn(ip, __dmul_rn(weights[q], p));
-    }
-    if (!isfinite(ip) || ip == 0.0) good = 0;
+    for (int q = 0; q < nqp; ++q)
+      ip = __dadd_rn(ip, __dmul_rn(weights[q], PF[w*nqp+q]));
+    good = isfinite(ip) && ip != 0.0;
     log_overlap = log(fabs(ip) + 1e-100);
     if (!good) atomicCAS(error, 0, RESIDENT_REBUILD);
   }
@@ -73,8 +73,11 @@ extern "C" __global__ void interval_resident_commit(
   const size_t base = (size_t)w*nqp*n*n;
   for (size_t i = threadIdx.x; i < (size_t)nqp*n*n; i += blockDim.x)
     inv[base+i] = -OUT[base+i];
-  for (int q = threadIdx.x; q < nqp; q += blockDim.x)
-    pf[w*nqp+q] = PF[w*nqp+q];
+  for (int q = threadIdx.x; q < nqp; q += blockDim.x) {
+    const double p = PF[w*nqp+q];
+    pf[w*nqp+q] = p;
+    valid[w*nqp+q] = ST[w*nqp+q] == 0 && isfinite(p) && p != 0.0;
+  }
   if (threadIdx.x == 0) {
     logip[w] = log_overlap;
     aw[w] = 0;
@@ -82,8 +85,8 @@ extern "C" __global__ void interval_resident_commit(
 }
 
 // The host enqueues a bounded number of hop/rebuild rounds without reading
-// flags. A forced rebuild (singular candidate plane) can consume an extra round;
-// a walker that still has unfinished hops must not publish a short interval.
+// flags. In-kernel refactors keep that bound; this guards the invariant so a
+// walker with unfinished hops never publishes a short interval.
 extern "C" __global__ void interval_resident_complete(
     const int* hop_off, int hops, int* error, int walkers) {
   const int w = blockIdx.x * blockDim.x + threadIdx.x;
