@@ -384,6 +384,8 @@ const L128_PF_CONSTANT: f64 = 16.0;
 
 /// Largest `|a - b| / (max(|a|, |b|) (aw + 1) n eps kappa)` over all planes.
 fn l128_pf_normalized(a: &[f64], b: &[f64], aw: &[i32], kappa: &[f64], n: usize) -> f64 {
+    // A NaN ratio would vanish in the max fold; these planes are all nonsingular.
+    assert!(a.iter().chain(b).all(|v| v.is_finite() && *v != 0.));
     let nqp = a.len() / aw.len();
     a.iter()
         .zip(b)
