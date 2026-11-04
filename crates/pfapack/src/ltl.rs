@@ -587,14 +587,10 @@ unsafe fn update_upper_rank2_f64_c_order_avx2(
     assert!(write_cols.len() >= kk0 * lda && col_kk0_data.len() >= kk0 && col_k0_data.len() >= kk0);
     let x = col_k0_data.as_ptr();
     let y = col_kk0_data.as_ptr();
-    for j in 0..kk0 {
-        let temp1 = alpha * *y.add(j);
-        let temp2 = alpha * *x.add(j);
-        let t1 = _mm256_set1_pd(temp1);
-        let t2 = _mm256_set1_pd(temp2);
-        let col = write_cols.as_mut_ptr().add(j * lda);
-        let mut i = 0;
-        while i + 4 <= j {
+    // Rows `i..len` of one column: whole vectors, then a masked tail so no element
+    // is touched twice.
+    let finish = |col: *mut f64, mut i: usize, len: usize, t1: __m256d, t2: __m256d| {
+        while i + 4 <= len {
             let c = _mm256_loadu_pd(col.add(i));
             let xv = _mm256_loadu_pd(x.add(i));
             let yv = _mm256_loadu_pd(y.add(i));
@@ -605,7 +601,7 @@ unsafe fn update_upper_rank2_f64_c_order_avx2(
             _mm256_storeu_pd(col.add(i), r);
             i += 4;
         }
-        let rem = j - i;
+        let rem = len - i;
         if rem > 0 {
             let mask = _mm256_loadu_si256(MASKS[rem].as_ptr() as *const __m256i);
             let c = _mm256_maskload_pd(col.add(i), mask);
@@ -617,6 +613,47 @@ unsafe fn update_upper_rank2_f64_c_order_avx2(
             );
             _mm256_maskstore_pd(col.add(i), mask, r);
         }
+    };
+    let base = write_cols.as_mut_ptr();
+    // Columns j and j+1 share each vector load of x and y. Every element still
+    // receives exactly `(a + x*t1) - y*t2` once; the columns are disjoint.
+    let mut j = 0;
+    while j + 1 < kk0 {
+        let (a1, a2) = (alpha * *y.add(j), alpha * *x.add(j));
+        let (b1, b2) = (alpha * *y.add(j + 1), alpha * *x.add(j + 1));
+        let (ta1, ta2) = (_mm256_set1_pd(a1), _mm256_set1_pd(a2));
+        let (tb1, tb2) = (_mm256_set1_pd(b1), _mm256_set1_pd(b2));
+        let col_a = base.add(j * lda);
+        let col_b = base.add((j + 1) * lda);
+        let mut i = 0;
+        while i + 4 <= j {
+            let xv = _mm256_loadu_pd(x.add(i));
+            let yv = _mm256_loadu_pd(y.add(i));
+            let ca = _mm256_loadu_pd(col_a.add(i));
+            let cb = _mm256_loadu_pd(col_b.add(i));
+            let ra = _mm256_sub_pd(
+                _mm256_add_pd(ca, _mm256_mul_pd(xv, ta1)),
+                _mm256_mul_pd(yv, ta2),
+            );
+            let rb = _mm256_sub_pd(
+                _mm256_add_pd(cb, _mm256_mul_pd(xv, tb1)),
+                _mm256_mul_pd(yv, tb2),
+            );
+            _mm256_storeu_pd(col_a.add(i), ra);
+            _mm256_storeu_pd(col_b.add(i), rb);
+            i += 4;
+        }
+        finish(col_a, i, j, ta1, ta2);
+        *col_a.add(j) = 0.0;
+        finish(col_b, i, j + 1, tb1, tb2);
+        *col_b.add(j + 1) = 0.0;
+        j += 2;
+    }
+    if j < kk0 {
+        let t1 = _mm256_set1_pd(alpha * *y.add(j));
+        let t2 = _mm256_set1_pd(alpha * *x.add(j));
+        let col = base.add(j * lda);
+        finish(col, 0, j, t1, t2);
         *col.add(j) = 0.0;
     }
 }
@@ -787,6 +824,33 @@ mod tests {
     use crate::pfaffian::pfaffian_ltl_real;
     use crate::utu2::utu2pfa_real;
     use approx::assert_relative_eq;
+
+    /// The paired-column AVX2 rank-2 update applies the scalar `(a + x*t1) - y*t2`
+    /// to the same elements (even/odd column counts, every tail length), so the
+    /// whole buffer, including the untouched lower triangle, must match bitwise.
+    #[test]
+    fn real_rank2_c_order_dispatch_matches_scalar_bitwise() {
+        let mut seed = 0x5eed_u64;
+        let mut next = || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((seed >> 11) as f64 / (1u64 << 53) as f64) - 0.5
+        };
+        for kk0 in [1usize, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 31, 64, 127] {
+            let k0 = kk0 + 1;
+            let lda = k0 + 3;
+            let base: Vec<f64> = (0..lda * lda).map(|_| next()).collect();
+            let alpha = 1.0 / (0.75 + next());
+            let mut want = base.clone();
+            update_upper_rank2_f64_c_order_scalar(&mut want, lda, kk0, k0, alpha);
+            let mut got = base.clone();
+            update_upper_rank2_f64_c_order(&mut got, lda, kk0, k0, alpha);
+            for (index, (g, w)) in got.iter().zip(&want).enumerate() {
+                assert_eq!(g.to_bits(), w.to_bits(), "kk0={kk0} index={index}");
+            }
+        }
+    }
 
     // After dsktf2, utu2pfa should reproduce the same Pfaffian as the
     // direct Parlett-Reid pass on a fresh copy. This is the
