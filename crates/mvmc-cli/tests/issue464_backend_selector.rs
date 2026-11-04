@@ -1,6 +1,10 @@
 //! Issue #464: `MVMC_RS_SR_BACKEND` is validated once at startup, before any IO. Invalid
 //! selectors and unavailable backends are usage errors (status 2) with a clear message, never a
-//! panic (status 101); `tenferro` runs and `c-order` is unchanged.
+//! panic (status 101); `tenferro` runs and `c-order` is unchanged. Issue #613: the tenferro
+//! measurement Pfaffian runs and reproduces the C-order measurement.
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -172,51 +176,126 @@ fn invalid_measurement_pfaffian_selector_is_a_usage_error_before_io() {
     let _ = fs::remove_dir_all(root);
 }
 
+/// Run Opt (`--nsteps 2 --nsmp 1`) or, with `physcal`, PhysCal on the fixed parameters, with
+/// the measurement Pfaffian selector `measure` (`None`: unset, the C-order `calc-m-all`).
+fn run_measure(inputs: &Path, out: &Path, measure: Option<&str>, physcal: Option<&Path>) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_mvmc"));
+    cmd.arg(inputs.join("namelist.def"))
+        .arg("--out-dir")
+        .arg(out)
+        .env_remove("MVMC_RS_SR_BACKEND")
+        .env_remove("MVMC_RS_MEASURE_BACKEND")
+        .env("MVMC_RS_TENFERRO_THREADS", "1")
+        .env("OPENBLAS_NUM_THREADS", "1");
+    match physcal {
+        Some(parameters) => cmd.arg("--physcal").arg(parameters),
+        None => cmd.args(["--nsteps", "2", "--nsmp", "1"]),
+    };
+    match measure {
+        Some(v) => cmd.env("MVMC_RS_MEASURE_PF_BACKEND", v),
+        None => cmd.env_remove("MVMC_RS_MEASURE_PF_BACKEND"),
+    };
+    cmd.output().unwrap()
+}
+
+/// Issue #613: the tenferro measurement Pfaffian runs Opt and PhysCal and reproduces the
+/// default C-order `calc-m-all` path. Its executor is the C-order PfaPack sequence, so no
+/// roundoff difference is expected (none was observed); the bound only avoids a bitwise
+/// assertion of computed values (#190) and is tighter than the native-C PhysCal bound
+/// (`1e-13`, `1e-10`). The time files are compared exactly except for their wall-clock stamp:
+/// they carry the acceptance counters, so equal rows mean the same sampling trajectory.
 #[test]
-fn unsupported_tenferro_pfaffian_is_rejected_before_opt_or_physcal_io() {
-    let (root, inputs) = setup("measure-tenferro-unavailable");
-    for (mode, alias) in [("opt", "tenferro"), ("phys", "tenferro-cpu")] {
-        let out = root.join(format!("out-{mode}"));
-        let mut command = Command::new(env!("CARGO_BIN_EXE_mvmc"));
-        command
-            .arg(inputs.join("namelist.def"))
-            .arg("--out-dir")
-            .arg(&out)
-            .env("MVMC_RS_MEASURE_PF_BACKEND", alias)
-            .env("MVMC_RS_SR_BACKEND", "tenferro")
-            .env("MVMC_RS_TENFERRO_THREADS", "1")
-            .env_remove("MVMC_RS_MEASURE_BACKEND")
-            .env("OPENBLAS_NUM_THREADS", "1");
-        if mode == "phys" {
-            // The nonexistent parameter file proves the selector is checked before input I/O.
-            command
-                .arg("--physcal")
-                .arg(root.join("missing-parameters.dat"));
-        } else {
-            command.args(["--nsteps", "1", "--nsmp", "1"]);
+fn tenferro_measurement_pfaffian_matches_c_order_in_opt_and_physcal() {
+    let (root, opt_inputs) = setup("measure-tenferro");
+    // PhysCal: a real Hubbard chain with Green functions on its fixed parameters.
+    let phys = fixtures().join("native_c_physcal_181/hubbard_chain_real");
+    let phys_inputs = phys.join("inputs");
+    let phys_parameters = phys.join("zqp_opt.dat");
+    for (mode, inputs, parameters) in [
+        ("opt", &opt_inputs, None),
+        ("phys", &phys_inputs, Some(phys_parameters.as_path())),
+    ] {
+        let outputs: Vec<PathBuf> = [None, Some("tenferro"), Some("tenferro-cpu")]
+            .into_iter()
+            .map(|measure| {
+                let out = root.join(format!("out-{mode}-{}", measure.unwrap_or("default")));
+                let output = run_measure(inputs, &out, measure, parameters);
+                assert!(
+                    output.status.success(),
+                    "{mode} {measure:?}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                out
+            })
+            .collect();
+        let mut files: Vec<String> = fs::read_dir(&outputs[0])
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        files.sort();
+        assert!(
+            files.iter().any(|f| f.starts_with("zvo_out")),
+            "{mode}: {files:?}"
+        );
+        for out in &outputs[1..] {
+            let mut other: Vec<String> = fs::read_dir(out)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().into_string().unwrap())
+                .collect();
+            other.sort();
+            assert_eq!(other, files, "{mode}: file inventory");
+            for file in &files {
+                let reference = fs::read_to_string(outputs[0].join(file)).unwrap();
+                let produced = fs::read_to_string(out.join(file)).unwrap();
+                if file.starts_with("zvo_time") {
+                    let rows = |text: &str| -> Vec<String> {
+                        text.lines()
+                            .map(|l| l.rsplit_once(": ").map_or(l, |(head, _)| head).to_owned())
+                            .collect()
+                    };
+                    assert_eq!(rows(&produced), rows(&reference), "{mode}/{file}");
+                    continue;
+                }
+                numerical_comparison::assert_numeric_text(
+                    produced.trim_end(),
+                    reference.trim_end(),
+                    1e-14,
+                    1e-13,
+                    &[],
+                    format!("{mode}/{file}"),
+                );
+            }
         }
-        let output = command.output().unwrap();
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert_eq!(output.status.code(), Some(2), "{mode}: {stderr}");
-        assert!(stderr.starts_with("error: "), "{mode}: {stderr}");
-        assert!(
-            stderr.contains("MVMC_RS_MEASURE_PF_BACKEND"),
-            "{mode}: {stderr}"
-        );
-        assert!(
-            stderr.contains("no skew-symmetric factorization or Pfaffian"),
-            "{mode}: {stderr}"
-        );
-        assert!(!stderr.contains("panicked"), "{mode}: {stderr}");
-        assert!(!out.exists(), "{mode}: output created before preflight");
     }
-    let supported_out = root.join("out-supported");
-    let supported = run_env(&inputs, &supported_out, None, Some("c-order"));
-    assert!(
-        supported.status.success(),
-        "C-order measurement remains available: {}",
-        String::from_utf8_lossy(&supported.stderr)
-    );
-    assert!(supported_out.join("zqp_opt.dat").exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Issue #613: the stage-backend measurement Pfaffian supports real, non-FSZ inputs; another
+/// mode is a usage error after input parsing and before any output, not a panic.
+#[test]
+fn stage_measurement_pfaffian_rejects_complex_inputs_before_output() {
+    let scenario = fixtures().join("native_c_physcal_181/heisenberg_chain_cmp");
+    let root = std::env::temp_dir().join(format!("issue464-measure-cmp-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    for alias in ["tenferro", "c-order"] {
+        let out = root.join(format!("out-{alias}"));
+        let output = run_measure(
+            &scenario.join("inputs"),
+            &out,
+            Some(alias),
+            Some(&scenario.join("zqp_opt.dat")),
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{alias}: {stderr}");
+        assert!(
+            stderr.contains("error: MVMC_RS_MEASURE_PF_BACKEND"),
+            "{alias}: {stderr}"
+        );
+        assert!(stderr.contains("only real, non-FSZ"), "{alias}: {stderr}");
+        assert!(stderr.contains("cmp calculation"), "{alias}: {stderr}");
+        assert!(!stderr.contains("panicked"), "{alias}: {stderr}");
+        assert!(!out.exists(), "{alias}: output created");
+    }
     let _ = fs::remove_dir_all(root);
 }

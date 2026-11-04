@@ -66,12 +66,28 @@ fn zero_pivot_plane_is_reported_per_plane() {
 }
 
 #[test]
-fn tenferro_cpu_composite_reports_the_pfaffian_gap_as_unsupported() {
+fn tenferro_cpu_composite_provides_the_pfaffian_stage() {
+    // Issue #613: the PfaPack extension operation in a prepared tenferro program.
     let mut b = StageBackend::tenferro_cpu().unwrap();
+    let x = [0.0, -1.5, 1.5, 0.0];
+    let out = b.pfaffian().pfaffian_inverse(&x, 2).unwrap();
+    // Pf([[0, a], [-a, 0]]) = a and its inverse is [[0, -1/a], [1/a, 0]] (column-major);
+    // the bounds allow one rounding of the reciprocal.
+    assert!((out.pf - 1.5).abs() <= 2.0 * f64::EPSILON * 1.5);
+    let want = [0.0, 1.0 / 1.5, -1.0 / 1.5, 0.0];
+    for (got, want) in out.inv.iter().zip(want) {
+        assert!((got - want).abs() <= 2.0 * f64::EPSILON, "{got} vs {want}");
+    }
+    // A singular plane is a numerical failure of the stage, not an unsupported capability.
     assert!(matches!(
         b.pfaffian().pfaffian_inverse(&[0.0; 4], 2),
-        Err(StageError::Unsupported(_))
+        Err(StageError::Failed(_))
     ));
+    assert!(
+        b.provider().contains("mvmc.pfaffian-inverse.v1"),
+        "{}",
+        b.provider()
+    );
 }
 
 /// Validated means deployed: the object production acquires for the selected kind is the

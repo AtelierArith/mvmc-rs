@@ -230,76 +230,85 @@ impl PfaffianStages for COrderPfaffian {
         n: usize,
         planes: usize,
     ) -> Result<Option<PfBatch>, StageError> {
-        if x.len() != n * n * planes {
-            return Err(StageError::Failed(format!(
-                "buffer length {} != n*n*planes = {}",
-                x.len(),
-                n * n * planes
-            )));
-        }
-        let plane_len = n * n.max(1);
-        assert_ne!(plane_len, 0, "chunk size must be non-zero");
-        // Each plane has its own factorization, inverse and status. Keep the
-        // scalar PfaPack sequence, but distribute independent planes across the
-        // same bounded inner pool used by calc_m_all (#586). The disjoint output
-        // windows retain input order, including failed/non-finite planes.
-        let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
-        crate::threading::qp_update(
-            &mut results,
-            x,
-            plane_len,
-            plane_len,
-            0,
-            planes,
-            crate::pfaffian::pfaffian_qp_cost_ns(n),
-            || (),
-            |_, _, result_slot, a| {
-                C_ORDER_PLANE_SCRATCH.with_borrow_mut(|(pivots, vt, work)| {
-                    pivots.resize(n, PivotIndex1Based(0));
-                    let result = {
-                        let mut view = SqMat::new(&mut *a, n);
-                        dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
-                    };
-                    match result {
-                        Err(info) => {
-                            a.fill(0.0);
-                            *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
-                        }
-                        Ok(value) => {
-                            // Worker-local scratch is reused across batches.
-                            // utu2inv resets its full matrix workspace;
-                            // failed/non-finite planes cannot leak into the next one.
-                            vt.resize(n.saturating_sub(1), 0.0);
-                            work.resize(n * n, 0.0);
-                            {
-                                let mut view = SqMat::new(&mut *a, n);
-                                let mut m_work = SqMat::new(work, n);
-                                utu2inv_real(&mut view, pivots, vt, &mut m_work);
-                            }
-                            // `a` now holds X^-1 (X * invM = I) for the matrix as given
-                            *result_slot = (
-                                value,
-                                if value.is_finite() {
-                                    PlaneOutcome::Ok
-                                } else {
-                                    PlaneOutcome::NonFinite
-                                },
-                            );
-                        }
-                    }
-                })
-            },
-        );
-        let (pf, outcome) = results.into_iter().unzip();
-        Ok(Some(PfBatch { pf, outcome }))
+        c_order_pfaffian_in_place(x, n, planes).map(Some)
     }
 }
 
-pub(crate) const TENFERRO_PFAFFIAN_UNAVAILABLE: &str =
-    "tenferro has no skew-symmetric factorization or Pfaffian";
+/// The C-order per-plane PfaPack sequence (`dsktf2`, `utu2pfa_real`, `utu2inv_real`) over
+/// `planes` column-major `n x n` planes, each replaced by its true inverse `X^-1`. A zero-pivot
+/// plane is zero-filled with `pf = 0`; a non-finite Pfaffian keeps the computed inverse.
+/// Independent planes are distributed over the bounded inner Rayon pool (#586); every plane
+/// keeps the scalar C operation order, so the results do not depend on the thread count.
+pub(crate) fn c_order_pfaffian_in_place(
+    x: &mut [f64],
+    n: usize,
+    planes: usize,
+) -> Result<PfBatch, StageError> {
+    if x.len() != n * n * planes {
+        return Err(StageError::Failed(format!(
+            "buffer length {} != n*n*planes = {}",
+            x.len(),
+            n * n * planes
+        )));
+    }
+    let plane_len = n * n.max(1);
+    assert_ne!(plane_len, 0, "chunk size must be non-zero");
+    // Each plane has its own factorization, inverse and status. Keep the
+    // scalar PfaPack sequence, but distribute independent planes across the
+    // same bounded inner pool used by calc_m_all (#586). The disjoint output
+    // windows retain input order, including failed/non-finite planes.
+    let mut results = vec![(0.0, PlaneOutcome::Ok); planes];
+    crate::threading::qp_update(
+        &mut results,
+        x,
+        plane_len,
+        plane_len,
+        0,
+        planes,
+        crate::pfaffian::pfaffian_qp_cost_ns(n),
+        || (),
+        |_, _, result_slot, a| {
+            C_ORDER_PLANE_SCRATCH.with_borrow_mut(|(pivots, vt, work)| {
+                pivots.resize(n, PivotIndex1Based(0));
+                let result = {
+                    let mut view = SqMat::new(&mut *a, n);
+                    dsktf2(&mut view, pivots).map(|_| utu2pfa_real(&view, pivots))
+                };
+                match result {
+                    Err(info) => {
+                        a.fill(0.0);
+                        *result_slot = (0.0, PlaneOutcome::ZeroPivot { row: info });
+                    }
+                    Ok(value) => {
+                        // Worker-local scratch is reused across batches.
+                        // utu2inv resets its full matrix workspace;
+                        // failed/non-finite planes cannot leak into the next one.
+                        vt.resize(n.saturating_sub(1), 0.0);
+                        work.resize(n * n, 0.0);
+                        {
+                            let mut view = SqMat::new(&mut *a, n);
+                            let mut m_work = SqMat::new(work, n);
+                            utu2inv_real(&mut view, pivots, vt, &mut m_work);
+                        }
+                        // `a` now holds X^-1 (X * invM = I) for the matrix as given
+                        *result_slot = (
+                            value,
+                            if value.is_finite() {
+                                PlaneOutcome::Ok
+                            } else {
+                                PlaneOutcome::NonFinite
+                            },
+                        );
+                    }
+                }
+            })
+        },
+    );
+    let (pf, outcome) = results.into_iter().unzip();
+    Ok(PfBatch { pf, outcome })
+}
 
-/// A Pfaffian stage that always reports [`StageError::Unsupported`] with the stated reason
-/// (tenferro has no skew-symmetric factorization or Pfaffian).
+/// A Pfaffian stage that always reports [`StageError::Unsupported`] with the stated reason.
 #[derive(Debug, Clone)]
 pub struct UnsupportedPfaffian {
     label: String,
@@ -313,11 +322,6 @@ impl UnsupportedPfaffian {
             label: label.to_string(),
             reason: reason.to_string(),
         }
-    }
-
-    /// The tenferro gap (still absent in 0.9).
-    pub fn tenferro() -> Self {
-        Self::new("none", TENFERRO_PFAFFIAN_UNAVAILABLE)
     }
 }
 
@@ -646,9 +650,10 @@ impl<'a> StageBackend<'a> {
         .with_measurement(Box::new(COrderMeasurement::default()))
     }
 
-    /// tenferro CPU (`native`): SR stages through eager ops and the real, non-FSZ
-    /// measurement stage (local energy + Slater derivative) through tensor contractions;
-    /// the Pfaffian stage is unsupported by tenferro.
+    /// tenferro CPU (`native`): SR stages through eager ops, the real, non-FSZ
+    /// measurement stage (local energy + Slater derivative) through tensor contractions, and
+    /// the Pfaffian stage through a prepared tenferro program of the PfaPack extension
+    /// operation ([`crate::tenferro_pfaffian`], issue #613).
     pub fn tenferro_cpu() -> Result<StageBackend<'static>, StageError> {
         Self::tenferro_cpu_with_transient(false)
     }
@@ -665,7 +670,7 @@ impl<'a> StageBackend<'a> {
                 engine.clone(),
                 "tenferro native".to_string(),
             )),
-            Box::new(UnsupportedPfaffian::tenferro()),
+            Box::new(crate::tenferro_pfaffian::TenferroPfaffian::new_cpu()?),
         )
         .with_measurement(Box::new(TenferroMeasurement::with_runtime(
             ctx,

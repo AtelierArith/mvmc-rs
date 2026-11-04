@@ -8,6 +8,9 @@
 //!
 //! The batch size is a process-wide override, so the sweep runs sequentially in one test.
 
+#[path = "../../../tests/support/numerical_comparison.rs"]
+mod numerical_comparison;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -231,15 +234,61 @@ fn stage_backend_c_order_measurement_is_byte_identical_to_calc_m_all() {
     set_measurement_batch_size_override(None);
 }
 
-/// A backend without the stage (tenferro 0.7.1 has no Pfaffian) is a hard error, never a
-/// fallback to the C-order kernels.
+/// Issue #613: the tenferro measurement Pfaffian (a prepared tenferro program of the PfaPack
+/// extension operation) reproduces the default `calc_m_all_real` path for every batch size in
+/// optimization and PhysCal. Its executor is the C-order PfaPack sequence, so no roundoff
+/// difference is expected (none was observed); the bound `1e-14` absolute, `1e-13` relative
+/// only avoids a bitwise assertion of computed values (#190), and integer/text tokens (sample
+/// counts, acceptance counters) are compared exactly.
 #[test]
-#[should_panic(expected = "measurement Pfaffian stage failed")]
-fn stage_backend_without_pfaffian_is_a_hard_error() {
-    set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
-        StageBackendKind::TenferroCpu,
-    )));
-    let _ = physcal("hubbard_chain_real", "real", 3);
+fn stage_backend_tenferro_measurement_matches_calc_m_all() {
+    let compare =
+        |label: &str, reference: &BTreeMap<String, Vec<u8>>, other: &BTreeMap<String, Vec<u8>>| {
+            assert_eq!(
+                reference.keys().collect::<Vec<_>>(),
+                other.keys().collect::<Vec<_>>(),
+                "{label}: file set differs"
+            );
+            for (name, bytes) in reference {
+                numerical_comparison::assert_numeric_text(
+                    String::from_utf8_lossy(&other[name]).trim_end(),
+                    String::from_utf8_lossy(bytes).trim_end(),
+                    1e-14,
+                    1e-13,
+                    &[],
+                    format!("{label}/{name}"),
+                );
+            }
+        };
+    for batch in [1usize, 3, 100_000] {
+        for (fixture, opt_trans) in [
+            ("hubbard_chain_real", false),
+            ("hubbard_chain_dh_real", false),
+        ] {
+            set_measurement_backend_override(None);
+            let reference = optimization(fixture, "real", opt_trans, batch);
+            set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
+                StageBackendKind::TenferroCpu,
+            )));
+            let staged = optimization(fixture, "real", opt_trans, batch);
+            compare(&format!("opt:{fixture} batch={batch}"), &reference, &staged);
+        }
+        for fixture in ["hubbard_all_terms_lanczos2", "hubbard_chain_real"] {
+            set_measurement_backend_override(None);
+            let reference = physcal(fixture, "real", batch);
+            set_measurement_backend_override(Some(MeasurementPfaffian::Stage(
+                StageBackendKind::TenferroCpu,
+            )));
+            let staged = physcal(fixture, "real", batch);
+            compare(
+                &format!("physcal:{fixture} batch={batch}"),
+                &reference,
+                &staged,
+            );
+        }
+    }
+    set_measurement_backend_override(None);
+    set_measurement_batch_size_override(None);
 }
 
 /// Complex mode has no stage-backend Pfaffian (the stage trait is real `f64`): hard error.

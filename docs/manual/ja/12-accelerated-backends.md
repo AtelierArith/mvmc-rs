@@ -91,13 +91,13 @@ MVMC_RS_CUDA_IMAGE=my/cuda:tag scripts/run_cuda_gate.sh docker
 | 値 | バックエンド | 備考 |
 |-------|---------|-------|
 | 未設定、空、`c`、`c-order`、`corder`、`default` | C 順序 CPU(`COrderSr` + `COrderPfaffian` + `COrderMeasurement`) | デフォルトであり整合性のオラクル。従来のインラインコードとバイト単位で同一 |
-| `tenferro`、`tenferro-cpu` | CPU 上の tenferro eager 演算(`cpu-faer`)。Pfaffian スロットは `Unsupported` | 実現性確認用の経路: 1 スレッドでは OpenBLAS/LAPACK より 1.1〜4 倍**遅い**(SYRK の代わりに faer の GEMM、ステージごとのテンソル生成と読み出し) |
+| `tenferro`、`tenferro-cpu` | CPU 上の tenferro eager 演算(`cpu-faer`)。Pfaffian スロットは PfaPack 拡張演算の準備済み tenferro プログラム(`TenferroPfaffian`、#613) | 実現性確認用の経路: 1 スレッドでは OpenBLAS/LAPACK より 1.1〜4 倍**遅い**(SYRK の代わりに faer の GEMM、ステージごとのテンソル生成と読み出し) |
 
 `MVMC_RS_MEASURE_PF_BACKEND` はさらに `calc-m-all`(デフォルト、サンプルごとの C 順序カーネル)を、`MVMC_RS_MEASURE_BACKEND` はさらに `direct`/`inline`(インラインの C 順序呼び出し)を受け付けます。
 
 規則:
 
-- **不正な値はエラーで、フォールバックはしません。** CLI は起動時に、ファイルを読み書きする前に一度だけ全セレクタを検証します。削除された `cuda`/`cuda:N` を含む不正な値(`MVMC_RS_SR_BACKEND="cuda" is not one of c-order, tenferro`)や利用できないバックエンド(たとえば歪対称分解を持たない `tenferro` を測定の Pfaffian 生成元に指定した場合)は `error: <変数名>: ...` を表示し、他のオプションエラーと同じく使用法エラーの終了ステータス `2` で終了します([8.1](08-running.md#81-mvmcコマンド))。出力ディレクトリは作られません。MPI では全ランクが合意に参加するので、全ランクがそろって停止します。この事前チェックを経ずに本番コードに到達したライブラリ呼び出し(`selected_stage_backend`、`acquire`)は同じメッセージで panic します。
+- **不正な値はエラーで、フォールバックはしません。** CLI は起動時に、ファイルを読み書きする前に一度だけ全セレクタを検証します。削除された `cuda`/`cuda:N` を含む不正な値(`MVMC_RS_SR_BACKEND="cuda" is not one of c-order, tenferro`)や利用できないバックエンドは `error: <変数名>: ...` を表示し、他のオプションエラーと同じく使用法エラーの終了ステータス `2` で終了します([8.1](08-running.md#81-mvmcコマンド))。出力ディレクトリは作られません。MPI では全ランクが合意に参加するので、全ランクがそろって停止します。この事前チェックを経ずに本番コードに到達したライブラリ呼び出し(`selected_stage_backend`、`acquire`)は同じメッセージで panic します。
 - **ルーティングされる範囲。** `MVMC_RS_SR_BACKEND` がルーティングするのは SR ステージのみです。Gram 積(`observables.rs` の `finalize_oo_store_real` と複素版ファイナライザ)、S/g の組み立てと Cholesky 求解(`sr.rs`)、CG 積(`sr_cg.rs`)。サンプラは常に C 順序のカーネルを使います。
 - **デフォルト以外のバックエンドはプロセスごとに 1 回だけ構築され**共有されます(tenferro ランタイムは高価です)。定数の CG オペランドは明示的なバージョンカウンタのもとでキャッシュされます。
 - **(観測)** デフォルト feature のリリースビルド(Linux x86_64)で `benchmark/hubbard_chain/inputs/hubbard_chain_L16`、`--nsteps 3 --nsmp 2` を実行すると、`tenferro` は `c-order` と同じファイル群(`zqp_opt.dat`、`zqp_*_opt.dat`、`zvo_out.dat`、`zvo_var.dat`、`zvo_SRinfo.dat`、`zvo_time_001.dat`)を書きます。`zvo_out.dat` の最初の 2 ステップは同一で、3 ステップ目は最後の桁が異なり、`zqp_opt.dat` の差は絶対値で最大 `5.7e-14` です。`tenferro` の 2 回の実行はバイト単位で同一です。出力はデフォルトとバイト単位では**一致しない**ため、オプトインで、許容誤差に対して確認します。この短い実行は例示であり、検証ではありません。
@@ -173,7 +173,7 @@ CG はステップごとには**比較しません**。サンプリングされ�
 
 ## 12.8 既知の制限
 
-- **tenferro ステージ**は実数・複素の SR と、実数・非 FSZ の測定ステージ B(RBM と二体 Green 項を除く)を扱います。測定の Pfaffian 生成元には tenferro の実装がありません(上流に歪対称分解がない)。設計が記録しているその他の上流の欠落(決定性の契約なし、argmax なし、`Tensor` が `Clone` でない、`Module` が `Send` でない)は設計 4.7 と 11.5 を参照してください。
+- **tenferro ステージ**は実数・複素の SR と、実数・非 FSZ の測定ステージ B(RBM と二体 Green 項を除く)を扱います。上流の tenferro には歪対称分解がないため、tenferro の測定 Pfaffian 生成元は純 Rust の PfaPack カーネルを tenferro 拡張演算として登録したものです(`mvmc_core::tenferro_pfaffian`)。テンソルプログラム、その準備と実行は tenferro、分解は C 順序の PfaPack 計算列です(#613)。設計が記録しているその他の上流の欠落(決定性の契約なし、argmax なし、`Tensor` が `Clone` でない、`Module` が `Send` でない)は設計 4.7 と 11.5 を参照してください。
 - **常駐 GPU ランナー**が受け付けるのは、有限な実数パラメータの実数通常軌道、ホッピングのみのサンプリング、局所スピン/RBM/DH/OptTrans なし、`NSRCG = 0`、逐次実行、`2 Ne <= 1024`(PhysCal はさらに `NLanczosMode = 0`)です。それ以外はデバイス上の作業の前に拒否されます(`gpu/mvmc-gpu-cuda/src/opt/model.rs`)。設計上、C/SFMT の軌道は再現しません。
 - **RTX 3060 の FP64。** 記録された GPU の測定値は、FP64 が FP32 の 1/64 のカードによるものです。データセンター向け GPU では比率が変わると見込まれます。
 - **CI に GPU なし。** CUDA ゲートはセルフホストランナー上のオプションです。設計文書の GPU の数値はローカル実行によるものです。

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Optional live MPICH preflight check; build the MPI-enabled CLI first.
+# Optional live MPICH check of the measurement Pfaffian selector (#613); build the MPI-enabled
+# CLI first. A uniform `tenferro` selection runs Opt and PhysCal; an invalid uniform selection
+# and a rank-inconsistent selection are rejected collectively before output.
 set -euo pipefail
 if [[ $# != 1 ]]; then
     echo "usage: $0 PATH_TO_MPI_CLI" >&2
@@ -24,7 +26,7 @@ fail() {
     exit 1
 }
 for ranks in 2 4; do
-    for selection in uniform mixed; do
+    for selection in uniform invalid mixed; do
         for mode in opt phys; do
             label="$ranks-$selection-$mode"
             set +e
@@ -33,13 +35,21 @@ for ranks in 2 4; do
                 timeout --kill-after=5s 45s "$launcher" -n "$ranks" bash -c '
                     set -euo pipefail
                     selection=$1; mode=$2; binary=$3; root=$4; out=$5; label=$6
-                    if [[ "$selection" = uniform || "$PMI_RANK" = 0 ]]; then
+                    if [[ "$selection" = invalid ]]; then
+                        export MVMC_RS_MEASURE_PF_BACKEND=bogus
+                    elif [[ "$selection" = uniform || "$PMI_RANK" = 0 ]]; then
                         export MVMC_RS_MEASURE_PF_BACKEND=tenferro
                     else
                         export MVMC_RS_MEASURE_PF_BACKEND=calc-m-all
                     fi
                     args=("$root/tests/fixtures/issue347_varbin/opt_inputs/namelist.def" --out-dir "$out/result-$label")
-                    if [[ "$mode" = phys ]]; then
+                    if [[ "$mode" = phys && "$selection" = uniform ]]; then
+                        # A real Hubbard chain on its fixed parameters (supported mode).
+                        scenario="$root/tests/fixtures/native_c_physcal_181/hubbard_chain_real"
+                        args=("$scenario/inputs/namelist.def" --out-dir "$out/result-$label"
+                              --physcal "$scenario/zqp_opt.dat")
+                    elif [[ "$mode" = phys ]]; then
+                        # Nonexistent parameters: the selector is checked before input I/O.
                         args+=(--physcal "$out/missing-parameters.dat")
                     else
                         args+=(--nsteps 1 --nsmp 1)
@@ -63,24 +73,32 @@ for ranks in 2 4; do
             status=$?
             set -e
             [[ "$status" != 124 && "$status" != 137 ]] || fail
-            if [[ "$selection" = uniform ]]; then
-                [[ "$status" = 2 ]] || fail
-            else
-                [[ "$status" = 1 ]] || fail
-            fi
+            case "$selection" in
+                uniform) [[ "$status" = 0 ]] || fail ;;
+                invalid) [[ "$status" = 2 ]] || fail ;;
+                *) [[ "$status" = 1 ]] || fail ;;
+            esac
             for ((rank = 0; rank < ranks; rank++)); do
                 [[ -f "$out/$label-rank$rank.status" ]] || fail
                 rank_status=$(cat "$out/$label-rank$rank.status")
                 if [[ "$selection" = uniform ]]; then
+                    [[ "$rank_status" = 0 ]] || fail
+                    ! rg -q '^error' "$out/$label-rank$rank.log" || fail
+                elif [[ "$selection" = invalid ]]; then
                     [[ "$rank_status" = 2 ]] || fail
-                    rg -q 'error: MVMC_RS_MEASURE_PF_BACKEND: unsupported: tenferro has no skew-symmetric factorization or Pfaffian' "$out/$label-rank$rank.log" || fail
+                    rg -q 'error: MVMC_RS_MEASURE_PF_BACKEND="bogus" is not one of calc-m-all, c-order, tenferro' "$out/$label-rank$rank.log" || fail
                 else
                     [[ "$rank_status" = 1 ]] || fail
                     rg -q 'CLI (control agreement failed|run controls differ)' "$out/$label-rank$rank.log" || fail
                 fi
                 ! rg -q 'panicked|thread .* panic' "$out/$label-rank$rank.log" || fail
             done
-            [[ ! -e "$out/result-$label" ]] || fail
+            if [[ "$selection" = uniform ]]; then
+                # Opt writes zvo_out.dat, PhysCal indexed zvo_out_NNN.dat.
+                compgen -G "$out/result-$label/zvo_out*.dat" > /dev/null || fail
+            else
+                [[ ! -e "$out/result-$label" ]] || fail
+            fi
             printf '%s launcher_status=%s, per-rank statuses verified: passed\n' "$label" "$status"
         done
     done
@@ -88,20 +106,31 @@ done
 
 # Check the actual launcher exit code without rank wrappers. Abrupt process::exit
 # before MPI_Finalize previously made MPICH occasionally return 0 despite errors.
+# A complex input with the stage-backend measurement Pfaffian is rejected after the
+# collective mode agreement, also before any output.
 for ranks in 2 4; do
     for repetition in 1 2 3 4 5; do
         label="direct-$ranks-$repetition"
+        if (( repetition % 2 )); then
+            selector=bogus
+            needle='error: MVMC_RS_MEASURE_PF_BACKEND="bogus" is not one of'
+            args=("$root/tests/fixtures/issue347_varbin/opt_inputs/namelist.def" --nsteps 1 --nsmp 1)
+        else
+            selector=tenferro
+            needle='error: MVMC_RS_MEASURE_PF_BACKEND: the stage-backend measurement Pfaffian supports only real, non-FSZ'
+            scenario="$root/tests/fixtures/native_c_physcal_181/heisenberg_chain_cmp"
+            args=("$scenario/inputs/namelist.def" --physcal "$scenario/zqp_opt.dat")
+        fi
         set +e
         OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 RAYON_NUM_THREADS=1 \
         MVMC_RS_INNER_THREADS=1 MVMC_RS_TENFERRO_THREADS=1 MVMC_RS_SR_BACKEND=tenferro \
-        MVMC_RS_MEASURE_PF_BACKEND=tenferro \
+        MVMC_RS_MEASURE_PF_BACKEND=$selector \
             timeout --kill-after=5s 45s "$launcher" -n "$ranks" "$binary" \
-            "$root/tests/fixtures/issue347_varbin/opt_inputs/namelist.def" \
-            --nsteps 1 --nsmp 1 --out-dir "$out/result-$label" > "$out/$label.log" 2>&1
+            "${args[@]}" --out-dir "$out/result-$label" > "$out/$label.log" 2>&1
         status=$?
         set -e
         [[ "$status" = 2 ]] || fail
-        rg -q 'error: MVMC_RS_MEASURE_PF_BACKEND: unsupported:' "$out/$label.log" || fail
+        rg -q -F "$needle" "$out/$label.log" || fail
         ! rg -q 'panicked|thread .* panic' "$out/$label.log" || fail
         [[ ! -e "$out/result-$label" ]] || fail
         printf '%s launcher_status=%s: passed\n' "$label" "$status"
