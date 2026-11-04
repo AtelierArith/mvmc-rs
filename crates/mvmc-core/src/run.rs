@@ -40,11 +40,55 @@ use crate::io::{output_data, output_opt_data, store_opt_data};
 use crate::measurement_batch::SlotStatus;
 use crate::observables::clear_phys_quantity;
 use crate::reducer::{Reducer, ReducerAsDyn, SingleProcessReducer};
-use crate::sampler_backend::SamplerBackendKind;
 use crate::slater_update::{update_slater_elm, update_slater_elm_fsz};
 use crate::state::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use crate::sync::sync_modified_parameter as sync_modified;
 use crate::sync::sync_modified_parameter_local as sync_modified_parameter;
+
+/// The production real, non-FSZ normal-mode sampler of one chain (`VMCMakeSample`): the C-order
+/// driver [`vmc_make_sample_real_with_reducer_timed`](crate::sampling::driver::vmc_make_sample_real_with_reducer_timed).
+///
+/// The driver runs against a fresh internal [`CTimer`] whose per-section counters are merged
+/// into `timing`, and a thread-safe reducer runs it inside the QP region team.
+fn sample_real_c_order(
+    data: &ExpertModeData,
+    state: &mut VmcOptimizationState,
+    rng: &mut Sfmt19937Rng,
+    timing: &mut dyn crate::stage_backend::MeasurementTiming,
+    reducer: &dyn Reducer,
+) -> Result<crate::sampling::SampleStats, String> {
+    fn run<const TIMED: bool>(
+        data: &ExpertModeData,
+        state: &mut VmcOptimizationState,
+        rng: &mut Sfmt19937Rng,
+        timer: &mut CTimer<TIMED>,
+        reducer: &dyn Reducer,
+    ) -> Result<crate::sampling::SampleStats, String> {
+        use crate::sampling::driver::vmc_make_sample_real_with_reducer_timed;
+        let result = if let Some(shared) = reducer.host_thread_safe() {
+            let width = state.slater_matrix.pf_m_real.len();
+            let cost =
+                crate::pfaffian::pfaffian_qp_cost_ns(state.slater_matrix.inv_m_real.n_size());
+            crate::threading::with_qp_region_team(width, cost, || {
+                vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, shared)
+            })
+        } else {
+            vmc_make_sample_real_with_reducer_timed(data, state, rng, timer, reducer)
+        };
+        result.map_err(|error| format!("failed: {error}"))
+    }
+    if timing.enabled() {
+        let mut timer = CTimer::<true>::new();
+        timer.diagnostics = timing.diagnostics();
+        let result = run(data, state, rng, &mut timer, reducer);
+        timing.merge_elapsed(&timer.elapsed_ns);
+        result
+    } else {
+        let mut timer = CTimer::<false>::new();
+        timer.diagnostics = timing.diagnostics();
+        run(data, state, rng, &mut timer, reducer)
+    }
+}
 
 #[cfg(all(test, feature = "mpi"))]
 #[path = "run_mpi_tests.rs"]
@@ -967,21 +1011,6 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
         reducer,
         "PhysCal validation",
     )?;
-    // Sampler backend (issue #517): resolved locally, like the other stage selectors (the CLI
-    // agrees on the selector across MPI ranks before any IO). Complex and FSZ modes have no
-    // device sampler, so a non-C-order selection for such a mode is a hard error, never a
-    // silent C-order fallback.
-    let sampler_kind = crate::sampler_backend::selected_sampler_backend();
-    if sampler_kind != SamplerBackendKind::COrder {
-        collective_result(
-            crate::sampler_backend::check_supported_input(sampler_kind, data).and_then(|()| {
-                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
-                    .map_err(|error| error.to_string())
-            }),
-            reducer,
-            "sampler backend mode",
-        )?;
-    }
     // C InitFile (NVMCCalMode==1) creates only the `_time_` file on rank 0; its
     // failure joins the directory-setup agreement so no extra collective is added.
     let mut run_files = None;
@@ -1028,7 +1057,6 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
     }
     timer.stop(20);
     let iterations = data.modpara.n_data_qty_smp.max(0) as usize;
-    let mut sampler_handle = crate::sampler_backend::acquire_sampler_kind(sampler_kind);
     for sample in 0..iterations {
         // C: OutputTime(ismp); FlushFile(0) (always a flush) before sampling.
         if let Some(files) = run_files.as_mut() {
@@ -1060,11 +1088,7 @@ pub fn vmc_phys_cal_in_place_with_options_timed<
             .map(|_| ())
             .map_err(|error| error.to_string())
         } else {
-            sampler_handle
-                .sampler()
-                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
-                .map(|_| ())
-                .map_err(|error| error.to_string())
+            sample_real_c_order(data, state, rng, timer, reducer.reducer_dyn()).map(|_| ())
         };
         timer.stop(3);
         let sample_error = sample_result.as_ref().err().cloned();
@@ -1238,21 +1262,6 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
         reducer,
         "optimization validation",
     )?;
-    // Sampler backend (issue #517): resolved locally, like the other stage selectors (the CLI
-    // agrees on the selector across MPI ranks before any IO). Complex and FSZ modes have no
-    // device sampler, so a non-C-order selection for such a mode is a hard error, never a
-    // silent C-order fallback.
-    let sampler_kind = crate::sampler_backend::selected_sampler_backend();
-    if sampler_kind != SamplerBackendKind::COrder {
-        collective_result(
-            crate::sampler_backend::check_supported_input(sampler_kind, data).and_then(|()| {
-                crate::sampler_backend::check_sampler_reducer(sampler_kind, reducer.reducer_dyn())
-                    .map_err(|error| error.to_string())
-            }),
-            reducer,
-            "sampler backend mode",
-        )?;
-    }
     let mut run_files: Option<crate::output_files::RunFiles> = None;
     let n_steps = data.modpara.nsr_opt_itr_step.max(0) as usize;
     // Validation excludes C's unwritten leading rows for oversized windows.
@@ -1289,7 +1298,6 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
             }
         }
     }
-    let mut sampler_handle = crate::sampler_backend::acquire_sampler_kind(sampler_kind);
     timer.start(2);
     for step in 0..n_steps {
         // C OutputTime(step) precedes the sample; Counter still holds the
@@ -1324,10 +1332,7 @@ pub fn vmc_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>
                 .map_err(|error| error.to_string())
             }
         } else if !all_complex {
-            sampler_handle
-                .sampler()
-                .sample_real_group(data, state, rng, timer, reducer.reducer_dyn())
-                .map_err(|error| error.to_string())
+            sample_real_c_order(data, state, rng, timer, reducer.reducer_dyn())
         } else {
             crate::sampling::driver::vmc_make_sample_with_reducer_timed(
                 data, state, rng, timer, reducer,
@@ -3077,8 +3082,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     // the host inverse planes. A device sampler keeps its own inverse resident, so a fully
     // device-resident PhysCal sweep can keep the inverse planes resident too; a C-order sampler
     // (and the byte-identity comparison run) still downloads them.
-    let sampler_host_inverse = crate::sampler_backend::selected_sampler_backend()
-        == crate::sampler_backend::SamplerBackendKind::COrder;
+    let sampler_host_inverse = true;
     let device_green_host_free =
         green_resident && data.modpara.lanczos_mode == 0 && !sampler_host_inverse;
     let download_tables = !(pf_resident && measure_resident)

@@ -7,7 +7,7 @@
 //! fixed order. [`RealPfStage`] is the seam between the two: [`CpuStage`] runs the existing
 //! flat CPU kernels in place (the production path, unchanged arithmetic), and a device-resident
 //! stage keeps the inverses on the accelerator and only exchanges moves and `NQP`-vectors with the
-//! host (`crate::device_sampler`).
+//! host.
 //!
 //! The seam changes no RNG draw: the draws happen in the host code around the stage calls.
 //! [`RealPfStage::decide`] is an observational hook with a default that returns the computed

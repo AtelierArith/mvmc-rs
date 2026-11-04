@@ -159,7 +159,7 @@ pub trait Reducer {
 
 /// Object-safe `&dyn Reducer` view of a possibly unsized reducer.
 ///
-/// The stage seams ([`crate::sampler_backend::SamplerStages`]) pass a `&dyn Reducer`, while the
+/// The stage seams (for example the production sampler) pass a `&dyn Reducer`, while the
 /// production runners are generic over `R: Reducer + ?Sized`. A generic `&R` cannot be coerced to
 /// `&dyn Reducer` when `R` may be unsized, so the conversion goes through this helper: the blanket
 /// impl covers every sized reducer and the second impl covers `dyn Reducer` itself.

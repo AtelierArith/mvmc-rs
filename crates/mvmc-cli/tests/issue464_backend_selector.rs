@@ -67,32 +67,50 @@ fn invalid_selector_is_a_usage_error_before_io() {
     let (root, inputs) = setup("invalid");
     let out = root.join("out");
     let output = run(&inputs, &out, Some("bogus"));
-    assert_usage_error(&output, &out, "not one of c-order, tenferro, cuda[:N]");
+    assert_usage_error(&output, &out, "not one of c-order, tenferro");
     let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn malformed_cuda_ordinal_is_a_usage_error() {
-    let (root, inputs) = setup("ordinal");
-    let out = root.join("out");
-    let output = run(&inputs, &out, Some("cuda:x"));
-    assert_usage_error(&output, &out, "not one of");
-    let _ = fs::remove_dir_all(root);
+fn removed_cuda_selector_is_a_usage_error_before_io() {
+    // The legacy CUDA stage backend was removed (#643): `cuda[:N]` is an invalid value like any
+    // other, rejected by the preflight before any IO.
+    for value in ["cuda", "cuda:0", "cuda:x"] {
+        let (root, inputs) = setup(&format!("cuda-{}", value.replace(':', "-")));
+        let out = root.join("out");
+        let output = run(&inputs, &out, Some(value));
+        assert_usage_error(&output, &out, "not one of c-order, tenferro");
+        let _ = fs::remove_dir_all(root);
+    }
 }
 
 #[test]
-fn cuda_without_a_registered_provider_is_a_usage_error_before_io() {
-    // The stock binary has no CUDA provider (with or without the `gpu-cuda` feature).
-    let (root, inputs) = setup("cuda");
+fn removed_cuda_measurement_consumer_is_a_usage_error_before_io() {
+    let (root, inputs) = setup("consumer-cuda");
     let out = root.join("out");
-    let output = run(&inputs, &out, Some("cuda"));
-    // Without the feature: "built without the `gpu-cuda` feature"; with it: "no CUDA provider registered".
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let output = Command::new(env!("CARGO_BIN_EXE_mvmc"))
+        .arg(inputs.join("namelist.def"))
+        .arg("--out-dir")
+        .arg(&out)
+        .args(["--nsteps", "2", "--nsmp", "1"])
+        .env_remove("MVMC_RS_SR_BACKEND")
+        .env_remove("MVMC_RS_MEASURE_PF_BACKEND")
+        .env("MVMC_RS_MEASURE_BACKEND", "cuda")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "stderr: {stderr}");
+    assert!(stderr.starts_with("error: "), "stderr: {stderr}");
     assert!(
-        stderr.contains("gpu-cuda") || stderr.contains("CUDA provider"),
+        stderr.contains("MVMC_RS_MEASURE_BACKEND"),
         "stderr: {stderr}"
     );
-    assert_usage_error(&output, &out, "unsupported");
+    assert!(
+        stderr.contains("not one of direct, c-order, tenferro"),
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("panicked"), "stderr: {stderr}");
+    assert!(!out.exists());
     let _ = fs::remove_dir_all(root);
 }
 
@@ -144,6 +162,10 @@ fn invalid_measurement_pfaffian_selector_is_a_usage_error_before_io() {
     assert_eq!(output.status.code(), Some(2), "stderr: {stderr}");
     assert!(
         stderr.contains("MVMC_RS_MEASURE_PF_BACKEND"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("not one of calc-m-all, c-order, tenferro"),
         "stderr: {stderr}"
     );
     assert!(!out.exists());

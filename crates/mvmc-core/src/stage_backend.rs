@@ -23,10 +23,10 @@
 //!
 //! # Selection
 //!
-//! [`StageBackendKind`]: C-order CPU (default, the parity oracle), tenferro CPU, or CUDA.
-//! `MVMC_RS_SR_BACKEND=c-order|tenferro|cuda[:N]` selects it for production SR; an invalid
-//! value or an unavailable device is an error, never a fallback. CUDA is only available when
-//! the `gpu-cuda` feature is enabled and a provider (`gpu/mvmc-gpu-cuda`) is registered.
+//! [`StageBackendKind`]: C-order CPU (default, the parity oracle) or tenferro CPU.
+//! `MVMC_RS_SR_BACKEND=c-order|tenferro` selects it for production SR; an invalid value is an
+//! error, never a fallback. The legacy CUDA stage backend was removed (#643); GPU work uses the
+//! device-resident runners of the standalone `gpu/mvmc-gpu-cuda` workspace.
 //!
 //! Production routes the SR stages through the selected backend, and a backend that keeps the
 //! SR step on a device (`SrStages::resident_direct`/`resident_cg`, issue #452) takes the real
@@ -952,11 +952,9 @@ pub enum StageBackendKind {
     COrder,
     /// tenferro eager ops on the CPU backend (`native`).
     TenferroCpu,
-    /// tenferro CUDA on the given device ordinal (feature `gpu-cuda` and a provider).
-    Cuda(usize),
 }
 
-/// Environment variable selecting the production backend (`c-order`, `tenferro`, `cuda[:N]`).
+/// Environment variable selecting the production backend (`c-order`, `tenferro`).
 pub const SR_BACKEND_VARIABLE: &str = "MVMC_RS_SR_BACKEND";
 
 /// Parse a selector value.
@@ -965,13 +963,9 @@ pub fn parse_stage_backend(value: &str) -> Result<StageBackendKind, String> {
     match v.as_str() {
         "" | "c" | "c-order" | "corder" | "default" => Ok(StageBackendKind::COrder),
         "tenferro" | "tenferro-cpu" => Ok(StageBackendKind::TenferroCpu),
-        "cuda" => Ok(StageBackendKind::Cuda(0)),
-        other => match other.strip_prefix("cuda:").map(str::parse::<usize>) {
-            Some(Ok(ordinal)) => Ok(StageBackendKind::Cuda(ordinal)),
-            _ => Err(format!(
-                "{SR_BACKEND_VARIABLE}={other:?} is not one of c-order, tenferro, cuda[:N]"
-            )),
-        },
+        other => Err(format!(
+            "{SR_BACKEND_VARIABLE}={other:?} is not one of c-order, tenferro"
+        )),
     }
 }
 
@@ -1006,9 +1000,8 @@ pub fn selected_stage_backend() -> StageBackendKind {
 }
 
 /// Startup preflight: resolve the selected backend and, for a non-default kind, open (and
-/// cache) it, so that an invalid selector or an unavailable backend (no `gpu-cuda` feature, no
-/// registered provider, device ordinal out of range) is reported as an error before any IO
-/// instead of a panic in the first SR step. The default C-order backend needs no opening.
+/// cache) it, so that an invalid selector or an unavailable backend is reported as an error
+/// before any IO instead of a panic in the first SR step. The default C-order backend needs no opening.
 ///
 /// # Errors
 ///
@@ -1029,9 +1022,8 @@ pub fn validate_selected_stage_backend() -> Result<StageBackendKind, String> {
 /// A message that names `variable`.
 pub fn preflight_stage_backend(kind: StageBackendKind, variable: &str) -> Result<(), String> {
     if kind != StageBackendKind::COrder {
-        // A provider may panic while loading a driver library (cudarc panics when `libcudart`
-        // is missing); report that as an error too, with the panic message and without the
-        // default hook's output.
+        // Report a panic while opening the backend as an error too, with the panic message and
+        // without the default hook's output.
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
         let opened = std::panic::catch_unwind(|| shared(kind).map(|_| ()));
@@ -1052,15 +1044,10 @@ pub fn preflight_stage_backend(kind: StageBackendKind, variable: &str) -> Result
 }
 
 /// Construct a fresh backend of the given kind.
-///
-/// CUDA is an error unless the build has the `gpu-cuda` feature and a provider is registered
-/// (`crate::backend::register_cuda_provider`): there is no CPU fallback.
 pub fn open_stage_backend(kind: StageBackendKind) -> Result<StageBackend<'static>, StageError> {
     match kind {
         StageBackendKind::COrder => Ok(StageBackend::c_order()),
         StageBackendKind::TenferroCpu => StageBackend::tenferro_cpu(),
-        StageBackendKind::Cuda(ordinal) => crate::backend::open_cuda_stage_backend(ordinal)
-            .map_err(|e| StageError::Unsupported(e.to_string())),
     }
 }
 
