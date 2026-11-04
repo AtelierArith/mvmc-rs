@@ -46,15 +46,17 @@ fn main() {
                         Ordering::Relaxed,
                     );
                     let start = Instant::now();
-                    let mut exec = engine.exec().expect("Engine execution bundle");
-                    exec.token().for_ranges(64, NonZeroUsize::MIN, |range| {
-                        let mut sum = 0u64;
-                        for i in range {
-                            sum += i as u64 + 1;
-                        }
-                        total.fetch_add(sum, Ordering::Relaxed);
-                    });
-                    drop(exec);
+                    engine
+                        .with_exec(|exec| {
+                            exec.token().for_ranges(64, NonZeroUsize::MIN, |range| {
+                                let mut sum = 0u64;
+                                for i in range {
+                                    sum += i as u64 + 1;
+                                }
+                                total.fetch_add(sum, Ordering::Relaxed);
+                            });
+                        })
+                        .expect("Engine operation");
                     dispatch_ns.fetch_add(
                         start.elapsed().as_nanos().try_into().unwrap(),
                         Ordering::Relaxed,

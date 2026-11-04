@@ -144,7 +144,7 @@ def source_files():
     raw = subprocess.check_output(
         ["git", "ls-files", "-co", "--exclude-standard", "-z", "--", "Cargo.toml",
          "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo", "tests/support",
-         "crates", "xtask", "scripts", ".github", "third_party"],
+         "crates", "xtask", "scripts", ".github"],
         cwd=ROOT,
     )
     return [ROOT / os.fsdecode(x) for x in raw.split(b"\0")

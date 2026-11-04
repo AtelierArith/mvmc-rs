@@ -73,7 +73,7 @@ for ranks in 2 4; do
                 rank_status=$(cat "$out/$label-rank$rank.status")
                 if [[ "$selection" = uniform ]]; then
                     [[ "$rank_status" = 2 ]] || fail
-                    rg -q 'error: MVMC_RS_MEASURE_PF_BACKEND: unsupported: tenferro 0.8 has no skew-symmetric factorization or Pfaffian' "$out/$label-rank$rank.log" || fail
+                    rg -q 'error: MVMC_RS_MEASURE_PF_BACKEND: unsupported: tenferro has no skew-symmetric factorization or Pfaffian' "$out/$label-rank$rank.log" || fail
                 else
                     [[ "$rank_status" = 1 ]] || fail
                     rg -q 'CLI (control agreement failed|run controls differ)' "$out/$label-rank$rank.log" || fail

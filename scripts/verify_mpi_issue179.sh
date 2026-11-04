@@ -9,7 +9,7 @@ limit=${MPI179_TIMEOUT:-30}
 out=$(mktemp -d /tmp/mvmc-issue179-evidence.XXXXXX)
 printf '%s\n' "$out"
 { git -c safe.directory="$PWD" rev-parse HEAD; git -c safe.directory="$PWD" diff --stat; rustc -Vv; mpirun --version; uname -a; pkg-config --modversion openblas || true; } > "$out/provenance.txt"
-git -c safe.directory="$PWD" ls-files --cached --others --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock rust-toolchain.toml .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
+git -c safe.directory="$PWD" ls-files --cached --others --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock rust-toolchain.toml .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
 sha256sum "$out/source-sha256.txt" >> "$out/provenance.txt"
 if [[ ${MPI179_PREPARE_ONLY:-0} != 1 ]]; then
     timeout --kill-after=10s 600s cargo build --locked --profile test-fast -p mvmc-cli --features mpi > "$out/build.log" 2>&1
@@ -137,7 +137,7 @@ for ranks in 2 4; do
     fi
 done
 printf 'Trajectory/624-word RNG/local accumulators/SR parity: NOT OBSERVED by CLI; run verify_mpi_issue179_states.sh.\nEmpty weights and per-move proposals/acceptance traces: NOT COVERED by CLI matrix.\n' > "$out/coverage-gaps.txt"
-git -c safe.directory="$PWD" ls-files --cached --others --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock rust-toolchain.toml .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
+git -c safe.directory="$PWD" ls-files --cached --others --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock rust-toolchain.toml .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
 if ! cmp -s "$out/source-sha256.txt" "$out/source-sha256-after.txt"; then
     echo 'SOURCE_CHANGED: shared source changed during verification; rebuild/reverify before milestone validation' >> "$out/provenance.txt"
     bad=1

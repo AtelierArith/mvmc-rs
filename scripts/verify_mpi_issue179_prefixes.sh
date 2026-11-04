@@ -30,7 +30,7 @@ finish() {
 }
 trap finish EXIT
 [[ -s $proof && $(git rev-parse --show-toplevel) == "$PWD" && $(git rev-parse HEAD) == "$MPI179_SOURCE_COMMIT" ]]
-git diff --exit-code "$MPI179_SOURCE_COMMIT" -- crates third_party xtask Cargo.toml Cargo.lock extern tests > "$output/production-baseline-diff.txt"
+git diff --exit-code "$MPI179_SOURCE_COMMIT" -- crates xtask Cargo.toml Cargo.lock extern tests > "$output/production-baseline-diff.txt"
 git diff --exit-code "$MPI179_SOURCE_COMMIT" -- scripts ':!scripts/mpi_issue179_prefix_evidence.py' ':!scripts/test_mpi_issue179_prefix_evidence.py' ':!scripts/verify_mpi_issue179_prefixes.sh' > "$output/nonowner-scripts-diff.txt"
 cp "$manifest" "$output/sources-before.sha256"
 sha256sum -c "$manifest" > "$output/source-before-check.txt"

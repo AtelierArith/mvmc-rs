@@ -362,7 +362,7 @@ def report(plan, evidence, root):
 def capture(root, selected):
     source = {}
     paths = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard",
-                                     "crates", "third_party", ".cargo", "Cargo.toml", "Cargo.lock",
+                                     "crates", ".cargo", "Cargo.toml", "Cargo.lock",
                                      "rustfmt.toml", "scripts/thread_gate_plan_183.py"], cwd=root, text=True).splitlines()
     for name in sorted(set(paths)):
         path = root / name

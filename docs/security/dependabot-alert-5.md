@@ -1,6 +1,6 @@
 # Dependabot alert 5 dependency remediation
 
-Local dependency remediation for [issue #192](https://github.com/AtelierArith/mvmc-rs/issues/192), investigated on 2026-10-03, independent of #190. Both workspace roots now patch the four lru-dependent tenferro 0.7.1 crates to controlled snapshots under third_party. Each snapshot changes only its lru requirement from 0.12 to 0.18.5. Both consumer lockfiles resolve registry lru 0.18.5, checksum `ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5`. Package source and licensing provenance are recorded in [third_party/README.md](../../third_party/README.md).
+Local dependency remediation for [issue #192](https://github.com/AtelierArith/mvmc-rs/issues/192), investigated on 2026-10-03, independent of #190. Both workspace roots now patch the four lru-dependent tenferro 0.7.1 crates to controlled snapshots under third_party. Each snapshot changes only its lru requirement from 0.12 to 0.18.5. Both consumer lockfiles resolve registry lru 0.18.5, checksum `ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5`. Package source and licensing provenance were recorded in `third_party/README.md`, deleted together with the snapshots in #644 (see the repository history before that change).
 
 ## Advisory coverage and release constraint
 
@@ -90,3 +90,7 @@ cargo audit --no-fetch --file Cargo.lock
 cargo audit --no-fetch --file benchmark/pfapack_compare/Cargo.lock
 cargo audit --no-fetch --file gpu/mvmc-gpu-cuda/Cargo.lock
 ```
+
+## tenferro v0.9 migration and snapshot removal (#644)
+
+The root, standalone CUDA and standalone `benchmark/pfapack_compare` locks resolve tenferro 0.9.0, and all three still resolve only registry `lru 0.18.5`. The `third_party/tenferro-*` 0.7.1 snapshots, which no lock had used since the v0.8 migration, were deleted together with their workspace `exclude` entries. On 2026-11-04, with Rust 1.99.0 and `cargo-audit` 0.22.2 using the locally available advisory database (`--no-fetch`), `cargo audit --no-fetch --file Cargo.lock` and `cargo audit --no-fetch --file benchmark/pfapack_compare/Cargo.lock` each exited 0 with no lru advisory. The root lock still reported the `custom_derive` and `paste` unmaintained warnings and the `anyhow` unsoundness warning RUSTSEC-2026-0190; the benchmark lock reported the `paste` warning. The standalone CUDA lock (`gpu/mvmc-gpu-cuda/Cargo.lock`, tenferro-gpu 0.9.0) also resolves only `lru 0.18.5`; its audit exited 0 with the `paste` warning. None were suppressed.

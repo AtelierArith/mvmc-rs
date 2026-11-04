@@ -9,7 +9,7 @@ limit=${MPI179_TIMEOUT:-30}
 out=$(mktemp -d /tmp/mvmc-issue179-physcal.XXXXXX)
 echo "Evidence: $out"
 git -c safe.directory="$PWD" rev-parse HEAD > "$out/head.txt"
-git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
+git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256.txt"
 sha256sum "$out/source-sha256.txt" > "$out/source-manifest.sha256"
 timeout --kill-after=10s 600s cargo build --locked --profile test-fast -p mvmc-cli --features mpi > "$out/build.log" 2>&1
 bin="$CARGO_TARGET_DIR/test-fast/mvmc"
@@ -57,7 +57,7 @@ for ranks in 2 4; do
         printf '%s\t%s\t%s\n' "$id" "$rc" "$status" | tee -a "$out/matrix.tsv"
     done
 done
-git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo third_party | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
+git -c safe.directory="$PWD" ls-files -co --exclude-standard -z -- crates scripts Cargo.toml Cargo.lock .cargo | sort -zu | xargs -0 sha256sum > "$out/source-sha256-after.txt"
 if ! cmp -s "$out/source-sha256.txt" "$out/source-sha256-after.txt"; then
     echo SOURCE_CHANGED > "$out/source-changed.txt"
     bad=1
