@@ -19,14 +19,14 @@ publish = false
 mvmc-core = { path = "../../crates/mvmc-core" }
 mvmc-expert-parsers = { path = "../../crates/mvmc-expert-parsers" }
 sfmt19937 = { path = "../../crates/sfmt19937" }
-# Versions must match the root workspace (crates.io 0.8.0; the git revisions used by
+# Versions must match the root workspace (crates.io 0.9.0; the git revisions used by
 # tenferro-decision-rs have a different with_backend_session signature, tenferro #1971).
-tenferro-gpu = { version = "0.8.0", features = ["cuda"] }
+tenferro-gpu = { version = "0.9.0", features = ["cuda"] }
 # Adapted vendored copy of AtelierArith/tenferro-decision-rs `tenferro-ext`; only its
 # single-stream raw CUDA execution helper (`with_raw_exec`/`RawExec`) is compiled
 # (issue #547). See gpu/tenferro-ext/README.md.
 tenferro-ext = { path = "../tenferro-ext" }
-tenferro-tensor = { version = "0.8.0", default-features = false }
+tenferro-tensor = { version = "0.9.0", default-features = false }
 num-complex = "0.4"
 libloading = "0.8"
 # Same version and features as tenferro-gpu's own cudarc (one copy in the lock); the resident
