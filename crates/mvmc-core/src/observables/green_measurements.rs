@@ -217,26 +217,30 @@ pub(crate) fn collect_green_values(
 ) -> Vec<Complex64> {
     let mut values = vec![Complex64::new(0.0, 0.0); len];
     if allow_parallel && crate::threading::inner_parallel_work(len, cost_ns) {
-        // C schedules these nonuniform operators dynamically. Interleave the
-        // logical indices across fixed blocks so a long run of cheap density
-        // operators cannot leave the heavy two-hop work on just a few workers.
-        // Each cell still has one producer and is published at its original
+        // C schedules these nonuniform operators dynamically (`schedule(dynamic)` in
+        // calgrn.c): which operators need a two-hop Pfaffian update depends on the
+        // sample, so a fixed assignment leaves some workers with several of the
+        // expensive ones. Workers claim short runs of indices from a shared cursor
+        // instead. Each cell still has one producer and is published at its original
         // index; no kernel reduction or aggregate addition is reordered.
-        let workers = crate::threading::inner_worker_count(len).min(len).max(1);
-        let block_len = len.div_ceil(workers);
-        let blocks = len.div_ceil(block_len);
+        const CHUNK: usize = 8;
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
         let _scope = crate::threading::profile_scope(true, len);
         let observed =
             crate::threading::observe_kernel(crate::threading::ObservedWork::Entry, true);
-        let produced = crate::threading::static_blocks(len, |start, _end| {
-            let first = start / block_len;
-            (first..len)
-                .step_by(blocks)
-                .map(|i| {
+        let produced = crate::threading::static_blocks(len, |_start, _end| {
+            let mut out = Vec::new();
+            loop {
+                let first = cursor.fetch_add(CHUNK, std::sync::atomic::Ordering::Relaxed);
+                if first >= len {
+                    break;
+                }
+                for i in first..(first + CHUNK).min(len) {
                     let _entry = observed.enter_item();
-                    (i, evaluate(i))
-                })
-                .collect::<Vec<_>>()
+                    out.push((i, evaluate(i)));
+                }
+            }
+            out
         });
         for block in produced {
             for (i, value) in block {
