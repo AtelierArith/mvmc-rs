@@ -28,15 +28,10 @@
 //! error, never a fallback. The legacy CUDA stage backend was removed (#643); GPU work uses the
 //! device-resident runners of the standalone `gpu/mvmc-gpu-cuda` workspace.
 //!
-//! Production routes the SR stages through the selected backend, and a backend that keeps the
-//! SR step on a device (`SrStages::resident_direct`/`resident_cg`, issue #452) takes the real
-//! direct step and the CG solve as whole composite stages (`sr.rs`, `sr_cg.rs`). The measurement
+//! Production routes the SR stages through the selected backend. The measurement
 //! routes stage A (Pfaffian/inverse tables) through [`PfaffianStages`] and stage B (local
 //! energy and Slater derivative) through [`MeasurementStages`] when the corresponding selector
-//! is non-default (issues #422, #519). Since issue #518 milestone 2 a backend can additionally
-//! run both measurement stages device-resident: [`PfaffianStages::stage_a_resident`] fills
-//! tables that [`MeasurementStages::measure_sample`] consumes by `batch_slot`, so only the
-//! sample's own rows and the small outputs cross the link inside a series.
+//! is non-default (issues #422, #519).
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -48,7 +43,7 @@ use crate::c_timer::{CTimer, TimerEnv, CTIMER_N};
 use crate::measurement_backend::TenferroMeasurement;
 use crate::slater_derivative::SlaterDerivativeScratch;
 use crate::sr_backend::{COrderSr, SrStages, TenferroSr, TenferroStats};
-use crate::state::{SlaterElmFlat, VmcOptimizationState};
+use crate::state::VmcOptimizationState;
 
 /// Why a stage produced no result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,42 +119,6 @@ pub struct PfBatch {
     pub outcome: Vec<PlaneOutcome>,
 }
 
-/// Device-resident measurement stage A request (issue #518 milestone 2, `stage_a_pfaffian`).
-///
-/// The caller lists the batch slots it needs tables for by their electron sites; the backend
-/// assembles and factorizes the planes on the device and keeps them there for the resident
-/// measurement stage B. Only the Pfaffians cross back by default; the inverse planes are
-/// returned only when the caller states that host consumers need them.
-pub struct ResidentStageAInput<'a> {
-    /// The working Slater table of the current wavefunction.
-    pub slater: &'a SlaterElmFlat<f64>,
-    /// `[slots * n]` electron sites of the requested samples (slot-major, `n = 2*Ne`).
-    pub ele_idx: &'a [i64],
-    /// Number of samples in the request.
-    pub slots: usize,
-    /// Lattice sites.
-    pub n_site: usize,
-    /// Electrons per spin.
-    pub n_elec: usize,
-    /// QP planes per sample.
-    pub n_qp: usize,
-    /// When true the caller needs the inverse planes on the host as well (PhysCal Green
-    /// functions, Lanczos, or a host measurement stage B).
-    pub download_inv: bool,
-}
-
-/// Result of [`PfaffianStages::stage_a_resident`], planes ordered `slot * n_qp + qp`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ResidentStageAOutput {
-    /// Pfaffians, `[slots * n_qp]`.
-    pub pf: Vec<f64>,
-    /// mVMC inverse planes `invM = -X^-1`, `[n, n, slots * n_qp]` column-major, when the
-    /// request asked for them.
-    pub inv: Option<Vec<f64>>,
-    /// Per-plane outcome (pfapack semantics).
-    pub outcome: Vec<PlaneOutcome>,
-}
-
 /// Batched Pfaffian and inverse of real skew-symmetric planes.
 pub trait PfaffianStages: Send {
     /// Short label, for example `c-order-cpu`.
@@ -188,27 +147,6 @@ pub trait PfaffianStages: Send {
         _planes: usize,
     ) -> Result<Option<PfBatch>, StageError> {
         Ok(None)
-    }
-
-    /// Whether this backend provides the device-resident stage A protocol
-    /// ([`Self::stage_a_resident`]). The C-order oracle and every host-only backend leave the
-    /// default `false`, so the caller keeps the host-plane path.
-    fn resident_stage_a(&self) -> bool {
-        false
-    }
-
-    /// Device-resident stage A (issue #518 milestone 2): assemble and factorize the requested
-    /// samples without host plane buffers, keeping the tables on the device for a resident
-    /// measurement stage B. A backend without the protocol returns [`StageError::Unsupported`];
-    /// `resident_stage_a` is the capability query the caller checks first.
-    fn stage_a_resident(
-        &mut self,
-        _input: &ResidentStageAInput<'_>,
-    ) -> Result<ResidentStageAOutput, StageError> {
-        Err(StageError::Unsupported(format!(
-            "{} does not provide the device-resident measurement stage A",
-            self.label()
-        )))
     }
 
     /// One plane; a numerical failure is a [`StageError::Failed`].
@@ -444,11 +382,6 @@ impl<const ENABLED: bool> MeasurementTiming for CTimer<ENABLED> {
 /// This is the host contract of milestone 1 (issue #519): the runner passes its
 /// `ExpertModeData`/`VmcOptimizationState`, so a device backend that cannot reconstruct them
 /// answers [`StageError::Unsupported`]. A flat device-facing layout is a later milestone.
-///
-/// `sample` and `batch_slot` are the residency keys of milestone 2 (issue #518): the runner
-/// tells the stage which saved configuration of the chain and which slot of the stage A chunk
-/// the sample is, so a device-resident backend can address the tables produced by
-/// [`PfaffianStages::stage_a_resident`] without any per-sample table transfer.
 pub struct MeasurementInput<'a> {
     /// Immutable physics configuration.
     pub data: &'a ExpertModeData,
@@ -464,10 +397,6 @@ pub struct MeasurementInput<'a> {
     pub ele_num: &'a [i64],
     /// Projection counts.
     pub ele_proj_cnt: &'a [i64],
-    /// Index of the saved configuration in the chain (`0..NVMCSample`).
-    pub sample: usize,
-    /// Slot of the sample inside the stage A chunk (the residency key).
-    pub batch_slot: usize,
 }
 
 /// Result of [`MeasurementStages::measure_sample`].
@@ -480,84 +409,6 @@ pub struct MeasurementOutput {
     pub slater_diff: Vec<Complex64>,
 }
 
-/// PhysCal Green-function values of one sample (issue #517 milestone 5), in the term order of
-/// `data.green_one_terms` / `data.green_two_terms`.
-///
-/// The one-body values are `<c^dag_{ri,s1} c_{rj,s2}>` and the direct two-body values are
-/// `<c^dag_{ri,s1} c_{rj,s1} c^dag_{rk,s3} c_{rl,s3}>`; the runner accumulates them exactly as
-/// it accumulates the host [`crate::observables`] consumer. A device backend returns this so
-/// the host never needs the inverse planes of a PhysCal sample.
-#[derive(Debug, Clone, PartialEq)]
-pub struct GreenOutput {
-    /// One-body values, one per `data.green_one_terms` entry.
-    pub one: Vec<Complex64>,
-    /// Direct two-body values, one per `data.green_two_terms` entry.
-    pub direct: Vec<Complex64>,
-}
-
-/// Host-visible counters of the device-resident measurement path (issue #518 milestone 2),
-/// for tests and benchmark metadata.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ResidentStats {
-    /// Slater-table uploads (one per changed content version).
-    pub slater_uploads: u64,
-    /// Bytes uploaded for Slater tables.
-    pub slater_upload_bytes: u64,
-    /// Resident stage A chunks.
-    pub stage_a_calls: u64,
-    /// Planes factorized on the device.
-    pub planes_factorized: u64,
-    /// Per-plane inverse-table downloads (`slots * n_qp` planes each).
-    pub inv_download_planes: u64,
-    /// Bytes downloaded for inverse tables.
-    pub inv_download_bytes: u64,
-    /// Bytes downloaded for Pfaffians (one `NQP` vector per sample plus status).
-    pub pf_download_bytes: u64,
-    /// Resident local-energy ratio tables.
-    pub ratio_tables: u64,
-    /// Resident Slater-derivative evaluations.
-    pub slater_diffs: u64,
-}
-
-impl ResidentStats {
-    /// Total bytes transferred host-to-device for tables (configuration/rows excluded).
-    pub fn table_upload_bytes(&self) -> u64 {
-        self.slater_upload_bytes
-    }
-
-    /// Total bytes transferred device-to-host for computed tables.
-    pub fn table_download_bytes(&self) -> u64 {
-        self.inv_download_bytes + self.pf_download_bytes
-    }
-}
-
-/// Input-fixed tables of the resident measurement path: uploaded once per `(geometry, data)`
-/// and reused across samples and steps.
-pub struct ResidentInputRequest<'a> {
-    /// Lattice sites.
-    pub n_site: usize,
-    /// Electrons per spin.
-    pub n_elec: usize,
-    /// QP planes per sample.
-    pub n_qp: usize,
-    /// Number of unique Slater parameters (`orbital_idx` values are `< n_slater`).
-    pub n_slater: usize,
-    /// QP points per translation sector (`NSPGaussLeg`).
-    pub n_sp_gauss_leg: usize,
-    /// Site-to-orbital index matrix (`orbital_idx[site][site]`, `-1` = none).
-    pub orbital_idx: &'a [Vec<i64>],
-    /// Site-to-orbital sign matrix.
-    pub orbital_sgn: &'a [Vec<i64>],
-    /// QP weights `[n_qp]`.
-    pub qp_weight: &'a [f64],
-    /// `spgl_cos_sin[spidx]` weight factors `[n_sp_gauss_leg]`.
-    pub spgl_cos_sin: &'a [f64],
-    /// `spgl_cos_cos[spidx]`.
-    pub spgl_cos_cos: &'a [f64],
-    /// `spgl_sin_sin[spidx]`.
-    pub spgl_sin_sin: &'a [f64],
-}
-
 /// Local energy and Slater-parameter derivative of one real, non-FSZ sample (issue #519).
 ///
 /// A backend that cannot run the stage returns [`StageError::Unsupported`]; the runner reports
@@ -567,49 +418,6 @@ pub trait MeasurementStages: Send {
     fn label(&self) -> String;
     /// Provider description recorded in the benchmark metadata.
     fn provider(&self) -> String;
-
-    /// Whether this backend keeps the measurement tables device-resident (issue #518
-    /// milestone 2). When true, `batch_slot` addresses tables produced by
-    /// [`PfaffianStages::stage_a_resident`] and no per-sample Slater/inverse table transfer
-    /// happens.
-    fn resident_measurement(&self) -> bool {
-        false
-    }
-
-    /// Upload the input-fixed tables of the resident path (no-op otherwise). Called once per
-    /// measurement sweep before the first stage A chunk.
-    fn resident_prepare(
-        &mut self,
-        _data: &ExpertModeData,
-        _state: &VmcOptimizationState,
-    ) -> Result<(), StageError> {
-        Ok(())
-    }
-
-    /// Counters of the resident path, `None` when the backend is not resident.
-    fn resident_stats(&self) -> Option<ResidentStats> {
-        None
-    }
-
-    /// Whether this backend computes the PhysCal Green functions on the device (issue #517
-    /// milestone 5). When true the runner uses [`Self::measure_green`] for the host Green
-    /// consumer and may keep the inverse planes resident.
-    fn resident_green(&self) -> bool {
-        false
-    }
-
-    /// Device PhysCal Green functions of one sample (issue #517 milestone 5). The default
-    /// `None` keeps the host C-order consumer; a backend that reports [`Self::resident_green`]
-    /// must return `Some`. `one_len`/`direct_len` size the outputs at the caller's term counts.
-    fn measure_green(
-        &mut self,
-        _input: &mut MeasurementInput<'_>,
-        _one_len: usize,
-        _direct_len: usize,
-        _timing: &mut dyn MeasurementTiming,
-    ) -> Result<Option<GreenOutput>, StageError> {
-        Ok(None)
-    }
 
     /// Compute the local energy and (when `slater_diff_len > 0`) the Slater-parameter
     /// derivative of one sample. `slater_diff_len` is the number of complex slots the runner
@@ -857,7 +665,6 @@ impl<'a> StageBackend<'a> {
             Box::new(TenferroSr::with_runtime(
                 ctx.clone(),
                 engine.clone(),
-                crate::sr_backend::Placement::Host,
                 "tenferro native".to_string(),
             )),
             Box::new(UnsupportedPfaffian::tenferro()),
@@ -865,7 +672,6 @@ impl<'a> StageBackend<'a> {
         .with_measurement(Box::new(TenferroMeasurement::with_runtime(
             ctx,
             engine.clone(),
-            crate::sr_backend::Placement::Host,
             "tenferro-measurement native".to_string(),
         )));
         if !transient {
@@ -1180,40 +986,6 @@ fn shared(kind: StageBackendKind) -> Result<Shared, StageError> {
     let backend: Shared = Box::leak(Box::new(Mutex::new(instance)));
     registry.push((kind, backend));
     Ok(backend)
-}
-
-/// Pre-register the process-wide backend of `kind` (tests and programs that supply their own
-/// stages). Returns `false`, leaving the existing backend, when `kind` was already opened or
-/// registered; `StageBackendKind::COrder` is never shared and cannot be registered.
-pub fn register_stage_backend(kind: StageBackendKind, backend: StageBackend<'static>) -> bool {
-    if kind == StageBackendKind::COrder {
-        return false;
-    }
-    let mut registry = SHARED.lock().unwrap_or_else(|e| e.into_inner());
-    if registry.iter().any(|(k, _)| *k == kind) {
-        return false;
-    }
-    let leaked: Shared = Box::leak(Box::new(Mutex::new(backend)));
-    registry.push((kind, leaked));
-    true
-}
-
-/// True when the selected backend keeps the direct SR step resident on a device (the selected
-/// kind is not C order and its SR stages report [`SrStages::resident_direct`]). A backend that
-/// cannot be opened is not resident here; the SR step reports that error itself.
-pub fn selected_resident_direct() -> bool {
-    let kind = selected_stage_backend();
-    if kind == StageBackendKind::COrder {
-        return false;
-    }
-    match shared(kind) {
-        Ok(m) => m
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .sr()
-            .resident_direct(),
-        Err(_) => false,
-    }
 }
 
 enum StageStorage {

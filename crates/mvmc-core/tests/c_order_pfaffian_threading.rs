@@ -255,17 +255,7 @@ fn check_plane_preparation() {
     let mut recorder = RecordingPlanes::default();
     let observer = threading::start_observation();
     // Deliberately non-contiguous and reversed active slots.
-    stage_a_pfaffian(
-        &mut recorder,
-        &slater,
-        &mut batch,
-        &[3, 2, 0],
-        4,
-        2,
-        3,
-        true,
-    )
-    .unwrap();
+    stage_a_pfaffian(&mut recorder, &slater, &mut batch, &[3, 2, 0], 4, 2, 3).unwrap();
     let observed = observer.finish();
     // Independently enumerated column-major source submatrices, before the
     // adapter's inverse sign flip. Each subsequent QP adds 100 in magnitude.

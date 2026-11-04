@@ -79,10 +79,6 @@ pub fn install_cg_observer(observer: Rc<dyn CgObserver>) -> Result<CgObserverGua
     })
 }
 
-fn cg_observer_installed() -> bool {
-    CG_OBSERVER.with(|slot| slot.borrow().is_some())
-}
-
 fn observe(f: impl FnOnce(&dyn CgObserver)) {
     CG_OBSERVER.with(|slot| {
         if let Some(observer) = slot.borrow().clone() {
@@ -349,37 +345,6 @@ impl SampledSrOperator {
         let kind = crate::stage_backend::selected_stage_backend();
         let _team = crate::stage_backend::retain_cpu_team(kind).map_err(|e| e.to_string())?;
         let mut backend = crate::stage_backend::acquire_kind(kind);
-        // Issue #452: a resident backend runs the whole loop on the device, with the sample
-        // matrices uploaded once. The host loop below stays the path for every other backend,
-        // for several ranks (the sampled products are reduced across ranks) and while a CG
-        // observer is installed (it reads the per-iteration host vectors).
-        if backend.sr().resident_cg()
-            && reducer.reduction_size() == 1
-            && !reducer.supports_grouped_sampling()
-            && !cg_observer_installed()
-        {
-            let stage = crate::sr_backend::CgStepInput {
-                real: &self.real_samples,
-                imag: self.complex.then_some(&self.imag_samples[..]),
-                components: self.components,
-                samples: self.samples,
-                gradient,
-                mean: &self.mean,
-                diagonal: &self.diagonal,
-                inv_weight,
-                shift,
-                tolerance,
-                max_iterations,
-            };
-            let out = backend.sr().cg_step(&stage).map_err(|e| e.to_string())?;
-            // The device keeps the residual and direction; they are diagnostics of the host loop.
-            return Ok(CgSolution {
-                solution: out.solution,
-                iterations: out.iterations,
-                residual: Vec::new(),
-                direction: Vec::new(),
-            });
-        }
         if backend.is_owned() {
             return self.solve_with_stages(
                 backend.sr(),

@@ -300,13 +300,6 @@ const MIN_ABS2: f64 = 1.0e-28;
 /// the working layout (`invM = -X^-1`, `pf`), or [`SlotStatus::Failed`] when any of its planes
 /// failed, like a failing `calc_m_all_real`.
 ///
-/// A backend that reports [`PfaffianStages::resident_stage_a`] runs the device-resident
-/// protocol instead (issue #518 milestone 2): the planes are assembled and factorized on the
-/// device from the resident Slater table and the sample's electron sites, the inverse planes
-/// are downloaded only when `download_inv` is set, and the tables stay addressable by
-/// `batch_slot` for a resident measurement stage B. Slots whose host inverse table was not
-/// downloaded are marked stale (issue #454) so that any host read fails loudly.
-///
 /// # Errors
 ///
 /// The backend's [`StageError`] (for example `Unsupported`); slot statuses are then
@@ -320,7 +313,6 @@ pub fn stage_a_pfaffian(
     n_site: usize,
     n_elec: usize,
     n_qp: usize,
-    download_inv: bool,
 ) -> Result<(), StageError> {
     let n = 2 * n_elec;
     let n2 = 2 * n_site;
@@ -333,18 +325,6 @@ pub fn stage_a_pfaffian(
             batch.status[slot] = SlotStatus::Failed;
         }
         return Ok(());
-    }
-    if backend.resident_stage_a() {
-        return stage_a_resident(
-            backend,
-            slater,
-            batch,
-            active,
-            n_site,
-            n_elec,
-            n_qp,
-            download_inv,
-        );
     }
     let planes = active.len() * n_qp;
     // Grow only: `clear` + `resize` re-zeroed the whole `nn * planes` buffer on every batch even
@@ -434,76 +414,6 @@ pub fn stage_a_pfaffian(
     }
     if in_place {
         batch.stage_x = out.inv;
-    }
-    Ok(())
-}
-
-/// Device-resident stage A (issue #518 milestone 2): hand the active samples to the backend
-/// and store the returned Pfaffians (and inverse planes when the host needs them) into the
-/// batch slots. Slots without a downloaded inverse table are marked stale.
-#[allow(clippy::too_many_arguments)]
-fn stage_a_resident(
-    backend: &mut dyn PfaffianStages,
-    slater: &SlaterElmFlat<f64>,
-    batch: &mut MeasurementBatchWorkspace,
-    active: &[usize],
-    n_site: usize,
-    n_elec: usize,
-    n_qp: usize,
-    download_inv: bool,
-) -> Result<(), StageError> {
-    let n = 2 * n_elec;
-    let nn = n * n;
-    let mut ele = Vec::with_capacity(active.len() * n);
-    for &slot in active {
-        ele.extend_from_slice(&batch.ele_idx[slot * n..(slot + 1) * n]);
-    }
-    let out = backend.stage_a_resident(&crate::stage_backend::ResidentStageAInput {
-        slater,
-        ele_idx: &ele,
-        slots: active.len(),
-        n_site,
-        n_elec,
-        n_qp,
-        download_inv,
-    })?;
-    let planes = active.len() * n_qp;
-    if out.pf.len() != planes || out.outcome.len() != planes {
-        return Err(StageError::Failed(format!(
-            "resident stage A returned {} Pfaffians / {} outcomes for {planes} planes",
-            out.pf.len(),
-            out.outcome.len()
-        )));
-    }
-    if let Some(inv) = &out.inv {
-        if inv.len() != planes * nn {
-            return Err(StageError::Failed(format!(
-                "resident stage A returned {} inverse values for {planes} planes of {n}x{n}",
-                inv.len()
-            )));
-        }
-    }
-    for (a, &slot) in active.iter().enumerate() {
-        if !(0..n_qp).all(|qp| out.outcome[a * n_qp + qp] == PlaneOutcome::Ok) {
-            batch.status[slot] = SlotStatus::Failed;
-            continue;
-        }
-        let set = &mut batch.real[slot];
-        for qp in 0..n_qp {
-            let p = a * n_qp + qp;
-            set.pf[qp] = out.pf[p];
-            match &out.inv {
-                Some(inv) => set
-                    .inv
-                    .qp_matrix_slice_mut(qp)
-                    .copy_from_slice(&inv[p * nn..(p + 1) * nn]),
-                None => set.inv.mark_stale(
-                    "device-resident measurement stage A (issue #518): the host inverse table \
-                     was intentionally not downloaded; the resident measurement stage B holds it",
-                ),
-            }
-        }
-        batch.status[slot] = SlotStatus::Ready;
     }
     Ok(())
 }
@@ -886,7 +796,6 @@ mod tests {
             n_site,
             n_elec,
             n_qp,
-            true,
         )
         .unwrap();
         let pool = ThreadedPfaPackWorkspace::new(2 * n_elec, 1);
@@ -927,7 +836,6 @@ mod tests {
             n_site,
             n_elec,
             n_qp,
-            true,
         )
         .unwrap();
         assert_eq!(
@@ -950,7 +858,6 @@ mod tests {
             n_site,
             n_elec,
             n_qp,
-            true,
         )
         .unwrap();
         let mut tweaked = setup(n_site, n_elec, n_qp, &configs);
@@ -965,7 +872,6 @@ mod tests {
             n_site,
             n_elec,
             n_qp,
-            true,
         )
         .unwrap();
         for qp in 0..n_qp {
@@ -981,7 +887,6 @@ mod tests {
             n_site,
             n_elec,
             n_qp,
-            true,
         )
         .unwrap_err();
         assert!(matches!(err, StageError::Unsupported(_)));
@@ -1024,33 +929,5 @@ mod tests {
         for removed in ["nope", "cuda", "cuda:1"] {
             assert!(parse_measurement_consumer(removed).is_err(), "{removed}");
         }
-    }
-
-    /// Stage A writes whole planes through the revalidating full-overwrite writer, so a slot
-    /// table left stale by a device run (issue #454) is valid again afterwards and readable.
-    #[test]
-    fn stage_a_overwrites_and_revalidates_stale_slot_tables() {
-        let (n_site, n_elec, n_qp) = (4usize, 2usize, 2usize);
-        let slater = skew_slater(n_qp, n_site);
-        let configs = vec![vec![0, 2, 1, 3]];
-        let mut batch = setup(n_site, n_elec, n_qp, &configs);
-        batch.real[0]
-            .inv
-            .mark_stale("test: device-resident sampler");
-        assert!(batch.real[0].inv.is_stale());
-        stage_a_pfaffian(
-            &mut COrderPfaffian,
-            &slater,
-            &mut batch,
-            &[0],
-            n_site,
-            n_elec,
-            n_qp,
-            true,
-        )
-        .unwrap();
-        assert_eq!(batch.status[0], SlotStatus::Ready);
-        assert!(!batch.real[0].inv.is_stale());
-        let _ = batch.real[0].inv.qp_matrix_slice(0); // would panic if still stale
     }
 }
