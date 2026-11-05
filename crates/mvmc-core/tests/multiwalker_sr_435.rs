@@ -252,6 +252,9 @@ fn prepare(cell: &Cell, dest: &Path, solver: &str) -> PathBuf {
             .unwrap_or_else(|| panic!("{key} missing from modpara.def"));
         *line = format!("{key} {value}");
     }
+    // The native C references are 1.3.0 runs that continue after a CG solve
+    // reaches its limit; C 1.4.0 does so only with NSRCGAbortOnFail = 0 (#682).
+    lines.push("NSRCGAbortOnFail 0".to_owned());
     fs::write(&modpara, lines.join("\n") + "\n").unwrap();
     dest.join("namelist.def")
 }

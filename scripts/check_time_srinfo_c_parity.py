@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Optional C probe for `_time_`/`_SRinfo` run-log formats (issue #346).
 
-Extracts verbatim mVMC-1.3.0 bodies into c_toolbox/time_srinfo_*.inc, builds
+Extracts verbatim mVMC-1.4.0 bodies into c_toolbox/time_srinfo_*.inc, builds
 c_toolbox/time_srinfo_format.c and writes the output files to
 tests/fixtures/time_srinfo_c/. Rust tests read only the checked-in fixture.
 
     uv run --no-project python scripts/check_time_srinfo_c_parity.py --write
     uv run --no-project python scripts/check_time_srinfo_c_parity.py        # verify
 
-Pass --source <mVMC-1.3.0 checkout> when extern/mVMC-1.4.0 is not populated.
+Pass --source <mVMC-1.4.0 checkout> when extern/mVMC-1.4.0 is not populated.
 """
 import argparse
 import filecmp
@@ -20,12 +20,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-LICENSE_NOTE = ("/* Verbatim lines from authoritative mVMC-1.3.0 (GPL-3.0-or-later, "
+LICENSE_NOTE = ("/* Verbatim lines from authoritative mVMC-1.4.0 (GPL-3.0-or-later, "
                 "Copyright (C) 2016 The University of Tokyo).\n * Regenerate with "
                 "scripts/check_time_srinfo_c_parity.py --write. Optional oracle, not a Rust "
                 "build/test dependency. */\n")
 CFLAGS = ["-std=gnu11", "-O0", "-ffp-contract=off"]
-SUBMODULE_COMMIT = "d73d06bd529d3b2573f38eb5817c4a5f52971006"
+SUBMODULE_COMMIT = "e83aa6cb1e37bfc4876848787ed2f61721a7e972"
 
 
 def sha(path):
@@ -49,14 +49,14 @@ def main():
     tool = root / "c_toolbox"
     parts = {
         "time_srinfo_upstream.inc": [
-            (mvmc / "initfile.c", 33, 70, "void InitFile("),
-            (mvmc / "initfile.c", 144, 156, "void CloseFile("),
-            (mvmc / "initfile.c", 192, 204, "void FlushFile("),
+            (mvmc / "initfile.c", 33, 75, "void InitFile("),
+            (mvmc / "initfile.c", 154, 166, "void CloseFile("),
+            (mvmc / "initfile.c", 205, 217, "void FlushFile("),
             (mvmc / "vmcclock.c", 34, 48, "void OutputTime("),
         ],
         "time_srinfo_rows_direct.inc": [(mvmc / "stcopt.c", 157, 158, "fprintf(FileSRinfo")],
         "time_srinfo_rows_diag.inc": [(mvmc / "stcopt_pdposv.c", 585, 586, "fprintf(FileSRinfo")],
-        "time_srinfo_rows_cg.inc": [(mvmc / "stcopt_cg_impl.c", 202, 203, "fprintf(FileSRinfo")],
+        "time_srinfo_rows_cg.inc": [(mvmc / "stcopt_cg_impl.c", 285, 286, "fprintf(FileSRinfo")],
     }
     sources = sorted({p[0] for v in parts.values() for p in v})
     for name, spec in parts.items():
@@ -90,7 +90,7 @@ def main():
                 "--write`.\n\n"
                 "- Probe: `c_toolbox/time_srinfo_format.c` (standalone kernel check; verbatim "
                 "`InitFile`, `CloseFile`, `FlushFile`, `OutputTime` and the SRinfo `fprintf` "
-                "statements from mVMC-1.3.0; no MPI/sampler/solver, counters and solver values "
+                "statements from mVMC-1.4.0; no MPI/sampler/solver, counters and solver values "
                 "are literals; `time()` stubbed to 1700000000, run with `TZ=UTC`). A full C "
                 "executable run was not possible (no MPI toolchain).\n"
                 f"- Compiler: `cc {' '.join(CFLAGS)}`; `{compiler.splitlines()[0]}`; "
@@ -99,7 +99,8 @@ def main():
                 + hashes + "\n\n"
                 "Inputs per case are the literals in the probe's `main`. `paraopt/` uses "
                 "`NFileFlushInterval=2`, `NDataIdxStart=7`; `physcal/` is `NVMCCalMode=1` with "
-                "`NDataIdxStart=-1`; `diag/` is `SRFlag=1`.\n")
+                "`NDataIdxStart=-1`; `diag/` is `SRFlag=1`; `cg/` is `NSRCG=1` (1.4.0 `info` "
+                "header and `%5d %d` rows).\n")
         else:
             for f in sorted(out.rglob("*_time_*.dat")) + sorted(out.rglob("*_SRinfo.dat")):
                 if not filecmp.cmp(f, fixture / f.relative_to(out), shallow=False):

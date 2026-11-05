@@ -17,8 +17,12 @@ def definition(width, complex_flag, maps, flags, label="NJastrowIdx"):
 def cases(root):
     for nsite in (2, 3, 6):
         width = nsite + 3
-        rows = [f"{i} {j} {(2*i+j)%3}\n" for i in range(nsite)
+        # mVMC 1.4.0 requires the same class for (i,j) and (j,i); the directed
+        # formula of the 1.3.0 cases is kept as the asymmetric rejection case.
+        rows = [f"{i} {j} {(2*min(i, j)+max(i, j))%3}\n" for i in range(nsite)
                 for j in range(nsite) if i != j]
+        directed = [f"{i} {j} {(2*i+j)%3}\n" for i in range(nsite)
+                    for j in range(nsite) if i != j]
         raw = [-2, -1, 0, 1, 2, 3]
         flags = [f"{99-k} {raw[k % 6]}\n" for k in range(width)]
         for complex_flag in (0, 1, 2):
@@ -37,6 +41,9 @@ def cases(root):
                 ("diagonal", "0 0 0\n"+"".join(rows[1:]), "".join(flags)),
                 ("bad_site", f"{nsite} 0 0\n"+"".join(rows[1:]), "".join(flags)),
                 ("duplicate_flag_labels", "".join(rows), "".join(f"-7 {raw[k%6]}\n" for k in range(width))),
+                ("asymmetric_classes", "".join(directed), "".join(flags)),
+                ("repeated_directed_pair", "".join(rows[:-1])+rows[0], "".join(flags)),
+                ("class_out_of_range", f"0 1 {width}\n"+"".join(rows[1:]), "".join(flags)),
             ):
                 yield prefix+"_"+name, nsite, definition(width, complex_flag, maps, opts)
             yield prefix+"_ignored_header_label", nsite, definition(width, complex_flag, "".join(rows), "".join(flags), "DeclaredWidth")

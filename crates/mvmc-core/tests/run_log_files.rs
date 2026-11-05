@@ -53,14 +53,13 @@ fn row(
 
 #[test]
 fn sr_info_rows_and_headers_match_c_printf_output() {
-    // The four rows per step are the literals passed to the C probe's row_* helpers.
+    // The three rows per step are the literals passed to the C probe's row_* helpers.
     let step_rows = [
         row(40, 4, 4, 3.10304e-2, 0.0, 7.84187e-3, 13, None),
-        row(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, Some(35)),
         row(1, 0, 0, 1.0e100, -1.0e-300, 123456.789, 99999, None),
         row(12345, 100000, 7, -0.0, 2.5, -0.0, -1, None),
     ];
-    let mut expected = sr_info_header(false).to_string();
+    let mut expected = sr_info_header(false, false).to_string();
     for _ in 0..4 {
         for r in &step_rows {
             expected += &format_sr_info_row(r);
@@ -68,7 +67,24 @@ fn sr_info_rows_and_headers_match_c_printf_output() {
     }
     assert_eq!(expected, fixture("paraopt/custom_SRinfo.dat"));
 
-    let diag = sr_info_header(true).to_string()
+    // mVMC 1.4.0 SR-CG: " info" header column and "%5d %d" rows, including the
+    // negative fallback/non-convergence codes.
+    let cg = sr_info_header(false, true).to_string()
+        + &format_sr_info_row(&row(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, Some(35)))
+        + &format_sr_info_row(&row(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, Some(-12)))
+        + &format_sr_info_row(&row(
+            12345,
+            100000,
+            7,
+            1.0e100,
+            -1.0e-300,
+            123456.789,
+            99999,
+            Some(-41),
+        ));
+    assert_eq!(cg, fixture("cg/zvo_SRinfo.dat"));
+
+    let diag = sr_info_header(true, false).to_string()
         + &format_sr_info_row(&row(3, 1, 2, 4.5, 0.25, -1.0, 4, None));
     assert_eq!(diag, fixture("diag/zvo_SRinfo.dat"));
 }
@@ -164,23 +180,23 @@ fn init_creates_c_named_files_and_header() {
 #[test]
 fn sr_info_header_follows_sr_flag_for_direct_and_cg_writers() {
     // RunFiles owns the single header writer used by the direct and CG solvers;
-    // `sr_flag` is C's SRFlag (set when DSROptStepDt is negative).
-    for (sr_flag, header) in [
-        (false, "sDiagMax  sDiagMin"),
-        (true, "sEigenMax  sEigenMin"),
+    // `sr_flag` is C's SRFlag (set when DSROptStepDt is negative); SR-CG adds
+    // the 1.4.0 " info" column title (initfile.c:47-58).
+    for (sr_flag, nsrcg, header) in [
+        (false, 0, "sDiagMax  sDiagMin    absRmax       imax"),
+        (true, 0, "sEigenMax  sEigenMin    absRmax       imax"),
+        (false, 1, "sDiagMax  sDiagMin    absRmax       imax info"),
     ] {
         let mut data = ExpertModeData::new();
         data.modpara.sr_flag = sr_flag;
-        let dir = scratch(&format!("header-{sr_flag}"));
+        data.modpara.nsrcg = nsrcg;
+        let dir = scratch(&format!("header-{sr_flag}-{nsrcg}"));
         RunFiles::init(&data, &dir, RunKind::ParaOpt, None)
             .unwrap()
             .close()
             .unwrap();
         let text = fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap();
-        assert_eq!(
-            text,
-            format!("#Npara Msize optCut diagCut {header}    absRmax       imax\n")
-        );
+        assert_eq!(text, format!("#Npara Msize optCut diagCut {header}\n"));
         fs::remove_dir_all(dir).unwrap();
     }
 }
@@ -288,7 +304,7 @@ fn para_opt_run_writes_c_time_and_srinfo_files() {
         let mut lines = info.lines();
         assert_eq!(
             format!("{}\n", lines.next().unwrap()),
-            sr_info_header(false)
+            sr_info_header(false, false)
         );
         let body: Vec<&str> = lines.collect();
         assert_eq!(body.len(), steps as usize, "{info}");

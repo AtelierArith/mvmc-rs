@@ -715,10 +715,10 @@ pub fn update_m_all_fsz_real_flat(
 
 /// Complex normal-mode `update_m_all_two!`.
 ///
-/// C (`pfupdate_two_fcmp.c:230`) defines `rsbOld = raOld + t*Nsite`, whereas this function uses
-/// `rb_old + t*n_site`. The old `(a,b)` element only enters through `vec_s[msb]`, and the
-/// updated Pfaffian and inverse do not depend on it beyond roundoff, so the difference is
-/// unobservable; see `tests/two_electron_rsbold.rs` for the equivalence check (#365).
+/// `rsbOld = rbOld + t*Nsite`, as in mVMC 1.4.0 `pfupdate_two_fcmp.c:230` (upstream #100;
+/// 1.3.0 used `raOld`). The old `(a,b)` element only enters through `vec_s[msb]`, and the
+/// updated Pfaffian and inverse do not depend on it beyond roundoff; see
+/// `tests/two_electron_rsbold.rs` for the equivalence check (#365).
 pub fn update_m_all_two_complex_flat(
     ma: usize,
     spin: u8,
@@ -774,15 +774,15 @@ pub fn update_m_all_two_complex_flat(
 
 /// Real normal-mode `update_m_all_two_real!`.
 ///
-/// This intentionally preserves the upstream real-path quirk:
-/// `rsb_old = ra_old + t*n_site` (not `rb_old + t*n_site`).
+/// `rsbOld = rbOld + t*Nsite`, as in mVMC 1.4.0 `pfupdate_two_real.c:230` (upstream #100;
+/// 1.3.0 used `raOld`, which agrees to roundoff, #682).
 pub fn update_m_all_two_real_flat(
     ma: usize,
     spin: u8,
     mb: usize,
     spin_other: u8,
     ra_old: usize,
-    _rb_old: usize,
+    rb_old: usize,
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<f64>,
     inv_m_flat: &mut [f64],
@@ -799,7 +799,7 @@ pub fn update_m_all_two_real_flat(
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
     let rsa_old = ra_old + (spin as usize) * n_site;
-    let rsb_old = ra_old + (spin_other as usize) * n_site;
+    let rsb_old = rb_old + (spin_other as usize) * n_site;
     crate::threading::qp_update(
         pf_m,
         inv_m_flat,
@@ -831,15 +831,15 @@ pub fn update_m_all_two_real_flat(
 
 /// Real FSZ `update_m_all_two_fsz_real!`.
 ///
-/// This intentionally preserves the upstream real-FSZ quirk:
-/// `rsb_old = ra_old + t*n_site` (not `rb_old + t*n_site`).
+/// `rsbOld = rbOld + t*Nsite`, as in mVMC 1.4.0 `pfupdate_two_fsz_real.c:221` (upstream
+/// #100; 1.3.0 used `raOld`, which agrees to roundoff, #682).
 pub fn update_m_all_two_fsz_real_flat(
     ma: usize,
     spin: u8,
     mb: usize,
     spin_other: u8,
     ra_old: usize,
-    _rb_old: usize,
+    rb_old: usize,
     ele_idx: &[i64],
     ele_spn: &[i64],
     slater_elm: &SlaterElmFlat<f64>,
@@ -857,7 +857,7 @@ pub fn update_m_all_two_fsz_real_flat(
     let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
     let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
     let rsa_old = ra_old + (spin as usize) * n_site;
-    let rsb_old = ra_old + (spin_other as usize) * n_site;
+    let rsb_old = rb_old + (spin_other as usize) * n_site;
     crate::threading::qp_update(
         pf_m,
         inv_m_flat,

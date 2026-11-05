@@ -145,22 +145,50 @@ $$
 
 C を再現する上で重要な3つの規則があります。
 
-- $\delta<\texttt{DSROptCGTol}^2\,n_S^2$ で停止します(反復の*開始時*に確認)。
+- $|\delta|<\texttt{DSROptCGTol}^2\,n_S^2$ で停止します(反復の*開始時*に確認)。
 - 最大 `NSROptCGMaxIter` 回反復します($\le 0$ の場合は `n_S`)。
 - **20回目の反復ごと**に、残差を漸化式ではなく $r=g-S'x$ で厳密に再計算します。
 
+mVMC 1.4.0 は失敗も報告します。反復 $i$ が破綻すると($\delta$、$d\cdot S'd$、$\alpha$、$\beta$ が有限でない、
+または $|d\cdot S'd|$ や古い $|\delta|$ が $10^{-20}$ 未満)解法は $-(i+1)$ を返し、$|\delta|$ がしきい値以上のまま
+上限に達すると $-(\texttt{max\_iter}+1)$ を返します。その後の動作は ModPara の2つのスイッチで決まります。
+
+- `NSRCGAbortOnFail`(既定値 1): 実行を中断します(`error: SR-CG fallback is disabled. Abort.`)。
+  0 なら近似解のまま続行し、負の状態値を `zvo_SRinfo.dat` に出力します。
+- `NSRCGFallback`(既定値 0): まずもう一方の CG(通常または DiagScale)で $x=0$ からステップを解き直します。
+  SRinfo の状態値は最初の解法の $-(i+1)$ になり、解き直しも失敗した場合は `NSRCGAbortOnFail` に従います。
+
+増分が有限でない場合は `NSRCGAbortOnFail` なら中断し、そうでなければ更新を飛ばして最適化を停止します(C の `info = 1`)。
+
+**DiagScale(`NSRCG = 2`、または `NSRCG 1` と `useDiagScale 1`)。** $M=(1+\texttt{DSROptStaDel})\,\mathrm{diag}(S)$
+による Jacobi 前処理付き CG です。各要素は、より小さいか有限でないとき $\pm10^{-12}$ に置き換えます。
+$r_0=g-S'x_0$、$d_0=M^{-1}r_0$、$\delta=r\cdot M^{-1}r$、$d_{i+1}=M^{-1}r_{i+1}+\beta_id_i$、
+$\delta_{i+1}=\delta_{\rm new}$($\beta\delta$ ではありません)。パーサは `NSRCG 2` を DiagScale 付きの `NSRCG 1`
+として保存し、`NSRCG` が 1 以外のときの `useDiagScale` は C と同じ remark を出して無効にします。
+
+**RescaleSmat 1**(`NSRCG 1` が必要)。解く前に、平均した $\langle O\rangle$、$\langle OO\rangle$ の対角、$\langle HO\rangle$
+と保存サンプルの Slater ブロックを、その対角 $S$ 要素の最大値が射影ブロックの最大値に一致するように
+スケールします。係数は $\rho=\max_{\rm proj}|S_{kk}|/\max(\max_{\rm Slater}|S_{kk}|,10^{-10})$ で、$O$ と $HO$ は
+$\sqrt\rho$ 倍、$OO$ は $\rho$ 倍し、Slater パラメータは $\sqrt\rho$ で割ります(規格化の変更です)。射影の最大値が
+$10^{-10}$ 未満のとき、または射影パラメータや Slater パラメータがないときは何もしません。
+
 カットと力は直接ソルバーと同一です([5.2](#52-sr方程式))。カットに使う対角要素は
-$\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$ です。CG の反復回数は `zvo_SRinfo.dat` の最終列に出力されます。
+$\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$ です。CG の状態値(反復回数、または負の失敗コード)は `zvo_SRinfo.dat` の最終列に出力されます。
 Rust では CG に対して `NSplitSize = 1` のみサポートされます(グループ CG は C で未定義)([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
+SR-CG は負の `DSROptStepDt`(対角化モード)と組み合わせられません。C 1.4.0 は中断するため、この入力は拒否されます。
+活性集合が空($n_S=0$)のとき C 1.4.0 は $-(0+1)$ を報告して既定では中断し、`r[0]` を範囲外で読みます。
+Rust はこのステップを厳密な何もしない処理として飛ばします([11.3](11-compatibility.md#113-cリファレンスとの既知の相違))。
 
 > **実装**
 > - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg.c:56`
 > - C: `fn_StochasticOptCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:81`
+> - C: `fn_StochasticOptPreconCG_DiagScale_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:352`
 > - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:484`
 > - C: `fn_operate_by_S` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:598`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:670`
+> - C: `fn_Rescale4SRCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:772`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
+> - Rust: `solve_variant_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
 > - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:517`
 > - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:268`
 > - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:292`

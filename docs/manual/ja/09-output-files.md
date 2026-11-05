@@ -100,13 +100,13 @@ NGutzwillerIdx  4
 **CG** ソルバー(`NSRCG != 0`)のみが書き出します。1行のヘッダーに続いて、SR ステップごとに1行です。
 
 ```text
-#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax
-  100   100     0     0  1.22546e+00  1.14682e-02 -6.31767e-02    76, 100
+#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info
+  100   100     0     0  1.22546e+00  1.14682e-02 -6.31767e-02    76 100
 ```
 
 列は次のとおりです。パラメータ数 `Npara`(複素数としての個数)、解く系のサイズ `Msize`($n_S$)、最適化フラグにより固定されるパラメータ数 `optCut`、
 `DSROptRedCut` により除去されるパラメータ数 `diagCut`、$S$ の対角要素の最大値と最小値、絶対値が最大の解成分 `absRmax`、その
-パラメータインデックス `imax`、そしてカンマの後に CG の反復回数です。書式は `"%5d %5d %5d %5d % .5e % .5e % .5e %5d, %d"` です。
+パラメータインデックス `imax`、そして CG の状態値 `info` です。状態値は反復回数、または解法が破綻したか上限に達し `NSRCGAbortOnFail 0` で続行したとき(フォールバック後も)の `-(iter+1)` です。書式は mVMC 1.4.0 以降 `"%5d %5d %5d %5d % .5e % .5e % .5e %5d %d"` で、ヘッダに ` info` が付きます。1.3.0 は `"%5d, %d"` で、この見出しはありませんでした。
 C のマニュアルによれば、実数モードのパラメータの虚部成分は `optCut` に数えられます。
 
 > **実装**

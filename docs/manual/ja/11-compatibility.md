@@ -59,8 +59,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 9 | `NSROptItrSmp > NSROptItrStep` | 行が書き出されないまま残る | 拒否 |
 | 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、スピンを変える `Trans` なし。スピン保存 `InterAll` はサポート。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
 | 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
-| 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 は拒否 | 最適化と PhysCal の両方で拒否 |
-| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | 非ゼロの `NSRCG` は CG を選択。`NStore=0` ではストレージが未定義。他の2つは C のキーではない | `NSRCG >= 2` は `NStore != 0` で CG、`NStore=0` は拒否。他の2つは値に関係なく未知のキーとして拒否 |
+| 12 | BackFlow (`BF`, `BFRange`) | C は拒否(`_NOTBACKFLOW`) | 最適化と PhysCal の両方で拒否 |
+| 13 | `NSRCG`、`useDiagScale`、`RescaleSmat`、`NSRCGFallback`、`NSRCGAbortOnFail` | 1.4.0: `NSRCG 2` は `NSRCG 1` の DiagScale CG。その他の非ゼロ値は通常の CG で、`NSRCG=1` 以外では `NStore=0` のストレージが未定義。`RescaleSmat` には `NSRCG 1` が必要 | 同じ正規化、remark、エラー([5.4](05-theory-sr.md#54-共役勾配法ソルバーnsrcg--1))。未定義のストレージは拒否。常駐GPUは通常の CG のみ |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99の複素数 | Julia互換の移植(最下位ビットの差が生じうる) |
 | 15 | ローカルエネルギーと `NProj` の和におけるOpenMPのリダクション順序 | スレッド依存 | 固定された逐次順序 |
 | 16 | $\lvert\langle H\rangle\rvert\le10^{-14}$ のときの分散の列 | $\pm\infty$/NaN | `0.0`(最適化の出力のみ) |
@@ -70,6 +70,12 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 20 | 負の `DSROptStepDt` | `SRFlag` を設定し正の値に変換 | パーサーは同じ処理を行う |
 | 21 | `modpara.def` の電子数キー | `Nelectron`, `Ne` | 同じキーを受理 |
 | 22 | `MVMC_RS_SR_BACKEND=tenferro` または `cuda` での SR ステージ | 該当なし | オプトインの Rust 拡張([第 12 章](12-accelerated-backends.md)): RNG の消費と Metropolis のプロトコルは同じ。SR の Gram、求解、CG 積は C 順序パスと導出された境界内で一致し、バイト単位では一致しない。デフォルトの `c-order` パスは変更なし |
+| 23 | SR-CG の失敗(1.4.0) | 破綻または上限到達で `-(iter+1)` を返す。`NSRCGAbortOnFail 1`(既定)なら `MPI_Abort`。`NSRCGFallback` はもう一方の解法で再試行 | 同じメッセージと `zvo_SRinfo.dat` の状態値。中断は行を書く前のエラー。常駐GPUは中断/続行の規則を移植済みで、フォールバックは未対応 |
+| 24 | 活性パラメータのない SR-CG($n_S=0$) | 1.4.0 は `-(0+1)` を報告し、既定では中断し、`r[0]` を範囲外で読む | 厳密な何もしないステップ(#682) |
+| 25 | 負の `DSROptStepDt` での SR-CG | 1.4.0 は中断 | 出力の前に拒否 |
+| 26 | `reweight 1` | 1.4.0 はサンプルを $\lvert\psi\rvert^2/\lvert\mathrm{Pf}\rvert^2$ で重み付け | 拒否(再重み付けは未移植)。他の値は受け付け $w=1$ のまま |
+| 27 | Jastrow のリーダー | 1.4.0 はすべての有向ペアがちょうど1回、$(i,j)$ と $(j,i)$ が同じクラスであることを要求し、対称化する | 同じ検査。保存する表は対称 |
+| 28 | `zvo_CalcTimer.dat`(PhysCal) | 1.4.0 は `addPhysTwist [54]` を追加 | 同じ行(ツイスト演算子は未移植のため常に 0) |
 
 ## 11.4 数値比較ポリシー
 
@@ -92,10 +98,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 
 本マニュアルの執筆中に気づいた項目で、別々のissueで扱う予定のものです。「観測」とは `mvmc` のリリースビルドで再現したことを、「コード読解」とはソースで確認したが実行はしていないことを意味します。
 
-1. **2電子更新、複素数の通常経路。** Cは4つのすべての2電子更新関数で `rsbOld = raOld + t*Nsite` を定義しています(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、
-   `pfupdate_two_fsz.c:235`、`pfupdate_two_fsz_real.c:221`)。すなわち、古い行列要素 $M^{\rm old}_{ab}$ の第2添字に*電子 a の古いサイト*を用います。Rustの*実数*版の更新は
-   これを意図的に保っています(`crates/mvmc-core/src/sampling/updates.rs:588`)が、Rustの*複素数の通常*版の更新
-   `update_m_all_two_complex_flat` は、Juliaと同様に電子 b の古いサイトを用います(`crates/mvmc-core/src/sampling/updates.rs:537`)。これが複素数の交換更新の数値に影響するかどうかは**検証していません**(コード読解)。
+1. **2電子更新の `rsbOld`。** mVMC 1.3.0 は `rsbOld = raOld + t*Nsite`、すなわち古い行列要素 $M^{\rm old}_{ab}$ の第2添字に*電子 a の古いサイト*を用いていました。mVMC 1.4.0(上流 #100)は4つのすべての2電子更新関数で `rbOld + t*Nsite` を用います(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、
+   `pfupdate_two_fsz.c:235`、`pfupdate_two_fsz_real.c:221`)。この要素は `vecS[msb]` を通してのみ入り、比と逆行列の更新で打ち消し合うため、どちらの選択も丸め誤差の範囲で一致します(`crates/mvmc-core/tests/two_electron_rsbold.rs`)。Rust は #682 以降すべての経路で 1.4.0 に従います。それまで実数版と実数FSZ版の更新は 1.3.0 の `raOld` を用いていました。
 2. **PhysCal のネームリスト検証。** 以前の検証漏れは #366 で修正され、最適化と PhysCal は共通の検査で未対応セクションを拒否します。
 3. **最適化における `TwoBodyGEx`** は C と同様に受理され無視されます(#349 までは古い「issue #30」メッセージで拒否されていました)。
 4. **`--help` のテキスト**は、既定の出力ディレクトリが「namelist parent dir」であると述べていますが、コードは `<namelist parent>/output` を使います(観測)。

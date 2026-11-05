@@ -142,9 +142,10 @@ fn rejected_case(case: &str, phys: bool, width: usize) -> (ExpertModeData, &'sta
             "NLanczosMode must be"
         }
         "invalid-cg" => {
-            // NSRCG >= 2 selects CG in C; without O storage it is undefined there.
-            // PhysCal never runs SR, so the case is only a ParaOpt rejection.
-            data.modpara.nsrcg = 2;
+            // NSRCG >= 3 selects plain CG in C; without O storage it is undefined
+            // there (1.4.0 turns NSRCG 2 into NSRCG 1). PhysCal never runs SR, so
+            // the case is only a ParaOpt rejection.
+            data.modpara.nsrcg = 3;
             data.modpara.nstore_o = 0;
             "undefined in mVMC C"
         }

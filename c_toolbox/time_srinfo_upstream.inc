@@ -1,6 +1,6 @@
-/* Verbatim lines from authoritative mVMC-1.3.0 (GPL-3.0-or-later, Copyright (C) 2016 The University of Tokyo).
+/* Verbatim lines from authoritative mVMC-1.4.0 (GPL-3.0-or-later, Copyright (C) 2016 The University of Tokyo).
  * Regenerate with scripts/check_time_srinfo_c_parity.py --write. Optional oracle, not a Rust build/test dependency. */
-/* initfile.c:33-70 sha256=8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8 */
+/* initfile.c:33-75 sha256=def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e */
 void InitFile(char *xNameListFile, int rank) {
   char fileName[D_FileNameMax];
 
@@ -16,8 +16,13 @@ void InitFile(char *xNameListFile, int rank) {
     sprintf(fileName, "%s_SRinfo.dat", CDataFileHead);
     FileSRinfo = fopen(fileName, "w");
     if(SRFlag == 0){
-      fprintf(FileSRinfo,
-            "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n");
+      if (NSRCG != 0) {
+        fprintf(FileSRinfo,
+              "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info\n");
+      } else {
+        fprintf(FileSRinfo,
+              "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n");
+      }
     }else{
       fprintf(FileSRinfo,
             "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax\n");
@@ -39,7 +44,7 @@ void InitFile(char *xNameListFile, int rank) {
 
   return;
 }
-/* initfile.c:144-156 sha256=8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8 */
+/* initfile.c:154-166 sha256=def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e */
 void CloseFile(int rank) {
   if(rank!=0) return;
 
@@ -53,7 +58,7 @@ void CloseFile(int rank) {
 
   return;
 }
-/* initfile.c:192-204 sha256=8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8 */
+/* initfile.c:205-217 sha256=def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e */
 void FlushFile(int step, int rank) {
   if(rank!=0) return;
 
@@ -67,7 +72,7 @@ void FlushFile(int step, int rank) {
   }
   return;
 }
-/* vmcclock.c:34-48 sha256=38fe6b4080df1bada7c1e8c4fa200f902d18eecef6b976e8e1cec486247df99c */
+/* vmcclock.c:34-48 sha256=698611bade56475c46feee02854815e5a06173d10044022c3c5e1fc0b1f5aa20 */
 void OutputTime(int step) {
   time_t tx;
   double pHop,pEx,pLSF;

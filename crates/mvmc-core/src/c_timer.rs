@@ -288,8 +288,8 @@ const DIAG_LINES: &[(&str, usize)] = &[
     ("  ReduceCounter            [966] ", 966),
 ];
 
-/// C's `OutputTimerPhysCal` line set (`vmcclock.c:140-192`). Distinct from the
-/// ParaOpt set: ids 50-53 mean GreenFunc1/GreenFunc2/addPhysCA/addPhysCACA in
+/// C's `OutputTimerPhysCal` line set (`vmcclock.c:140-193`). Distinct from the
+/// ParaOpt set: ids 50-54 mean GreenFunc1/GreenFunc2/addPhysCA/addPhysCACA/addPhysTwist in
 /// this mode, and StochasticOpt/ReturnSlaterElmDiff ids are absent.
 const PHYS_CAL_LINES: &[(&str, usize)] = &[
     ("All                         [0] ", 0),
@@ -330,6 +330,8 @@ const PHYS_CAL_LINES: &[(&str, usize)] = &[
     ("      GreenFunc2           [51] ", 51),
     ("      addPhysCA            [52] ", 52),
     ("      addPhysCACA          [53] ", 53),
+    // mVMC 1.4.0 (vmcclock.c:184): the twist-operator measurement timer.
+    ("      addPhysTwist         [54] ", 54),
     ("    Lanczos1               [43] ", 43),
     ("    Lanczos2               [44] ", 44),
     ("  UpdateSlaterElm          [20] ", 20),

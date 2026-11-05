@@ -20,6 +20,8 @@ fn fixture_dir() -> PathBuf {
 struct Case {
     status: i32,
     rejected_keyword: Option<String>,
+    aborted: Option<String>,
+    remarks: Vec<String>,
     ints: BTreeMap<String, i64>,
     doubles: BTreeMap<String, f64>,
     strings: BTreeMap<String, String>,
@@ -48,6 +50,14 @@ fn load_cases() -> BTreeMap<String, Case> {
         let case = &mut current.as_mut().unwrap().1;
         if kind == "rejected_keyword" {
             case.rejected_keyword = Some(rest.to_owned());
+            continue;
+        }
+        if kind == "aborted" {
+            case.aborted = Some(rest.to_owned());
+            continue;
+        }
+        if kind == "remark" {
+            case.remarks.push(rest.to_owned());
             continue;
         }
         let (key, value) = rest.split_once(' ').unwrap();
@@ -92,6 +102,12 @@ fn rust_ints(p: &ModParaParameters) -> Vec<(&'static str, i64)> {
         ("NBlockSize_RBMRatio", p.nblock_size_rbm_ratio),
         ("NStore", p.nstore_o),
         ("NSRCG", p.nsrcg),
+        ("useDiagScale", i64::from(p.use_diag_scale)),
+        ("NSRCGFallback", i64::from(p.nsrcg_fallback)),
+        ("NSRCGAbortOnFail", i64::from(p.nsrcg_abort_on_fail)),
+        ("RescaleSmat", i64::from(p.rescale_smat)),
+        ("reweight", p.reweight),
+        ("SRFlag", i64::from(p.sr_flag)),
     ]
 }
 
@@ -99,6 +115,14 @@ fn rust_ints(p: &ModParaParameters) -> Vec<(&'static str, i64)> {
 fn modpara_reader_matches_c_oracle_for_accepted_and_rejected_inputs() {
     let cases = load_cases();
     assert!(cases.len() >= 40, "fixture must cover about 40 variants");
+    // The C 1.4.0 SR-CG switches are part of the fixture (#682).
+    for name in [
+        "nsrcg_two_is_diag_scale_cg",
+        "rescale_smat_without_cg_aborts",
+        "negative_step_cg_aborts",
+    ] {
+        assert!(cases.contains_key(name), "{name}");
+    }
     let mut accepted = 0;
     let mut rejected = 0;
     for (name, case) in &cases {
@@ -113,10 +137,17 @@ fn modpara_reader_matches_c_oracle_for_accepted_and_rejected_inputs() {
                     "{name}: error must name keyword {keyword}: {error}"
                 );
             }
+            // Status 2: C 1.4.0 MPI_Abort in ReadDefFileNInt; Rust reports the C text.
+            if let Some(message) = &case.aborted {
+                assert_eq!(case.status, 2, "{name}");
+                assert_eq!(error.to_string(), *message, "{name}");
+            }
             continue;
         }
         accepted += 1;
         let p = parsed.unwrap_or_else(|e| panic!("{name}: {e}"));
+        // ReadDefFileNInt prints the SR-CG remarks on rank 0 stdout.
+        assert_eq!(p.sr_cg_remarks, case.remarks, "{name}: remarks");
         // Integer contract: exact.
         for (key, value) in rust_ints(&p) {
             assert_eq!(value, case.ints[key], "{name}: {key}");
@@ -176,8 +207,6 @@ fn rust_only_keywords_are_rejected_naming_the_keyword() {
         "NElec",
         "NSite",
         "VMCCalMode",
-        "useDiagScale",
-        "RescaleSmat",
         "NFileFlushInterval",
         "ComplexType",
         "NSROptFixSmp",

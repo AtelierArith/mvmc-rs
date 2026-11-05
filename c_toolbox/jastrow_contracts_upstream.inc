@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
+/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -60,6 +60,8 @@ int GetInfoOpt(FILE *fp, int *ArrayOpt, int iComplxFlag, int *iTotalOptCount, in
     fscanf(fp, "%d\n", &(ArrayOpt[2 * fidx])); // TBC real
     if(iComplxFlag>0){
       ArrayOpt[2 * fidx + 1] = ArrayOpt[2 * fidx]; //  TBC imaginary
+    }else{
+      ArrayOpt[2 * fidx + 1] = 0;
     }
     fidx++;
     (iLocalOptCount)++;
@@ -89,30 +91,111 @@ char *ReadBuffIntCmpFlg(FILE *fp, int *iNbuf, int *iComplexFlag) {
 int GetInfoJastrow(FILE *fp, int **ArrayIdx, int *ArrayOpt, int iComplxFlag, int *iOptCount, int _fidx, int Nsite,
                    int NArray, char *defname) {
   int idx0 = 0, idx1 = 0, info = 0;
-  int i = 0, j = 0;
+  int i = 0, j = 0, n = 0;
+  int a = 0, b = 0;
+  int line = 0;
+  int idxExpected = Nsite * (Nsite - 1);
+  int *pairClass = NULL;
   int fidx = _fidx;
   if (NArray > 0) {
-    while (fscanf(fp, "%d %d ", &i, &j) != EOF) {
+    pairClass = (int *)malloc(sizeof(int) * Nsite * Nsite);
+    if (pairClass == NULL) {
+      fprintf(stderr, "Error: memory allocation failed in GetInfoJastrow.\n");
+      return 1;
+    }
+    for (i = 0; i < Nsite; i++) {
+      for (j = 0; j < Nsite; j++) {
+        if (i == j) {
+          ArrayIdx[i][j] = -1;
+          pairClass[i * Nsite + j] = -1;
+        } else {
+          ArrayIdx[i][j] = -2;
+          pairClass[i * Nsite + j] = -2;
+        }
+      }
+    }
+
+    while (idx0 < idxExpected) {
+      if (fscanf(fp, "%d %d %d", &i, &j, &n) != 3) {
+        fprintf(stderr, "Error in %s: failed to read Jastrow row %d.\n", defname, line + 1);
+        info = 1;
+        break;
+      }
+      line++;
       if (i == j) {
-        fprintf(stderr, "Error in %s: [Condition] i neq j\n", defname);
+        fprintf(stderr, "Error in %s: [Condition] i neq j at row %d.\n", defname, line);
         info = 1;
         break;
       }
       if (CheckPairSite(i, j, Nsite) != 0) {
-        fprintf(stderr, "Error: Site index is incorrect. \n");
+        fprintf(stderr, "Error in %s: Site index is incorrect at row %d.\n", defname, line);
         info = 1;
         break;
       }
+      if (n < 0 || n >= NArray) {
+        fprintf(stderr, "Error in %s: class index %d out of range [0, %d) at row %d.\n",
+                defname, n, NArray, line);
+        info = 1;
+        break;
+      }
+      if (ArrayIdx[i][j] != -2) {
+        fprintf(stderr, "Error in %s: duplicated pair (%d,%d) at row %d.\n", defname, i, j, line);
+        info = 1;
+        break;
+      }
+      ArrayIdx[i][j] = n;
 
-      fscanf(fp, "%d\n", &(ArrayIdx[i][j]));
-      ArrayIdx[i][i] = -1; // This case is Gutzwiller.
+      if (i < j) {
+        a = i;
+        b = j;
+      } else {
+        a = j;
+        b = i;
+      }
+      if (pairClass[a * Nsite + b] == -2) {
+        pairClass[a * Nsite + b] = n;
+      } else if (pairClass[a * Nsite + b] != n) {
+        fprintf(stderr, "Error in %s: inconsistent class for pair (%d,%d) at row %d.\n",
+                defname, a, b, line);
+        info = 1;
+        break;
+      }
       idx0++;
-      if (idx0 == Nsite * (Nsite - 1)) break;
     }
-    idx1 = GetInfoOpt(fp, ArrayOpt, iComplxFlag, iOptCount, fidx);
-    if (idx0 != Nsite * (Nsite - 1) || idx1 != NArray) {
+    if (info == 0) {
+      for (i = 0; i < Nsite; i++) {
+        for (j = 0; j < Nsite; j++) {
+          if (i == j) continue;
+          if (ArrayIdx[i][j] == -2) {
+            fprintf(stderr, "Error in %s: missing pair (%d,%d).\n", defname, i, j);
+            info = 1;
+            break;
+          }
+        }
+        if (info != 0) break;
+      }
+    }
+    if (info == 0) {
+      for (i = 0; i < Nsite; i++) {
+        for (j = i + 1; j < Nsite; j++) {
+          if (pairClass[i * Nsite + j] == -2) {
+            fprintf(stderr, "Error in %s: missing undirected pair (%d,%d).\n", defname, i, j);
+            info = 1;
+            break;
+          }
+          ArrayIdx[i][j] = pairClass[i * Nsite + j];
+          ArrayIdx[j][i] = pairClass[i * Nsite + j];
+        }
+        if (info != 0) break;
+      }
+    }
+    if (info == 0) {
+      idx1 = GetInfoOpt(fp, ArrayOpt, iComplxFlag, iOptCount, fidx);
+    }
+    if (info != 0 || idx0 != idxExpected || idx1 != NArray) {
       info = ReadDefFileError(defname);
     }
+    free(pairClass);
   }
   return info;
 }

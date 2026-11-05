@@ -79,6 +79,16 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
         return Err(format!("NSplitSize must be >= 1; got {}", p.nsplit_size));
     }
     validate_ex_update_path(p.nex_update_path)?;
+    // mVMC 1.4.0 `reweight 1` weights every sample by |psi|^2/|Slater|^2
+    // (vmccal.c:153-158, calculateOO_Store*); other values leave w = 1.
+    // Reweighting is a 1.4.0 feature that is not ported (#682).
+    if p.reweight == 1 {
+        return Err(
+            "reweight = 1 is not supported: the mVMC 1.4.0 reweighting is not ported; \
+                    use reweight 0"
+                .into(),
+        );
+    }
     if !(0..=2).contains(&p.lanczos_mode) {
         return Err(format!(
             "NLanczosMode must be 0, 1, or 2; got {}",
@@ -120,15 +130,17 @@ pub fn validate_ex_update_path(path: i64) -> Result<(), String> {
 ///
 /// C selects the CG solver for any `NSRCG != 0` (vmcmain.c:463,487;
 /// vmccal.c:591,602) but allocates `SROptO_Store` only when
-/// `NSRCG == 1 || NStoreO != 0` (setmemory.c:428-452). `NSRCG >= 2` with
-/// `NStore == 0` therefore leaves the CG solver without its O storage, which is
-/// undefined behavior in C; Rust rejects it instead of imitating that.
+/// `NSRCG == 1 || NStoreO != 0` (setmemory.c:428-452). mVMC 1.4.0 turns the file
+/// value `NSRCG 2` into DiagScale CG with `NSRCG = 1` before allocation
+/// (readdef.c:927-930, applied by the ModPara parser), so any other nonzero
+/// `NSRCG` with `NStore == 0` leaves the CG solver without its O storage, which
+/// is undefined behavior in C; Rust rejects it instead of imitating that.
 pub fn validate_sr_storage_contract(p: &ModParaParameters) -> Result<(), String> {
-    if p.nsrcg >= 2 && p.nstore_o == 0 {
+    if p.nsrcg != 0 && p.nsrcg != 1 && p.nstore_o == 0 {
         return Err(format!(
             "NSRCG={} with NStore=0 is undefined in mVMC C: any nonzero NSRCG selects the CG solver, \
              but the SROptO storage it reads is allocated only when NSRCG == 1 or NStore != 0 \
-             (setmemory.c); use NStore != 0 or NSRCG = 1",
+             (setmemory.c); use NStore != 0, NSRCG = 1 or NSRCG = 2",
             p.nsrcg
         ));
     }
@@ -484,16 +496,7 @@ mod nsrcg_contract_tests {
 
     #[test]
     fn nonzero_nsrcg_is_accepted_when_c_allocates_o_storage() {
-        for (cg, store) in [
-            (0, 0),
-            (0, 1),
-            (1, 0),
-            (1, 1),
-            (2, 1),
-            (3, 1),
-            (-1, 1),
-            (2, -1),
-        ] {
+        for (cg, store) in [(0, 0), (0, 1), (1, 0), (1, 1), (3, 1), (-1, 1), (3, -1)] {
             let p = modpara(cg, store);
             assert_eq!(validate_supported_modpara(&p), Ok(()), "{cg},{store}");
             assert_eq!(validate_sr_storage_contract(&p), Ok(()), "{cg},{store}");
@@ -501,8 +504,23 @@ mod nsrcg_contract_tests {
     }
 
     #[test]
-    fn nsrcg_two_or_more_without_store_is_rejected_as_c_undefined() {
-        for cg in [2, 3, 100] {
+    fn reweight_one_is_rejected_and_other_values_leave_unit_weights() {
+        // mVMC 1.4.0 reweights only for `reweight == 1` (vmccal.c:153); Rust
+        // does not port it (#682).
+        let mut p = modpara(0, 1);
+        p.reweight = 1;
+        let error = validate_supported_modpara(&p).unwrap_err();
+        assert!(error.contains("reweight = 1 is not supported"), "{error}");
+        for value in [0, 2, -1] {
+            p.reweight = value;
+            assert_eq!(validate_supported_modpara(&p), Ok(()), "{value}");
+        }
+    }
+
+    #[test]
+    fn cg_other_than_nsrcg_one_without_store_is_rejected_as_c_undefined() {
+        // The parser has already turned the file value NSRCG 2 into NSRCG 1.
+        for cg in [3, 100, -1] {
             let error = validate_sr_storage_contract(&modpara(cg, 0)).unwrap_err();
             assert!(error.contains("undefined in mVMC C"), "{error}");
             assert!(error.contains(&format!("NSRCG={cg}")), "{error}");

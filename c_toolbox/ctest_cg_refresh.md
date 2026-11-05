@@ -4,7 +4,57 @@ This standalone developer program generates checked-in expectations from the
 authoritative C recurrence. Cargo neither compiles nor invokes it. It is a
 serial fixed-operand kernel check, not C initialization/sampling or MPI proof.
 
+## mVMC 1.4.0 (#682)
+
 `ctest_cg_main_upstream.inc` is the byte-for-byte concatenation of
+`extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c` lines 1–21 (license) and
+350–668 (`StochasticOptPreconCG_DiagScale_Main`, `StochasticOptCG_Main` and the
+sampled matrix operator). Upstream SHA256:
+`84a1bb1867a957f25d8a822f67213ff044bf52448d96263c2efdf085bb815dd5`.
+Extraction SHA256:
+`63d35a521f1b3ddcea93b7009881594fb20f091a2968dc4aecc4709621482cb6`.
+`ctest_cg_dot_upstream.inc` is `stcopt_cg.c` lines 26–34, unchanged and
+identical to 1.3.0. Upstream SHA256:
+`a79243fcc6cd3ca363ef15a43a81ae261755da4508258f507b7b78e8cdb77943`;
+extraction SHA256:
+`f36c3f7d0aa0fc22e7e3cbffde3c95b79808112979e1e0ebc8fdd853d995d214`.
+
+The adapter (SHA256
+`9df41611459585db474b016c5905d753c158194e5516dbf9f1d82baf11d3ea11`) runs the
+plain Main, or with a third argument `diag` the DiagScale-preconditioned Main.
+Both return the C 1.4.0 status: the iteration count, or `-(iter+1)` on a
+breakdown (non-finite or below-`1e-20` `delta`/`d.q`, non-finite `alpha`/`beta`)
+and `-(max_iter+1)` when the limit is reached. Tolerance zero never converges,
+so every limit records a negative status.
+
+Regenerated on 2026-11-05 on Linux x86_64 with GCC
+`Ubuntu 13.3.0-6ubuntu2~24.04.1`, `-O0 -ffp-contract=off`, LP64 OpenBLAS pthread
+`0.3.26+ds-1ubuntu0.1` (library SHA256
+`bfc7492adbf84a8f567720a9e1fae2afc18f3d817da233e7f4d453683485308e`, the same
+library as the 1.3.0 generation), threads=1:
+
+| Case | C 1.4.0 output SHA256 |
+| --- | --- |
+| real | `f5b6e8340e886943423f3e9d85d8d3ca298c0c61d4bb6fc3d9fd649c934f3fa2` |
+| complex | `7009acebae2fc64bdfbd58d2b8fd471248c0475ba627f844bf4e80f6f0fc3088` |
+| sampled complex | `eec31746b75c09e58d44a973ee8d1f0dca9e48670ad4e7662c5ccec4f5990091` |
+| real DiagScale | `3a3a7007db4e4c0830dbbff76ba2e0b06f10398e8a2ee23ba1a649784b2a4e45` |
+| complex DiagScale | `d9f0f158b16d23971ebde5efdb044b6070709a26943f56e47cb4016736f0dd6d` |
+| sampled complex DiagScale | `5551ab36a2db88ea1a364f5f3b63552949505d261913a02e4d90386ca2755d96` |
+
+Against the 1.3.0 outputs below, the real and complex plain trajectories are
+bit-identical and only the status column changed (1.3.0 returned the iteration
+count). The sampled complex trajectory stops at iteration 5 for every limit
+above 5 (status `-6`): its old `delta` falls below the new `1e-20` guard, where
+1.3.0 continued. Reproduce with the commands below, adding the `diag` argument
+and `_diag_scale` output names for the DiagScale files.
+
+## Historical mVMC 1.3.0 generation
+
+The record below describes the original 1.3.0 extraction and run; its hashes are
+historical (`tests/fixtures/C_REFERENCE_PROVENANCE.md`).
+
+`ctest_cg_main_upstream.inc` was the byte-for-byte concatenation of
 `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c` lines 1–21 (license) and
 255–426 (Main and sampled matrix operator). Upstream SHA256:
 `41452de5fe766409431c6e1cf73cd2b12485faaeb4bfbcdec1e53444e9af1cf9`.
@@ -53,15 +103,15 @@ From the repository root in that environment:
 
 ```sh
 mkdir -p /tmp/mvmc-cg-c-refresh
-cc -O0 -ffp-contract=off -DMVMC_SRCG_REAL c_toolbox/ctest_cg_refresh.c -lopenblas -lm -o /tmp/mvmc-cg-c-refresh/real-probe
-cc -O0 -ffp-contract=off c_toolbox/ctest_cg_refresh.c -lopenblas -lm -o /tmp/mvmc-cg-c-refresh/complex-probe
+cc -O0 -ffp-contract=off -DMVMC_SRCG_REAL -I c_toolbox c_toolbox/ctest_cg_refresh.c -lopenblas -lm -o /tmp/mvmc-cg-c-refresh/real-probe
+cc -O0 -ffp-contract=off -I c_toolbox c_toolbox/ctest_cg_refresh.c -lopenblas -lm -o /tmp/mvmc-cg-c-refresh/complex-probe
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/mvmc-cg-c-refresh/real-probe tests/fixtures/sr_cg/real.txt /tmp/mvmc-cg-c-refresh/real.txt
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/mvmc-cg-c-refresh/complex-probe tests/fixtures/sr_cg/complex.txt /tmp/mvmc-cg-c-refresh/complex.txt
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/mvmc-cg-c-refresh/complex-probe tests/fixtures/sr_cg/sampled_complex.txt /tmp/mvmc-cg-c-refresh/sampled_complex.txt
 ```
 
 Generated files are separately imported into `tests/fixtures/sr_cg/c_refresh/`.
-Input/output SHA256 pairs:
+Input/output SHA256 pairs of the 1.3.0 generation (historical):
 
 | Case | Archived input file SHA256 | C output SHA256 |
 | --- | --- | --- |

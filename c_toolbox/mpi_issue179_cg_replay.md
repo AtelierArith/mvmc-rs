@@ -1,5 +1,10 @@
 # Issue 179: fixed published-Julia operands, authoritative C MPI CG
 
+> **Historical mVMC 1.3.0 record (#682).** The run below used the 1.3.0 CG Main
+> (`stcopt_cg_impl.c` changed in mVMC 1.4.0). `ctest_cg_main_upstream.inc` is now
+> the 1.4.0 extraction (see `ctest_cg_refresh.md`), so the recorded hashes and
+> results are 1.3.0 evidence; see `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 This optional developer probe is not full C sampling parity and is never invoked
 by Cargo. `mpi_issue179_cg_replay.c` reads independent Julia operands exported by
 `scripts/mpi_issue179_export_cg_operands.py`; no Rust-generated expectations are

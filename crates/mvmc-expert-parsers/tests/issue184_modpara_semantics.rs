@@ -1,5 +1,5 @@
 //! M0209–224: shared C solver-control defaults. Since #344 the parser follows
-//! the C reader exactly: no Julia-only `useDiagScale`/`RescaleSmat`, no
+//! the C reader exactly (1.4.0 SR-CG keywords included), with no Julia-only
 //! `name = value` syntax and no aliases (see `issue344_c_modpara_reader.rs`).
 use mvmc_expert_parsers::parsers::modpara::parse_modpara_content;
 

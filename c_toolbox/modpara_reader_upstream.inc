@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; readdef.h sha256=7e7a4a85b759bbbbe61657a9cd67e82112bdbe3f08405c20e2223c59669cca0d; global.h sha256=a8834e9457e5b8345496087222e5f724c26896928f86fe1bf4ac7e8190b409e1.
+/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3; readdef.h sha256=02c6e668b13925bf1b504b8d4e6f6dc437fbdf3fa6dc5a4425f210d841fc8409; global.h sha256=247e935bceed9e13e4585daabd91575b34fb1b54697772ad2a70e16b7072f821.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -86,6 +86,7 @@ void SetDefaultValuesModPara(int *bufInt, double *bufDouble) {
   bufInt[IdxNExchange] = 0;
   bufInt[IdxNGutz] = 0;
   bufInt[IdxNJast] = 0;
+  bufInt[IdxNSpinJast] = 0;
   bufInt[IdxNDH2] = 0;
   bufInt[IdxNDH4] = 0;
   bufInt[IdxNOrbit] = 0;
@@ -125,6 +126,17 @@ void SetDefaultValuesModPara(int *bufInt, double *bufDouble) {
   bufDouble[IdxSROptCGTol] = 1.0e-10;
   NStoreO = 1;
   NSRCG = 0;
+  NSRCGFallback = 0;
+  NSRCGAbortOnFail = 1;
+  RescaleSmat  = 0;
+  useDiagScale = 0;
+  reweight = 0;
+
+  bufInt[IdxNx] = 1;
+  bufInt[IdxNy] = 1;
+  bufInt[IdxNz] = 1;
+  bufInt[IdxNorb] = 1;
+  bufInt[IdxNTwist] = 0;
 }
 int GetInfoFromModPara(int *bufInt, double *bufDouble) {
 
@@ -237,6 +249,16 @@ int GetInfoFromModPara(int *bufInt, double *bufDouble) {
               NStoreO = (int) dtmp;
             } else if (CheckWords(ctmp, "NSRCG") == 0) {
               NSRCG = (int) dtmp;
+            } else if (CheckWords(ctmp, "NSRCGFallback") == 0) {
+              NSRCGFallback = (int) dtmp;
+            } else if (CheckWords(ctmp, "NSRCGAbortOnFail") == 0) {
+              NSRCGAbortOnFail = (int) dtmp;
+            } else if (CheckWords(ctmp, "RescaleSmat") == 0) {
+              RescaleSmat = (int) dtmp;
+            } else if (CheckWords(ctmp, "useDiagScale") == 0) {
+              useDiagScale = (int) dtmp;
+            } else if (CheckWords(ctmp, "reweight") == 0) {
+              reweight = (int) dtmp;
 //RBM
             } else if (CheckWords(ctmp, "Nneuron") == 0) {
               bufInt[IdxNneuron] = (int) dtmp;
@@ -263,9 +285,10 @@ int GetInfoFromModPara(int *bufInt, double *bufDouble) {
         default:
           break;
       }
+      fclose(fp);
     }
   }
-  fclose(fp);
+  //fclose(fp);
   fprintf(stdout, "End: Read ModPara File .\n");
   return iret;
 }
@@ -279,4 +302,57 @@ static void ApplyNBlockSizeRBMRatioAdjustment(int *bufInt) {
       printf("\n --- Notice --- \n");
       printf("NBlockSize_RBMRatio Adjust to %d\n\n",bufInt[IdxNBlockSize_RBMRatio]);
     }
+}
+/* Wrapper added by the toolbox: the block below is verbatim from ReadDefFileNInt. */
+static void ApplySrCgNormalization(int rank) {
+  if (NSRCG == 2){
+    useDiagScale = 1;
+    NSRCG = 1;
+  //  if (rank == 0) printf("remark: use preconditioned CG (Diag Scale)\n");
+  } //else {
+  //  useDiagScale = 0;
+  //}
+  NSRCGFallback = (NSRCGFallback != 0);
+  NSRCGAbortOnFail = (NSRCGAbortOnFail != 0);
+
+  if (useDiagScale){
+    if(NSRCG == 1){
+      if (rank == 0) printf("remark: use preconditioned CG (Diag Scale)\n");
+    }else{
+      if (rank == 0) printf("remark: not use preconditioned CG (Diag Scale) because NSRCG=%d != 1. Use direct method instead.\n",NSRCG);
+      useDiagScale = 0;
+    }
+  }
+
+  if (RescaleSmat){
+    if (NSRCG != 1) {
+      if (rank == 0) {
+        fprintf(stderr,
+                "error: invalid RescaleSmat configuration. "
+                "RescaleSmat=1 requires NSRCG==1, but got NSRCG=%d.\n",
+                NSRCG);
+      }
+      MPI_Abort(comm, EXIT_FAILURE);
+    }
+    if (rank == 0) printf("remark: rescale S matrix \n");
+  }
+
+  if (DSROptStepDt < 0) {
+    SRFlag = 1; /* diagonalization */
+    if (rank == 0) fprintf(stderr, "remark: Diagonalization Mode\n");
+    DSROptStepDt *= -1;
+  } else {
+    SRFlag = 0;
+  }
+
+  if (SRFlag != 0 && NSRCG != 0) {
+    if (rank == 0) {
+      fprintf(stderr,
+              "error: SR-CG (NSRCG=%d) cannot be combined with diagonalization mode "
+              "(DSROptStepDt < 0). Use either DSROptStepDt > 0 with SR-CG, "
+              "or DSROptStepDt < 0 with NSRCG=0.\n",
+              NSRCG);
+    }
+    MPI_Abort(comm, EXIT_FAILURE);
+  }
 }

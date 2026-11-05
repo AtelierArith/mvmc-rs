@@ -770,6 +770,12 @@ pub fn run_cli() {
     let output_root = mpi_context.is_none_or(|context| context.is_root());
     #[cfg(not(feature = "mpi"))]
     let output_root = true;
+    // readdef.c:936-956: rank 0 prints the SR-CG remarks (DiagScale, RescaleSmat).
+    if output_root {
+        for remark in &data.modpara.sr_cg_remarks {
+            println!("{remark}");
+        }
+    }
     // readdef.c:959-962: rank 0 reports the negative-DSROptStepDt mode on stderr.
     if data.modpara.sr_flag && output_root {
         eprintln!("remark: Diagonalization Mode");

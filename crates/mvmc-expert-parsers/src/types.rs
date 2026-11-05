@@ -176,10 +176,30 @@ pub struct ModParaParameters {
     /// `NSROptCGMaxIter`.
     pub nsr_opt_cg_max_iter: i64,
 
-    /// `NSRCG` (0 = direct, non-zero = CG).
+    /// `NSRCG` after the C 1.4.0 normalization (0 = direct, non-zero = CG).
+    /// The file value 2 selects DiagScale-preconditioned CG and is stored as
+    /// `nsrcg = 1` with `use_diag_scale = true` (readdef.c:927-930).
     pub nsrcg: i64,
     /// `NStore`.
     pub nstore_o: i64,
+    /// C 1.4.0 `useDiagScale`: Jacobi (DiagScale) preconditioned SR-CG. Set by
+    /// the `useDiagScale` keyword or `NSRCG 2`; cleared unless `NSRCG == 1`.
+    pub use_diag_scale: bool,
+    /// C 1.4.0 `NSRCGFallback != 0`: retry a failed SR-CG solve with the other
+    /// CG variant (plain or DiagScale).
+    pub nsrcg_fallback: bool,
+    /// C 1.4.0 `NSRCGAbortOnFail != 0` (default on): a failed SR-CG solve or a
+    /// non-finite increment aborts the run.
+    pub nsrcg_abort_on_fail: bool,
+    /// C 1.4.0 `RescaleSmat != 0`: rescale the Slater block of the SR-CG
+    /// operands before the solve (`Rescale4SRCG`); requires `NSRCG == 1`.
+    pub rescale_smat: bool,
+    /// C 1.4.0 `reweight` (raw `(int)` value). Only 1 enables reweighting in
+    /// C; Rust does not port reweighting and rejects that value at run time.
+    pub reweight: i64,
+    /// Lines C 1.4.0 `ReadDefFileNInt` prints on rank 0 stdout for the SR-CG
+    /// switches (readdef.c:936-956), in C order.
+    pub sr_cg_remarks: Vec<String>,
 
     /// `RndSeed`.
     pub rnd_seed: i64,
@@ -276,6 +296,12 @@ impl Default for ModParaParameters {
             nsr_opt_cg_max_iter: 0,
             nsrcg: 0,
             nstore_o: 1,
+            use_diag_scale: false,
+            nsrcg_fallback: false,
+            nsrcg_abort_on_fail: true,
+            rescale_smat: false,
+            reweight: 0,
+            sr_cg_remarks: Vec::new(),
             rnd_seed: 11272,
             nsplit_size: 1,
             nsp_gauss_leg: 1,

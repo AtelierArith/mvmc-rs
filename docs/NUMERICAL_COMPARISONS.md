@@ -22,6 +22,60 @@ the Jastrow reader) and the roundoff-only `rsbOld` and SIMD items. 1.4.0 adds
 may reorder those sums, so new full-executable references are built without
 OpenMP or record the OpenMP/SIMD flags.
 
+## mVMC 1.4.0 contract changes (#682)
+
+Rust follows these 1.4.0 contracts; each has independent C-derived tests:
+
+- **SR-CG status and failure policy** (`stcopt_cg_impl.c:203-310, 484-591`): the
+  breakdown guards (non-finite `delta`, `d.q`, `alpha`, `beta`; `|d.q|` or the
+  old `|delta|` below `1e-20`) and `-(max_iter+1)` at the limit, then
+  `NSRCGAbortOnFail` (default abort) and `NSRCGFallback`. The fixed-operand C
+  oracle (`c_toolbox/ctest_cg_refresh.c`, now the 1.4.0 Main) was regenerated:
+  the real and complex plain trajectories are bit-identical to 1.3.0 and only
+  the status changed; the sampled complex solve stops at iteration 5 for every
+  limit above 5 because of the `1e-20` guard
+  (`tests/fixtures/sr_cg/c_refresh/`, `cg_fixed_input_matches_c_through_residual_refresh`).
+- **DiagScale CG** (`NSRCG 2`, `useDiagScale`; `:352-480`): the same oracle
+  records the C preconditioned Main for all three operands
+  (`*_diag_scale.txt`); Rust reproduces the status of every limit and the
+  iterates within the existing budgets.
+- **ModPara normalization and errors** (`readdef.c:927-976`): the reader oracle
+  now runs the verbatim SR-CG block, with `MPI_Abort` reported as status 2
+  (`tests/fixtures/modpara_reader/`, 80 cases).
+- **`zqp_SRinfo.dat`**: the CG header title ` info` and the `"%5d %d"` row
+  (`tests/fixtures/time_srinfo_c/cg/`).
+- **Jastrow reader** (`readdef.c:2477-2587`): duplicate, missing and asymmetric
+  directed pairs are errors; the table is symmetric
+  (`tests/fixtures/jastrow/`, 171 cases, 60 accepted).
+- **`rsbOld = rbOld + t*Nsite`** on every two-electron update, and the PhysCal
+  timer line `addPhysTwist [54]` (`tests/fixtures/timers/c_*_zero.dat`).
+
+Historical references keep their 1.3.0 contract and are compared under the
+documented translation:
+
+- 1.3.0 continued after an SR-CG solve reached its limit, as 1.4.0 does with
+  `NSRCGAbortOnFail 0`. The historical CG harnesses set that switch, and their
+  `zqp_SRinfo.dat` comparisons map the 1.4.0 layout back to 1.3.0
+  (`as_historical_cg_srinfo`: drop ` info`, print `", %d"`, and decode a status
+  `-(iter+1)` to the count `iter`).
+- The `real` and `cmp` CG prefixes meet the `|d.q| < 1e-20` guard in their
+  first solve (status `-3` and `-6`); the Julia/1.3.0 references continue the
+  solve. Only their step-1 sampling, energy and SR diagnostic columns 0-5 are
+  compared, with the 1.4.0 status asserted; later steps check repeatability
+  (`c14_cg_breakdown`). C 1.4.0 aborts these inputs by default.
+- `native_c_lanczos_576`: with `rbOld` the largest Lanczos-output difference
+  from the 1.3.0 native reference is `2.45e-10` absolute (`3.4e-13` relative);
+  with `raOld` Rust reproduces the earlier `1.4e-12`. The Lanczos bound is
+  `max(1e-10, 1e-12 |value|)` (fixture README).
+- Julia's real two-electron update keeps `raOld`; the synthetic Julia operand
+  test (`pf_update_vs_julia`) passes `ra_old` as `rb_old` to compare its
+  arithmetic, since those operands do not satisfy `invM = M^-1`.
+
+Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
+no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
+the resident GPU CG rejects DiagScale, the fallback and `RescaleSmat`. The
+earlier C-defect fixes (#370, #669, #676, #680, #681) are unchanged.
+
 ## Comparison rules
 
 `tests/support/numerical_comparison.rs` compares each finite component using

@@ -221,7 +221,7 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
-> - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:230`, `pfupdate_two_real.c:230`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
+> - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. In the two-electron update, mVMC 1.4.0 defines `rsbOld = rbOld + t*Nsite` in all four variants (`pfupdate_two_fcmp.c:230`, `pfupdate_two_real.c:230` and the FSZ files; 1.3.0 used `raOld`), and every Rust update follows it (`update_m_all_two_real_flat`, `update_m_all_two_complex_flat`). See [11.5](11-compatibility.md#115-open-observations).
 
 ## 4.6 Parallelism inside the sampler
 

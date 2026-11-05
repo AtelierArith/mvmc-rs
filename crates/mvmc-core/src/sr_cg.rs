@@ -1,4 +1,4 @@
-//! Sampled matrix operator for Julia's standard stochastic-reconfiguration CG.
+//! Sampled SR-CG: the C 1.4.0 `StochasticOptCG` step and its CG solvers.
 
 use crate::output_files::{RunFiles, SrInfoRow};
 use crate::{reducer::Reducer, ExpertModeData, VmcOptimizationState};
@@ -87,14 +87,114 @@ fn observe(f: impl FnOnce(&dyn CgObserver)) {
     });
 }
 
-/// Apply Julia's standard sampled SR-CG step, writing diagnostics before updates.
-/// Returns zero for finite increments, including iteration-limit/breakdown exits.
+/// Apply the C 1.4.0 sampled SR-CG step (`StochasticOptCG`), writing the
+/// `zqp_SRinfo.dat` row before the update.
+///
+/// Returns 0 after a finite update and 1 when the increment is not finite with
+/// `NSRCGAbortOnFail = 0` (the update is skipped, as in C). A failed CG solve
+/// is an error when `NSRCGAbortOnFail` is set (C calls `MPI_Abort`), and so is
+/// a non-finite increment.
 pub fn stochastic_opt_cg(
     data: &mut ExpertModeData,
     state: &VmcOptimizationState,
     files: Option<&mut RunFiles>,
 ) -> io::Result<i32> {
     stochastic_opt_cg_with_reducer(data, state, files, &crate::reducer::SingleProcessReducer)
+}
+
+/// Which C 1.4.0 CG solver runs (`useDiagScale`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CgVariant {
+    /// `StochasticOptCG_Main`: unpreconditioned CG.
+    Plain,
+    /// `StochasticOptPreconCG_DiagScale_Main`: Jacobi (DiagScale) preconditioned CG.
+    DiagScale,
+}
+
+impl CgVariant {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Plain => "CG",
+            Self::DiagScale => "CG-diag",
+        }
+    }
+
+    fn other(self) -> Self {
+        match self {
+            Self::Plain => Self::DiagScale,
+            Self::DiagScale => Self::Plain,
+        }
+    }
+}
+
+/// C `get_absmax` (stcopt_cg.c:36-46): the largest `|p[i]|` in `start..end`,
+/// keeping the earlier value when a comparison fails (NaN).
+fn get_absmax(start: usize, end: usize, p: &[f64]) -> f64 {
+    if end <= start {
+        return 0.0;
+    }
+    let mut max = p[start].abs();
+    for value in &p[start + 1..end] {
+        if max < value.abs() {
+            max = value.abs();
+        }
+    }
+    max
+}
+
+/// Slater-block factors of C `Rescale4SRCG` (stcopt_cg_impl.c:772-875).
+struct SlaterRescale {
+    /// `OFFSET*sltStart .. OFFSET*sltEnd`: the rescaled O components.
+    components: std::ops::Range<usize>,
+    /// `rescaleOO_SlaterRatio`.
+    oo_ratio: f64,
+    /// `rescaleO_SlaterRatio = sqrt(rescaleOO_SlaterRatio)`.
+    o_ratio: f64,
+}
+
+/// `None` where C `Rescale4SRCG` returns without rescaling.
+fn slater_rescale(
+    data: &ExpertModeData,
+    oo: &[f64],
+    size: usize,
+    offset: usize,
+    n_para: usize,
+) -> Option<SlaterRescale> {
+    let n_proj = data.projection_layout().n_proj;
+    let n_slater = mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+    // Para = Proj | RBM | ProjBF (always empty here) | Slater | OptTrans.
+    let slt_start = n_proj + data.count_rbm_parameters();
+    let slt_end = slt_start + n_slater;
+    if n_proj == 0 || n_proj >= n_para || n_slater == 0 {
+        return None;
+    }
+    // r[pi] = OO[pi+OFFSET] - O[pi+OFFSET]^2: the diagonal of S, before the cut.
+    let r: Vec<f64> = (0..offset * n_para)
+        .map(|pi| oo[size + pi + offset] - oo[pi + offset] * oo[pi + offset])
+        .collect();
+    let proj_max = get_absmax(0, offset * n_proj, &r);
+    let mut slater_max = get_absmax(offset * slt_start, offset * slt_end, &r);
+    if proj_max < 1e-10 {
+        return None;
+    }
+    if slater_max < 1e-10 {
+        slater_max = 1e-10;
+    }
+    let oo_ratio = proj_max / slater_max;
+    Some(SlaterRescale {
+        components: offset * slt_start..offset * slt_end,
+        oo_ratio,
+        o_ratio: oo_ratio.sqrt(),
+    })
+}
+
+/// C's `"error"`/`"warning"` prefix and action of a failed SR-CG solve.
+fn failure_words(abort: bool, continued: &'static str) -> (&'static str, &'static str) {
+    if abort {
+        ("error", "Abort")
+    } else {
+        ("warning", continued)
+    }
 }
 
 /// Apply sampled SR-CG with the global accumulator communicator.
@@ -118,17 +218,35 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     if data.optimization_flags.is_empty() {
         data.optimization_flags = vec![1; 2 * n_para];
     }
+    let root = reducer.rank() == 0;
     let size = offset * state.sr_opt.sr_opt_size;
-    let oo: Vec<f64> = if complex {
+    let mut oo: Vec<f64> = if complex {
         state.sr_opt.sr_opt_oo.iter().map(|z| z.re).collect()
     } else {
         state.sr_opt.sr_opt_oo_real.clone()
     };
-    let ho: Vec<f64> = if complex {
+    let mut ho: Vec<f64> = if complex {
         state.sr_opt.sr_opt_ho.iter().map(|z| z.re).collect()
     } else {
         state.sr_opt.sr_opt_ho_real.clone()
     };
+    // stcopt_cg.c:58-65: RescaleSmat rescales the averaged operands, the stored
+    // samples (below) and the Slater parameters before StochasticOptCG.
+    let rescale = if data.modpara.rescale_smat {
+        slater_rescale(data, &oo, size, offset, n_para)
+    } else {
+        None
+    };
+    if let Some(rescale) = &rescale {
+        for i in rescale.components.clone() {
+            oo[size + i + offset] *= rescale.oo_ratio;
+            oo[i + offset] *= rescale.o_ratio;
+            ho[i + offset] *= rescale.o_ratio;
+        }
+        for value in &mut data.slater_params {
+            *value /= rescale.o_ratio;
+        }
+    }
     let variance: Vec<f64> = (0..full)
         .map(|pi| {
             let idx = pi + offset;
@@ -157,6 +275,9 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
             mapping.push(pi);
         }
     }
+    // With nSmat = 0, C 1.4.0 runs the solver anyway, returns -(0+1), aborts by
+    // default and reads r[0] out of bounds for zqp_SRinfo.dat. An empty active
+    // set is an exact no-op here, as before (#682).
     if mapping.is_empty() {
         return Ok(0);
     }
@@ -164,7 +285,7 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     let mut operator = SampledSrOperator::new(mapping.len(), samples, complex);
     let mut gradient = vec![0.0; mapping.len()];
     let dt = 2.0 * data.modpara.dsr_opt_step_dt;
-    // stcopt_cg_impl.c:713-734 `omp parallel for` over the active components `si`.
+    // stcopt_cg_impl.c:733-744 `omp parallel for` over the active components `si`.
     crate::threading::for_each_mut(&mut operator.mean, 2, |si, value| {
         *value = oo[mapping[si] + offset]
     });
@@ -177,17 +298,25 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     });
     let n_active = mapping.len();
     if samples > 0 {
+        // RescaleSmat multiplies the stored Slater components in place
+        // (stcopt_cg_impl.c:856-862); the factor is applied while copying.
+        let factor = |pi: usize| match &rescale {
+            Some(r) if r.components.contains(&pi) => Some(r.o_ratio),
+            _ => None,
+        };
         // Sample `s` owns the contiguous window `s * n_active ..` of the sample matrices.
         let fill = |s: usize, real: &mut [f64], imag: &mut [f64]| {
             for (si, &pi) in mapping.iter().enumerate() {
                 let src = s * size + pi + offset;
+                let scale = factor(pi);
                 if complex {
-                    if let Some(o) = state.sr_opt.sr_opt_o_store.get(src) {
+                    if let Some(&o) = state.sr_opt.sr_opt_o_store.get(src) {
+                        let o = scale.map_or(o, |f| o * f);
                         real[si] = o.re;
                         imag[si] = o.im;
                     }
                 } else if let Some(&o) = state.sr_opt.sr_opt_o_store_real.get(src) {
-                    real[si] = o;
+                    real[si] = scale.map_or(o, |f| o * f);
                 }
             }
         };
@@ -215,17 +344,100 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
         mapping.len()
     };
     observe(|observer| observer.prepared(&mapping, &operator, &gradient));
-    let result = operator
-        .solve_with_reducer(
-            &gradient,
-            1.0 / state.energy.wc.re,
-            data.modpara.dsr_opt_sta_del,
-            data.modpara.dsr_opt_cg_tol,
-            max_iterations,
-            reducer,
-        )
-        .map_err(io::Error::other)?;
-    let info = i32::from(result.solution.iter().any(|x| !x.is_finite()));
+    let variant = if data.modpara.use_diag_scale {
+        CgVariant::DiagScale
+    } else {
+        CgVariant::Plain
+    };
+    let inv_weight = 1.0 / state.energy.wc.re;
+    let (sta_del, tolerance) = (data.modpara.dsr_opt_sta_del, data.modpara.dsr_opt_cg_tol);
+    let abort = data.modpara.nsrcg_abort_on_fail;
+    let solve = |operator: &mut SampledSrOperator, variant| {
+        operator
+            .solve_variant_with_reducer(
+                variant,
+                &gradient,
+                inv_weight,
+                sta_del,
+                tolerance,
+                max_iterations,
+                reducer,
+            )
+            .map_err(io::Error::other)
+    };
+    let mut result = solve(&mut operator, variant)?;
+    let mut info = result.status;
+    // stcopt_cg_impl.c:203-269: failure report, optional fallback and abort.
+    if result.status < 0 {
+        let fallback_iter = (-result.status - 1).max(0) as usize;
+        let reason = |iter: usize| {
+            if iter >= max_iterations {
+                "did not converge"
+            } else {
+                "became numerically unstable"
+            }
+        };
+        if root {
+            eprintln!(
+                "warning: SR-{} {} at iter={fallback_iter} (max_iter={max_iterations}).",
+                variant.name(),
+                reason(fallback_iter)
+            );
+        }
+        if data.modpara.nsrcg_fallback {
+            let alternative = variant.other();
+            if root {
+                if !FALLBACK_INFO_PRINTED.with(|printed| printed.replace(true)) {
+                    eprintln!(
+                        "remark: in zqp_SRinfo.dat, negative info means SR-CG fallback at \
+                         iteration (info=-(iter+1))."
+                    );
+                }
+                eprintln!(
+                    "warning: fallback from SR-{} to SR-{}.",
+                    variant.name(),
+                    alternative.name()
+                );
+            }
+            // C reinitializes VecCG (x = 0) before the alternative solve.
+            result = solve(&mut operator, alternative)?;
+            if root && result.status >= 0 {
+                eprintln!(
+                    "remark: SR-{} after fallback converged at iter={}.",
+                    alternative.name(),
+                    result.status
+                );
+            }
+            info = -(fallback_iter as i64 + 1);
+            if result.status < 0 {
+                let alt_iter = (-result.status - 1).max(0) as usize;
+                let (level, action) =
+                    failure_words(abort, "Continue with the approximate solution");
+                let message = format!(
+                    "{level}: fallback SR-{} {} at iter={alt_iter} (max_iter={max_iterations}). \
+                     {action}.",
+                    alternative.name(),
+                    reason(alt_iter)
+                );
+                if abort {
+                    return Err(io::Error::other(message));
+                }
+                if root {
+                    eprintln!("{message}");
+                }
+            }
+        } else {
+            let (level, action) = failure_words(abort, "Continue with the approximate solution");
+            let message = format!("{level}: SR-CG fallback is disabled. {action}.");
+            if abort {
+                return Err(io::Error::other(message));
+            }
+            if root {
+                eprintln!("{message}");
+            }
+            info = -(fallback_iter as i64 + 1);
+        }
+    }
     if let Some(files) = files {
         let mut imax = 0;
         for i in 1..result.solution.len() {
@@ -243,21 +455,37 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
             s_diag_min: minimum,
             r_max: result.solution[imax],
             i_max: mapping[imax] as i64,
-            cg_info: Some(result.iterations as i64),
+            cg_info: Some(info),
         })?;
     }
-    if info == 0 {
-        for (&pi, &x) in mapping.iter().zip(&result.solution) {
-            let para = if complex { pi / 2 } else { pi };
-            let (re, im) = if complex && pi % 2 != 0 {
-                (0.0, x)
-            } else {
-                (x, 0.0)
-            };
-            crate::sr::update_parameter_value(data, para, re, im, n_proj);
+    // stcopt_cg_impl.c:291-310: a non-finite increment skips the update and
+    // returns 1 (the run then stops), or aborts with NSRCGAbortOnFail.
+    if result.solution.iter().any(|x| !x.is_finite()) {
+        let (level, action) = failure_words(abort, "Skip this parameter update");
+        let message = format!("{level}: SR-CG produced non-finite parameter updates. {action}.");
+        if abort {
+            return Err(io::Error::other(message));
         }
+        if root {
+            eprintln!("{message}");
+        }
+        return Ok(1);
     }
-    Ok(info)
+    for (&pi, &x) in mapping.iter().zip(&result.solution) {
+        let para = if complex { pi / 2 } else { pi };
+        let (re, im) = if complex && pi % 2 != 0 {
+            (0.0, x)
+        } else {
+            (x, 0.0)
+        };
+        crate::sr::update_parameter_value(data, para, re, im, n_proj);
+    }
+    Ok(0)
+}
+
+thread_local! {
+    /// C's function-static `fallback_info_printed` (stcopt_cg_impl.c:119).
+    static FALLBACK_INFO_PRINTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Dot product with Julia/C's explicit sequential accumulation order.
@@ -270,17 +498,32 @@ pub fn sequential_dot(p: &[f64], q: &[f64]) -> f64 {
     sum
 }
 
-/// Result of the standard CG iteration loop (not a convergence status).
+/// Result of one C 1.4.0 CG solve (`StochasticOptCG_Main` or
+/// `StochasticOptPreconCG_DiagScale_Main`).
 #[derive(Debug)]
 pub struct CgSolution {
-    /// Solution increment, initialized to zero for every solve.
+    /// Solution increment `x`, initialized to zero for every solve. After a
+    /// failure it holds the iterate at the point where C returned.
     pub solution: Vec<f64>,
-    /// Julia iteration count, including the iteration that detects breakdown.
+    /// C return value: the iteration count `iter` on convergence, or
+    /// `-(iter+1)` when iteration `iter` broke down (non-finite or tiny
+    /// `delta`, `d.q`, `alpha` or `beta`) and `-(max_iter+1)` when the
+    /// iteration limit was reached without convergence.
+    pub status: i64,
+    /// C loop index `iter` where the solve stopped: `status` on success, the
+    /// failing iteration otherwise (`max_iter` for non-convergence).
     pub iterations: usize,
-    /// Final residual, including Julia's periodic explicit recomputation.
+    /// Final residual, including the periodic explicit recomputation.
     pub residual: Vec<f64>,
     /// Final search direction, retained for deterministic solver diagnostics.
     pub direction: Vec<f64>,
+}
+
+impl CgSolution {
+    /// `true` when C reports convergence (`status >= 0`).
+    pub fn converged(&self) -> bool {
+        self.status >= 0
+    }
 }
 
 type LocalCgProduct<'a> = dyn FnMut(
@@ -306,10 +549,14 @@ pub struct SampledSrOperator {
     complex: bool,
 }
 
+/// C 1.4.0 breakdown guard for `d.q` and the old `delta` (stcopt_cg_impl.c:540,567).
+const CG_TINY: f64 = 1.0e-20;
+/// C `precon_diag_eps` of the DiagScale preconditioner (stcopt_cg_impl.c:363).
+const PRECON_DIAG_EPS: f64 = 1.0e-12;
+
 impl SampledSrOperator {
-    /// Solve with Julia's convergence threshold and 20-iteration residual refresh.
-    /// A small search-direction product ends the loop without an error, as in
-    /// Julia. The caller must check the returned increments for finiteness.
+    /// Solve with C 1.4.0 `StochasticOptCG_Main`: residual-norm stop test,
+    /// 20-iteration residual refresh and the breakdown/non-convergence status.
     pub fn solve(
         &mut self,
         gradient: &[f64],
@@ -318,7 +565,28 @@ impl SampledSrOperator {
         tolerance: f64,
         max_iterations: usize,
     ) -> CgSolution {
-        self.solve_with_reducer(
+        self.solve_variant(
+            CgVariant::Plain,
+            gradient,
+            inv_weight,
+            shift,
+            tolerance,
+            max_iterations,
+        )
+    }
+
+    /// Serial solve with the selected C 1.4.0 CG variant.
+    pub fn solve_variant(
+        &mut self,
+        variant: CgVariant,
+        gradient: &[f64],
+        inv_weight: f64,
+        shift: f64,
+        tolerance: f64,
+        max_iterations: usize,
+    ) -> CgSolution {
+        self.solve_variant_with_reducer(
+            variant,
             gradient,
             inv_weight,
             shift,
@@ -329,9 +597,32 @@ impl SampledSrOperator {
         .expect("serial CG communication cannot fail")
     }
 
-    /// Solve using global sampled products, including periodic residual refresh.
+    /// Plain CG using global sampled products.
     pub fn solve_with_reducer<R: Reducer + ?Sized>(
         &mut self,
+        gradient: &[f64],
+        inv_weight: f64,
+        shift: f64,
+        tolerance: f64,
+        max_iterations: usize,
+        reducer: &R,
+    ) -> Result<CgSolution, String> {
+        self.solve_variant_with_reducer(
+            CgVariant::Plain,
+            gradient,
+            inv_weight,
+            shift,
+            tolerance,
+            max_iterations,
+            reducer,
+        )
+    }
+
+    /// Solve using global sampled products, including periodic residual refresh.
+    #[allow(clippy::too_many_arguments)]
+    pub fn solve_variant_with_reducer<R: Reducer + ?Sized>(
+        &mut self,
+        variant: CgVariant,
         gradient: &[f64],
         inv_weight: f64,
         shift: f64,
@@ -346,8 +637,9 @@ impl SampledSrOperator {
         let _team = crate::stage_backend::retain_cpu_team(kind).map_err(|e| e.to_string())?;
         let mut backend = crate::stage_backend::acquire_kind(kind);
         if backend.is_owned() {
-            return self.solve_with_stages(
-                backend.sr(),
+            return self.solve_with_product(
+                variant,
+                &mut |samples, x, z| backend.sr().cg_local_product(samples, x, z),
                 gradient,
                 inv_weight,
                 shift,
@@ -361,6 +653,7 @@ impl SampledSrOperator {
         // solve's operand version for the backend's cache.
         drop(backend);
         self.solve_with_product(
+            variant,
             &mut |samples, x, z| {
                 crate::stage_backend::acquire_kind(kind)
                     .sr()
@@ -375,8 +668,8 @@ impl SampledSrOperator {
         )
     }
 
-    /// [`Self::solve_with_reducer`] on an explicit SR stage implementation (the default
-    /// `cg_step` and the validation of resident implementations use it).
+    /// Plain CG on an explicit SR stage implementation (the default `cg_step`
+    /// and the validation of resident implementations use it).
     #[allow(clippy::too_many_arguments)]
     pub fn solve_with_stages<R: Reducer + ?Sized>(
         &mut self,
@@ -389,6 +682,7 @@ impl SampledSrOperator {
         reducer: &R,
     ) -> Result<CgSolution, String> {
         self.solve_with_product(
+            CgVariant::Plain,
             &mut |samples, x, z| stages.cg_local_product(samples, x, z),
             gradient,
             inv_weight,
@@ -399,9 +693,13 @@ impl SampledSrOperator {
         )
     }
 
+    /// C `StochasticOptCG_Main` (stcopt_cg_impl.c:484-591) and
+    /// `StochasticOptPreconCG_DiagScale_Main` (:352-480), in C operation order.
+    /// `x` starts at zero; DiagScale forms `r = g - S x` with an operator call.
     #[allow(clippy::too_many_arguments)]
     fn solve_with_product<R: Reducer + ?Sized>(
         &mut self,
+        variant: CgVariant,
         local_product: &mut LocalCgProduct<'_>,
         gradient: &[f64],
         inv_weight: f64,
@@ -413,14 +711,51 @@ impl SampledSrOperator {
         let n = self.components;
         assert_eq!(gradient.len(), n);
         let version = crate::stage_backend::next_operand_version();
+        let diag_scale = variant == CgVariant::DiagScale;
         // stcopt_cg_impl.c:492 evaluates these four factors left to right.
         let threshold = tolerance * tolerance * n as f64 * n as f64;
+        // :362 precon_factor and the clamped preconditioner (:383-389, :450-456).
+        let precon_factor = 1.0 + shift;
+        let diagonal = self.diagonal.clone();
+        let precondition = move |i: usize, r: f64| {
+            let mut dq = precon_factor * diagonal[i];
+            if !dq.is_finite() || dq.abs() < PRECON_DIAG_EPS {
+                dq = if dq < 0.0 {
+                    -PRECON_DIAG_EPS
+                } else {
+                    PRECON_DIAG_EPS
+                };
+            }
+            r / dq
+        };
         let mut solution = vec![0.0; n];
-        let mut direction = gradient.to_vec();
         let mut residual = gradient.to_vec();
         let mut product = vec![0.0; n];
-        let mut delta = sequential_dot(&residual, &residual);
-        let mut iterations = 0;
+        let mut direction;
+        let mut delta;
+        if diag_scale {
+            // r = g - S x, d = M^-1 r, delta = r.d.
+            self.apply_with_product(
+                local_product,
+                version,
+                &mut residual,
+                &mut solution,
+                inv_weight,
+                shift,
+                reducer,
+            )?;
+            crate::threading::for_each_mut(&mut residual, 2, |i, value| {
+                *value = gradient[i] - *value
+            });
+            direction = vec![0.0; n];
+            crate::threading::for_each_mut(&mut direction, 2, |i, value| {
+                *value = precondition(i, residual[i])
+            });
+            delta = sequential_dot(&residual, &direction);
+        } else {
+            direction = gradient.to_vec();
+            delta = sequential_dot(&residual, &residual);
+        }
         observe(|observer| {
             observer.iteration(CgIterationView {
                 iteration: 0,
@@ -431,12 +766,30 @@ impl SampledSrOperator {
                 alpha: None,
             })
         });
-        for iteration in 1..=max_iterations {
-            iterations = iteration;
-            if delta < threshold {
-                iterations = iteration - 1;
+        let finish = |solution, status: i64, iterations, residual, direction| {
+            let result = CgSolution {
+                solution,
+                status,
+                iterations,
+                residual,
+                direction,
+            };
+            observe(|observer| observer.finished(&result));
+            Ok(result)
+        };
+        if !delta.is_finite() {
+            return finish(solution, -1, 0, residual, direction);
+        }
+        let mut iter = 0;
+        while iter < max_iterations {
+            let failed = -(iter as i64 + 1);
+            if !delta.is_finite() {
+                return finish(solution, failed, iter, residual, direction);
+            }
+            if delta.abs() < threshold {
                 break;
             }
+            // q = S d.
             self.apply_with_product(
                 local_product,
                 version,
@@ -447,12 +800,18 @@ impl SampledSrOperator {
                 reducer,
             )?;
             let dq = sequential_dot(&direction, &product);
+            if !dq.is_finite() || dq.abs() < CG_TINY {
+                return finish(solution, failed, iter, residual, direction);
+            }
             let alpha = delta / dq;
+            if !alpha.is_finite() {
+                return finish(solution, failed, iter, residual, direction);
+            }
             // stcopt_cg_impl.c:545 `omp parallel for`: elementwise, one producer per entry.
             crate::threading::for_each_mut(&mut solution, 2, |i, value| {
                 *value += alpha * direction[i]
             });
-            if iteration % 20 == 0 {
+            if (iter + 1) % 20 == 0 {
                 self.apply_with_product(
                     local_product,
                     version,
@@ -470,18 +829,40 @@ impl SampledSrOperator {
                     *value -= alpha * product[i]
                 });
             }
-            let delta_new = sequential_dot(&residual, &residual);
+            let delta_new = if diag_scale {
+                // q is reused for M^-1 r.
+                crate::threading::for_each_mut(&mut product, 2, |i, value| {
+                    *value = precondition(i, residual[i])
+                });
+                sequential_dot(&residual, &product)
+            } else {
+                sequential_dot(&residual, &residual)
+            };
+            if !delta_new.is_finite() || delta.abs() < CG_TINY {
+                return finish(solution, failed, iter, residual, direction);
+            }
             let beta = delta_new / delta;
-            // C:336 rounds the quotient and then multiplies it by the old
-            // norm. Assigning delta_new changes subsequent alpha/stop tests.
-            let recurrent_norm = beta * delta;
-            delta = recurrent_norm;
-            crate::threading::for_each_mut(&mut direction, 2, |i, value| {
-                *value = residual[i] + beta * *value
-            });
+            if !beta.is_finite() {
+                return finish(solution, failed, iter, residual, direction);
+            }
+            if diag_scale {
+                delta = delta_new;
+                crate::threading::for_each_mut(&mut direction, 2, |i, value| {
+                    *value = product[i] + beta * *value
+                });
+            } else {
+                // C:575 keeps delta = beta*delta (mathematically delta_new) to
+                // preserve the legacy rounding; assigning delta_new would change
+                // later alpha/stop decisions.
+                delta *= beta; // IEEE multiplication commutes: C `beta*delta`
+                crate::threading::for_each_mut(&mut direction, 2, |i, value| {
+                    *value = residual[i] + beta * *value
+                });
+            }
+            iter += 1;
             observe(|observer| {
                 observer.iteration(CgIterationView {
-                    iteration,
+                    iteration: iter,
                     solution: &solution,
                     residual: &residual,
                     direction: &direction,
@@ -490,14 +871,12 @@ impl SampledSrOperator {
                 })
             });
         }
-        let result = CgSolution {
-            solution,
-            iterations,
-            residual,
-            direction,
-        };
-        observe(|observer| observer.finished(&result));
-        Ok(result)
+        // :583 (and :469): the limit was reached without meeting the threshold.
+        if iter == max_iterations && delta.abs() >= threshold {
+            let status = -(max_iterations as i64 + 1);
+            return finish(solution, status, max_iterations, residual, direction);
+        }
+        finish(solution, iter as i64, iter, residual, direction)
     }
 
     /// Allocate the sampled operator and its reusable intermediate vectors.

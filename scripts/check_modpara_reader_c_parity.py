@@ -72,6 +72,18 @@ def variants():
     add("explicit_plus_sign", "Nsite +6\n")
     add("double_values", "DSROptRedCut 2.5e-3\nDSROptStaDel 1.5e-5\nDSROptStepDt 0.125\nDSROptCGTol 2.5e-9\n")
     add("solver_controls", "NStore 0\nNSRCG 1\nNSROptCGMaxIter 41\nDSROptCGTol 2.5e-9\n")
+    # mVMC 1.4.0 SR-CG switches and their ReadDefFileNInt normalization.
+    add("nsrcg_two_is_diag_scale_cg", "NSRCG 2\n")
+    add("nsrcg_three_drops_diag_scale", "NSRCG 3\nuseDiagScale 1\n")
+    add("use_diag_scale_with_cg", "NSRCG 1\nuseDiagScale 1\n")
+    add("use_diag_scale_without_cg", "useDiagScale 1\n")
+    add("sr_cg_switch_values", "NSRCGFallback 3\nNSRCGAbortOnFail 0\nRescaleSmat 0\nreweight 2\n")
+    add("sr_cg_switch_fractions", "NSRCGFallback 0.5\nNSRCGAbortOnFail -0.5\nreweight 1.9\n")
+    add("rescale_smat_with_cg", "NSRCG 1\nRescaleSmat 1\n")
+    add("rescale_smat_without_cg_aborts", "RescaleSmat 1\n")
+    add("negative_step_direct", "DSROptStepDt -0.25\n")
+    add("negative_step_cg_aborts", "NSRCG 1\nDSROptStepDt -0.25\n")
+    add("negative_step_nsrcg_two_aborts", "NSRCG 2\nDSROptStepDt -0.25\n")
     add("rbm_keys", "Nneuron 3\nNneuronCharge 4\nNneuronSpin 5\nNneuronGeneral 6\nNBlockSize_RBMRatio 64\n")
     add("itrstep_only_keeps_smp_default", "NSROptItrStep 500\n")
     add("duplicate_keys_last_wins", "Nsite 4\nNsite 8\n")
@@ -106,8 +118,6 @@ def variants():
     add("reject_alias_nsite_nlocspin", "NLocSpin 2\n")
     add("reject_alias_vmccalmode", "VMCCalMode 0\n")
     add("reject_alias_lanczosmode", "LanczosMode 0\n")
-    add("reject_usediagscale", "useDiagScale 1\n")
-    add("reject_rescalesmat", "RescaleSmat 1\n")
     add("reject_nfileflushinterval", "NFileFlushInterval 2\n")
     add("reject_complextype", "ComplexType 1\n")
     add("reject_nsroptfixsmp", "NSROptFixSmp 1\n")
@@ -134,6 +144,10 @@ def extract(reader):
                "static void ApplyNBlockSizeRBMRatioAdjustment(int *bufInt) {\n  int itmp;\n  "
                + snippet + "\n}")
     bodies.append(wrapper)
+    start = reader.index("  if (NSRCG == 2){")
+    end = reader.index("  Nsize = 2 * Ne;", start)
+    bodies.append("/* Wrapper added by the toolbox: the block below is verbatim from ReadDefFileNInt. */\n"
+                  "static void ApplySrCgNormalization(int rank) {\n" + reader[start:end].rstrip() + "\n}")
     return "\n".join(bodies)
 
 
@@ -163,13 +177,14 @@ def main():
     cc_version = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
     sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     lines = [
-        "# C mVMC 1.3.0 modpara reader oracle (#344): SetDefaultValuesModPara + GetInfoFromModPara",
-        "# + NBlockSize_RBMRatio adjustment (readdef.c:403-408). time(NULL) replaced by sentinel.",
+        "# C mVMC 1.4.0 modpara reader oracle (#344): SetDefaultValuesModPara + GetInfoFromModPara",
+        "# + NBlockSize_RBMRatio adjustment (readdef.c:403-408) + SR-CG/DSROptStepDt normalization",
+        "# (readdef.c:927-976; status 2 = MPI_Abort). time(NULL) replaced by sentinel.",
         *(f"# {name} sha256={digest}" for name, digest in sha.items()),
         f"# compiler: {cc_version}; options: cc -O0 -I extern/mVMC-1.4.0/src/mVMC/include -I c_toolbox",
         f"# platform: {platform.system()} {platform.machine()} {platform.libc_ver()[0]} {platform.libc_ver()[1]}",
         "# reproduce: uv run --no-project python scripts/check_modpara_reader_c_parity.py --write",
-        "# format: 'case <name> status <n>' then 'int|double|str <key> <value>' lines",
+        "# format: 'case <name> status <n>', 'remark|aborted <text>', 'int|double|str <key> <value>'",
     ]
     inputs = {}
     with tempfile.TemporaryDirectory(prefix="mvmc-c-modpara-") as directory:
@@ -185,10 +200,15 @@ def main():
             status, values = parse_result(result.stdout)
             assert result.returncode == 0 and status is not None, (name, result)
             lines.append(f"case {name} status {status}")
+            lines.extend(f"remark {line}" for line in result.stdout.splitlines()
+                         if line.startswith("remark:"))
             if status != "0":
                 keyword = re.search(r'keyword " (.*) " is incorrect', result.stderr)
                 if keyword:
                     lines.append(f"rejected_keyword {keyword.group(1)}")
+                aborted = re.search(r"^(error: .*)$", result.stderr, re.M)
+                if status == "2" and aborted:
+                    lines.append(f"aborted {aborted.group(1)}")
             lines.extend(values)
             inputs[name] = text
     output = "\n".join(lines) + "\n"

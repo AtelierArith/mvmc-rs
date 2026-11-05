@@ -16,7 +16,7 @@ fn records() -> Vec<&'static str> {
 #[test]
 fn directional_jastrow_mapping_matches_actual_c_reader() {
     let rows = records();
-    assert_eq!(rows.len(), 144 * 4);
+    assert_eq!(rows.len(), 171 * 4);
     let mut checked = 0;
     for record in rows.as_chunks::<4>().0.iter() {
         let header: Vec<_> = record[0].split_whitespace().collect();
@@ -50,7 +50,7 @@ fn directional_jastrow_mapping_matches_actual_c_reader() {
         );
         checked += 1;
     }
-    assert_eq!(checked, 69);
+    assert_eq!(checked, 60);
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn jastrow_flags_preserve_read_order_signed_values_and_nonzero_offset() {
         );
         checked += 1;
     }
-    assert_eq!(checked, 69);
+    assert_eq!(checked, 60);
 }
 
 #[test]

@@ -2,10 +2,10 @@
 //!
 //! Pure-Rust port of C mVMC 1.4.0 `SetDefaultValuesModPara` and
 //! `GetInfoFromModPara` (`readdef.c`), including the NBlockSize_RBMRatio
-//! adjustment that `ReadDefFileNInt` applies after the read. Julia's
-//! `modpara_parser.jl` is the architectural reference only; its aliases,
-//! `name = value` syntax, `useDiagScale`/`RescaleSmat` and silent handling of
-//! unknown keywords are not C behavior and are not accepted.
+//! adjustment and the SR-CG normalization that `ReadDefFileNInt` applies after
+//! the read. Julia's `modpara_parser.jl` is the architectural reference only;
+//! its aliases, `name = value` syntax and silent handling of unknown keywords
+//! are not C behavior and are not accepted.
 //!
 //! C contract reproduced here:
 //! * Every key starts at the C default (`ModParaParameters::default`), so a
@@ -27,8 +27,14 @@
 //!   directory (default `<namelist dir>/output`, overridden by `--out-dir`), so
 //!   the heads are stored without it; see
 //!   `ModParaParameters::c_data_file_path_head`.
+//! * The 1.4.0 SR-CG keywords `NSRCGFallback`, `NSRCGAbortOnFail` (default 1),
+//!   `RescaleSmat`, `useDiagScale` and `reweight` are read as `(int)` values.
+//!   `NSRCG 2` becomes `NSRCG 1` with DiagScale; `useDiagScale` is kept only
+//!   with `NSRCG 1`; `RescaleSmat` without `NSRCG 1` is an error
+//!   (readdef.c:927-957).
 //! * A negative `DSROptStepDt` sets `sr_flag` (C `SRFlag`, "Diagonalization
-//!   Mode") and is negated before use (readdef.c:959-965).
+//!   Mode") and is negated before use (readdef.c:959-965). Combined with SR-CG
+//!   it is an error (readdef.c:967-975).
 //! * `NFileFlushInterval` is not a C modpara keyword and is rejected (flush
 //!   semantics are tracked separately in #346).
 
@@ -96,6 +102,9 @@ pub fn parse_modpara_content(content: &str) -> io::Result<ModParaParameters> {
     let mut keyword: Vec<u8> = it.next().ok_or_else(incomplete)?.to_vec();
     // C's `dtmp` is uninitialized until the first successful `%lf`.
     let mut value = 0.0_f64;
+    // C 1.4.0 `int` globals set by SetDefaultValuesModPara (readdef.c:2132-2136).
+    let (mut nsrcg_fallback, mut nsrcg_abort_on_fail) = (0_i32, 1_i32);
+    let (mut rescale_smat, mut use_diag_scale) = (0_i32, 0_i32);
 
     for line in it {
         if line.first() == Some(&b'\n') || line.first() == Some(&b'-') {
@@ -179,6 +188,16 @@ pub fn parse_modpara_content(content: &str) -> io::Result<ModParaParameters> {
             p.nneuron_general = int64;
         } else if check_words(k, "NBlockSize_RBMRatio") {
             p.nblock_size_rbm_ratio = int64;
+        } else if check_words(k, "NSRCGFallback") {
+            nsrcg_fallback = int;
+        } else if check_words(k, "NSRCGAbortOnFail") {
+            nsrcg_abort_on_fail = int;
+        } else if check_words(k, "RescaleSmat") {
+            rescale_smat = int;
+        } else if check_words(k, "useDiagScale") {
+            use_diag_scale = int;
+        } else if check_words(k, "reweight") {
+            p.reweight = int64;
         } else {
             return Err(invalid(format!(
                 "keyword \" {} \" is incorrect in modpara.def",
@@ -194,14 +213,57 @@ pub fn parse_modpara_content(content: &str) -> io::Result<ModParaParameters> {
     if block % 8 > 0 {
         p.nblock_size_rbm_ratio = i64::from((block / 8).max(1) * 8);
     }
+    // readdef.c:927-957 (ReadDefFileNInt): `NSRCG == 2` selects DiagScale CG
+    // and becomes `NSRCG = 1`; the fallback/abort switches become 0/1;
+    // `useDiagScale` survives only with `NSRCG == 1`; `RescaleSmat` requires it.
+    if p.nsrcg == 2 {
+        use_diag_scale = 1;
+        p.nsrcg = 1;
+    }
+    p.nsrcg_fallback = nsrcg_fallback != 0;
+    p.nsrcg_abort_on_fail = nsrcg_abort_on_fail != 0;
+    if use_diag_scale != 0 {
+        if p.nsrcg == 1 {
+            p.sr_cg_remarks
+                .push("remark: use preconditioned CG (Diag Scale)".to_string());
+        } else {
+            p.sr_cg_remarks.push(format!(
+                "remark: not use preconditioned CG (Diag Scale) because NSRCG={} != 1. \
+                 Use direct method instead.",
+                p.nsrcg
+            ));
+        }
+    }
+    p.use_diag_scale = use_diag_scale != 0 && p.nsrcg == 1;
+    p.rescale_smat = rescale_smat != 0;
+    if p.rescale_smat {
+        if p.nsrcg != 1 {
+            return Err(invalid(format!(
+                "error: invalid RescaleSmat configuration. \
+                 RescaleSmat=1 requires NSRCG==1, but got NSRCG={}.",
+                p.nsrcg
+            )));
+        }
+        p.sr_cg_remarks
+            .push("remark: rescale S matrix ".to_string());
+    }
     // readdef.c:959-965: a negative DSROptStepDt selects "Diagonalization Mode"
     // (SRFlag = 1) and is negated; non-negative values (including -0.0) keep
-    // SRFlag = 0. Only the SRinfo header differs in C.
+    // SRFlag = 0.
     if p.dsr_opt_step_dt < 0.0 {
         p.sr_flag = true;
         p.dsr_opt_step_dt *= -1.0;
     } else {
         p.sr_flag = false;
+    }
+    // readdef.c:967-975: SR-CG has no diagonalization mode (C 1.4.0 aborts).
+    if p.sr_flag && p.nsrcg != 0 {
+        return Err(invalid(format!(
+            "error: SR-CG (NSRCG={}) cannot be combined with diagonalization mode \
+             (DSROptStepDt < 0). Use either DSROptStepDt > 0 with SR-CG, \
+             or DSROptStepDt < 0 with NSRCG=0.",
+            p.nsrcg
+        )));
     }
     Ok(p)
 }

@@ -148,22 +148,56 @@ $$
 
 with three rules that matter for reproducing C:
 
-- stop when $\delta<\texttt{DSROptCGTol}^2\,n_S^2$ (checked at the *start* of an iteration),
+- stop when $|\delta|<\texttt{DSROptCGTol}^2\,n_S^2$ (checked at the *start* of an iteration),
 - run at most `NSROptCGMaxIter` iterations (`n_S` if it is $\le 0$),
 - **every 20th iteration** the residual is recomputed exactly, $r=g-S'x$, instead of by the recurrence.
 
+mVMC 1.4.0 also reports failure. The solve returns $-(i+1)$ when iteration $i$ breaks down
+(a non-finite $\delta$, $d\cdot S'd$, $\alpha$ or $\beta$, or $|d\cdot S'd|$ or the old $|\delta|$ below
+$10^{-20}$), and $-(\texttt{max\_iter}+1)$ when the limit is reached with $|\delta|$ still above the
+threshold. What happens next depends on two ModPara switches:
+
+- `NSRCGAbortOnFail` (default 1): abort the run (`error: SR-CG fallback is disabled. Abort.`).
+  With 0, continue with the approximate solution and print the negative status in `zvo_SRinfo.dat`.
+- `NSRCGFallback` (default 0): first retry the step with the other CG variant (plain or DiagScale),
+  starting again from $x=0$. The SRinfo status is then $-(i+1)$ of the first solve; if the retry also fails,
+  `NSRCGAbortOnFail` decides.
+
+A non-finite increment aborts with `NSRCGAbortOnFail`, and otherwise skips the update and stops
+the optimization (C `info = 1`).
+
+**DiagScale (`NSRCG = 2` or `useDiagScale 1` with `NSRCG 1`).** Jacobi-preconditioned CG with
+$M=(1+\texttt{DSROptStaDel})\,\mathrm{diag}(S)$, each entry clamped to $\pm10^{-12}$ when it is smaller or
+not finite:
+$r_0=g-S'x_0$, $d_0=M^{-1}r_0$, $\delta=r\cdot M^{-1}r$, $d_{i+1}=M^{-1}r_{i+1}+\beta_id_i$ and
+$\delta_{i+1}=\delta_{\rm new}$ (not $\beta\delta$). The parser stores `NSRCG 2` as `NSRCG 1` with
+DiagScale; `useDiagScale` with any `NSRCG` other than 1 is dropped with C's remark.
+
+**RescaleSmat 1** (requires `NSRCG 1`). Before the solve, the Slater block of the averaged
+$\langle O\rangle$, $\langle OO\rangle$-diagonal, $\langle HO\rangle$ and stored samples is rescaled so that
+its largest diagonal $S$ entry matches the projection block's: the factor is
+$\rho=\max_{\rm proj}|S_{kk}|/\max(\max_{\rm Slater}|S_{kk}|,10^{-10})$, with $O$ and $HO$ scaled by
+$\sqrt\rho$, $OO$ by $\rho$, and the Slater parameters divided by $\sqrt\rho$ (a normalization change).
+Nothing is rescaled when the projection maximum is below $10^{-10}$ or there are no projection or Slater
+parameters.
+
 The cut and the force are identical to the direct solver ([5.2](#52-the-sr-equations)); the diagonal elements used for the
-cut are $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$. The number of CG iterations is printed as the last column of `zvo_SRinfo.dat`.
+cut are $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$. The CG status (the iteration count, or the negative failure code) is printed as the last column of `zvo_SRinfo.dat`.
 Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C) ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
+SR-CG cannot be combined with a negative `DSROptStepDt` (diagonalization mode); the input is rejected, as C 1.4.0 aborts.
+With an empty active set ($n_S=0$) C 1.4.0 reports $-(0+1)$, aborts by default and reads `r[0]` out of bounds;
+Rust skips the step as an exact no-op ([11.3](11-compatibility.md#113-known-differences-from-the-c-reference)).
 
 > **Implementation**
 > - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg.c:56`
 > - C: `fn_StochasticOptCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:81`
+> - C: `fn_StochasticOptPreconCG_DiagScale_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:352`
 > - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:484`
 > - C: `fn_operate_by_S` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:598`
 > - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:670`
+> - C: `fn_Rescale4SRCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:772`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
-> - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
+> - Rust: `solve_variant_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
 > - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:517`
 > - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:268`
 > - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:292`

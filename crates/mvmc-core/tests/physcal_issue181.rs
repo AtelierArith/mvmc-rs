@@ -866,14 +866,16 @@ fn assert_reference(actual: &Path, expected: &Path) {
                 // Retain the old gate's upper bound too: adopting an
                 // independent contract must not loosen any existing check.
                 let tolerance = tolerance.min(1.0e-10 + 1.0e-8 * scale);
-                // #576: the observed largest Lanczos output difference is
-                // 1.4e-12 on Linux x86_64; see the fixture README.
+                // #576: the observed largest Lanczos output difference was
+                // 1.4e-12 on Linux x86_64 against this 1.3.0 reference. #682:
+                // the 1.4.0 rbOld exchange update moves it to 2.45e-10 (3.4e-13
+                // relative, value 7.17e2); see the fixture README.
                 let tolerance = if expected
                     .components()
                     .any(|component| component.as_os_str() == "native_c_lanczos_576")
                     && name.starts_with("zvo_ls_")
                 {
-                    tolerance.min(1.0e-10)
+                    tolerance.min(f64::max(1.0e-10, 1.0e-12 * scale))
                 } else {
                     tolerance
                 };

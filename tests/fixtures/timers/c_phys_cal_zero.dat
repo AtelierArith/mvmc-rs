@@ -36,6 +36,7 @@ VMCPhysCal                  [2]      0.00000
       GreenFunc2           [51]      0.00000
       addPhysCA            [52]      0.00000
       addPhysCACA          [53]      0.00000
+      addPhysTwist         [54]      0.00000
     Lanczos1               [43]      0.00000
     Lanczos2               [44]      0.00000
   UpdateSlaterElm          [20]      0.00000
