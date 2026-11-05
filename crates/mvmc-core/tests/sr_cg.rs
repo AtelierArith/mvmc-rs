@@ -489,8 +489,13 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             // 1e-15 at 6, 2e-14 at 7, O(1e-2) after 13), so only the first limits are a
             // meaningful forward comparison there. The explicit-residual (backward error)
             // check above holds at every limit on every kernel.
+            // DiagScale divides by the clamped S diagonal (down to 1e-12), which
+            // multiplies a one-ulp GEMV difference by up to 1/min(diag): on a host
+            // that reads the Linux oracle (Apple: 3.5e-12 at limit 1 for complex
+            // DiagScale) only the exact status and the backward error are portable.
             let forward_limit = match julia_fixture::kernel_class(&fixtures) {
                 julia_fixture::KernelClass::Reference if !fallback => usize::MAX,
+                _ if fallback && variant == CgVariant::DiagScale => 0,
                 _ => 5,
             };
             if limit > forward_limit {
