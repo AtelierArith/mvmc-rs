@@ -1,6 +1,6 @@
 # Grouped (`NSplitSize > 1`) native-C references (issue #349)
 
-Native `vmc.out` (stock `extern/mVMC-1.3.0`, see `PROVENANCE.txt`) outputs at world
+Native `vmc.out` (stock `extern/mVMC-1.4.0`, see `PROVENANCE.txt`) outputs at world
 sizes 1/2/4 and `NSplitSize` 1/2/4 on the `physcal_181` inputs. Regenerate with
 `c_toolbox/grouped_nsplit_349/generate.sh` (explicit developer command, Dev Container).
 Layout: `<case>/c/r<world>s<split>/<file>`; `<case>/overrides.txt` holds the modpara

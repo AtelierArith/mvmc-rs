@@ -16,12 +16,11 @@ fn heisenberg_chain_fsz_zvo_out_first10_matches_reference() {
         .join("inputs")
         .join("heisenberg_chain_fsz")
         .join("namelist.def");
-    let reference = julia
-        .join("test")
-        .join("integration")
-        .join("reference")
-        .join("heisenberg_chain_fsz")
-        .join("zvo_out_first10.dat");
+    // First ten optimization rows of C 1.4.0 on the same inputs
+    // (tests/fixtures/c_integration_reference, c_toolbox/integration_reference).
+    let reference = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../tests/fixtures/c_integration_reference/heisenberg_chain_fsz/zvo_out_first10.dat",
+    );
     if !namelist.is_file() || !reference.is_file() {
         support::missing_fixture(
             "phase4-fsz",

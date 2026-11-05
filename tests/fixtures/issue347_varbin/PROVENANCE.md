@@ -1,16 +1,16 @@
 # Issue #347: C `vmc.out -b` binary parameter layout
 
 Expected files in `c_expected/` were produced by the **unmodified** authoritative C
-`vmc.out` (`extern/mVMC-1.3.0`, no patch, no debug flags) and checked in as data. Rust
+`vmc.out` (`extern/mVMC-1.4.0` at `e83aa6cb`, no patch, no debug flags; regenerated for #695) and checked in as data. Rust
 tests read only these files; they never build or run C.
 
 | Item | Value |
 |---|---|
-| Platform | Linux x86_64 Dev Container (Ubuntu 24.04), image `vsc-mvmc-rs-*-uid` |
-| Compiler | gcc 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1), MPICH `/opt/mpich/bin/mpicc`, Release, CMake `-DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF` |
-| `vmc.out` SHA-256 | `629ec3b317d31ed3bbab91f26ae39a4bde8e4a7cdda3c170434ab1f33d99a4a3` |
-| `vmcmain.c` SHA-256 | `fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63` |
-| `initfile.c` SHA-256 | `8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8` |
+| Platform | Linux x86_64 Dev Container (Ubuntu 24.04), image `503e36a6615e` (`vsc-mvmc-rs-*`) |
+| Compiler | gcc 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1), MPICH 4.2.0 `/opt/mpich/bin/mpicc`, OpenBLAS 0.3.26, CMake 3.28.3 Release (default flags), CMake `-DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF` |
+| `vmc.out` SHA-256 | `5d67bbc5b4e8815252e986fabe815c3a92a39768d794d6c1980849820ebbf589` |
+| `vmcmain.c` SHA-256 | `da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0` |
+| `initfile.c` SHA-256 | `def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e` |
 | Run environment | `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1`, single MPI process |
 | Reproduction | `c_toolbox/issue347_varbin/README.md` |
 
@@ -54,6 +54,6 @@ Header bytes: exact. PhysCal blocks are parameters read from a file (or `InitPar
 not computed results, and C's `NPara` doubles equal the leading `NPara` doubles of Rust's block
 exactly.
 Optimizer step 0 is identical to C; later steps depend on the SR solve (BLAS operation order)
-and differ by about 5e-10 absolute (values are O(1)); the test uses `1e-8` absolute with the
+and differ by at most 1.4e-9 absolute against the 1.4.0 runs (values are O(1)); the test uses `1e-8` absolute with the
 step-0 row required exactly and the RNG-driven control path unchanged (see #358 for the SR
 operand analysis).

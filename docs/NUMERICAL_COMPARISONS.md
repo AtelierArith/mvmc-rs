@@ -58,10 +58,10 @@ documented translation:
   (`c14_cg_breakdown`) were removed in #695. Tests that still run short CG
   optimizations set `NSRCGAbortOnFail 0` only so that a solve that reaches its
   limit does not stop the run; they check Rust repeatability, not a reference.
-- `native_c_lanczos_576`: with `rbOld` the largest Lanczos-output difference
-  from the 1.3.0 native reference is `2.45e-10` absolute (`3.4e-13` relative);
-  with `raOld` Rust reproduces the earlier `1.4e-12`. The Lanczos bound is
-  `max(1e-10, 1e-12 |value|)` (fixture README).
+  The C 1.4.0 references of the #179 MPI matrix CG cells and the #358 step-1
+  operands were generated with the same option in C, because their step-1
+  solve meets the 1.4.0 breakdown guard. The compared values (sampler state,
+  operands, energy) precede the solve.
 
 Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
 no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
@@ -370,7 +370,7 @@ unmodified C `vmc.out` therefore uses:
 - block data: C's `NPara` doubles against the leading `NPara` doubles of Rust's block. PhysCal
   blocks (file-read or `InitParameter` values, no accumulated arithmetic) and the optimizer's
   step-0 block are compared exactly; later optimizer steps depend on the SR solve (BLAS
-  operation order, #358) and use an absolute bound of `1e-8` (observed maximum about `5e-10`,
+  operation order, #358) and use an absolute bound of `1e-8` (observed maximum `1.4e-9` against C 1.4.0,
   parameters O(1)) with RNG-driven control paths identical;
 - completeness: the Rust block must contain every parameter of the text `zvo_var` output.
 

@@ -17,7 +17,7 @@ and are not listed. Benchmark results under `benchmark/**/results/` and other
 dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historical
 1.3.0 records as well.
 
-39 C sources under `src/` changed between the releases. 170 files are historical 1.3.0 and 110 files cite only 1.4.0 hashes.
+39 C sources under `src/` changed between the releases. 62 files are historical 1.3.0 and 219 files cite only 1.4.0 hashes.
 
 ## Historical 1.3.0
 
@@ -44,19 +44,10 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/ctest_orbital_contracts.md` | `readdef.c`, `vmcmain.c` |
 | `c_toolbox/ctest_window_bounds.md` | `avevar.c`, `readdef.c`, `setmemory.c`, `vmcmain.c` |
 | `c_toolbox/issue183_ls_empty/README.md` | `initfile.c`, `readdef.c`, `vmcmain.c` |
-| `c_toolbox/issue347_varbin/README.md` | `initfile.c`, `vmcmain.c` |
 | `c_toolbox/mpi_issue179_store.md` | `setmemory.c`, `vmccal.c` |
 | `c_toolbox/native13_initialization/generate-fixtures.pl` | `readdef.c`, `vmcmain.c` |
 | `c_toolbox/real_fsz_direct_sr_audit.md` | `parameter.c` |
 | `c_toolbox/run_real_fsz_direct_sr_audit.jl` | `parameter.c` |
-| `c_toolbox/two_hop_bilinear_449/README.md` | `pfupdate_two_real.c` |
-| `crates/mvmc-cli/tests/physcal_lifecycle.rs` | `parameter.c`, `readdef.c` |
-| `crates/mvmc-core/tests/issue184_assertion_contracts.rs` | `parameter.c` |
-| `crates/mvmc-expert-parsers/tests/issue184_coulomb_definition_boundary.rs` | `readdef.c` |
-| `crates/mvmc-expert-parsers/tests/issue184_pair_value_definition_boundaries.rs` | `readdef.c` |
-| `crates/mvmc-expert-parsers/tests/issue184_pairhop_definition_boundary.rs` | `readdef.c` |
-| `crates/mvmc-expert-parsers/tests/issue184_qptrans_complex_weight.rs` | `readdef.c` |
-| `crates/mvmc-expert-parsers/tests/issue184_transfer_definition_boundary.rs` | `readdef.c` |
 | `docs/ISSUE184_OVERLAY_EVIDENCE.md` | `readdef.c` |
 | `docs/reference/c-to-julia/verification/evidence/issue-180-real-fsz-direct-15087-provenance.txt` | `parameter.c` |
 | `docs/reference/c-to-julia/verification/issue-176-current-evidence-audit.md` | `setmemory.c`, `vmccal_fsz.c` |
@@ -82,117 +73,18 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `scripts/compare_mpi_issue179.py` | `readdef.c` |
 | `scripts/issue179_p02/c_written_mask.py` | `readdef.c` |
 | `scripts/test_compare_mpi_issue179.py` | `readdef.c` |
-| `tests/fixtures/c_order_sr_operands/PROVENANCE.md` | `stcopt_cg_impl.c`, `vmcmain.c` |
-| `tests/fixtures/gutzwiller/README.md` | `readdef.c` |
-| `tests/fixtures/interall/c_complex_green.txt` | `locgrn.c`, `pfupdate.c`, `pfupdate_two_fcmp.c`, `projection.c` |
-| `tests/fixtures/interall/c_fsz_green.txt` | `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c` |
-| `tests/fixtures/interall/c_fsz_hamiltonian.txt` | `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c` |
-| `tests/fixtures/interall/c_fsz_measurements.txt` | `average.c`, `calgrn_fsz.c`, `global.h`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, `setmemory.c`, `vmccal_fsz.c` |
-| `tests/fixtures/interall/c_fsz_real_green.txt` | `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c` |
-| `tests/fixtures/interall/c_fsz_real_hamiltonian.txt` | `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c` |
-| `tests/fixtures/interall/c_real_green.txt` | `locgrn_real.c`, `pfupdate_real.c`, `pfupdate_two_real.c`, `projection.c` |
-| `tests/fixtures/issue184_heisenberg_parser/README.md` | `readdef.c` |
-| `tests/fixtures/issue347_varbin/PROVENANCE.md` | `initfile.c`, `vmcmain.c` |
-| `tests/fixtures/jastrow/README.md` | `projection.c`, `readdef.c` |
-| `tests/fixtures/multidef_348/PROVENANCE.txt` | `vmcmain.c` |
-| `tests/fixtures/multidef_348/split_PROVENANCE.txt` | `vmcmain.c` |
-| `tests/fixtures/native_c_lanczos_576/README.md` | `readdef.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_complex1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_complex2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_nodal1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_nodal2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_real1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_lanczos_576/interall_real2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/all_terms_lanczos1_cmp/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/all_terms_lanczos1_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/all_terms_lanczos2_cmp/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/all_terms_lanczos2_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh24_opttrans_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh24_opttrans_physcal_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh24_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh24_rbm_opttrans_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh24_rbm_opttrans_zero_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh2_csz_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_dh2_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_rbm_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_rbm_zero_physcal/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample10/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/fsz_warm10_sample50/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_cmp/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_cmp_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz_mpi4/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real_mpi4/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos1_exact_state/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos1_gauss8/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_overlays_gjo/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos1_exact_state/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_opttrans/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_opttrans_mpi4/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_overlays/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_rbm_opttrans/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_rbm_opttrans_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_real_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_real_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_chain_real_mpi4/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_dh2_only_overlay/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_dh4_only_overlay/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_dh_real_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_dh_real_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_lanczos1_cmp/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/hubbard_lanczos2_cmp/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/idx_negative_start/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/idx_start1_qty3_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/idx_start3_qty3/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/kondo_chain_real/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/kondo_chain_real_mpi2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/kondo_chain_real_mpi4/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/kondo_real_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/kondo_real_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/nodal_neel_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/nodal_neel_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/rerun_lanczos_off/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/rerun_truncate/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/spin_chain_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_c_physcal_181/spin_chain_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/original_heisenberg_parser_184/README.md` | `readdef.c` |
-| `tests/fixtures/physcal_181/all-terms-reader/provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/duplicate-reader/provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/energy-only/provenance.txt` | `initfile.c` |
-| `tests/fixtures/physcal_181/formatting/README.md` | `vmcmain.c` |
 | `tests/fixtures/physcal_181/heisenberg_chain_cmp/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/heisenberg_chain_fsz/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/heisenberg_chain_real/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_all_terms_lanczos1/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_all_terms_lanczos2/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_dh_overlays/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_overlays/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_dh_real/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_real/metadata-provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/kondo_chain_real/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/native-c-weighted-green/provenance.txt` | `average.c` |
 | `tests/fixtures/physcal_181/native-macos-measurement-diagnostic/README.md` | `locgrn_fsz.c`, `pfupdate_two_fsz.c` |
-| `tests/fixtures/physcal_181/unnormalized-reserved-slater/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 
 ## 1.4.0
 
@@ -234,6 +126,7 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/issue274_initializer/SOURCE-AUTHORITY.txt` | `matrix.c` |
 | `c_toolbox/issue274_initializer/extract_shared_initializer.pl` | `vmcmake.c` |
 | `c_toolbox/issue342_negative_info/extract_initializers.pl` | `vmcmake.c` |
+| `c_toolbox/issue347_varbin/README.md` | `initfile.c`, `vmcmain.c` |
 | `c_toolbox/jastrow_contracts_upstream.inc` | `readdef.c` |
 | `c_toolbox/jastrow_projection_upstream.inc` | `projection.c` |
 | `c_toolbox/modpara_reader_upstream.inc` | `global.h`, `readdef.c`, `readdef.h` |
@@ -265,28 +158,126 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/time_srinfo_rows_diag.inc` | `stcopt_pdposv.c` |
 | `c_toolbox/time_srinfo_rows_direct.inc` | `stcopt.c` |
 | `c_toolbox/time_srinfo_upstream.inc` | `initfile.c`, `vmcclock.c` |
+| `c_toolbox/two_hop_bilinear_449/README.md` | `pfupdate_two_real.c` |
 | `c_toolbox/weighted_oo.c` | `vmccal.c` |
+| `crates/mvmc-cli/tests/physcal_lifecycle.rs` | `parameter.c`, `readdef.c` |
 | `crates/mvmc-core/tests/fixtures/normalization_c_literals.README.txt` | `average.c` |
+| `crates/mvmc-core/tests/issue184_assertion_contracts.rs` | `parameter.c` |
+| `crates/mvmc-expert-parsers/tests/issue184_coulomb_definition_boundary.rs` | `readdef.c` |
+| `crates/mvmc-expert-parsers/tests/issue184_pair_value_definition_boundaries.rs` | `readdef.c` |
+| `crates/mvmc-expert-parsers/tests/issue184_pairhop_definition_boundary.rs` | `readdef.c` |
+| `crates/mvmc-expert-parsers/tests/issue184_qptrans_complex_weight.rs` | `readdef.c` |
+| `crates/mvmc-expert-parsers/tests/issue184_transfer_definition_boundary.rs` | `readdef.c` |
 | `docs/reference/c-to-julia/verification/issue-179-qp-literals.md` | `qp.c`, `qp_real.c` |
 | `docs/reference/c-to-julia/verification/issue-274-real-zero-ip.md` | `qp_real.c` |
+| `tests/fixtures/c_order_sr_operands/PROVENANCE.md` | `stcopt_cg_impl.c`, `vmccal.c`, `vmcmain.c` |
 | `tests/fixtures/complex_uhf/PROVENANCE.txt` | `Def.h`, `SFMT.c`, `UHFmain.c`, `cal_energy.c`, `cal_energy.h`, `diag.c`, `diag.h`, `green.c`, +13 |
+| `tests/fixtures/gutzwiller/README.md` | `readdef.c` |
 | `tests/fixtures/gutzwiller/c_reader_contracts.txt` | `readdef.c` |
 | `tests/fixtures/initial_records/c_records.txt` | `SFMT-params19937.h`, `SFMT.c`, `SFMT.h`, `parameter.c` |
+| `tests/fixtures/interall/c_complex_green.txt` | `calham.c`, `locgrn.c`, `pfupdate.c`, `pfupdate_two_fcmp.c`, `projection.c`, `qp.c` |
 | `tests/fixtures/interall/c_complex_green_linux_gnu.txt` | `calham.c`, `locgrn.c`, `pfupdate.c`, `pfupdate_two_fcmp.c`, `projection.c`, `qp.c` |
+| `tests/fixtures/interall/c_fsz_green.txt` | `calham_fsz.c`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, `qp.c` |
 | `tests/fixtures/interall/c_fsz_green_linux_gnu.txt` | `calham_fsz.c`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, `qp.c` |
+| `tests/fixtures/interall/c_fsz_hamiltonian.txt` | `calham_fsz.c`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, `qp.c` |
 | `tests/fixtures/interall/c_fsz_hamiltonian_linux_gnu.txt` | `calham_fsz.c`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, `qp.c` |
+| `tests/fixtures/interall/c_fsz_measurements.txt` | `average.c`, `calgrn_fsz.c`, `calham_fsz.c`, `global.h`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, +3 |
 | `tests/fixtures/interall/c_fsz_measurements_linux_gnu.txt` | `average.c`, `calgrn_fsz.c`, `calham_fsz.c`, `global.h`, `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c`, +3 |
+| `tests/fixtures/interall/c_fsz_real_green.txt` | `calham_fsz_real.c`, `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c`, `qp_real.c` |
 | `tests/fixtures/interall/c_fsz_real_green_linux_gnu.txt` | `calham_fsz_real.c`, `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c`, `qp_real.c` |
+| `tests/fixtures/interall/c_fsz_real_hamiltonian.txt` | `calham_fsz_real.c`, `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c`, `qp_real.c` |
 | `tests/fixtures/interall/c_fsz_real_hamiltonian_linux_gnu.txt` | `calham_fsz_real.c`, `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c`, `qp_real.c` |
 | `tests/fixtures/interall/c_reader.txt` | `readdef.c` |
+| `tests/fixtures/interall/c_real_green.txt` | `calham_real.c`, `locgrn_real.c`, `pfupdate_real.c`, `pfupdate_two_real.c`, `projection.c`, `qp_real.c` |
 | `tests/fixtures/interall/c_real_green_linux_gnu.txt` | `calham_real.c`, `locgrn_real.c`, `pfupdate_real.c`, `pfupdate_two_real.c`, `projection.c`, `qp_real.c` |
+| `tests/fixtures/issue184_heisenberg_parser/README.md` | `readdef.c` |
 | `tests/fixtures/issue274_caller_control/PROVENANCE.txt` | `vmcmake.c` |
 | `tests/fixtures/issue274_native_boundaries.PROVENANCE.md` | `SFMT.c`, `matrix.c`, `vmcmake.c`, `vmcmake_real.c` |
 | `tests/fixtures/issue342_negative_info/PROVENANCE.txt` | `SFMT.c`, `matrix.c`, `projection.c`, `vmcmake.c` |
+| `tests/fixtures/issue347_varbin/PROVENANCE.md` | `initfile.c`, `vmcmain.c` |
+| `tests/fixtures/jastrow/README.md` | `projection.c`, `readdef.c` |
 | `tests/fixtures/jastrow/c_projection_counts.txt` | `projection.c`, `readdef.c` |
 | `tests/fixtures/jastrow/c_reader_contracts.txt` | `readdef.c` |
 | `tests/fixtures/modpara_reader/c_reader.txt` | `global.h`, `readdef.c`, `readdef.h` |
+| `tests/fixtures/multidef_348/PROVENANCE.txt` | `vmcmain.c` |
+| `tests/fixtures/multidef_348/split_PROVENANCE.txt` | `vmcmain.c` |
 | `tests/fixtures/native13_initialization/provenance.json` | `SFMT.c`, `readdef.c`, `vmcmain.c` |
+| `tests/fixtures/native_c_lanczos_576/README.md` | `calham.c`, `calham_real.c`, `lslocgrn.c`, `lslocgrn_real.c`, `readdef.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_complex1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_complex2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_nodal1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_nodal2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_real1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_lanczos_576/interall_real2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/all_terms_lanczos1_cmp/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/all_terms_lanczos1_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/all_terms_lanczos2_cmp/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/all_terms_lanczos2_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh24_opttrans_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh24_opttrans_physcal_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh24_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh24_rbm_opttrans_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh24_rbm_opttrans_zero_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh2_csz_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_dh2_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_rbm_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_rbm_zero_physcal/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample10/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_warm0_sample2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/fsz_warm10_sample50/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_cmp/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_cmp_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_fsz_mpi4/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_chain_real_mpi4/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos1_exact_state/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_cmp_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos1_gauss8/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_fsz_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_overlays_gjo/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos1_exact_state/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/heisenberg_real_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_opttrans/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_opttrans_mpi4/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_overlays/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_rbm_opttrans/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_rbm_opttrans_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_dh_real_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_real_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_chain_real_mpi4/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_dh2_only_overlay/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_dh4_only_overlay/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_dh_real_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_dh_real_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_lanczos1_cmp/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/hubbard_lanczos2_cmp/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/idx_negative_start/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/idx_start1_qty3_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/idx_start3_qty3/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/kondo_chain_real/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/kondo_chain_real_mpi2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/kondo_chain_real_mpi4/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/kondo_real_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/kondo_real_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/nodal_neel_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/nodal_neel_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/rerun_lanczos_off/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/rerun_truncate/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/spin_chain_lanczos1/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/spin_chain_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
+| `tests/fixtures/native_c_physcal_181/third_hubbard_lanczos2/provenance.txt` | `SFMT.c`, `physcal_lanczos.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
 | `tests/fixtures/native_comparison_492/full_probe_provenance.json` | `readdef.c`, `stcopt_dposv.c`, `vmccal.c`, `vmcmain.c` |
 | `tests/fixtures/native_comparison_492/provenance.txt` | `vmccal.c` |
 | `tests/fixtures/negative_stepdt/c_sr.txt` | `global.h`, `initfile.c`, `readdef.c`, `stcopt_dposv.c` |
@@ -302,7 +293,17 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/orbital_general/c_rbm_prefix.txt` | `SFMT-params19937.h`, `SFMT.c`, `SFMT.h`, `parameter.c`, `slater.c` |
 | `tests/fixtures/orbital_general/c_reader_contracts.txt` | `readdef.c` |
 | `tests/fixtures/orbital_general/c_shared_matrix.txt` | `SFMT-params19937.h`, `SFMT.c`, `SFMT.h`, `parameter.c`, `slater.c` |
+| `tests/fixtures/original_heisenberg_parser_184/README.md` | `readdef.c` |
+| `tests/fixtures/physcal_181/all-terms-reader/provenance.txt` | `readdef.c` |
+| `tests/fixtures/physcal_181/duplicate-reader/provenance.txt` | `readdef.c` |
+| `tests/fixtures/physcal_181/energy-only/provenance.txt` | `initfile.c` |
+| `tests/fixtures/physcal_181/formatting/README.md` | `physcal_lanczos.c`, `vmcmain.c` |
+| `tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
+| `tests/fixtures/physcal_181/hubbard_chain_dh_overlays/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
+| `tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
+| `tests/fixtures/physcal_181/native-c-weighted-green/provenance.txt` | `average.c` |
 | `tests/fixtures/physcal_181/slater47-semantic-handoff.md` | `slater.c` |
+| `tests/fixtures/physcal_181/unnormalized-reserved-slater/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/projection_count/c_contracts.txt` | `qp.c`, `readdef.c` |
 | `tests/fixtures/rbm/c_counters.txt` | `rbm.c`, `readdef.c` |
 | `tests/fixtures/rbm/c_parameters.txt` | `SFMT-params19937.h`, `SFMT.c`, `SFMT.h`, `parameter.c`, `readdef.c` |

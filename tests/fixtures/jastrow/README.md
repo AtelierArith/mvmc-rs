@@ -5,8 +5,8 @@ Four-line records contain name/site count and native header/reader status,
 the encoded definition (`|` replaces newline), flattened directional index
 matrix and full real/imaginary flags. Rejected records have `-` array lines.
 
-Source: authoritative `extern/mVMC-1.3.0/src/mVMC/readdef.c`, SHA-256
-`6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`.
+Source: authoritative `extern/mVMC-1.4.0/src/mVMC/readdef.c`, SHA-256
+`9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3`.
 The standalone driver and verbatim GPL excerpts live in `c_toolbox/`.
 Verify with `python3 scripts/check_jastrow_contracts_c_parity.py`;
 append `--write` to explicitly regenerate. Apple clang 17 uses `-O0`.
@@ -55,7 +55,7 @@ upper-triangle lookup with directional tables, including reverse hops, shared
 indices and unused coefficient slots; it does not exercise full sampling/RNG.
 
 Projection source: `src/mVMC/projection.c`, SHA-256
-`2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1`.
+`9459b9819d08bd67dc40bc9a2103a43851667af3775e4a32752f1f7f559e5794`.
 Actual complete function bodies are extracted into
 `c_toolbox/jastrow_projection_upstream.inc`. Kernels are excluded for duplicate
 reader mappings that leave off-diagonal cells untouched. Such reader results
